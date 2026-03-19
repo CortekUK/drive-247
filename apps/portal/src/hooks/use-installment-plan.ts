@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 export interface ScheduledInstallment {
   id: string;
@@ -49,6 +50,7 @@ export interface InstallmentPlanWithSchedule extends InstallmentPlan {
 export const useInstallmentPlan = (rentalId: string | null) => {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   // Fetch installment plan and scheduled installments
   const {
@@ -100,7 +102,7 @@ export const useInstallmentPlan = (rentalId: string | null) => {
   });
 
   // Retry a failed installment payment
-  const retryPaymentMutation = useMutation({
+  const retryPaymentMutation = useMutation<{ success: boolean }, Error, string>({
     mutationFn: async (installmentId: string) => {
       if (!tenant?.id) throw new Error('No tenant ID');
 
@@ -121,8 +123,14 @@ export const useInstallmentPlan = (rentalId: string | null) => {
 
       return { success: true };
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['installment-plan', rentalId] });
+      logAction({
+        action: "installment_payment_retried",
+        entityType: "rental",
+        entityId: rentalId!,
+        details: { installment_id: variables },
+      });
       toast({
         title: 'Retry Scheduled',
         description: 'The payment will be retried in the next processing cycle.',
@@ -154,6 +162,12 @@ export const useInstallmentPlan = (rentalId: string | null) => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['installment-plan', rentalId] });
       queryClient.invalidateQueries({ queryKey: ['rental', rentalId] });
+      logAction({
+        action: "installment_plan_cancelled",
+        entityType: "rental",
+        entityId: rentalId!,
+        details: { plan_id: plan?.id },
+      });
       toast({
         title: 'Plan Cancelled',
         description: 'The installment plan has been cancelled.',
@@ -188,8 +202,14 @@ export const useInstallmentPlan = (rentalId: string | null) => {
 
       return { success: true };
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['installment-plan', rentalId] });
+      logAction({
+        action: "installment_marked_paid",
+        entityType: "rental",
+        entityId: rentalId!,
+        details: { installment_id: variables.installmentId, payment_id: variables.paymentId },
+      });
       toast({
         title: 'Installment Marked Paid',
         description: 'The installment has been marked as paid.',

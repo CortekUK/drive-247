@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { toast } from 'sonner';
+import { logCustomerAudit } from '@/lib/auditLogger';
 
 export interface CustomerDocument {
   id: string;
@@ -93,10 +94,19 @@ export function useDeleteCustomerDocument() {
       if (error) throw error;
       return document?.customer_id;
     },
-    onSuccess: () => {
+    onSuccess: (customerId) => {
       queryClient.invalidateQueries({ queryKey: ['customer-documents'] });
       queryClient.invalidateQueries({ queryKey: ['customer-onboarding'] });
       toast.success('Document deleted successfully');
+      if (customerId && customerUser?.tenant_id) {
+        logCustomerAudit({
+          action: 'document_deleted',
+          entityType: 'customer',
+          entityId: customerId,
+          tenantId: customerUser.tenant_id,
+          details: { trigger: 'customer_self_service' },
+        });
+      }
     },
     onError: (error) => {
       console.error('Error deleting document:', error);

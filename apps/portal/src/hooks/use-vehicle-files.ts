@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 export interface VehicleFile {
   id: string;
@@ -19,6 +20,7 @@ export function useVehicleFiles(vehicleId: string) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   // Fetch files for a vehicle
   const { data: files = [], isLoading } = useQuery({
@@ -100,8 +102,14 @@ export function useVehicleFiles(vehicleId: string) {
 
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['vehicleFiles', tenant?.id, vehicleId] });
+      logAction({
+        action: "vehicle_file_uploaded",
+        entityType: "vehicle",
+        entityId: vehicleId,
+        details: { file_name: data.file_name, content_type: data.content_type, size_bytes: data.size_bytes },
+      });
       toast({
         title: "File Uploaded",
         description: "File has been uploaded successfully.",
@@ -140,8 +148,14 @@ export function useVehicleFiles(vehicleId: string) {
 
       if (dbError) throw dbError;
     },
-    onSuccess: () => {
+    onSuccess: (_data, deletedFile) => {
       queryClient.invalidateQueries({ queryKey: ['vehicleFiles', tenant?.id, vehicleId] });
+      logAction({
+        action: "vehicle_file_deleted",
+        entityType: "vehicle",
+        entityId: vehicleId,
+        details: { file_id: deletedFile.id, file_name: deletedFile.file_name },
+      });
       toast({
         title: "File Deleted",
         description: "File has been deleted successfully.",

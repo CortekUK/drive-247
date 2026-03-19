@@ -46,6 +46,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 // Helper function to display user-friendly payment type names
 const getPaymentTypeDisplay = (paymentType: string): string => {
@@ -66,6 +67,7 @@ const PaymentsList = () => {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
+  const { logAction } = useAuditLog();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectPaymentId, setRejectPaymentId] = useState<string | null>(null);
@@ -219,6 +221,17 @@ const PaymentsList = () => {
       toast({
         title: "Payment Reversed",
         description: `Payment of ${formatCurrency(reversePaymentDetails?.amount || 0, tenant?.currency_code || 'USD')} has been reversed. ${data.details?.applicationsReversed || 0} allocations were undone.`,
+      });
+
+      logAction({
+        action: "payment_reversed",
+        entityType: "payment",
+        entityId: reversePaymentId,
+        details: {
+          amount: data.details?.amount ?? reversePaymentDetails?.amount,
+          reason: reverseReason.trim(),
+          applications_reversed: data.details?.applicationsReversed,
+        },
       });
 
       // Invalidate all related queries

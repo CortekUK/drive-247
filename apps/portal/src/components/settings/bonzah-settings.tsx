@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Shield, CheckCircle2, AlertCircle, ExternalLink, Loader2, TestTube2, Zap, Unplug, Lock, Wallet, RefreshCw, Bell, ShieldAlert, ArrowRight } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { useAuditLog, createAuditLog } from '@/hooks/use-audit-log';
 import { useBonzahBalance } from '@/hooks/use-bonzah-balance';
 import { useBonzahAlertConfig } from '@/hooks/use-bonzah-alert-config';
 import { useBonzahRetryAll } from '@/hooks/use-bonzah-retry-all';
@@ -46,6 +47,7 @@ export function BonzahSettings() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const { tenant: tenantContext, refetchTenant } = useTenant();
+  const { logAction } = useAuditLog();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -149,6 +151,14 @@ export function BonzahSettings() {
 
       queryClient.invalidateQueries({ queryKey: ['tenant-bonzah-status'] });
       refetchTenant();
+      if (tenantContext?.id) {
+        logAction({
+          action: 'bonzah_connected',
+          entityType: 'settings',
+          entityId: tenantContext.id,
+          details: { bonzah_mode: currentMode },
+        });
+      }
       toast({
         title: 'Bonzah Connected',
         description: 'Your Bonzah credentials have been verified and saved. Insurance is now enabled for your customers.',
@@ -184,6 +194,13 @@ export function BonzahSettings() {
       setPassword('');
       queryClient.invalidateQueries({ queryKey: ['tenant-bonzah-status'] });
       refetchTenant();
+      if (tenantContext?.id) {
+        logAction({
+          action: 'bonzah_disconnected',
+          entityType: 'settings',
+          entityId: tenantContext.id,
+        });
+      }
       toast({
         title: 'Bonzah Disconnected',
         description: 'Bonzah credentials have been removed. Insurance will no longer be shown to customers during booking.',
@@ -215,6 +232,14 @@ export function BonzahSettings() {
         enabled: alertEnabled,
         threshold: alertEnabled ? threshold : (alertConfig?.threshold ?? 0),
       });
+      if (tenantContext?.id) {
+        logAction({
+          action: 'bonzah_alert_config_updated',
+          entityType: 'settings',
+          entityId: tenantContext.id,
+          details: { enabled: alertEnabled, threshold: alertEnabled ? threshold : null },
+        });
+      }
       toast({
         title: 'Alert settings saved',
         description: alertEnabled
@@ -244,6 +269,13 @@ export function BonzahSettings() {
       supabase.from('tenants').update({ integration_bonzah: true }).eq('id', tenantContext.id).then(() => {
         queryClient.invalidateQueries({ queryKey: ['tenant-bonzah-status'] });
         refetchTenant();
+        createAuditLog({
+          action: "settings_updated",
+          entityType: "settings",
+          entityId: tenantContext.id,
+          tenantId: tenantContext.id,
+          details: { section: "bonzah", trigger: "auto_test_mode", integration_bonzah: true },
+        });
       });
     }
   }, [isTestMode, tenantContext?.id, bonzahStatus?.integration_bonzah]);

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
+import { useAuditLog } from '@/hooks/use-audit-log';
 import { DEFAULT_AGREEMENT_TEMPLATE } from '@/lib/default-agreement-template';
 
 export type TemplateType = 'default' | 'custom';
@@ -39,6 +40,7 @@ export const CUSTOM_TEMPLATE_NAME = 'Custom Template';
 export const useAgreementTemplates = () => {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   // Fetch all templates for the tenant
   const {
@@ -105,8 +107,14 @@ export const useAgreementTemplates = () => {
 
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['agreement-templates', tenant?.id] });
+      logAction({
+        action: 'settings_updated',
+        entityType: 'tenant',
+        entityId: tenant?.id || '',
+        details: { setting: 'agreement_template', action: 'created', template_id: data.id },
+      });
       toast({
         title: 'Template Created',
         description: 'Your agreement template has been created successfully.',
@@ -166,8 +174,14 @@ export const useAgreementTemplates = () => {
 
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['agreement-templates', tenant?.id] });
+      logAction({
+        action: 'settings_updated',
+        entityType: 'tenant',
+        entityId: tenant?.id || '',
+        details: { setting: 'agreement_template', action: 'updated', template_id: data.id },
+      });
       toast({
         title: 'Template Updated',
         description: 'Your agreement template has been updated successfully.',
@@ -200,8 +214,14 @@ export const useAgreementTemplates = () => {
         throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, templateId) => {
       queryClient.invalidateQueries({ queryKey: ['agreement-templates', tenant?.id] });
+      logAction({
+        action: 'settings_updated',
+        entityType: 'tenant',
+        entityId: tenant?.id || '',
+        details: { setting: 'agreement_template', action: 'deleted', template_id: templateId },
+      });
       toast({
         title: 'Template Deleted',
         description: 'The agreement template has been deleted.',
@@ -241,8 +261,14 @@ export const useAgreementTemplates = () => {
         throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, templateId) => {
       queryClient.invalidateQueries({ queryKey: ['agreement-templates', tenant?.id] });
+      logAction({
+        action: 'settings_updated',
+        entityType: 'tenant',
+        entityId: tenant?.id || '',
+        details: { setting: 'agreement_template', action: 'set_active', template_id: templateId },
+      });
       toast({
         title: 'Active Template Updated',
         description: 'The selected template is now active and will be used for new agreements.',
@@ -329,6 +355,7 @@ export const useActiveAgreementTemplate = () => {
 export const useTemplateSelection = () => {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   const {
     data: templates,
@@ -481,8 +508,14 @@ export const useTemplateSelection = () => {
         throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, type) => {
       queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+      logAction({
+        action: 'settings_updated',
+        entityType: 'tenant',
+        entityId: tenant?.id || '',
+        details: { setting: 'agreement_template', action: 'set_active', type },
+      });
       toast({
         title: 'Template Updated',
         description: 'Active template has been changed successfully.',
@@ -555,8 +588,14 @@ export const useTemplateSelection = () => {
         }
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+      logAction({
+        action: 'settings_updated',
+        entityType: 'tenant',
+        entityId: tenant?.id || '',
+        details: { setting: 'agreement_template', action: 'content_updated', type: variables.type },
+      });
       toast({
         title: 'Template Saved',
         description: 'Template content has been saved successfully.',
@@ -603,6 +642,12 @@ export const useTemplateSelection = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+      logAction({
+        action: 'settings_updated',
+        entityType: 'tenant',
+        entityId: tenant?.id || '',
+        details: { setting: 'agreement_template', action: 'cleared_custom' },
+      });
       toast({
         title: 'Template Cleared',
         description: 'Custom template has been cleared.',
@@ -672,6 +717,12 @@ export const useTemplateSelection = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+      logAction({
+        action: 'settings_updated',
+        entityType: 'tenant',
+        entityId: tenant?.id || '',
+        details: { setting: 'agreement_template', action: 'reset_default' },
+      });
       toast({
         title: 'Template Reset',
         description: 'Default template has been reset to original content.',

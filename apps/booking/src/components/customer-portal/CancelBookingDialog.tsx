@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Calendar, Car, AlertCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { logCustomerAudit } from '@/lib/auditLogger';
 import { useTenant } from '@/contexts/TenantContext';
 import { format } from 'date-fns';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
@@ -86,6 +87,13 @@ export function CancelBookingDialog({ open, onOpenChange, rental }: CancelBookin
         console.error('Failed to create notification:', notifError);
       }
 
+      logCustomerAudit({
+        action: 'rental_cancellation_requested',
+        entityType: 'rental',
+        entityId: rental.id,
+        tenantId: tenant.id,
+        details: { reason: reason.trim().substring(0, 200) },
+      });
       toast.success('Cancellation request submitted successfully');
 
       queryClient.invalidateQueries({ queryKey: ['customer-rentals'] });

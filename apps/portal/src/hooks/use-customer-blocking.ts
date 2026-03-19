@@ -241,7 +241,18 @@ export function useCustomerBlockingActions() {
           customerQuery = customerQuery.eq('tenant_id', tenant.id);
         }
 
-        await customerQuery;
+        const { data: blockedCustomers } = await customerQuery.select('id');
+        // Audit each cascading customer block
+        if (blockedCustomers?.length) {
+          for (const c of blockedCustomers) {
+            logAction({
+              action: "customer_blocked",
+              entityType: "customer",
+              entityId: c.id,
+              details: { reason, blocked_via: "identity_blocklist", identity_type: identityType, identity_number: identityNumber },
+            });
+          }
+        }
       }
 
       // If blocking by email, check and update global blacklist
@@ -265,7 +276,18 @@ export function useCustomerBlockingActions() {
           customerQuery = customerQuery.eq('tenant_id', tenant.id);
         }
 
-        await customerQuery;
+        const { data: blockedByEmail } = await customerQuery.select('id');
+        // Audit each cascading customer block
+        if (blockedByEmail?.length) {
+          for (const c of blockedByEmail) {
+            logAction({
+              action: "customer_blocked",
+              entityType: "customer",
+              entityId: c.id,
+              details: { reason, blocked_via: "identity_blocklist", identity_type: "email", identity_number: identityNumber },
+            });
+          }
+        }
       }
 
       return data;

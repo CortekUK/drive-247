@@ -116,6 +116,20 @@ Deno.serve(async (req) => {
       return errorResponse("Failed to save summary", 500);
     }
 
+    // Audit log
+    try {
+      await supabase.from('audit_logs').insert({
+        action: 'review_summary_generated',
+        actor_id: null,
+        entity_type: 'customer',
+        entity_id: customerId,
+        tenant_id: tenantId,
+        details: { average_rating: averageRating, total_reviews: totalReviews },
+      });
+    } catch (e) {
+      console.error('[Audit] review_summary_generated failed:', e);
+    }
+
     return jsonResponse({
       summary: summaryText,
       average_rating: averageRating,

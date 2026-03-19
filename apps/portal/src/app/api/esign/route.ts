@@ -1101,6 +1101,16 @@ export async function POST(request: NextRequest) {
                 if (agreementType === 'original') {
                     await supabase.from('rentals').update({ document_status: 'credit_failed' }).eq('id', body.rentalId);
                 }
+                // Audit log — agreement credit failed
+                await supabase.from('audit_logs').insert({
+                    action: 'agreement_credit_failed',
+                    actor_id: null,
+                    entity_type: 'rental',
+                    entity_id: body.rentalId,
+                    tenant_id: body.tenantId,
+                    details: { agreement_type: agreementType },
+                }).catch((e: any) => console.error('[Audit]', e));
+
                 return NextResponse.json({ ok: false, error: 'insufficient_credits', balance: deductResult.balance, required: deductResult.required }, { status: 402 });
             }
 
@@ -1167,6 +1177,16 @@ export async function POST(request: NextRequest) {
 
         if (agreementError) {
             console.error('Failed to create rental_agreements row:', agreementError);
+        } else {
+            // Audit log — agreement sent
+            await supabase.from('audit_logs').insert({
+                action: 'agreement_sent',
+                actor_id: null,
+                entity_type: 'rental',
+                entity_id: body.rentalId,
+                tenant_id: body.tenantId,
+                details: { agreement_type: agreementType, boldsign_mode: boldsignMode, document_id: documentId },
+            }).catch((e: any) => console.error('[Audit]', e));
         }
         const agreementId = agreementRow?.id || null;
 

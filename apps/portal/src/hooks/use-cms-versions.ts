@@ -2,12 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import type { CMSPageVersion } from "@/types/cms";
 
 export const useCMSVersions = (pageSlug: string) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   // Helper to get page by slug with tenant filtering
   const getPageBySlug = async () => {
@@ -121,9 +123,15 @@ export const useCMSVersions = (pageSlug: string) => {
 
       await updateQuery;
     },
-    onSuccess: () => {
+    onSuccess: (_data, versionId) => {
       queryClient.invalidateQueries({ queryKey: ["cms-page", pageSlug] });
       queryClient.invalidateQueries({ queryKey: ["cms-pages"] });
+      logAction({
+        action: "cms_version_rollback",
+        entityType: "cms_page",
+        entityId: versionId,
+        details: { page_slug: pageSlug },
+      });
       toast({
         title: "Version Restored",
         description: "Page content has been restored to the selected version. Publish to make it live.",
@@ -179,8 +187,14 @@ export const useCMSVersions = (pageSlug: string) => {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, keepCount) => {
       queryClient.invalidateQueries({ queryKey: ["cms-versions", pageSlug] });
+      logAction({
+        action: "cms_versions_cleaned",
+        entityType: "cms_page",
+        entityId: pageSlug,
+        details: { page_slug: pageSlug, keep_count: keepCount },
+      });
       toast({
         title: "Versions Cleaned Up",
         description: "Old versions have been removed.",

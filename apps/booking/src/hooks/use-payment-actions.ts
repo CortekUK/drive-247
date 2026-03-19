@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { toast } from 'sonner';
+import { logCustomerAudit } from '@/lib/auditLogger';
 
 interface CardInfo {
   brand: string;
@@ -127,9 +128,19 @@ export function useConfirmPaymentMethod() {
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['customer-installment-plans'] });
       toast.success('Payment method updated successfully');
+      logCustomerAudit({
+        action: 'payment_method_updated',
+        entityType: 'customer',
+        entityId: customerUser?.customer_id || '',
+        tenantId: customerUser?.tenant_id,
+        details: {
+          trigger: 'customer_portal',
+          installment_plan_id: variables.installmentPlanId || null,
+        },
+      });
     },
     onError: (error) => {
       toast.error(error.message || 'Failed to update payment method');
@@ -160,11 +171,21 @@ export function usePayInstallmentEarly() {
 
       return data as PaymentResult;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, installmentId) => {
       queryClient.invalidateQueries({ queryKey: ['customer-installment-plans'] });
       queryClient.invalidateQueries({ queryKey: ['customer-payment-history'] });
       queryClient.invalidateQueries({ queryKey: ['customer-rentals'] });
       toast.success(data.message || 'Payment successful');
+      logCustomerAudit({
+        action: 'installment_early_payment_initiated',
+        entityType: 'payment',
+        entityId: installmentId,
+        tenantId: customerUser?.tenant_id,
+        details: {
+          trigger: 'customer_portal',
+          amount: data.amount,
+        },
+      });
     },
     onError: (error) => {
       toast.error(error.message || 'Payment failed');
@@ -195,11 +216,21 @@ export function usePayRemainingInstallments() {
 
       return data as PaymentResult;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, installmentPlanId) => {
       queryClient.invalidateQueries({ queryKey: ['customer-installment-plans'] });
       queryClient.invalidateQueries({ queryKey: ['customer-payment-history'] });
       queryClient.invalidateQueries({ queryKey: ['customer-rentals'] });
       toast.success(data.message || 'All remaining installments paid');
+      logCustomerAudit({
+        action: 'installment_payoff_initiated',
+        entityType: 'payment',
+        entityId: installmentPlanId,
+        tenantId: customerUser?.tenant_id,
+        details: {
+          trigger: 'customer_portal',
+          amount: data.amount,
+        },
+      });
     },
     onError: (error) => {
       toast.error(error.message || 'Payment failed');
@@ -231,11 +262,21 @@ export function useRetryPayment() {
 
       return data as PaymentResult;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, installmentId) => {
       queryClient.invalidateQueries({ queryKey: ['customer-installment-plans'] });
       queryClient.invalidateQueries({ queryKey: ['customer-payment-history'] });
       queryClient.invalidateQueries({ queryKey: ['customer-rentals'] });
       toast.success('Payment retry successful');
+      logCustomerAudit({
+        action: 'payment_retry_initiated',
+        entityType: 'payment',
+        entityId: installmentId,
+        tenantId: customerUser?.tenant_id,
+        details: {
+          trigger: 'customer_portal',
+          amount: data.amount,
+        },
+      });
     },
     onError: (error) => {
       toast.error(error.message || 'Payment retry failed. Please update your card.');

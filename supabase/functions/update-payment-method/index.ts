@@ -228,6 +228,27 @@ serve(async (req) => {
         expYear: card.exp_year,
       } : null
 
+      // Audit log — payment method updated (customer-initiated, no staff actor)
+      if (tenantId) {
+        try {
+          await supabase.from('audit_logs').insert({
+            action: 'customer_updated',
+            actor_id: null,
+            entity_type: 'customer',
+            entity_id: body.customerId,
+            tenant_id: tenantId,
+            details: {
+              field: 'payment_method',
+              card_brand: cardInfo?.brand,
+              card_last4: cardInfo?.last4,
+              installment_plan_id: body.installmentPlanId || null,
+            },
+          });
+        } catch (e) {
+          console.error('[Audit] customer_updated failed:', e);
+        }
+      }
+
       return new Response(
         JSON.stringify({
           success: true,

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 export interface GigDriverImage {
   id: string;
@@ -34,6 +35,7 @@ export function useGigDriverImages(customerId: string | undefined) {
 export function useUploadGigDriverImage() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   return useMutation({
     mutationFn: async ({ customerId, file }: { customerId: string; file: File }) => {
@@ -63,14 +65,21 @@ export function useUploadGigDriverImage() {
       if (dbError) throw new Error(`Save failed: ${dbError.message}`);
       return data as GigDriverImage;
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["gig-driver-images"] });
+      logAction({
+        action: "document_uploaded",
+        entityType: "customer",
+        entityId: variables.customerId,
+        details: { document_type: "gig_driver_image", file_name: variables.file.name },
+      });
     },
   });
 }
 
 export function useDeleteGigDriverImage() {
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   return useMutation({
     mutationFn: async (image: GigDriverImage) => {
@@ -80,9 +89,16 @@ export function useDeleteGigDriverImage() {
         .delete()
         .eq('id', image.id);
       if (error) throw error;
+      return image;
     },
-    onSuccess: () => {
+    onSuccess: (image) => {
       queryClient.invalidateQueries({ queryKey: ["gig-driver-images"] });
+      logAction({
+        action: "document_deleted",
+        entityType: "customer",
+        entityId: image.customer_id,
+        details: { document_type: "gig_driver_image", file_name: image.file_name },
+      });
     },
   });
 }

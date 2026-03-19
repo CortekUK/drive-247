@@ -51,6 +51,7 @@ import {
 import { toast } from 'sonner';
 import AIVerificationQR from '@/components/AIVerificationQR';
 import { createVeriffFrame, MESSAGES } from '@veriff/incontext-sdk';
+import { logCustomerAudit } from '@/lib/auditLogger';
 
 interface AISessionData {
   sessionId: string;
@@ -142,6 +143,13 @@ export default function VerificationPage() {
       });
       setVerificationMode('ai');
       setShowUpdateDialog(false);
+      logCustomerAudit({
+        action: 'verification_session_created',
+        entityType: 'customer',
+        entityId: customerUser.customer_id,
+        tenantId: tenant.id,
+        details: { provider: 'ai', trigger: 'customer_self_service' },
+      });
       toast.success('Scan the QR code with your phone to verify your identity.');
     } catch (error: any) {
       console.error('AI verification error:', error);
@@ -214,6 +222,14 @@ export default function VerificationPage() {
 
       if (dbError) {
         console.error('Error creating verification record:', dbError);
+      } else {
+        logCustomerAudit({
+          action: 'verification_session_created',
+          entityType: 'customer',
+          entityId: customerUser.customer_id,
+          tenantId: tenant.id,
+          details: { provider: 'veriff', trigger: 'customer_self_service', session_id: sessionId },
+        });
       }
 
       setVerificationMode('veriff');
@@ -225,13 +241,8 @@ export default function VerificationPage() {
         onEvent: async (msg: string) => {
           switch (msg) {
             case MESSAGES.FINISHED:
-              toast.success('Identity verified successfully!');
+              toast.success('Verification submitted — your status will update shortly.');
               setVerificationMode('idle');
-              // Update customer status
-              await supabase
-                .from('customers')
-                .update({ identity_verification_status: 'verified' })
-                .eq('id', customerUser.customer_id);
               refetch();
               refetchCustomerUser();
               // Update onboarding status to remove sidebar warning badge
@@ -262,14 +273,6 @@ export default function VerificationPage() {
     toast.success('Identity verified successfully!');
     setVerificationMode('idle');
     setAiSessionData(null);
-
-    // Update customer status
-    if (customerUser?.customer_id) {
-      await supabase
-        .from('customers')
-        .update({ identity_verification_status: 'verified' })
-        .eq('id', customerUser.customer_id);
-    }
 
     refetch();
     refetchCustomerUser();
@@ -402,6 +405,13 @@ export default function VerificationPage() {
 
       if (error) throw error;
 
+      logCustomerAudit({
+        action: 'customer_updated',
+        entityType: 'customer',
+        entityId: customerUser?.customer_id!,
+        tenantId: customerUser?.tenant_id,
+        details: { trigger: 'customer_self_service', field: 'verification_details', changed_fields: Object.keys(updateData).filter(k => k !== 'updated_at') },
+      });
       toast.success('Details updated successfully');
       setShowEditDetailsDialog(false);
       refetch();

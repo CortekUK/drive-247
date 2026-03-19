@@ -866,6 +866,12 @@ const CreateRental = () => {
         }
 
         sonnerToast.success("AI verification session created");
+        logAction({
+          action: "verification_session_created",
+          entityType: "customer",
+          entityId: selectedCustomerId,
+          details: { provider: "ai" },
+        });
         setAiSessionData({
           sessionId: data.sessionId,
           qrUrl: data.qrUrl,
@@ -893,6 +899,12 @@ const CreateRental = () => {
         }
 
         await refetchVerification();
+        logAction({
+          action: "verification_session_created",
+          entityType: "customer",
+          entityId: selectedCustomerId,
+          details: { provider: "veriff" },
+        });
       }
     } catch (error: any) {
       console.error("Error creating verification:", error);
@@ -1165,6 +1177,14 @@ const CreateRental = () => {
                 if (ledgerError) {
                   console.error('[Bonzah] Ledger entry error:', ledgerError);
                 }
+
+                // Audit log for insurance purchase during rental creation
+                logAction({
+                  action: 'insurance_purchased',
+                  entityType: 'rental',
+                  entityId: rental.id,
+                  details: { premium: bonzahPremium, policy_record_id: policyRecordId, source: 'rental_creation' },
+                });
               }
             }
           }

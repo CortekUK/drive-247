@@ -182,6 +182,22 @@ Deno.serve(async (req) => {
         type: 'welcome',
       });
 
+    // Audit log — customer self-signup (no staff actor)
+    if (tenant_id) {
+      try {
+        await supabaseAdmin.from('audit_logs').insert({
+          action: 'customer_created',
+          actor_id: null,
+          entity_type: 'customer',
+          entity_id: finalCustomerId,
+          tenant_id,
+          details: { trigger: 'self_signup', email },
+        });
+      } catch (e) {
+        console.error('[Audit] customer_created failed:', e);
+      }
+    }
+
     console.log('Customer signup completed:', {
       auth_user_id: authUserId,
       customer_id: finalCustomerId,

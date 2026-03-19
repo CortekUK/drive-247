@@ -238,6 +238,20 @@ serve(async (req) => {
       );
     }
 
+    // Audit log
+    try {
+      await supabase.from('audit_logs').insert({
+        action: 'payment_reversed',
+        actor_id: null,
+        entity_type: 'payment',
+        entity_id: paymentId,
+        tenant_id: payment.tenant_id,
+        details: { amount: payment.amount, reason, applications_reversed: applications?.length || 0 },
+      });
+    } catch (e) {
+      console.error('[Audit] payment_reversed failed:', e);
+    }
+
     console.log("Payment reversed successfully");
 
     return new Response(

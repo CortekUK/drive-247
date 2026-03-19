@@ -260,6 +260,26 @@ serve(async (req) => {
             }
           }
 
+          // Audit log (customer-initiated, no actor)
+          try {
+            await supabase.from('audit_logs').insert({
+              action: 'installment_paid_early',
+              actor_id: null,
+              entity_type: 'payment',
+              entity_id: payment?.id,
+              tenant_id: tenantId,
+              details: {
+                customer_id: customerId,
+                installment_id: installmentId,
+                amount: installment.amount,
+                installment_number: installment.installment_number,
+                payment_intent_id: paymentIntent.id,
+              },
+            });
+          } catch (e) {
+            console.error('[Audit] installment_paid_early failed:', e);
+          }
+
           // Send receipt
           try {
             await fetch(
@@ -501,6 +521,27 @@ serve(async (req) => {
               updated_at: new Date().toISOString(),
             })
             .eq('id', installmentPlanId)
+
+          // Audit log (customer-initiated, no actor)
+          try {
+            await supabase.from('audit_logs').insert({
+              action: 'installment_paid_early',
+              actor_id: null,
+              entity_type: 'payment',
+              entity_id: payment?.id,
+              tenant_id: tenantId,
+              details: {
+                customer_id: customerId,
+                installment_plan_id: installmentPlanId,
+                amount: totalAmount,
+                installments_paid: remainingInstallments.length,
+                payment_intent_id: paymentIntent.id,
+                action: 'pay_remaining',
+              },
+            });
+          } catch (e) {
+            console.error('[Audit] installment_paid_early failed:', e);
+          }
 
           return new Response(
             JSON.stringify({

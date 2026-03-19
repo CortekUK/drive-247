@@ -24,6 +24,7 @@ import { createInvoiceWithFallback, Invoice } from "@/lib/invoiceUtils";
 import InstallmentSelector, { InstallmentOption, InstallmentConfig } from "@/components/InstallmentSelector";
 import { useDeliveryLocations } from "@/hooks/useDeliveryLocations";
 import CheckoutProgressOverlay from "@/components/CheckoutProgressOverlay";
+import { logCustomerAudit } from "@/lib/auditLogger";
 
 interface PromoDetails {
   code: string;
@@ -770,6 +771,13 @@ export default function BookingCheckoutStep({
           throw updateError;
         }
         customer = updatedCustomer;
+        logCustomerAudit({
+          action: 'customer_updated',
+          entityType: 'customer',
+          entityId: existingCustomer.id,
+          tenantId: tenant?.id,
+          details: { trigger: 'booking_checkout', fields: Object.keys(updateData) },
+        });
       } else {
         // No existing customer - create new one
         console.log('🆕 Creating new customer...');
@@ -797,6 +805,13 @@ export default function BookingCheckoutStep({
           throw createError;
         }
         customer = newCustomer;
+        logCustomerAudit({
+          action: 'customer_created',
+          entityType: 'customer',
+          entityId: newCustomer.id,
+          tenantId: tenant?.id,
+          details: { trigger: 'booking_checkout', email: formData.customerEmail },
+        });
       }
 
       console.log('✅ Customer ready:', customer.id);
@@ -902,6 +917,18 @@ export default function BookingCheckoutStep({
               console.error('Failed to update customer verification status:', customerStatusError);
             } else {
               console.log('✅ Updated customer verification status to:', verificationStatus);
+              logCustomerAudit({
+                action: 'customer_updated',
+                entityType: 'customer',
+                entityId: customer.id,
+                tenantId: tenant?.id,
+                details: {
+                  field: 'identity_verification_status',
+                  new_value: verificationStatus,
+                  trigger: 'checkout_verification_link',
+                  verification_id: verification.id,
+                },
+              });
             }
           }
         } else {
@@ -1222,6 +1249,13 @@ export default function BookingCheckoutStep({
           // Clear pending files from Zustand store
           clearPendingInsuranceFiles();
           console.log('✅ Insurance files processed and cleaned up');
+          logCustomerAudit({
+            action: 'document_uploaded',
+            entityType: 'customer',
+            entityId: customer.id,
+            tenantId: tenant?.id,
+            details: { document_type: 'insurance', trigger: 'booking_checkout' },
+          });
         }
 
         // Handle reused existing document (selected from dropdown, not in pendingFiles)
@@ -1282,6 +1316,13 @@ export default function BookingCheckoutStep({
 
           clearPendingGigDriverFiles();
           console.log('✅ Gig driver data processed');
+          logCustomerAudit({
+            action: 'customer_updated',
+            entityType: 'customer',
+            entityId: customer.id,
+            tenantId: tenant?.id,
+            details: { field: 'is_gig_driver', new_value: true, trigger: 'booking_checkout', gig_images_count: uniqueGigFiles.length },
+          });
         } catch (gigErr) {
           console.warn('⚠️ Error processing gig driver data:', gigErr);
         }

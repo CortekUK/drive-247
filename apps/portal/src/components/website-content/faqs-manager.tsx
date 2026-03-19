@@ -121,6 +121,7 @@ export function FAQsManager() {
 
       await query1;
       await query2;
+      logAction({ action: "faq_updated", entityType: "faq", entityId: id, details: { field: "display_order", direction: "up" } });
       toast.success("FAQ order updated");
     } catch {
       toast.error("Failed to update order");
@@ -147,6 +148,7 @@ export function FAQsManager() {
 
       await query1;
       await query2;
+      logAction({ action: "faq_updated", entityType: "faq", entityId: id, details: { field: "display_order", direction: "down" } });
       toast.success("FAQ order updated");
     } catch {
       toast.error("Failed to update order");
@@ -173,6 +175,7 @@ export function FAQsManager() {
       toast.error("Failed to update FAQ");
       setFaqs(oldFAQs);
     } else {
+      logAction({ action: "faq_updated", entityType: "faq", entityId: id, details: { field: "is_active", value } });
       toast.success(`FAQ ${value ? 'activated' : 'deactivated'}`);
     }
   };

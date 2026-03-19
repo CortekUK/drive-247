@@ -505,6 +505,26 @@ async function handleVeriffWebhook(
       console.error('Error updating customer status:', customerUpdateError);
     }
 
+    // Audit log — customer_blocked for auto-block
+    if (customerIsBlocked && tenantId && verification.customer_id) {
+      try {
+        await supabaseClient.from('audit_logs').insert({
+          action: 'customer_blocked',
+          actor_id: null,
+          entity_type: 'customer',
+          entity_id: verification.customer_id,
+          tenant_id: tenantId,
+          details: {
+            trigger: 'veriff_blocked_identity',
+            document_number: updateData.document_number,
+            reason: blockReason,
+          },
+        });
+      } catch (e) {
+        console.error('[Audit] customer_blocked failed:', e);
+      }
+    }
+
     // If blocked, create a notification for admins
     if (isBlockedIdentity) {
       // tenantId already defined above for blocked identity check
@@ -541,6 +561,28 @@ async function handleVeriffWebhook(
         }
 
         await supabaseClient.from('notifications').insert(notificationData);
+      }
+    }
+
+    // Audit log — verification decision processed (no staff actor)
+    if (tenantId && verification.customer_id) {
+      try {
+        await supabaseClient.from('audit_logs').insert({
+          action: 'verification_completed',
+          actor_id: null,
+          entity_type: 'customer',
+          entity_id: verification.customer_id,
+          tenant_id: tenantId,
+          details: {
+            provider: 'veriff',
+            session_id: sessionId,
+            result: updateData.review_result || 'pending',
+            auto_blocked: customerIsBlocked,
+            document_number: updateData.document_number || null,
+          },
+        });
+      } catch (e) {
+        console.error('[Audit] verification_completed failed:', e);
       }
     }
 

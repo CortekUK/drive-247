@@ -405,6 +405,27 @@ serve(async (req) => {
 
     console.log(`[Bonzah Quote] Total premium across ${chunks.length} policies: $${totalPremium}`)
 
+    // Audit log for quote creation
+    try {
+      const { error: auditErr } = await supabase.from('audit_logs').insert({
+        action: 'insurance_quote_created',
+        actor_id: null,
+        entity_type: 'rental',
+        entity_id: body.rental_id,
+        tenant_id: body.tenant_id,
+        details: {
+          customer_id: body.customer_id,
+          total_premium: totalPremium,
+          policy_count: chunks.length,
+          policy_type: policyType,
+          coverage: body.coverage,
+        },
+      })
+      if (auditErr) console.error('[Bonzah Quote] Audit log error:', auditErr)
+    } catch (auditEx) {
+      console.error('[Bonzah Quote] Audit log exception:', auditEx)
+    }
+
     // Update rental with total insurance premium (only for original policies)
     // Extension policies don't update the rental FK — it stays pointing to the original
     if (policyType === 'original' && firstPolicyRecordId) {

@@ -651,6 +651,23 @@ serve(async (req) => {
       });
     }
 
+    // Audit log
+    try {
+      const { data: paymentForAudit } = await supabase.from('payments').select('tenant_id, rental_id, amount').eq('id', paymentId).single();
+      if (paymentForAudit?.tenant_id) {
+        await supabase.from('audit_logs').insert({
+          action: 'payment_applied',
+          actor_id: null,
+          entity_type: 'payment',
+          entity_id: paymentId,
+          tenant_id: paymentForAudit.tenant_id,
+          details: { allocated: result.allocated, remaining: result.remaining, status: result.status, rental_id: paymentForAudit.rental_id },
+        });
+      }
+    } catch (e) {
+      console.error('[Audit] payment_applied failed:', e);
+    }
+
     return new Response(JSON.stringify(result), {
       status: 201,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

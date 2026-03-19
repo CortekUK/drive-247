@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
+import { logCustomerAudit } from "@/lib/auditLogger";
 import { useBookingStore } from "@/stores/booking-store";
 import { formatCurrency } from "@/lib/format-utils";
 
@@ -62,6 +63,16 @@ const BookingSuccessContent = () => {
           }
 
           const { error: rentalUpdateError } = await rentalUpdateQuery;
+
+          if (!rentalUpdateError) {
+            logCustomerAudit({
+              action: 'rental_payment_fulfilled',
+              entityType: 'rental',
+              entityId: rentalId,
+              tenantId: tenant?.id,
+              details: { session_id: sessionId },
+            });
+          }
 
           if (rentalUpdateError) {
             console.error("Failed to update rental status:", rentalUpdateError);

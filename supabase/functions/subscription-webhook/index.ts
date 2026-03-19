@@ -108,7 +108,7 @@ async function handleCheckoutCompleted(stripe: Stripe, supabase: any, session: a
   const paymentMethod = subscription.default_payment_method as Stripe.PaymentMethod | null;
   const card = paymentMethod?.card;
 
-  const { error: subError } = await supabase
+  const { data: subData, error: subError } = await supabase
     .from("tenant_subscriptions")
     .upsert({
       tenant_id: tenantId,
@@ -129,7 +129,9 @@ async function handleCheckoutCompleted(stripe: Stripe, supabase: any, session: a
       trial_end: subscription.trial_end
         ? new Date(subscription.trial_end * 1000).toISOString()
         : null,
-    }, { onConflict: "stripe_subscription_id" });
+    }, { onConflict: "stripe_subscription_id" })
+    .select("id")
+    .single();
 
   if (subError) { console.error("Error upserting subscription:", subError); throw subError; }
 
@@ -163,6 +165,20 @@ async function handleCheckoutCompleted(stripe: Stripe, supabase: any, session: a
     } catch (refundErr) {
       console.warn(`Failed to auto-refund verification charge for tenant ${tenantId}:`, refundErr.message);
     }
+  }
+
+  try {
+    const { error: auditErr } = await supabase.from("audit_logs").insert({
+      action: "subscription_activated",
+      actor_id: null,
+      entity_type: "subscription",
+      entity_id: subData?.id || null,
+      tenant_id: tenantId,
+      details: { stripe_subscription_id: subscription.id, plan_name: resolvedPlanName, plan_id: planId, status: subscription.status, is_trial: subscription.status === "trialing" },
+    });
+    if (auditErr) console.error("[Audit] Failed:", auditErr);
+  } catch (auditEx) {
+    console.error("[Audit] Exception:", auditEx);
   }
 
   console.log(`Subscription ${subscription.id} activated for tenant ${tenantId}, plan: ${resolvedPlanName}`);
@@ -232,6 +248,22 @@ async function handleSubscriptionUpdated(stripe: Stripe, supabase: any, subscrip
   }
 
   await supabase.from("tenants").update(goLiveUpdate).eq("id", tenantId);
+
+  try {
+    const { data: subRecord } = await supabase.from("tenant_subscriptions").select("id").eq("stripe_subscription_id", subscription.id).maybeSingle();
+    const { error: auditErr } = await supabase.from("audit_logs").insert({
+      action: "subscription_updated",
+      actor_id: null,
+      entity_type: "subscription",
+      entity_id: subRecord?.id || null,
+      tenant_id: tenantId,
+      details: { stripe_subscription_id: subscription.id, status: subscription.status, plan_name: activePlan, auto_go_live: !!goLiveUpdate.setup_completed_at },
+    });
+    if (auditErr) console.error("[Audit] Failed:", auditErr);
+  } catch (auditEx) {
+    console.error("[Audit] Exception:", auditEx);
+  }
+
   console.log(`Subscription ${subscription.id} updated: status=${subscription.status}, plan=${activePlan}`);
 }
 
@@ -252,6 +284,23 @@ async function handleSubscriptionDeleted(supabase: any, subscription: any) {
   if (tenantId) {
     await supabase.from("tenants").update({ subscription_plan: "basic" }).eq("id", tenantId);
   }
+
+  try {
+    const { data: subRecord } = await supabase.from("tenant_subscriptions").select("id, tenant_id").eq("stripe_subscription_id", subscription.id).maybeSingle();
+    const resolvedTenantId = tenantId || subRecord?.tenant_id || null;
+    const { error: auditErr } = await supabase.from("audit_logs").insert({
+      action: "subscription_cancelled",
+      actor_id: null,
+      entity_type: "subscription",
+      entity_id: subRecord?.id || null,
+      tenant_id: resolvedTenantId,
+      details: { stripe_subscription_id: subscription.id },
+    });
+    if (auditErr) console.error("[Audit] Failed:", auditErr);
+  } catch (auditEx) {
+    console.error("[Audit] Exception:", auditEx);
+  }
+
   console.log(`Subscription ${subscription.id} deleted/canceled`);
 }
 
@@ -307,6 +356,21 @@ async function handleInvoicePaid(supabase: any, invoice: any) {
     }, { onConflict: "stripe_invoice_id" });
 
   if (error) console.error("Error upserting invoice:", error);
+
+  try {
+    const { error: auditErr } = await supabase.from("audit_logs").insert({
+      action: "subscription_invoice_paid",
+      actor_id: null,
+      entity_type: "subscription_invoice",
+      entity_id: sub?.id || null,
+      tenant_id: tenant.id,
+      details: { stripe_invoice_id: invoice.id, amount_paid: invoice.amount_paid, currency: invoice.currency, invoice_number: invoice.number },
+    });
+    if (auditErr) console.error("[Audit] Failed:", auditErr);
+  } catch (auditEx) {
+    console.error("[Audit] Exception:", auditEx);
+  }
+
   console.log(`Invoice ${invoice.id} paid for tenant ${tenant.id} (base: ${baseAmount}, usage: ${usageAmount}, qty: ${usageQuantity})`);
 }
 
@@ -340,6 +404,20 @@ async function handleInvoicePaymentFailed(supabase: any, invoice: any) {
       usage_amount: usageAmount || null,
       usage_quantity: usageQuantity || null,
     }, { onConflict: "stripe_invoice_id" });
+
+  try {
+    const { error: auditErr } = await supabase.from("audit_logs").insert({
+      action: "subscription_invoice_failed",
+      actor_id: null,
+      entity_type: "subscription_invoice",
+      entity_id: sub?.id || null,
+      tenant_id: tenant.id,
+      details: { stripe_invoice_id: invoice.id, amount_due: invoice.amount_due, currency: invoice.currency, invoice_number: invoice.number },
+    });
+    if (auditErr) console.error("[Audit] Failed:", auditErr);
+  } catch (auditEx) {
+    console.error("[Audit] Exception:", auditEx);
+  }
 
   console.log(`Invoice payment failed for tenant ${tenant.id} (${tenant.company_name})`);
 }
@@ -393,6 +471,20 @@ async function handleCreditPurchase(supabase: any, session: any) {
     } catch (pmErr) {
       console.warn("Could not save payment method for auto-refill:", pmErr);
     }
+  }
+
+  try {
+    const { error: auditErr } = await supabase.from("audit_logs").insert({
+      action: "credit_wallet_purchased",
+      actor_id: null,
+      entity_type: "credit_wallet",
+      entity_id: tenantId,
+      tenant_id: tenantId,
+      details: { credits, package_name: packageName, package_id: packageId, is_test: isTestPurchase, stripe_payment_id: session.payment_intent },
+    });
+    if (auditErr) console.error("[Audit] Failed:", auditErr);
+  } catch (auditEx) {
+    console.error("[Audit] Exception:", auditEx);
   }
 
   console.log(`Credit purchase completed: ${credits} ${isTestPurchase ? "TEST" : "LIVE"} credits added for tenant ${tenantId} (package: ${packageName})`);

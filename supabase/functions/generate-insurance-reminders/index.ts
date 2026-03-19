@@ -151,6 +151,25 @@ Deno.serve(async (req) => {
           console.error('❌ Error updating policy status to expired:', updateError);
         } else {
           console.log(`📅 Marked policy ${policy.policy_number} as expired`);
+          // Audit log for policy expiration
+          try {
+            const { error: auditErr } = await supabaseClient.from('audit_logs').insert({
+              action: 'insurance_policy_expired',
+              actor_id: null,
+              entity_type: 'insurance',
+              entity_id: policy.id,
+              tenant_id: policy.tenant_id,
+              details: {
+                policy_number: policy.policy_number,
+                customer_id: policy.customer_id,
+                expiry_date: policy.expiry_date,
+                system_initiated: true,
+              },
+            });
+            if (auditErr) console.error('❌ Audit log error:', auditErr);
+          } catch (auditEx) {
+            console.error('❌ Audit log exception:', auditEx);
+          }
         }
       }
     }

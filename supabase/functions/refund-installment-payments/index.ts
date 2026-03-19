@@ -380,6 +380,27 @@ Deno.serve(async (req) => {
       console.log("[REFUND-INSTALLMENTS] Plan cancelled:", plan.id);
     }
 
+    // Audit log (system/rejection flow, no actor)
+    try {
+        if (totalRefunded > 0 || results.filter((r) => r.action === "refunded").length > 0) {
+        await supabase.from("audit_logs").insert({
+          action: "installment_payments_refunded",
+          actor_id: null,
+          entity_type: "rental",
+          entity_id: rentalId,
+          tenant_id: tenantId,
+          details: {
+            plan_id: plan.id,
+            total_refunded: totalRefunded,
+            refunded_count: results.filter((r) => r.action === "refunded").length,
+            reason: reason || "Booking rejected/cancelled",
+          },
+        });
+      }
+      } catch (e) {
+        console.error("[Audit] installment_payments_refunded failed:", e);
+      }
+
     // Summary
     const refundedCount = results.filter((r) => r.action === "refunded").length;
     const noChargeCount = results.filter((r) => r.action === "no_stripe_charge").length;

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 export interface VehiclePricingOverride {
   id: string;
@@ -27,6 +28,7 @@ export type VehiclePricingOverrideUpsert = {
 
 export const useVehiclePricingOverrides = (vehicleId?: string) => {
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
   const queryKey = ['vehicle-pricing-overrides', vehicleId];
 
   const { data: overrides, isLoading, error } = useQuery({
@@ -69,9 +71,15 @@ export const useVehiclePricingOverrides = (vehicleId?: string) => {
       if (error) throw error;
       return data as VehiclePricingOverride;
     },
-    onSuccess: () => {
+    onSuccess: (_data: VehiclePricingOverride, variables: VehiclePricingOverrideUpsert) => {
       queryClient.invalidateQueries({ queryKey });
       toast({ title: 'Override Saved', description: 'Vehicle pricing override updated.' });
+      logAction({
+        action: "settings_updated",
+        entityType: "vehicle",
+        entityId: variables.vehicle_id,
+        details: { section: "pricing_override", rule_type: variables.rule_type, override_type: variables.override_type },
+      });
     },
     onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -87,9 +95,15 @@ export const useVehiclePricingOverrides = (vehicleId?: string) => {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data: void, id: string) => {
       queryClient.invalidateQueries({ queryKey });
       toast({ title: 'Override Removed', description: 'Vehicle uses global pricing rule.' });
+      logAction({
+        action: "settings_updated",
+        entityType: "vehicle",
+        entityId: vehicleId || "unknown",
+        details: { section: "pricing_override", action: "removed", override_id: id },
+      });
     },
     onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -114,9 +128,15 @@ export const useVehiclePricingOverrides = (vehicleId?: string) => {
       const { error } = await query;
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data: void, params: { ruleType: 'weekend' | 'holiday'; holidayId?: string | null }) => {
       queryClient.invalidateQueries({ queryKey });
       toast({ title: 'Reset', description: 'Vehicle now uses global pricing.' });
+      logAction({
+        action: "settings_updated",
+        entityType: "vehicle",
+        entityId: vehicleId || "unknown",
+        details: { section: "pricing_override", action: "reset", rule_type: params.ruleType },
+      });
     },
     onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });

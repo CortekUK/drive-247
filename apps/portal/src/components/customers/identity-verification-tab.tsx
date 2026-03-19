@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { useTenant } from "@/contexts/TenantContext";
 import { VerificationQRModal } from "./verification-qr-modal";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface IdentityVerification {
   id: string;
@@ -49,6 +50,7 @@ export function IdentityVerificationTab({ customerId }: IdentityVerificationTabP
   const [showQRModal, setShowQRModal] = useState(false);
   const [aiSessionData, setAiSessionData] = useState<AISessionData | null>(null);
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   const fetchVerifications = async () => {
     try {
@@ -102,6 +104,12 @@ export function IdentityVerificationTab({ customerId }: IdentityVerificationTabP
         });
         setShowQRModal(true);
         await fetchVerifications();
+        logAction({
+          action: "verification_session_created",
+          entityType: "customer",
+          entityId: customerId,
+          details: { provider: "ai" },
+        });
       } else {
         // Veriff flow (existing)
         const { data, error } = await supabase.functions.invoke('create-veriff-session', {
@@ -123,6 +131,12 @@ export function IdentityVerificationTab({ customerId }: IdentityVerificationTabP
 
         // Refresh the list
         await fetchVerifications();
+        logAction({
+          action: "verification_session_created",
+          entityType: "customer",
+          entityId: customerId,
+          details: { provider: "veriff" },
+        });
       }
     } catch (error: any) {
       console.error('Error creating verification:', error);

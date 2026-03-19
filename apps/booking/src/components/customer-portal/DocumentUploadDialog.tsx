@@ -16,6 +16,7 @@ import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { toast } from 'sonner';
 import { Upload, FileText, X, Loader2, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { logCustomerAudit } from '@/lib/auditLogger';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface DocumentUploadDialogProps {
@@ -207,6 +208,13 @@ export function DocumentUploadDialog({
       }
 
       toast.success(`Insurance document${files.length > 1 ? 's' : ''} uploaded successfully`);
+      logCustomerAudit({
+        action: 'document_uploaded',
+        entityType: 'customer',
+        entityId: customerUser?.customer_id!,
+        tenantId: customerUser?.tenant_id,
+        details: { document_type: 'insurance', trigger: 'customer_self_service', count: files.length },
+      });
 
       // Invalidate queries to refresh the list and update onboarding status
       queryClient.invalidateQueries({ queryKey: ['customer-documents'] });

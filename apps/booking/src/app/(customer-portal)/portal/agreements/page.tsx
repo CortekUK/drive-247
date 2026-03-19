@@ -36,6 +36,8 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { logCustomerAudit } from '@/lib/auditLogger';
+import { useTenant } from '@/contexts/TenantContext';
 
 function StatCard({
   title,
@@ -339,6 +341,7 @@ function AgreementViewerDialog({
 }
 
 export default function AgreementsPage() {
+  const { tenant } = useTenant();
   const { data: agreements, isLoading, refetch, isFetching } = useCustomerAgreements();
   const { data: stats, refetch: refetchStats } = useCustomerAgreementStats();
   const downloadAgreement = useDownloadAgreement();
@@ -352,7 +355,21 @@ export default function AgreementsPage() {
   const [signingAgreement, setSigningAgreement] = useState<CustomerAgreement | null>(null);
 
   const handleDownload = (agreement: CustomerAgreement) => {
-    downloadAgreement.mutate(agreement);
+    downloadAgreement.mutate(agreement, {
+      onSuccess: () => {
+        logCustomerAudit({
+          action: 'agreement_downloaded',
+          entityType: 'rental_agreement',
+          entityId: agreement.id,
+          tenantId: tenant?.id,
+          details: {
+            rental_id: agreement.rental_id,
+            rental_number: agreement.rental_number,
+            agreement_type: agreement.agreement_type,
+          },
+        });
+      },
+    });
   };
 
   const handleView = async (agreement: CustomerAgreement) => {
@@ -363,6 +380,17 @@ export default function AgreementsPage() {
     viewAgreement.mutate(agreement, {
       onSuccess: (url) => {
         setDocumentUrl(url);
+        logCustomerAudit({
+          action: 'agreement_viewed',
+          entityType: 'rental_agreement',
+          entityId: agreement.id,
+          tenantId: tenant?.id,
+          details: {
+            rental_id: agreement.rental_id,
+            rental_number: agreement.rental_number,
+            agreement_type: agreement.agreement_type,
+          },
+        });
       },
     });
   };
@@ -371,6 +399,19 @@ export default function AgreementsPage() {
     setSigningAgreement(agreement);
     signAgreement.mutate(agreement, {
       onSuccess: (result) => {
+        logCustomerAudit({
+          action: 'agreement_sign_initiated',
+          entityType: 'rental_agreement',
+          entityId: agreement.id,
+          tenantId: tenant?.id,
+          details: {
+            rental_id: agreement.rental_id,
+            rental_number: agreement.rental_number,
+            agreement_type: agreement.agreement_type,
+            document_id: agreement.document_id,
+            method: result.signingUrl ? 'embedded' : 'email',
+          },
+        });
         if (result.signingUrl) {
           signingIframeLoadCount.current = 0;
           setSigningUrl(result.signingUrl);

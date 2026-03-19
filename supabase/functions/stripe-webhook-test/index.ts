@@ -276,6 +276,19 @@ serve(async (req) => {
 
             if (rentalUpdateError) {
               console.error("[TEST MODE] Error updating rental payment status:", rentalUpdateError);
+            } else {
+              try {
+                await supabase.from('audit_logs').insert({
+                  action: 'installment_plan_activated',
+                  actor_id: null,
+                  entity_type: 'rental',
+                  entity_id: rentalId,
+                  tenant_id: session.metadata?.tenant_id,
+                  details: { plan_id: installmentPlan.id, trigger: 'stripe_webhook_checkout_completed' },
+                });
+              } catch (e) {
+                console.error('[Audit] installment_plan_activated failed:', e);
+              }
             }
 
             // Trigger FIFO ledger allocation for the upfront payment
@@ -927,6 +940,19 @@ serve(async (req) => {
               .eq("id", rentalId);
 
             console.log("Cancelled expired checkout rental:", rentalId);
+
+            try {
+              await supabase.from('audit_logs').insert({
+                action: 'rental_cancelled',
+                actor_id: null,
+                entity_type: 'rental',
+                entity_id: rentalId,
+                tenant_id: session.metadata?.tenant_id,
+                details: { trigger: 'checkout_session_expired' },
+              });
+            } catch (e) {
+              console.error('[Audit] rental_cancelled failed:', e);
+            }
           }
         }
         break;

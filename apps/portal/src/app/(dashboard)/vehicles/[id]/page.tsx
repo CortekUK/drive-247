@@ -260,6 +260,12 @@ export default function VehicleDetail() {
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ['vehicle', id] });
       setLockboxEditing(false);
+      logAction({
+        action: "vehicle_updated",
+        entityType: "vehicle",
+        entityId: vehicle.id,
+        details: { field: "lockbox_code", has_code: !!lockboxCode },
+      });
       toast({ title: 'Lockbox code saved' });
     } catch {
       toast({ title: 'Failed to save lockbox code', variant: 'destructive' });
@@ -653,6 +659,7 @@ export default function VehicleDetail() {
                         onCheckedChange={async (checked) => {
                           await supabase.from("vehicles").update({ available_daily: checked }).eq("id", vehicle.id);
                           queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                          logAction({ action: "vehicle_updated", entityType: "vehicle", entityId: vehicle.id, details: { field: "available_daily", value: checked } });
                         }}
                       />
                       <label htmlFor="avail-daily" className="text-xs font-medium">Daily</label>
@@ -664,6 +671,7 @@ export default function VehicleDetail() {
                         onCheckedChange={async (checked) => {
                           await supabase.from("vehicles").update({ available_weekly: checked }).eq("id", vehicle.id);
                           queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                          logAction({ action: "vehicle_updated", entityType: "vehicle", entityId: vehicle.id, details: { field: "available_weekly", value: checked } });
                         }}
                       />
                       <label htmlFor="avail-weekly" className="text-xs font-medium">Weekly</label>
@@ -675,6 +683,7 @@ export default function VehicleDetail() {
                         onCheckedChange={async (checked) => {
                           await supabase.from("vehicles").update({ available_monthly: checked }).eq("id", vehicle.id);
                           queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                          logAction({ action: "vehicle_updated", entityType: "vehicle", entityId: vehicle.id, details: { field: "available_monthly", value: checked } });
                         }}
                       />
                       <label htmlFor="avail-monthly" className="text-xs font-medium">Monthly</label>
@@ -747,6 +756,12 @@ export default function VehicleDetail() {
                           }).eq("id", vehicle.id);
                           queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
                           setMileageEditing(false);
+                          logAction({
+                            action: "vehicle_updated",
+                            entityType: "vehicle",
+                            entityId: vehicle.id,
+                            details: { field: "mileage_allowance", daily: mileageForm.daily_mileage, weekly: mileageForm.weekly_mileage, monthly: mileageForm.monthly_mileage, excess_rate: mileageForm.excess_mileage_rate },
+                          });
                           toast({ title: "Mileage allowance updated" });
                         } catch {
                           toast({ title: "Failed to update mileage", variant: "destructive" });

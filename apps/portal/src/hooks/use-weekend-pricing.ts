@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 export interface WeekendPricingSettings {
   weekend_surcharge_percent: number;
@@ -16,6 +17,7 @@ const DEFAULTS: WeekendPricingSettings = {
 export const useWeekendPricing = () => {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   const { data: settings, isLoading, error } = useQuery({
     queryKey: ['weekend-pricing', tenant?.id],
@@ -51,9 +53,15 @@ export const useWeekendPricing = () => {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data: void, variables: Partial<WeekendPricingSettings>) => {
       queryClient.invalidateQueries({ queryKey: ['weekend-pricing', tenant?.id] });
       toast({ title: 'Saved', description: 'Weekend pricing updated.' });
+      logAction({
+        action: "settings_updated",
+        entityType: "settings",
+        entityId: tenant?.id || "unknown",
+        details: { section: "weekend_pricing", changes: variables },
+      });
     },
     onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });

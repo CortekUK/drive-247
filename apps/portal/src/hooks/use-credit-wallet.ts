@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 export interface CreditWallet {
   id: string;
@@ -64,6 +65,7 @@ export interface CreditCost {
 export function useCreditWallet() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   // Fetch wallet
   const walletQuery = useQuery({
@@ -148,6 +150,7 @@ export function useCreditWallet() {
     },
     onSuccess: (data) => {
       if (data?.url) {
+        // Audit log is created server-side in subscription-webhook when payment completes
         window.location.href = data.url;
       }
     },
@@ -178,9 +181,15 @@ export function useCreditWallet() {
       if (data?.error) throw new Error(data.error);
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["credit-wallet", tenant?.id] });
       toast.success("Auto-refill settings updated");
+      logAction({
+        action: "settings_updated",
+        entityType: "settings",
+        entityId: tenant!.id,
+        details: { setting: "credit_wallet_auto_refill", ...variables },
+      });
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to update auto-refill settings");

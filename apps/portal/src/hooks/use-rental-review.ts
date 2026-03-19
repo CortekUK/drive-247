@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/stores/auth-store";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 export interface RentalReview {
   id: string;
@@ -52,6 +53,7 @@ export const useSubmitRentalReview = () => {
   const { appUser } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { logAction } = useAuditLog();
 
   return useMutation({
     mutationFn: async (payload: SubmitReviewPayload) => {
@@ -94,6 +96,12 @@ export const useSubmitRentalReview = () => {
       return result;
     },
     onSuccess: (_data, variables) => {
+      logAction({
+        action: "rental_review_submitted",
+        entityType: "rental",
+        entityId: variables.rentalId,
+        details: { rating: variables.rating, customer_id: variables.customerId, tags: variables.tags },
+      });
       toast({ title: "Review Submitted", description: "Your review has been saved." });
       queryClient.invalidateQueries({ queryKey: ["rental-review"] });
       queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });
@@ -111,6 +119,7 @@ export const useSkipRentalReview = () => {
   const { appUser } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { logAction } = useAuditLog();
 
   return useMutation({
     mutationFn: async (payload: { rentalId: string; customerId: string; existingReviewId?: string }) => {
@@ -144,7 +153,13 @@ export const useSkipRentalReview = () => {
         return data;
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      logAction({
+        action: "rental_review_skipped",
+        entityType: "rental",
+        entityId: variables.rentalId,
+        details: { customer_id: variables.customerId },
+      });
       toast({ title: "Review Skipped", description: "You can add a review later." });
       queryClient.invalidateQueries({ queryKey: ["rental-review"] });
       queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });

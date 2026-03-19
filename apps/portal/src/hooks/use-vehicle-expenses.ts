@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 type ExpenseCategory = 'Repair' | 'Service' | 'Tyres' | 'Valet' | 'Accessory' | 'Other';
 
@@ -30,6 +31,7 @@ export function useVehicleExpenses(vehicleId: string) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   // Fetch expenses for a vehicle
   const { data: expenses = [], isLoading } = useQuery({
@@ -72,13 +74,19 @@ export function useVehicleExpenses(vehicleId: string) {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['vehicleExpenses', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['plEntries', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['vehicle', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['plSummary'] });
       queryClient.invalidateQueries({ queryKey: ['vehiclePLData'] });
       queryClient.invalidateQueries({ queryKey: ['monthlyPLData'] });
+      logAction({
+        action: "vehicle_expense_created",
+        entityType: "vehicle",
+        entityId: vehicleId,
+        details: { category: variables.category, amount: variables.amount, expense_date: variables.expense_date },
+      });
       toast({
         title: "Expense Added",
         description: "Vehicle expense has been added successfully.",
@@ -109,13 +117,19 @@ export function useVehicleExpenses(vehicleId: string) {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ['vehicleExpenses', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['plEntries', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['vehicle', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['plSummary'] });
       queryClient.invalidateQueries({ queryKey: ['vehiclePLData'] });
       queryClient.invalidateQueries({ queryKey: ['monthlyPLData'] });
+      logAction({
+        action: "vehicle_expense_deleted",
+        entityType: "vehicle",
+        entityId: vehicleId,
+        details: { expense_id: deletedId },
+      });
       toast({
         title: "Expense Deleted",
         description: "Vehicle expense has been deleted successfully.",

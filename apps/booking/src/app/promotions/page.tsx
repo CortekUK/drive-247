@@ -70,33 +70,25 @@ const Promotions = () => {
   const loadData = async () => {
     setLoading(true);
     try {
+      if (!tenant?.id) return;
+
       // Load promotions with tenant filtering
-      let promoQuery = supabase
+      const { data: promoData, error: promoError } = await supabase
         .from("promotions")
         .select("*")
+        .eq("tenant_id", tenant.id)
         .order("created_at", { ascending: false });
-
-      if (tenant?.id) {
-        promoQuery = promoQuery.eq("tenant_id", tenant.id);
-      }
-
-      const { data: promoData, error: promoError } = await promoQuery;
 
       if (promoError) throw promoError;
       setPromotions(promoData || []);
 
       // Load vehicles with tenant filtering
-      let vehicleQuery = supabase
+      const { data: vehicleData } = await supabase
         .from("vehicles")
         .select("id, name")
+        .eq("tenant_id", tenant.id)
         .eq("is_active", true)
         .order("name");
-
-      if (tenant?.id) {
-        vehicleQuery = vehicleQuery.eq("tenant_id", tenant.id);
-      }
-
-      const { data: vehicleData } = await vehicleQuery;
 
       setVehicles(vehicleData || []);
     } catch (error) {

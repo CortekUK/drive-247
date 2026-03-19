@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 export interface ServiceRecord {
   id: string;
@@ -26,6 +27,7 @@ export function useVehicleServices(vehicleId: string) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   // Fetch service records for a vehicle
   const { data: serviceRecords = [], isLoading } = useQuery({
@@ -68,11 +70,17 @@ export function useVehicleServices(vehicleId: string) {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['serviceRecords', tenant?.id, vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['vehicle', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['plEntries', vehicleId] });
+      logAction({
+        action: "service_record_created",
+        entityType: "vehicle",
+        entityId: vehicleId,
+        details: { service_type: variables.service_type, cost: variables.cost, service_date: variables.service_date },
+      });
       toast({
         title: "Service Record Added",
         description: "Service record has been added successfully.",
@@ -110,11 +118,17 @@ export function useVehicleServices(vehicleId: string) {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['serviceRecords', tenant?.id, vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['vehicle', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['plEntries', vehicleId] });
+      logAction({
+        action: "service_record_updated",
+        entityType: "vehicle",
+        entityId: vehicleId,
+        details: { service_record_id: variables.id, service_type: variables.service_type, cost: variables.cost },
+      });
       toast({
         title: "Service Record Updated",
         description: "Service record has been updated successfully.",
@@ -145,11 +159,17 @@ export function useVehicleServices(vehicleId: string) {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ['serviceRecords', tenant?.id, vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['vehicle', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['plEntries', vehicleId] });
+      logAction({
+        action: "service_record_deleted",
+        entityType: "vehicle",
+        entityId: vehicleId,
+        details: { service_record_id: deletedId },
+      });
       toast({
         title: "Service Record Deleted",
         description: "Service record has been deleted successfully.",

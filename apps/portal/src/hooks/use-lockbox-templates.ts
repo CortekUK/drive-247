@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 export interface LockboxTemplate {
   id: string;
@@ -45,6 +46,7 @@ Booking Ref: {{booking_ref}}`,
 export function useLockboxTemplates() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   const { data: templates, isLoading } = useQuery({
     queryKey: ['lockbox-templates', tenant?.id],
@@ -108,8 +110,14 @@ export function useLockboxTemplates() {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data: void, variables: { channel: string; subject?: string; body: string }) => {
       queryClient.invalidateQueries({ queryKey: ['lockbox-templates', tenant?.id] });
+      logAction({
+        action: "settings_updated",
+        entityType: "settings",
+        entityId: tenant?.id || "unknown",
+        details: { section: "lockbox_template", channel: variables.channel },
+      });
     },
   });
 

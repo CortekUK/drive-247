@@ -22,6 +22,7 @@ import {
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuditLog } from '@/hooks/use-audit-log';
 import type { RentalAgreement } from '@/hooks/use-rental-agreements';
 
 export interface ExtensionGroupInfo {
@@ -94,6 +95,7 @@ function AgreementCard({
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [resending, setResending] = useState(false);
 
@@ -115,6 +117,12 @@ function AgreementCard({
       const data = await response.json();
       if (data?.ok) {
         toast({ title: 'Status Updated', description: `Document status: ${data.status}` });
+        logAction({
+          action: "agreement_status_checked",
+          entityType: "rental",
+          entityId: rentalId,
+          details: { agreement_id: agreement.id, new_status: data.status },
+        });
         queryClient.invalidateQueries({ queryKey: ['rental-agreements', rentalId] });
         queryClient.invalidateQueries({ queryKey: ['rental', rentalId] });
       } else {
@@ -146,6 +154,12 @@ function AgreementCard({
       const data = await response.json();
       if (data?.ok) {
         toast({ title: 'Agreement Resent', description: 'A new agreement has been sent for signing' });
+        logAction({
+          action: "agreement_resent",
+          entityType: "rental",
+          entityId: rentalId,
+          details: { agreement_id: agreement.id, agreement_type: agreement.agreement_type },
+        });
         queryClient.invalidateQueries({ queryKey: ['rental-agreements', rentalId] });
         queryClient.invalidateQueries({ queryKey: ['rental', rentalId] });
       } else if (data?.error === 'insufficient_credits') {
@@ -255,6 +269,7 @@ export function AgreementTimeline({
 }: AgreementTimelineProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
   const [sendingAgreement, setSendingAgreement] = useState<string | null>(null);
 
   const originalAgreements = agreements.filter((a) => a.agreement_type === 'original');
@@ -312,6 +327,12 @@ export function AgreementTimeline({
           description: agreementType === 'extension'
             ? `Extension #${extGroup?.extensionNumber} agreement has been sent for signing`
             : 'Rental agreement has been sent for signing',
+        });
+        logAction({
+          action: "agreement_sent",
+          entityType: "rental",
+          entityId: rentalId,
+          details: { agreement_type: agreementType, extension_number: extGroup?.extensionNumber },
         });
         queryClient.invalidateQueries({ queryKey: ['rental-agreements', rentalId] });
         queryClient.invalidateQueries({ queryKey: ['rental', rentalId] });

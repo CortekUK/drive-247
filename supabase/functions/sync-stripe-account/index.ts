@@ -93,6 +93,20 @@ serve(async (req) => {
       )
     }
 
+    // Audit log
+    try {
+      await supabaseClient.from('audit_logs').insert({
+        action: 'stripe_account_synced',
+        actor_id: null,
+        entity_type: 'settings',
+        entity_id: tenantId,
+        tenant_id: tenantId,
+        details: { stripe_account_id: stripeAccountId, status, onboarding_complete: onboardingComplete },
+      })
+    } catch (e) {
+      console.error('[Audit] stripe_account_synced failed:', e)
+    }
+
     console.log(`Synced Stripe account ${stripeAccountId} to tenant ${tenant.company_name}: status=${status}, onboarding=${onboardingComplete}`)
 
     return new Response(

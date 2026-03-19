@@ -47,6 +47,7 @@ import {
 } from '@/components/ui/alert';
 import { useCustomerVerification } from '@/hooks/use-customer-verification';
 import { format } from 'date-fns';
+import { logCustomerAudit } from '@/lib/auditLogger';
 
 export default function SettingsPage() {
   const { customerUser, user, refetchCustomerUser } = useCustomerAuthStore();
@@ -158,6 +159,13 @@ export default function SettingsPage() {
 
       if (updateError) throw updateError;
 
+      logCustomerAudit({
+        action: 'customer_updated',
+        entityType: 'customer',
+        entityId: customerUser?.customer_id!,
+        tenantId: customerUser?.tenant_id,
+        details: { trigger: 'customer_self_service', field: 'profile_photo_url' },
+      });
       await refetchCustomerUser();
       toast.success('Profile photo updated successfully');
     } catch (error: any) {
@@ -195,6 +203,13 @@ export default function SettingsPage() {
 
       if (error) throw error;
 
+      logCustomerAudit({
+        action: 'customer_updated',
+        entityType: 'customer',
+        entityId: customerUser?.customer_id!,
+        tenantId: customerUser?.tenant_id,
+        details: { trigger: 'customer_self_service', fields: ['name', 'phone', 'timezone', 'address', 'license_number', 'license_state'] },
+      });
       await refetchCustomerUser();
       toast.success('Profile updated successfully');
     } catch (error: any) {
@@ -231,6 +246,13 @@ export default function SettingsPage() {
 
       if (error) throw error;
 
+      logCustomerAudit({
+        action: 'customer_updated',
+        entityType: 'customer',
+        entityId: customerUser?.customer_id!,
+        tenantId: customerUser?.tenant_id,
+        details: { trigger: 'customer_self_service', field: 'password' },
+      });
       toast.success('Password changed successfully');
       setShowPasswordDialog(false);
       setCurrentPassword('');
@@ -273,6 +295,13 @@ export default function SettingsPage() {
 
       if (error) throw error;
 
+      logCustomerAudit({
+        action: 'customer_updated',
+        entityType: 'customer',
+        entityId: customerUser?.customer_id!,
+        tenantId: customerUser?.tenant_id,
+        details: { trigger: 'customer_self_service', field: 'email' },
+      });
       toast.success('Verification email sent! Please check your new email address to confirm the change.');
       setShowEmailDialog(false);
       setNewEmail('');

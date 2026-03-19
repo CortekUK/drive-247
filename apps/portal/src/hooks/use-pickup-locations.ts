@@ -293,6 +293,12 @@ export const usePickupLocations = () => {
         title: "Settings Updated",
         description: "Location settings have been saved successfully.",
       });
+      logAction({
+        action: "settings_updated",
+        entityType: "settings",
+        entityId: tenant?.id || "unknown",
+        details: { section: "location_settings" },
+      });
     },
     onError: (error: Error) => {
       toast({

@@ -97,7 +97,7 @@ serve(async (req) => {
     // Get document record to find the actual file URL
     const { data: docRecord, error: docError } = await supabase
       .from('customer_documents')
-      .select('file_url, mime_type, file_name')
+      .select('file_url, mime_type, file_name, tenant_id')
       .eq('id', documentId)
       .single();
 
@@ -407,6 +407,27 @@ IMPORTANT:
     }
 
     console.log('[INSURANCE-AI] Document scan completed successfully. Decision:', verificationDecision);
+
+    // Audit log for successful scan
+    if (docRecord?.tenant_id) {
+      try {
+        const { error: auditErr } = await supabase.from('audit_logs').insert({
+          action: 'insurance_document_scanned',
+          actor_id: null,
+          entity_type: 'document',
+          entity_id: documentId,
+          tenant_id: docRecord.tenant_id,
+          details: {
+            verification_decision: verificationDecision,
+            validation_score: validationScore,
+            confidence_score: confidenceScore,
+          },
+        });
+        if (auditErr) console.error('[INSURANCE-AI] Audit log error:', auditErr);
+      } catch (auditEx) {
+        console.error('[INSURANCE-AI] Audit log exception:', auditEx);
+      }
+    }
 
     return new Response(
       JSON.stringify({

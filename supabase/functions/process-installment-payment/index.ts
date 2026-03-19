@@ -182,6 +182,26 @@ serve(async (req) => {
 
           console.log('Installment', installment.id, 'paid successfully')
 
+          // Audit log (system/cron, no actor)
+          try {
+            await supabase.from('audit_logs').insert({
+              action: 'installment_payment_processed',
+              actor_id: null,
+              entity_type: 'payment',
+              entity_id: payment?.id,
+              tenant_id: installment.tenant_id,
+              details: {
+                installment_id: installment.id,
+                installment_number: installment.installment_number,
+                amount: installment.amount,
+                payment_intent_id: paymentIntent.id,
+                is_retry: isRetry,
+              },
+            });
+          } catch (e) {
+            console.error('[Audit] installment_payment_processed failed:', e);
+          }
+
           // Send receipt notification
           try {
             await fetch(

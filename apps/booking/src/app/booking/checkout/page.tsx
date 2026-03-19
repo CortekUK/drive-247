@@ -21,6 +21,7 @@ import { useBookingStore } from "@/stores/booking-store";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown } from "@/lib/calculate-rental-price";
+import { logCustomerAudit } from "@/lib/auditLogger";
 const checkoutSchema = z.object({
   customerName: z.string().min(2, "Name must be at least 2 characters"),
   customerEmail: z.string().email("Invalid email address"),
@@ -353,6 +354,13 @@ const BookingCheckoutContent = () => {
 
         if (createError) throw createError;
         customer = newCustomer;
+        logCustomerAudit({
+          action: 'customer_created',
+          entityType: 'customer',
+          entityId: newCustomer.id,
+          tenantId: tenant?.id,
+          details: { trigger: 'booking_checkout', email: customerEmail },
+        });
       }
 
       // Step 2: Link any pending insurance documents to the customer
@@ -454,6 +462,17 @@ const BookingCheckoutContent = () => {
         }
       }
 
+      // Audit log for insurance docs
+      if (uniqueFiles.length > 0) {
+        logCustomerAudit({
+          action: 'document_uploaded',
+          entityType: 'customer',
+          entityId: customer.id,
+          tenantId: tenant?.id,
+          details: { document_type: 'insurance', trigger: 'booking_checkout', count: uniqueFiles.length },
+        });
+      }
+
       // Clear store immediately after processing to prevent duplicates on retry
       clearPendingInsuranceFiles();
       console.log('[CHECKOUT] Cleared pending insurance files from store');
@@ -503,6 +522,13 @@ const BookingCheckoutContent = () => {
 
         clearPendingGigDriverFiles();
         console.log('[CHECKOUT] Cleared pending gig driver files from store');
+        logCustomerAudit({
+          action: 'customer_updated',
+          entityType: 'customer',
+          entityId: customer.id,
+          tenantId: tenant?.id,
+          details: { field: 'is_gig_driver', new_value: true, trigger: 'booking_checkout', gig_images_count: uniqueGigFiles.length },
+        });
       }
 
       // Step 3: Check if customer already has active rental
@@ -559,6 +585,14 @@ const BookingCheckoutContent = () => {
 
       if (rentalError) throw rentalError;
 
+      logCustomerAudit({
+        action: 'rental_created',
+        entityType: 'rental',
+        entityId: rental.id,
+        tenantId: tenant?.id,
+        details: { trigger: 'booking_checkout', vehicle_id: vehicleId, start_date: pickupDate, end_date: returnDate },
+      });
+
       // Step 6: Update vehicle status to Rented (filtered by tenant)
       let vehicleUpdateQuery = supabase
         .from("vehicles")
@@ -574,6 +608,14 @@ const BookingCheckoutContent = () => {
       if (vehicleError) {
         console.error("Failed to update vehicle status:", vehicleError);
         // Don't throw - rental is already created
+      } else {
+        logCustomerAudit({
+          action: 'vehicle_status_changed',
+          entityType: 'vehicle',
+          entityId: vehicleId,
+          tenantId: tenant?.id,
+          details: { new_status: 'Rented', trigger: 'booking_checkout', rental_id: rental.id },
+        });
       }
 
       // Step 7: Generate rental charges (let database triggers handle this)
