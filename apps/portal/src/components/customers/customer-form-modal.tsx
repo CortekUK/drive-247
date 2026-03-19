@@ -266,12 +266,14 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
     setLoading(true);
 
     try {
-      // Check for duplicate license number (prevent duplicates)
+      // Check for duplicate license number (prevent duplicates within same tenant)
       if (data.license_number) {
         let duplicateQuery = supabase
           .from('customers')
           .select('id, name, license_number')
           .eq('license_number', data.license_number.trim());
+
+        if (tenant?.id) duplicateQuery = duplicateQuery.eq('tenant_id', tenant.id);
 
         // If editing, exclude current customer from duplicate check
         if (isEditing && customer?.id) {
@@ -291,12 +293,14 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         }
       }
 
-      // Check for duplicate email (prevent duplicates)
+      // Check for duplicate email (prevent duplicates within same tenant)
       if (data.email) {
         let emailDuplicateQuery = supabase
           .from('customers')
           .select('id, name, email')
           .eq('email', data.email.trim().toLowerCase());
+
+        if (tenant?.id) emailDuplicateQuery = emailDuplicateQuery.eq('tenant_id', tenant.id);
 
         // If editing, exclude current customer from duplicate check
         if (isEditing && customer?.id) {
@@ -382,6 +386,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         name: data.name,
         email: data.email || null,
         phone: data.phone || null,
+        type: "Individual",
         date_of_birth: data.date_of_birth || null,
         license_number: data.license_number || null,
         id_number: data.id_number || null,
