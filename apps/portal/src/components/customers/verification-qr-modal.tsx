@@ -119,7 +119,7 @@ export function VerificationQRModal({ open, onOpenChange, sessionData, onComplet
       if (!o) handleClose();
       else onOpenChange(o);
     }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Smartphone className="h-5 w-5 text-primary" />
@@ -143,10 +143,10 @@ export function VerificationQRModal({ open, onOpenChange, sessionData, onComplet
               }}
             >
               <img
-                src={`https://quickchart.io/qr?text=${encodeURIComponent(sessionData.qrUrl)}&size=300&margin=3&dark=000000&light=ffffff&ecLevel=M&format=png`}
+                src={`https://quickchart.io/qr?text=${encodeURIComponent(sessionData.qrUrl)}&size=250&margin=3&dark=000000&light=ffffff&ecLevel=M&format=png`}
                 alt="Scan QR code to verify identity"
-                width={300}
-                height={300}
+                width={250}
+                height={250}
                 style={{ display: 'block', imageRendering: 'pixelated' }}
               />
             </div>
