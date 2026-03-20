@@ -1339,6 +1339,11 @@ const RentalDetail = () => {
   };
 
   const handleApproveClick = async () => {
+    if (!hasDocuSign) {
+      // No agreement sent at all — show warning
+      setShowDocuSignWarning(true);
+      return;
+    }
     if (hasDocuSign && !isDocuSignSigned) {
       // DB says not signed — check BoldSign API for latest status before warning
       try {
@@ -1365,7 +1370,7 @@ const RentalDetail = () => {
       // Still not signed — show warning
       setShowDocuSignWarning(true);
     } else {
-      // No DocuSign or already signed - check insurance next
+      // Already signed - check insurance next
       proceedToApproveAfterChecks();
     }
   };
@@ -4624,7 +4629,9 @@ const RentalDetail = () => {
               Agreement Not Signed
             </AlertDialogTitle>
             <AlertDialogDescription>
-              The rental agreement has been sent but has not been signed by the customer yet.
+              {hasDocuSign
+                ? 'The rental agreement has been sent but has not been signed by the customer yet.'
+                : 'No rental agreement has been sent for this booking.'}
               <span className="block mt-2 font-medium">
                 Do you still want to approve this booking without a signed agreement?
               </span>
