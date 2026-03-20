@@ -116,6 +116,13 @@ export const KeyHandoverSection = ({
   const whatsappEnabled = enabledMethods.includes('whatsapp');
   const smsEnabled = enabledMethods.includes('sms');
 
+  // Lockbox code state — pre-fill from vehicle, editable by admin
+  const [lockboxCodeInput, setLockboxCodeInput] = useState(vehicleLockboxCode || '');
+
+  useEffect(() => {
+    setLockboxCodeInput(vehicleLockboxCode || '');
+  }, [vehicleLockboxCode]);
+
   // Notification method state
   const [sendEmail, setSendEmail] = useState(true);
   const [sendWhatsApp, setSendWhatsApp] = useState(false);
@@ -187,19 +194,22 @@ export const KeyHandoverSection = ({
   const handleConfirmHandover = async () => {
     if (!confirmHandover) return;
 
-    // Track the resolved lockbox code (existing or auto-generated) for use across notifications
-    let resolvedLockboxCode = vehicleLockboxCode;
+    // Track the resolved lockbox code — use admin input, fallback to vehicle, then auto-generate
+    let resolvedLockboxCode = lockboxCodeInput || vehicleLockboxCode;
 
     // If giving handover with lockbox delivery method, send notification and save delivery_method
     if (confirmHandover === "giving" && showLockboxOption && deliveryMethodChoice === "lockbox") {
       setIsSendingLockbox(true);
       try {
-        // Use existing code or auto-generate one
+        // Use admin-entered code, or auto-generate as last resort
         let lockboxCode = resolvedLockboxCode;
         if (!lockboxCode && vehicleId) {
           lockboxCode = generateLockboxCode();
           resolvedLockboxCode = lockboxCode;
-          // Save the generated code to the vehicle
+          setLockboxCodeInput(lockboxCode);
+        }
+        // Always save the code to the vehicle record
+        if (lockboxCode && vehicleId) {
           const { error: vehicleUpdateError } = await supabase
             .from("vehicles")
             .update({ lockbox_code: lockboxCode })
@@ -417,11 +427,47 @@ export const KeyHandoverSection = ({
               </div>
             )}
 
-            {/* Info: code will be auto-generated if vehicle doesn't have one */}
-            {showLockboxOption && !vehicleLockboxCode && deliveryMethodChoice === 'lockbox' && !givingCompleted && !isClosed && (
-              <div className="flex items-center gap-2 text-muted-foreground text-xs p-2 border rounded-md bg-muted/30">
-                <Lock className="h-3.5 w-3.5 flex-shrink-0" />
-                <span>A lockbox code will be auto-generated for this vehicle when you confirm collection.</span>
+            {/* Lockbox Code Input */}
+            {showLockboxOption && deliveryMethodChoice === 'lockbox' && !givingCompleted && !isClosed && (
+              <div className="p-3 border rounded-lg bg-muted/20 space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-1.5">
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                  Lockbox Code
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    placeholder="Enter lockbox code"
+                    value={lockboxCodeInput}
+                    onChange={(e) => setLockboxCodeInput(e.target.value)}
+                    className="max-w-[200px] text-center text-lg font-mono tracking-widest"
+                  />
+                  {!lockboxCodeInput && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setLockboxCodeInput(generateLockboxCode())}
+                    >
+                      Auto-generate
+                    </Button>
+                  )}
+                </div>
+                {vehicleLockboxCode && lockboxCodeInput === vehicleLockboxCode && (
+                  <p className="text-[11px] text-muted-foreground">Pre-filled from vehicle record</p>
+                )}
+                {!lockboxCodeInput && (
+                  <p className="text-[11px] text-muted-foreground">Enter a code or click auto-generate. This will be sent to the customer.</p>
+                )}
+              </div>
+            )}
+
+            {/* Show lockbox code after completion */}
+            {showLockboxOption && deliveryMethodChoice === 'lockbox' && givingCompleted && vehicleLockboxCode && (
+              <div className="flex items-center gap-2 text-sm p-2 border rounded-md bg-muted/30">
+                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground">Lockbox code:</span>
+                <span className="font-mono font-bold tracking-widest">{vehicleLockboxCode}</span>
               </div>
             )}
 
@@ -517,28 +563,30 @@ export const KeyHandoverSection = ({
                     </div>
                   )}
                   {smsEnabled && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 opacity-50">
                       <Checkbox
                         id="notify-sms"
-                        checked={sendSms}
-                        onCheckedChange={(checked) => setSendSms(!!checked)}
+                        checked={false}
+                        disabled
                       />
-                      <Label htmlFor="notify-sms" className="text-sm cursor-pointer flex items-center gap-1.5">
+                      <Label htmlFor="notify-sms" className="text-sm cursor-not-allowed flex items-center gap-1.5">
                         <Phone className="h-3.5 w-3.5" />
                         SMS
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 ml-1">Coming soon</Badge>
                       </Label>
                     </div>
                   )}
                   {whatsappEnabled && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 opacity-50">
                       <Checkbox
                         id="notify-whatsapp"
-                        checked={sendWhatsApp}
-                        onCheckedChange={(checked) => setSendWhatsApp(!!checked)}
+                        checked={false}
+                        disabled
                       />
-                      <Label htmlFor="notify-whatsapp" className="text-sm cursor-pointer flex items-center gap-1.5">
+                      <Label htmlFor="notify-whatsapp" className="text-sm cursor-not-allowed flex items-center gap-1.5">
                         <MessageCircle className="h-3.5 w-3.5" />
                         WhatsApp
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 ml-1">Coming soon</Badge>
                       </Label>
                     </div>
                   )}

@@ -125,10 +125,6 @@ const BookingSuccessContent = () => {
   const isInvoicePayment = searchParams?.get("type") === "invoice";
   const isAuthenticated = !!customerUser;
 
-  if (isInvoicePayment) {
-    return <InvoicePaymentSuccess />;
-  }
-
   // Clear persisted booking form data on successful booking
   useEffect(() => {
     clearBooking();
@@ -532,6 +528,10 @@ const BookingSuccessContent = () => {
       return () => clearTimeout(timer);
     }
   }, [loading, bookingDetails, fireConfetti]);
+
+  if (isInvoicePayment) {
+    return <InvoicePaymentSuccess />;
+  }
 
   return (
     <>

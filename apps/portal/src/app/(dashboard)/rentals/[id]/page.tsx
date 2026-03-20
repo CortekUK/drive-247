@@ -548,6 +548,8 @@ const RentalDetail = () => {
           queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
           queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'] }),
           queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
+          queryClient.invalidateQueries({ queryKey: ['excess-mileage-charge'] }),
+          queryClient.invalidateQueries({ queryKey: ['key-handovers-mileage'] }),
         ]);
 
         setPaymentResult({ status: 'success', message: 'Stripe payment has been processed and applied successfully.' });

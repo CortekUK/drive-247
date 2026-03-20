@@ -375,7 +375,6 @@ export function AgreementTimeline({
                   <Car className="h-3 w-3 text-green-500" />
                 </div>
                 <span className="text-sm font-medium">Original Agreement</span>
-                {originalAgreements.length > 0 && getGroupStatusBadge(originalAgreements)}
               </div>
               {canEdit && !hasOriginal && displayStatus !== 'Completed' && (
                 <Button variant="outline" size="sm" onClick={() => handleSendAgreement('original')} disabled={sendingAgreement !== null}>
