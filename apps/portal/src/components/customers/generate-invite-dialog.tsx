@@ -96,7 +96,7 @@ export function GenerateInviteDialog({ open, onOpenChange }: GenerateInviteDialo
             Customer Registration Link
           </DialogTitle>
           <DialogDescription>
-            Generate a link that customers can use to register themselves. The link includes a registration form and optional ID verification.
+            Generate a link that customers can use to register themselves. The link includes a registration form and ID verification.
           </DialogDescription>
         </DialogHeader>
 
@@ -104,7 +104,7 @@ export function GenerateInviteDialog({ open, onOpenChange }: GenerateInviteDialo
           {!inviteUrl ? (
             <div className="text-center space-y-4">
               <p className="text-sm text-muted-foreground">
-                The link will be valid for 7 days. The customer can fill out their details and optionally complete ID verification.
+                The link will be valid for 7 days. The customer can fill out their details and complete ID verification.
               </p>
               <Button
                 onClick={handleGenerate}

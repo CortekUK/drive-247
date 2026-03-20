@@ -49,9 +49,9 @@ import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/t
 import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
 import { useGigDriverImages } from "@/hooks/use-gig-driver-images";
 import GigDriverUploadDialog from "@/components/booking/gig-driver-upload-dialog";
-import { formatCurrency, getEarthRadius, metersToUnit, getPerMonthLabel, getUnlimitedLabel, getDistanceUnitLong, getMileageTierLabel } from "@/lib/format-utils";
+import { formatCurrency, getEarthRadius, metersToUnit, getPerMonthLabel, getUnlimitedLabel, getDistanceUnitLong, getDistanceUnitShort, getMileageTierLabel, formatDistance } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
-import { getMileageTier, getTierMileage, isUnlimitedMileage } from "@/lib/mileage-utils";
+import { getMileageTier, getTierMileage, calculateTotalMileageAllowance, isUnlimitedMileage } from "@/lib/mileage-utils";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown, parseDateString as parseDateStringSafe } from "@/lib/calculate-rental-price";
 interface VehiclePhoto {
@@ -80,6 +80,7 @@ interface Vehicle {
   daily_mileage?: number | null;
   weekly_mileage?: number | null;
   monthly_mileage?: number | null;
+  excess_mileage_rate?: number | null;
 }
 interface PricingExtra {
   id: string;
@@ -2321,18 +2322,17 @@ const MultiStepBookingWidget = () => {
     };
   };
 
-  // Get mileage display label based on selected dates and tier
+  // Get mileage display — shows total allowance for the trip when dates are selected
   const getVehicleMileageDisplay = (vehicle: Vehicle): string => {
     if (isUnlimitedMileage(vehicle)) return getUnlimitedLabel(distanceUnit);
     const duration = calculateRentalDuration();
     const days = duration?.days || 0;
     if (days > 0) {
-      const tier = getMileageTier(days);
-      const perUnit = getTierMileage(vehicle, tier);
-      if (perUnit === null) return getUnlimitedLabel(distanceUnit);
-      return `${perUnit.toLocaleString()} ${getMileageTierLabel(tier, distanceUnit)}`;
+      const totalAllowance = calculateTotalMileageAllowance(vehicle, days);
+      if (totalAllowance === null) return getUnlimitedLabel(distanceUnit);
+      return `${formatDistance(totalAllowance, distanceUnit)} allowance`;
     }
-    // No dates selected — show monthly as default, or daily, or weekly
+    // No dates selected — show per-unit rate as fallback
     const mileage = vehicle.monthly_mileage ?? vehicle.daily_mileage ?? vehicle.weekly_mileage;
     if (mileage == null) return getUnlimitedLabel(distanceUnit);
     const tier = vehicle.monthly_mileage != null ? 'monthly' : vehicle.daily_mileage != null ? 'daily' : 'weekly';
@@ -4418,6 +4418,37 @@ const MultiStepBookingWidget = () => {
                       )}
                     </div>
                   )}
+
+                  {/* Mileage allowance */}
+                  {(() => {
+                    const days = estimatedBooking.days || 0;
+                    if (days <= 0 || isUnlimitedMileage(selectedVehicle)) {
+                      return (
+                        <div className="text-xs pt-2 border-t border-border/30">
+                          <div className="flex justify-between text-muted-foreground">
+                            <span className="flex items-center gap-1"><Gauge className="h-3 w-3" /> Mileage</span>
+                            <span>Unlimited</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    const totalAllowance = calculateTotalMileageAllowance(selectedVehicle, days);
+                    if (totalAllowance === null) return null;
+                    return (
+                      <div className="text-xs space-y-1 pt-2 border-t border-border/30">
+                        <div className="flex justify-between text-muted-foreground">
+                          <span className="flex items-center gap-1"><Gauge className="h-3 w-3" /> Mileage allowance</span>
+                          <span className="font-medium text-foreground">{formatDistance(totalAllowance, distanceUnit)}</span>
+                        </div>
+                        {selectedVehicle.excess_mileage_rate != null && selectedVehicle.excess_mileage_rate > 0 && (
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>Excess rate</span>
+                            <span>{formatCurrency(selectedVehicle.excess_mileage_rate, currencyCode, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/{getDistanceUnitShort(distanceUnit)}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   <p className="text-xs text-muted-foreground">
                     Final total at checkout

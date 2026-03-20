@@ -3087,8 +3087,6 @@ const Settings = () => {
                     <SelectItem value="driving_license">Driver&apos;s License</SelectItem>
                     <SelectItem value="passport">Passport</SelectItem>
                     <SelectItem value="id_card">ID Card</SelectItem>
-                    <SelectItem value="driving_license_or_passport">Driver&apos;s License or Passport</SelectItem>
-                    <SelectItem value="any">Any Government ID</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">

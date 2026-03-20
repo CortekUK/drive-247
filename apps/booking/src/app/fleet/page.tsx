@@ -15,7 +15,8 @@ import SEO from "@/components/SEO";
 import { usePageContent, defaultFleetContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { useBrandingSettings } from "@/hooks/useBrandingSettings";
 import { createCompanyNameReplacer } from "@/utils/tenantName";
-import { formatCurrency } from "@/lib/format-utils";
+import { formatCurrency, getUnlimitedLabel, formatDistance, getDistanceUnitShort, getPerMonthLabel, type DistanceUnit } from "@/lib/format-utils";
+import { isUnlimitedMileage } from "@/lib/mileage-utils";
 import {
   Car,
   CarFront,
@@ -36,6 +37,7 @@ import {
   Baby,
   MapPin,
   FileCheck,
+  Gauge,
 } from "lucide-react";
 
 interface VehiclePhoto {
@@ -52,6 +54,10 @@ interface Vehicle {
   daily_rent: number;
   weekly_rent: number;
   monthly_rent: number;
+  daily_mileage?: number | null;
+  weekly_mileage?: number | null;
+  monthly_mileage?: number | null;
+  excess_mileage_rate?: number | null;
   status: string;
   photo_url?: string | null;
   vehicle_photos?: VehiclePhoto[];
@@ -92,8 +98,29 @@ const getIconComponent = (iconName: string) => {
   return icons[iconName] || Shield;
 };
 
+const getMileageDisplay = (vehicle: Vehicle, distanceUnit: DistanceUnit) => {
+  if (isUnlimitedMileage(vehicle)) {
+    return { label: getUnlimitedLabel(distanceUnit), excess: null };
+  }
+  // Show the most generous tier as a reference (monthly > weekly > daily)
+  const mileageValue = vehicle.monthly_mileage ?? vehicle.weekly_mileage ?? vehicle.daily_mileage;
+  if (mileageValue == null) {
+    return { label: getUnlimitedLabel(distanceUnit), excess: null };
+  }
+  const tierLabel = vehicle.monthly_mileage != null
+    ? getPerMonthLabel(distanceUnit)
+    : vehicle.weekly_mileage != null
+      ? (distanceUnit === 'miles' ? 'mi/wk' : 'km/wk')
+      : (distanceUnit === 'miles' ? 'mi/day' : 'km/day');
+  return {
+    label: `${mileageValue.toLocaleString()} ${tierLabel}`,
+    excess: vehicle.excess_mileage_rate,
+  };
+};
+
 const Pricing = () => {
   const { tenant } = useTenant();
+  const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const { branding } = useBrandingSettings();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [makeFilter, setMakeFilter] = useState<string>("all");
@@ -376,6 +403,24 @@ const Pricing = () => {
                               )}
                             </div>
                           )}
+
+                          {/* Mileage */}
+                          {(() => {
+                            const mileage = getMileageDisplay(vehicle, distanceUnit);
+                            return (
+                              <div className="flex items-center gap-1.5 mt-2">
+                                <Gauge className="w-3.5 h-3.5 text-accent/70" />
+                                <span className="text-xs text-muted-foreground">
+                                  {mileage.label}
+                                </span>
+                                {mileage.excess != null && (
+                                  <span className="text-xs text-muted-foreground/70">
+                                    · {formatCurrency(mileage.excess, tenant?.currency_code || 'GBP')}/{getDistanceUnitShort(distanceUnit)} excess
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {/* Pricing & Actions */}

@@ -16,6 +16,102 @@ import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
 import { formatCurrency } from "@/lib/format-utils";
 
+const InvoicePaymentSuccess = () => {
+  const { tenant } = useTenant();
+  const [processing, setProcessing] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+
+    // Process the payment — find the most recent Pending Stripe payment and apply it
+    const processPayment = async () => {
+      try {
+        // Get the checkout session ID from URL params
+        const params = new URLSearchParams(window.location.search);
+        const sessionParam = params.get('session_id');
+
+        // If no session_id in URL, find the most recent pending payment's session
+        let checkoutSessionId = sessionParam;
+        if (!checkoutSessionId) {
+          const { data: pendingPayment } = await supabase
+            .from('payments')
+            .select('stripe_checkout_session_id')
+            .eq('status', 'Pending')
+            .not('stripe_checkout_session_id', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          checkoutSessionId = pendingPayment?.stripe_checkout_session_id || null;
+        }
+
+        if (!checkoutSessionId) {
+          console.log('[INVOICE-SUCCESS] No checkout session found');
+          setProcessing(false);
+          return;
+        }
+
+        console.log('[INVOICE-SUCCESS] Processing session:', checkoutSessionId);
+
+        // Call the edge function which uses service role (bypasses RLS)
+        const { data: result, error: fnError } = await supabase.functions.invoke('process-pending-payment', {
+          body: { checkoutSessionId },
+        });
+
+        if (fnError) {
+          console.error('[INVOICE-SUCCESS] Error:', fnError);
+          setError(fnError.message);
+        } else {
+          console.log('[INVOICE-SUCCESS] Result:', result);
+        }
+      } catch (err: any) {
+        console.error('[INVOICE-SUCCESS] Error:', err);
+        setError(err.message);
+      }
+      setProcessing(false);
+    };
+
+    // Small delay to let Stripe finish processing
+    setTimeout(processPayment, 2000);
+  }, [tenant?.id]);
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Navigation />
+      <div className="pt-24 pb-16 px-4">
+        <div className="max-w-lg mx-auto text-center space-y-6">
+          <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto">
+            {processing ? (
+              <Loader2 className="w-8 h-8 text-green-600 dark:text-green-400 animate-spin" />
+            ) : (
+              <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
+            )}
+          </div>
+          <h1 className="text-3xl font-bold">{processing ? 'Processing Payment...' : 'Payment Received'}</h1>
+          <p className="text-muted-foreground text-lg">
+            {processing
+              ? 'Please wait while we confirm your payment.'
+              : 'Thank you! Your payment has been processed successfully.'
+            }
+          </p>
+          {!processing && (
+            <>
+              <p className="text-sm text-muted-foreground">You can close this page now.</p>
+              <Link href="/">
+                <Button variant="outline" className="mt-4">
+                  <Home className="w-4 h-4 mr-2" />
+                  Back to Home
+                </Button>
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+      <Footer />
+    </div>
+  );
+};
+
 const BookingSuccessContent = () => {
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
@@ -26,7 +122,12 @@ const BookingSuccessContent = () => {
   const sessionId = searchParams?.get("session_id");
   const rentalId = searchParams?.get("rental_id");
   const isInstallment = searchParams?.get("installment") === "true";
+  const isInvoicePayment = searchParams?.get("type") === "invoice";
   const isAuthenticated = !!customerUser;
+
+  if (isInvoicePayment) {
+    return <InvoicePaymentSuccess />;
+  }
 
   // Clear persisted booking form data on successful booking
   useEffect(() => {

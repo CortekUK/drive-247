@@ -272,7 +272,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { invoiceId, tenantId, recipientEmail }: SendInvoiceEmailRequest = await req.json();
+    const { invoiceId, tenantId, recipientEmail, paymentUrl: externalPaymentUrl }: SendInvoiceEmailRequest & { paymentUrl?: string } = await req.json();
 
     if (!invoiceId || !tenantId) {
       throw new Error("Missing required fields: invoiceId and tenantId");
@@ -317,9 +317,9 @@ serve(async (req) => {
 
     const tenantCurrencyCode = tenant?.currency_code || "GBP";
 
-    // Create Stripe checkout session for payment link
-    let paymentUrl: string | undefined;
-    try {
+    // Use external payment URL if provided (from create-checkout-session), otherwise create our own
+    let paymentUrl: string | undefined = externalPaymentUrl || undefined;
+    if (!paymentUrl) try {
       if (tenant) {
         const stripeMode = (tenant.stripe_mode as StripeMode) || "test";
         const stripe = getStripeClient(stripeMode);
@@ -344,17 +344,41 @@ serve(async (req) => {
           }],
           mode: "payment",
           customer_email: toEmail,
-          success_url: `${bookingDomain}/portal/payments?payment=success`,
-          cancel_url: `${bookingDomain}/portal/payments?payment=cancelled`,
+          success_url: `${bookingDomain}/booking-success?type=invoice&status=paid`,
+          cancel_url: `${bookingDomain}/portal/payments`,
+          payment_intent_data: {
+            receipt_email: toEmail,
+          },
           metadata: {
             invoice_id: invoiceId,
             tenant_id: tenantId,
             rental_id: invoice.rental_id || "",
+            type: "invoice_payment",
           },
         }, stripeOptions);
 
         paymentUrl = session.url || undefined;
         console.log("Stripe checkout session created:", session.id);
+
+        // Pre-create payment record so webhook can find and update it
+        if (session.id && invoice.rental_id) {
+          const { error: paymentInsertError } = await supabase.from("payments").insert({
+            customer_id: invoice.customer_id,
+            vehicle_id: invoice.vehicle_id,
+            rental_id: invoice.rental_id,
+            amount: invoice.total_amount,
+            payment_type: "Payment",
+            status: "Pending",
+            method: "Card",
+            stripe_checkout_session_id: session.id,
+            tenant_id: tenantId,
+          });
+          if (paymentInsertError) {
+            console.error("Failed to pre-create payment record:", paymentInsertError);
+          } else {
+            console.log("Payment record pre-created for session:", session.id);
+          }
+        }
       }
     } catch (stripeError) {
       console.error("Failed to create Stripe checkout session (continuing without payment link):", stripeError);

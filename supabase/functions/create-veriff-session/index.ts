@@ -49,15 +49,13 @@ async function createVeriffSession(
     };
 
     // Map document type setting to Veriff's document type
-    if (documentType && documentType !== 'any') {
+    if (documentType) {
       const veriffDocTypeMap: Record<string, string> = {
         'driving_license': 'DRIVERS_LICENSE',
         'passport': 'PASSPORT',
         'id_card': 'ID_CARD',
       };
-      if (documentType === 'driving_license_or_passport') {
-        // Veriff doesn't support multi-type in one field — leave unset and let user choose
-      } else if (veriffDocTypeMap[documentType]) {
+      if (veriffDocTypeMap[documentType]) {
         requestBody.verification.document = {
           type: veriffDocTypeMap[documentType],
         };

@@ -46,27 +46,24 @@ export const generateInvoiceNumber = async (tenantId?: string): Promise<string> 
   const year = format(now, 'yyyy');
   const month = format(now, 'MM');
 
-  // Calculate next month (handle December -> January rollover)
-  const nextMonth = Number(month) === 12 ? 1 : Number(month) + 1;
-  const nextYear = Number(month) === 12 ? Number(year) + 1 : Number(year);
-
-  // Count ALL invoices this month (globally, not per-tenant) to avoid
-  // unique constraint violations on invoice_number
-  const query = supabase
+  // Find the highest sequence number used this month
+  const prefix = `INV-${year}${month}-`;
+  const { data: latestInvoice } = await supabase
     .from('invoices')
-    .select('*', { count: 'exact', head: true })
-    .gte('invoice_date', `${year}-${month}-01`)
-    .lt('invoice_date', `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`);
+    .select('invoice_number')
+    .like('invoice_number', `${prefix}%`)
+    .order('invoice_number', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  const { count, error } = await query;
-
-  if (error) {
-    console.error('Error counting invoices:', error);
-    throw error;
+  let nextSeq = 1;
+  if (latestInvoice?.invoice_number) {
+    const lastSeq = parseInt(latestInvoice.invoice_number.replace(prefix, ''), 10);
+    if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
   }
 
-  const sequence = String((count || 0) + 1).padStart(4, '0');
-  return `INV-${year}${month}-${sequence}`;
+  const sequence = String(nextSeq).padStart(4, '0');
+  return `${prefix}${sequence}`;
 };
 
 // Create invoice (retries once on unique constraint conflict)

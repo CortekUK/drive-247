@@ -55,6 +55,10 @@ export interface CustomerRental {
     model: string | null;
     colour: string | null;
     photo_url: string | null;
+    daily_mileage: number | null;
+    weekly_mileage: number | null;
+    monthly_mileage: number | null;
+    excess_mileage_rate: number | null;
     vehicle_photos: { photo_url: string }[];
   } | null;
   installment_plans: CustomerRentalInstallmentPlan[] | null;
@@ -104,6 +108,10 @@ export function useCustomerRentals(filter: 'all' | 'active' | 'current' | 'past'
             model,
             colour,
             photo_url,
+            daily_mileage,
+            weekly_mileage,
+            monthly_mileage,
+            excess_mileage_rate,
             vehicle_photos (photo_url)
           ),
           installment_plans!installment_plans_rental_id_fkey (

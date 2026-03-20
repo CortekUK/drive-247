@@ -5874,11 +5874,13 @@ export type Database = {
           delivery_fee: number | null
           delivery_location_id: string | null
           delivery_method: string | null
+          daily_mileage_override: number | null
           delivery_option: string | null
           discount_applied: number | null
           document_status: string | null
           docusign_envelope_id: string | null
           driver_age_range: string | null
+          excess_mileage_rate_override: number | null
           end_date: string | null
           envelope_completed_at: string | null
           envelope_created_at: string | null
@@ -5892,6 +5894,7 @@ export type Database = {
           is_extended: boolean | null
           is_gig_driver: boolean | null
           monthly_amount: number
+          monthly_mileage_override: number | null
           payment_mode: string | null
           payment_status: string | null
           pickup_location: string | null
@@ -5914,6 +5917,7 @@ export type Database = {
           updated_at: string
           uses_delivery_service: boolean | null
           vehicle_id: string | null
+          weekly_mileage_override: number | null
         }
         Insert: {
           approval_status?: string | null
@@ -5930,6 +5934,7 @@ export type Database = {
           delivery_fee?: number | null
           delivery_location_id?: string | null
           delivery_method?: string | null
+          daily_mileage_override?: number | null
           delivery_option?: string | null
           discount_applied?: number | null
           document_status?: string | null
@@ -5939,6 +5944,7 @@ export type Database = {
           envelope_completed_at?: string | null
           envelope_created_at?: string | null
           envelope_sent_at?: string | null
+          excess_mileage_rate_override?: number | null
           extension_checkout_url?: string | null
           has_installment_plan?: boolean | null
           id?: string
@@ -5948,6 +5954,7 @@ export type Database = {
           is_extended?: boolean | null
           is_gig_driver?: boolean | null
           monthly_amount: number
+          monthly_mileage_override?: number | null
           payment_mode?: string | null
           payment_status?: string | null
           pickup_location?: string | null
@@ -5970,6 +5977,7 @@ export type Database = {
           updated_at?: string
           uses_delivery_service?: boolean | null
           vehicle_id?: string | null
+          weekly_mileage_override?: number | null
         }
         Update: {
           approval_status?: string | null
@@ -5986,6 +5994,7 @@ export type Database = {
           delivery_fee?: number | null
           delivery_location_id?: string | null
           delivery_method?: string | null
+          daily_mileage_override?: number | null
           delivery_option?: string | null
           discount_applied?: number | null
           document_status?: string | null
@@ -5995,6 +6004,7 @@ export type Database = {
           envelope_completed_at?: string | null
           envelope_created_at?: string | null
           envelope_sent_at?: string | null
+          excess_mileage_rate_override?: number | null
           extension_checkout_url?: string | null
           has_installment_plan?: boolean | null
           id?: string
@@ -6026,6 +6036,7 @@ export type Database = {
           updated_at?: string
           uses_delivery_service?: boolean | null
           vehicle_id?: string | null
+          weekly_mileage_override?: number | null
         }
         Relationships: [
           {

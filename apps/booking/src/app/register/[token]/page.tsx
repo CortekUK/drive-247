@@ -324,7 +324,7 @@ export default function RegisterPage() {
               Customer Registration
             </CardTitle>
             <CardDescription>
-              Fill out the form below and optionally verify your identity.
+              Fill out the form below and verify your identity.
             </CardDescription>
           </CardHeader>
           <CardContent>

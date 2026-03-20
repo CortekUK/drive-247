@@ -91,10 +91,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, noCharge: true, reason: "Missing mileage readings" });
     }
 
-    // Fetch rental details (vehicle_id, customer_id, start_date, end_date)
+    // Fetch rental details including mileage overrides
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
-      .select("vehicle_id, customer_id, tenant_id, start_date, end_date")
+      .select("vehicle_id, customer_id, tenant_id, start_date, end_date, daily_mileage_override, weekly_mileage_override, monthly_mileage_override, excess_mileage_rate_override")
       .eq("id", rentalId)
       .single();
 
@@ -124,12 +124,29 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, noCharge: true, reason: "Vehicle not found" });
     }
 
-    // Calculate tier-based total allowance
-    const totalAllowance = calculateTotalMileageAllowance(vehicle, rentalDays);
+    // Apply rental-level overrides (admin can override mileage per-rental)
+    const effectiveVehicle = {
+      daily_mileage: rental.daily_mileage_override !== null && rental.daily_mileage_override !== undefined ? rental.daily_mileage_override : vehicle.daily_mileage,
+      weekly_mileage: rental.weekly_mileage_override !== null && rental.weekly_mileage_override !== undefined ? rental.weekly_mileage_override : vehicle.weekly_mileage,
+      monthly_mileage: rental.monthly_mileage_override !== null && rental.monthly_mileage_override !== undefined ? rental.monthly_mileage_override : vehicle.monthly_mileage,
+    };
+    const effectiveExcessRate = rental.excess_mileage_rate_override !== null && rental.excess_mileage_rate_override !== undefined
+      ? rental.excess_mileage_rate_override
+      : vehicle.excess_mileage_rate;
+
+    const hasOverrides = rental.daily_mileage_override != null || rental.weekly_mileage_override != null || rental.monthly_mileage_override != null || rental.excess_mileage_rate_override != null;
+    if (hasOverrides) {
+      console.log("[EXCESS-MILEAGE] Using rental-level mileage overrides:", {
+        daily: effectiveVehicle.daily_mileage, weekly: effectiveVehicle.weekly_mileage, monthly: effectiveVehicle.monthly_mileage, rate: effectiveExcessRate
+      });
+    }
+
+    // Calculate tier-based total allowance using effective values
+    const totalAllowance = calculateTotalMileageAllowance(effectiveVehicle, rentalDays);
     const tier = getMileageTier(rentalDays);
 
     // If unlimited mileage for this tier or no rate set, no charge
-    if (totalAllowance === null || !vehicle.excess_mileage_rate || vehicle.excess_mileage_rate <= 0) {
+    if (totalAllowance === null || !effectiveExcessRate || effectiveExcessRate <= 0) {
       await deleteExistingCharge();
       return jsonResponse({
         success: true,
@@ -155,9 +172,9 @@ Deno.serve(async (req) => {
     }
 
     // Calculate charge amount
-    const chargeAmount = Math.round(excessMiles * vehicle.excess_mileage_rate * 100) / 100;
+    const chargeAmount = Math.round(excessMiles * effectiveExcessRate * 100) / 100;
 
-    console.log("[EXCESS-MILEAGE] Tier:", tier, "Allowance:", totalAllowance, "Excess:", excessMiles, "miles × rate:", vehicle.excess_mileage_rate, "= charge:", chargeAmount);
+    console.log("[EXCESS-MILEAGE] Tier:", tier, "Allowance:", totalAllowance, "Excess:", excessMiles, "miles × rate:", effectiveExcessRate, "= charge:", chargeAmount, hasOverrides ? "(overrides applied)" : "");
 
     // Delete any existing excess mileage charge (idempotent recalculation)
     await deleteExistingCharge();
@@ -177,7 +194,7 @@ Deno.serve(async (req) => {
         category: "Excess Mileage",
         amount: chargeAmount,
         remaining_amount: chargeAmount,
-        reference: `${excessMiles} excess miles (${tier} tier, ${totalAllowance} allowance) × ${vehicle.excess_mileage_rate}/mile`,
+        reference: `${excessMiles} excess miles (${tier} tier, ${totalAllowance} allowance) × ${effectiveExcessRate}/mile${hasOverrides ? ' [rental override]' : ''}`,
       })
       .select()
       .single();
@@ -197,7 +214,8 @@ Deno.serve(async (req) => {
       milesDriven,
       allowedMileage: totalAllowance,
       tier,
-      rate: vehicle.excess_mileage_rate,
+      rate: effectiveExcessRate,
+      hasOverrides,
     });
   } catch (error: any) {
     console.error("[EXCESS-MILEAGE] Error:", error);

@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
-import { CalendarIcon, DollarSign, Loader2, Banknote, CreditCard, Building2, Smartphone, FileText, MoreHorizontal, ExternalLink, Mail } from "lucide-react";
+import { CalendarIcon, DollarSign, Loader2, Banknote, CreditCard, Building2, Smartphone, FileText, MoreHorizontal, ExternalLink, Mail, ChevronDown } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -80,6 +80,7 @@ export const AddPaymentDialog = ({
   const [loading, setLoading] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const { toast } = useToast();
   const { tenant } = useTenant();
   const { logAction } = useAuditLog();
@@ -105,14 +106,21 @@ export const AddPaymentDialog = ({
     },
   });
 
+  // Calculate breakdown total when breakdown items are provided
+  const breakdownTotal = breakdownItems && breakdownItems.length > 0
+    ? breakdownItems.reduce((sum, item) => sum + (item.type === 'discount' ? -Math.abs(item.amount) : item.amount), 0)
+    : null;
+
   // Update form values when props change
   useEffect(() => {
     if (open) {
       if (customer_id) form.setValue("customer_id", customer_id);
       if (vehicle_id) form.setValue("vehicle_id", vehicle_id);
-      if (defaultAmount) form.setValue("amount", defaultAmount);
+      // Prefer breakdown total > defaultAmount > outstanding
+      if (breakdownTotal && breakdownTotal > 0) form.setValue("amount", Math.round(breakdownTotal * 100) / 100);
+      else if (defaultAmount) form.setValue("amount", defaultAmount);
     }
-  }, [open, customer_id, vehicle_id, defaultAmount, form]);
+  }, [open, customer_id, vehicle_id, defaultAmount, breakdownTotal, form]);
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -266,7 +274,7 @@ export const AddPaymentDialog = ({
       const finalCustomerId = data.customer_id || customer_id;
       const finalVehicleId = data.vehicle_id || vehicle_id;
 
-      if (outstandingBalance !== undefined && data.amount > outstandingBalance && outstandingBalance > 0) {
+      if (!breakdownItems && outstandingBalance !== undefined && data.amount > outstandingBalance && outstandingBalance > 0) {
         const confirmOverpay = window.confirm(
           `The payment amount (${formatCurrency(data.amount, tenant?.currency_code || 'USD')}) exceeds the outstanding balance (${formatCurrency(outstandingBalance, tenant?.currency_code || 'USD')}). ` +
           `The excess ${formatCurrency(data.amount - outstandingBalance, tenant?.currency_code || 'USD')} will remain as credit. Continue?`
@@ -274,7 +282,7 @@ export const AddPaymentDialog = ({
         if (!confirmOverpay) { setLoading(false); return; }
       }
 
-      if (outstandingBalance !== undefined && outstandingBalance === 0) {
+      if (!breakdownItems && outstandingBalance !== undefined && outstandingBalance === 0) {
         toast({ title: "No Outstanding Balance", description: "This customer has no outstanding balance to pay.", variant: "destructive" });
         setLoading(false);
         return;
@@ -336,7 +344,7 @@ export const AddPaymentDialog = ({
     const finalCustomerId = selectedCustomerId || customer_id;
     if (!finalCustomerId) { toast({ title: "Error", description: "Please select a customer first.", variant: "destructive" }); return; }
 
-    const amount = defaultAmount || outstandingBalance || rentalDetails?.monthly_amount || latestInvoice?.total_amount || 0;
+    const amount = form.getValues("amount") || breakdownTotal || defaultAmount || outstandingBalance || rentalDetails?.monthly_amount || latestInvoice?.total_amount || 0;
     if (amount <= 0) { toast({ title: "Error", description: "No outstanding amount to charge.", variant: "destructive" }); return; }
 
     setStripeLoading(true);
@@ -376,40 +384,51 @@ export const AddPaymentDialog = ({
     }
   };
 
-  // Email invoice handler
+  // Email Stripe link handler — creates checkout session first, then emails it
   const handleSendInvoiceEmail = async () => {
     const finalCustomerId = selectedCustomerId || customer_id;
     if (!finalCustomerId) { toast({ title: "Error", description: "Please select a customer first.", variant: "destructive" }); return; }
     if (!customerEmail) { toast({ title: "Error", description: "Customer has no email address.", variant: "destructive" }); return; }
     if (!rentalId || !rentalDetails) { toast({ title: "Error", description: "No rental found for invoice.", variant: "destructive" }); return; }
 
+    const invoiceToSend = latestInvoice;
+    if (!invoiceToSend) { toast({ title: "Error", description: "No invoice found for this rental.", variant: "destructive" }); return; }
+
     setEmailLoading(true);
     try {
-      let invoiceToSend = latestInvoice;
-      if (!invoiceToSend) {
-        const { data: extras } = await supabase.from('rental_extras_selections').select('quantity, price_at_booking').eq('rental_id', rentalId);
-        const extrasTotal = extras?.reduce((sum: number, e: any) => sum + ((e.quantity || 1) * (e.price_at_booking || 0)), 0) || 0;
-        const deliveryFee = (rentalDetails as any).delivery_fee || 0;
-        const insurancePremium = (rentalDetails as any).insurance_premium || 0;
-        const totalAmount = rentalDetails.monthly_amount || 0;
-        const subtotal = Math.max(totalAmount - deliveryFee - insurancePremium - extrasTotal, 0);
+      const amount = form.getValues("amount") || breakdownTotal || invoiceToSend.total_amount || 0;
 
-        const invoice = await createInvoice({
-          rental_id: rentalId, customer_id: finalCustomerId, vehicle_id: (rentalDetails as any).vehicle_id,
-          invoice_date: new Date(), subtotal, delivery_fee: deliveryFee, insurance_premium: insurancePremium,
-          extras_total: extrasTotal, total_amount: totalAmount, tenant_id: tenant?.id,
-        });
-        invoiceToSend = { id: invoice.id, invoice_number: invoice.invoice_number, total_amount: invoice.total_amount };
-        await queryClient.invalidateQueries({ queryKey: ["latest-invoice-for-payment", rentalId, tenant?.id] });
+      // Step 1: Create Stripe checkout session (same as "Charge via Stripe" — uses the working webhook flow)
+      const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout-session', {
+        body: {
+          rentalId,
+          customerEmail,
+          customerName,
+          totalAmount: amount,
+          tenantId: tenant?.id,
+          successUrl: `https://${tenant?.slug || 'app'}.drive-247.com/booking-success?type=invoice&status=paid&session_id={CHECKOUT_SESSION_ID}`,
+          cancelUrl: `https://${tenant?.slug || 'app'}.drive-247.com/portal/payments`,
+          source: 'portal',
+        },
+      });
+
+      if (checkoutError || !checkoutData?.url) {
+        throw new Error(checkoutError?.message || 'Failed to create payment link');
       }
 
+      // Step 2: Send invoice email with the Stripe link
       const { data, error } = await supabase.functions.invoke('send-invoice-email', {
-        body: { invoiceId: invoiceToSend.id, tenantId: tenant?.id, recipientEmail: customerEmail },
+        body: { invoiceId: invoiceToSend.id, tenantId: tenant?.id, recipientEmail: customerEmail, paymentUrl: checkoutData.url },
       });
       if (error) throw new Error(error.message || 'Failed to send invoice email');
       if (data && !data.success) throw new Error(data.error || 'Failed to send invoice email');
 
-      toast({ title: "Invoice Sent", description: `Invoice emailed to ${customerEmail}. Payment will be recorded when the customer pays.` });
+      // Store the checkout session ID so the rental detail page can poll for it
+      if (checkoutData.sessionId && rentalId) {
+        localStorage.setItem(`pending_email_payment_${rentalId}`, checkoutData.sessionId);
+      }
+
+      toast({ title: "Invoice Sent", description: `Invoice with payment link emailed to ${customerEmail}. Payment will be recorded automatically when the customer pays.` });
       onOpenChange(false);
     } catch (error: any) {
       console.error("Error sending invoice:", error);
@@ -420,7 +439,7 @@ export const AddPaymentDialog = ({
   };
 
   const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');
-  const stripeAmount = defaultAmount || outstandingBalance || rentalDetails?.monthly_amount || latestInvoice?.total_amount || 0;
+  const stripeAmount = breakdownTotal || defaultAmount || outstandingBalance || rentalDetails?.monthly_amount || latestInvoice?.total_amount || 0;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!isAnyLoading) onOpenChange(v); }}>
@@ -487,51 +506,70 @@ export const AddPaymentDialog = ({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-sm font-medium">Amount</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">{currencySymbol}</span>
-                        <Input
-                          type="number" step="0.01" placeholder="0.00"
-                          className="pl-7 text-lg font-semibold h-12"
-                          {...field}
-                          value={field.value ?? ''}
-                          onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                        />
-                      </div>
-                    </FormControl>
-                    {outstandingBalance !== undefined && outstandingBalance > 0 && field.value !== outstandingBalance && (
-                      <button type="button" className="text-xs text-primary hover:underline" onClick={() => field.onChange(outstandingBalance)}>
-                        Use full outstanding: {formatCurrency(outstandingBalance, tenant?.currency_code || 'USD')}
-                      </button>
-                    )}
-                    {outstandingBalance !== undefined && outstandingBalance === 0 && selectedCustomerId && (
-                      <p className="text-xs text-emerald-500">No outstanding balance</p>
+                    {breakdownItems && breakdownItems.length > 0 ? (
+                      <>
+                        {/* Read-only amount display for breakdown mode */}
+                        <div className="flex items-center h-12 px-3 rounded-md border bg-muted/50 text-lg font-semibold">
+                          <span className="text-muted-foreground text-sm mr-1">{currencySymbol}</span>
+                          {formatCurrency(field.value || 0, tenant?.currency_code || 'USD').replace(/^[^\d]*/, '')}
+                        </div>
+                        {/* Collapsible breakdown */}
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 text-xs text-primary hover:underline"
+                          onClick={() => setShowBreakdown(!showBreakdown)}
+                        >
+                          <ChevronDown className={cn("h-3 w-3 transition-transform", showBreakdown && "rotate-180")} />
+                          {showBreakdown ? 'Hide breakdown' : 'View breakdown'}
+                        </button>
+                        {showBreakdown && (
+                          <div className="rounded-lg border px-3 py-2 space-y-1 text-xs">
+                            {breakdownItems.map((item, i) => (
+                              <div key={i} className={cn(
+                                "flex items-center justify-between",
+                                item.type === 'discount' && "text-green-600 dark:text-green-400"
+                              )}>
+                                <span className="text-muted-foreground">{item.label}</span>
+                                <span className="font-medium">
+                                  {item.type === 'discount' ? '−' : ''}{formatCurrency(Math.abs(item.amount), tenant?.currency_code || 'USD')}
+                                </span>
+                              </div>
+                            ))}
+                            <div className="border-t pt-1 flex items-center justify-between font-semibold text-sm">
+                              <span>Total</span>
+                              <span>{formatCurrency(
+                                breakdownItems.reduce((sum, item) => sum + (item.type === 'discount' ? -Math.abs(item.amount) : item.amount), 0),
+                                tenant?.currency_code || 'USD'
+                              )}</span>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <FormControl>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">{currencySymbol}</span>
+                            <Input
+                              type="number" step="0.01" placeholder="0.00"
+                              className="pl-7 text-lg font-semibold h-12"
+                              {...field}
+                              value={field.value ?? ''}
+                              onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                            />
+                          </div>
+                        </FormControl>
+                        {outstandingBalance !== undefined && outstandingBalance > 0 && field.value !== outstandingBalance && (
+                          <button type="button" className="text-xs text-primary hover:underline" onClick={() => field.onChange(outstandingBalance)}>
+                            Use full outstanding: {formatCurrency(outstandingBalance, tenant?.currency_code || 'USD')}
+                          </button>
+                        )}
+                        {outstandingBalance !== undefined && outstandingBalance === 0 && selectedCustomerId && (
+                          <p className="text-xs text-emerald-500">No outstanding balance</p>
+                        )}
+                      </>
                     )}
                     <FormMessage />
-
-                    {/* Breakdown table */}
-                    {breakdownItems && breakdownItems.length > 0 && (
-                      <div className="mt-2 rounded-lg border px-3 py-2 space-y-1 text-xs">
-                        {breakdownItems.map((item, i) => (
-                          <div key={i} className={cn(
-                            "flex items-center justify-between",
-                            item.type === 'discount' && "text-green-600 dark:text-green-400"
-                          )}>
-                            <span className="text-muted-foreground">{item.label}</span>
-                            <span className="font-medium">
-                              {item.type === 'discount' ? '−' : ''}{formatCurrency(Math.abs(item.amount), tenant?.currency_code || 'USD')}
-                            </span>
-                          </div>
-                        ))}
-                        <div className="border-t pt-1 flex items-center justify-between font-semibold text-sm">
-                          <span>Total</span>
-                          <span>{formatCurrency(
-                            breakdownItems.reduce((sum, item) => sum + (item.type === 'discount' ? -Math.abs(item.amount) : item.amount), 0),
-                            tenant?.currency_code || 'USD'
-                          )}</span>
-                        </div>
-                      </div>
-                    )}
                   </FormItem>
                 )}
               />
@@ -543,25 +581,40 @@ export const AddPaymentDialog = ({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-sm font-medium">Method</FormLabel>
-                    <FormControl>
-                      <div className="grid grid-cols-6 gap-1.5">
+                    <Select
+                      value={field.value?.startsWith('Other:') ? 'Other' : (field.value || '')}
+                      onValueChange={(val) => {
+                        if (val === 'Other') {
+                          field.onChange('Other:');
+                        } else {
+                          field.onChange(val);
+                        }
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select payment method" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
                         {PAYMENT_METHODS.map(({ value, label, icon: Icon }) => (
-                          <button
-                            key={value} type="button"
-                            onClick={() => field.onChange(field.value === value ? "" : value)}
-                            className={cn(
-                              "flex flex-col items-center gap-1 rounded-lg border px-1 py-2.5 text-[11px] font-medium transition-all",
-                              field.value === value
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-border hover:border-muted-foreground/30 text-muted-foreground hover:text-foreground"
-                            )}
-                          >
-                            <Icon className="h-4 w-4" />
-                            {label}
-                          </button>
+                          <SelectItem key={value} value={value}>
+                            <div className="flex items-center gap-2">
+                              <Icon className="h-4 w-4 text-muted-foreground" />
+                              <span>{label}</span>
+                            </div>
+                          </SelectItem>
                         ))}
-                      </div>
-                    </FormControl>
+                      </SelectContent>
+                    </Select>
+                    {field.value?.startsWith('Other:') && (
+                      <Input
+                        placeholder="Specify payment method"
+                        className="h-9 mt-2"
+                        value={field.value.replace('Other:', '').trim()}
+                        onChange={(e) => field.onChange(`Other: ${e.target.value}`)}
+                      />
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -613,46 +666,61 @@ export const AddPaymentDialog = ({
               </div>
             </div>
 
-            {/* Footer with all actions */}
-            <div className="px-6 py-4 border-t bg-muted/30 space-y-3">
-              {/* Primary action row */}
-              <div className="flex items-center justify-between">
-                <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={isAnyLoading}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isAnyLoading} size="sm">
-                  {loading ? (
-                    <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> Recording...</>
-                  ) : (
-                    <><DollarSign className="w-3.5 h-3.5 mr-1.5" /> Record Payment</>
-                  )}
-                </Button>
-              </div>
+            {/* Footer */}
+            <div className="px-6 py-4 border-t bg-muted/30 space-y-2">
+              {/* Primary: Record manual payment */}
+              <Button type="submit" disabled={isAnyLoading} className="w-full h-11">
+                {loading ? (
+                  <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Recording...</>
+                ) : (
+                  <><DollarSign className="w-4 h-4 mr-2" /> Record Payment</>
+                )}
+              </Button>
 
-              {/* Secondary actions */}
+              {/* Stripe options row */}
               {selectedCustomerId && (
-                <div className="flex items-center justify-center gap-4 pt-1 border-t">
-                  <button
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
                     type="button"
+                    variant="outline"
                     disabled={isAnyLoading || stripeAmount <= 0}
                     onClick={handleStripePayment}
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:pointer-events-none pt-3 transition-colors"
+                    className="w-full h-10 gap-2"
                   >
-                    {stripeLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ExternalLink className="h-3 w-3" />}
-                    Send Stripe Link
-                  </button>
-                  <div className="w-px h-4 bg-border mt-3" />
-                  <button
+                    {stripeLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="#635BFF">
+                        <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z" />
+                      </svg>
+                    )}
+                    <span className="text-sm">Charge via Stripe</span>
+                  </Button>
+                  <Button
                     type="button"
+                    variant="outline"
                     disabled={isAnyLoading || !customerEmail || (!latestInvoice && !rentalDetails)}
                     onClick={handleSendInvoiceEmail}
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:pointer-events-none pt-3 transition-colors"
+                    className="w-full h-10 gap-2"
                   >
-                    {emailLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />}
-                    Email Invoice
-                  </button>
+                    {emailLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="#635BFF">
+                          <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z" />
+                        </svg>
+                        <Mail className="w-3.5 h-3.5 shrink-0 -ml-1" />
+                      </>
+                    )}
+                    <span className="text-sm">Email Stripe Link</span>
+                  </Button>
                 </div>
               )}
+
+              <button type="button" className="w-full text-center text-xs text-muted-foreground hover:text-foreground py-1 transition-colors" onClick={() => onOpenChange(false)} disabled={isAnyLoading}>
+                Cancel
+              </button>
             </div>
           </form>
         </Form>

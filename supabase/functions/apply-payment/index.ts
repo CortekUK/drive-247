@@ -114,27 +114,22 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
 
     if (ledgerError) {
       if (ledgerError.message.includes('duplicate key') || ledgerError.message.includes('idx_ledger_payment_unique')) {
-        // Another call already inserted the ledger entry — it owns allocation.
-        // Wait for it to finish, then return the final state.
-        console.log(`Payment ${paymentId} already being processed by another call (duplicate ledger entry). Waiting...`);
-        await new Promise(r => setTimeout(r, 3000));
+        // Payment ledger entry already exists — check if payment is fully allocated
         const { data: fresh } = await supabase.from('payments').select('status, remaining_amount, amount').eq('id', paymentId).single();
+        if (fresh && (fresh.status === 'Applied' || (fresh.remaining_amount != null && fresh.remaining_amount <= 0))) {
+          console.log(`Payment ${paymentId} already fully applied, skipping`);
+          return { ok: true, paymentId, category: 'Payment', entryDate, allocated: fresh.amount, remaining: 0, status: 'Applied' };
+        }
+        // Payment is partial — continue with allocation to handle newly created charges
+        console.log(`Payment ${paymentId} ledger entry exists but payment is ${fresh?.status} with remaining=${fresh?.remaining_amount}. Continuing allocation...`);
+      } else {
+        console.error('CRITICAL: Ledger insert failed:', ledgerError);
         return {
-          ok: true,
-          paymentId,
-          category: 'Payment',
-          entryDate,
-          allocated: fresh ? fresh.amount - (fresh.remaining_amount || 0) : 0,
-          remaining: fresh?.remaining_amount || 0,
-          status: fresh?.status || 'Applied'
+          ok: false,
+          error: 'CRITICAL: Failed to create ledger entry',
+          detail: `${ledgerError.code}: ${ledgerError.message}`
         };
       }
-      console.error('CRITICAL: Ledger insert failed:', ledgerError);
-      return {
-        ok: false,
-        error: 'CRITICAL: Failed to create ledger entry',
-        detail: `${ledgerError.code}: ${ledgerError.message}`
-      };
     }
 
     // Handle InitialFee payments - allocate to fee charges first, then rental
@@ -333,39 +328,22 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
         }));
         console.log(`Targeted allocation to categories: ${targetCategories.join(', ')}`);
       } else if (payment.rental_id) {
-        // Auto-derive categories from the rental's outstanding charges
-        const { data: outstandingCharges } = await supabase
-          .from('ledger_entries')
-          .select('category')
-          .eq('rental_id', payment.rental_id)
-          .eq('type', 'Charge')
-          .gt('remaining_amount', 0);
-
-        if (outstandingCharges && outstandingCharges.length > 0) {
-          const uniqueCategories = [...new Set(outstandingCharges.map((c: any) => c.category as string))];
-          allocationOrder = uniqueCategories.map(cat => ({
-            category: cat,
-            description: `${cat.toLowerCase()} charges`
-          }));
-          console.log(`Auto-derived allocation from rental charges: ${uniqueCategories.join(', ')}`);
-        } else {
-          // No outstanding charges found, fallback to all common categories
-          allocationOrder = [
-            { category: 'Rental', description: 'rental charges' },
-            { category: 'Tax', description: 'tax charges' },
-            { category: 'Service Fee', description: 'service fee charges' },
-            { category: 'Security Deposit', description: 'security deposit charges' },
-            { category: 'Delivery Fee', description: 'delivery fee charges' },
-            { category: 'Insurance', description: 'insurance charges' },
-            { category: 'Extras', description: 'extras charges' },
-            { category: 'Extension Rental', description: 'extension rental fee' },
-            { category: 'Extension Tax', description: 'extension tax' },
-            { category: 'Extension Service Fee', description: 'extension service fee' },
-            { category: 'Fines', description: 'fine charges' },
-            { category: 'Other', description: 'other charges' },
-          ];
-          console.log('No outstanding charges found, using all common categories as fallback');
-        }
+        // Always use full category list — auto-create missing charges from invoice
+        allocationOrder = [
+          { category: 'Rental', description: 'rental charges' },
+          { category: 'Tax', description: 'tax charges' },
+          { category: 'Service Fee', description: 'service fee charges' },
+          { category: 'Security Deposit', description: 'security deposit charges' },
+          { category: 'Delivery Fee', description: 'delivery fee charges' },
+          { category: 'Insurance', description: 'insurance charges' },
+          { category: 'Extras', description: 'extras charges' },
+          { category: 'Extension Rental', description: 'extension rental fee' },
+          { category: 'Extension Tax', description: 'extension tax' },
+          { category: 'Extension Service Fee', description: 'extension service fee' },
+          { category: 'Fines', description: 'fine charges' },
+          { category: 'Other', description: 'other charges' },
+        ];
+        console.log('Using full category list with auto-creation from invoice');
       } else {
         // No rental_id and no targetCategories — use all common categories
         allocationOrder = [
@@ -410,8 +388,8 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           .order('entry_date', { ascending: true })
           .order('id', { ascending: true });
 
-        // Auto-create ledger charge from invoice if targeted category has no charge
-        if (targetCategories && (!outstandingCharges || outstandingCharges.length === 0) && payment.rental_id) {
+        // Auto-create ledger charge from invoice if category has no existing charge
+        if ((!outstandingCharges || outstandingCharges.length === 0) && payment.rental_id) {
           const invoiceCategoryMap: Record<string, string> = {
             'Insurance': 'insurance_premium',
             'Service Fee': 'service_fee',

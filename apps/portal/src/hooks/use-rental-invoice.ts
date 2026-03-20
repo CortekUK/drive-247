@@ -111,9 +111,9 @@ export const useRentalPaymentBreakdown = (rentalId: string | undefined) => {
         if (!categoryTotals[category]) {
           categoryTotals[category] = { total: 0, paid: 0, remaining: 0 };
         }
-        categoryTotals[category].total += charge.amount;
-        categoryTotals[category].remaining += charge.remaining_amount;
-        categoryTotals[category].paid += charge.amount - charge.remaining_amount;
+        categoryTotals[category].total += Number(charge.amount);
+        categoryTotals[category].remaining += Number(charge.remaining_amount);
+        categoryTotals[category].paid += Number(charge.amount) - Number(charge.remaining_amount);
       });
 
       return categoryTotals;

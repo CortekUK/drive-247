@@ -105,6 +105,18 @@ const BookingCheckoutContent = () => {
     agreeTerms: false
   });
 
+  // Promo code state — read from localStorage (set by MultiStepBookingWidget)
+  const [promoDetails, setPromoDetails] = useState<{ code: string; type: 'percentage' | 'fixed_amount'; value: number } | null>(null);
+  useEffect(() => {
+    try {
+      const savedCode = localStorage.getItem('appliedPromoCode');
+      const savedDetails = localStorage.getItem('appliedPromoDetails');
+      if (savedCode && savedDetails) {
+        setPromoDetails(JSON.parse(savedDetails));
+      }
+    } catch {}
+  }, []);
+
   // Extract booking context
   const pickupDate = searchParams?.get("pickup") || "";
   const returnDate = searchParams?.get("return") || "";
@@ -196,13 +208,23 @@ const BookingCheckoutContent = () => {
     return calculateVehiclePrice();
   };
 
-  // Complete total calculation including all fees
+  // Complete total calculation including all fees and promo discount
   const calculateCompleteTotal = () => {
     const vehiclePrice = calculateVehiclePrice();
     const extrasTotal = 0;
 
+    // Promo discount
+    let discountAmount = 0;
+    if (promoDetails && vehiclePrice > 0) {
+      if (promoDetails.type === 'fixed_amount') {
+        discountAmount = Math.min(promoDetails.value, vehiclePrice);
+      } else if (promoDetails.type === 'percentage') {
+        discountAmount = (vehiclePrice * promoDetails.value) / 100;
+      }
+    }
+    const discountedVehiclePrice = vehiclePrice - discountAmount;
+
     // Delivery fee from new flow (same for delivery and collection)
-    // Use the stored deliveryFee, or calculate from location/area if needed
     let deliveryFee = deliveryData.deliveryFee || 0;
 
     // Fallback to legacy calculation if deliveryFee not set but legacy fields are
@@ -210,13 +232,10 @@ const BookingCheckoutContent = () => {
       deliveryFee = deliveryData.deliveryLocation.delivery_fee || 0;
     }
 
-    // Collection fee - in new flow, same fee applies to both
-    // So we don't add a separate collection fee anymore
     const collectionFee = 0;
+    const subtotal = discountedVehiclePrice + extrasTotal + deliveryFee + collectionFee;
 
-    const subtotal = vehiclePrice + extrasTotal + deliveryFee + collectionFee;
-
-    // Tax (if enabled)
+    // Tax on discounted amount
     const taxPercentage = tenant?.tax_percentage || 0;
     const taxAmount = tenant?.tax_enabled
       ? subtotal * (taxPercentage / 100)
@@ -234,6 +253,8 @@ const BookingCheckoutContent = () => {
 
     return {
       vehiclePrice,
+      discountedVehiclePrice,
+      discountAmount,
       extrasTotal,
       deliveryFee,
       collectionFee,
@@ -530,6 +551,19 @@ const BookingCheckoutContent = () => {
       // Get current totals for delivery/collection fees
       const currentTotals = calculateCompleteTotal();
 
+      // Snapshot vehicle mileage settings at time of booking (only if vehicle has mileage limits)
+      const hasMileageSettings = vehicleDetails.daily_mileage != null ||
+        vehicleDetails.weekly_mileage != null ||
+        vehicleDetails.monthly_mileage != null ||
+        vehicleDetails.excess_mileage_rate != null;
+
+      const mileageOverrides = hasMileageSettings ? {
+        daily_mileage_override: vehicleDetails.daily_mileage,
+        weekly_mileage_override: vehicleDetails.weekly_mileage,
+        monthly_mileage_override: vehicleDetails.monthly_mileage,
+        excess_mileage_rate_override: vehicleDetails.excess_mileage_rate,
+      } : {};
+
       const { data: rental, error: rentalError } = await supabase
         .from("rentals")
         .insert({
@@ -553,6 +587,11 @@ const BookingCheckoutContent = () => {
           collection_address: null,
           collection_fee: 0, // Same fee applies for both
           is_gig_driver: isGigDriver,
+          // Promo code discount
+          promo_code: promoDetails?.code || null,
+          discount_applied: currentTotals.discountAmount > 0 ? currentTotals.discountAmount : null,
+          // Mileage snapshot from vehicle at time of booking
+          ...mileageOverrides,
         } as any)
         .select()
         .single();
@@ -579,12 +618,40 @@ const BookingCheckoutContent = () => {
       // Step 7: Generate rental charges (let database triggers handle this)
       await supabase.rpc("backfill_rental_charges_first_month_only").catch(err => {
         console.error("Failed to generate charges:", err);
-        // Don't throw - rental is created
       });
 
-      // Step 8: Handle payment based on installment selection
+      // Step 7b: Create invoice (required for payment breakdown to work)
       const vehicleName = vehicleDetails?.name || `${vehicleDetails?.make} ${vehicleDetails?.model}` || "Vehicle";
       const currentTotalsForPayment = calculateCompleteTotal();
+      {
+        const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Date.now().toString(36).toUpperCase()}`;
+        const { error: invoiceError } = await supabase.from('invoices').insert({
+          rental_id: rental.id,
+          customer_id: customer.id,
+          vehicle_id: vehicleId,
+          invoice_number: invoiceNumber,
+          invoice_date: pickupDate,
+          due_date: pickupDate,
+          subtotal: currentTotalsForPayment.discountedVehiclePrice,
+          rental_fee: currentTotalsForPayment.discountedVehiclePrice,
+          tax_amount: currentTotalsForPayment.taxAmount,
+          service_fee: currentTotalsForPayment.serviceFee,
+          security_deposit: currentTotalsForPayment.deposit,
+          insurance_premium: 0, // Insurance is handled separately via Bonzah
+          delivery_fee: currentTotalsForPayment.deliveryFee,
+          extras_total: currentTotalsForPayment.extrasTotal,
+          total_amount: currentTotalsForPayment.grandTotal,
+          status: 'pending',
+          notes: `Booking for ${vehicleName}`,
+          tenant_id: tenant?.id,
+        });
+        if (invoiceError) {
+          console.error('Invoice creation failed:', invoiceError);
+          throw new Error('Failed to create invoice: ' + invoiceError.message);
+        }
+      }
+
+      // Step 8: Handle payment based on installment selection
 
       // Check if installment plan is selected (not "full" payment)
       if (selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled) {

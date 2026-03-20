@@ -1070,6 +1070,15 @@ export default function PaymentsPage() {
   const { data: invoiceStats, isLoading: invoiceStatsLoading } = useInvoiceStats();
   const { data: nextPayment, isLoading: nextLoading } = useNextInstallmentPayment();
 
+  // Show success banner when redirected from Stripe payment
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('payment') === 'success';
+    }
+    return false;
+  });
+
   const payEarly = usePayInstallmentEarly();
   const payOff = usePayRemainingInstallments();
   const retryPayment = useRetryPayment();
@@ -1173,6 +1182,18 @@ export default function PaymentsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Payment success banner */}
+      {showPaymentSuccess && (
+        <div className="flex items-center gap-3 p-4 rounded-lg border border-green-500/30 bg-green-500/10">
+          <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+          <div className="flex-1">
+            <p className="font-medium text-green-700 dark:text-green-400">Payment Successful</p>
+            <p className="text-sm text-green-600 dark:text-green-500">Your payment has been processed successfully. Thank you!</p>
+          </div>
+          <button onClick={() => { setShowPaymentSuccess(false); window.history.replaceState({}, '', window.location.pathname); }} className="text-muted-foreground hover:text-foreground text-sm">Dismiss</button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>

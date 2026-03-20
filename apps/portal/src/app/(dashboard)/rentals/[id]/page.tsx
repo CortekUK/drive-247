@@ -330,7 +330,7 @@ const RentalDetail = () => {
   const { data: rentalTotals } = useRentalTotals(id);
   const { data: rentalCharges } = useRentalCharges(id);
   const { data: invoiceBreakdown } = useRentalInvoice(id);
-  const { data: paymentBreakdown } = useRentalPaymentBreakdown(id);
+  const { data: paymentBreakdown, isLoading: isPaymentBreakdownLoading } = useRentalPaymentBreakdown(id);
   const { data: refundBreakdown } = useRentalRefundBreakdown(id);
 
   // Fetch fines linked to this rental
@@ -562,6 +562,67 @@ const RentalDetail = () => {
 
     processStripePayment();
   }, [searchParams, id, tenant?.id, paymentProcessed, queryClient, toast, router]);
+
+  // Poll for pending email payment completion (when admin sent Stripe link via email)
+  useEffect(() => {
+    if (!id || !tenant?.id) return;
+    const sessionId = localStorage.getItem(`pending_email_payment_${id}`);
+    if (!sessionId) return;
+
+    let attempts = 0;
+    const maxAttempts = 60; // Poll for up to 5 minutes (60 × 5s)
+    const pollInterval = setInterval(async () => {
+      attempts++;
+      if (attempts > maxAttempts) {
+        clearInterval(pollInterval);
+        localStorage.removeItem(`pending_email_payment_${id}`);
+        return;
+      }
+
+      // Check if the payment is still Pending
+      const { data: payment } = await supabase
+        .from('payments')
+        .select('id, status, stripe_checkout_session_id')
+        .eq('stripe_checkout_session_id', sessionId)
+        .maybeSingle();
+
+      if (!payment) return;
+
+      // If payment is no longer Pending (webhook or success page handled it), refresh
+      if (payment.status !== 'Pending') {
+        clearInterval(pollInterval);
+        localStorage.removeItem(`pending_email_payment_${id}`);
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['rental-totals'] }),
+          queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] }),
+          queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
+          queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
+        ]);
+        setPaymentResult({ status: 'success', message: 'Customer has completed the payment.' });
+        return;
+      }
+
+      // Check with Stripe if the session is actually paid (via edge function)
+      try {
+        const { data: result } = await supabase.functions.invoke('process-pending-payment', {
+          body: { checkoutSessionId: sessionId },
+        });
+        if (result?.ok && !result?.alreadyProcessed) {
+          clearInterval(pollInterval);
+          localStorage.removeItem(`pending_email_payment_${id}`);
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['rental-totals'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
+          ]);
+          setPaymentResult({ status: 'success', message: 'Customer has completed the payment.' });
+        }
+      } catch {}
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [id, tenant?.id, queryClient]);
 
   // Fetch extras details for this rental
   const { data: extrasDetails } = useQuery({
@@ -1749,6 +1810,7 @@ const RentalDetail = () => {
       {/* Payment Result Banner */}
       {paymentResult && !isProcessingPayment && (
         <Alert className={cn(
+          "pr-10",
           paymentResult.status === 'success' && "border-emerald-500/30 bg-emerald-500/10",
           paymentResult.status === 'cancelled' && "border-amber-500/30 bg-amber-500/10",
           paymentResult.status === 'failed' && "border-red-500/30 bg-red-500/10",
@@ -1771,54 +1833,158 @@ const RentalDetail = () => {
           )}>
             {paymentResult.message}
           </AlertDescription>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-2 right-2 h-6 w-6"
+          <button
+            type="button"
+            className="absolute top-3 right-3 text-muted-foreground hover:text-foreground transition-colors"
             onClick={() => setPaymentResult(null)}
           >
-            <X className="h-3.5 w-3.5" />
-          </Button>
+            <X className="h-4 w-4" />
+          </button>
         </Alert>
       )}
 
-      {/* Rental Summary */}
+      {/* Rental Financial Summary */}
       {(() => {
         const totalRefunded = refundBreakdown
           ? Object.values(refundBreakdown).reduce((sum, val) => sum + val, 0)
           : 0;
+        const netReceived = totalPayments - totalRefunded;
+        const cur = tenant?.currency_code || 'GBP';
         return (
-          <div className={`grid gap-6 md:grid-cols-3 ${isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}`}>
-            <Card>
+          <div className={`grid gap-4 grid-cols-2 lg:grid-cols-4 ${isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}`}>
+            {/* Total Collected */}
+            <Card className="border-emerald-500/20 bg-emerald-500/5">
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Total Paid</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Collected</CardTitle>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-[280px] p-3 text-xs leading-relaxed">
+                        <p className="font-medium mb-1">Total money received from the customer</p>
+                        <p className="text-muted-foreground mb-2">Sum of all payments applied to this rental's charges, including fines.</p>
+                        <div className="font-mono text-[11px] bg-muted/50 rounded p-2 space-y-0.5">
+                          <p className="text-muted-foreground">Example: Customer pays £500 for rental + £50 for a fine</p>
+                          <p className="font-medium">Collected = £550</p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  {formatCurrencyUtil(totalPayments, tenant?.currency_code || 'GBP')}
+                <div className={`text-2xl font-bold ${totalPayments > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+                  {formatCurrencyUtil(totalPayments, cur)}
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
+            {/* Balance Due */}
+            <Card className={outstandingBalance > 0 ? "border-red-500/20 bg-red-500/5" : "border-blue-500/20 bg-blue-500/5"}>
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Outstanding</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className={`text-sm font-medium ${outstandingBalance > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>Balance Due</CardTitle>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-[280px] p-3 text-xs leading-relaxed">
+                        <p className="font-medium mb-1">Balance Due = Total Charges − Payments Applied</p>
+                        <p className="text-muted-foreground mb-2">The remaining unpaid amount across all charges. Reaches zero when fully paid.</p>
+                        <div className="font-mono text-[11px] bg-muted/50 rounded p-2 space-y-0.5">
+                          <p className="text-muted-foreground">Example: Total charges £600, paid £500</p>
+                          <p className="font-medium">Balance Due = £100</p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${outstandingBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  {formatCurrencyUtil(outstandingBalance, tenant?.currency_code || 'GBP')}
+                <div className={`text-2xl font-bold ${outstandingBalance > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>
+                  {formatCurrencyUtil(outstandingBalance, cur)}
                 </div>
+                {outstandingBalance === 0 && totalPayments > 0 && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Fully settled</p>
+                )}
               </CardContent>
             </Card>
 
-            <Card>
+            {/* Refunded */}
+            <Card className={totalRefunded > 0 ? "border-amber-500/20 bg-amber-500/5" : ""}>
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Total Refunded</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className={`text-sm font-medium ${totalRefunded > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>Refunded</CardTitle>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-[280px] p-3 text-xs leading-relaxed">
+                        <p className="font-medium mb-1">Total returned to the customer</p>
+                        <p className="text-muted-foreground mb-2">Partial or full refunds across any category — rental, deposit, fees, etc. Reduces your Net Received but does not change Balance Due.</p>
+                        <div className="font-mono text-[11px] bg-muted/50 rounded p-2 space-y-0.5">
+                          <p className="text-muted-foreground">Example: Collected £500, refund deposit £100</p>
+                          <p className="font-medium">Refunded = £100</p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${totalRefunded > 0 ? 'text-orange-500' : 'text-muted-foreground'}`}>
-                  {formatCurrencyUtil(totalRefunded, tenant?.currency_code || 'GBP')}
+                <div className={`text-2xl font-bold ${totalRefunded > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
+                  {formatCurrencyUtil(totalRefunded, cur)}
                 </div>
+                {totalRefunded === 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">No refunds</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Net Received */}
+            <Card className="border-indigo-500/20 bg-indigo-500/5">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-indigo-600 dark:text-indigo-400">Net Received</CardTitle>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-[280px] p-3 text-xs leading-relaxed">
+                        <p className="font-medium mb-1">Net Received = Collected − Refunded</p>
+                        <p className="text-muted-foreground mb-2">The actual amount you kept from this rental. This is your real revenue after all refunds.</p>
+                        <div className="font-mono text-[11px] bg-muted/50 rounded p-2 space-y-0.5">
+                          <div className="flex justify-between"><span>Collected</span><span>{formatCurrencyUtil(totalPayments, cur)}</span></div>
+                          <div className="flex justify-between text-orange-500"><span>Refunded</span><span>−{formatCurrencyUtil(totalRefunded, cur)}</span></div>
+                          <div className="flex justify-between font-bold border-t border-border pt-0.5 mt-0.5"><span>Net</span><span>{formatCurrencyUtil(netReceived, cur)}</span></div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${netReceived > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-muted-foreground'}`}>
+                  {formatCurrencyUtil(netReceived, cur)}
+                </div>
+                {totalRefunded > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    After {formatCurrencyUtil(totalRefunded, cur)} refunded
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -1989,9 +2155,16 @@ const RentalDetail = () => {
                       )}
                       <TableCell className={selectableCategories.length > 0 ? "" : "pl-6"}>
                         <div className="flex items-center gap-3">
-                          <div className={`h-7 w-7 rounded-full flex items-center justify-center ${applied ? bg : 'bg-muted/30'}`}>
-                            <Icon className={`h-3.5 w-3.5 ${applied ? color : 'text-muted-foreground/50'}`} />
-                          </div>
+                          {category === 'Insurance' ? (
+                            <div className="h-7 w-7 flex items-center justify-center">
+                              <img src="/bonzah-logo.svg" alt="Bonzah" className="h-5 w-auto dark:hidden" />
+                              <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-5 w-auto hidden dark:block" />
+                            </div>
+                          ) : (
+                            <div className={`h-7 w-7 rounded-full flex items-center justify-center ${applied ? bg : 'bg-muted/30'}`}>
+                              <Icon className={`h-3.5 w-3.5 ${applied ? color : 'text-muted-foreground/50'}`} />
+                            </div>
+                          )}
                           <div>
                             <p className="text-sm font-medium">
                               {label}
@@ -2042,18 +2215,27 @@ const RentalDetail = () => {
                           }
                           // Check payment status from ledger breakdown
                           const catPayment = paymentBreakdown?.[category];
+                          // Also check directly from rentalCharges (loaded with allocations)
+                          const catCharges = rentalCharges?.filter(c => c.category === category) || [];
+                          const catChargeRemaining = catCharges.reduce((sum, c) => sum + Number(c.remaining_amount), 0);
+                          const catChargeTotal = catCharges.reduce((sum, c) => sum + Number(c.amount), 0);
+                          const catAllocated = catCharges.reduce((sum, c) => sum + c.allocations.reduce((s, a) => s + Number(a.amount_applied), 0), 0);
+
                           if (catPayment) {
-                            if (catPayment.remaining <= 0) {
+                            if (Number(catPayment.remaining) <= 0) {
                               return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
                             }
-                            if (catPayment.paid > 0) {
+                            if (Number(catPayment.paid) > 0) {
                               return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
                             }
-                            // On cancelled/rejected rental, show "Cancelled" instead of "Not Paid"
-                            if (isCancelledOrRejected) {
-                              return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Cancelled</Badge>;
+                          } else if (catCharges.length > 0) {
+                            // Fallback: check directly from charge data
+                            if (catChargeRemaining <= 0 && catChargeTotal > 0) {
+                              return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
                             }
-                            return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
+                            if (catAllocated > 0) {
+                              return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
+                            }
                           }
                           // No ledger entry for this category — check overall payment status
                           if (totalPayments >= (invoiceBreakdown?.totalAmount || 0) && totalPayments > 0) {

@@ -731,15 +731,32 @@ export default function BookingCheckoutStep({
     console.log('🔍 Verification Session ID:', formData.verificationSessionId);
 
     try {
-      // Step 1: Find existing customer by email GLOBALLY (without tenant filter)
-      // This prevents duplicate key errors when email exists with different tenant_id
-      console.log('📝 Checking for existing customer by email (globally)...');
+      // Step 1: Find existing customer by email for this tenant first, then globally
+      console.log('📝 Checking for existing customer by email...');
 
-      const { data: existingCustomer } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("email", formData.customerEmail)
-        .maybeSingle();
+      let existingCustomer = null;
+
+      // First: check within this tenant (matches the unique constraint)
+      if (tenant?.id) {
+        const { data: tenantCustomer } = await supabase
+          .from("customers")
+          .select("*")
+          .eq("email", formData.customerEmail)
+          .eq("tenant_id", tenant.id)
+          .maybeSingle();
+        existingCustomer = tenantCustomer;
+      }
+
+      // Fallback: check globally (for customers without tenant_id)
+      if (!existingCustomer) {
+        const { data: globalCustomer } = await supabase
+          .from("customers")
+          .select("*")
+          .eq("email", formData.customerEmail)
+          .is("tenant_id", null)
+          .maybeSingle();
+        existingCustomer = globalCustomer;
+      }
 
       let customer;
 
@@ -778,6 +795,7 @@ export default function BookingCheckoutStep({
           name: formData.customerName,
           email: formData.customerEmail,
           phone: formData.customerPhone,
+          type: "Individual",
           status: "Active",
           is_blocked: false,
         };

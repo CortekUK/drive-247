@@ -1,0 +1,299 @@
+'use client';
+
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Input } from "@/components/ui/input";
+import { MapPin, Loader2, LocateFixed, AlertTriangle } from "lucide-react";
+import { useGoogleMapsLoader } from "@/hooks/use-google-maps-loader";
+import { PlacesSessionManager } from "@/lib/google-places-session";
+import { kmToDisplayUnit, getDistanceUnitShort } from "@/lib/format-utils";
+import type { DistanceUnit } from "@/lib/format-utils";
+
+interface LocationAutocompleteWithRadiusProps {
+  id: string;
+  value: string;
+  onChange: (value: string, lat?: number, lon?: number, outOfRadius?: boolean) => void;
+  placeholder: string;
+  className?: string;
+  disabled?: boolean;
+  radiusKm: number;
+  centerLat?: number | null;
+  centerLon?: number | null;
+  distanceUnit?: DistanceUnit;
+  /** When true, show out-of-radius results with a warning instead of filtering them */
+  allowOutOfRadius?: boolean;
+}
+
+interface Suggestion {
+  placeId: string;
+  mainText: string;
+  secondaryText: string;
+  fullText: string;
+  lat?: number;
+  lng?: number;
+  distance?: number;
+  outOfRadius?: boolean;
+}
+
+const haversineDistance = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+export function LocationAutocompleteWithRadius({
+  id,
+  value,
+  onChange,
+  placeholder,
+  className,
+  disabled = false,
+  radiusKm,
+  centerLat,
+  centerLon,
+  distanceUnit = 'miles',
+  allowOutOfRadius = false,
+}: LocationAutocompleteWithRadiusProps) {
+  const { isLoaded } = useGoogleMapsLoader();
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const debounceTimer = useRef<NodeJS.Timeout>();
+  const sessionManager = useRef(new PlacesSessionManager());
+
+  const getCenterCoords = useCallback(() => {
+    if (centerLat && centerLon) {
+      return { lat: centerLat, lon: centerLon };
+    }
+    return null;
+  }, [centerLat, centerLon]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const fetchSuggestions = async (inputValue: string) => {
+    if (!inputValue || inputValue.length < 3 || !isLoaded) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const center = getCenterCoords();
+    setLoading(true);
+    try {
+      const request: google.maps.places.AutocompleteRequest = {
+        input: inputValue,
+        sessionToken: sessionManager.current.getToken(),
+      };
+
+      if (center && radiusKm <= 50) {
+        request.locationBias = new google.maps.Circle({
+          center: { lat: center.lat, lng: center.lon },
+          radius: radiusKm * 1000,
+        });
+      }
+
+      const { suggestions: autocompleteSuggestions } =
+        await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+
+      sessionManager.current.refreshToken();
+
+      const detailsPromises = autocompleteSuggestions.slice(0, 10).map(async (s) => {
+        const prediction = s.placePrediction!;
+        const suggestion: Suggestion = {
+          placeId: prediction.placeId,
+          mainText: prediction.mainText!.text,
+          secondaryText: prediction.secondaryText?.text || "",
+          fullText: prediction.text.text,
+        };
+
+        try {
+          const place = new google.maps.places.Place({ id: prediction.placeId });
+          await place.fetchFields({ fields: ["location", "formattedAddress"] });
+
+          if (place.location) {
+            suggestion.lat = place.location.lat();
+            suggestion.lng = place.location.lng();
+            suggestion.fullText = place.formattedAddress || suggestion.fullText;
+
+            if (center) {
+              suggestion.distance = haversineDistance(
+                center.lat, center.lon,
+                suggestion.lat, suggestion.lng
+              );
+              suggestion.outOfRadius = suggestion.distance > radiusKm;
+            }
+          }
+        } catch {
+          // Skip places we can't get details for
+        }
+
+        return suggestion;
+      });
+
+      let results = await Promise.all(detailsPromises);
+
+      if (center) {
+        if (allowOutOfRadius) {
+          // Show all results, sorted by distance, with out-of-radius flagged
+          results = results
+            .filter((s) => s.distance !== undefined)
+            .sort((a, b) => a.distance! - b.distance!);
+        } else {
+          // Only show in-radius results
+          results = results
+            .filter((s) => s.distance !== undefined && s.distance <= radiusKm)
+            .sort((a, b) => a.distance! - b.distance!);
+        }
+      }
+
+      results = results.slice(0, 5);
+      setSuggestions(results);
+      setShowSuggestions(true);
+    } catch (error) {
+      console.error("[LocationAutocompleteWithRadius] Error:", error);
+      setSuggestions([]);
+      setShowSuggestions(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInputChange = (inputValue: string) => {
+    const sanitized = inputValue.replace(/[^a-zA-Z0-9\s,.\-']/g, "");
+    onChange(sanitized);
+
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      fetchSuggestions(sanitized);
+    }, 300);
+  };
+
+  const handleFocus = () => {
+    if (value.length >= 3 && suggestions.length > 0) {
+      setShowSuggestions(true);
+    } else if (value.length >= 3) {
+      fetchSuggestions(value);
+    }
+  };
+
+  const handleSelectSuggestion = (suggestion: Suggestion) => {
+    onChange(suggestion.fullText, suggestion.lat, suggestion.lng, suggestion.outOfRadius);
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
+
+  const formatDistanceDisplay = (km: number): string => {
+    const displayValue = kmToDisplayUnit(km, distanceUnit);
+    const unitLabel = getDistanceUnitShort(distanceUnit);
+    if (distanceUnit === 'km' && km < 1) return `${Math.round(km * 1000)}m`;
+    if (distanceUnit === 'miles' && km < 0.1) return `${Math.round(km * 1000)}m`;
+    return `${displayValue.toFixed(1)}${unitLabel}`;
+  };
+
+  const center = getCenterCoords();
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      {center && (
+        <div className="flex items-center gap-2 mb-2 text-xs">
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <LocateFixed className="w-3 h-3 text-primary" />
+            Searching within {kmToDisplayUnit(radiusKm, distanceUnit)}{getDistanceUnitShort(distanceUnit)} of service area
+          </span>
+        </div>
+      )}
+
+      <div className="relative">
+        <Input
+          id={id}
+          value={value}
+          onChange={(e) => handleInputChange(e.target.value)}
+          onFocus={handleFocus}
+          placeholder={placeholder}
+          className={className}
+          autoComplete="off"
+          disabled={disabled}
+        />
+        {loading && (
+          <div className="absolute right-3 top-0 bottom-0 flex items-center pointer-events-none">
+            <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+          </div>
+        )}
+      </div>
+
+      {showSuggestions && suggestions.length > 0 && !disabled && (
+        <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-60 overflow-auto">
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion.placeId}
+              type="button"
+              className={`group w-full px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground flex items-start gap-2 transition-colors border-b border-border/50 last:border-0 ${
+                suggestion.outOfRadius ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''
+              }`}
+              onClick={() => handleSelectSuggestion(suggestion)}
+            >
+              {suggestion.outOfRadius ? (
+                <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-500 flex-shrink-0" />
+              ) : (
+                <MapPin className="w-4 h-4 mt-0.5 text-muted-foreground group-hover:text-accent-foreground/70 flex-shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium truncate">{suggestion.mainText}</span>
+                  {suggestion.distance !== undefined && (
+                    <span className={`text-xs font-medium whitespace-nowrap ${
+                      suggestion.outOfRadius ? 'text-amber-500' : 'text-primary'
+                    }`}>
+                      {formatDistanceDisplay(suggestion.distance)}
+                    </span>
+                  )}
+                </div>
+                {suggestion.secondaryText && (
+                  <div className="text-xs text-muted-foreground truncate">
+                    {suggestion.secondaryText}
+                  </div>
+                )}
+                {suggestion.outOfRadius && (
+                  <div className="text-[10px] text-amber-500 mt-0.5">
+                    Outside service radius
+                  </div>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {showSuggestions && suggestions.length === 0 && !loading && value.length >= 3 && center && (
+        <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg p-4">
+          <p className="text-sm text-muted-foreground text-center">
+            No locations found within {kmToDisplayUnit(radiusKm, distanceUnit)}{getDistanceUnitShort(distanceUnit)}.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default LocationAutocompleteWithRadius;

@@ -250,11 +250,11 @@ export const useRentalTotals = (rentalId: string | undefined) => {
 
         if (appError) throw appError;
 
-        totalPayments = applications.reduce((sum, app) => sum + app.amount_applied, 0);
+        totalPayments = applications.reduce((sum, app) => sum + Number(app.amount_applied), 0);
       }
 
-      const totalCharges = charges.reduce((sum, charge) => sum + charge.amount, 0);
-      const outstanding = charges.reduce((sum, charge) => sum + charge.remaining_amount, 0);
+      const totalCharges = charges.reduce((sum, charge) => sum + Number(charge.amount), 0);
+      const outstanding = charges.reduce((sum, charge) => sum + Number(charge.remaining_amount), 0);
 
       return { totalCharges, totalPayments, outstanding };
     },

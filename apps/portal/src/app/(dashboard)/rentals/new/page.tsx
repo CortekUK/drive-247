@@ -41,7 +41,7 @@ import { useOrgSettings } from "@/hooks/use-org-settings";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useBlockedDates } from "@/hooks/use-blocked-dates";
 import { InsuranceUploadDialog } from "@/components/shared/dialogs/insurance-upload-dialog";
-import { LocationPicker } from "@/components/ui/location-picker";
+import { LocationPicker, type LocationMethod } from "@/components/ui/location-picker";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TimePicker } from "@/components/ui/time-picker";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -50,7 +50,9 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { toast as sonnerToast } from "sonner";
 import { useRentalExtras, type RentalExtra } from "@/hooks/use-rental-extras";
-import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
+import { formatCurrency, getCurrencySymbol, formatDistance, getDistanceUnitShort, getMileageTierLabel } from "@/lib/format-utils";
+import type { DistanceUnit } from "@/lib/format-utils";
+import { getMileageTier, getTierMileage, calculateTotalMileageAllowance, isUnlimitedMileage } from "@/lib/mileage-utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useCustomerReviewSummary } from "@/hooks/use-customer-review-summary";
 import { useCustomerReviews } from "@/hooks/use-customer-reviews";
@@ -61,6 +63,7 @@ import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
 import { useVehiclePricingOverrides } from "@/hooks/use-vehicle-pricing-overrides";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { RentalProgressOverlay } from "@/components/rentals/rental-progress-overlay";
+import { getTimezonesByRegion, findTimezone } from "@/lib/timezones";
 
 const rentalSchema = z.object({
   customer_id: z.string().min(1, "Customer is required"),
@@ -96,7 +99,7 @@ const CreateRental = () => {
   const { toast } = useToast();
   const { tenant } = useTenant();
   const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');
-  const { balanceNumber: bonzahCdBalance, isBonzahConnected, portalUrl: bonzahPortalUrl } = useBonzahBalance();
+  const { balanceNumber: bonzahCdBalance, isBonzahConnected, portalUrl: bonzahPortalUrl, bonzahMode } = useBonzahBalance();
   const skipInsurance = !isBonzahConnected;
   const queryClient = useQueryClient();
   const { isManager, canEdit } = useManagerPermissions();
@@ -156,6 +159,27 @@ const CreateRental = () => {
 
   // Lockbox / delivery method state
   const [deliveryMethod, setDeliveryMethod] = useState<'in_person' | 'lockbox'>('in_person');
+
+  // Pickup/Return location method state
+  const [pickupMethod, setPickupMethod] = useState<LocationMethod>('fixed');
+  const [returnMethod, setReturnMethod] = useState<LocationMethod>('fixed');
+  const [deliveryFee, setDeliveryFee] = useState<number>(0);
+  const [collectionFee, setCollectionFee] = useState<number>(0);
+  const [deliveryFeeOverride, setDeliveryFeeOverride] = useState<number | null>(null);
+  const [collectionFeeOverride, setCollectionFeeOverride] = useState<number | null>(null);
+  const [pickupOutOfRadius, setPickupOutOfRadius] = useState(false);
+  const [returnOutOfRadius, setReturnOutOfRadius] = useState(false);
+  const [pickupIsCustom, setPickupIsCustom] = useState(false);
+  const [returnIsCustom, setReturnIsCustom] = useState(false);
+
+  // Mileage override state — admin can override per-rental
+  const [dailyMileageOverride, setDailyMileageOverride] = useState<number | null>(null);
+  const [weeklyMileageOverride, setWeeklyMileageOverride] = useState<number | null>(null);
+  const [monthlyMileageOverride, setMonthlyMileageOverride] = useState<number | null>(null);
+  const [excessRateOverride, setExcessRateOverride] = useState<number | null>(null);
+
+  // Verification override state — admin can override document type per-rental
+  const [verificationDocTypeOverride, setVerificationDocTypeOverride] = useState<string | null>(null);
 
   // Verification state
   const [creatingVerification, setCreatingVerification] = useState(false);
@@ -592,7 +616,7 @@ const CreateRental = () => {
   // Keep return_location synced with pickup_location when sameAsPickup is checked
   useEffect(() => {
     if (sameAsPickup && watchedPickupLocation) {
-      form.setValue("return_location", watchedPickupLocation);
+      form.setValue("return_location", watchedPickupLocation, { shouldValidate: true });
     }
   }, [sameAsPickup, watchedPickupLocation, form]);
 
@@ -651,6 +675,22 @@ const CreateRental = () => {
     enabled: !!selectedCustomerId && !!tenant?.id,
   });
 
+  // Auto-fill driver age from customer's date of birth
+  useEffect(() => {
+    if (customerDetails?.date_of_birth) {
+      const dob = new Date(customerDetails.date_of_birth);
+      const today = new Date();
+      let age = today.getFullYear() - dob.getFullYear();
+      const monthDiff = today.getMonth() - dob.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+        age--;
+      }
+      if (age > 0 && age < 200) {
+        form.setValue("driver_age", age, { shouldValidate: true });
+      }
+    }
+  }, [customerDetails?.date_of_birth, form]);
+
   // Get customer's latest verification status
   const { data: customerVerification, refetch: refetchVerification } = useQuery({
     queryKey: ["customer-verification-for-rental", tenant?.id, selectedCustomerId],
@@ -671,7 +711,7 @@ const CreateRental = () => {
   });
 
   // Derive verification state
-  const isCustomerVerified = customerVerification?.review_result === "GREEN" || customerDetails?.identity_verification_status === "manually_verified";
+  const isCustomerVerified = customerVerification?.review_result === "GREEN" || customerDetails?.identity_verification_status === "verified" || customerDetails?.identity_verification_status === "manually_verified";
   const verificationPending = customerVerification?.status === "pending" || customerVerification?.review_status === "pending";
   const verificationMode = tenant?.integration_veriff !== false ? "veriff" : "ai";
 
@@ -680,7 +720,7 @@ const CreateRental = () => {
     queryFn: async () => {
       let query = (supabase as any)
         .from("vehicles")
-        .select("id, reg, make, model, daily_rent, weekly_rent, monthly_rent, security_deposit")
+        .select("id, reg, make, model, daily_rent, weekly_rent, monthly_rent, security_deposit, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, current_mileage")
         .eq("status", "Available");
 
       if (tenant?.id) {
@@ -890,6 +930,7 @@ const CreateRental = () => {
             customerId: selectedCustomerId,
             tenantId: tenant.id,
             tenantSlug: tenant.slug,
+            ...(verificationDocTypeOverride ? { documentType: verificationDocTypeOverride } : {}),
           },
         });
 
@@ -1019,7 +1060,7 @@ const CreateRental = () => {
     setCreationProgress(1); // Step 1: Validating
     setSubmitError("");
     try {
-      // Check customer verification first (STRICT blocking)
+      // Check customer verification (STRICT — always required)
       if (!isCustomerVerified) {
         throw new Error("Customer must complete identity verification before rental can be created.");
       }
@@ -1043,6 +1084,10 @@ const CreateRental = () => {
       // Calculate discount if promo code was applied
       const discountAmount = promoDetails ? calculateDiscount(data.monthly_amount) : 0;
 
+      // Calculate effective delivery/collection fees
+      const effectiveDeliveryFee = deliveryFeeOverride !== null ? deliveryFeeOverride : deliveryFee;
+      const effectiveCollectionFee = sameAsPickup ? 0 : (collectionFeeOverride !== null ? collectionFeeOverride : collectionFee);
+
       setCreationProgress(2); // Step 2: Creating rental record
 
       // Create rental with Pending status (will become Active after DocuSign)
@@ -1055,15 +1100,14 @@ const CreateRental = () => {
           end_date: data.end_date.toISOString().split('T')[0],
           rental_period_type: data.rental_period_type,
           monthly_amount: data.monthly_amount,
-          status: "Pending", // Start as Pending, will become Active after DocuSign signed
-          document_status: "pending", // Track DocuSign state
-          source: "portal", // Track rental origin
+          status: "Pending",
+          document_status: "pending",
+          source: "portal",
           tenant_id: tenant?.id,
-          // Booking-aligned fields
           pickup_location: data.pickup_location || null,
           return_location: sameAsPickup ? data.pickup_location : data.return_location || null,
-          pickup_location_id: pickupLocationId || null,
-          return_location_id: sameAsPickup ? pickupLocationId : returnLocationId || null,
+          pickup_location_id: pickupMethod === 'location' ? (pickupLocationId || null) : null,
+          return_location_id: !sameAsPickup && returnMethod === 'location' ? (returnLocationId || null) : (sameAsPickup && pickupMethod === 'location' ? (pickupLocationId || null) : null),
           pickup_time: data.pickup_time || null,
           return_time: data.return_time || null,
           driver_age_range: data.driver_age ? (data.driver_age < 25 ? 'under_25' : data.driver_age > 70 ? 'over_70' : '25_70') : null,
@@ -1073,6 +1117,13 @@ const CreateRental = () => {
           insurance_premium: bonzahPremium > 0 ? bonzahPremium : null,
           renewed_from_rental_id: renewFromId || null,
           delivery_method: rentalSettings?.lockbox_enabled ? deliveryMethod : null,
+          delivery_fee: effectiveDeliveryFee > 0 ? effectiveDeliveryFee : null,
+          collection_fee: effectiveCollectionFee > 0 ? effectiveCollectionFee : null,
+          delivery_option: pickupMethod,
+          daily_mileage_override: dailyMileageOverride,
+          weekly_mileage_override: weeklyMileageOverride,
+          monthly_mileage_override: monthlyMileageOverride,
+          excess_mileage_rate_override: excessRateOverride,
           has_installment_plan: installmentPlanType !== 'full' && rentalSettings?.installments_enabled,
         } as any)
         .select()
@@ -1318,44 +1369,46 @@ const CreateRental = () => {
       const serviceFee = serviceFeeOverride !== null ? serviceFeeOverride : calculateServiceFee(discountedAmount);
       const securityDeposit = depositOverride !== null ? depositOverride : calculateSecurityDeposit(data.vehicle_id);
       const insurancePremium = bonzahPremium > 0 ? bonzahPremium : 0;
-      const totalAmount = discountedAmount + taxAmount + serviceFee + securityDeposit + insurancePremium;
+      const extrasTotal = Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
+        if (qty <= 0) return sum;
+        const extra = activeExtras?.find((e: RentalExtra) => e.id === id);
+        return sum + (extra ? Number(extra.price) * qty : 0);
+      }, 0);
+      const totalAmount = discountedAmount + taxAmount + serviceFee + securityDeposit + insurancePremium + effectiveDeliveryFee + effectiveCollectionFee + extrasTotal;
 
       // Track if this is an installment rental (used for routing after creation)
       const isInstallmentRental = installmentPlanType !== 'full' && rentalSettings?.installments_enabled;
 
-      // Generate invoice for all rentals (needed for Payment Breakdown display on rental detail page)
+      // Generate invoice — REQUIRED for payment breakdown to work
       let invoiceCreated = false;
+      const invoiceNotes = `Monthly rental fee for ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg})`;
+
+      const invoice = await createInvoice({
+        rental_id: rental.id,
+        customer_id: data.customer_id,
+        vehicle_id: data.vehicle_id,
+        invoice_date: data.start_date,
+        due_date: addMonths(data.start_date, 1),
+        subtotal: discountedAmount,
+        tax_amount: taxAmount,
+        service_fee: serviceFee,
+        security_deposit: securityDeposit,
+        insurance_premium: insurancePremium,
+        delivery_fee: effectiveDeliveryFee + effectiveCollectionFee,
+        extras_total: extrasTotal,
+        total_amount: totalAmount,
+        notes: invoiceNotes,
+        tenant_id: tenant?.id,
+      });
+
+      // Add discount info to invoice for display
+      setGeneratedInvoice({
+        ...invoice,
+        discount_amount: discountAmount > 0 ? discountAmount : undefined,
+        promo_code: promoDetails?.code,
+      } as any);
+      invoiceCreated = true;
       {
-        try {
-          const invoiceNotes = `Monthly rental fee for ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg})`;
-
-          const invoice = await createInvoice({
-            rental_id: rental.id,
-            customer_id: data.customer_id,
-            vehicle_id: data.vehicle_id,
-            invoice_date: data.start_date,
-            due_date: addMonths(data.start_date, 1),
-            subtotal: discountedAmount,
-            tax_amount: taxAmount,
-            service_fee: serviceFee,
-            security_deposit: securityDeposit,
-            insurance_premium: insurancePremium,
-            total_amount: totalAmount,
-            notes: invoiceNotes,
-            tenant_id: tenant?.id,
-          });
-
-          // Add discount info to invoice for display
-          setGeneratedInvoice({
-            ...invoice,
-            discount_amount: discountAmount > 0 ? discountAmount : undefined,
-            promo_code: promoDetails?.code,
-          } as any);
-          invoiceCreated = true;
-        } catch (invoiceError) {
-          console.error('Error creating invoice:', invoiceError);
-          // If invoice fails, still continue with the flow - skip invoice and go to DocuSign
-        }
       }
 
       // Create installment plan if selected
@@ -1556,6 +1609,8 @@ const CreateRental = () => {
         if (!extra) return;
         breakdownForPayment.push({ label: `${extra.name}${qty > 1 ? ` ×${qty}` : ''}`, amount: Number(extra.price) * qty });
       });
+      if (effectiveDeliveryFee > 0) breakdownForPayment.push({ label: 'Delivery Fee', amount: effectiveDeliveryFee });
+      if (!sameAsPickup && effectiveCollectionFee > 0) breakdownForPayment.push({ label: 'Collection Fee', amount: effectiveCollectionFee });
       if (securityDeposit > 0) breakdownForPayment.push({ label: 'Security Deposit', amount: securityDeposit });
 
       // Store rental data for invoice dialog
@@ -1732,11 +1787,11 @@ const CreateRental = () => {
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:h-[calc(100vh-180px)]">
             {/* ── Left: Scrollable Form ─────────────────────── */}
             <div className="lg:col-span-3 lg:overflow-y-auto lg:pr-2 space-y-6">
-              {/* ── Section 1: Customer ──────────────────────────── */}
+              {/* ── Section 1: Customer & Vehicle ──────────────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
                 <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
                   <span className="text-2xl font-extrabold text-primary">1.</span>
-                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Customer</h2>
+                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Customer & Vehicle</h2>
                 </div>
                 <div className="p-5">
                     <FormField
@@ -1836,73 +1891,49 @@ const CreateRental = () => {
                           </span>
                         </div>
                         {isCustomerVerified ? (
-                          <Badge variant="default" className="bg-green-500 hover:bg-green-600">
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
-                            Verified
-                          </Badge>
+                          <Badge variant="default" className="bg-green-500 hover:bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Verified</Badge>
                         ) : verificationPending ? (
-                          <Badge variant="secondary">
-                            <Clock className="h-3 w-3 mr-1" />
-                            Pending
-                          </Badge>
+                          <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Pending</Badge>
                         ) : (
-                          <Badge variant="outline" className="border-amber-500 text-amber-600">
-                            <AlertTriangle className="h-3 w-3 mr-1" />
-                            Not Verified
-                          </Badge>
+                          <Badge variant="outline" className="border-amber-500 text-amber-600"><AlertTriangle className="h-3 w-3 mr-1" />Not Verified</Badge>
+                        )}
+                      </div>
+
+                      {/* Document Type Override */}
+                      <div className="space-y-2">
+                        <Label className="text-xs font-medium text-muted-foreground">Required Document</Label>
+                        <Select value={verificationDocTypeOverride || (rentalSettings as any)?.verification_document_type || 'driving_license'} onValueChange={(value) => { const tenantDefault = (rentalSettings as any)?.verification_document_type || 'driving_license'; setVerificationDocTypeOverride(value === tenantDefault ? null : value); }}>
+                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="driving_license">Driver&apos;s License</SelectItem>
+                            <SelectItem value="passport">Passport</SelectItem>
+                            <SelectItem value="id_card">ID Card</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {verificationDocTypeOverride && (
+                          <p className="text-[10px] text-amber-500">Overridden for this rental (default: {{ driving_license: "Driver's License", passport: "Passport", id_card: "ID Card" }[(rentalSettings as any)?.verification_document_type || 'driving_license'] || "Driver's License"})</p>
                         )}
                       </div>
 
                       {/* DOB Warning */}
                       {customerDetails && !customerDetails.date_of_birth && (
-                        <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
-                          Customer date of birth is not set. This may be required for identity verification.
-                        </p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">Customer date of birth is not set. This may be required for identity verification.</p>
                       )}
 
                       {isCustomerVerified ? (
                         <div className="text-sm text-muted-foreground">
                           <p>Customer identity has been verified.</p>
-                          {customerVerification?.first_name && customerVerification?.last_name && (
-                            <p className="mt-1">
-                              Name: {customerVerification.first_name} {customerVerification.last_name}
-                            </p>
-                          )}
+                          {customerVerification?.first_name && customerVerification?.last_name && (<p className="mt-1">Name: {customerVerification.first_name} {customerVerification.last_name}</p>)}
                         </div>
                       ) : verificationPending ? (
                         <div className="space-y-3">
-                          <Alert variant="default" className="border-blue-500 bg-blue-50">
-                            <Clock className="h-4 w-4 text-blue-600" />
-                            <AlertDescription className="text-blue-700">
-                              Verification session in progress.
-                            </AlertDescription>
-                          </Alert>
+                          <Alert variant="default" className="border-blue-500 bg-blue-50"><Clock className="h-4 w-4 text-blue-600" /><AlertDescription className="text-blue-700">Verification session in progress.</AlertDescription></Alert>
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          <Alert variant="destructive">
-                            <XCircle className="h-4 w-4" />
-                            <AlertDescription>
-                              Customer must complete identity verification before rental can be created.
-                            </AlertDescription>
-                          </Alert>
-                          <Button
-                            type="button"
-                            onClick={handleCreateVerification}
-                            disabled={creatingVerification}
-                            className="w-full"
-                          >
-                            {creatingVerification ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Creating Session...
-                              </>
-                            ) : (
-                              <>
-                                <Shield className="h-4 w-4 mr-2" />
-                                Start Verification
-                              </>
-                            )}
+                          <Alert variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>Customer must complete identity verification before rental can be created.</AlertDescription></Alert>
+                          <Button type="button" onClick={handleCreateVerification} disabled={creatingVerification} className="w-full">
+                            {creatingVerification ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating Session...</>) : (<><Shield className="h-4 w-4 mr-2" />Start Verification</>)}
                           </Button>
                         </div>
                       )}
@@ -1976,16 +2007,55 @@ const CreateRental = () => {
                       )}
                     </div>
                   )}
-                </div>
-              </div>
 
-              {/* ── Section 1b: Vehicle ───────────────────────────── */}
-              <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                  <span className="text-2xl font-extrabold text-primary">2.</span>
-                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Vehicle</h2>
-                </div>
-                <div className="p-5">
+                  {/* Driver Age — auto-filled from DOB, editable as override */}
+                  {selectedCustomerId && (
+                    <div className="mt-5">
+                      <FormField
+                        control={form.control}
+                        name="driver_age"
+                        render={({ field }) => {
+                          const minAge = rentalSettings?.minimum_rental_age || 18;
+                          const hasDob = !!customerDetails?.date_of_birth;
+                          const belowMinimum = field.value != null && field.value < minAge;
+                          return (
+                            <FormItem>
+                              <FormLabel>Driver Age <span className="text-red-500">*</span></FormLabel>
+                              <div className="flex items-center gap-3">
+                                <FormControl>
+                                  <Input
+                                    type="text"
+                                    inputMode="numeric"
+                                    placeholder="Enter driver age"
+                                    className="max-w-[200px]"
+                                    value={field.value ?? ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      if (val === "" || /^\d*$/.test(val)) {
+                                        field.onChange(val === "" ? undefined : parseInt(val));
+                                      }
+                                    }}
+                                  />
+                                </FormControl>
+                                {hasDob && (
+                                  <span className="text-xs text-muted-foreground">Auto-filled from date of birth</span>
+                                )}
+                              </div>
+                              {belowMinimum && (
+                                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
+                                  Driver is below the minimum rental age of {minAge}.
+                                </p>
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          );
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {/* ── Vehicle ───────────────────────────── */}
+                  <div className="border-t mt-5 pt-5">
                     <FormField
                       control={form.control}
                       name="vehicle_id"
@@ -2031,6 +2101,10 @@ const CreateRental = () => {
                                           onSelect={() => {
                                             field.onChange(vehicle.id);
                                             setVehicleOpen(false);
+                                            setDailyMileageOverride(null);
+                                            setWeeklyMileageOverride(null);
+                                            setMonthlyMileageOverride(null);
+                                            setExcessRateOverride(null);
                                           }}
                                         >
                                           <Check
@@ -2079,68 +2153,14 @@ const CreateRental = () => {
                         );
                       }}
                     />
+                  </div>
                 </div>
               </div>
 
-              {/* ── Uploaded Insurance ────────────────────────────── */}
-              {selectedCustomerId && (
-                <div className="rounded-xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary"><ShieldCheck className="h-4 w-4" /></div>
-                    <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Uploaded Insurance</h2>
-                  </div>
-                  <div className="p-5">
-                    {customerInsurance && customerInsurance.length > 0 ? (
-                      <div className="space-y-2">
-                        {customerInsurance.slice(0, 3).map(policy => {
-                          const isActive = policy.status === "Active";
-                          const isExpired = policy.status === "Expired";
-                          return (
-                            <div key={policy.id} className="flex items-center justify-between text-xs">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <div className={cn(
-                                  "h-1.5 w-1.5 rounded-full shrink-0",
-                                  isActive ? "bg-emerald-500" : isExpired ? "bg-red-500" : "bg-amber-500"
-                                )} />
-                                <span className="font-medium truncate">{policy.policy_number}</span>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0 ml-2">
-                                {policy.vehicles && (
-                                  <span className="text-muted-foreground">{policy.vehicles.reg}</span>
-                                )}
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    "text-[10px] px-1.5 py-0",
-                                    isActive && "border-emerald-500/30 text-emerald-600",
-                                    isExpired && "border-red-500/30 text-red-600"
-                                  )}
-                                >
-                                  {policy.status}
-                                </Badge>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {customerInsurance.length > 3 && (
-                          <p className="text-[10px] text-muted-foreground">
-                            +{customerInsurance.length - 3} more {customerInsurance.length - 3 === 1 ? 'policy' : 'policies'}
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        No uploaded insurance on record. Customer-provided policies will appear here once uploaded.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* ── Section 2: Rental Period ────────────── */}
+              {/* ── Section 2: Rental Period & Pricing ────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
                 <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                  <span className="text-2xl font-extrabold text-primary">3.</span>
+                  <span className="text-2xl font-extrabold text-primary">2.</span>
                   <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Rental Period & Pricing</h2>
                 </div>
                 <div className="p-5 space-y-5">
@@ -2155,7 +2175,14 @@ const CreateRental = () => {
                           <FormControl>
                             <DatePickerInput
                               date={field.value}
-                              onSelect={field.onChange}
+                              onSelect={(date) => {
+                                field.onChange(date);
+                                // If end date is now before or equal to new start date, reset it
+                                const currentEnd = form.getValues("end_date");
+                                if (date && currentEnd && !isAfter(currentEnd, addDays(date, 1)) && currentEnd.getTime() !== addDays(date, 1).getTime()) {
+                                  form.setValue("end_date", addDays(date, 1));
+                                }
+                              }}
                               placeholder="Select start date"
                               disabled={(date) => {
                                 if (isBefore(date, yearAgo)) return true;
@@ -2328,17 +2355,21 @@ const CreateRental = () => {
                 const showTax = rentalSettings?.tax_enabled && (rentalSettings?.tax_percentage ?? 0) > 0;
                 const showServiceFee = rentalSettings?.service_fee_enabled && autoServiceFee > 0;
                 const showDeposit = autoDeposit > 0;
-                const hasFees = showTax || showServiceFee || showDeposit;
+
+                const effDeliveryFee = deliveryFeeOverride !== null ? deliveryFeeOverride : deliveryFee;
+                const effCollectionFee = sameAsPickup ? 0 : (collectionFeeOverride !== null ? collectionFeeOverride : collectionFee);
+                const showDeliveryFees = effDeliveryFee > 0 || effCollectionFee > 0;
+                const hasFees = showTax || showServiceFee || showDeposit || showDeliveryFees;
 
                 const effectiveTax = taxOverride !== null ? taxOverride : autoTax;
                 const effectiveServiceFee = serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee;
                 const effectiveDeposit = depositOverride !== null ? depositOverride : autoDeposit;
-                const feesTotal = (showTax ? effectiveTax : 0) + (showServiceFee ? effectiveServiceFee : 0) + (showDeposit ? effectiveDeposit : 0);
+                const feesTotal = (showTax ? effectiveTax : 0) + (showServiceFee ? effectiveServiceFee : 0) + (showDeposit ? effectiveDeposit : 0) + effDeliveryFee + (sameAsPickup ? 0 : effCollectionFee);
                 const grandTotal = discountedAmount + feesTotal + bonzahPremium;
                 const currency = tenant?.currency_code || 'GBP';
                 const feeType = rentalSettings?.service_fee_type || 'fixed_amount';
                 const feeValue = rentalSettings?.service_fee_value ?? rentalSettings?.service_fee_amount ?? 0;
-                const hasOverrides = taxOverride !== null || serviceFeeOverride !== null || depositOverride !== null;
+                const hasOverrides = taxOverride !== null || serviceFeeOverride !== null || depositOverride !== null || deliveryFeeOverride !== null || collectionFeeOverride !== null;
 
                 const periodType = watchedRentalPeriodType || "Monthly";
                 const amountLabel = periodType === "Daily" ? "Total Amount" :
@@ -2501,10 +2532,41 @@ const CreateRental = () => {
                                       </>
                                     )}
                                     <div className="border-t my-1.5" />
-                                    <div className="flex justify-between font-medium text-foreground">
-                                      <span>Calculated Total</span>
-                                      <span>{formatCurrency(field.value || 0, currency)}</span>
-                                    </div>
+                                    {(() => {
+                                      // Compute the auto-calculated amount to compare with field value
+                                      let autoTotal = 0;
+                                      if (tier === 'daily' && dailyRent > 0) {
+                                        let t = 0;
+                                        const s = new Date(watchedStartDate!);
+                                        for (let i = 0; i < days; i++) {
+                                          const d = new Date(s);
+                                          d.setDate(d.getDate() + i);
+                                          const dow = d.getDay();
+                                          const isWeekend = weekendPricingSettings.weekend_surcharge_percent > 0 && weekendPricingSettings.weekend_days?.includes(dow);
+                                          t += isWeekend ? dailyRent * (1 + weekendPricingSettings.weekend_surcharge_percent / 100) : dailyRent;
+                                        }
+                                        autoTotal = Math.round(t * 100) / 100;
+                                      } else if (tier === 'weekly' && weeklyRent > 0) {
+                                        autoTotal = Math.round(((days / 7) * weeklyRent) * 100) / 100;
+                                      } else if (tier === 'monthly' && monthlyRent > 0) {
+                                        autoTotal = Math.round(((days / 30) * monthlyRent) * 100) / 100;
+                                      }
+                                      const isOverridden = autoTotal > 0 && Math.abs((field.value || 0) - autoTotal) > 0.01;
+                                      return (
+                                        <>
+                                          <div className="flex justify-between font-medium text-foreground">
+                                            <span>Auto-Calculated</span>
+                                            <span className={isOverridden ? 'line-through text-muted-foreground' : ''}>{formatCurrency(autoTotal, currency)}</span>
+                                          </div>
+                                          {isOverridden && (
+                                            <div className="flex justify-between font-medium text-amber-600 dark:text-amber-400">
+                                              <span>Admin Override</span>
+                                              <span>{formatCurrency(field.value || 0, currency)}</span>
+                                            </div>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               );
@@ -2513,6 +2575,106 @@ const CreateRental = () => {
                           </FormItem>
                           );
                         }}
+                      />
+
+                      {/* Promo Code */}
+                      <FormField
+                        control={form.control}
+                        name="promo_code"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                            <FormLabel>Promo Code</FormLabel>
+                            <div className="flex gap-2">
+                              <Popover open={promoCodeOpen} onOpenChange={setPromoCodeOpen}>
+                                <PopoverTrigger asChild>
+                                  <FormControl>
+                                    <Button
+                                      variant="outline"
+                                      role="combobox"
+                                      aria-expanded={promoCodeOpen}
+                                      className={cn(
+                                        "flex-1 justify-between font-normal",
+                                        !field.value && "text-muted-foreground",
+                                        promoError ? "border-destructive" : promoDetails ? "border-green-500" : ""
+                                      )}
+                                    >
+                                      {field.value || "Select promo code"}
+                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                  </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[300px] p-0" align="start">
+                                  <Command>
+                                    <CommandInput placeholder="Search promo codes..." />
+                                    <CommandList>
+                                      <CommandEmpty>No promo codes found</CommandEmpty>
+                                      <CommandGroup>
+                                        {promoCodes?.map((promo: any) => (
+                                          <CommandItem
+                                            key={promo.id}
+                                            value={promo.code}
+                                            onSelect={() => {
+                                              field.onChange(promo.code);
+                                              setPromoCodeOpen(false);
+                                              setPromoError(null);
+                                              setPromoDetails(null);
+                                              // Auto-validate the selected promo code
+                                              validatePromoCode(promo.code);
+                                            }}
+                                          >
+                                            <div className="flex flex-col">
+                                              <span className="font-medium">{promo.code}</span>
+                                              <span className="text-xs text-muted-foreground">
+                                                {promo.type === 'percentage'
+                                                  ? `${promo.value}% off`
+                                                  : `${formatCurrency(promo.value, tenant?.currency_code || 'GBP')} off`}
+                                                {promo.expires_at && ` · Expires ${format(new Date(promo.expires_at), "MMM d, yyyy")}`}
+                                              </span>
+                                            </div>
+                                            <Check
+                                              className={cn(
+                                                "ml-auto h-4 w-4",
+                                                field.value === promo.code ? "opacity-100" : "opacity-0"
+                                              )}
+                                            />
+                                          </CommandItem>
+                                        ))}
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
+                              {field.value && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => {
+                                    field.onChange("");
+                                    setPromoDetails(null);
+                                    setPromoError(null);
+                                  }}
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                            {promoLoading && (
+                              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Validating...
+                              </p>
+                            )}
+                            {promoError && <p className="text-sm text-destructive">{promoError}</p>}
+                            {promoDetails && (
+                              <p className="text-sm text-green-600 font-medium flex items-center gap-1">
+                                <Check className="w-4 h-4" />
+                                Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `${formatCurrency(promoDetails.value, tenant?.currency_code || 'GBP')} off`}
+                              </p>
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
 
                       {/* Fee breakdown */}
@@ -2889,150 +3051,270 @@ const CreateRental = () => {
                 );
               })()}
 
+              {/* ── Section 2c: Mileage Info ─────────────────────── */}
+              {selectedVehicleId && watchedStartDate && watchedEndDate && (() => {
+                const vehicle = vehicles?.find((v: any) => v.id === selectedVehicleId);
+                if (!vehicle) return null;
+                const distUnit: DistanceUnit = (tenant?.distance_unit as DistanceUnit) || 'miles';
+                const unitShort = getDistanceUnitShort(distUnit);
+                const mCurrency = tenant?.currency_code || 'GBP';
+                const days = Math.max(1, differenceInDays(watchedEndDate, watchedStartDate));
+                const tier = getMileageTier(days);
+                const currentMileage = vehicle.current_mileage;
+                const effDaily = dailyMileageOverride !== null ? dailyMileageOverride : vehicle.daily_mileage;
+                const effWeekly = weeklyMileageOverride !== null ? weeklyMileageOverride : vehicle.weekly_mileage;
+                const effMonthly = monthlyMileageOverride !== null ? monthlyMileageOverride : vehicle.monthly_mileage;
+                const effExcessRate = excessRateOverride !== null ? excessRateOverride : vehicle.excess_mileage_rate;
+                const effVehicle = { daily_mileage: effDaily, weekly_mileage: effWeekly, monthly_mileage: effMonthly };
+                const perUnit = getTierMileage(effVehicle, tier);
+                const totalAllowance = calculateTotalMileageAllowance(effVehicle, days);
+                const unlimited = isUnlimitedMileage(effVehicle);
+                const tierMultiplier = tier === 'daily' ? days : tier === 'weekly' ? Math.ceil(days / 7) : Math.ceil(days / 30);
+                const tierUnitLabel = tier === 'daily' ? 'day' : tier === 'weekly' ? 'week' : 'month';
+                const hasMileageOverrides = dailyMileageOverride !== null || weeklyMileageOverride !== null || monthlyMileageOverride !== null || excessRateOverride !== null;
+                const tierItems: { key: 'daily' | 'weekly' | 'monthly'; label: string; vehicleVal: number | null; override: number | null; setOverride: (v: number | null) => void }[] = [
+                  { key: 'daily', label: 'Daily', vehicleVal: vehicle.daily_mileage, override: dailyMileageOverride, setOverride: setDailyMileageOverride },
+                  { key: 'weekly', label: 'Weekly', vehicleVal: vehicle.weekly_mileage, override: weeklyMileageOverride, setOverride: setWeeklyMileageOverride },
+                  { key: 'monthly', label: 'Monthly', vehicleVal: vehicle.monthly_mileage, override: monthlyMileageOverride, setOverride: setMonthlyMileageOverride },
+                ];
+                return (
+                  <div className="rounded-xl border bg-card shadow-sm">
+                    <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                      <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary"><Clock className="h-4 w-4" /></div>
+                      <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Mileage</h2>
+                    </div>
+                    <div className="p-5 space-y-4">
+                      {currentMileage != null && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Current Odometer</span>
+                          <span className="text-sm font-semibold">{formatDistance(currentMileage, distUnit)}</span>
+                        </div>
+                      )}
+                      {(() => {
+                        const activeTier = tierItems.find(t => t.key === tier);
+                        if (!activeTier) return null;
+                        const { key, label, vehicleVal, override, setOverride } = activeTier;
+                        const effVal = override !== null ? override : vehicleVal;
+                        const isOverridden = override !== null;
+                        return (
+                          <div className="flex items-center gap-4">
+                            <div className="flex-1 min-w-0">
+                              <Label className="text-sm">{label} Mileage Allowance</Label>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {effVal != null ? `${getMileageTierLabel(key, distUnit)} per ${tierUnitLabel}` : 'Unlimited — no limit set'}
+                                {isOverridden && <span className="text-amber-500 ml-1">(overridden)</span>}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Input type="text" inputMode="numeric" placeholder="∞" value={effVal != null ? effVal : ''}
+                                onChange={(e) => { const raw = e.target.value; if (raw !== '' && !/^\d*$/.test(raw)) return; if (raw === '') { if (vehicleVal == null) setOverride(null); else setOverride(0); } else { const num = parseInt(raw, 10); if (!isNaN(num)) { if (num === (vehicleVal ?? -1)) setOverride(null); else setOverride(num); } } }}
+                                className={cn("w-24 h-9 text-center font-semibold", isOverridden && "border-amber-400 dark:border-amber-600")}
+                              />
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">{unitShort}</span>
+                              {isOverridden && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 underline whitespace-nowrap" onClick={() => setOverride(null)}>Reset</button>}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      {(effExcessRate != null || vehicle.excess_mileage_rate != null || !unlimited) && (
+                        <div className="flex items-center gap-3">
+                          <Label className="text-sm text-muted-foreground whitespace-nowrap">Excess Rate</Label>
+                          <CurrencyInput value={effExcessRate ?? 0} onChange={(val) => { const num = typeof val === 'string' ? parseFloat(val) : val; if (num === (vehicle.excess_mileage_rate ?? 0)) setExcessRateOverride(null); else setExcessRateOverride(isNaN(num) ? 0 : num); }} currencySymbol={currencySymbol} className="w-28" />
+                          <span className="text-xs text-muted-foreground">/{unitShort}</span>
+                          {excessRateOverride !== null && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 underline" onClick={() => setExcessRateOverride(null)}>Reset</button>}
+                        </div>
+                      )}
+                      {!unlimited && (
+                        <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">This Rental ({days} days — {tier} tier)</p>
+                          {perUnit != null ? (
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">{perUnit.toLocaleString()} {unitShort}/{tierUnitLabel} × {tierMultiplier} {tierUnitLabel}{tierMultiplier !== 1 ? 's' : ''}</span>
+                              <span className="text-sm font-bold">{formatDistance(totalAllowance!, distUnit)}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Mileage allowance</span><span className="text-sm font-bold">Unlimited</span></div>
+                          )}
+                          {effExcessRate != null && effExcessRate > 0 && totalAllowance != null && (
+                            <div className="flex items-center justify-between border-t pt-2">
+                              <span className="text-xs text-muted-foreground">Excess charge</span>
+                              <span className="text-xs font-medium text-amber-600 dark:text-amber-400">{formatCurrency(effExcessRate, mCurrency)}/{unitShort} over {formatDistance(totalAllowance, distUnit)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {unlimited && <p className="text-sm text-muted-foreground text-center py-2">Unlimited mileage — no excess charges apply.</p>}
+                      {hasMileageOverrides && <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">* Custom mileage — applies only to this rental, not saved to vehicle settings.</p>}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* ── Section 3: Pickup & Return ────────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
                 <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                  <span className="text-2xl font-extrabold text-primary">4.</span>
+                  <span className="text-2xl font-extrabold text-primary">3.</span>
                   <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Pickup & Return</h2>
                 </div>
                 <div className="p-5 space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="pickup_location"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Pickup Location <span className="text-red-500">*</span></FormLabel>
-                            <FormControl>
-                              <LocationPicker
-                                type="pickup"
-                                value={field.value || ''}
-                                locationId={pickupLocationId}
-                                onChange={(address, locId) => {
-                                  field.onChange(address);
-                                  setPickupLocationId(locId);
-                                  // Sync return location if "Same as pickup" is checked
-                                  if (sameAsPickup) {
-                                    form.setValue("return_location", address);
-                                    setReturnLocationId(locId);
-                                  }
-                                }}
-                                placeholder="Enter pickup address"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="return_location"
-                        render={({ field }) => (
-                          <FormItem>
-                            <div className="flex items-center justify-between">
-                              <FormLabel>Return Location <span className="text-red-500">*</span></FormLabel>
-                              <div className="flex items-center gap-2">
-                                <Checkbox
-                                  id="sameAsPickup"
-                                  checked={sameAsPickup}
-                                  onCheckedChange={(checked) => {
-                                    setSameAsPickup(checked === true);
-                                    if (checked) {
-                                      form.setValue("return_location", form.getValues("pickup_location"));
-                                      setReturnLocationId(pickupLocationId);
-                                    } else {
-                                      form.setValue("return_location", "");
-                                      setReturnLocationId(undefined);
-                                    }
-                                  }}
-                                />
-                                <label
-                                  htmlFor="sameAsPickup"
-                                  className="text-sm text-muted-foreground cursor-pointer"
-                                >
-                                  Same as pickup
-                                </label>
-                              </div>
-                            </div>
-                            <FormControl>
-                              <LocationPicker
-                                type="return"
-                                value={sameAsPickup ? form.getValues("pickup_location") || '' : field.value || ''}
-                                locationId={sameAsPickup ? pickupLocationId : returnLocationId}
-                                onChange={(address, locId) => {
-                                  field.onChange(address);
-                                  setReturnLocationId(locId);
-                                }}
-                                placeholder="Enter return address"
-                                disabled={sameAsPickup}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                  <FormField control={form.control} name="pickup_location" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Pickup Location <span className="text-red-500">*</span></FormLabel>
+                      <FormControl>
+                        <LocationPicker type="pickup" value={field.value || ''} locationId={pickupLocationId} method={pickupMethod}
+                          onMethodChange={(m) => { setPickupMethod(m); setDeliveryFee(0); setDeliveryFeeOverride(null); setPickupOutOfRadius(false); setPickupIsCustom(false); }}
+                          onChange={(address, locId, fee, outOfRadius) => { field.onChange(address); setPickupLocationId(locId); if (fee !== undefined) setDeliveryFee(fee); setPickupOutOfRadius(outOfRadius || false); if (!address) { setTimeout(() => { form.clearErrors("pickup_location"); if (sameAsPickup) form.clearErrors("return_location"); }, 0); } if (sameAsPickup) { form.setValue("return_location", address, { shouldValidate: !!address }); setReturnLocationId(locId); if (fee !== undefined) setCollectionFee(fee); setReturnOutOfRadius(outOfRadius || false); } }}
+                          onCustomAddressChange={(isCustom) => setPickupIsCustom(isCustom)}
+                          placeholder="Enter pickup address" currency={tenant?.currency_code || 'GBP'} distanceUnit={(tenant?.distance_unit as 'km' | 'miles') || 'miles'}
+                        />
+                      </FormControl>
+                      {pickupOutOfRadius && <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />Address is outside the configured service radius. Proceeding as admin override.</p>}
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+
+                  {(pickupIsCustom || (pickupMethod !== 'fixed' && (deliveryFee > 0 || deliveryFeeOverride !== null))) && (
+                    <div className="flex items-center gap-3">
+                      <Label className="text-sm text-muted-foreground whitespace-nowrap">Delivery Fee</Label>
+                      <CurrencyInput value={deliveryFeeOverride !== null ? deliveryFeeOverride : deliveryFee} onChange={(val) => setDeliveryFeeOverride(val)} currencySymbol={currencySymbol} className="w-32" />
+                      {deliveryFeeOverride !== null && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 underline" onClick={() => setDeliveryFeeOverride(null)}>Reset to {formatCurrency(deliveryFee, tenant?.currency_code || 'GBP')}</button>}
                     </div>
+                  )}
+
+                  <div className="border-t" />
+
+                  <FormField control={form.control} name="return_location" render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center justify-between">
+                        <FormLabel>Return Location <span className="text-red-500">*</span></FormLabel>
+                        <div className="flex items-center gap-2">
+                          <Checkbox id="sameAsPickup" checked={sameAsPickup} onCheckedChange={(checked) => {
+                            setSameAsPickup(checked === true);
+                            if (checked) { form.setValue("return_location", form.getValues("pickup_location"), { shouldValidate: true }); setReturnLocationId(pickupLocationId); setReturnMethod(pickupMethod); setCollectionFee(deliveryFee); setCollectionFeeOverride(deliveryFeeOverride); setReturnOutOfRadius(pickupOutOfRadius); }
+                            else { form.setValue("return_location", "", { shouldValidate: true }); setReturnLocationId(undefined); setCollectionFee(0); setCollectionFeeOverride(null); setReturnOutOfRadius(false); }
+                          }} />
+                          <label htmlFor="sameAsPickup" className="text-sm text-muted-foreground cursor-pointer">Same as pickup</label>
+                        </div>
+                      </div>
+                      {!sameAsPickup ? (
+                        <>
+                          <FormControl>
+                            <LocationPicker type="return" value={field.value || ''} locationId={returnLocationId} method={returnMethod}
+                              onMethodChange={(m) => { setReturnMethod(m); setCollectionFee(0); setCollectionFeeOverride(null); setReturnOutOfRadius(false); setReturnIsCustom(false); }}
+                              onChange={(address, locId, fee, outOfRadius) => { field.onChange(address); setReturnLocationId(locId); if (fee !== undefined) setCollectionFee(fee); setReturnOutOfRadius(outOfRadius || false); if (!address) { setTimeout(() => form.clearErrors("return_location"), 0); } }}
+                              onCustomAddressChange={(isCustom) => setReturnIsCustom(isCustom)}
+                              placeholder="Enter return address" currency={tenant?.currency_code || 'GBP'} distanceUnit={(tenant?.distance_unit as 'km' | 'miles') || 'miles'}
+                            />
+                          </FormControl>
+                          {returnOutOfRadius && <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />Address is outside the configured service radius. Proceeding as admin override.</p>}
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-2 px-3 h-10 border rounded-md bg-muted/50 text-foreground">
+                          <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          <span className="flex-1 truncate text-sm text-muted-foreground">{form.getValues("pickup_location") || 'Same as pickup location'}</span>
+                        </div>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+
+                  {!sameAsPickup && (returnIsCustom || (returnMethod !== 'fixed' && (collectionFee > 0 || collectionFeeOverride !== null))) && (
+                    <div className="flex items-center gap-3">
+                      <Label className="text-sm text-muted-foreground whitespace-nowrap">Collection Fee</Label>
+                      <CurrencyInput value={collectionFeeOverride !== null ? collectionFeeOverride : collectionFee} onChange={(val) => setCollectionFeeOverride(val)} currencySymbol={currencySymbol} className="w-32" />
+                      {collectionFeeOverride !== null && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 underline" onClick={() => setCollectionFeeOverride(null)}>Reset to {formatCurrency(collectionFee, tenant?.currency_code || 'GBP')}</button>}
+                    </div>
+                  )}
 
                   {/* Lockbox / Delivery Method */}
                   {rentalSettings?.lockbox_enabled && (
                     <div className="border-t pt-4">
                       <Label className="text-sm font-medium mb-3 block">Key Handover Method</Label>
-                      <RadioGroup
-                        value={deliveryMethod}
-                        onValueChange={(val) => setDeliveryMethod(val as 'in_person' | 'lockbox')}
-                        className="flex gap-4"
-                      >
-                        <label
-                          className={cn(
-                            "flex items-center gap-2.5 rounded-lg border p-3 flex-1 cursor-pointer transition-colors",
-                            deliveryMethod === 'in_person' ? "border-primary bg-primary/5" : "hover:bg-muted/50"
-                          )}
-                        >
+                      <RadioGroup value={deliveryMethod} onValueChange={(val) => setDeliveryMethod(val as 'in_person' | 'lockbox')} className="flex gap-4">
+                        <label className={cn("flex items-center gap-2.5 rounded-lg border p-3 flex-1 cursor-pointer transition-colors", deliveryMethod === 'in_person' ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
                           <RadioGroupItem value="in_person" id="handover-in-person" />
-                          <div>
-                            <span className="text-sm font-medium">In Person</span>
-                            <p className="text-xs text-muted-foreground">Hand keys directly to customer</p>
-                          </div>
+                          <div><span className="text-sm font-medium">In Person</span><p className="text-xs text-muted-foreground">Hand keys directly to customer</p></div>
                         </label>
-                        <label
-                          className={cn(
-                            "flex items-center gap-2.5 rounded-lg border p-3 flex-1 cursor-pointer transition-colors",
-                            deliveryMethod === 'lockbox' ? "border-primary bg-primary/5" : "hover:bg-muted/50"
-                          )}
-                        >
+                        <label className={cn("flex items-center gap-2.5 rounded-lg border p-3 flex-1 cursor-pointer transition-colors", deliveryMethod === 'lockbox' ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
                           <RadioGroupItem value="lockbox" id="handover-lockbox" />
-                          <div className="flex items-center gap-1.5">
-                            <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                            <div>
-                              <span className="text-sm font-medium">Lockbox</span>
-                              <p className="text-xs text-muted-foreground">Keys placed in secure lockbox</p>
-                            </div>
-                          </div>
+                          <div className="flex items-center gap-1.5"><Lock className="h-3.5 w-3.5 text-muted-foreground" /><div><span className="text-sm font-medium">Lockbox</span><p className="text-xs text-muted-foreground">Keys placed in secure lockbox</p></div></div>
                         </label>
                       </RadioGroup>
-                      {deliveryMethod === 'lockbox' && (
-                        <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-                          <Info className="h-3 w-3" />
-                          Lockbox code and instructions will be sent to the customer after rental creation via the Key Handover section.
-                        </p>
-                      )}
+                      {deliveryMethod === 'lockbox' && <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1"><Info className="h-3 w-3" />Lockbox code and instructions will be sent to the customer after rental creation via the Key Handover section.</p>}
                     </div>
                   )}
-
                 </div>
               </div>
 
               {/* ── Section 4: Insurance ──────────────────────────── */}
-              {!skipInsurance && (
                 <div className="rounded-xl border bg-card shadow-sm">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                    <span className="text-2xl font-extrabold text-primary">5.</span>
+                    <span className="text-2xl font-extrabold text-primary">4.</span>
                     <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Insurance</h2>
                   </div>
                   <div className="p-5 space-y-5">
+                  {/* Customer's Uploaded Insurance Policies (non-expired only) */}
+                  {(() => {
+                    const activePolicies = selectedCustomerId && customerInsurance
+                      ? customerInsurance.filter(p => p.status !== "Expired")
+                      : [];
+                    if (!selectedCustomerId) return null;
+                    return (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">Customer Insurance Policies</p>
+                        {activePolicies.length > 0 ? (
+                          <div className="rounded-lg border overflow-hidden">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="bg-muted/50 border-b">
+                                  <th className="text-left font-medium text-muted-foreground px-3 py-2">Policy No.</th>
+                                  <th className="text-left font-medium text-muted-foreground px-3 py-2">Provider</th>
+                                  <th className="text-left font-medium text-muted-foreground px-3 py-2">Vehicle</th>
+                                  <th className="text-left font-medium text-muted-foreground px-3 py-2">Expiry</th>
+                                  <th className="text-left font-medium text-muted-foreground px-3 py-2">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {activePolicies.map((policy, idx) => (
+                                  <tr key={policy.id} className={cn(idx < activePolicies.length - 1 && "border-b")}>
+                                    <td className="px-3 py-2 font-medium">{policy.policy_number}</td>
+                                    <td className="px-3 py-2 text-muted-foreground">{policy.provider || "—"}</td>
+                                    <td className="px-3 py-2 text-muted-foreground">
+                                      {policy.vehicles ? `${policy.vehicles.reg}` : "—"}
+                                    </td>
+                                    <td className="px-3 py-2 text-muted-foreground">
+                                      {policy.expiry_date ? format(parseISO(policy.expiry_date), "dd MMM yyyy") : "—"}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <Badge
+                                        variant="outline"
+                                        className={cn(
+                                          "text-[10px] px-1.5 py-0",
+                                          policy.status === "Active" && "border-emerald-500/30 text-emerald-600",
+                                          policy.status === "Suspended" && "border-amber-500/30 text-amber-600"
+                                        )}
+                                      >
+                                        {policy.status}
+                                      </Badge>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            No active insurance policies on record for this customer.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                     {/* Existing Insurance Documents */}
                     {selectedCustomerId && existingInsuranceDocs.length > 0 && (
                       <div className="space-y-2.5">
+                        <div className="border-t" />
                         <p className="text-sm font-medium">Existing Insurance Certificates</p>
                         <div className="space-y-2">
                           {existingInsuranceDocs.map((doc) => {
@@ -3130,7 +3412,7 @@ const CreateRental = () => {
                     </div>
 
                     {/* Bonzah Insurance Selection */}
-                    {watchedStartDate && watchedEndDate && (
+                    {!skipInsurance && watchedStartDate && watchedEndDate && (
                       <div className="space-y-4">
                         {isBonzahEligibilityLoading ? (
                           <div className="flex items-center gap-2 py-3">
@@ -3205,6 +3487,7 @@ const CreateRental = () => {
                                 setBonzahPremium(0);
                               }}
                               initialCoverage={bonzahCoverage}
+                              customerDetails={customerDetails}
                             />
                             {bonzahPremium > 0 && (
                               <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-3 space-y-2">
@@ -3212,8 +3495,8 @@ const CreateRental = () => {
                                   <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
                                   <p className="text-sm text-muted-foreground">
                                     Insurance premium: <span className="font-medium">${bonzahPremium.toFixed(2)}</span>.
-                                    {bonzahCdBalance != null && <> Bonzah Balance: <span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>.</>}
-                                    {' '}The policy will only activate if your Bonzah <strong>allocated balance</strong> is sufficient. If not, the policy will be quoted and you can retry after allocating more funds.
+                                    {bonzahCdBalance != null && <> Bonzah {bonzahMode === 'live' ? 'Live' : 'Test'} Balance: <span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>.</>}
+                                    {' '}The policy will only activate if your Bonzah <strong>allocated {bonzahMode === 'live' ? 'live' : 'test'} balance</strong> is sufficient. If not, the policy will be quoted and you can retry after allocating more funds.
                                   </p>
                                 </div>
                                 <a
@@ -3233,13 +3516,12 @@ const CreateRental = () => {
                     )}
                   </div>
                 </div>
-              )}
 
               {/* ── Section 5: Optional Extras ────────────────────── */}
               {activeExtras.length > 0 && (
                 <div className="rounded-xl border bg-card shadow-sm">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                    <span className="text-2xl font-extrabold text-primary">6.</span>
+                    <span className="text-2xl font-extrabold text-primary">5.</span>
                     <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Optional Extras</h2>
                   </div>
                   <div className="p-5 space-y-4">
@@ -3363,147 +3645,26 @@ const CreateRental = () => {
                 </div>
               )}
 
-              {/* ── Section 6: Additional Details ─────────────────── */}
-              <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                  <span className="text-2xl font-extrabold text-primary">7.</span>
-                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Additional Details</h2>
-                </div>
-                <div className="p-5 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="driver_age"
-                        render={({ field }) => {
-                          const minAge = rentalSettings?.minimum_rental_age || 18;
-                          const exceedsLimit = field.value != null && field.value > minAge;
-                          return (
-                            <FormItem>
-                              <FormLabel>Driver Age <span className="text-red-500">*</span></FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  min={16}
-                                  max={200}
-                                  placeholder="Enter driver age"
-                                  value={field.value ?? ""}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    field.onChange(val === "" ? undefined : parseInt(val));
-                                  }}
-                                />
-                              </FormControl>
-                              {exceedsLimit && (
-                                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
-                                  Driver age exceeds the set limit of {minAge}. Admin override allowed.
-                                </p>
-                              )}
-                              <FormMessage />
-                            </FormItem>
-                          );
-                        }}
+              {/* ── Notes ─────────────────────────── */}
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium flex items-center gap-1.5">
+                      <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
+                      Notes
+                    </FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Add any notes about this rental (optional)"
+                        className="resize-none min-h-[60px]"
+                        {...field}
                       />
-                      <FormField
-                        control={form.control}
-                        name="promo_code"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-col">
-                            <FormLabel>Promo Code</FormLabel>
-                            <div className="flex gap-2">
-                              <Popover open={promoCodeOpen} onOpenChange={setPromoCodeOpen}>
-                                <PopoverTrigger asChild>
-                                  <FormControl>
-                                    <Button
-                                      variant="outline"
-                                      role="combobox"
-                                      aria-expanded={promoCodeOpen}
-                                      className={cn(
-                                        "flex-1 justify-between font-normal",
-                                        !field.value && "text-muted-foreground",
-                                        promoError ? "border-destructive" : promoDetails ? "border-green-500" : ""
-                                      )}
-                                    >
-                                      {field.value || "Select promo code"}
-                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                  </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[300px] p-0" align="start">
-                                  <Command>
-                                    <CommandInput placeholder="Search promo codes..." />
-                                    <CommandList>
-                                      <CommandEmpty>No promo codes found</CommandEmpty>
-                                      <CommandGroup>
-                                        {promoCodes?.map((promo: any) => (
-                                          <CommandItem
-                                            key={promo.id}
-                                            value={promo.code}
-                                            onSelect={() => {
-                                              field.onChange(promo.code);
-                                              setPromoCodeOpen(false);
-                                              setPromoError(null);
-                                              setPromoDetails(null);
-                                              // Auto-validate the selected promo code
-                                              validatePromoCode(promo.code);
-                                            }}
-                                          >
-                                            <div className="flex flex-col">
-                                              <span className="font-medium">{promo.code}</span>
-                                              <span className="text-xs text-muted-foreground">
-                                                {promo.type === 'percentage'
-                                                  ? `${promo.value}% off`
-                                                  : `${formatCurrency(promo.value, tenant?.currency_code || 'GBP')} off`}
-                                                {promo.expires_at && ` · Expires ${format(new Date(promo.expires_at), "MMM d, yyyy")}`}
-                                              </span>
-                                            </div>
-                                            <Check
-                                              className={cn(
-                                                "ml-auto h-4 w-4",
-                                                field.value === promo.code ? "opacity-100" : "opacity-0"
-                                              )}
-                                            />
-                                          </CommandItem>
-                                        ))}
-                                      </CommandGroup>
-                                    </CommandList>
-                                  </Command>
-                                </PopoverContent>
-                              </Popover>
-                              {field.value && (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="icon"
-                                  onClick={() => {
-                                    field.onChange("");
-                                    setPromoDetails(null);
-                                    setPromoError(null);
-                                  }}
-                                >
-                                  <XCircle className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                            {promoLoading && (
-                              <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                Validating...
-                              </p>
-                            )}
-                            {promoError && <p className="text-sm text-destructive">{promoError}</p>}
-                            {promoDetails && (
-                              <p className="text-sm text-green-600 font-medium flex items-center gap-1">
-                                <Check className="w-4 h-4" />
-                                Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `${formatCurrency(promoDetails.value, tenant?.currency_code || 'GBP')} off`}
-                              </p>
-                            )}
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                  </div>
-                </div>
-              </div>
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
 
               {/* ── Submit ─────────────────────────── */}
               <div className="flex justify-end gap-3 pt-2">
@@ -3595,9 +3756,13 @@ const CreateRental = () => {
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className="text-[10px]">{watchedRentalPeriodType || "—"}</Badge>
                           {watchedStartDate && watchedEndDate && (
-                            <span className="text-[10px] text-muted-foreground">
-                              ({Math.max(1, differenceInDays(watchedEndDate, watchedStartDate))} days)
-                            </span>
+                            differenceInDays(watchedEndDate, watchedStartDate) <= 0 ? (
+                              <span className="text-[10px] text-red-500 font-medium">Invalid dates</span>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">
+                                ({differenceInDays(watchedEndDate, watchedStartDate)} days)
+                              </span>
+                            )
                           )}
                         </div>
                       </div>
@@ -3610,7 +3775,7 @@ const CreateRental = () => {
                       </div>
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-muted-foreground">End</p>
-                        <p className="text-xs font-medium">
+                        <p className={cn("text-xs font-medium", watchedStartDate && watchedEndDate && !isAfter(watchedEndDate, watchedStartDate) && "text-red-500")}>
                           {watchedEndDate ? format(watchedEndDate, "dd MMM yyyy") : "—"}
                           {form.watch("return_time") ? ` at ${form.watch("return_time")}` : ""}
                         </p>
@@ -3645,13 +3810,15 @@ const CreateRental = () => {
                       const effectiveTax = taxOverride !== null ? taxOverride : autoTax;
                       const effectiveServiceFee = serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee;
                       const effectiveDeposit = depositOverride !== null ? depositOverride : autoDeposit;
+                      const prevDeliveryFee = deliveryFeeOverride !== null ? deliveryFeeOverride : deliveryFee;
+                      const prevCollectionFee = sameAsPickup ? 0 : (collectionFeeOverride !== null ? collectionFeeOverride : collectionFee);
 
                       const extrasTotal = Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
                         const extra = activeExtras?.find((e: RentalExtra) => e.id === id);
                         return sum + (extra ? Number(extra.price) * qty : 0);
                       }, 0);
 
-                      const subtotal = discountedAmount + (showTax ? effectiveTax : 0) + (showServiceFee && autoServiceFee > 0 ? effectiveServiceFee : 0) + bonzahPremium + extrasTotal;
+                      const subtotal = discountedAmount + (showTax ? effectiveTax : 0) + (showServiceFee && autoServiceFee > 0 ? effectiveServiceFee : 0) + bonzahPremium + extrasTotal + prevDeliveryFee + (sameAsPickup ? 0 : prevCollectionFee);
                       const grandTotal = subtotal + (effectiveDeposit > 0 ? effectiveDeposit : 0);
 
                       return (
@@ -3717,6 +3884,19 @@ const CreateRental = () => {
                             </div>
                           )}
 
+                          {prevDeliveryFee > 0 && (
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs text-muted-foreground">Delivery Fee{deliveryFeeOverride !== null && <span className="text-amber-500 ml-1">*</span>}</p>
+                              <p className="text-xs font-medium">{formatCurrency(prevDeliveryFee, currency)}</p>
+                            </div>
+                          )}
+                          {!sameAsPickup && prevCollectionFee > 0 && (
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs text-muted-foreground">Collection Fee{collectionFeeOverride !== null && <span className="text-amber-500 ml-1">*</span>}</p>
+                              <p className="text-xs font-medium">{formatCurrency(prevCollectionFee, currency)}</p>
+                            </div>
+                          )}
+
                           {effectiveDeposit > 0 && (
                             <div className="flex items-center justify-between">
                               <p className="text-xs text-muted-foreground">
@@ -3727,7 +3907,7 @@ const CreateRental = () => {
                             </div>
                           )}
 
-                          {(taxOverride !== null || serviceFeeOverride !== null || depositOverride !== null) && (
+                          {(taxOverride !== null || serviceFeeOverride !== null || depositOverride !== null || deliveryFeeOverride !== null || collectionFeeOverride !== null) && (
                             <p className="text-[10px] text-amber-500">* Manually adjusted</p>
                           )}
 

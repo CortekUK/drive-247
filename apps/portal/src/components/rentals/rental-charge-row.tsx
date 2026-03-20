@@ -43,7 +43,8 @@ export const RentalChargeRow = ({ charge }: RentalChargeRowProps) => {
       <TableCell>
         {charge.category === 'Insurance' ? (
           <span className="flex items-center gap-1.5">
-            <ShieldCheck className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+            <img src="/bonzah-logo.svg" alt="Bonzah" className="h-4 w-auto flex-shrink-0 dark:hidden" />
+            <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-4 w-auto flex-shrink-0 hidden dark:block" />
             <span>Bonzah Insurance</span>
           </span>
         ) : (

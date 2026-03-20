@@ -123,7 +123,44 @@ function processTemplate(
     vehicle_daily_mileage: vehicle?.daily_mileage?.toString() || '',
     vehicle_weekly_mileage: vehicle?.weekly_mileage?.toString() || '',
     vehicle_monthly_mileage: vehicle?.monthly_mileage?.toString() || '',
-    vehicle_allowed_mileage: vehicle?.monthly_mileage?.toString() || '',
+    vehicle_allowed_mileage: (() => {
+      // Calculate total allowed mileage based on rental tier and duration
+      const startDate = rental?.start_date as string | undefined;
+      const endDate = rental?.end_date as string | undefined;
+      if (!startDate || !endDate) return vehicle?.monthly_mileage?.toString() || 'Unlimited';
+      const days = Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)));
+
+      // Use rental-level mileage overrides if present, otherwise fall back to vehicle
+      const dailyMileage = (rental?.daily_mileage_override as number | null) ?? (vehicle?.daily_mileage as number | null);
+      const weeklyMileage = (rental?.weekly_mileage_override as number | null) ?? (vehicle?.weekly_mileage as number | null);
+      const monthlyMileage = (rental?.monthly_mileage_override as number | null) ?? (vehicle?.monthly_mileage as number | null);
+
+      if (days > 30) {
+        if (monthlyMileage == null) return 'Unlimited';
+        return (monthlyMileage * Math.ceil(days / 30)).toString();
+      } else if (days >= 7) {
+        if (weeklyMileage == null) return 'Unlimited';
+        return (weeklyMileage * Math.ceil(days / 7)).toString();
+      } else {
+        if (dailyMileage == null) return 'Unlimited';
+        return (dailyMileage * days).toString();
+      }
+    })(),
+    mileage_tier: (() => {
+      const startDate = rental?.start_date as string | undefined;
+      const endDate = rental?.end_date as string | undefined;
+      if (!startDate || !endDate) return 'monthly';
+      const days = Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)));
+      if (days > 30) return 'monthly';
+      if (days >= 7) return 'weekly';
+      return 'daily';
+    })(),
+    vehicle_excess_mileage_rate: (() => {
+      // Use rental-level override if present, otherwise fall back to vehicle
+      const rate = (rental?.excess_mileage_rate_override as number | null) ?? (vehicle?.excess_mileage_rate as number | null);
+      if (rate == null) return 'N/A';
+      return formatCurrency(rate);
+    })(),
 
     // Rental
     rental_number: (rental?.rental_number as string) || (rental?.id as string)?.substring(0, 8)?.toUpperCase() || 'N/A',

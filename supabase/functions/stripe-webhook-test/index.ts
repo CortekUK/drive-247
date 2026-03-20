@@ -101,8 +101,92 @@ serve(async (req) => {
         const isExcessMileage = session.metadata?.type === "excess_mileage";
         const isInstallment = session.metadata?.checkout_type === "installment" || session.metadata?.checkout_type === "installment_upfront";
 
-        if (!rentalId) {
-          console.log("No rental ID in session, skipping");
+        // Handle invoice payments (emailed payment links)
+        const isInvoicePayment = session.metadata?.type === "invoice_payment";
+        const invoiceId = session.metadata?.invoice_id;
+
+        if (!rentalId && !isInvoicePayment) {
+          console.log("No rental ID in session and not an invoice payment, skipping");
+          break;
+        }
+
+        if (isInvoicePayment && invoiceId) {
+          console.log("[TEST MODE] Invoice payment completed. Invoice:", invoiceId);
+
+          const paidAmount = (session.amount_total || 0) / 100;
+          const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id;
+          const invoiceRentalId = session.metadata?.rental_id || null;
+
+          // Find the pre-created payment record
+          const { data: existingPayment } = await supabase
+            .from("payments")
+            .select("id")
+            .eq("stripe_checkout_session_id", session.id)
+            .maybeSingle();
+
+          if (existingPayment) {
+            // Update existing payment to Completed
+            await supabase
+              .from("payments")
+              .update({
+                status: "Completed",
+                capture_status: "captured",
+                paid_at: new Date().toISOString(),
+                stripe_payment_intent_id: paymentIntentId || null,
+              })
+              .eq("id", existingPayment.id);
+
+            console.log("[TEST MODE] Payment updated:", existingPayment.id);
+
+            // Apply payment to ledger
+            const { data: applyResult, error: applyError } = await supabase.functions.invoke("apply-payment", {
+              body: { paymentId: existingPayment.id },
+            });
+
+            if (applyError) {
+              console.error("[TEST MODE] apply-payment error:", applyError);
+            } else {
+              console.log("[TEST MODE] apply-payment result:", applyResult?.status, "allocated:", applyResult?.allocated);
+            }
+          } else {
+            console.log("[TEST MODE] No pre-created payment found for session:", session.id, "— creating one");
+
+            // Fallback: create payment record now
+            if (invoiceRentalId) {
+              const { data: invoice } = await supabase.from("invoices").select("customer_id, vehicle_id").eq("id", invoiceId).maybeSingle();
+
+              const { data: newPayment } = await supabase
+                .from("payments")
+                .insert({
+                  customer_id: invoice?.customer_id || null,
+                  vehicle_id: invoice?.vehicle_id || null,
+                  rental_id: invoiceRentalId,
+                  amount: paidAmount,
+                  payment_type: "Payment",
+                  status: "Completed",
+                  capture_status: "captured",
+                  method: "Card",
+                  paid_at: new Date().toISOString(),
+                  stripe_payment_intent_id: paymentIntentId || null,
+                  stripe_checkout_session_id: session.id,
+                  tenant_id: session.metadata?.tenant_id || null,
+                })
+                .select()
+                .single();
+
+              if (newPayment) {
+                const { data: applyResult } = await supabase.functions.invoke("apply-payment", {
+                  body: { paymentId: newPayment.id },
+                });
+                console.log("[TEST MODE] Fallback payment created and applied:", newPayment.id, applyResult?.status);
+              }
+            }
+          }
+
+          // Update invoice status
+          await supabase.from("invoices").update({ status: "paid" }).eq("id", invoiceId);
+          console.log("[TEST MODE] Invoice marked as paid:", invoiceId);
+
           break;
         }
 

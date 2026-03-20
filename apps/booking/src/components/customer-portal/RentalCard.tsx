@@ -5,13 +5,14 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, AlertTriangle, Pencil, CalendarPlus, XCircle, RefreshCw, ExternalLink, Lock, FileSignature } from 'lucide-react';
+import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, AlertTriangle, Pencil, CalendarPlus, XCircle, RefreshCw, ExternalLink, Lock, FileSignature, Gauge } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday } from 'date-fns';
 import { CustomerRental } from '@/hooks/use-customer-rentals';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useTenant } from '@/contexts/TenantContext';
-import { formatCurrency } from '@/lib/format-utils';
+import { formatCurrency, getUnlimitedLabel, getDistanceUnitShort, type DistanceUnit } from '@/lib/format-utils';
+import { isUnlimitedMileage, calculateTotalMileageAllowance } from '@/lib/mileage-utils';
 import { EditInsuranceDialog } from './EditInsuranceDialog';
 import { ExtendRentalDialog } from './ExtendRentalDialog';
 import { CancelBookingDialog } from './CancelBookingDialog';
@@ -50,6 +51,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showRenewDialog, setShowRenewDialog] = useState(false);
   const vehicle = rental.vehicles;
+  const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
 
   // Check if booking can be edited (only Pending status)
   const canEditInsurance = rental.status === 'Pending';
@@ -276,6 +278,29 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Lock className="h-4 w-4" />
                   <span>Keys via secure lockbox</span>
+                </div>
+              )}
+
+              {/* Mileage Allowance */}
+              {vehicle && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Gauge className="h-4 w-4" />
+                  {isUnlimitedMileage(vehicle) ? (
+                    <span>{getUnlimitedLabel(distanceUnit)}</span>
+                  ) : (
+                    <span>
+                      {(() => {
+                        const totalAllowance = calculateTotalMileageAllowance(vehicle, durationDays);
+                        if (totalAllowance === null) return getUnlimitedLabel(distanceUnit);
+                        return `${totalAllowance.toLocaleString()} ${getDistanceUnitShort(distanceUnit)} allowance`;
+                      })()}
+                      {vehicle.excess_mileage_rate != null && (
+                        <span className="text-muted-foreground/70">
+                          {' '}· {formatCurrency(vehicle.excess_mileage_rate, currencyCode)}/{getDistanceUnitShort(distanceUnit)} excess
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </div>
               )}
 

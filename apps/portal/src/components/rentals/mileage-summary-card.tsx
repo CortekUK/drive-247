@@ -2,12 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Gauge, TrendingUp, TrendingDown, Minus, Car, DollarSign } from "lucide-react";
+import { Gauge, TrendingUp, TrendingDown, Minus, Car, DollarSign, Info } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatDistance, formatDistanceLong, getDistanceUnitShort, getMileageTierLabel } from "@/lib/format-utils";
 import { formatCurrency } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
-import { calculateTotalMileageAllowance, getMileageTier } from "@/lib/mileage-utils";
+import { calculateTotalMileageAllowance, getMileageTier, getTierMileage } from "@/lib/mileage-utils";
 
 interface MileageSummaryCardProps {
   rentalId: string;
@@ -30,6 +30,13 @@ interface Vehicle {
   monthly_mileage: number | null;
   current_mileage: number | null;
   excess_mileage_rate: number | null;
+}
+
+interface RentalOverrides {
+  daily_mileage_override: number | null;
+  weekly_mileage_override: number | null;
+  monthly_mileage_override: number | null;
+  excess_mileage_rate_override: number | null;
 }
 
 interface ExcessMileageCharge {
@@ -78,6 +85,40 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
     enabled: !!vehicleId,
   });
 
+  // Fetch rental-level mileage overrides
+  const { data: rentalOverrides } = useQuery({
+    queryKey: ["rental-mileage-overrides", rentalId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("rentals")
+        .select("daily_mileage_override, weekly_mileage_override, monthly_mileage_override, excess_mileage_rate_override")
+        .eq("id", rentalId)
+        .single();
+
+      if (error) throw error;
+      return data as RentalOverrides;
+    },
+    enabled: !!rentalId,
+  });
+
+  // Build effective mileage config: rental overrides take precedence over vehicle defaults
+  const hasOverrides = rentalOverrides && (
+    rentalOverrides.daily_mileage_override != null ||
+    rentalOverrides.weekly_mileage_override != null ||
+    rentalOverrides.monthly_mileage_override != null ||
+    rentalOverrides.excess_mileage_rate_override != null
+  );
+
+  const effectiveVehicle = vehicle ? {
+    daily_mileage: rentalOverrides?.daily_mileage_override ?? vehicle.daily_mileage,
+    weekly_mileage: rentalOverrides?.weekly_mileage_override ?? vehicle.weekly_mileage,
+    monthly_mileage: rentalOverrides?.monthly_mileage_override ?? vehicle.monthly_mileage,
+  } : null;
+
+  const effectiveExcessRate = vehicle
+    ? (rentalOverrides?.excess_mileage_rate_override ?? vehicle.excess_mileage_rate)
+    : null;
+
   // Fetch excess mileage charge from ledger
   const { data: excessCharge } = useQuery({
     queryKey: ["excess-mileage-charge", rentalId],
@@ -110,18 +151,22 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
     rentalDays = Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)));
   }
 
-  const allowedMileage = vehicle && rentalDays > 0
-    ? calculateTotalMileageAllowance(vehicle, rentalDays)
+  const allowedMileage = effectiveVehicle && rentalDays > 0
+    ? calculateTotalMileageAllowance(effectiveVehicle, rentalDays)
     : null;
 
   const tier = rentalDays > 0 ? getMileageTier(rentalDays) : null;
   const tierLabel = tier ? getMileageTierLabel(tier, distanceUnit) : null;
+  const perUnitMileage = effectiveVehicle && tier ? getTierMileage(effectiveVehicle, tier) : null;
+  const tierUnits = tier === 'daily' ? rentalDays : tier === 'weekly' ? Math.ceil(rentalDays / 7) : tier === 'monthly' ? Math.ceil(rentalDays / 30) : 0;
+  const tierUnitLabel = tier === 'daily' ? 'day' : tier === 'weekly' ? 'week' : 'month';
+  const excessRate = effectiveExcessRate;
 
   // Calculate over/under allowance
   const mileageDifference = milesDriven && allowedMileage ? milesDriven - allowedMileage : null;
 
-  // Don't show the card if no mileage data exists
-  if (!pickupMileage && !returnMileage && !currentVehicleMileage) {
+  // Don't show the card if no vehicle mileage config exists
+  if (!pickupMileage && !returnMileage && !vehicle) {
     return null;
   }
 
@@ -146,6 +191,12 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
           Odometer readings and mileage tracking for this rental
           {tierLabel && ` (${tier} tier — ${tierLabel})`}
         </CardDescription>
+        {hasOverrides && (
+          <div className="flex items-center gap-1.5 text-xs text-indigo-600 mt-1">
+            <Info className="h-3.5 w-3.5" />
+            <span>Custom mileage set for this rental</span>
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -211,6 +262,29 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
           </div>
         </div>
 
+        {/* Allowance Calculation Breakdown */}
+        {tier && perUnitMileage !== null && (
+          <div className="mt-4 pt-4 border-t space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">How Allowance is Calculated</p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <span className="text-muted-foreground">
+                {perUnitMileage.toLocaleString()} {getDistanceUnitShort(distanceUnit)}/{tierUnitLabel} × {tierUnits} {tierUnitLabel}{tierUnits !== 1 ? 's' : ''} = <span className="font-semibold text-foreground">{allowedMileage?.toLocaleString()} {getDistanceUnitShort(distanceUnit)} total</span>
+              </span>
+              {excessRate != null && excessRate > 0 && (
+                <span className="text-muted-foreground">
+                  · Excess rate: <span className="font-semibold text-foreground">{formatCurrency(excessRate, currencyCode)}/{distanceUnit === 'miles' ? 'mile' : 'km'}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+        {tier && perUnitMileage === null && (
+          <div className="mt-4 pt-4 border-t">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Mileage</p>
+            <p className="text-sm text-muted-foreground mt-1">Unlimited mileage — no per-{tierUnitLabel} limit configured for this vehicle.</p>
+          </div>
+        )}
+
         {/* Excess Mileage Charge Info */}
         {mileageDifference !== null && mileageDifference > 0 && excessCharge && (
           <div className="mt-4 pt-4 border-t">
@@ -221,7 +295,7 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
                   Excess Mileage Charge: {formatCurrency(excessCharge.amount, currencyCode)}
                 </span>
                 <span className="text-muted-foreground">
-                  ({mileageDifference.toLocaleString()} excess {getDistanceUnitShort(distanceUnit)} × {formatCurrency(vehicle?.excess_mileage_rate || 0, currencyCode)}/{distanceUnit === 'miles' ? 'mile' : 'km'})
+                  ({mileageDifference.toLocaleString()} excess {getDistanceUnitShort(distanceUnit)} × {formatCurrency(excessRate || 0, currencyCode)}/{distanceUnit === 'miles' ? 'mile' : 'km'})
                 </span>
               </div>
               {chargeStatus === 'Paid' ? (
@@ -235,12 +309,12 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
           </div>
         )}
 
-        {/* Vehicle Current Mileage */}
-        {currentVehicleMileage && (
+        {/* Vehicle Current Mileage — only show when there's rental mileage context */}
+        {currentVehicleMileage != null && (pickupMileage || returnMileage) && (
           <div className="mt-4 pt-4 border-t flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Car className="h-4 w-4" />
-              <span>Vehicle's Current Odometer</span>
+              <span>Vehicle&apos;s Current Odometer (latest reading)</span>
             </div>
             <span className="font-semibold">{formatDistanceLong(currentVehicleMileage, distanceUnit)}</span>
           </div>
