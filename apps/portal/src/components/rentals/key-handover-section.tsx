@@ -174,6 +174,8 @@ export const KeyHandoverSection = ({
   }, [receivingHandover?.mileage]);
 
   const isClosed = rentalStatus === "Closed" || rentalStatus === "Completed";
+  const isActive = rentalStatus === "Active";
+  const returnEnabled = isActive || isClosed; // Only allow return when rental is active (or already closed for viewing)
 
   const givingCompleted = !!givingHandover?.handed_at;
   const receivingCompleted = !!receivingHandover?.handed_at;
@@ -685,7 +687,7 @@ export const KeyHandoverSection = ({
           </div>
 
           {/* Vehicle Return Section */}
-          <div className={`space-y-4 p-4 border rounded-lg ${!givingCompleted ? 'bg-muted/50 opacity-60' : 'bg-muted/20'}`}>
+          <div className={`space-y-4 p-4 border rounded-lg ${!returnEnabled || !givingCompleted ? 'bg-muted/50 opacity-60' : 'bg-muted/20'}`}>
             <div className="flex items-center gap-2">
               <Key className="h-5 w-5 text-primary" />
               <h3 className="font-semibold">Vehicle Return</h3>
@@ -695,8 +697,16 @@ export const KeyHandoverSection = ({
               After rental - Document car condition when receiving the key back
             </p>
 
+            {/* Message if rental not active */}
+            {!returnEnabled && !isClosed && (
+              <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+                <Key className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Rental must be active before vehicle can be returned</p>
+              </div>
+            )}
+
             {/* Message if giving not completed */}
-            {!givingCompleted && !isClosed && (
+            {returnEnabled && !givingCompleted && !isClosed && (
               <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
                 <Key className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">Complete Vehicle Collection first</p>
@@ -704,7 +714,7 @@ export const KeyHandoverSection = ({
             )}
 
             {/* Photos */}
-            {givingCompleted && (
+            {returnEnabled && givingCompleted && (
               <KeyHandoverPhotos
                 photos={receivingHandover?.photos || []}
                 onUpload={handleUpload("receiving")}
@@ -716,7 +726,7 @@ export const KeyHandoverSection = ({
             )}
 
             {/* Mileage Input */}
-            {givingCompleted && (
+            {returnEnabled && givingCompleted && (
               <div>
                 <Label htmlFor="receiving-mileage" className="text-sm font-medium flex items-center gap-2">
                   <Gauge className="h-4 w-4 text-muted-foreground" />
@@ -749,7 +759,7 @@ export const KeyHandoverSection = ({
             )}
 
             {/* Notes */}
-            {givingCompleted && (
+            {returnEnabled && givingCompleted && (
               <div>
                 <Label className="text-sm font-medium">Notes (Optional)</Label>
                 <Textarea
@@ -776,7 +786,7 @@ export const KeyHandoverSection = ({
             )}
 
             {/* Key Received Toggle Button — sticky at bottom */}
-            {givingCompleted && !isClosed && (
+            {returnEnabled && givingCompleted && !isClosed && (
               <div className="sticky bottom-0 pt-3 pb-1 bg-inherit space-y-2 border-t mt-2 -mx-4 px-4">
                 <Button
                   onClick={() => receivingCompleted ? setConfirmUndo("receiving") : handleRequestHandover("receiving")}
