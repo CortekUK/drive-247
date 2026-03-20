@@ -326,6 +326,20 @@ export const KeyHandoverSection = ({
       }
     }
 
+    // Auto-save mileage if it has a value but hasn't been saved yet
+    if (confirmHandover === 'giving' && givingMileage && !givingHandover?.mileage) {
+      const mileageVal = parseInt(givingMileage, 10);
+      if (!isNaN(mileageVal)) {
+        updateMileage.mutate({ type: 'giving', mileage: mileageVal });
+      }
+    }
+    if (confirmHandover === 'receiving' && receivingMileage && !receivingHandover?.mileage) {
+      const mileageVal = parseInt(receivingMileage, 10);
+      if (!isNaN(mileageVal)) {
+        updateMileage.mutate({ type: 'receiving', mileage: mileageVal });
+      }
+    }
+
     markKeyHanded.mutate(confirmHandover);
     setConfirmHandover(null);
   };
