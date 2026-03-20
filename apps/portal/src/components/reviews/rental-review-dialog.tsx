@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, SkipForward } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, SkipForward, Plus, X } from "lucide-react";
 import { useRentalReview, useSubmitRentalReview, useSkipRentalReview } from "@/hooks/use-rental-review";
-import { POSITIVE_TAGS, NEGATIVE_TAGS, getRatingColor, getSliderColor } from "./review-tags";
+import { useReviewTags, useCreateReviewTag } from "@/hooks/use-review-tags";
+import { getRatingColor } from "./review-tags";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 interface RentalReviewDialogProps {
@@ -32,6 +34,8 @@ export function RentalReviewDialog({
   const { data: existingReview, isLoading: loadingReview } = useRentalReview(open ? rentalId : undefined);
   const submitReview = useSubmitRentalReview();
   const skipReview = useSkipRentalReview();
+  const { data: tenantTags = [], isLoading: loadingTags } = useReviewTags();
+  const createTag = useCreateReviewTag();
 
   useAuditLogOnOpen({
     open,
@@ -43,6 +47,7 @@ export function RentalReviewDialog({
   const [rating, setRating] = useState<number>(5);
   const [comment, setComment] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [newTagInput, setNewTagInput] = useState("");
 
   const isEditing = !!existingReview && !existingReview.is_skipped;
 
@@ -56,12 +61,30 @@ export function RentalReviewDialog({
       setComment("");
       setSelectedTags([]);
     }
+    setNewTagInput("");
   }, [existingReview, open]);
 
   const handleToggleTag = (tag: string) => {
     setSelectedTags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     );
+  };
+
+  const handleAddNewTag = async () => {
+    const trimmed = newTagInput.trim();
+    if (!trimmed) return;
+
+    // Check if tag already exists (case-insensitive)
+    const exists = tenantTags.some((t) => t.name.toLowerCase() === trimmed.toLowerCase());
+    if (!exists) {
+      await createTag.mutateAsync(trimmed);
+    }
+
+    // Select the tag
+    if (!selectedTags.includes(trimmed)) {
+      setSelectedTags((prev) => [...prev, trimmed]);
+    }
+    setNewTagInput("");
   };
 
   const handleSubmit = () => {
@@ -138,47 +161,70 @@ export function RentalReviewDialog({
             {/* Tags */}
             <div className="space-y-3">
               <Label>Tags</Label>
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground font-medium">Positive</p>
-                <div className="flex flex-wrap gap-2">
-                  {POSITIVE_TAGS.map((tag) => (
-                    <label
+
+              {/* Selected tags */}
+              {selectedTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedTags.map((tag) => (
+                    <Badge
                       key={tag}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors border ${
-                        selectedTags.includes(tag)
-                          ? "bg-green-500/15 text-green-700 border-green-500/30 dark:text-green-400"
-                          : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
-                      }`}
+                      variant="secondary"
+                      className="bg-primary/10 text-primary border border-primary/20 cursor-pointer hover:bg-primary/20 gap-1"
+                      onClick={() => handleToggleTag(tag)}
                     >
-                      <Checkbox
-                        checked={selectedTags.includes(tag)}
-                        onCheckedChange={() => handleToggleTag(tag)}
-                        className="h-3 w-3 border-current"
-                      />
                       {tag}
-                    </label>
+                      <X className="h-3 w-3" />
+                    </Badge>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground font-medium mt-2">Negative</p>
-                <div className="flex flex-wrap gap-2">
-                  {NEGATIVE_TAGS.map((tag) => (
-                    <label
-                      key={tag}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors border ${
-                        selectedTags.includes(tag)
-                          ? "bg-red-500/15 text-red-700 border-red-500/30 dark:text-red-400"
-                          : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
-                      }`}
-                    >
-                      <Checkbox
-                        checked={selectedTags.includes(tag)}
-                        onCheckedChange={() => handleToggleTag(tag)}
-                        className="h-3 w-3 border-current"
-                      />
-                      {tag}
-                    </label>
-                  ))}
+              )}
+
+              {/* Available tags (unselected) */}
+              {!loadingTags && tenantTags.filter((t) => !selectedTags.includes(t.name)).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {tenantTags
+                    .filter((t) => !selectedTags.includes(t.name))
+                    .map((tag) => (
+                      <Badge
+                        key={tag.id}
+                        variant="outline"
+                        className="cursor-pointer hover:bg-muted text-muted-foreground"
+                        onClick={() => handleToggleTag(tag.name)}
+                      >
+                        {tag.name}
+                      </Badge>
+                    ))}
                 </div>
+              )}
+
+              {/* Add new tag */}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Add a new tag..."
+                  value={newTagInput}
+                  onChange={(e) => setNewTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddNewTag();
+                    }
+                  }}
+                  className="h-8 text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddNewTag}
+                  disabled={!newTagInput.trim() || createTag.isPending}
+                  className="h-8 px-3 shrink-0"
+                >
+                  {createTag.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5" />
+                  )}
+                </Button>
               </div>
             </div>
 

@@ -412,6 +412,7 @@ const RentalsList = () => {
                           <ReviewStatusBadge
                             reviewStatus={rental.review_status}
                             reviewRating={rental.review_rating}
+                            rentalStatus={rental.computed_status}
                             onClick={(e) => {
                               e.stopPropagation();
                               setReviewRental(rental);

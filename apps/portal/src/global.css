@@ -2,6 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide number input spinner arrows globally */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Rental creation progress bar shimmer */
+@keyframes rentalProgressShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.rental-progress-bar-fill {
+  position: relative;
+  background: hsl(var(--primary));
+  overflow: hidden;
+}
+
+.rental-progress-bar-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 50%;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary-foreground) / 0.3), transparent);
+  animation: rentalProgressShimmer 1.5s ease-in-out infinite;
+}
+
 
 /* Drive247 Design System
 All colors, gradients, fonts, etc should be defined here.

@@ -634,7 +634,7 @@ export function ExtrasSettings() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2 max-h-[70vh] overflow-y-auto">
+          <div className="space-y-4 py-2 px-1 -mx-1 max-h-[70vh] overflow-y-auto">
             {/* Row 1: Name + Price (global only) */}
             <div className={`grid gap-4 ${formData.pricing_type === 'global' ? 'grid-cols-3' : 'grid-cols-1'}`}>
               <div className={formData.pricing_type === 'global' ? 'col-span-2 space-y-2' : 'space-y-2'}>

@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Star, FileText } from "lucide-react";
 import { useCustomerReviews } from "@/hooks/use-customer-reviews";
-import { getRatingColor, POSITIVE_TAGS } from "./review-tags";
+import { getRatingColor } from "./review-tags";
 import { useRouter } from "next/navigation";
 
 interface CustomerReviewsDialogProps {
@@ -88,11 +88,7 @@ export function CustomerReviewsDialog({
                       <Badge
                         key={tag}
                         variant="outline"
-                        className={`text-xs ${
-                          POSITIVE_TAGS.includes(tag as any)
-                            ? "bg-green-500/10 text-green-700 border-green-500/20 dark:text-green-400"
-                            : "bg-red-500/10 text-red-700 border-red-500/20 dark:text-red-400"
-                        }`}
+                        className="text-xs bg-primary/10 text-primary border-primary/20"
                       >
                         {tag}
                       </Badge>

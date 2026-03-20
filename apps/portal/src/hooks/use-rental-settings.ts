@@ -38,6 +38,7 @@ export interface RentalSettings {
   service_fee_amount: number | null;
   service_fee_type: 'percentage' | 'fixed_amount' | null;
   service_fee_value: number | null;
+  security_deposit_enabled: boolean | null;
   deposit_mode: 'global' | 'per_vehicle' | null;
   global_deposit_amount: number | null;
   // Working hours settings
@@ -55,6 +56,8 @@ export interface RentalSettings {
   lockbox_code_length: number | null;
   lockbox_notification_methods: string[] | null;
   lockbox_default_instructions: string | null;
+  // Verification
+  verification_document_type: string | null;
 }
 
 const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
@@ -71,6 +74,7 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   service_fee_amount: 0,
   service_fee_type: 'fixed_amount',
   service_fee_value: 0,
+  security_deposit_enabled: true,
   deposit_mode: 'global',
   global_deposit_amount: 0,
   // Working hours defaults
@@ -100,6 +104,8 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   lockbox_code_length: null,
   lockbox_notification_methods: ['email'],
   lockbox_default_instructions: null,
+  // Verification
+  verification_document_type: 'driving_license',
 };
 
 /**
@@ -145,6 +151,7 @@ export const useRentalSettings = () => {
           service_fee_amount,
           service_fee_type,
           service_fee_value,
+          security_deposit_enabled,
           deposit_mode,
           global_deposit_amount,
           working_hours_enabled,
@@ -156,7 +163,8 @@ export const useRentalSettings = () => {
           lockbox_enabled,
           lockbox_code_length,
           lockbox_notification_methods,
-          lockbox_default_instructions
+          lockbox_default_instructions,
+          verification_document_type
         `)
         .eq('id', tenant.id)
         .single();
@@ -212,6 +220,7 @@ export const useRentalSettings = () => {
           service_fee_amount,
           service_fee_type,
           service_fee_value,
+          security_deposit_enabled,
           deposit_mode,
           global_deposit_amount,
           working_hours_enabled,
@@ -223,7 +232,8 @@ export const useRentalSettings = () => {
           lockbox_enabled,
           lockbox_code_length,
           lockbox_notification_methods,
-          lockbox_default_instructions
+          lockbox_default_instructions,
+          verification_document_type
         `);
 
       if (error) {

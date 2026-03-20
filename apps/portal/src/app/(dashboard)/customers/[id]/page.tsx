@@ -42,6 +42,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 import { useGigDriverImages, useDeleteGigDriverImage } from "@/hooks/use-gig-driver-images";
 import GigDriverUploadDialog from "@/components/customers/gig-driver-upload-dialog";
+import { BlurredImage } from "@/components/ui/blurred-image";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -414,8 +415,11 @@ const CustomerDetail = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Personal Information */}
         <Card className="lg:col-span-2 shadow-card rounded-lg">
-          <CardHeader className="pb-2 pt-4 px-5">
+          <CardHeader className="pb-2 pt-4 px-5 flex flex-row items-center justify-between">
             <CardTitle className="text-base font-semibold">Personal Information</CardTitle>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditCustomerOpen(true)} title="Edit customer info">
+              <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+            </Button>
           </CardHeader>
           <CardContent className="pt-3 pb-4 px-5">
             <div className="space-y-3">
@@ -496,6 +500,19 @@ const CustomerDetail = () => {
                       </button>
                     </div>
                   )}
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs text-muted-foreground mb-0.5">Gig Driver</span>
+                  <span className="text-sm font-semibold">
+                    {customer.is_gig_driver ? (
+                      <Badge variant="outline" className="border-green-500/30 bg-green-500/10 text-green-600 text-xs">
+                        <Briefcase className="h-3 w-3 mr-1" />
+                        Yes
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">No</span>
+                    )}
+                  </span>
                 </div>
               </div>
 
@@ -594,49 +611,37 @@ const CustomerDetail = () => {
                 {latestVerification.face_image_url && (
                   <button
                     onClick={() => setPreviewImage({ url: latestVerification.face_image_url!, label: "Face Photo" })}
-                    className="group relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
+                    className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
                   >
-                    <img src={latestVerification.face_image_url} alt="Face photo" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                      <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center">Face</span>
+                    <BlurredImage src={latestVerification.face_image_url} alt="Face photo" label="Face" />
+                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center z-10">Face</span>
                   </button>
                 )}
                 {latestVerification.selfie_image_url && (
                   <button
                     onClick={() => setPreviewImage({ url: latestVerification.selfie_image_url!, label: "Selfie" })}
-                    className="group relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
+                    className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
                   >
-                    <img src={latestVerification.selfie_image_url} alt="Selfie" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                      <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center">Selfie</span>
+                    <BlurredImage src={latestVerification.selfie_image_url} alt="Selfie" label="Selfie" />
+                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center z-10">Selfie</span>
                   </button>
                 )}
                 {latestVerification.document_front_url && (
                   <button
                     onClick={() => setPreviewImage({ url: latestVerification.document_front_url!, label: "Document Front" })}
-                    className="group relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
+                    className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
                   >
-                    <img src={latestVerification.document_front_url} alt="Document front" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                      <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center">Doc Front</span>
+                    <BlurredImage src={latestVerification.document_front_url} alt="Document front" label="Doc Front" />
+                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center z-10">Doc Front</span>
                   </button>
                 )}
                 {latestVerification.document_back_url && (
                   <button
                     onClick={() => setPreviewImage({ url: latestVerification.document_back_url!, label: "Document Back" })}
-                    className="group relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
+                    className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
                   >
-                    <img src={latestVerification.document_back_url} alt="Document back" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                      <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center">Doc Back</span>
+                    <BlurredImage src={latestVerification.document_back_url} alt="Document back" label="Doc Back" />
+                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center z-10">Doc Back</span>
                   </button>
                 )}
               </div>
@@ -1315,28 +1320,30 @@ const CustomerDetail = () => {
                       const { data: urlData } = supabase.storage.from('gig-driver-images').getPublicUrl(image.image_url);
                       return (
                         <div key={image.id} className="relative group rounded-lg overflow-hidden border">
-                          <div className="aspect-square bg-muted">
-                            <img
+                          <div className="aspect-square bg-muted overflow-hidden">
+                            <BlurredImage
                               src={urlData.publicUrl}
                               alt={image.file_name}
-                              className="w-full h-full object-cover"
+                              label="View"
                             />
                           </div>
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                             <Button
                               size="sm"
                               variant="secondary"
-                              onClick={() => window.open(urlData.publicUrl, '_blank')}
+                              className="h-7 w-7 p-0"
+                              onClick={(e) => { e.stopPropagation(); window.open(urlData.publicUrl, '_blank'); }}
                             >
-                              <ExternalLink className="h-4 w-4" />
+                              <ExternalLink className="h-3.5 w-3.5" />
                             </Button>
                             {gigDriverImages && gigDriverImages.length > 1 && (
                               <Button
                                 size="sm"
                                 variant="destructive"
-                                onClick={() => setGigDriverDeleteId(image.id)}
+                                className="h-7 w-7 p-0"
+                                onClick={(e) => { e.stopPropagation(); setGigDriverDeleteId(image.id); }}
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             )}
                           </div>

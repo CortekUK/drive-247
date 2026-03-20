@@ -1,58 +1,62 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { getRatingColor } from "./review-tags";
+import { Star, Pencil, MinusCircle } from "lucide-react";
 
 interface ReviewStatusBadgeProps {
   reviewStatus: "pending" | "reviewed" | "skipped" | null;
   reviewRating?: number | null;
+  rentalStatus?: string;
   onClick?: (e: React.MouseEvent) => void;
 }
 
-export function ReviewStatusBadge({ reviewStatus, reviewRating, onClick }: ReviewStatusBadgeProps) {
-  if (!reviewStatus) return null;
+export function ReviewStatusBadge({ reviewStatus, reviewRating, rentalStatus, onClick }: ReviewStatusBadgeProps) {
+  // Non-completed rentals — show dash, no action needed
+  if (rentalStatus && rentalStatus !== "Completed") {
+    return <span className="text-xs text-muted-foreground/50">—</span>;
+  }
 
-  if (reviewStatus === "pending") {
+  // Completed + reviewed
+  if (reviewStatus === "reviewed" && reviewRating) {
+    const color = reviewRating >= 8
+      ? "text-green-600"
+      : reviewRating >= 5
+      ? "text-amber-600"
+      : "text-red-600";
     return (
-      <Badge
-        variant="outline"
-        className="bg-amber-500/10 text-amber-600 border-amber-500/30 cursor-pointer hover:bg-amber-500/20 transition-colors"
+      <button
+        className={`flex items-center gap-1 text-xs font-medium cursor-pointer hover:opacity-70 transition-opacity ${color}`}
         onClick={onClick}
+        title="Click to view review"
       >
-        Pending Review
-      </Badge>
+        <Star className="h-3 w-3 fill-current" />
+        {reviewRating}/10
+      </button>
     );
   }
 
+  // Completed + skipped
   if (reviewStatus === "skipped") {
     return (
-      <Badge
-        variant="outline"
-        className="text-muted-foreground cursor-pointer hover:bg-muted/50 transition-colors"
+      <button
+        className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
         onClick={onClick}
+        title="Review was skipped"
       >
+        <MinusCircle className="h-3 w-3" />
         Skipped
-      </Badge>
+      </button>
     );
   }
 
-  if (reviewStatus === "reviewed" && reviewRating) {
-    return (
-      <Badge
-        variant="outline"
-        className={`cursor-pointer hover:opacity-80 transition-colors ${
-          reviewRating >= 8
-            ? "bg-green-500/10 text-green-600 border-green-500/30"
-            : reviewRating >= 5
-            ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
-            : "bg-red-500/10 text-red-600 border-red-500/30"
-        }`}
-        onClick={onClick}
-      >
-        Reviewed ({reviewRating}/10)
-      </Badge>
-    );
-  }
-
-  return null;
+  // Completed + not reviewed yet (pending or null)
+  return (
+    <button
+      className="flex items-center gap-1 text-xs text-amber-600 cursor-pointer hover:text-amber-500 transition-colors"
+      onClick={onClick}
+      title="Click to review"
+    >
+      <Pencil className="h-3 w-3" />
+      Review
+    </button>
+  );
 }

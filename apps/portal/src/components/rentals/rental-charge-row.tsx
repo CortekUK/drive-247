@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { formatInTimeZone } from "date-fns-tz";
+import { ShieldCheck } from "lucide-react";
 import { RentalCharge } from "@/hooks/use-rental-ledger-data";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
@@ -39,7 +40,16 @@ export const RentalChargeRow = ({ charge }: RentalChargeRowProps) => {
           ? formatInTimeZone(new Date(charge.rental_start_date), 'Europe/London', "dd MMM yyyy")
           : '-'}
       </TableCell>
-      <TableCell>{charge.category}</TableCell>
+      <TableCell>
+        {charge.category === 'Insurance' ? (
+          <span className="flex items-center gap-1.5">
+            <ShieldCheck className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+            <span>Bonzah Insurance</span>
+          </span>
+        ) : (
+          charge.category
+        )}
+      </TableCell>
       <TableCell>
         <Badge variant={status.variant as any} className={status.className}>
           {status.label}

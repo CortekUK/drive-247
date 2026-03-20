@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Star, Edit, SkipForward, MessageSquarePlus } from "lucide-react";
 import { useRentalReview } from "@/hooks/use-rental-review";
-import { getRatingColor, POSITIVE_TAGS } from "./review-tags";
+import { getRatingColor } from "./review-tags";
 
 interface ReviewDisplayCardProps {
   rentalId: string;
@@ -91,11 +91,7 @@ export function ReviewDisplayCard({ rentalId, onEdit, onLeaveReview }: ReviewDis
               <Badge
                 key={tag}
                 variant="outline"
-                className={
-                  POSITIVE_TAGS.includes(tag as any)
-                    ? "bg-green-500/10 text-green-700 border-green-500/20 dark:text-green-400"
-                    : "bg-red-500/10 text-red-700 border-red-500/20 dark:text-red-400"
-                }
+                className="bg-primary/10 text-primary border-primary/20"
               >
                 {tag}
               </Badge>

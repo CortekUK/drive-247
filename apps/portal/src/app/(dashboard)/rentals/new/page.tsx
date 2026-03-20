@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -55,24 +55,26 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useCustomerReviewSummary } from "@/hooks/use-customer-review-summary";
 import { useCustomerReviews } from "@/hooks/use-customer-reviews";
 import { useCustomerInsurance } from "@/hooks/use-customer-insurance";
+import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
 import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
 import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
 import { useVehiclePricingOverrides } from "@/hooks/use-vehicle-pricing-overrides";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { RentalProgressOverlay } from "@/components/rentals/rental-progress-overlay";
 
 const rentalSchema = z.object({
   customer_id: z.string().min(1, "Customer is required"),
   vehicle_id: z.string().min(1, "Vehicle is required"),
-  start_date: z.date(),
-  end_date: z.date(),
-  rental_period_type: z.enum(["Daily", "Weekly", "Monthly"]),
-  monthly_amount: z.coerce.number().min(1, "Rental amount must be at least 1"),
+  start_date: z.date({ required_error: "Start date is required", invalid_type_error: "Please select a valid start date" }),
+  end_date: z.date({ required_error: "End date is required", invalid_type_error: "Please select a valid end date" }),
+  rental_period_type: z.enum(["Daily", "Weekly", "Monthly"], { required_error: "Rental period type is required" }),
+  monthly_amount: z.coerce.number({ invalid_type_error: "Please enter a valid rental amount" }).min(0.01, "Rental amount is required"),
   // New booking-aligned fields
   pickup_location: z.string().min(1, "Pickup location is required"),
   return_location: z.string().min(1, "Return location is required"),
   pickup_time: z.string().regex(/^\d{2}:\d{2}$/, "Pickup time is required"),
   return_time: z.string().regex(/^\d{2}:\d{2}$/, "Return time is required"),
-  driver_age: z.coerce.number().min(1, "Driver age is required"),
+  driver_age: z.coerce.number({ invalid_type_error: "Please enter a valid driver age" }).min(1, "Driver age is required").max(200, "Driver age cannot exceed 200"),
   promo_code: z.string().optional(),
   insurance_status: z.enum(["pending", "uploaded", "verified", "bonzah", "not_required"]).optional(),
   notes: z.string().optional(),
@@ -100,6 +102,16 @@ const CreateRental = () => {
   const { isManager, canEdit } = useManagerPermissions();
   const { logAction } = useAuditLog();
   const [loading, setLoading] = useState(false);
+  const [creationProgress, setCreationProgress] = useState(0);
+  const creationSteps = useMemo(() => [
+    { label: 'Validating rental details' },
+    { label: 'Creating rental record' },
+    { label: 'Setting up insurance' },
+    { label: 'Configuring pricing & charges' },
+    { label: 'Sending agreement for signing' },
+    { label: 'Sending notifications' },
+    { label: 'Finalising rental' },
+  ], []);
   const [vehicleOpen, setVehicleOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [promoCodeOpen, setPromoCodeOpen] = useState(false);
@@ -134,6 +146,7 @@ const CreateRental = () => {
 
   // Fee override state — admin can override per-rental
   const [taxOverride, setTaxOverride] = useState<number | null>(null);
+  const [showPricingBreakdown, setShowPricingBreakdown] = useState(false);
   const [serviceFeeOverride, setServiceFeeOverride] = useState<number | null>(null);
   const [depositOverride, setDepositOverride] = useState<number | null>(null);
 
@@ -418,6 +431,16 @@ const CreateRental = () => {
   const watchedInsuranceStatus = form.watch("insurance_status");
   const watchedDriverAge = form.watch("driver_age");
 
+  // Reset insurance selection when customer changes
+  const prevCustomerRef = useRef(selectedCustomerId);
+  useEffect(() => {
+    if (prevCustomerRef.current && prevCustomerRef.current !== selectedCustomerId) {
+      setInsuranceDocId(null);
+      form.setValue("insurance_status", "pending");
+    }
+    prevCustomerRef.current = selectedCustomerId;
+  }, [selectedCustomerId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Dynamic pricing: vehicle-specific overrides
   const { overrides: vehiclePricingOverrides } = useVehiclePricingOverrides(selectedVehicleId || undefined);
 
@@ -600,6 +623,16 @@ const CreateRental = () => {
   const { data: reviewSummary } = useCustomerReviewSummary(selectedCustomerId || undefined);
   const { data: customerReviews } = useCustomerReviews(selectedCustomerId || undefined);
   const { data: customerInsurance } = useCustomerInsurance(selectedCustomerId || "");
+  const { data: customerDocuments } = useCustomerDocuments(selectedCustomerId || "");
+
+  const existingInsuranceDocs = useMemo(() => {
+    if (!customerDocuments) return [];
+    return customerDocuments.filter(doc => {
+      if (doc.document_type !== 'Insurance Certificate') return false;
+      const status = getDocumentStatus(doc.end_date);
+      return status === 'Active' || status === 'Expires Soon' || status === 'Unknown';
+    });
+  }, [customerDocuments]);
 
   // Get customer details including DOB for verification
   const { data: customerDetails } = useQuery({
@@ -983,6 +1016,7 @@ const CreateRental = () => {
 
   const onSubmit = async (data: RentalFormData) => {
     setLoading(true);
+    setCreationProgress(1); // Step 1: Validating
     setSubmitError("");
     try {
       // Check customer verification first (STRICT blocking)
@@ -1008,6 +1042,8 @@ const CreateRental = () => {
 
       // Calculate discount if promo code was applied
       const discountAmount = promoDetails ? calculateDiscount(data.monthly_amount) : 0;
+
+      setCreationProgress(2); // Step 2: Creating rental record
 
       // Create rental with Pending status (will become Active after DocuSign)
       const { data: rental, error: rentalError } = await supabase
@@ -1043,6 +1079,8 @@ const CreateRental = () => {
         .single();
 
       if (rentalError) throw rentalError;
+
+      setCreationProgress(3); // Step 3: Setting up insurance
 
       // Create Bonzah insurance quote if coverage was selected
       const hasBonzahCoverage = bonzahCoverage.cdw || bonzahCoverage.rcli || bonzahCoverage.sli || bonzahCoverage.pai;
@@ -1173,6 +1211,8 @@ const CreateRental = () => {
           // Non-fatal — rental is already created
         }
       }
+
+      setCreationProgress(4); // Step 4: Configuring pricing & charges
 
       // Save selected extras
       if (Object.keys(selectedExtras).length > 0) {
@@ -1420,6 +1460,8 @@ const CreateRental = () => {
         }
       }
 
+      setCreationProgress(6); // Step 6: Sending notifications
+
       // Send booking notification emails
       try {
         await sendBookingNotification({
@@ -1448,6 +1490,8 @@ const CreateRental = () => {
       queryClient.invalidateQueries({ queryKey: ["customer-net-position"] });
       queryClient.invalidateQueries({ queryKey: ["reminders"] });
       queryClient.invalidateQueries({ queryKey: ["reminder-stats"] });
+
+      setCreationProgress(5); // Step 5: Sending agreement
 
       // Auto-trigger eSign via portal API route (BoldSign)
       let docuSignSuccess = false;
@@ -1489,10 +1533,30 @@ const CreateRental = () => {
         });
       }
 
+      setCreationProgress(7); // Step 7: Finalising rental
+
       // Clear the persisted draft since rental was created successfully
       localStorage.removeItem(PORTAL_RENTAL_STORAGE_KEY);
 
       logAction({ action: "rental_created", entityType: "rental", entityId: rental.id, details: { rental_number: rental.rental_number, customer_id: data.customer_id, vehicle_id: data.vehicle_id } });
+
+      // Build breakdown items for payment dialog (must match Rental Preview)
+      const breakdownForPayment: { label: string; amount: number; type?: 'discount' | 'normal' }[] = [];
+      breakdownForPayment.push({ label: 'Rental Amount', amount: data.monthly_amount });
+      if (discountAmount > 0) {
+        breakdownForPayment.push({ label: `Discount${promoDetails?.code ? ` (${promoDetails.code})` : ''}`, amount: discountAmount, type: 'discount' });
+      }
+      if (taxAmount > 0) breakdownForPayment.push({ label: `Tax (${rentalSettings?.tax_percentage || 0}%)`, amount: taxAmount });
+      if (serviceFee > 0) breakdownForPayment.push({ label: 'Service Fee', amount: serviceFee });
+      if (insurancePremium > 0) breakdownForPayment.push({ label: 'Insurance', amount: insurancePremium });
+      // Add extras individually
+      Object.entries(selectedExtras).forEach(([extraId, qty]) => {
+        if (qty <= 0) return;
+        const extra = activeExtras.find(e => e.id === extraId);
+        if (!extra) return;
+        breakdownForPayment.push({ label: `${extra.name}${qty > 1 ? ` ×${qty}` : ''}`, amount: Number(extra.price) * qty });
+      });
+      if (securityDeposit > 0) breakdownForPayment.push({ label: 'Security Deposit', amount: securityDeposit });
 
       // Store rental data for invoice dialog
       setCreatedRentalData({
@@ -1501,7 +1565,13 @@ const CreateRental = () => {
         vehicle: selectedVehicle,
         formData: data,
         docuSignSuccess,
+        breakdownItems: breakdownForPayment,
       });
+
+      // Show completion state briefly
+      setCreationProgress(creationSteps.length + 1);
+      await new Promise(resolve => setTimeout(resolve, 600));
+      setCreationProgress(0);
 
       // If installment plan was selected, skip payment/invoice dialogs — go straight to rental detail
       if (isInstallmentRental) {
@@ -1516,6 +1586,7 @@ const CreateRental = () => {
       }
     } catch (error: any) {
       console.error("Error creating rental:", error);
+      setCreationProgress(0);
 
       // Surface full Postgres error
       const errorMessage = error?.message || "Failed to create rental agreement. Please try again.";
@@ -1609,7 +1680,13 @@ const CreateRental = () => {
   if (isManager && !canEdit('rentals')) return null;
 
   return (
-    <div className="container mx-auto px-4 py-6 md:px-6 md:py-8 min-h-screen">
+    <>
+    <RentalProgressOverlay
+      isVisible={creationProgress > 0}
+      currentStep={creationProgress}
+      steps={creationSteps}
+    />
+    <div className="container mx-auto px-4 py-6 md:px-6 md:py-8">
       {/* Header */}
       <div className="flex items-center gap-4 mb-2">
         <Button
@@ -1778,12 +1855,9 @@ const CreateRental = () => {
 
                       {/* DOB Warning */}
                       {customerDetails && !customerDetails.date_of_birth && (
-                        <Alert variant="default" className="border-amber-500 bg-amber-50">
-                          <AlertTriangle className="h-4 w-4 text-amber-600" />
-                          <AlertDescription className="text-amber-700">
-                            Customer date of birth is not set. This may be required for identity verification.
-                          </AlertDescription>
-                        </Alert>
+                        <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
+                          Customer date of birth is not set. This may be required for identity verification.
+                        </p>
                       )}
 
                       {isCustomerVerified ? (
@@ -1977,9 +2051,30 @@ const CreateRental = () => {
                               </PopoverContent>
                             </Popover>
                             <FormMessage />
-                            <FormDescription>
+                            <FormDescription className="flex items-center gap-2">
                               Only available vehicles are shown
                             </FormDescription>
+                            {(() => {
+                              const selectedVehicle = vehicles?.find(v => v.id === field.value);
+                              if (!selectedVehicle) return null;
+                              const rates = [
+                                { label: "Daily", value: selectedVehicle.daily_rent },
+                                { label: "Weekly", value: selectedVehicle.weekly_rent },
+                                { label: "Monthly", value: selectedVehicle.monthly_rent },
+                              ].filter(r => r.value && r.value > 0);
+                              if (rates.length === 0) return null;
+                              const cur = tenant?.currency_code || 'GBP';
+                              return (
+                                <div className="flex gap-2 mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                  {rates.map(r => (
+                                    <div key={r.label} className="flex-1 rounded-lg border bg-muted/40 px-3 py-2 text-center">
+                                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{r.label}</p>
+                                      <p className="text-sm font-bold text-foreground mt-0.5">{formatCurrency(r.value!, cur)}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </FormItem>
                         );
                       }}
@@ -2074,16 +2169,14 @@ const CreateRental = () => {
                             />
                           </FormControl>
                           {isPastStartDate && (
-                            <div className="flex items-center gap-1 text-amber-600 text-sm">
-                              <AlertTriangle className="h-3 w-3" />
-                              Warning: Start date is in the past
-                            </div>
+                            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
+                              Start date is in the past
+                            </p>
                           )}
                           {leadTimeWarning && (
-                            <div className="flex items-center gap-1 text-amber-600 text-sm">
-                              <AlertTriangle className="h-3 w-3" />
+                            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
                               {leadTimeWarning}. Admin override allowed.
-                            </div>
+                            </p>
                           )}
                           <FormMessage />
                         </FormItem>
@@ -2128,20 +2221,58 @@ const CreateRental = () => {
                               </FormDescription>
                             )}
                             {minDurationWarning && (
-                              <div className="flex items-center gap-1 text-amber-600 text-sm">
-                                <AlertTriangle className="h-3 w-3" />
+                              <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
                                 {minDurationWarning}. Admin override allowed.
-                              </div>
+                              </p>
                             )}
                             {maxDurationWarning && (
-                              <div className="flex items-center gap-1 text-amber-600 text-sm">
-                                <AlertTriangle className="h-3 w-3" />
+                              <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
                                 {maxDurationWarning}. Admin override allowed.
-                              </div>
+                              </p>
                             )}
                           </FormItem>
                         );
                       }}
+                    />
+                  </div>
+
+                  {/* Times */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="pickup_time"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Pickup Time <span className="text-red-500">*</span></FormLabel>
+                          <FormControl>
+                            <TimePicker
+                              id="pickup_time"
+                              value={field.value}
+                              onChange={field.onChange}
+                              placeholder="Select pickup time"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="return_time"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Return Time <span className="text-red-500">*</span></FormLabel>
+                          <FormControl>
+                            <TimePicker
+                              id="return_time"
+                              value={field.value}
+                              onChange={field.onChange}
+                              placeholder="Select return time"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
                   </div>
 
@@ -2175,65 +2306,16 @@ const CreateRental = () => {
                     const blockCheck = checkBlockedDatesOverlap(watchedStartDate, watchedEndDate, selectedVehicleId);
                     if (!blockCheck.blocked) return null;
                     return (
-                      <Alert variant="destructive" className="border-red-500/50 bg-red-500/10">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription>
-                          <span className="font-medium">
-                            {blockCheck.isGlobal ? 'Global blocked period' : 'Vehicle blocked'}:
-                          </span>{' '}
-                          {blockCheck.reason}. Please choose different dates.
-                        </AlertDescription>
-                      </Alert>
+                      <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md px-3 py-1.5">
+                        <span className="font-medium">{blockCheck.isGlobal ? 'Global blocked period' : 'Vehicle blocked'}:</span>{' '}
+                        {blockCheck.reason}. Please choose different dates.
+                      </p>
                     );
                   })()}
                 </div>
               </div>
 
-              {/* ── Section 2b: Pricing ────────────── */}
-              <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                  <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary"><Banknote className="h-4 w-4" /></div>
-                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Pricing</h2>
-                </div>
-                <div className="p-5 space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="monthly_amount"
-                      render={({ field }) => {
-                        const periodType = watchedRentalPeriodType || "Monthly";
-                        const labelText = periodType === "Daily" ? "Total Amount" :
-                          periodType === "Weekly" ? "Total Amount" :
-                            "Monthly Amount";
-                        return (
-                          <FormItem>
-                            <FormLabel>{labelText} <span className="text-red-500">*</span></FormLabel>
-                            <FormControl>
-                              <CurrencyInput
-                                value={field.value}
-                                onChange={field.onChange}
-                                placeholder="Rental amount"
-                                min={1}
-                                step={0.01}
-                                error={!!form.formState.errors.monthly_amount}
-                                currencySymbol={currencySymbol}
-                                disabled={false}
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              Auto-calculated from vehicle rates. You can adjust if needed.
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        );
-                      }}
-                    />
-
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Fees & Charges (auto-calculated, admin-overridable) ── */}
+              {/* ── Section 2b: Pricing & Fees (combined) ────────────── */}
               {(() => {
                 const rentalAmount = watchedMonthlyAmount || 0;
                 const discountAmt = promoDetails ? calculateDiscount(rentalAmount) : 0;
@@ -2246,8 +2328,7 @@ const CreateRental = () => {
                 const showTax = rentalSettings?.tax_enabled && (rentalSettings?.tax_percentage ?? 0) > 0;
                 const showServiceFee = rentalSettings?.service_fee_enabled && autoServiceFee > 0;
                 const showDeposit = autoDeposit > 0;
-
-                if (!showTax && !showServiceFee && !showDeposit) return null;
+                const hasFees = showTax || showServiceFee || showDeposit;
 
                 const effectiveTax = taxOverride !== null ? taxOverride : autoTax;
                 const effectiveServiceFee = serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee;
@@ -2257,165 +2338,347 @@ const CreateRental = () => {
                 const currency = tenant?.currency_code || 'GBP';
                 const feeType = rentalSettings?.service_fee_type || 'fixed_amount';
                 const feeValue = rentalSettings?.service_fee_value ?? rentalSettings?.service_fee_amount ?? 0;
+                const hasOverrides = taxOverride !== null || serviceFeeOverride !== null || depositOverride !== null;
+
+                const periodType = watchedRentalPeriodType || "Monthly";
+                const amountLabel = periodType === "Daily" ? "Total Amount" :
+                  periodType === "Weekly" ? "Total Amount" : "Monthly Amount";
 
                 return (
                   <div className="rounded-xl border bg-card shadow-sm">
                     <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
                       <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
-                        <Receipt className="h-4 w-4" />
+                        <Banknote className="h-4 w-4" />
                       </div>
-                      <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Fees & Charges</h2>
-                      <span className="ml-auto text-xs text-muted-foreground">Auto-calculated from settings. Override for this rental only.</span>
+                      <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Pricing & Fees</h2>
                     </div>
-                    <div className="p-5 space-y-4">
-                      {/* Summary lines */}
-                      {discountAmt > 0 && (
+                    <div className="p-5 space-y-5">
+                      {/* Rental Amount Input */}
+                      <FormField
+                        control={form.control}
+                        name="monthly_amount"
+                        render={({ field }) => {
+                          const vehicle = vehicles?.find(v => v.id === selectedVehicleId);
+                          const days = watchedStartDate && watchedEndDate
+                            ? Math.max(1, differenceInDays(watchedEndDate, watchedStartDate))
+                            : 0;
+
+                          return (
+                          <FormItem>
+                            <FormLabel>{amountLabel} <span className="text-red-500">*</span></FormLabel>
+                            <FormControl>
+                              <CurrencyInput
+                                value={field.value}
+                                onChange={field.onChange}
+                                placeholder="Rental amount"
+                                min={0.01}
+                                step={0.01}
+                                error={!!form.formState.errors.monthly_amount}
+                                currencySymbol={currencySymbol}
+                                disabled={false}
+                              />
+                            </FormControl>
+                            <div className="flex items-center justify-between">
+                              <FormDescription>
+                                Auto-calculated from vehicle rates. You can adjust if needed.
+                              </FormDescription>
+                              {vehicle && days > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowPricingBreakdown(!showPricingBreakdown)}
+                                  className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 transition-colors"
+                                >
+                                  <Info className="h-3 w-3" />
+                                  {showPricingBreakdown ? 'Hide' : 'How is this calculated?'}
+                                </button>
+                              )}
+                            </div>
+                            {showPricingBreakdown && vehicle && days > 0 && (() => {
+                              const dailyRent = vehicle.daily_rent || 0;
+                              const weeklyRent = vehicle.weekly_rent || 0;
+                              const monthlyRent = vehicle.monthly_rent || 0;
+                              const tier = days > 30 && monthlyRent > 0 ? 'monthly'
+                                : days >= 7 && days <= 30 && weeklyRent > 0 ? 'weekly'
+                                : dailyRent > 0 ? 'daily'
+                                : weeklyRent > 0 ? 'weekly' : 'monthly';
+
+                              // Count weekend/holiday days for daily tier
+                              let weekendDays = 0;
+                              let holidayDays = 0;
+                              let regularDays = 0;
+                              if (tier === 'daily' && watchedStartDate) {
+                                for (let i = 0; i < days; i++) {
+                                  const currentDate = addDays(watchedStartDate, i);
+                                  const dayOfWeek = currentDate.getDay();
+                                  const holiday = tenantHolidays.find(h => {
+                                    const dateStr = format(currentDate, 'yyyy-MM-dd');
+                                    if (h.excluded_vehicle_ids?.includes(selectedVehicleId!)) return false;
+                                    if (h.recurs_annually) {
+                                      const hStart = new Date(h.start_date + 'T00:00:00');
+                                      const hEnd = new Date(h.end_date + 'T00:00:00');
+                                      const m = currentDate.getMonth(), d = currentDate.getDate();
+                                      return (m === hStart.getMonth() && d >= hStart.getDate() && (hStart.getMonth() === hEnd.getMonth() ? d <= hEnd.getDate() : true))
+                                        || (m === hEnd.getMonth() && d <= hEnd.getDate() && hStart.getMonth() !== hEnd.getMonth())
+                                        || (m > hStart.getMonth() && m < hEnd.getMonth());
+                                    }
+                                    return dateStr >= h.start_date && dateStr <= h.end_date;
+                                  });
+                                  if (holiday) {
+                                    holidayDays++;
+                                  } else if (weekendPricingSettings.weekend_surcharge_percent > 0 && weekendPricingSettings.weekend_days?.includes(dayOfWeek)) {
+                                    weekendDays++;
+                                  } else {
+                                    regularDays++;
+                                  }
+                                }
+                              }
+
+                              return (
+                                <div className="mt-2 p-3 rounded-lg bg-muted/50 border text-xs space-y-2 animate-in slide-in-from-top-2 duration-200">
+                                  <p className="font-medium text-foreground text-sm">Pricing Breakdown</p>
+                                  <div className="space-y-1.5 text-muted-foreground">
+                                    <div className="flex justify-between">
+                                      <span>Vehicle</span>
+                                      <span className="font-medium text-foreground">{vehicle.make} {vehicle.model} ({vehicle.reg})</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Duration</span>
+                                      <span className="font-medium text-foreground">{days} day{days !== 1 ? 's' : ''}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Pricing Tier</span>
+                                      <Badge variant="outline" className="text-[10px] h-5 capitalize">{tier}</Badge>
+                                    </div>
+                                    <div className="border-t my-1.5" />
+                                    {tier === 'monthly' && (
+                                      <>
+                                        <div className="flex justify-between">
+                                          <span>Monthly Rate</span>
+                                          <span>{formatCurrency(monthlyRent, currency)}/month</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span>Formula</span>
+                                          <span>({days} days &divide; 30) &times; {formatCurrency(monthlyRent, currency)}</span>
+                                        </div>
+                                      </>
+                                    )}
+                                    {tier === 'weekly' && (
+                                      <>
+                                        <div className="flex justify-between">
+                                          <span>Weekly Rate</span>
+                                          <span>{formatCurrency(weeklyRent, currency)}/week</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span>Formula</span>
+                                          <span>({days} days &divide; 7) &times; {formatCurrency(weeklyRent, currency)}</span>
+                                        </div>
+                                      </>
+                                    )}
+                                    {tier === 'daily' && (
+                                      <>
+                                        <div className="flex justify-between">
+                                          <span>Daily Rate</span>
+                                          <span>{formatCurrency(dailyRent, currency)}/day</span>
+                                        </div>
+                                        {regularDays > 0 && (
+                                          <div className="flex justify-between">
+                                            <span>Regular days</span>
+                                            <span>{regularDays} &times; {formatCurrency(dailyRent, currency)} = {formatCurrency(regularDays * dailyRent, currency)}</span>
+                                          </div>
+                                        )}
+                                        {weekendDays > 0 && (
+                                          <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                                            <span>Weekend days (+{weekendPricingSettings.weekend_surcharge_percent}%)</span>
+                                            <span>{weekendDays} &times; {formatCurrency(dailyRent * (1 + weekendPricingSettings.weekend_surcharge_percent / 100), currency)} = {formatCurrency(weekendDays * dailyRent * (1 + weekendPricingSettings.weekend_surcharge_percent / 100), currency)}</span>
+                                          </div>
+                                        )}
+                                        {holidayDays > 0 && (
+                                          <div className="flex justify-between text-orange-600 dark:text-orange-400">
+                                            <span>Holiday days (surcharge applied)</span>
+                                            <span>{holidayDays} day{holidayDays !== 1 ? 's' : ''} with holiday pricing</span>
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                    <div className="border-t my-1.5" />
+                                    <div className="flex justify-between font-medium text-foreground">
+                                      <span>Calculated Total</span>
+                                      <span>{formatCurrency(field.value || 0, currency)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                            <FormMessage />
+                          </FormItem>
+                          );
+                        }}
+                      />
+
+                      {/* Fee breakdown */}
+                      {hasFees && (
                         <>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Rental Amount</span>
-                            <span className="font-medium">{formatCurrency(rentalAmount, currency)}</span>
+                          <div className="border-t" />
+
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-muted-foreground">Fee Breakdown</p>
+                            <p className="text-xs text-muted-foreground">Override for this rental only</p>
                           </div>
-                          <div className="flex items-center justify-between text-sm text-green-600">
-                            <span>Promo Discount ({promoDetails?.type === 'percentage' ? `${promoDetails.value}%` : 'fixed'})</span>
-                            <span className="font-medium">-{formatCurrency(discountAmt, currency)}</span>
+
+                          <div className="space-y-3">
+                            {/* Promo discount lines */}
+                            {discountAmt > 0 && (
+                              <>
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-muted-foreground">Rental Amount</span>
+                                  <span className="font-medium">{formatCurrency(rentalAmount, currency)}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-sm text-green-600">
+                                  <span>Promo Discount ({promoDetails?.type === 'percentage' ? `${promoDetails.value}%` : 'fixed'})</span>
+                                  <span className="font-medium">-{formatCurrency(discountAmt, currency)}</span>
+                                </div>
+                              </>
+                            )}
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">{discountAmt > 0 ? 'After Discount' : 'Rental Amount'}</span>
+                              <span className="font-medium">{formatCurrency(discountedAmount, currency)}</span>
+                            </div>
+
+                            {/* Tax row */}
+                            {showTax && (
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex-1 min-w-0">
+                                  <Label className="text-sm">Tax ({rentalSettings?.tax_percentage}%)</Label>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Auto: {formatCurrency(autoTax, currency)}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-36">
+                                    <CurrencyInput
+                                      value={taxOverride !== null ? taxOverride : autoTax}
+                                      onChange={(val) => {
+                                        const numVal = typeof val === 'string' ? parseFloat(val) : val;
+                                        if (numVal === autoTax || (isNaN(numVal) && autoTax === 0)) {
+                                          setTaxOverride(null);
+                                        } else {
+                                          setTaxOverride(isNaN(numVal) ? 0 : numVal);
+                                        }
+                                      }}
+                                      placeholder="Tax amount"
+                                      min={0}
+                                      step={0.01}
+                                      currencySymbol={currencySymbol}
+                                    />
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className={cn("text-xs px-2 h-8 w-14 shrink-0", taxOverride === null && "invisible")}
+                                    onClick={() => setTaxOverride(null)}
+                                  >
+                                    Reset
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Service fee row */}
+                            {showServiceFee && (
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex-1 min-w-0">
+                                  <Label className="text-sm">
+                                    Service Fee{feeType === 'percentage' ? ` (${feeValue}%)` : ''}
+                                  </Label>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Auto: {formatCurrency(autoServiceFee, currency)}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-36">
+                                    <CurrencyInput
+                                      value={serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee}
+                                      onChange={(val) => {
+                                        const numVal = typeof val === 'string' ? parseFloat(val) : val;
+                                        if (numVal === autoServiceFee || (isNaN(numVal) && autoServiceFee === 0)) {
+                                          setServiceFeeOverride(null);
+                                        } else {
+                                          setServiceFeeOverride(isNaN(numVal) ? 0 : numVal);
+                                        }
+                                      }}
+                                      placeholder="Service fee"
+                                      min={0}
+                                      step={0.01}
+                                      currencySymbol={currencySymbol}
+                                    />
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className={cn("text-xs px-2 h-8 w-14 shrink-0", serviceFeeOverride === null && "invisible")}
+                                    onClick={() => setServiceFeeOverride(null)}
+                                  >
+                                    Reset
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Deposit row */}
+                            {showDeposit && (
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex-1 min-w-0">
+                                  <Label className="text-sm">Security Deposit</Label>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Auto: {formatCurrency(autoDeposit, currency)}{rentalSettings?.deposit_mode === 'per_vehicle' ? ' (per-vehicle)' : ' (global)'}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-36">
+                                    <CurrencyInput
+                                      value={depositOverride !== null ? depositOverride : autoDeposit}
+                                      onChange={(val) => {
+                                        const numVal = typeof val === 'string' ? parseFloat(val) : val;
+                                        if (numVal === autoDeposit || (isNaN(numVal) && autoDeposit === 0)) {
+                                          setDepositOverride(null);
+                                        } else {
+                                          setDepositOverride(isNaN(numVal) ? 0 : numVal);
+                                        }
+                                      }}
+                                      placeholder="Deposit"
+                                      min={0}
+                                      step={0.01}
+                                      currencySymbol={currencySymbol}
+                                    />
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className={cn("text-xs px-2 h-8 w-14 shrink-0", depositOverride === null && "invisible")}
+                                    onClick={() => setDepositOverride(null)}
+                                  >
+                                    Reset
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                           </div>
+
+                          {/* Grand Total */}
+                          <div className="border-t pt-3 flex items-center justify-between">
+                            <span className="font-semibold text-sm">Estimated Total</span>
+                            <span className="font-semibold text-base">{formatCurrency(grandTotal, currency)}</span>
+                          </div>
+
+                          {hasOverrides && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
+                              Custom fees applied — changes only affect this rental.
+                            </p>
+                          )}
                         </>
-                      )}
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">{discountAmt > 0 ? 'After Discount' : 'Rental Amount'}</span>
-                        <span className="font-medium">{formatCurrency(discountedAmount, currency)}</span>
-                      </div>
-
-                      {showTax && (
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <Label className="text-sm">Tax ({rentalSettings?.tax_percentage}%)</Label>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Auto: {formatCurrency(autoTax, currency)}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-36">
-                              <CurrencyInput
-                                value={taxOverride !== null ? taxOverride : autoTax}
-                                onChange={(val) => {
-                                  const numVal = typeof val === 'string' ? parseFloat(val) : val;
-                                  if (numVal === autoTax || (isNaN(numVal) && autoTax === 0)) {
-                                    setTaxOverride(null);
-                                  } else {
-                                    setTaxOverride(isNaN(numVal) ? 0 : numVal);
-                                  }
-                                }}
-                                placeholder="Tax amount"
-                                min={0}
-                                step={0.01}
-                                currencySymbol={currencySymbol}
-                              />
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className={cn("text-xs px-2 h-8 w-14 shrink-0", taxOverride === null && "invisible")}
-                              onClick={() => setTaxOverride(null)}
-                            >
-                              Reset
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-
-                      {showServiceFee && (
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <Label className="text-sm">
-                              Service Fee{feeType === 'percentage' ? ` (${feeValue}%)` : ''}
-                            </Label>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Auto: {formatCurrency(autoServiceFee, currency)}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-36">
-                              <CurrencyInput
-                                value={serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee}
-                                onChange={(val) => {
-                                  const numVal = typeof val === 'string' ? parseFloat(val) : val;
-                                  if (numVal === autoServiceFee || (isNaN(numVal) && autoServiceFee === 0)) {
-                                    setServiceFeeOverride(null);
-                                  } else {
-                                    setServiceFeeOverride(isNaN(numVal) ? 0 : numVal);
-                                  }
-                                }}
-                                placeholder="Service fee"
-                                min={0}
-                                step={0.01}
-                                currencySymbol={currencySymbol}
-                              />
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className={cn("text-xs px-2 h-8 w-14 shrink-0", serviceFeeOverride === null && "invisible")}
-                              onClick={() => setServiceFeeOverride(null)}
-                            >
-                              Reset
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-
-                      {showDeposit && (
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <Label className="text-sm">Security Deposit</Label>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Auto: {formatCurrency(autoDeposit, currency)}{rentalSettings?.deposit_mode === 'per_vehicle' ? ' (per-vehicle)' : ' (global)'}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-36">
-                              <CurrencyInput
-                                value={depositOverride !== null ? depositOverride : autoDeposit}
-                                onChange={(val) => {
-                                  const numVal = typeof val === 'string' ? parseFloat(val) : val;
-                                  if (numVal === autoDeposit || (isNaN(numVal) && autoDeposit === 0)) {
-                                    setDepositOverride(null);
-                                  } else {
-                                    setDepositOverride(isNaN(numVal) ? 0 : numVal);
-                                  }
-                                }}
-                                placeholder="Deposit"
-                                min={0}
-                                step={0.01}
-                                currencySymbol={currencySymbol}
-                              />
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className={cn("text-xs px-2 h-8 w-14 shrink-0", depositOverride === null && "invisible")}
-                              onClick={() => setDepositOverride(null)}
-                            >
-                              Reset
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Divider + Grand Total */}
-                      <div className="border-t pt-3 flex items-center justify-between">
-                        <span className="font-semibold text-sm">Estimated Total</span>
-                        <span className="font-semibold text-base">{formatCurrency(grandTotal, currency)}</span>
-                      </div>
-
-                      {(taxOverride !== null || serviceFeeOverride !== null || depositOverride !== null) && (
-                        <div className="flex items-center gap-1 text-amber-600 text-xs">
-                          <AlertTriangle className="h-3 w-3" />
-                          Custom fees applied — changes only affect this rental.
-                        </div>
                       )}
                     </div>
                   </div>
@@ -2615,10 +2878,9 @@ const CreateRental = () => {
                           </div>
 
                           {installmentAmountOverride !== null && (
-                            <div className="flex items-center gap-1 text-amber-600 text-xs">
-                              <AlertTriangle className="h-3 w-3" />
+                            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
                               Custom installment amount — applies only to this rental.
-                            </div>
+                            </p>
                           )}
                         </div>
                       )}
@@ -2711,49 +2973,6 @@ const CreateRental = () => {
                       />
                     </div>
 
-                  {/* Times */}
-                  <div className="space-y-4 pt-2">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Times</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="pickup_time"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Pickup Time <span className="text-red-500">*</span></FormLabel>
-                            <FormControl>
-                              <TimePicker
-                                id="pickup_time"
-                                value={field.value}
-                                onChange={field.onChange}
-                                placeholder="Select pickup time"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="return_time"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Return Time <span className="text-red-500">*</span></FormLabel>
-                            <FormControl>
-                              <TimePicker
-                                id="return_time"
-                                value={field.value}
-                                onChange={field.onChange}
-                                placeholder="Select return time"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-
                   {/* Lockbox / Delivery Method */}
                   {rentalSettings?.lockbox_enabled && (
                     <div className="border-t pt-4">
@@ -2811,6 +3030,85 @@ const CreateRental = () => {
                     <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Insurance</h2>
                   </div>
                   <div className="p-5 space-y-5">
+                    {/* Existing Insurance Documents */}
+                    {selectedCustomerId && existingInsuranceDocs.length > 0 && (
+                      <div className="space-y-2.5">
+                        <p className="text-sm font-medium">Existing Insurance Certificates</p>
+                        <div className="space-y-2">
+                          {existingInsuranceDocs.map((doc) => {
+                            const status = getDocumentStatus(doc.end_date);
+                            const isSelected = insuranceDocId === doc.id;
+                            return (
+                              <button
+                                key={doc.id}
+                                type="button"
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setInsuranceDocId(null);
+                                    form.setValue("insurance_status", "pending");
+                                  } else {
+                                    setInsuranceDocId(doc.id);
+                                    form.setValue("insurance_status", "uploaded");
+                                  }
+                                }}
+                                className={cn(
+                                  "w-full text-left rounded-lg border p-3 transition-colors",
+                                  isSelected
+                                    ? "border-green-500 bg-green-50 dark:bg-green-950/20"
+                                    : "hover:bg-muted/50"
+                                )}
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className={cn(
+                                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+                                      isSelected
+                                        ? "border-green-500 bg-green-500 text-white"
+                                        : "border-muted-foreground/30"
+                                    )}>
+                                      {isSelected && <Check className="h-3 w-3" />}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium truncate">{doc.document_name}</p>
+                                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                                        {doc.insurance_provider && <span>{doc.insurance_provider}</span>}
+                                        {doc.insurance_provider && doc.policy_number && <span>·</span>}
+                                        {doc.policy_number && <span>{doc.policy_number}</span>}
+                                        {doc.end_date && (
+                                          <>
+                                            <span>·</span>
+                                            <span>Expires {format(parseISO(doc.end_date), "dd MMM yyyy")}</span>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <Badge
+                                    variant={status === 'Active' ? 'default' : 'secondary'}
+                                    className={cn(
+                                      "shrink-0",
+                                      status === 'Active' && "bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400",
+                                      status === 'Expires Soon' && "bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400"
+                                    )}
+                                  >
+                                    {status}
+                                  </Badge>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="relative">
+                          <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t" />
+                          </div>
+                          <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-card px-2 text-muted-foreground">or upload new</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <p className="text-sm text-muted-foreground">Upload customer&apos;s insurance certificate for verification</p>
                       <div className="flex items-center gap-2 flex-wrap">
@@ -2882,10 +3180,9 @@ const CreateRental = () => {
                               return (
                                 <div className="space-y-1.5">
                                   {warnings.map((w, i) => (
-                                    <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
-                                      <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                                      <span>{w}</span>
-                                    </div>
+                                    <p key={i} className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
+                                      {w}
+                                    </p>
                                   ))}
                                 </div>
                               );
@@ -2946,7 +3243,7 @@ const CreateRental = () => {
                     <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Optional Extras</h2>
                   </div>
                   <div className="p-5 space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {activeExtras.map((extra) => {
                           const isSelected = !!selectedExtras[extra.id];
                           const isToggle = extra.max_quantity === null;
@@ -3053,15 +3350,15 @@ const CreateRental = () => {
                             </div>
                           );
                         })}
+                    </div>
+                    {Object.keys(selectedExtras).length > 0 && (
+                      <div className="text-sm text-right font-medium">
+                        Extras Total: {formatCurrency(Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
+                          const extra = activeExtras.find(e => e.id === id);
+                          return sum + (extra ? Number(extra.price) * qty : 0);
+                        }, 0), tenant?.currency_code || 'USD')}
                       </div>
-                      {Object.keys(selectedExtras).length > 0 && (
-                        <div className="text-sm text-right font-medium">
-                          Extras Total: {formatCurrency(Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
-                            const extra = activeExtras.find(e => e.id === id);
-                            return sum + (extra ? Number(extra.price) * qty : 0);
-                          }, 0), tenant?.currency_code || 'USD')}
-                        </div>
-                      )}
+                    )}
                   </div>
                 </div>
               )}
@@ -3073,7 +3370,7 @@ const CreateRental = () => {
                   <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Additional Details</h2>
                 </div>
                 <div className="p-5 space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name="driver_age"
@@ -3087,7 +3384,7 @@ const CreateRental = () => {
                                 <Input
                                   type="number"
                                   min={16}
-                                  max={100}
+                                  max={200}
                                   placeholder="Enter driver age"
                                   value={field.value ?? ""}
                                   onChange={(e) => {
@@ -3097,10 +3394,9 @@ const CreateRental = () => {
                                 />
                               </FormControl>
                               {exceedsLimit && (
-                                <div className="flex items-center gap-1 text-amber-600 text-sm">
-                                  <AlertTriangle className="h-3 w-3" />
+                                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
                                   Driver age exceeds the set limit of {minAge}. Admin override allowed.
-                                </div>
+                                </p>
                               )}
                               <FormMessage />
                             </FormItem>
@@ -3205,7 +3501,7 @@ const CreateRental = () => {
                           </FormItem>
                         )}
                       />
-                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -3233,143 +3529,231 @@ const CreateRental = () => {
             {/* ── Right: Static Preview ─────────────────────── */}
             <div className="hidden lg:block lg:col-span-2 lg:overflow-y-auto">
               <div className="space-y-5">
-                {/* Preview Header */}
-                <div className="rounded-xl border bg-card shadow-sm">
+                <div className="rounded-xl border bg-card shadow-sm sticky top-0">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
                     <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary"><FileText className="h-4 w-4" /></div>
                     <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Rental Preview</h2>
                   </div>
-                  <div className="p-5 space-y-5">
-                    {/* Customer */}
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Customer</p>
-                      {selectedCustomer ? (
-                        <div className="flex items-center gap-2">
-                          <div className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
-                          <p className="text-sm font-medium">{selectedCustomer.name}</p>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground italic">Not selected</p>
-                      )}
-                    </div>
-
-                    {/* Vehicle */}
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Vehicle</p>
-                      {selectedVehicle ? (
-                        <div className="flex items-center gap-2">
-                          <div className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
-                          <p className="text-sm font-medium">{selectedVehicle.make} {selectedVehicle.model}</p>
-                          <Badge variant="outline" className="text-[10px]">{selectedVehicle.reg}</Badge>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground italic">Not selected</p>
-                      )}
-                    </div>
-
-                    {/* Verification Status */}
-                    {selectedCustomerId && (
+                  <div className="p-5 space-y-4">
+                    {/* Customer & Vehicle */}
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Verification</p>
-                        {isCustomerVerified ? (
-                          <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Customer</p>
+                        {selectedCustomer ? (
+                          <div className="flex items-center gap-1.5">
+                            <div className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
+                            <p className="text-sm font-medium truncate">{selectedCustomer.name}</p>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground italic">Not selected</p>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Vehicle</p>
+                        {selectedVehicle ? (
+                          <div className="flex items-center gap-1.5">
+                            <div className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
+                            <p className="text-sm font-medium truncate">{selectedVehicle.make} {selectedVehicle.model}</p>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground italic">Not selected</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Badges row */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {selectedVehicle && (
+                        <Badge variant="outline" className="text-[10px]">{selectedVehicle.reg}</Badge>
+                      )}
+                      {selectedCustomerId && (
+                        isCustomerVerified ? (
+                          <Badge variant="default" className="bg-green-500 hover:bg-green-600 text-[10px]">
                             <CheckCircle2 className="h-3 w-3 mr-1" /> Verified
                           </Badge>
                         ) : verificationPending ? (
-                          <Badge variant="secondary">
+                          <Badge variant="secondary" className="text-[10px]">
                             <Clock className="h-3 w-3 mr-1" /> Pending
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="border-amber-500 text-amber-600">
+                          <Badge variant="outline" className="border-amber-500 text-amber-600 text-[10px]">
                             <AlertTriangle className="h-3 w-3 mr-1" /> Not Verified
                           </Badge>
-                        )}
-                      </div>
-                    )}
+                        )
+                      )}
+                      {deliveryMethod === 'lockbox' && rentalSettings?.lockbox_enabled && (
+                        <Badge variant="outline" className="text-[10px] border-purple-500/30 text-purple-600">
+                          <Lock className="h-3 w-3 mr-1" /> Lockbox
+                        </Badge>
+                      )}
+                    </div>
 
-                    <div className="border-t pt-4 space-y-3">
-                      {/* Period */}
+                    {/* Rental Details */}
+                    <div className="border-t pt-3 space-y-2">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground">Period Type</p>
-                        <Badge variant="outline">{watchedRentalPeriodType || "—"}</Badge>
+                        <p className="text-xs text-muted-foreground">Period</p>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[10px]">{watchedRentalPeriodType || "—"}</Badge>
+                          {watchedStartDate && watchedEndDate && (
+                            <span className="text-[10px] text-muted-foreground">
+                              ({Math.max(1, differenceInDays(watchedEndDate, watchedStartDate))} days)
+                            </span>
+                          )}
+                        </div>
                       </div>
-
-                      {/* Dates */}
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-muted-foreground">Start</p>
-                        <p className="text-sm font-medium">{watchedStartDate ? format(watchedStartDate, "dd MMM yyyy") : "—"}</p>
+                        <p className="text-xs font-medium">
+                          {watchedStartDate ? format(watchedStartDate, "dd MMM yyyy") : "—"}
+                          {form.watch("pickup_time") ? ` at ${form.watch("pickup_time")}` : ""}
+                        </p>
                       </div>
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-muted-foreground">End</p>
-                        <p className="text-sm font-medium">{watchedEndDate ? format(watchedEndDate, "dd MMM yyyy") : "—"}</p>
+                        <p className="text-xs font-medium">
+                          {watchedEndDate ? format(watchedEndDate, "dd MMM yyyy") : "—"}
+                          {form.watch("return_time") ? ` at ${form.watch("return_time")}` : ""}
+                        </p>
                       </div>
-
-                      {/* Pickup */}
                       {watchedPickupLocation && (
                         <div className="flex items-center justify-between">
                           <p className="text-xs text-muted-foreground">Pickup</p>
-                          <p className="text-sm font-medium truncate max-w-[180px]">{watchedPickupLocation}</p>
+                          <p className="text-xs font-medium truncate max-w-[180px]">{watchedPickupLocation}</p>
+                        </div>
+                      )}
+                      {!sameAsPickup && form.watch("return_location") && (
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">Return</p>
+                          <p className="text-xs font-medium truncate max-w-[180px]">{form.watch("return_location")}</p>
                         </div>
                       )}
                     </div>
 
-                    {/* Financial Summary */}
-                    <div className="border-t pt-4 space-y-3">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Financial Summary</p>
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-muted-foreground">Rental Amount</p>
-                        <p className="text-sm font-semibold">{watchedMonthlyAmount > 0 ? formatCurrency(watchedMonthlyAmount, tenant?.currency_code || 'USD') : "—"}</p>
-                      </div>
-                      {bonzahPremium > 0 && (
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm text-muted-foreground">Insurance</p>
-                          <p className="text-sm font-medium">{formatCurrency(bonzahPremium, tenant?.currency_code || 'USD')}</p>
-                        </div>
-                      )}
-                      {Object.keys(selectedExtras).length > 0 && (
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm text-muted-foreground">Extras</p>
-                          <p className="text-sm font-medium">
-                            {formatCurrency(
-                              Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
+                    {/* Financial Summary — Full Breakdown */}
+                    {(() => {
+                      const currency = tenant?.currency_code || 'GBP';
+                      const rentalAmount = watchedMonthlyAmount || 0;
+                      const discountAmt = promoDetails ? calculateDiscount(rentalAmount) : 0;
+                      const discountedAmount = rentalAmount - discountAmt;
+
+                      const showTax = rentalSettings?.tax_enabled && (rentalSettings?.tax_percentage ?? 0) > 0;
+                      const showServiceFee = rentalSettings?.service_fee_enabled;
+                      const autoTax = showTax ? Math.round(calculateTaxAmount(discountedAmount) * 100) / 100 : 0;
+                      const autoServiceFee = showServiceFee ? Math.round(calculateServiceFee(discountedAmount) * 100) / 100 : 0;
+                      const autoDeposit = calculateSecurityDeposit(form.getValues("vehicle_id"));
+
+                      const effectiveTax = taxOverride !== null ? taxOverride : autoTax;
+                      const effectiveServiceFee = serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee;
+                      const effectiveDeposit = depositOverride !== null ? depositOverride : autoDeposit;
+
+                      const extrasTotal = Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
+                        const extra = activeExtras?.find((e: RentalExtra) => e.id === id);
+                        return sum + (extra ? Number(extra.price) * qty : 0);
+                      }, 0);
+
+                      const subtotal = discountedAmount + (showTax ? effectiveTax : 0) + (showServiceFee && autoServiceFee > 0 ? effectiveServiceFee : 0) + bonzahPremium + extrasTotal;
+                      const grandTotal = subtotal + (effectiveDeposit > 0 ? effectiveDeposit : 0);
+
+                      return (
+                        <div className="border-t pt-3 space-y-2">
+                          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Financial Summary</p>
+
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">Rental Amount</p>
+                            <p className="text-xs font-semibold">{rentalAmount > 0 ? formatCurrency(rentalAmount, currency) : "—"}</p>
+                          </div>
+
+                          {promoDetails && discountAmt > 0 && (
+                            <div className="flex items-center justify-between text-green-600 dark:text-green-400">
+                              <p className="text-xs">Discount ({promoDetails.type === 'percentage' ? `${promoDetails.value}%` : 'fixed'})</p>
+                              <p className="text-xs font-medium">−{formatCurrency(discountAmt, currency)}</p>
+                            </div>
+                          )}
+
+                          {showTax && effectiveTax > 0 && (
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs text-muted-foreground">
+                                Tax ({rentalSettings?.tax_percentage}%)
+                                {taxOverride !== null && <span className="text-amber-500 ml-1">*</span>}
+                              </p>
+                              <p className="text-xs font-medium">{formatCurrency(effectiveTax, currency)}</p>
+                            </div>
+                          )}
+
+                          {showServiceFee && autoServiceFee > 0 && (
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs text-muted-foreground">
+                                Service Fee
+                                {serviceFeeOverride !== null && <span className="text-amber-500 ml-1">*</span>}
+                              </p>
+                              <p className="text-xs font-medium">{formatCurrency(effectiveServiceFee, currency)}</p>
+                            </div>
+                          )}
+
+                          {bonzahPremium > 0 && (
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <img src="/bonzah-logo.svg" alt="" className="h-3 w-auto dark:hidden" />
+                                <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-auto hidden dark:block" />
+                                Insurance
+                              </p>
+                              <p className="text-xs font-medium">{formatCurrency(bonzahPremium, currency)}</p>
+                            </div>
+                          )}
+
+                          {extrasTotal > 0 && (
+                            <div className="space-y-1">
+                              {Object.entries(selectedExtras).map(([id, qty]) => {
+                                if (qty <= 0) return null;
                                 const extra = activeExtras?.find((e: RentalExtra) => e.id === id);
-                                return sum + (extra ? Number(extra.price) * qty : 0);
-                              }, 0),
-                              tenant?.currency_code || 'USD'
-                            )}
-                          </p>
+                                if (!extra) return null;
+                                return (
+                                  <div key={id} className="flex items-center justify-between">
+                                    <p className="text-xs text-muted-foreground">{extra.name}{qty > 1 ? ` ×${qty}` : ''}</p>
+                                    <p className="text-xs font-medium">{formatCurrency(Number(extra.price) * qty, currency)}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {effectiveDeposit > 0 && (
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs text-muted-foreground">
+                                Security Deposit
+                                {depositOverride !== null && <span className="text-amber-500 ml-1">*</span>}
+                              </p>
+                              <p className="text-xs font-medium">{formatCurrency(effectiveDeposit, currency)}</p>
+                            </div>
+                          )}
+
+                          {(taxOverride !== null || serviceFeeOverride !== null || depositOverride !== null) && (
+                            <p className="text-[10px] text-amber-500">* Manually adjusted</p>
+                          )}
+
+                          <div className="border-t pt-2 mt-1 flex items-center justify-between">
+                            <p className="text-sm font-semibold">Total</p>
+                            <p className="text-base font-bold text-primary">
+                              {grandTotal > 0 ? formatCurrency(Math.max(0, grandTotal), currency) : "—"}
+                            </p>
+                          </div>
+                          {effectiveDeposit > 0 && grandTotal > 0 && (
+                            <div className="flex items-center justify-between">
+                              <p className="text-[10px] text-muted-foreground">Excl. deposit</p>
+                              <p className="text-[10px] text-muted-foreground">{formatCurrency(Math.max(0, grandTotal - effectiveDeposit), currency)}</p>
+                            </div>
+                          )}
                         </div>
-                      )}
-                      {promoDetails && (
-                        <div className="flex items-center justify-between text-green-600">
-                          <p className="text-sm">Discount</p>
-                          <p className="text-sm font-medium">
-                            −{promoDetails.type === 'percentage' ? `${promoDetails.value}%` : formatCurrency(promoDetails.value, tenant?.currency_code || 'USD')}
-                          </p>
-                        </div>
-                      )}
-                      <div className="border-t pt-3 flex items-center justify-between">
-                        <p className="text-sm font-semibold">Total</p>
-                        <p className="text-base font-bold text-primary">
-                          {(() => {
-                            let total = watchedMonthlyAmount || 0;
-                            total += bonzahPremium || 0;
-                            total += Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
-                              const extra = activeExtras?.find((e: RentalExtra) => e.id === id);
-                              return sum + (extra ? Number(extra.price) * qty : 0);
-                            }, 0);
-                            if (promoDetails) {
-                              if (promoDetails.type === 'percentage') {
-                                total -= (watchedMonthlyAmount || 0) * (promoDetails.value / 100);
-                              } else {
-                                total -= promoDetails.value;
-                              }
-                            }
-                            return total > 0 ? formatCurrency(Math.max(0, total), tenant?.currency_code || 'USD') : "—";
-                          })()}
-                        </p>
+                      );
+                    })()}
+
+                    {/* Notes */}
+                    {form.watch("notes") && (
+                      <div className="border-t pt-3 space-y-1">
+                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Notes</p>
+                        <p className="text-xs text-muted-foreground line-clamp-3">{form.watch("notes")}</p>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -3399,6 +3783,7 @@ const CreateRental = () => {
         customer_id={createdRentalData?.rental?.customer_id || createdRentalData?.formData?.customer_id}
         vehicle_id={createdRentalData?.rental?.vehicle_id || createdRentalData?.formData?.vehicle_id}
         rental_id={createdRentalData?.rental?.id}
+        breakdownItems={createdRentalData?.breakdownItems}
       />
 
       {/* Invoice Dialog */}
@@ -3456,6 +3841,7 @@ const CreateRental = () => {
           onUploadComplete={(documentId) => {
             setInsuranceDocId(documentId);
             form.setValue("insurance_status", "uploaded");
+            queryClient.invalidateQueries({ queryKey: ["customer-documents"] });
           }}
         />
       )}
@@ -3577,6 +3963,7 @@ const CreateRental = () => {
         onOpenChange={setInviteDialogOpen}
       />
     </div>
+    </>
   );
 };
 

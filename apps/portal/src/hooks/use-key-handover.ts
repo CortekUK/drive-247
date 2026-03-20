@@ -619,8 +619,8 @@ export function useKeyHandover(rentalId: string | undefined) {
 
       if (error) throw error;
 
-      // If this is the return handover (receiving), also update the vehicle's current_mileage
-      if (type === "receiving" && mileage) {
+      // Update the vehicle's current_mileage on both giving and receiving handovers
+      if (mileage) {
         const { data: rental } = await supabase
           .from("rentals")
           .select("vehicle_id")
@@ -634,16 +634,18 @@ export function useKeyHandover(rentalId: string | undefined) {
             .eq("id", rental.vehicle_id);
         }
 
-        // Auto-calculate excess mileage charge
-        try {
-          const { error: calcError } = await supabase.functions.invoke('calculate-excess-mileage', {
-            body: { rentalId, tenantId: tenant?.id },
-          });
-          if (calcError) {
-            console.error('[MILEAGE] Excess mileage calculation error:', calcError);
+        // Auto-calculate excess mileage charge on return
+        if (type === "receiving") {
+          try {
+            const { error: calcError } = await supabase.functions.invoke('calculate-excess-mileage', {
+              body: { rentalId, tenantId: tenant?.id },
+            });
+            if (calcError) {
+              console.error('[MILEAGE] Excess mileage calculation error:', calcError);
+            }
+          } catch (calcErr) {
+            console.error('[MILEAGE] Error calling calculate-excess-mileage:', calcErr);
           }
-        } catch (calcErr) {
-          console.error('[MILEAGE] Error calling calculate-excess-mileage:', calcErr);
         }
       }
     },

@@ -32,7 +32,8 @@ async function createVeriffSession(
   baseUrl: string,
   customerName: string,
   vendorData: string,
-  callbackUrl?: string
+  callbackUrl?: string,
+  documentType?: string
 ): Promise<{ sessionUrl: string; sessionToken: string; sessionId: string } | null> {
   try {
     console.log('Creating Veriff session for:', vendorData);
@@ -46,6 +47,22 @@ async function createVeriffSession(
         vendorData: vendorData,
       }
     };
+
+    // Map document type setting to Veriff's document type
+    if (documentType && documentType !== 'any') {
+      const veriffDocTypeMap: Record<string, string> = {
+        'driving_license': 'DRIVERS_LICENSE',
+        'passport': 'PASSPORT',
+        'id_card': 'ID_CARD',
+      };
+      if (documentType === 'driving_license_or_passport') {
+        // Veriff doesn't support multi-type in one field — leave unset and let user choose
+      } else if (veriffDocTypeMap[documentType]) {
+        requestBody.verification.document = {
+          type: veriffDocTypeMap[documentType],
+        };
+      }
+    }
 
     // Add callback URL if provided (overrides dashboard settings)
     if (callbackUrl) {
@@ -117,6 +134,17 @@ async function createVerificationSession(
       };
     }
 
+    // Fetch tenant's required document type
+    let documentType: string | undefined;
+    if (customer.tenant_id) {
+      const { data: tenantData } = await supabase
+        .from('tenants')
+        .select('verification_document_type')
+        .eq('id', customer.tenant_id)
+        .single();
+      documentType = tenantData?.verification_document_type || undefined;
+    }
+
     // Create Veriff session (no callback URL - will use dashboard settings for portal)
     const sessionResult = await createVeriffSession(
       VERIFF_API_KEY,
@@ -124,7 +152,8 @@ async function createVerificationSession(
       VERIFF_BASE_URL,
       customer.name,
       customer.id,
-      undefined // Use dashboard default callback for portal
+      undefined, // Use dashboard default callback for portal
+      documentType
     );
 
     if (!sessionResult) {

@@ -203,13 +203,13 @@ function AgreementCard({
             )}
           </div>
         )}
-        {agreement.envelope_sent_at && (
+        {agreement.envelope_sent_at && !isNaN(new Date(agreement.envelope_sent_at).getTime()) && (
           <div>
             <p className="text-xs text-muted-foreground">Sent</p>
             <p className="font-medium">{format(new Date(agreement.envelope_sent_at), 'MMM d, yyyy')}</p>
           </div>
         )}
-        {agreement.envelope_completed_at && (
+        {agreement.envelope_completed_at && !isNaN(new Date(agreement.envelope_completed_at).getTime()) && (
           <div>
             <p className="text-xs text-muted-foreground">Signed</p>
             <p className="font-medium">{format(new Date(agreement.envelope_completed_at), 'MMM d, yyyy')}</p>

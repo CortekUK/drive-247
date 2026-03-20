@@ -6802,6 +6802,7 @@ export type Database = {
       tenants: {
         Row: {
           accent_color: string | null
+          accepted_verification_document: string
           address: string | null
           admin_email: string | null
           admin_name: string | null
@@ -6906,6 +6907,7 @@ export type Database = {
           saturday_enabled: boolean | null
           saturday_open: string | null
           secondary_color: string | null
+          security_deposit_enabled: boolean | null
           service_fee_amount: number | null
           service_fee_enabled: boolean | null
           service_fee_type: string | null
@@ -6953,6 +6955,7 @@ export type Database = {
         }
         Insert: {
           accent_color?: string | null
+          accepted_verification_document?: string
           address?: string | null
           admin_email?: string | null
           admin_name?: string | null
@@ -7057,6 +7060,7 @@ export type Database = {
           saturday_enabled?: boolean | null
           saturday_open?: string | null
           secondary_color?: string | null
+          security_deposit_enabled?: boolean | null
           service_fee_amount?: number | null
           service_fee_enabled?: boolean | null
           service_fee_type?: string | null
@@ -7104,6 +7108,7 @@ export type Database = {
         }
         Update: {
           accent_color?: string | null
+          accepted_verification_document?: string
           address?: string | null
           admin_email?: string | null
           admin_name?: string | null
@@ -7208,6 +7213,7 @@ export type Database = {
           saturday_enabled?: boolean | null
           saturday_open?: string | null
           secondary_color?: string | null
+          security_deposit_enabled?: boolean | null
           service_fee_amount?: number | null
           service_fee_enabled?: boolean | null
           service_fee_type?: string | null
@@ -7840,6 +7846,41 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "vehicles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      verification_otps: {
+        Row: {
+          code: string
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          tenant_id: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          email: string
+          expires_at: string
+          id?: string
+          tenant_id?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verification_otps_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -8557,6 +8598,7 @@ export type Database = {
         Args: { rental_id: string }
         Returns: undefined
       }
+      generate_next_invoice_number: { Args: never; Returns: string }
       generate_next_rental_charge: {
         Args: { r_id: string }
         Returns: undefined
@@ -9144,4 +9186,3 @@ export const Constants = {
     },
   },
 } as const
-

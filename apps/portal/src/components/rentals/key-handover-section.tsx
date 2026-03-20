@@ -143,9 +143,24 @@ export const KeyHandoverSection = ({
     setReceivingNotes(receivingHandover?.notes || "");
   }, [receivingHandover?.notes]);
 
+  // Pre-fill pickup mileage from handover or vehicle's current odometer
   useEffect(() => {
-    setGivingMileage(givingHandover?.mileage?.toString() || "");
-  }, [givingHandover?.mileage]);
+    if (givingHandover?.mileage) {
+      setGivingMileage(givingHandover.mileage.toString());
+    } else if (!givingHandover && vehicleId) {
+      // Pre-fill from vehicle's current_mileage when no handover recorded yet
+      supabase
+        .from("vehicles")
+        .select("current_mileage")
+        .eq("id", vehicleId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.current_mileage && !givingMileage) {
+            setGivingMileage(data.current_mileage.toString());
+          }
+        });
+    }
+  }, [givingHandover?.mileage, vehicleId]);
 
   useEffect(() => {
     setReceivingMileage(receivingHandover?.mileage?.toString() || "");
@@ -460,7 +475,9 @@ export const KeyHandoverSection = ({
                 className="mt-1"
                 min={0}
               />
-              <p className="text-xs text-muted-foreground mt-1">Record the odometer reading when handing over keys</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {!givingHandover?.mileage && givingMileage ? "Pre-filled from vehicle's current odometer. Verify and adjust if needed." : "Record the odometer reading when handing over keys"}
+              </p>
             </div>
 
             {/* Notes */}
@@ -567,38 +584,40 @@ export const KeyHandoverSection = ({
               </p>
             )}
 
-            {/* Key Handed Toggle Button */}
+            {/* Key Handed Toggle Button — sticky at bottom */}
             {!isClosed && (
-              <Button
-                onClick={() => givingCompleted ? setConfirmUndo("giving") : handleRequestHandover("giving")}
-                disabled={isMarkingHanded || isUnmarkingHanded || isSendingLockbox || isSendingWhatsApp}
-                variant={givingCompleted ? "outline" : "default"}
-                className="w-full"
-              >
-                {(isSendingLockbox || isSendingWhatsApp) ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <KeyRound className="h-4 w-4 mr-2" />
-                )}
-                {isSendingLockbox
-                  ? "Sending lockbox code..."
-                  : isSendingWhatsApp
-                    ? "Sending WhatsApp..."
-                    : isMarkingHanded || isUnmarkingHanded
-                      ? "Processing..."
-                      : givingCompleted
-                        ? "Undo Collection"
-                        : showLockboxOption && deliveryMethodChoice === 'lockbox'
-                          ? "Confirm Collection & Send Code"
-                          : "Confirm Collection"}
-              </Button>
-            )}
+              <div className="sticky bottom-0 pt-3 pb-1 bg-inherit space-y-2 border-t mt-2 -mx-4 px-4">
+                <Button
+                  onClick={() => givingCompleted ? setConfirmUndo("giving") : handleRequestHandover("giving")}
+                  disabled={isMarkingHanded || isUnmarkingHanded || isSendingLockbox || isSendingWhatsApp}
+                  variant={givingCompleted ? "outline" : "default"}
+                  className="w-full"
+                >
+                  {(isSendingLockbox || isSendingWhatsApp) ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <KeyRound className="h-4 w-4 mr-2" />
+                  )}
+                  {isSendingLockbox
+                    ? "Sending lockbox code..."
+                    : isSendingWhatsApp
+                      ? "Sending WhatsApp..."
+                      : isMarkingHanded || isUnmarkingHanded
+                        ? "Processing..."
+                        : givingCompleted
+                          ? "Undo Collection"
+                          : showLockboxOption && deliveryMethodChoice === 'lockbox'
+                            ? "Confirm Collection & Send Code"
+                            : "Confirm Collection"}
+                </Button>
 
-            {/* Warning if no photos */}
-            {!givingCompleted && !isClosed && (givingHandover?.photos?.length || 0) === 0 && (
-              <div className="flex items-center gap-2 text-amber-600 text-sm">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                <span>Consider uploading photos first</span>
+                {/* Warning if no photos */}
+                {!givingCompleted && (givingHandover?.photos?.length || 0) === 0 && (
+                  <div className="flex items-center gap-2 text-amber-600 text-sm">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    <span>Consider uploading photos first</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -659,6 +678,11 @@ export const KeyHandoverSection = ({
                   min={0}
                 />
                 <p className="text-xs text-muted-foreground mt-1">Record the odometer reading when receiving keys back</p>
+                {receivingMileage && givingMileage && parseInt(receivingMileage, 10) < parseInt(givingMileage, 10) && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5 mt-1.5">
+                    Return odometer ({parseInt(receivingMileage, 10).toLocaleString()}) is lower than pickup ({parseInt(givingMileage, 10).toLocaleString()}). Please verify the reading.
+                  </p>
+                )}
               </div>
             )}
 
@@ -689,28 +713,30 @@ export const KeyHandoverSection = ({
               </p>
             )}
 
-            {/* Key Received Toggle Button */}
+            {/* Key Received Toggle Button — sticky at bottom */}
             {givingCompleted && !isClosed && (
-              <Button
-                onClick={() => receivingCompleted ? setConfirmUndo("receiving") : handleRequestHandover("receiving")}
-                disabled={isMarkingHanded || isUnmarkingHanded}
-                variant={receivingCompleted ? "outline" : "default"}
-                className="w-full"
-              >
-                <Key className="h-4 w-4 mr-2" />
-                {isMarkingHanded || isUnmarkingHanded
-                  ? "Processing..."
-                  : receivingCompleted
-                    ? "Undo Return"
-                    : "Confirm Return"}
-              </Button>
-            )}
+              <div className="sticky bottom-0 pt-3 pb-1 bg-inherit space-y-2 border-t mt-2 -mx-4 px-4">
+                <Button
+                  onClick={() => receivingCompleted ? setConfirmUndo("receiving") : handleRequestHandover("receiving")}
+                  disabled={isMarkingHanded || isUnmarkingHanded}
+                  variant={receivingCompleted ? "outline" : "default"}
+                  className="w-full"
+                >
+                  <Key className="h-4 w-4 mr-2" />
+                  {isMarkingHanded || isUnmarkingHanded
+                    ? "Processing..."
+                    : receivingCompleted
+                      ? "Undo Return"
+                      : "Confirm Return"}
+                </Button>
 
-            {/* Warning if no photos */}
-            {!receivingCompleted && givingCompleted && !isClosed && (receivingHandover?.photos?.length || 0) === 0 && (
-              <div className="flex items-center gap-2 text-amber-600 text-sm">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                <span>Consider uploading photos first</span>
+                {/* Warning if no photos */}
+                {!receivingCompleted && (receivingHandover?.photos?.length || 0) === 0 && (
+                  <div className="flex items-center gap-2 text-amber-600 text-sm">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    <span>Consider uploading photos first</span>
+                  </div>
+                )}
               </div>
             )}
           </div>

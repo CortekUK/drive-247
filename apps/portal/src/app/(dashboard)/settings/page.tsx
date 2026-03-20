@@ -121,6 +121,7 @@ const Settings = () => {
     service_fee_amount: number;
     service_fee_type: 'percentage' | 'fixed_amount';
     service_fee_value: number;
+    security_deposit_enabled: boolean;
     deposit_mode: 'global' | 'per_vehicle';
     global_deposit_amount: number;
     installments_enabled: boolean;
@@ -145,6 +146,7 @@ const Settings = () => {
     lockbox_enabled: boolean;
     lockbox_code_length: number | null;
     lockbox_notification_methods: string[];
+    verification_document_type: string;
   }>({
     minimum_rental_age: '',
     tax_enabled: false,
@@ -153,6 +155,7 @@ const Settings = () => {
     service_fee_amount: 0,
     service_fee_type: 'fixed_amount' as 'percentage' | 'fixed_amount',
     service_fee_value: 0,
+    security_deposit_enabled: true,
     deposit_mode: 'global' as 'global' | 'per_vehicle',
     global_deposit_amount: 0,
     // Installment settings
@@ -193,6 +196,8 @@ const Settings = () => {
     lockbox_enabled: false,
     lockbox_code_length: null as number | null,
     lockbox_notification_methods: ['email'] as string[],
+    // Verification
+    verification_document_type: 'driving_license',
   });
 
   // Sync rental form with loaded settings
@@ -206,6 +211,7 @@ const Settings = () => {
         service_fee_amount: rentalSettings.service_fee_amount ?? 0,
         service_fee_type: (rentalSettings.service_fee_type as 'percentage' | 'fixed_amount') ?? 'fixed_amount',
         service_fee_value: rentalSettings.service_fee_value ?? rentalSettings.service_fee_amount ?? 0,
+        security_deposit_enabled: rentalSettings.security_deposit_enabled ?? true,
         deposit_mode: rentalSettings.deposit_mode ?? 'global',
         global_deposit_amount: rentalSettings.global_deposit_amount ?? 0,
         // Installment settings
@@ -236,6 +242,8 @@ const Settings = () => {
         lockbox_enabled: rentalSettings.lockbox_enabled ?? false,
         lockbox_code_length: rentalSettings.lockbox_code_length ?? null,
         lockbox_notification_methods: (rentalSettings.lockbox_notification_methods as string[]) ?? ['email'],
+        // Verification
+        verification_document_type: (rentalSettings as any).verification_document_type ?? 'driving_license',
       });
     }
   }, [rentalSettings]);
@@ -396,7 +404,8 @@ const Settings = () => {
       rentalForm.lockbox_code_length !== (rs.lockbox_code_length ?? null) ||
       rentalForm.min_rental_days !== (rs.min_rental_days ?? 0) ||
       rentalForm.min_rental_hours !== (rs.min_rental_hours ?? 1) ||
-      rentalForm.max_rental_days !== (rs.max_rental_days ?? 90)
+      rentalForm.max_rental_days !== (rs.max_rental_days ?? 90) ||
+      rentalForm.verification_document_type !== ((rs as any).verification_document_type ?? 'driving_license')
     );
   }, [rentalForm, rentalSettings]);
 
@@ -2450,13 +2459,30 @@ const Settings = () => {
                 <Shield className="h-5 w-5 text-primary" />
                 Security Deposit
               </CardTitle>
-              <CardDescription>
-                Configure security deposit for customer bookings
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <CardDescription>
+                  Configure security deposit for customer bookings
+                </CardDescription>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="security-deposit-toggle" className="text-sm text-muted-foreground">
+                    {rentalForm.security_deposit_enabled ? 'Enabled' : 'Disabled'}
+                  </Label>
+                  <Switch
+                    id="security-deposit-toggle"
+                    checked={rentalForm.security_deposit_enabled}
+                    onCheckedChange={(checked) => setRentalForm(prev => ({ ...prev, security_deposit_enabled: checked }))}
+                    disabled={!canEditSettings('rental')}
+                  />
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
+              {!rentalForm.security_deposit_enabled && (
+                <p className="text-sm text-muted-foreground">Security deposit is disabled. No deposit will be charged on bookings.</p>
+              )}
+
               {/* Deposit Mode Selection */}
-              <RadioGroup
+              {rentalForm.security_deposit_enabled && <RadioGroup
                 value={rentalForm.deposit_mode}
                 onValueChange={(value) => setRentalForm(prev => ({
                   ...prev,
@@ -2484,10 +2510,10 @@ const Settings = () => {
                     </div>
                   </Label>
                 </div>
-              </RadioGroup>
+              </RadioGroup>}
 
               {/* Global Deposit Amount (only when mode is global) */}
-              {rentalForm.deposit_mode === 'global' && (
+              {rentalForm.security_deposit_enabled && rentalForm.deposit_mode === 'global' && (
                 <div className="space-y-2">
                   <Label htmlFor="global_deposit_amount">Global Deposit Amount</Label>
                   <div className="flex items-center gap-4">
@@ -2520,7 +2546,7 @@ const Settings = () => {
                 </div>
               )}
 
-              {rentalForm.deposit_mode === 'per_vehicle' && (
+              {rentalForm.security_deposit_enabled && rentalForm.deposit_mode === 'per_vehicle' && (
                 <Alert>
                   <AlertDescription>
                     Set deposit amounts when adding or editing vehicles. Vehicles without a deposit will show $0.
@@ -2533,6 +2559,7 @@ const Settings = () => {
                   onClick={async () => {
                     try {
                       await updateRentalSettings({
+                        security_deposit_enabled: rentalForm.security_deposit_enabled,
                         deposit_mode: rentalForm.deposit_mode,
                         global_deposit_amount: rentalForm.global_deposit_amount,
                       });
@@ -3034,6 +3061,60 @@ const Settings = () => {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          {/* Identity Verification */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                Identity Verification
+              </CardTitle>
+              <CardDescription>
+                Configure which document type customers must provide for identity verification.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Required Document Type</Label>
+                <Select
+                  value={rentalForm.verification_document_type}
+                  onValueChange={(value) => setRentalForm(prev => ({ ...prev, verification_document_type: value }))}
+                >
+                  <SelectTrigger className="w-full max-w-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="driving_license">Driver&apos;s License</SelectItem>
+                    <SelectItem value="passport">Passport</SelectItem>
+                    <SelectItem value="id_card">ID Card</SelectItem>
+                    <SelectItem value="driving_license_or_passport">Driver&apos;s License or Passport</SelectItem>
+                    <SelectItem value="any">Any Government ID</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  This determines which document type is accepted during Veriff or AI verification.
+                </p>
+              </div>
+              {canEditSettings('rental') && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      await updateRentalSettings({
+                        verification_document_type: rentalForm.verification_document_type,
+                      } as any);
+                    } catch (error) {
+                      console.error('Failed to update verification settings:', error);
+                    }
+                  }}
+                  disabled={isUpdatingRentalSettings || rentalForm.verification_document_type === ((rentalSettings as any).verification_document_type ?? 'driving_license')}
+                  className="flex items-center gap-2"
+                >
+                  {isUpdatingRentalSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save
+                </Button>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Lockbox Settings */}
           <Card>

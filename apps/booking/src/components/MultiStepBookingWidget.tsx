@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, AlertTriangle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase, ExternalLink, Mail, Phone as PhoneIcon } from "lucide-react";
+import { BlurredImage } from "@/components/ui/blurred-image";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
@@ -5695,10 +5696,9 @@ const MultiStepBookingWidget = () => {
                               <div className="flex flex-col items-center">
                                 <div className={`w-full aspect-[3/4] rounded-md overflow-hidden border bg-muted/30 ${verificationImages.document_front_url ? 'border-green-500/30' : 'border-muted'}`}>
                                   {verificationImages.document_front_url ? (
-                                    <img
+                                    <BlurredImage
                                       src={verificationImages.document_front_url}
                                       alt="ID Front"
-                                      className="w-full h-full object-cover"
                                     />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center">
@@ -5713,10 +5713,9 @@ const MultiStepBookingWidget = () => {
                               <div className="flex flex-col items-center">
                                 <div className={`w-full aspect-[3/4] rounded-md overflow-hidden border bg-muted/30 ${verificationImages.document_back_url ? 'border-green-500/30' : 'border-muted'}`}>
                                   {verificationImages.document_back_url ? (
-                                    <img
+                                    <BlurredImage
                                       src={verificationImages.document_back_url}
                                       alt="ID Back"
-                                      className="w-full h-full object-cover"
                                     />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center">
@@ -5731,10 +5730,9 @@ const MultiStepBookingWidget = () => {
                               <div className="flex flex-col items-center">
                                 <div className={`w-full aspect-[3/4] rounded-md overflow-hidden border bg-muted/30 ${verificationImages.selfie_image_url ? 'border-green-500/30' : 'border-muted'}`}>
                                   {verificationImages.selfie_image_url ? (
-                                    <img
+                                    <BlurredImage
                                       src={verificationImages.selfie_image_url}
                                       alt="Selfie"
-                                      className="w-full h-full object-cover"
                                     />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center">

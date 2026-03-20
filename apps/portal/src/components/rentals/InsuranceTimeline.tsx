@@ -333,6 +333,12 @@ export function InsuranceTimeline({
               <img src="/bonzah-logo.svg" alt="Bonzah" className="h-8 w-auto dark:hidden" />
               <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-8 w-auto hidden dark:block" />
               Insurance Policies
+              <Badge variant="outline" className={bonzahMode === 'live'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500 text-[10px] uppercase tracking-wider'
+                : 'border-amber-500/30 bg-amber-500/10 text-amber-500 text-[10px] uppercase tracking-wider'
+              }>
+                {bonzahMode === 'live' ? 'Live' : 'Test'}
+              </Badge>
             </div>
           </CardTitle>
           {canEdit && !hasOriginal && isBonzahConnected && (
@@ -346,8 +352,17 @@ export function InsuranceTimeline({
       <CardContent className="space-y-4">
         {/* Bonzah Balance */}
         {isBonzahConnected && bonzahCdBalance != null && (
-          <div className="flex items-center justify-between rounded-md px-4 py-2.5 bg-muted/50 border border-border">
-            <span className="text-sm font-medium text-muted-foreground">Bonzah Balance (Broker Total)</span>
+          <div className={`flex items-center justify-between rounded-md px-4 py-2.5 border ${
+            bonzahMode === 'live'
+              ? 'bg-muted/50 border-border'
+              : 'bg-amber-500/5 border-amber-500/20'
+          }`}>
+            <span className="text-sm font-medium text-muted-foreground">
+              Bonzah Balance (Broker Total)
+              {bonzahMode !== 'live' && (
+                <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-amber-500">Test Mode</span>
+              )}
+            </span>
             <span className="text-base font-bold tabular-nums text-foreground">
               ${bonzahCdBalance.toFixed(2)}
             </span>

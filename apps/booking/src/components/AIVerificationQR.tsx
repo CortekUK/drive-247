@@ -19,6 +19,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BlurredImage } from '@/components/ui/blurred-image';
 
 interface AIVerificationQRProps {
   sessionId: string;
@@ -435,10 +436,9 @@ export default function AIVerificationQR({
                         verificationData?.document_front_url ? "border-primary/30" : "border-muted"
                       )}>
                         {verificationData?.document_front_url ? (
-                          <img
+                          <BlurredImage
                             src={verificationData.document_front_url}
                             alt="ID Front"
-                            className="w-full h-full object-cover"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
@@ -456,10 +456,9 @@ export default function AIVerificationQR({
                         verificationData?.document_back_url ? "border-primary/30" : "border-muted"
                       )}>
                         {verificationData?.document_back_url ? (
-                          <img
+                          <BlurredImage
                             src={verificationData.document_back_url}
                             alt="ID Back"
-                            className="w-full h-full object-cover"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
@@ -477,10 +476,9 @@ export default function AIVerificationQR({
                         verificationData?.selfie_image_url ? "border-primary/30" : "border-muted"
                       )}>
                         {verificationData?.selfie_image_url ? (
-                          <img
+                          <BlurredImage
                             src={verificationData.selfie_image_url}
                             alt="Selfie"
-                            className="w-full h-full object-cover"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">

@@ -37,6 +37,12 @@ const paymentSchema = z.object({
 
 type PaymentFormData = z.infer<typeof paymentSchema>;
 
+interface BreakdownItem {
+  label: string;
+  amount: number;
+  type?: 'discount' | 'normal';
+}
+
 interface AddPaymentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -47,6 +53,7 @@ interface AddPaymentDialogProps {
   insuranceChargeMode?: boolean;
   targetCategories?: string[];
   onPaymentSuccess?: () => void;
+  breakdownItems?: BreakdownItem[];
 }
 
 const PAYMENT_METHODS = [
@@ -67,7 +74,8 @@ export const AddPaymentDialog = ({
   defaultAmount,
   insuranceChargeMode,
   targetCategories,
-  onPaymentSuccess
+  onPaymentSuccess,
+  breakdownItems
 }: AddPaymentDialogProps) => {
   const [loading, setLoading] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
@@ -229,6 +237,9 @@ export const AddPaymentDialog = ({
       queryClient.invalidateQueries({ queryKey: ["rental-totals"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["rental-charges"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["rental-payments"], ...invalidateOptions }),
+      queryClient.invalidateQueries({ queryKey: ["rental-payment-breakdown"], ...invalidateOptions }),
+      queryClient.invalidateQueries({ queryKey: ["rental-refund-breakdown"], ...invalidateOptions }),
+      queryClient.invalidateQueries({ queryKey: ["rental-invoice"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["ledger-entries"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["payment-applications"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["outstanding-balance"], ...invalidateOptions }),
@@ -413,7 +424,7 @@ export const AddPaymentDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!isAnyLoading) onOpenChange(v); }}>
-      <DialogContent className="sm:max-w-[460px] p-0 gap-0 overflow-hidden">
+      <DialogContent className="sm:max-w-[460px] p-0 gap-0 overflow-hidden max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="px-6 pt-6 pb-4">
           <DialogHeader>
@@ -497,6 +508,30 @@ export const AddPaymentDialog = ({
                       <p className="text-xs text-emerald-500">No outstanding balance</p>
                     )}
                     <FormMessage />
+
+                    {/* Breakdown table */}
+                    {breakdownItems && breakdownItems.length > 0 && (
+                      <div className="mt-2 rounded-lg border px-3 py-2 space-y-1 text-xs">
+                        {breakdownItems.map((item, i) => (
+                          <div key={i} className={cn(
+                            "flex items-center justify-between",
+                            item.type === 'discount' && "text-green-600 dark:text-green-400"
+                          )}>
+                            <span className="text-muted-foreground">{item.label}</span>
+                            <span className="font-medium">
+                              {item.type === 'discount' ? '−' : ''}{formatCurrency(Math.abs(item.amount), tenant?.currency_code || 'USD')}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="border-t pt-1 flex items-center justify-between font-semibold text-sm">
+                          <span>Total</span>
+                          <span>{formatCurrency(
+                            breakdownItems.reduce((sum, item) => sum + (item.type === 'discount' ? -Math.abs(item.amount) : item.amount), 0),
+                            tenant?.currency_code || 'USD'
+                          )}</span>
+                        </div>
+                      </div>
+                    )}
                   </FormItem>
                 )}
               />
@@ -549,12 +584,11 @@ export const AddPaymentDialog = ({
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
+                        <PopoverContent className="w-auto p-0 z-[60]" align="start">
                           <Calendar
                             mode="single" selected={field.value}
                             onSelect={(date) => { if (date) { field.onChange(new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0)); } }}
-                            fromYear={new Date().getFullYear() - 5} toYear={new Date().getFullYear() + 1}
-                            captionLayout="dropdown-buttons" initialFocus className={cn("p-3 pointer-events-auto")}
+                            initialFocus className={cn("p-3 pointer-events-auto")}
                           />
                         </PopoverContent>
                       </Popover>

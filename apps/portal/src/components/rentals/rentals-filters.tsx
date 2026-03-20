@@ -54,10 +54,10 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
   const hasDateFilter = filters.startDateFrom || filters.startDateTo;
 
   const statusOptions = [
-    { value: 'active', label: 'Active', color: '#22c55e' },
+    { value: 'active', label: 'Active', color: '#16a34a' },
     { value: 'upcoming', label: 'Upcoming', color: '#3b82f6' },
-    { value: 'pending', label: 'Pending', color: '#eab308' },
-    { value: 'closed', label: 'Completed', color: '#a855f7' },
+    { value: 'pending', label: 'Pending', color: '#f59e0b' },
+    { value: 'completed', label: 'Completed', color: '#6b7280' },
     { value: 'cancelled', label: 'Cancelled', color: '#ef4444' },
   ] as const;
 

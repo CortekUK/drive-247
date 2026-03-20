@@ -119,14 +119,19 @@ export function TimePicker({
                 max="12"
                 value={hours}
                 onChange={(e) => {
-                  let val = parseInt(e.target.value, 10)
-                  if (isNaN(val)) {
+                  const raw = e.target.value;
+                  if (raw === "") {
                     setHours("")
                     return
                   }
+                  let val = parseInt(raw, 10)
+                  if (isNaN(val)) return
                   if (val > 12) val = 12
                   if (val < 1) val = 1
                   setHours(val.toString().padStart(2, "0"))
+                }}
+                onBlur={() => {
+                  if (!hours || hours.trim() === "") setHours("12")
                 }}
                 className="w-16 text-center"
               />
@@ -144,14 +149,19 @@ export function TimePicker({
                 max="59"
                 value={minutes}
                 onChange={(e) => {
-                  let val = parseInt(e.target.value, 10)
-                  if (isNaN(val)) {
-                    setMinutes("00")
+                  const raw = e.target.value;
+                  if (raw === "") {
+                    setMinutes("")
                     return
                   }
+                  let val = parseInt(raw, 10)
+                  if (isNaN(val)) return
                   if (val > 59) val = 59
                   if (val < 0) val = 0
                   setMinutes(val.toString().padStart(2, "0"))
+                }}
+                onBlur={() => {
+                  if (!minutes || minutes.trim() === "") setMinutes("00")
                 }}
                 className="w-16 text-center"
               />
@@ -221,6 +231,7 @@ export function TimePicker({
               type="button"
               size="sm"
               onClick={handleApply}
+              disabled={!hours || hours.trim() === "" || !minutes || minutes.trim() === ""}
               className="flex-1"
             >
               Apply

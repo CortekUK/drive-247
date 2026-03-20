@@ -9,11 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase, Bell } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase, Bell, Eye, EyeOff } from "lucide-react";
+import { BlurredImage } from "@/components/ui/blurred-image";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
@@ -40,6 +41,7 @@ import { useBonzahVehicleEligibility } from "@/hooks/use-bonzah-vehicle-eligibil
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency } from "@/lib/formatters";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
+import { cn } from "@/lib/utils";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { LocationMap } from "@/components/ui/location-map";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -234,6 +236,7 @@ const RentalDetail = () => {
   const [showDocuSignWarning, setShowDocuSignWarning] = useState(false);
   const [showInsuranceWarning, setShowInsuranceWarning] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showSensitiveInfo, setShowSensitiveInfo] = useState(false);
   const [showAddFineDialog, setShowAddFineDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
@@ -433,8 +436,9 @@ const RentalDetail = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [id, queryClient]);
 
-  // Handle ?payment=success — ensure Stripe payment is allocated after checkout
+  // Handle ?payment=success|cancelled — ensure Stripe payment is allocated after checkout
   const [paymentProcessed, setPaymentProcessed] = useState(false);
+  const [paymentResult, setPaymentResult] = useState<{ status: 'success' | 'failed' | 'cancelled'; message: string } | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(() => {
     // Initialize from URL so the banner shows immediately on page load
     if (typeof window !== 'undefined') {
@@ -445,7 +449,17 @@ const RentalDetail = () => {
   });
   useEffect(() => {
     const paymentStatus = searchParams?.get('payment');
-    if (paymentStatus !== 'success' || !id || !tenant?.id || paymentProcessed) return;
+    if (!paymentStatus || !id || paymentProcessed) return;
+
+    // Handle cancelled/failed payments
+    if (paymentStatus === 'cancelled') {
+      setPaymentProcessed(true);
+      setPaymentResult({ status: 'cancelled', message: 'Payment was cancelled. The customer did not complete checkout.' });
+      router.replace(`/rentals/${id}`);
+      return;
+    }
+
+    if (paymentStatus !== 'success' || !tenant?.id) return;
 
     setPaymentProcessed(true);
     setIsProcessingPayment(true);
@@ -536,10 +550,10 @@ const RentalDetail = () => {
           queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
         ]);
 
-        toast({ title: 'Payment Confirmed', description: 'Stripe payment has been processed and applied.' });
+        setPaymentResult({ status: 'success', message: 'Stripe payment has been processed and applied successfully.' });
       } catch (err: any) {
         console.error('Error processing Stripe payment:', err);
-        toast({ title: 'Payment Processing', description: 'Payment received. Refreshing data...', variant: 'default' });
+        setPaymentResult({ status: 'failed', message: err.message || 'Payment was received but could not be fully processed. Please check the payment details.' });
       }
 
       setIsProcessingPayment(false);
@@ -1732,6 +1746,42 @@ const RentalDetail = () => {
         </Alert>
       )}
 
+      {/* Payment Result Banner */}
+      {paymentResult && !isProcessingPayment && (
+        <Alert className={cn(
+          paymentResult.status === 'success' && "border-emerald-500/30 bg-emerald-500/10",
+          paymentResult.status === 'cancelled' && "border-amber-500/30 bg-amber-500/10",
+          paymentResult.status === 'failed' && "border-red-500/30 bg-red-500/10",
+        )}>
+          {paymentResult.status === 'success' && <CheckCircle className="h-4 w-4 text-emerald-500" />}
+          {paymentResult.status === 'cancelled' && <XCircle className="h-4 w-4 text-amber-500" />}
+          {paymentResult.status === 'failed' && <XCircle className="h-4 w-4 text-red-500" />}
+          <AlertTitle className={cn(
+            "text-sm font-semibold",
+            paymentResult.status === 'success' && "text-emerald-500",
+            paymentResult.status === 'cancelled' && "text-amber-500",
+            paymentResult.status === 'failed' && "text-red-500",
+          )}>
+            {paymentResult.status === 'success' ? 'Payment Successful' : paymentResult.status === 'cancelled' ? 'Payment Cancelled' : 'Payment Failed'}
+          </AlertTitle>
+          <AlertDescription className={cn(
+            paymentResult.status === 'success' && "text-emerald-600 dark:text-emerald-400",
+            paymentResult.status === 'cancelled' && "text-amber-600 dark:text-amber-400",
+            paymentResult.status === 'failed' && "text-red-600 dark:text-red-400",
+          )}>
+            {paymentResult.message}
+          </AlertDescription>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-2 right-2 h-6 w-6"
+            onClick={() => setPaymentResult(null)}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </Alert>
+      )}
+
       {/* Rental Summary */}
       {(() => {
         const totalRefunded = refundBreakdown
@@ -1790,7 +1840,7 @@ const RentalDetail = () => {
           { label: 'Security Deposit', category: 'Security Deposit', amount: invoiceBreakdown.securityDeposit, detail: invoiceBreakdown.securityDeposit > 0 ? (rental.status === 'Closed' ? 'Eligible for refund' : 'Held') : '', icon: Shield, color: 'text-amber-500', bg: 'bg-amber-500/10' },
           { label: 'Delivery Fee', category: 'Delivery Fee', amount: invoiceBreakdown.deliveryFee || rental.delivery_fee || 0, detail: 'Vehicle delivery', icon: Truck, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
           { label: 'Collection Fee', category: 'Collection Fee', amount: rental.collection_fee ?? 0, detail: 'Vehicle collection', icon: MapPin, color: 'text-rose-500', bg: 'bg-rose-500/10' },
-          { label: 'Extras', category: 'Extras', amount: extrasTotal, detail: (extrasDetails?.length || 0) > 0 ? `${extrasDetails!.length} item${extrasDetails!.length > 1 ? 's' : ''}` : 'Add-ons', icon: Package, color: 'text-indigo-500', bg: 'bg-indigo-500/10', nonRefundable: true, onClick: extrasTotal > 0 ? () => setShowExtrasDialog(true) : undefined },
+          { label: 'Extras', category: 'Extras', amount: extrasTotal, detail: (extrasDetails?.length || 0) > 0 ? `${extrasDetails!.length} item${extrasDetails!.length > 1 ? 's' : ''}` : 'Add-ons', icon: Package, color: 'text-indigo-500', bg: 'bg-indigo-500/10', onClick: extrasTotal > 0 ? () => setShowExtrasDialog(true) : undefined },
         ];
 
         // Add fines row if any fines are linked to this rental
@@ -1851,9 +1901,7 @@ const RentalDetail = () => {
         // Compute which rows have unpaid charges (selectable for targeted payment)
         // Don't allow payments on cancelled/rejected rentals
         const isCancelledOrRejected = rental.status === 'Cancelled' || rental.approval_status === 'rejected';
-        const isRentalCompleted = rental.status === 'Closed' || rental.status === 'Completed';
-        const isInactive = isCancelledOrRejected || isRentalCompleted;
-        const selectableCategories = isInactive ? [] : rows
+        const selectableCategories = rows
           .filter(({ category, amount }) => {
             if (amount <= 0) return false;
             const refunded = refundBreakdown?.[category] ?? 0;
@@ -2037,11 +2085,11 @@ const RentalDetail = () => {
                       <TableCell className="text-right pr-6">
                         <div className="flex items-center gap-2 justify-end">
                         {isExcessMileageUnpaid && excessMileageCharge ? (
-                          <div className={`flex items-center gap-2 justify-end ${isRentalCompleted ? 'opacity-40 pointer-events-none' : ''}`}>
+                          <div className="flex items-center gap-2 justify-end">
                             {invoiceBreakdown && invoiceBreakdown.securityDeposit > 0 && (
                               <button
                                 className="text-xs text-amber-500 hover:text-amber-400 hover:underline font-medium"
-                                disabled={isDeductingDeposit || isRentalCompleted}
+                                disabled={isDeductingDeposit}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setShowDeductFromDepositDialog(true);
@@ -2052,7 +2100,7 @@ const RentalDetail = () => {
                             )}
                             <button
                               className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
-                              disabled={isSendingPaymentLink || isRentalCompleted}
+                              disabled={isSendingPaymentLink}
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 setIsSendingPaymentLink(true);
@@ -2097,11 +2145,9 @@ const RentalDetail = () => {
                           if (allResolved && (hasPaidFines || hasPartiallyRefunded)) {
                             return (
                               <button
-                                className={`text-xs font-medium ${isRentalCompleted ? 'text-orange-500/40 cursor-not-allowed' : 'text-orange-500 hover:text-orange-400 hover:underline'}`}
-                                disabled={isRentalCompleted}
+                                className="text-xs font-medium text-orange-500 hover:text-orange-400 hover:underline"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (isRentalCompleted) return;
                                   setRefundCategory('Fine');
                                   setRefundTotalAmount(rentalFinesPaidAmount);
                                   setRefundPaidAmount(Math.max(0, rentalFinesPaidAmount - fineRefunded));
@@ -2116,11 +2162,9 @@ const RentalDetail = () => {
                           if (hasOpenFines) {
                             return (
                               <button
-                                className={`text-xs font-medium ${isRentalCompleted ? 'text-blue-500/40 cursor-not-allowed' : 'text-blue-500 hover:text-blue-400 hover:underline'}`}
-                                disabled={isRentalCompleted}
+                                className="text-xs font-medium text-blue-500 hover:text-blue-400 hover:underline"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (isRentalCompleted) return;
                                   setSelectedCategories(new Set(['Fine']));
                                   setShowTargetedPayment(true);
                                 }}
@@ -2134,15 +2178,13 @@ const RentalDetail = () => {
                           // Show Refund if category has been paid (dimmed for completed rentals)
                           const catPayment = paymentBreakdown?.[category];
                           const categoryHasBeenPaid = catPayment ? catPayment.paid > 0 : false;
-                          const wouldShowRefund = applied && !fullyRefunded && categoryHasBeenPaid && (canRefund || isRentalCompleted);
+                          const wouldShowRefund = applied && !fullyRefunded && categoryHasBeenPaid && canRefund;
                           return wouldShowRefund;
                         })() ? (
                           <button
-                            className={`text-xs font-medium ${isRentalCompleted ? 'text-orange-500/40 cursor-not-allowed' : 'text-orange-500 hover:text-orange-400 hover:underline'}`}
-                            disabled={isRentalCompleted}
+                            className="text-xs font-medium text-orange-500 hover:text-orange-400 hover:underline"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (isRentalCompleted) return;
                               setRefundCategory(category);
                               setRefundTotalAmount(amount);
                               const alreadyRefunded = refundBreakdown?.[category] ?? 0;
@@ -2155,16 +2197,14 @@ const RentalDetail = () => {
                         ) : applied && fullyRefunded ? (
                           <Check className="h-4 w-4 text-green-500 inline-block" />
                         ) : (() => {
-                          // Show Add Payment if category has remaining amount (dimmed for completed rentals)
-                          const wouldBeSelectable = isSelectable || (isRentalCompleted && applied && !fullyRefunded && (categoryRemainingAmounts[category] ?? 0) > 0);
+                          // Show Add Payment if category has remaining amount
+                          const wouldBeSelectable = isSelectable || (applied && !fullyRefunded && (categoryRemainingAmounts[category] ?? 0) > 0);
                           return wouldBeSelectable;
                         })() ? (
                           <button
-                            className={`text-xs font-medium ${isRentalCompleted ? 'text-blue-500/40 cursor-not-allowed' : 'text-blue-500 hover:text-blue-400 hover:underline'}`}
-                            disabled={isRentalCompleted}
+                            className="text-xs font-medium text-blue-500 hover:text-blue-400 hover:underline"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (isRentalCompleted) return;
                               setSelectedCategories(new Set([category]));
                               setShowTargetedPayment(true);
                             }}
@@ -2202,13 +2242,27 @@ const RentalDetail = () => {
                   {selectedCategories.size} item{selectedCategories.size > 1 ? 's' : ''} selected &mdash;{' '}
                   <span className="font-semibold text-foreground">{formatCurrencyUtil(selectedTotal, tenant?.currency_code || 'USD')}</span>
                 </p>
-                <Button
-                  size="sm"
-                  onClick={() => setShowTargetedPayment(true)}
-                >
-                  <DollarSign className="h-3.5 w-3.5 mr-1.5" />
-                  Add Payment
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const cats = Array.from(selectedCategories).join(', ');
+                      setReminderRowTitle(`${cats} - Rental #${rental.id?.slice(0, 8)}`);
+                      setShowRowReminder(true);
+                    }}
+                  >
+                    <Bell className="h-3.5 w-3.5 mr-1.5" />
+                    Set Reminder
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setShowTargetedPayment(true)}
+                  >
+                    <DollarSign className="h-3.5 w-3.5 mr-1.5" />
+                    Add Payment
+                  </Button>
+                </div>
               </div>
             )}
           </>
@@ -2219,8 +2273,6 @@ const RentalDetail = () => {
         // Not applicable for extensions: Security Deposit, Delivery Fee, Collection Fee, Extras
         const renderExtensionBreakdownTable = (group: typeof extensionGroups[0]) => {
           const isCancelledOrRejected = rental.status === 'Cancelled' || rental.approval_status === 'rejected';
-          const isExtRentalCompleted = rental.status === 'Closed' || rental.status === 'Completed';
-          const isInactive = isCancelledOrRejected || isExtRentalCompleted;
 
           // Parse dates from the rental charge reference
           const refCharge = group.rentalCharge;
@@ -2292,7 +2344,7 @@ const RentalDetail = () => {
           ];
 
           // Compute selectable categories for this extension
-          const extSelectableCategories = isInactive ? [] : extRows
+          const extSelectableCategories = extRows
             .filter(({ amount, remaining_amount }) => amount > 0 && remaining_amount > 0)
             .map(r => r.category);
 
@@ -2426,7 +2478,7 @@ const RentalDetail = () => {
                         <div className="flex items-center gap-2 justify-end">
                         {!applied ? (
                           <span className="text-muted-foreground/30">-</span>
-                        ) : hasUnpaid && !isInactive ? (
+                        ) : hasUnpaid ? (
                           <button
                             className="text-xs font-medium text-blue-500 hover:text-blue-400 hover:underline"
                             onClick={() => {
@@ -2437,12 +2489,10 @@ const RentalDetail = () => {
                           >
                             Add Payment
                           </button>
-                        ) : isPaid && !fullyRefunded && (canRefund || isExtRentalCompleted) ? (
+                        ) : isPaid && !fullyRefunded && canRefund ? (
                           <button
-                            className={`text-xs font-medium ${isExtRentalCompleted ? 'text-orange-500/40 cursor-not-allowed' : 'text-orange-500 hover:text-orange-400 hover:underline'}`}
-                            disabled={isExtRentalCompleted}
+                            className="text-xs font-medium text-orange-500 hover:text-orange-400 hover:underline"
                             onClick={() => {
-                              if (isExtRentalCompleted) return;
                               setRefundCategory(category);
                               setRefundTotalAmount(amount);
                               const alreadyRefunded = refundBreakdown?.[category] ?? 0;
@@ -2774,7 +2824,7 @@ const RentalDetail = () => {
                   unitLabel = 'month';
                 }
 
-                // Calculate number of units
+                // Calculate expected amount from vehicle rate
                 const startDate = new Date(rental.start_date);
                 const endDate = new Date(rental.end_date);
                 const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
@@ -2783,7 +2833,11 @@ const RentalDetail = () => {
                 else if (unitLabel === 'week') units = Math.ceil(totalDays / 7);
                 else units = Math.max(1, Math.round(totalDays / 30));
 
-                if (unitRate > 0) {
+                const expectedAmount = Math.round(unitRate * units * 100) / 100;
+                const isCustomPrice = unitRate > 0 && Math.abs(totalAmount - expectedAmount) > 0.01;
+
+                if (unitRate > 0 && !isCustomPrice) {
+                  // Standard rate — show formula
                   return (
                     <>
                       <p className="text-xs uppercase tracking-wider text-muted-foreground">{rental.rental_period_type || 'Monthly'} Rate</p>
@@ -2795,7 +2849,23 @@ const RentalDetail = () => {
                   );
                 }
 
-                // Fallback: no vehicle rate available, show total as before
+                if (isCustomPrice) {
+                  // Custom price — show amount with badge, no misleading formula
+                  return (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs uppercase tracking-wider text-muted-foreground">{rental.rental_period_type || 'Monthly'} Amount</p>
+                        <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 dark:text-amber-400">Custom</Badge>
+                      </div>
+                      <p className="text-lg font-semibold">{formatCurrencyUtil(totalAmount, currCode)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Vehicle rate: {formatCurrencyUtil(unitRate, currCode)}/{unitLabel} — overridden at creation
+                      </p>
+                    </>
+                  );
+                }
+
+                // Fallback: no vehicle rate available
                 return (
                   <>
                     <p className="text-xs uppercase tracking-wider text-muted-foreground">{rental.rental_period_type || 'Monthly'} Amount</p>
@@ -3586,6 +3656,23 @@ const RentalDetail = () => {
               <span className="text-xs text-muted-foreground">No documents uploaded</span>
             </div>
             <div className="flex items-center gap-2">
+              {canEdit('rentals') && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => notifyInsuranceReuploadMutation.mutate()}
+                  disabled={notifyInsuranceReuploadMutation.isPending}
+                  title="Send notification to customer requesting insurance upload"
+                >
+                  {notifyInsuranceReuploadMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  ) : (
+                    <Send className="h-3 w-3 mr-1" />
+                  )}
+                  Request Insurance
+                </Button>
+              )}
               {!bonzahPolicy && isBonzahConnected && (
                 <Button
                   size="sm"
@@ -3769,6 +3856,20 @@ const RentalDetail = () => {
                 </div>
               )}
 
+              {/* Sensitive Info Toggle */}
+              {(identityVerification.first_name || identityVerification.last_name || identityVerification.document_number) && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowSensitiveInfo(!showSensitiveInfo)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showSensitiveInfo ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    {showSensitiveInfo ? 'Hide sensitive info' : 'Reveal sensitive info'}
+                  </button>
+                </div>
+              )}
+
               {/* Extracted Person Info */}
               {(identityVerification.first_name || identityVerification.last_name || identityVerification.date_of_birth) && (
                 <div className="bg-muted/50 rounded-lg p-4">
@@ -3780,19 +3881,19 @@ const RentalDetail = () => {
                     {identityVerification.first_name && (
                       <div>
                         <span className="text-muted-foreground">First Name:</span>
-                        <p className="font-medium">{identityVerification.first_name}</p>
+                        <p className="font-medium">{showSensitiveInfo ? identityVerification.first_name : identityVerification.first_name.charAt(0) + '••••'}</p>
                       </div>
                     )}
                     {identityVerification.last_name && (
                       <div>
                         <span className="text-muted-foreground">Last Name:</span>
-                        <p className="font-medium">{identityVerification.last_name}</p>
+                        <p className="font-medium">{showSensitiveInfo ? identityVerification.last_name : identityVerification.last_name.charAt(0) + '••••'}</p>
                       </div>
                     )}
                     {identityVerification.date_of_birth && (
                       <div>
                         <span className="text-muted-foreground">Date of Birth:</span>
-                        <p className="font-medium">{new Date(identityVerification.date_of_birth).toLocaleDateString()}</p>
+                        <p className="font-medium">{showSensitiveInfo ? new Date(identityVerification.date_of_birth).toLocaleDateString() : '••/••/••••'}</p>
                       </div>
                     )}
                   </div>
@@ -3816,7 +3917,7 @@ const RentalDetail = () => {
                     {identityVerification.document_number && (
                       <div>
                         <span className="text-muted-foreground">Number:</span>
-                        <p className="font-medium font-mono">{identityVerification.document_number}</p>
+                        <p className="font-medium font-mono">{showSensitiveInfo ? identityVerification.document_number : '••••••' + identityVerification.document_number.slice(-4)}</p>
                       </div>
                     )}
                     {identityVerification.document_country && (
@@ -3828,7 +3929,7 @@ const RentalDetail = () => {
                     {identityVerification.document_expiry_date && (
                       <div>
                         <span className="text-muted-foreground">Expiry:</span>
-                        <p className="font-medium">{new Date(identityVerification.document_expiry_date).toLocaleDateString()}</p>
+                        <p className="font-medium">{showSensitiveInfo ? new Date(identityVerification.document_expiry_date).toLocaleDateString() : '••/••/••••'}</p>
                       </div>
                     )}
                   </div>
@@ -3847,18 +3948,14 @@ const RentalDetail = () => {
                       <div className="space-y-2">
                         <span className="text-sm text-muted-foreground">ID Front</span>
                         <div className="relative aspect-square rounded-lg overflow-hidden border">
-                          <img
+                          <BlurredImage
                             src={identityVerification.document_front_url}
                             alt="ID Front"
-                            className="w-full h-full object-cover"
+                            label="ID Front"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none';
-                              (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
                             }}
                           />
-                          <div className="hidden absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground text-sm">
-                            Image unavailable
-                          </div>
                         </div>
                         <Button
                           variant="outline"
@@ -3875,18 +3972,14 @@ const RentalDetail = () => {
                       <div className="space-y-2">
                         <span className="text-sm text-muted-foreground">ID Back</span>
                         <div className="relative aspect-square rounded-lg overflow-hidden border">
-                          <img
+                          <BlurredImage
                             src={identityVerification.document_back_url}
                             alt="ID Back"
-                            className="w-full h-full object-cover"
+                            label="ID Back"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none';
-                              (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
                             }}
                           />
-                          <div className="hidden absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground text-sm">
-                            Image unavailable
-                          </div>
                         </div>
                         <Button
                           variant="outline"
@@ -3903,18 +3996,14 @@ const RentalDetail = () => {
                       <div className="space-y-2">
                         <span className="text-sm text-muted-foreground">Selfie</span>
                         <div className="relative aspect-square rounded-lg overflow-hidden border">
-                          <img
+                          <BlurredImage
                             src={identityVerification.selfie_image_url}
                             alt="Selfie"
-                            className="w-full h-full object-cover"
+                            label="Selfie"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none';
-                              (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
                             }}
                           />
-                          <div className="hidden absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground text-sm">
-                            Image unavailable
-                          </div>
                         </div>
                         <Button
                           variant="outline"

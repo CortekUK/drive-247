@@ -11,6 +11,7 @@ import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { BlurredImage } from '@/components/ui/blurred-image';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -699,10 +700,10 @@ export default function VerificationPage() {
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Document Front</p>
                         <div className="aspect-[3/2] rounded-lg overflow-hidden border bg-muted">
-                          <img
+                          <BlurredImage
                             src={currentVerification.document_front_url}
                             alt="Document Front"
-                            className="w-full h-full object-cover"
+                            label="Document Front"
                           />
                         </div>
                       </div>
@@ -711,10 +712,10 @@ export default function VerificationPage() {
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Document Back</p>
                         <div className="aspect-[3/2] rounded-lg overflow-hidden border bg-muted">
-                          <img
+                          <BlurredImage
                             src={currentVerification.document_back_url}
                             alt="Document Back"
-                            className="w-full h-full object-cover"
+                            label="Document Back"
                           />
                         </div>
                       </div>
@@ -723,10 +724,10 @@ export default function VerificationPage() {
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Selfie</p>
                         <div className="aspect-[3/4] rounded-lg overflow-hidden border bg-muted">
-                          <img
+                          <BlurredImage
                             src={currentVerification.selfie_image_url}
                             alt="Selfie"
-                            className="w-full h-full object-cover"
+                            label="Selfie"
                           />
                         </div>
                       </div>

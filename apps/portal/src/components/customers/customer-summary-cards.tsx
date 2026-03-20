@@ -9,6 +9,7 @@ interface Customer {
   status: string;
   whatsapp_opt_in: boolean;
   is_blocked?: boolean;
+  is_gig_driver?: boolean;
 }
 
 interface CustomerSummaryCardsProps {
@@ -21,6 +22,7 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
   const totalCustomers = nonBlockedCustomers.length;
   const activeCustomers = nonBlockedCustomers.filter(c => c.status === 'Active').length;
   const rejectedCustomers = nonBlockedCustomers.filter(c => c.status === 'Rejected').length;
+  const gigDrivers = nonBlockedCustomers.filter(c => c.is_gig_driver).length;
 
   const cards = [
     {
@@ -37,11 +39,16 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
       title: "Rejected",
       value: rejectedCustomers,
       description: "Customers pending review"
+    },
+    {
+      title: "Gig Drivers",
+      value: gigDrivers,
+      description: "Customers registered as gig drivers"
     }
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {cards.map((card) => {
         const getCardClassName = () => {
           let baseClasses = "transition-all duration-200 cursor-pointer hover:shadow-md ";
@@ -49,8 +56,8 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
             return baseClasses + "bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40";
           } else if (card.title === "Rejected") {
             return baseClasses + "bg-gradient-to-br from-red-500/10 to-red-500/5 border-red-500/20 hover:border-red-500/40";
-          } else if (card.title === "Companies") {
-            return baseClasses + "bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20 hover:border-blue-500/40";
+          } else if (card.title === "Gig Drivers") {
+            return baseClasses + "bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20 hover:border-purple-500/40";
           } else {
             return baseClasses + "bg-card hover:bg-accent/50 border";
           }

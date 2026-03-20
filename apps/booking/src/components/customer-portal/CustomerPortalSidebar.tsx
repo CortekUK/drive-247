@@ -157,16 +157,19 @@ export function CustomerPortalSidebar() {
                 const showVerificationWarning = isVerification && onboarding && !onboarding.isVerified;
                 const showInsuranceWarning = isInsurance && onboarding && !onboarding.hasInsurance;
 
+                const hasBadge = showMessageBadge || showVerificationWarning || showInsuranceWarning;
+
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
                       asChild
                       isActive={isActive}
                       tooltip={item.title}
+                      className={hasBadge && state !== 'collapsed' ? 'pr-8' : ''}
                     >
                       <Link href={item.href}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
                     {/* Message unread count badge */}
@@ -179,7 +182,7 @@ export function CustomerPortalSidebar() {
                     {showVerificationWarning && (
                       <span
                         className={`absolute ${state === 'collapsed' ? '-top-1 -right-1' : 'top-1.5 right-2'} text-amber-500`}
-                        title="ID verification required"
+                        title="Verification required"
                       >
                         <AlertCircle className="h-4 w-4" />
                       </span>

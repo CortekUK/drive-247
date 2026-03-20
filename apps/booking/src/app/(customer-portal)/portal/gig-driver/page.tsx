@@ -23,6 +23,7 @@ import { Briefcase, Plus, Trash2, ExternalLink, ImageIcon, Loader2 } from 'lucid
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { BlurredImage } from '@/components/ui/blurred-image';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
@@ -160,27 +161,29 @@ export default function GigDriverPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {images.map((image) => (
             <Card key={image.id} className="overflow-hidden group">
-              <div className="aspect-square relative bg-muted">
-                <img
+              <div className="aspect-square relative bg-muted overflow-hidden">
+                <BlurredImage
                   src={getPublicUrl(image.image_url)}
                   alt={image.file_name}
-                  className="w-full h-full object-cover"
+                  label="View"
                 />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={() => window.open(getPublicUrl(image.image_url), '_blank')}
+                    className="h-7 w-7 p-0"
+                    onClick={(e) => { e.stopPropagation(); window.open(getPublicUrl(image.image_url), '_blank'); }}
                   >
-                    <ExternalLink className="h-4 w-4" />
+                    <ExternalLink className="h-3.5 w-3.5" />
                   </Button>
                   {images.length > 1 && (
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => setDeleteId(image.id)}
+                      className="h-7 w-7 p-0"
+                      onClick={(e) => { e.stopPropagation(); setDeleteId(image.id); }}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   )}
                 </div>
