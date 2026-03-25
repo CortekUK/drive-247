@@ -38,6 +38,7 @@ interface ExtensionRequestDialogProps {
     start_date: string;
     end_date: string;
     previous_end_date: string | null;
+    original_end_date?: string | null;
     has_installment_plan?: boolean;
     bonzah_policy_id?: string | null;
     rental_period_type?: string;
@@ -204,13 +205,15 @@ export function ExtensionRequestDialog({
 
     setIsApproving(true);
     try {
-      // Swap dates: end_date ↔ previous_end_date
+      // Swap dates: end_date ↔ previous_end_date (set original_end_date only on first extension)
+      const isFirstExtension = !rental.original_end_date && (existingExtensionCount || 0) === 0;
       const { error: updateError } = await supabase
         .from('rentals')
         .update({
           end_date: rental.previous_end_date,
           previous_end_date: rental.end_date,
           is_extended: false,
+          ...(isFirstExtension ? { original_end_date: rental.end_date } : {}),
           updated_at: new Date().toISOString(),
         })
         .eq('id', rental.id)

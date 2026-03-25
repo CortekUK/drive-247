@@ -95,6 +95,7 @@ interface Rental {
   // Extension fields
   is_extended?: boolean;
   previous_end_date?: string | null;
+  original_end_date?: string | null;
   // Renewal fields
   renewed_from_rental_id?: string | null;
   // Installment & Insurance fields
@@ -3097,10 +3098,10 @@ const RentalDetail = () => {
               <div>
                 <p className="text-sm text-muted-foreground">End Date</p>
                 <p className="text-base font-medium">{new Date(rental.end_date).toLocaleDateString()}</p>
-                {/* Show original date if extension was approved */}
-                {!rental.is_extended && rental.previous_end_date && (
+                {/* Show original end date if rental has been extended */}
+                {(rental.original_end_date || (!rental.is_extended && rental.previous_end_date)) && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Originally: {new Date(rental.previous_end_date).toLocaleDateString()}
+                    Originally: {new Date(rental.original_end_date || rental.previous_end_date!).toLocaleDateString()}
                   </p>
                 )}
               </div>
@@ -3109,6 +3110,27 @@ const RentalDetail = () => {
                 <Badge variant="outline" className="mt-1">{rental.rental_period_type || 'Monthly'}</Badge>
               </div>
             </div>
+
+            {/* Extension History */}
+            {extensionGroups.length > 0 && (
+              <div className="mt-4 pt-3 border-t space-y-1.5">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Extension History</p>
+                {extensionGroups.map((group) => {
+                  const refCharge = group.rentalCharge;
+                  const refMatch = refCharge?.reference?.match(/\(([^)]+)\)/);
+                  const dateRange = refMatch?.[1] || '';
+                  return (
+                    <div key={group.extensionNumber} className="flex items-center gap-2 text-sm">
+                      <CalendarPlus className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                      <span className="text-muted-foreground">Extension #{group.extensionNumber}:</span>
+                      <span className="font-medium">{dateRange || `${group.charges.length} charges`}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="text-sm">{formatCurrencyUtil(group.totalAmount + (group.insurancePolicy?.premium_amount || 0), tenant?.currency_code || 'USD')}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Pending Extension Alert */}
             {rental.is_extended && rental.previous_end_date && (

@@ -40,6 +40,7 @@ interface AdminExtendRentalDialogProps {
     id: string;
     start_date: string;
     end_date: string;
+    original_end_date?: string | null;
     has_installment_plan?: boolean;
     bonzah_policy_id?: string | null;
     rental_period_type?: string;
@@ -216,13 +217,15 @@ export function AdminExtendRentalDialog({
 
     setIsSubmitting(true);
     try {
-      // 1. Update rental dates
+      // 1. Update rental dates (set original_end_date only on first extension)
+      const isFirstExtension = !rental.original_end_date && (existingExtensionCount || 0) === 0;
       const { error: updateError } = await supabase
         .from('rentals')
         .update({
           end_date: newEndDate,
-          previous_end_date: rental.end_date,
+          previous_end_date: snapshotEndDate,
           is_extended: false,
+          ...(isFirstExtension ? { original_end_date: snapshotEndDate } : {}),
           updated_at: new Date().toISOString(),
         })
         .eq('id', rental.id)
