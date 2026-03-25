@@ -357,7 +357,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                               customerEmail: rental.customers?.email,
                               source: 'booking',
                               targetCategories: ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance'],
-                              successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rental.id}`,
+                              successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rental.id}&type=invoice`,
                               cancelUrl: `${window.location.origin}/portal/bookings`,
                             },
                           });

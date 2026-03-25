@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
       mode: 'payment',
       customer_email: customerEmail,
       client_reference_id: rentalId,
-      success_url: `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rentalId}`,
+      success_url: `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rentalId}&type=invoice`,
       cancel_url: `${origin}/portal/bookings?extension=cancelled`,
       metadata: {
         type: 'extension',
