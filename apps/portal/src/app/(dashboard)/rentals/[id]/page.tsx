@@ -1210,43 +1210,55 @@ const RentalDetail = () => {
     },
   });
 
-  // Outstanding includes both ledger charges and invoice-only charges (e.g. Bonzah Insurance)
-  // For installment plans, the upfront payment covers fees (deposit, service fee, tax) which are
-  // included in the Rental charge from the DB trigger — don't double-count them from the invoice.
-  // Must be above early returns to maintain hook order
+  // Group extension charges by extension number for display
+  const extensionGroups = (() => {
+    const allExtCharges = (rentalCharges || []).filter(c =>
+      c.category === 'Extension' || c.category === 'Extension Rental' || c.category === 'Extension Tax' || c.category === 'Extension Service Fee'
+    );
+    const groups: Record<number, typeof allExtCharges> = {};
+    let nextLegacyNum = 1;
+    allExtCharges.forEach(charge => {
+      const numMatch = charge.reference?.match(/Extension #(\d+)/);
+      const extNum = numMatch ? parseInt(numMatch[1], 10) : nextLegacyNum++;
+      if (!groups[extNum]) groups[extNum] = [];
+      groups[extNum].push(charge);
+    });
+    const extInsurancePolicies = (insurancePolicies || [])
+      .filter(p => p.policy_type === 'extension')
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    return Object.entries(groups)
+      .sort(([a], [b]) => parseInt(a) - parseInt(b))
+      .map(([num, charges], idx) => ({
+        extensionNumber: parseInt(num),
+        charges,
+        totalAmount: charges.reduce((sum, c) => sum + c.amount, 0),
+        totalRemaining: charges.reduce((sum, c) => sum + c.remaining_amount, 0),
+        entryDate: charges[0]?.entry_date || '',
+        rentalCharge: charges.find(c => c.category === 'Extension Rental' || c.category === 'Extension'),
+        insurancePolicy: extInsurancePolicies[idx] || null,
+      }));
+  })();
+
+  // Outstanding balance: ledger charges already include extension charges via remaining_amount
+  // Only add extension insurance that has NO ledger entry (not tracked in ledger)
   const outstandingBalance = useMemo(() => {
     const ledgerOutstanding = rentalTotals?.outstanding || 0;
-    let invoiceOnlyOutstanding = 0;
-
-    // Categories covered by the installment upfront (already included in the Rental charge)
-    const upfrontCoveredCategories = new Set(['Security Deposit', 'Service Fee', 'Tax', 'Delivery Fee']);
-    const installmentUpfrontPaid = hasInstallmentPlan && installmentPlan?.upfront_paid;
-
-    // If total payments cover the full invoice amount, no invoice-only categories are outstanding
-    const totalPaid = rentalTotals?.totalPayments || 0;
-    const invoiceTotal = invoiceBreakdown?.totalAmount || 0;
-    const fullyCoveredByPayments = totalPaid >= invoiceTotal && totalPaid > 0;
-
-    if (!fullyCoveredByPayments) {
-      for (const [cat, remaining] of Object.entries(categoryRemainingAmounts)) {
-        // Skip Fine — handled separately below
-        if (cat === 'Fine') continue;
-        const hasLedgerCharge = paymentBreakdown?.[cat] !== undefined;
-        if (!hasLedgerCharge && remaining > 0) {
-          // Skip fees that are covered by the installment upfront payment
-          if (installmentUpfrontPaid && upfrontCoveredCategories.has(cat)) {
-            continue;
-          }
-          invoiceOnlyOutstanding += remaining;
+    const finesInLedger = paymentBreakdown?.['Fine'] !== undefined;
+    const finesOutstanding = finesInLedger ? 0 : rentalFinesOpenAmount;
+    let extInsuranceOutstanding = 0;
+    for (const group of extensionGroups) {
+      if (group.insurancePolicy) {
+        const extInsLedger = (rentalCharges || []).find(c =>
+          (c.category === 'Insurance' && c.reference?.includes(`Extension #${group.extensionNumber}`)) ||
+          c.category === 'Extension Insurance'
+        );
+        if (!extInsLedger) {
+          extInsuranceOutstanding += group.insurancePolicy.premium_amount || 0;
         }
       }
     }
-    // Only add fines to outstanding if they're NOT already tracked in the ledger
-    // (ledgerOutstanding already includes Fine charges that have ledger entries with rental_id)
-    const finesInLedger = paymentBreakdown?.['Fine'] !== undefined;
-    const finesOutstanding = finesInLedger ? 0 : rentalFinesOpenAmount;
-    return ledgerOutstanding + invoiceOnlyOutstanding + finesOutstanding;
-  }, [rentalTotals, categoryRemainingAmounts, paymentBreakdown, hasInstallmentPlan, installmentPlan, rentalFinesOpenAmount, invoiceBreakdown]);
+    return ledgerOutstanding + finesOutstanding + extInsuranceOutstanding;
+  }, [rentalTotals, paymentBreakdown, rentalFinesOpenAmount, extensionGroups, rentalCharges]);
 
   if (isLoading) {
     return <div>Loading rental details...</div>;
@@ -1267,45 +1279,6 @@ const RentalDetail = () => {
   // Use the new totals from allocation-based calculations (include fines)
   const totalCharges = (rentalTotals?.totalCharges || 0) + rentalFinesTotal;
   const totalPayments = (rentalTotals?.totalPayments || 0) + rentalFinesPaidAmount;
-
-  // Group extension charges by extension number for display
-  // Supports both legacy 'Extension' category and new multi-category ('Extension Rental', 'Extension Tax', 'Extension Service Fee')
-  // Also matches extension insurance policies by order
-  const extensionGroups = (() => {
-    const allExtCharges = (rentalCharges || []).filter(c =>
-      c.category === 'Extension' || c.category === 'Extension Rental' || c.category === 'Extension Tax' || c.category === 'Extension Service Fee'
-    );
-    // Group by extension number extracted from reference (e.g. "Extension #1: ...")
-    // Legacy entries without a number get assigned based on order
-    const groups: Record<number, typeof allExtCharges> = {};
-    let nextLegacyNum = 1;
-    allExtCharges.forEach(charge => {
-      const numMatch = charge.reference?.match(/Extension #(\d+)/);
-      const extNum = numMatch ? parseInt(numMatch[1], 10) : nextLegacyNum++;
-      if (!groups[extNum]) groups[extNum] = [];
-      groups[extNum].push(charge);
-    });
-
-    // Match extension insurance policies by order (1st extension → 1st extension policy, etc.)
-    const extInsurancePolicies = (insurancePolicies || [])
-      .filter(p => p.policy_type === 'extension')
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
-    // Return sorted by extension number
-    return Object.entries(groups)
-      .sort(([a], [b]) => parseInt(a) - parseInt(b))
-      .map(([num, charges], idx) => ({
-        extensionNumber: parseInt(num),
-        charges,
-        totalAmount: charges.reduce((sum, c) => sum + c.amount, 0),
-        totalRemaining: charges.reduce((sum, c) => sum + c.remaining_amount, 0),
-        entryDate: charges[0]?.entry_date || '',
-        // Get the rental fee charge for date reference info
-        rentalCharge: charges.find(c => c.category === 'Extension Rental' || c.category === 'Extension'),
-        // Matched extension insurance policy (by order)
-        insurancePolicy: extInsurancePolicies[idx] || null,
-      }));
-  })();
 
   // Compute rental status based on approval_status, payment_status, AND key handover
   const computeStatus = (rental: Rental): string => {
@@ -1860,8 +1833,13 @@ const RentalDetail = () => {
 
       {/* Rental Financial Summary */}
       {(() => {
+        // Exclude Security Deposit deductions applied to Excess Mileage — not a customer refund
+        const hasExcessMileageCharge = (rentalCharges || []).some(c => c.category === 'Excess Mileage');
         const totalRefunded = refundBreakdown
-          ? Object.values(refundBreakdown).reduce((sum, val) => sum + val, 0)
+          ? Object.entries(refundBreakdown).reduce((sum, [cat, val]) => {
+              if (cat === 'Security Deposit' && hasExcessMileageCharge) return sum; // deducted, not refunded
+              return sum + val;
+            }, 0)
           : 0;
         const netReceived = totalPayments - totalRefunded;
         const cur = tenant?.currency_code || 'GBP';
@@ -2008,7 +1986,7 @@ const RentalDetail = () => {
 
       {/* Payment Breakdown */}
       {invoiceBreakdown && (() => {
-        const canRefund = totalPayments > 0 && rental.status !== 'Cancelled' && rental.status !== 'Closed';
+        const canRefund = totalPayments > 0 && rental.status !== 'Cancelled';
         // Determine insurance amount: prefer ledger charge, fall back to invoice
         const insuranceCharge = (rentalCharges || []).find(c => c.category === 'Insurance');
         const insuranceAmount = insuranceCharge?.amount ?? invoiceBreakdown.insurancePremium ?? 0;
@@ -2020,12 +1998,24 @@ const RentalDetail = () => {
         const deliveryFeeAmount = rental.delivery_fee || invoiceBreakdown.deliveryFee || 0;
         const collectionFeeAmount = collectionLedgerCharge ? Number(collectionLedgerCharge.amount) : (rental.collection_fee ?? 0);
 
-        const rows: { label: string; category: string; amount: number; detail: string; icon: any; color: string; bg: string; nonRefundable?: boolean; onClick?: () => void }[] = [
+        const rows: { label: string; category: string; amount: number; detail: string; icon: any; color: string; bg: string; nonRefundable?: boolean; onClick?: () => void; isDepositDeducted?: boolean }[] = [
           { label: 'Rental', category: 'Rental', amount: invoiceBreakdown.rentalFee, detail: rental.rental_period_type || 'Monthly', icon: Car, color: 'text-green-500', bg: 'bg-green-500/10' },
           { label: 'Tax', category: 'Tax', amount: invoiceBreakdown.taxAmount, detail: invoiceBreakdown.taxAmount > 0 && invoiceBreakdown.rentalFee > 0 ? `${((invoiceBreakdown.taxAmount / invoiceBreakdown.rentalFee) * 100).toFixed(1)}% rate` : 'Tax on rental', icon: Percent, color: 'text-blue-500', bg: 'bg-blue-500/10' },
           { label: 'Bonzah Insurance', category: 'Insurance', amount: insuranceAmount, detail: bonzahPolicy ? 'Bonzah Insurance' : 'Insurance coverage', icon: ShieldCheck, color: 'text-teal-500', bg: 'bg-teal-500/10' },
           { label: 'Service Fee', category: 'Service Fee', amount: invoiceBreakdown.serviceFee, detail: 'Platform fee', icon: Receipt, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-          { label: 'Security Deposit', category: 'Security Deposit', amount: invoiceBreakdown.securityDeposit, detail: invoiceBreakdown.securityDeposit > 0 ? (rental.status === 'Closed' ? 'Eligible for refund' : 'Held') : '', icon: Shield, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+          { label: 'Security Deposit', category: 'Security Deposit', amount: invoiceBreakdown.securityDeposit, detail: (() => {
+            if (invoiceBreakdown.securityDeposit <= 0) return '';
+            const depositRefunded = refundBreakdown?.['Security Deposit'] ?? 0;
+            const hasExcessMileage = (rentalCharges || []).some(c => c.category === 'Excess Mileage');
+            if (depositRefunded > 0 && hasExcessMileage) return 'Applied to Excess Mileage';
+            if (depositRefunded > 0) return 'Refunded to customer';
+            if (rental.status === 'Closed') return 'Eligible for refund';
+            return 'Held';
+          })(), icon: Shield, color: 'text-amber-500', bg: 'bg-amber-500/10', isDepositDeducted: (() => {
+            const depositRefunded = refundBreakdown?.['Security Deposit'] ?? 0;
+            const hasExcessMileage = (rentalCharges || []).some(c => c.category === 'Excess Mileage');
+            return depositRefunded > 0 && hasExcessMileage;
+          })() },
           { label: 'Delivery Fee', category: 'Delivery Fee', amount: deliveryFeeAmount, detail: 'Vehicle delivery', icon: Truck, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
           { label: 'Collection Fee', category: 'Collection Fee', amount: collectionFeeAmount, detail: 'Vehicle collection', icon: MapPin, color: 'text-rose-500', bg: 'bg-rose-500/10' },
           { label: 'Extras', category: 'Extras', amount: extrasTotal, detail: (extrasDetails?.length || 0) > 0 ? `${extrasDetails!.length} item${extrasDetails!.length > 1 ? 's' : ''}` : 'Add-ons', icon: Package, color: 'text-indigo-500', bg: 'bg-indigo-500/10', onClick: extrasTotal > 0 ? () => setShowExtrasDialog(true) : undefined },
@@ -2132,16 +2122,16 @@ const RentalDetail = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  {selectableCategories.length > 0 && (
-                    <TableHead className="pl-6 w-10">
+                  <TableHead className="pl-6 w-10">
+                    {selectableCategories.length > 0 ? (
                       <Checkbox
                         checked={allUnpaidSelected ? true : someUnpaidSelected ? "indeterminate" : false}
                         onCheckedChange={toggleAllUnpaid}
                         aria-label="Select all unpaid"
                       />
-                    </TableHead>
-                  )}
-                  <TableHead className={selectableCategories.length > 0 ? "" : "pl-6"}>Category</TableHead>
+                    ) : null}
+                  </TableHead>
+                  <TableHead>Category</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="text-right">Refunded</TableHead>
@@ -2149,10 +2139,10 @@ const RentalDetail = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map(({ label, category, amount, detail, icon: Icon, color, bg, nonRefundable, onClick }) => {
-                  const refunded = refundBreakdown?.[category] ?? 0;
+                {rows.map(({ label, category, amount, detail, icon: Icon, color, bg, nonRefundable, onClick, isDepositDeducted }) => {
+                  const refunded = isDepositDeducted ? 0 : (refundBreakdown?.[category] ?? 0);
                   const applied = amount > 0;
-                  const fullyRefunded = applied && refunded >= amount;
+                  const fullyRefunded = !isDepositDeducted && applied && refunded >= amount;
                   const net = amount - refunded;
                   // Check if insurance charge is unpaid
                   const isInsuranceUnpaid = category === 'Insurance' && insuranceCharge && insuranceCharge.remaining_amount > 0;
@@ -2162,20 +2152,16 @@ const RentalDetail = () => {
                   const isSelected = selectedCategories.has(category);
 
                   return (
-                    <TableRow key={category} className={`${!applied ? 'opacity-40' : ''} ${onClick ? 'cursor-pointer hover:bg-muted/30' : ''}`} onClick={onClick}>
-                      {selectableCategories.length > 0 && (
-                        <TableCell className="pl-6 w-10">
-                          {isSelectable ? (
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => toggleCategory(category)}
-                              onClick={(e) => e.stopPropagation()}
-                              aria-label={`Select ${label}`}
-                            />
-                          ) : null}
-                        </TableCell>
-                      )}
-                      <TableCell className={selectableCategories.length > 0 ? "" : "pl-6"}>
+                    <TableRow key={category} className={`${!applied || isDepositDeducted ? 'opacity-40' : ''} ${onClick ? 'cursor-pointer hover:bg-muted/30' : ''}`} onClick={onClick}>
+                      <TableCell className="pl-6 w-10">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleCategory(category)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Select ${label}`}
+                        />
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-3">
                           {category === 'Insurance' ? (
                             <div className="h-7 w-7 flex items-center justify-center">
@@ -2198,6 +2184,9 @@ const RentalDetail = () => {
                       </TableCell>
                       <TableCell>
                         {(() => {
+                          if (isDepositDeducted) {
+                            return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Deducted</Badge>;
+                          }
                           if (!applied) {
                             return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">Not Applied</Badge>;
                           }
@@ -2259,10 +2248,6 @@ const RentalDetail = () => {
                               return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
                             }
                           }
-                          // No ledger entry for this category — check overall payment status
-                          if (totalPayments >= (invoiceBreakdown?.totalAmount || 0) && totalPayments > 0) {
-                            return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
-                          }
                           // For installment plans, fees are paid via the upfront payment (included in the Rental charge)
                           if (hasInstallmentPlan && installmentPlan?.upfront_paid && ['Security Deposit', 'Service Fee', 'Tax', 'Delivery Fee'].includes(category) && amount > 0) {
                             return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
@@ -2290,38 +2275,33 @@ const RentalDetail = () => {
                         <div className="flex items-center gap-2 justify-end">
                         {isExcessMileageUnpaid && excessMileageCharge ? (
                           <div className="flex items-center gap-2 justify-end">
-                            {invoiceBreakdown && invoiceBreakdown.securityDeposit > 0 && (
-                              <button
-                                className="text-xs text-amber-500 hover:text-amber-400 hover:underline font-medium"
-                                disabled={isDeductingDeposit}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowDeductFromDepositDialog(true);
-                                }}
-                              >
-                                {isDeductingDeposit ? 'Deducting...' : 'Deduct Deposit'}
-                              </button>
-                            )}
+                            {(() => {
+                              // Only show Deduct Deposit if deposit charge exists and has remaining > 0
+                              const depositCharge = (rentalCharges || []).find(c => c.category === 'Security Deposit');
+                              const depositAvailable = depositCharge && Number(depositCharge.remaining_amount) > 0;
+                              const depositFromInvoice = !depositCharge && invoiceBreakdown && invoiceBreakdown.securityDeposit > 0;
+                              return (depositAvailable || depositFromInvoice) ? (
+                                <button
+                                  className="text-xs text-amber-500 hover:text-amber-400 hover:underline font-medium"
+                                  disabled={isDeductingDeposit}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowDeductFromDepositDialog(true);
+                                  }}
+                                >
+                                  {isDeductingDeposit ? 'Deducting...' : 'Deduct Deposit'}
+                                </button>
+                              ) : null;
+                            })()}
                             <button
-                              className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
-                              disabled={isSendingPaymentLink}
-                              onClick={async (e) => {
+                              className="text-xs font-medium text-blue-500 hover:text-blue-400 hover:underline"
+                              onClick={(e) => {
                                 e.stopPropagation();
-                                setIsSendingPaymentLink(true);
-                                try {
-                                  const { data: result, error } = await supabase.functions.invoke('send-excess-mileage-payment-link', {
-                                    body: { rentalId: rental.id, amount: excessMileageCharge.remaining_amount, tenantId: tenant?.id },
-                                  });
-                                  if (error) throw error;
-                                  toast({ title: 'Payment Link Sent', description: 'The customer has been emailed a payment link.' });
-                                } catch (err: any) {
-                                  toast({ title: 'Failed to send payment link', description: err.message, variant: 'destructive' });
-                                } finally {
-                                  setIsSendingPaymentLink(false);
-                                }
+                                setSelectedCategories(new Set(['Excess Mileage']));
+                                setShowTargetedPayment(true);
                               }}
                             >
-                              {isSendingPaymentLink ? 'Sending...' : 'Send Pay Link'}
+                              Add Payment
                             </button>
                           </div>
                         ) : nonRefundable && applied ? (
@@ -2381,8 +2361,10 @@ const RentalDetail = () => {
                         })() : (() => {
                           // Show Refund if category has been paid (via ledger or total payment coverage)
                           const catPayment = paymentBreakdown?.[category];
-                          const categoryHasBeenPaid = catPayment ? catPayment.paid > 0 : (totalPayments >= (invoiceBreakdown?.totalAmount || 0) && totalPayments > 0);
-                          const wouldShowRefund = applied && !fullyRefunded && categoryHasBeenPaid && canRefund;
+                          const categoryHasBeenPaid = catPayment ? catPayment.paid > 0 : false;
+                          // Security Deposit: disable refund if deposit was already used (deducted for excess mileage — remaining=0 and refunded)
+                          const isDepositUsed = category === 'Security Deposit' && (refundBreakdown?.['Security Deposit'] ?? 0) > 0;
+                          const wouldShowRefund = applied && !fullyRefunded && categoryHasBeenPaid && canRefund && !isDepositUsed;
                           return wouldShowRefund;
                         })() ? (
                           <button
@@ -2403,8 +2385,7 @@ const RentalDetail = () => {
                         ) : (() => {
                           // Show Add Payment if category has remaining amount AND is NOT covered by total payments
                           const catRemaining = categoryRemainingAmounts[category] ?? 0;
-                          const coveredByTotalPayment = totalPayments >= (invoiceBreakdown?.totalAmount || 0) && totalPayments > 0;
-                          const wouldBeSelectable = (isSelectable || (applied && !fullyRefunded && catRemaining > 0)) && !coveredByTotalPayment && !isCancelledOrRejected;
+                          const wouldBeSelectable = (isSelectable || (applied && !fullyRefunded && catRemaining > 0)) && !isCancelledOrRejected;
                           return wouldBeSelectable;
                         })() ? (
                           <button
@@ -2500,7 +2481,8 @@ const RentalDetail = () => {
           const insuranceActive = extInsurance?.status === 'active' || extInsurance?.status === 'policy_issued';
           // Insurance ledger entry (for payment tracking)
           const insuranceLedgerCharge = (rentalCharges || []).find(c =>
-            c.category === 'Insurance' && c.reference?.includes(`Extension #${group.extensionNumber}`)
+            (c.category === 'Insurance' && c.reference?.includes(`Extension #${group.extensionNumber}`)) ||
+            c.category === 'Extension Insurance'
           );
 
           // Build rows — 1:1 with original table's applicable categories
@@ -2529,7 +2511,7 @@ const RentalDetail = () => {
               label: extInsurance ? 'Bonzah Insurance' : 'Insurance',
               category: 'Extension Insurance',
               amount: insuranceAmount,
-              remaining_amount: insuranceLedgerCharge?.remaining_amount ?? (insuranceActive ? 0 : insuranceAmount),
+              remaining_amount: insuranceLedgerCharge ? Number(insuranceLedgerCharge.remaining_amount) : insuranceAmount,
               detail: extInsurance
                 ? `${extInsurance.coverage_types ? Object.entries(extInsurance.coverage_types).filter(([, v]) => v).map(([k]) => k.toUpperCase()).join(', ') : 'Bonzah Insurance'}`
                 : "Customer's own",
@@ -2557,12 +2539,12 @@ const RentalDetail = () => {
           const extAllSelected = extSelectableCategories.length > 0 && extSelectableCategories.every(c => selectedExtCategories.has(c));
           const extSomeSelected = extSelectableCategories.some(c => selectedExtCategories.has(c));
 
-          const extSelectedTotal = extSelectableCategories
+          const extSelectedTotal = Math.round(extSelectableCategories
             .filter(c => selectedExtCategories.has(c))
             .reduce((sum, c) => {
               const row = extRows.find(r => r.category === c);
               return sum + (row?.remaining_amount ?? 0);
-            }, 0);
+            }, 0) * 100) / 100;
 
           const toggleExtCategory = (category: string) => {
             setSelectedExtCategories(prev => {
@@ -2608,9 +2590,7 @@ const RentalDetail = () => {
                   const refunded = refundBreakdown?.[category] ?? 0;
                   const fullyRefunded = applied && refunded >= amount;
                   const isInsuranceRow = category === 'Extension Insurance';
-                  const isPaid = isInsuranceRow
-                    ? (applied && insuranceActive)
-                    : (applied && remaining_amount === 0);
+                  const isPaid = applied && remaining_amount === 0;
                   const isPartial = !isInsuranceRow && applied && remaining_amount > 0 && remaining_amount < amount;
                   const hasUnpaid = applied && !isPaid && !fullyRefunded;
                   const isExtSelectable = extSelectableCategories.includes(category);
@@ -4750,7 +4730,7 @@ const RentalDetail = () => {
                 try {
                   // For manual mode with pending payment, capture first
                   if (rental?.payment_mode === 'manual' && rental?.payment_status === 'pending' && payment?.capture_status === 'requires_capture') {
-                    const { error: captureError } = await supabase.functions.invoke('capture-payment', {
+                    const { error: captureError } = await supabase.functions.invoke('capture-booking-payment', {
                       body: {
                         paymentId: payment.id,
                         rentalId: id,

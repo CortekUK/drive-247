@@ -251,6 +251,8 @@ export const AddPaymentDialog = ({
       queryClient.invalidateQueries({ queryKey: ["ledger-entries"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["payment-applications"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["outstanding-balance"], ...invalidateOptions }),
+      queryClient.invalidateQueries({ queryKey: ["excess-mileage-charge"], ...invalidateOptions }),
+      queryClient.invalidateQueries({ queryKey: ["rental-charges-payments"], ...invalidateOptions }),
     ]);
 
     if (rentalId) {
@@ -259,6 +261,7 @@ export const AddPaymentDialog = ({
         queryClient.invalidateQueries({ queryKey: ["rental-charges", rentalId], ...invalidateOptions }),
         queryClient.invalidateQueries({ queryKey: ["rental-payments", rentalId], ...invalidateOptions }),
         queryClient.invalidateQueries({ queryKey: ["rental", rentalId], ...invalidateOptions }),
+        queryClient.invalidateQueries({ queryKey: ["excess-mileage-charge", rentalId], ...invalidateOptions }),
       ]);
     }
 
@@ -274,18 +277,22 @@ export const AddPaymentDialog = ({
       const finalCustomerId = data.customer_id || customer_id;
       const finalVehicleId = data.vehicle_id || vehicle_id;
 
-      if (!breakdownItems && outstandingBalance !== undefined && data.amount > outstandingBalance && outstandingBalance > 0) {
-        const confirmOverpay = window.confirm(
-          `The payment amount (${formatCurrency(data.amount, tenant?.currency_code || 'USD')}) exceeds the outstanding balance (${formatCurrency(outstandingBalance, tenant?.currency_code || 'USD')}). ` +
-          `The excess ${formatCurrency(data.amount - outstandingBalance, tenant?.currency_code || 'USD')} will remain as credit. Continue?`
-        );
-        if (!confirmOverpay) { setLoading(false); return; }
-      }
+      // Skip overpayment/zero-balance checks when defaultAmount is provided (extension payments, targeted payments)
+      // The caller already calculated the correct amount
+      if (!defaultAmount) {
+        if (!breakdownItems && outstandingBalance !== undefined && data.amount > outstandingBalance && outstandingBalance > 0) {
+          const confirmOverpay = window.confirm(
+            `The payment amount (${formatCurrency(data.amount, tenant?.currency_code || 'USD')}) exceeds the outstanding balance (${formatCurrency(outstandingBalance, tenant?.currency_code || 'USD')}). ` +
+            `The excess ${formatCurrency(data.amount - outstandingBalance, tenant?.currency_code || 'USD')} will remain as credit. Continue?`
+          );
+          if (!confirmOverpay) { setLoading(false); return; }
+        }
 
-      if (!breakdownItems && outstandingBalance !== undefined && outstandingBalance === 0) {
-        toast({ title: "No Outstanding Balance", description: "This customer has no outstanding balance to pay.", variant: "destructive" });
-        setLoading(false);
-        return;
+        if (!breakdownItems && outstandingBalance !== undefined && outstandingBalance === 0) {
+          toast({ title: "No Outstanding Balance", description: "This customer has no outstanding balance to pay.", variant: "destructive" });
+          setLoading(false);
+          return;
+        }
       }
 
       const { data: payment, error: paymentError } = await supabase
@@ -559,12 +566,12 @@ export const AddPaymentDialog = ({
                             />
                           </div>
                         </FormControl>
-                        {outstandingBalance !== undefined && outstandingBalance > 0 && field.value !== outstandingBalance && (
+                        {!defaultAmount && outstandingBalance !== undefined && outstandingBalance > 0 && field.value !== outstandingBalance && (
                           <button type="button" className="text-xs text-primary hover:underline" onClick={() => field.onChange(outstandingBalance)}>
                             Use full outstanding: {formatCurrency(outstandingBalance, tenant?.currency_code || 'USD')}
                           </button>
                         )}
-                        {outstandingBalance !== undefined && outstandingBalance === 0 && selectedCustomerId && (
+                        {!defaultAmount && outstandingBalance !== undefined && outstandingBalance === 0 && selectedCustomerId && (
                           <p className="text-xs text-emerald-500">No outstanding balance</p>
                         )}
                       </>

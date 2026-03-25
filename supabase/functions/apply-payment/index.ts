@@ -341,6 +341,7 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           { category: 'Extension Rental', description: 'extension rental fee' },
           { category: 'Extension Tax', description: 'extension tax' },
           { category: 'Extension Service Fee', description: 'extension service fee' },
+          { category: 'Extension Insurance', description: 'extension insurance' },
           { category: 'Fines', description: 'fine charges' },
           { category: 'Other', description: 'other charges' },
         ];
@@ -359,6 +360,7 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           { category: 'Extension Rental', description: 'extension rental fee' },
           { category: 'Extension Tax', description: 'extension tax' },
           { category: 'Extension Service Fee', description: 'extension service fee' },
+          { category: 'Extension Insurance', description: 'extension insurance' },
           { category: 'Fines', description: 'fine charges' },
           { category: 'Other', description: 'other charges' },
         ];

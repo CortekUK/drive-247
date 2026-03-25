@@ -74,14 +74,14 @@ export function useKeyHandover(rentalId: string | undefined) {
 
       if (existing) return existing;
 
-      // Create new handover record
+      // Create new handover record (upsert to avoid conflict on race conditions)
       const { data, error } = await supabase
         .from("rental_key_handovers")
-        .insert({
+        .upsert({
           rental_id: rentalId,
           handover_type: type,
           tenant_id: tenant?.id,
-        })
+        }, { onConflict: 'rental_id,handover_type' })
         .select()
         .single();
 
@@ -219,11 +219,11 @@ export function useKeyHandover(rentalId: string | undefined) {
         } else {
           const { data: newHandover, error: createError } = await supabase
             .from("rental_key_handovers")
-            .insert({
+            .upsert({
               rental_id: rentalId,
               handover_type: type,
               tenant_id: tenant?.id,
-            })
+            }, { onConflict: 'rental_id,handover_type' })
             .select()
             .single();
 

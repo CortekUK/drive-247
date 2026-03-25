@@ -1690,15 +1690,34 @@ const CreateRental = () => {
     // Pick test customer by email, fallback to first available
     const customer = customers?.find(c => c.email === 'bscs21028@itu.edu.pk') || customers?.[0];
 
-    // Pick a Bonzah-eligible vehicle (skip excluded luxury brands)
+    // Pick a Bonzah-eligible vehicle (full exclusion list from bonzah-check-vehicle-eligibility)
     const BONZAH_EXCLUDED_BRANDS = [
-      'alfa romeo', 'aston martin', 'bentley', 'bmw', 'bugatti', 'ferrari',
-      'jaguar', 'koenigsegg', 'lamborghini', 'lotus', 'maserati', 'maybach',
-      'mclaren', 'pagani', 'porsche', 'rolls royce', 'rover', 'tvr',
+      'alfa romeo', 'aston martin', 'auburn', 'avanti', 'bentley', 'bertone',
+      'bmc/leyland', 'bmw', 'bradley', 'bricklin', 'bugatti', 'clenet',
+      'cosworth', 'de lorean', 'excalibre', 'ferrari', 'iso', 'jaguar',
+      'jensen healy', 'koenigsegg', 'lamborghini', 'lancia', 'lotus',
+      'maserati', 'maybach', 'mclaren', 'mg', 'morgan', 'pagani', 'pantera',
+      'panther', 'pininfarina', 'porsche', 'rolls royce', 'rover', 'stutz',
+      'sterling', 'triumph', 'tvr',
     ];
+    // Model-specific exclusions (brand is allowed but these models are not)
+    const isBonzahExcludedModel = (make: string, model: string) => {
+      const m = make?.toLowerCase();
+      const mod = model?.toLowerCase() || '';
+      if (m === 'mercedes' && (mod.includes('amg') || mod.includes('g-wagon') || mod.includes('g-class') || mod.includes('s-class'))) return true;
+      if (m === 'chevrolet' && mod.includes('corvette')) return true;
+      if (m === 'tesla' && mod.includes('cybertruck')) return true;
+      return false;
+    };
+    const isBonzahEligible = (v: any) =>
+      !BONZAH_EXCLUDED_BRANDS.includes((v.make || '').toLowerCase().trim()) &&
+      !isBonzahExcludedModel(v.make || '', v.model || '');
+
+    // Prefer safe brands (Toyota, Honda, Ford, etc.) then fall back to any eligible
+    const SAFE_BRANDS = ['toyota', 'honda', 'ford', 'hyundai', 'kia', 'volkswagen', 'nissan', 'mazda', 'subaru'];
     const vehicle = vehicles?.find(v =>
-      !BONZAH_EXCLUDED_BRANDS.includes(v.make?.toLowerCase())
-    ) || vehicles?.[0];
+      SAFE_BRANDS.includes((v.make || '').toLowerCase().trim())
+    ) || vehicles?.find(v => isBonzahEligible(v)) || vehicles?.[0];
 
     if (!customer || !vehicle) {
       toast({ title: "No data", description: "Need at least 1 customer and 1 vehicle to auto-fill", variant: "destructive" });
