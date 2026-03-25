@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     // Find the payment by checkout session ID
     const { data: payment, error: findError } = await supabase
       .from('payments')
-      .select('id, status, rental_id, tenant_id, amount')
+      .select('id, status, rental_id, tenant_id, amount, target_categories')
       .eq('stripe_checkout_session_id', checkoutSessionId)
       .maybeSingle();
 
@@ -121,6 +121,18 @@ Deno.serve(async (req) => {
     // Update invoice status
     if (payment.rental_id) {
       await supabase.from('invoices').update({ status: 'paid' }).eq('rental_id', payment.rental_id);
+
+      // Clear extension checkout fields after successful payment (allows requesting another extension)
+      const hasExtensionTargets = payment.target_categories &&
+        Array.isArray(payment.target_categories) &&
+        payment.target_categories.some((c: string) => c.startsWith('Extension'));
+      if (hasExtensionTargets) {
+        await supabase.from('rentals').update({
+          extension_checkout_url: null,
+          extension_amount: null
+        }).eq('id', payment.rental_id);
+        console.log("[PROCESS-PENDING] Cleared extension checkout fields for rental:", payment.rental_id);
+      }
     }
 
     return new Response(JSON.stringify({

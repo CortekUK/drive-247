@@ -320,8 +320,8 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                 </div>
               )}
 
-              {/* Extension Info - shown when rental was extended and has a previous end date */}
-              {rental.previous_end_date && !rental.is_extended && rental.status === 'Active' && (
+              {/* Extension Info - shown when rental was extended and has unpaid extension */}
+              {rental.previous_end_date && !rental.is_extended && rental.status === 'Active' && rental.extension_checkout_url && (
                 <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 space-y-2">
                   <div className="flex items-center gap-2">
                     <CalendarPlus className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
@@ -332,52 +332,46 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                   <p className="text-xs text-blue-600 dark:text-blue-400">
                     Extended from {format(new Date(rental.previous_end_date), 'MMM dd')} to {format(new Date(rental.end_date), 'MMM dd, yyyy')}
                   </p>
-                  {rental.extension_checkout_url && (
-                    <button
-                      className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const btn = e.currentTarget;
-                        btn.disabled = true;
-                        btn.textContent = 'Loading...';
-                        try {
-                          // Use extension_amount set by admin, NOT monthly_amount (which is the original rental total)
-                          const extAmount = rental.extension_amount;
-                          if (!extAmount || extAmount <= 0) {
-                            // No extension amount stored — use the stored checkout URL directly
-                            window.location.href = rental.extension_checkout_url;
-                            return;
-                          }
-                          // Create a fresh checkout session with proper success redirect
-                          const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-                            body: {
-                              rentalId: rental.id,
-                              totalAmount: extAmount,
-                              tenantId: tenant?.id,
-                              customerEmail: rental.customers?.email,
-                              source: 'booking',
-                              targetCategories: ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance'],
-                              successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rental.id}&type=invoice`,
-                              cancelUrl: `${window.location.origin}/portal/bookings`,
-                            },
-                          });
-                          if (error) throw error;
-                          if (data?.url) {
-                            // Navigate in same window so booking-success page handles the payment processing
-                            window.location.href = data.url;
-                          } else {
-                            window.location.href = rental.extension_checkout_url;
-                          }
-                        } catch (err) {
-                          window.location.href = rental.extension_checkout_url;
+                  <button
+                    className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const btn = e.currentTarget;
+                      btn.disabled = true;
+                      btn.textContent = 'Loading...';
+                      try {
+                        const extAmount = rental.extension_amount;
+                        if (!extAmount || extAmount <= 0) {
+                          window.location.href = rental.extension_checkout_url!;
+                          return;
                         }
-                      }}
-                    >
-                      <CreditCard className="h-4 w-4" />
-                      Pay Extension Fee
-                      <ExternalLink className="h-3 w-3" />
-                    </button>
-                  )}
+                        const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+                          body: {
+                            rentalId: rental.id,
+                            totalAmount: extAmount,
+                            tenantId: tenant?.id,
+                            customerEmail: rental.customers?.email,
+                            source: 'booking',
+                            targetCategories: ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance'],
+                            successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rental.id}&type=invoice`,
+                            cancelUrl: `${window.location.origin}/portal/bookings`,
+                          },
+                        });
+                        if (error) throw error;
+                        if (data?.url) {
+                          window.location.href = data.url;
+                        } else {
+                          window.location.href = rental.extension_checkout_url!;
+                        }
+                      } catch (err) {
+                        window.location.href = rental.extension_checkout_url!;
+                      }
+                    }}
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    Pay Extension Fee
+                    <ExternalLink className="h-3 w-3" />
+                  </button>
                 </div>
               )}
 
