@@ -350,6 +350,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                               tenantId: tenant?.id,
                               customerEmail: rental.customers?.email,
                               source: 'booking',
+                              targetCategories: ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance'],
                             },
                           });
                           if (error) throw error;

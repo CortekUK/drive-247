@@ -297,7 +297,7 @@ export function AdminExtendRentalDialog({
             if (checkoutUrl) {
               await supabase
                 .from('rentals')
-                .update({ extension_checkout_url: checkoutUrl })
+                .update({ extension_checkout_url: checkoutUrl, extension_amount: extensionTotalAmount })
                 .eq('id', rental.id);
             }
           } else {

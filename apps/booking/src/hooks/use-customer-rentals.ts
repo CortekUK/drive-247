@@ -42,6 +42,7 @@ export interface CustomerRental {
   cancellation_reason: string | null;
   renewed_from_rental_id: string | null;
   extension_checkout_url: string | null;
+  extension_amount: number | null;
   delivery_method: string | null;
   delivery_address: string | null;
   delivery_fee: number | null;
@@ -95,6 +96,7 @@ export function useCustomerRentals(filter: 'all' | 'active' | 'current' | 'past'
           cancellation_reason,
           renewed_from_rental_id,
           extension_checkout_url,
+          extension_amount,
           delivery_method,
           delivery_address,
           delivery_fee,

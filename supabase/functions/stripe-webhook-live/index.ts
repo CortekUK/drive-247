@@ -471,11 +471,14 @@ serve(async (req) => {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
                   },
-                  body: JSON.stringify({ paymentId: extensionPayment.id }),
+                  body: JSON.stringify({
+                    paymentId: extensionPayment.id,
+                    targetCategories: ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance'],
+                  }),
                 }
               );
               if (applyResponse.ok) {
-                console.log("Extension payment FIFO allocation completed");
+                console.log("Extension payment allocation completed");
               } else {
                 console.error("FIFO allocation failed:", await applyResponse.text());
               }
