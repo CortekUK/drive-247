@@ -81,6 +81,7 @@ function AgreementCard({
   customerEmail,
   customerName,
   extensionNumber,
+  hideStatusBadge,
   onViewAgreement,
 }: {
   agreement: RentalAgreement;
@@ -90,6 +91,7 @@ function AgreementCard({
   customerEmail?: string;
   customerName?: string;
   extensionNumber?: number;
+  hideStatusBadge?: boolean;
   onViewAgreement: (agreementId: string, signedDocFileUrl?: string | null) => void;
 }) {
   const { toast } = useToast();
@@ -164,22 +166,24 @@ function AgreementCard({
 
   return (
     <div className="space-y-3">
-      {/* Status + badges row */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Badge
-          className={isSigned ? 'bg-green-600' : statusInfo.color === 'yellow' ? 'bg-yellow-600' : ''}
-          variant={statusInfo.color === 'gray' ? 'outline' : 'default'}
-        >
-          <statusInfo.icon className="h-3 w-3 mr-1" />
-          {statusInfo.label}
-        </Badge>
-        {isTestMode && (
-          <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 dark:bg-blue-400/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 ring-1 ring-inset ring-blue-500/20 dark:ring-blue-400/20">
-            <span className="h-1.5 w-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
-            Test
-          </span>
-        )}
-      </div>
+      {/* Status + badges row (hidden when parent accordion trigger already shows it) */}
+      {!hideStatusBadge && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge
+            className={isSigned ? 'bg-green-600' : statusInfo.color === 'yellow' ? 'bg-yellow-600' : ''}
+            variant={statusInfo.color === 'gray' ? 'outline' : 'default'}
+          >
+            <statusInfo.icon className="h-3 w-3 mr-1" />
+            {statusInfo.label}
+          </Badge>
+          {isTestMode && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 dark:bg-blue-400/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 ring-1 ring-inset ring-blue-500/20 dark:ring-blue-400/20">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
+              Test
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Info grid */}
       <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
@@ -419,6 +423,7 @@ export function AgreementTimeline({
                       key={a.id} agreement={a} canEdit={canEdit} tenantId={tenantId}
                       rentalId={rentalId} customerEmail={rental.customers?.email}
                       customerName={rental.customers?.name} onViewAgreement={onViewAgreement}
+                      hideStatusBadge={originalAgreements.length === 1}
                     />
                   ))
                 ) : (
@@ -470,6 +475,7 @@ export function AgreementTimeline({
                           customerName={rental.customers?.name}
                           extensionNumber={extGroup.extensionNumber}
                           onViewAgreement={onViewAgreement}
+                          hideStatusBadge={extAgreements.length === 1}
                         />
                       ))
                     ) : (

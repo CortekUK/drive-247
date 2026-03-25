@@ -151,7 +151,8 @@ export function useCustomerRentals(filter: 'all' | 'active' | 'current' | 'past'
       }
       // 'all' - no additional filters
 
-      const { data, error } = await query.order('start_date', { ascending: false });
+      const { data, error } = await query
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching customer rentals:', error);

@@ -186,13 +186,14 @@ function generateInvoicePDF(invoice: InvoiceData, branding: TenantBranding, curr
   return doc.output("datauristring").split(",")[1];
 }
 
-function generateEmailContent(invoice: InvoiceData, branding: TenantBranding, currencyCode: string, paymentUrl?: string): string {
+function generateEmailContent(invoice: InvoiceData, branding: TenantBranding, currencyCode: string, paymentUrl?: string, overrideAmount?: number, overrideDescription?: string): string {
+  const displayAmount = overrideAmount ?? invoice.total_amount;
   const payNowButton = paymentUrl ? `
         <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
           <tr>
             <td style="text-align: center;">
               <a href="${paymentUrl}" style="display: inline-block; background: ${branding.accentColor}; color: #ffffff; padding: 14px 40px; border-radius: 8px; font-weight: 600; font-size: 16px; text-decoration: none;">
-                Pay Now - ${formatCurrency(invoice.total_amount, currencyCode)}
+                Pay Now - ${formatCurrency(displayAmount, currencyCode)}
               </a>
             </td>
           </tr>
@@ -244,8 +245,9 @@ function generateEmailContent(invoice: InvoiceData, branding: TenantBranding, cu
         <table role="presentation" style="width: 100%; border-collapse: collapse; background: linear-gradient(135deg, ${branding.accentColor} 0%, #d4b896 100%); border-radius: 8px; margin-bottom: 25px;">
           <tr>
             <td style="padding: 20px; text-align: center;">
-              <p style="margin: 0 0 5px; color: rgba(255,255,255,0.9); font-size: 14px;">Total Amount</p>
-              <p style="margin: 0; color: white; font-size: 32px; font-weight: bold;">${formatCurrency(invoice.total_amount, currencyCode)}</p>
+              <p style="margin: 0 0 5px; color: rgba(255,255,255,0.9); font-size: 14px;">${overrideDescription ? 'Amount Due' : 'Total Amount'}</p>
+              <p style="margin: 0; color: white; font-size: 32px; font-weight: bold;">${formatCurrency(displayAmount, currencyCode)}</p>
+              ${overrideDescription ? `<p style="margin: 5px 0 0; color: rgba(255,255,255,0.8); font-size: 13px;">${overrideDescription}</p>` : ''}
             </td>
           </tr>
         </table>
@@ -272,7 +274,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { invoiceId, tenantId, recipientEmail, paymentUrl: externalPaymentUrl }: SendInvoiceEmailRequest & { paymentUrl?: string } = await req.json();
+    const { invoiceId, tenantId, recipientEmail, paymentUrl: externalPaymentUrl, overrideAmount, overrideDescription }: SendInvoiceEmailRequest & { paymentUrl?: string; overrideAmount?: number; overrideDescription?: string } = await req.json();
 
     if (!invoiceId || !tenantId) {
       throw new Error("Missing required fields: invoiceId and tenantId");
@@ -390,7 +392,7 @@ serve(async (req) => {
     console.log("PDF generated successfully");
 
     // Generate email HTML
-    const emailContent = generateEmailContent(invoice as InvoiceData, branding, tenantCurrencyCode, paymentUrl);
+    const emailContent = generateEmailContent(invoice as InvoiceData, branding, tenantCurrencyCode, paymentUrl, overrideAmount, overrideDescription);
     const emailHtml = wrapWithBrandedTemplate(emailContent, branding);
 
     // Send via Resend with attachment

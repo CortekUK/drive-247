@@ -11,6 +11,7 @@ import { CustomerRental } from '@/hooks/use-customer-rentals';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useTenant } from '@/contexts/TenantContext';
+import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency, getUnlimitedLabel, getDistanceUnitShort, type DistanceUnit } from '@/lib/format-utils';
 import { isUnlimitedMileage, calculateTotalMileageAllowance } from '@/lib/mileage-utils';
 import { EditInsuranceDialog } from './EditInsuranceDialog';
@@ -332,17 +333,45 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                     Extended from {format(new Date(rental.previous_end_date), 'MMM dd')} to {format(new Date(rental.end_date), 'MMM dd, yyyy')}
                   </p>
                   {rental.extension_checkout_url && (
-                    <a
-                      href={rental.extension_checkout_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
-                      onClick={(e) => e.stopPropagation()}
+                    <button
+                      className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const btn = e.currentTarget;
+                        btn.disabled = true;
+                        btn.textContent = 'Loading...';
+                        try {
+                          // Create a fresh checkout session (old one may have expired)
+                          const extAmount = rental.extension_amount || rental.monthly_amount || 0;
+                          const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+                            body: {
+                              rentalId: rental.id,
+                              totalAmount: extAmount,
+                              tenantId: tenant?.id,
+                              customerEmail: rental.customers?.email,
+                              source: 'booking',
+                            },
+                          });
+                          if (error) throw error;
+                          if (data?.url) {
+                            window.open(data.url, '_blank');
+                          } else {
+                            // Fallback to stored URL
+                            window.open(rental.extension_checkout_url, '_blank');
+                          }
+                        } catch (err) {
+                          // Fallback to stored URL if new session fails
+                          window.open(rental.extension_checkout_url, '_blank');
+                        } finally {
+                          btn.disabled = false;
+                          btn.innerHTML = '';
+                        }
+                      }}
                     >
                       <CreditCard className="h-4 w-4" />
                       Pay Extension Fee
                       <ExternalLink className="h-3 w-3" />
-                    </a>
+                    </button>
                   )}
                 </div>
               )}
@@ -446,7 +475,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                         setShowExtendDialog(true);
                       }}
                     >
-                      <RefreshCw className="h-3 w-3 mr-1" />
+                      <CalendarPlus className="h-3 w-3 mr-1" />
                       Extension
                     </Button>
                   )}

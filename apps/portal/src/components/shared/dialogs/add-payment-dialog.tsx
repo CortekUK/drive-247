@@ -416,6 +416,7 @@ export const AddPaymentDialog = ({
           successUrl: `https://${tenant?.slug || 'app'}.drive-247.com/booking-success?type=invoice&status=paid&session_id={CHECKOUT_SESSION_ID}`,
           cancelUrl: `https://${tenant?.slug || 'app'}.drive-247.com/portal/payments`,
           source: 'portal',
+          ...(targetCategories && targetCategories.length > 0 ? { targetCategories } : {}),
         },
       });
 
@@ -424,8 +425,19 @@ export const AddPaymentDialog = ({
       }
 
       // Step 2: Send invoice email with the Stripe link
+      // Pass the actual amount and category info so the email shows the correct details
       const { data, error } = await supabase.functions.invoke('send-invoice-email', {
-        body: { invoiceId: invoiceToSend.id, tenantId: tenant?.id, recipientEmail: customerEmail, paymentUrl: checkoutData.url },
+        body: {
+          invoiceId: invoiceToSend.id,
+          tenantId: tenant?.id,
+          recipientEmail: customerEmail,
+          paymentUrl: checkoutData.url,
+          // Override amount if paying for specific categories (e.g. extension charges)
+          ...(targetCategories && targetCategories.length > 0 ? {
+            overrideAmount: amount,
+            overrideDescription: `Payment for: ${targetCategories.join(', ')}`,
+          } : {}),
+        },
       });
       if (error) throw new Error(error.message || 'Failed to send invoice email');
       if (data && !data.success) throw new Error(data.error || 'Failed to send invoice email');

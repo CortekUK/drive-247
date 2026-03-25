@@ -1602,7 +1602,7 @@ const RentalDetail = () => {
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Pending Rental - Show Approve, Reject, Delete buttons */}
           {canEdit('rentals') && displayStatus === 'Pending' && (
             <>

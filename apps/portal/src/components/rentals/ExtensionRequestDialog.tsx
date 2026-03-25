@@ -26,6 +26,9 @@ import { format } from 'date-fns';
 import { getCurrencySymbol } from '@/lib/format-utils';
 import { useQuery } from '@tanstack/react-query';
 import { calculateTotalMileageAllowance, getMileageTier, isUnlimitedMileage } from '@/lib/mileage-utils';
+import { type CoverageOptions } from '@/hooks/use-bonzah-premium';
+import BonzahInsuranceSelector from '@/components/rentals/bonzah-insurance-selector';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface ExtensionRequestDialogProps {
   open: boolean;
@@ -60,6 +63,51 @@ export function ExtensionRequestDialog({
   const [extensionInsuranceType, setExtensionInsuranceType] = useState<'bonzah' | 'own'>(
     rental.bonzah_policy_id ? 'bonzah' : 'own'
   );
+  const [extensionCoverage, setExtensionCoverage] = useState<CoverageOptions>({ cdw: false, rcli: false, sli: false, pai: false });
+  const [bonzahPremiumAmount, setBonzahPremiumAmount] = useState(0);
+  const [ownInsuranceFile, setOwnInsuranceFile] = useState<File | null>(null);
+
+  // Fetch original Bonzah policy
+  const { data: originalPolicy } = useQuery({
+    queryKey: ['original-bonzah-policy', rental.bonzah_policy_id],
+    queryFn: async () => {
+      if (!rental.bonzah_policy_id) return null;
+      const { data } = await supabase
+        .from('bonzah_insurance_policies')
+        .select('coverage_types, pickup_state, renter_details, status')
+        .eq('id', rental.bonzah_policy_id)
+        .single();
+      return data;
+    },
+    enabled: !!rental.bonzah_policy_id,
+  });
+
+  // Pre-fill coverage from original policy
+  const [coverageInitialized, setCoverageInitialized] = useState(false);
+  if (originalPolicy?.coverage_types && !coverageInitialized) {
+    const ct = originalPolicy.coverage_types as any;
+    setExtensionCoverage({ cdw: !!ct.cdw, rcli: !!ct.rcli, sli: !!ct.sli, pai: !!ct.pai });
+    setCoverageInitialized(true);
+  }
+
+  // Fetch full customer details for Bonzah
+  const customerId = rental.customer_id || rental.customers?.id;
+  const { data: fullCustomer } = useQuery({
+    queryKey: ['customer-bonzah-details', customerId],
+    queryFn: async () => {
+      if (!customerId) return null;
+      const { data } = await supabase
+        .from('customers')
+        .select('id, name, email, phone, date_of_birth, address_street, address_city, address_state, address_zip, license_number, license_state')
+        .eq('id', customerId)
+        .single();
+      return data;
+    },
+    enabled: !!customerId,
+  });
+
+  const hasBonzahCoverage = extensionInsuranceType === 'bonzah' && (extensionCoverage.cdw || extensionCoverage.rcli || extensionCoverage.sli || extensionCoverage.pai);
+  const insurancePremium = extensionInsuranceType === 'bonzah' ? bonzahPremiumAmount : 0;
 
   const currentEndDate = new Date(rental.end_date);
   const requestedEndDate = rental.previous_end_date
@@ -87,7 +135,13 @@ export function ExtensionRequestDialog({
     }
     return rentalSettings.service_fee_value || rentalSettings.service_fee_amount || 0;
   })();
-  const extensionTotalAmount = extensionCost + extensionTaxAmount + extensionServiceFee;
+  const extensionTotalAmount = extensionCost + extensionTaxAmount + extensionServiceFee + insurancePremium;
+
+  const extensionStartForInsurance = (() => {
+    const d = rental.end_date.split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+    return d < today ? today : d;
+  })();
 
   // Fetch vehicle mileage data for mileage impact display
   const vId = rental.vehicle_id || rental.vehicles?.id;
@@ -316,54 +370,52 @@ export function ExtensionRequestDialog({
         console.error('Failed to trigger extension agreement:', e);
       }
 
-      // Auto-create extension insurance (fire-and-forget) — only if Bonzah selected
-      if (extensionInsuranceType === 'bonzah' && rental.bonzah_policy_id) {
+      // Auto-create extension insurance — only if Bonzah selected with coverage
+      if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && originalPolicy && rental.previous_end_date) {
         try {
-          const { data: originalPolicy } = await supabase
-            .from('bonzah_insurance_policies')
-            .select('coverage_types, pickup_state, renter_details, status')
-            .eq('id', rental.bonzah_policy_id)
-            .single();
+          const { data: quoteResult } = await supabase.functions.invoke('bonzah-create-quote', {
+            body: {
+              rental_id: rental.id,
+              customer_id: rental.customer_id || rental.customers?.id,
+              tenant_id: tenant.id,
+              trip_dates: {
+                start: extensionStartForInsurance,
+                end: rental.previous_end_date.split('T')[0],
+              },
+              pickup_state: originalPolicy.pickup_state,
+              coverage: extensionCoverage,
+              renter: originalPolicy.renter_details,
+              policy_type: 'extension',
+            },
+          });
 
-          if (originalPolicy?.status === 'active' && originalPolicy.coverage_types) {
-            const ct = originalPolicy.coverage_types as any;
-            const hasCoverage = ct.cdw || ct.rcli || ct.sli || ct.pai;
-
-            if (hasCoverage && rental.previous_end_date) {
-              // Gap period: current end_date → requested new end_date (previous_end_date after swap)
-              const { data: quoteResult } = await supabase.functions.invoke('bonzah-create-quote', {
-                body: {
-                  rental_id: rental.id,
-                  customer_id: rental.customer_id || rental.customers?.id,
-                  tenant_id: tenant.id,
-                  trip_dates: {
-                    start: (() => {
-                      const d = rental.end_date.split('T')[0];
-                      const today = new Date().toISOString().split('T')[0];
-                      return d < today ? today : d;
-                    })(),
-                    end: rental.previous_end_date.split('T')[0],
-                  },
-                  pickup_state: originalPolicy.pickup_state,
-                  coverage: { cdw: !!ct.cdw, rcli: !!ct.rcli, sli: !!ct.sli, pai: !!ct.pai },
-                  renter: originalPolicy.renter_details,
-                  policy_type: 'extension',
-                },
-              });
-
-              if (quoteResult?.policy_record_id) {
-                await supabase.functions.invoke('bonzah-confirm-payment', {
-                  body: {
-                    policy_record_id: quoteResult.policy_record_id,
-                    stripe_payment_intent_id: `portal-extension-${rental.id}`,
-                  },
-                });
-              }
-
-              queryClient.invalidateQueries({ queryKey: ['rental-insurance-policies', rental.id] });
-              queryClient.invalidateQueries({ queryKey: ['bonzah-balance'] });
-            }
+          if (quoteResult?.policy_record_id) {
+            await supabase.functions.invoke('bonzah-confirm-payment', {
+              body: {
+                policy_record_id: quoteResult.policy_record_id,
+                stripe_payment_intent_id: `portal-extension-${rental.id}`,
+              },
+            });
           }
+
+          // Create Extension Insurance ledger charge
+          if (insurancePremium > 0) {
+            await supabase.from('ledger_entries').insert({
+              customer_id: rental.customer_id || rental.customers?.id,
+              rental_id: rental.id,
+              vehicle_id: rental.vehicle_id || rental.vehicles?.id,
+              entry_date: rental.previous_end_date.split('T')[0],
+              type: 'Charge',
+              category: 'Extension Insurance',
+              amount: insurancePremium,
+              remaining_amount: insurancePremium,
+              due_date: rental.previous_end_date.split('T')[0],
+              tenant_id: tenant.id,
+            });
+          }
+
+          queryClient.invalidateQueries({ queryKey: ['rental-insurance-policies', rental.id] });
+          queryClient.invalidateQueries({ queryKey: ['bonzah-balance'] });
         } catch (insuranceErr) {
           console.error('Extension insurance auto-create failed (non-blocking):', insuranceErr);
         }
@@ -477,8 +529,8 @@ export function ExtensionRequestDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-w-xl max-h-[90vh] flex flex-col overflow-hidden p-0">
+        <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle className="flex items-center gap-2">
             <CalendarPlus className="h-5 w-5 text-amber-600" />
             Extension Request
@@ -488,7 +540,8 @@ export function ExtensionRequestDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <ScrollArea className="flex-1 overflow-y-auto">
+        <div className="space-y-4 px-6 py-4">
           {/* Vehicle Info */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Badge variant="outline">
@@ -621,13 +674,18 @@ export function ExtensionRequestDialog({
                       <span className="font-medium text-blue-700 dark:text-blue-300">{currencySymbol}{extensionServiceFee.toFixed(2)}</span>
                     </div>
                   )}
-                  {/* Total */}
-                  {(extensionTaxAmount > 0 || extensionServiceFee > 0) && (
-                    <div className="flex justify-between text-sm pt-1 border-t border-blue-200 dark:border-blue-700 mt-1">
-                      <span className="font-semibold text-blue-700 dark:text-blue-300">Total</span>
-                      <span className="font-bold text-blue-700 dark:text-blue-300">{currencySymbol}{extensionTotalAmount.toFixed(2)}</span>
+                  {/* Insurance line item */}
+                  {insurancePremium > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-blue-600 dark:text-blue-400">Bonzah Insurance</span>
+                      <span className="font-medium text-blue-700 dark:text-blue-300">{currencySymbol}{insurancePremium.toFixed(2)}</span>
                     </div>
                   )}
+                  {/* Total */}
+                  <div className="flex justify-between text-sm pt-1 border-t border-blue-200 dark:border-blue-700 mt-1">
+                    <span className="font-semibold text-blue-700 dark:text-blue-300">Total</span>
+                    <span className="font-bold text-blue-700 dark:text-blue-300">{currencySymbol}{extensionTotalAmount.toFixed(2)}</span>
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
@@ -673,10 +731,10 @@ export function ExtensionRequestDialog({
             </Alert>
           )}
 
-          {/* Extension Insurance Type */}
+          {/* Extension Insurance */}
           {extensionDays > 0 && (
-            <div className="border rounded-lg p-3 space-y-3">
-              <div className="flex items-center gap-2 mb-1">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-muted-foreground" />
                 <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                   Extension Insurance
@@ -684,53 +742,99 @@ export function ExtensionRequestDialog({
               </div>
               <RadioGroup
                 value={extensionInsuranceType}
-                onValueChange={(v) => setExtensionInsuranceType(v as 'bonzah' | 'own')}
+                onValueChange={(v) => {
+                  setExtensionInsuranceType(v as 'bonzah' | 'own');
+                  if (v === 'own') {
+                    setOwnInsuranceFile(null);
+                    setExtensionCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+                    setBonzahPremiumAmount(0);
+                  }
+                }}
                 className="space-y-2"
               >
-                <label
-                  className={`flex items-start gap-3 p-2.5 rounded-md border cursor-pointer transition-colors ${
-                    extensionInsuranceType === 'bonzah'
-                      ? 'border-blue-300 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-border hover:bg-muted/30'
-                  }`}
-                >
-                  <RadioGroupItem value="bonzah" className="mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="h-4 w-4 text-blue-600" />
-                      <span className="text-sm font-medium">Bonzah Insurance</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {rental.bonzah_policy_id
-                        ? 'Auto-create extension policy with same coverage as original'
-                        : 'Purchase Bonzah insurance from the rental page after approving'}
-                    </p>
-                  </div>
+                <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                  extensionInsuranceType === 'bonzah' ? 'border-blue-400 bg-blue-50/50 dark:bg-blue-900/10' : 'border-border hover:bg-muted/20'
+                }`}>
+                  <RadioGroupItem value="bonzah" />
+                  <ShieldCheck className="h-4 w-4 text-blue-600 shrink-0" />
+                  <span className="text-sm font-medium flex-1">Bonzah Insurance</span>
+                  {insurancePremium > 0 && (
+                    <span className="text-sm font-semibold text-blue-600">{currencySymbol}{insurancePremium.toFixed(2)}</span>
+                  )}
                 </label>
-                <label
-                  className={`flex items-start gap-3 p-2.5 rounded-md border cursor-pointer transition-colors ${
-                    extensionInsuranceType === 'own'
-                      ? 'border-blue-300 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-border hover:bg-muted/30'
-                  }`}
-                >
-                  <RadioGroupItem value="own" className="mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Upload className="h-4 w-4 text-amber-600" />
-                      <span className="text-sm font-medium">Customer's Own Insurance</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Customer will upload their own insurance documents
-                    </p>
+
+                {extensionInsuranceType === 'bonzah' && (
+                  <div className="pl-2">
+                    {originalPolicy ? (
+                      <BonzahInsuranceSelector
+                        tripStartDate={extensionStartForInsurance}
+                        tripEndDate={rental.previous_end_date?.split('T')[0] || null}
+                        pickupState={(originalPolicy.pickup_state as string) || 'FL'}
+                        onCoverageChange={(coverage, premium) => {
+                          setExtensionCoverage(coverage);
+                          setBonzahPremiumAmount(premium);
+                        }}
+                        onSkipInsurance={() => {
+                          setExtensionCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+                          setBonzahPremiumAmount(0);
+                        }}
+                        initialCoverage={extensionCoverage}
+                        customerDetails={fullCustomer || undefined}
+                      />
+                    ) : (
+                      <p className="text-xs text-muted-foreground p-3 border rounded-lg bg-muted/20">
+                        No original Bonzah policy found. You can add insurance from the rental page after approving.
+                      </p>
+                    )}
                   </div>
+                )}
+
+                <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                  extensionInsuranceType === 'own' ? 'border-amber-400 bg-amber-50/50 dark:bg-amber-900/10' : 'border-border hover:bg-muted/20'
+                }`}>
+                  <RadioGroupItem value="own" />
+                  <Upload className="h-4 w-4 text-amber-600 shrink-0" />
+                  <span className="text-sm font-medium">Customer's Own Insurance</span>
                 </label>
+
+                {extensionInsuranceType === 'own' && (
+                  <div className="pl-2">
+                    <div className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+                      ownInsuranceFile ? 'border-emerald-400 bg-emerald-50/30 dark:bg-emerald-900/10' : 'border-muted-foreground/20 hover:border-muted-foreground/40'
+                    }`}>
+                      {ownInsuranceFile ? (
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
+                            <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                          </div>
+                          <div className="flex-1 text-left min-w-0">
+                            <p className="text-sm font-medium truncate">{ownInsuranceFile.name}</p>
+                            <p className="text-xs text-muted-foreground">{(ownInsuranceFile.size / 1024).toFixed(0)} KB</p>
+                          </div>
+                          <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive shrink-0" onClick={() => setOwnInsuranceFile(null)}>
+                            Remove
+                          </Button>
+                        </div>
+                      ) : (
+                        <label className="cursor-pointer block">
+                          <Upload className="h-7 w-7 text-muted-foreground/40 mx-auto mb-1.5" />
+                          <p className="text-sm text-muted-foreground">
+                            <span className="text-primary font-medium hover:underline">Click to upload</span> insurance document
+                          </p>
+                          <p className="text-xs text-muted-foreground/60 mt-0.5">PDF, JPG, PNG up to 10MB</p>
+                          <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => { const file = e.target.files?.[0]; if (file) setOwnInsuranceFile(file); }} />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                )}
               </RadioGroup>
             </div>
           )}
         </div>
+        </ScrollArea>
 
-        <DialogFooter className="flex gap-2 sm:gap-2">
+        <DialogFooter className="px-6 pb-6 pt-3 border-t flex gap-2 sm:gap-2">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
