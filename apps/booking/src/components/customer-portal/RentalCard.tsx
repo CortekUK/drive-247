@@ -341,8 +341,14 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                         btn.disabled = true;
                         btn.textContent = 'Loading...';
                         try {
-                          // Create a fresh checkout session (old one may have expired)
-                          const extAmount = rental.extension_amount || rental.monthly_amount || 0;
+                          // Use extension_amount set by admin, NOT monthly_amount (which is the original rental total)
+                          const extAmount = rental.extension_amount;
+                          if (!extAmount || extAmount <= 0) {
+                            // No extension amount stored — use the stored checkout URL directly
+                            window.location.href = rental.extension_checkout_url;
+                            return;
+                          }
+                          // Create a fresh checkout session with proper success redirect
                           const { data, error } = await supabase.functions.invoke('create-checkout-session', {
                             body: {
                               rentalId: rental.id,
@@ -351,21 +357,19 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                               customerEmail: rental.customers?.email,
                               source: 'booking',
                               targetCategories: ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance'],
+                              successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rental.id}`,
+                              cancelUrl: `${window.location.origin}/portal/bookings`,
                             },
                           });
                           if (error) throw error;
                           if (data?.url) {
-                            window.open(data.url, '_blank');
+                            // Navigate in same window so booking-success page handles the payment processing
+                            window.location.href = data.url;
                           } else {
-                            // Fallback to stored URL
-                            window.open(rental.extension_checkout_url, '_blank');
+                            window.location.href = rental.extension_checkout_url;
                           }
                         } catch (err) {
-                          // Fallback to stored URL if new session fails
-                          window.open(rental.extension_checkout_url, '_blank');
-                        } finally {
-                          btn.disabled = false;
-                          btn.innerHTML = '';
+                          window.location.href = rental.extension_checkout_url;
                         }
                       }}
                     >

@@ -48,6 +48,7 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
     vehicleId: rental.vehicles?.id,
     currentEndDate: rental.end_date,
     newEndDate: newEndDate || undefined,
+    rentalPeriodType: rental.rental_period_type,
   });
 
   const currencyCode = tenant?.currency_code || 'GBP';
