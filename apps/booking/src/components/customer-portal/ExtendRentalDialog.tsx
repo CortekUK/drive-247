@@ -53,6 +53,19 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
 
   const currencyCode = tenant?.currency_code || 'GBP';
 
+  // Calculate tax and service fee to match admin portal pricing
+  const taxPercentage = tenant?.tax_enabled ? (tenant?.tax_percentage || 0) : 0;
+  const extensionTaxAmount = taxPercentage > 0
+    ? Math.round(extensionCost * (taxPercentage / 100) * 100) / 100
+    : 0;
+  const serviceFeePercentage = tenant?.service_fee_enabled && tenant?.service_fee_type === 'percentage'
+    ? (tenant?.service_fee_value || 0)
+    : 0;
+  const extensionServiceFee = serviceFeePercentage > 0
+    ? Math.round(extensionCost * (serviceFeePercentage / 100) * 100) / 100
+    : (tenant?.service_fee_enabled ? (tenant?.service_fee_amount || 0) : 0);
+  const extensionTotalAmount = extensionCost + extensionTaxAmount + extensionServiceFee;
+
   const { hasConflicts, isChecking: isCheckingConflicts } = useExtensionConflicts({
     vehicleId: rental.vehicles?.id,
     currentEndDate: rental.end_date,
@@ -105,7 +118,7 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
           tenant_id: tenant.id,
           type: 'booking',
           title: 'Rental Extension Request',
-          message: `Extension requested for ${rental.vehicles?.make || ''} ${rental.vehicles?.model || ''} (${rental.vehicles?.reg || 'N/A'}) - New end date: ${format(selectedDate, 'MMM dd, yyyy')}${extensionCost > 0 ? ` (Est. cost: ${formatCurrency(extensionCost, currencyCode)})` : ''}`,
+          message: `Extension requested for ${rental.vehicles?.make || ''} ${rental.vehicles?.model || ''} (${rental.vehicles?.reg || 'N/A'}) - New end date: ${format(selectedDate, 'MMM dd, yyyy')}${extensionTotalAmount > 0 ? ` (Est. cost: ${formatCurrency(extensionTotalAmount, currencyCode)})` : ''}`,
           link: `/rentals/${rental.id}`,
         });
 
@@ -192,7 +205,7 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
                   ) : dailyRate ? (
                     <div>
                       <p className="text-lg font-bold text-blue-700 dark:text-blue-300">
-                        {formatCurrency(extensionCost, currencyCode)}
+                        {formatCurrency(extensionTotalAmount, currencyCode)}
                       </p>
                       {hasSurcharges ? (
                         <div className="space-y-0.5 mt-1">
@@ -303,16 +316,34 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
                   <span className="font-bold text-lg text-amber-600">+{extensionDays} days</span>
                 </div>
                 {extensionCost > 0 && (
-                  <div className="border-t pt-3 flex justify-between items-center">
-                    <span className="text-sm font-medium">Estimated Cost</span>
-                    <span className="font-bold text-lg">{formatCurrency(extensionCost, currencyCode)}</span>
+                  <div className="border-t pt-3 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Rental Fee</span>
+                      <span className="text-sm font-medium">{formatCurrency(extensionCost, currencyCode)}</span>
+                    </div>
+                    {extensionTaxAmount > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Tax ({taxPercentage}%)</span>
+                        <span className="text-sm font-medium">{formatCurrency(extensionTaxAmount, currencyCode)}</span>
+                      </div>
+                    )}
+                    {extensionServiceFee > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Service Fee</span>
+                        <span className="text-sm font-medium">{formatCurrency(extensionServiceFee, currencyCode)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center pt-1 border-t">
+                      <span className="text-sm font-semibold">Estimated Cost</span>
+                      <span className="font-bold text-lg">{formatCurrency(extensionTotalAmount, currencyCode)}</span>
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* Confirmation Text */}
               <p className="text-sm text-muted-foreground text-center">
-                By confirming, you are requesting to extend your rental by <strong>{extensionDays} days</strong>.{extensionCost > 0 ? ` The estimated cost is ${formatCurrency(extensionCost, currencyCode)}.` : ''} The admin will review and approve your request.
+                By confirming, you are requesting to extend your rental by <strong>{extensionDays} days</strong>.{extensionTotalAmount > 0 ? ` The estimated cost is ${formatCurrency(extensionTotalAmount, currencyCode)}.` : ''} The admin will review and approve your request.
               </p>
 
               {/* Action Buttons */}
