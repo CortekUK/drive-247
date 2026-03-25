@@ -335,6 +335,7 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           { category: 'Service Fee', description: 'service fee charges' },
           { category: 'Security Deposit', description: 'security deposit charges' },
           { category: 'Delivery Fee', description: 'delivery fee charges' },
+          { category: 'Collection Fee', description: 'collection fee charges' },
           { category: 'Insurance', description: 'insurance charges' },
           { category: 'Extras', description: 'extras charges' },
           { category: 'Extension Rental', description: 'extension rental fee' },
@@ -352,6 +353,7 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           { category: 'Service Fee', description: 'service fee charges' },
           { category: 'Security Deposit', description: 'security deposit charges' },
           { category: 'Delivery Fee', description: 'delivery fee charges' },
+          { category: 'Collection Fee', description: 'collection fee charges' },
           { category: 'Insurance', description: 'insurance charges' },
           { category: 'Extras', description: 'extras charges' },
           { category: 'Extension Rental', description: 'extension rental fee' },
@@ -391,6 +393,7 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
         // Auto-create ledger charge from invoice if category has no existing charge
         if ((!outstandingCharges || outstandingCharges.length === 0) && payment.rental_id) {
           const invoiceCategoryMap: Record<string, string> = {
+            'Rental': 'rental_fee',
             'Insurance': 'insurance_premium',
             'Service Fee': 'service_fee',
             'Security Deposit': 'security_deposit',
@@ -399,7 +402,45 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
             'Extras': 'extras_total',
           };
           const invoiceField = invoiceCategoryMap[category];
-          if (invoiceField) {
+
+          // Collection Fee comes from the rental record, not the invoice
+          if (category === 'Collection Fee') {
+            const { data: rental } = await supabase
+              .from('rentals')
+              .select('collection_fee')
+              .eq('id', payment.rental_id)
+              .single();
+
+            const collectionAmount = Number(rental?.collection_fee) || 0;
+            if (collectionAmount > 0) {
+              console.log(`Auto-creating Collection Fee charge from rental: ${formatCurrency(collectionAmount, currencyCode)}`);
+              const chargeData: any = {
+                customer_id: payment.customer_id,
+                rental_id: payment.rental_id,
+                vehicle_id: payment.vehicle_id,
+                entry_date: entryDate,
+                type: 'Charge',
+                category: 'Collection Fee',
+                amount: collectionAmount,
+                remaining_amount: collectionAmount,
+                due_date: entryDate,
+              };
+              if (payment.tenant_id) chargeData.tenant_id = payment.tenant_id;
+
+              const { data: newCharge, error: chargeCreateError } = await supabase
+                .from('ledger_entries')
+                .insert(chargeData)
+                .select()
+                .single();
+
+              if (!chargeCreateError && newCharge) {
+                console.log(`Created Collection Fee charge: ${newCharge.id}`);
+                outstandingCharges = [newCharge];
+              } else if (chargeCreateError) {
+                console.error('Failed to create Collection Fee charge:', chargeCreateError);
+              }
+            }
+          } else if (invoiceField) {
             const { data: invoice } = await supabase
               .from('invoices')
               .select('*')

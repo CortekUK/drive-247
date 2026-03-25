@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check, Plus, Minus, Receipt, ImageIcon, ExternalLink, Info, CalendarDays, StickyNote, ChevronsUpDown, Link2, Star, ShieldCheck, Lock, Banknote, CreditCard } from "lucide-react";
+import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check, Plus, Minus, Receipt, ImageIcon, ExternalLink, Info, CalendarDays, StickyNote, ChevronsUpDown, Link2, Star, ShieldCheck, Lock, Banknote, CreditCard, Zap } from "lucide-react";
 import { GenerateInviteDialog } from "@/components/customers/generate-invite-dialog";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -124,6 +124,7 @@ const CreateRental = () => {
   const [bonzahCoverage, setBonzahCoverage] = useState<CoverageOptions>({
     cdw: false, rcli: false, sli: false, pai: false,
   });
+  const [bonzahKey, setBonzahKey] = useState(0);
   const [bonzahPremium, setBonzahPremium] = useState<number>(0);
   const [submitError, setSubmitError] = useState<string>("");
   const [showDocuSignDialog, setShowDocuSignDialog] = useState(false);
@@ -861,56 +862,6 @@ const CreateRental = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVehicleId, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles, weekendPricingSettings.weekend_surcharge_percent, tenantHolidays.length, vehiclePricingOverrides.length]);
 
-  // DEV MODE: Listen for dev panel fill events (only in development)
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
-
-    const handleDevFillRental = (e: CustomEvent<{
-      customer_id: string;
-      vehicle_id: string;
-      start_date: Date;
-      end_date: Date;
-      rental_period_type: string;
-      monthly_amount: number;
-      pickup_location?: string;
-      return_location?: string;
-      pickup_time?: string;
-      return_time?: string;
-    }>) => {
-      const data = e.detail;
-      console.log('🔧 DEV MODE: Filling rental form with:', data);
-
-      // Set form values
-      form.setValue('customer_id', data.customer_id);
-      form.setValue('vehicle_id', data.vehicle_id);
-      form.setValue('start_date', new Date(data.start_date));
-      form.setValue('end_date', new Date(data.end_date));
-      form.setValue('rental_period_type', data.rental_period_type as "Daily" | "Weekly" | "Monthly");
-      form.setValue('monthly_amount', data.monthly_amount);
-
-      if (data.pickup_location) {
-        form.setValue('pickup_location', data.pickup_location);
-      }
-      if (data.return_location) {
-        form.setValue('return_location', data.return_location);
-      }
-      if (data.pickup_time) {
-        form.setValue('pickup_time', data.pickup_time);
-      }
-      if (data.return_time) {
-        form.setValue('return_time', data.return_time);
-      }
-
-      // Trigger form validation
-      form.trigger();
-
-      sonnerToast.success('Rental form auto-filled by Dev Panel');
-    };
-
-    window.addEventListener('dev-fill-rental-form', handleDevFillRental as EventListener);
-    return () => window.removeEventListener('dev-fill-rental-form', handleDevFillRental as EventListener);
-  }, [form]);
-
   // Note: End date is no longer auto-calculated from period type since period type
   // is now auto-determined from the date range. The admin picks both start and end dates manually.
 
@@ -1316,16 +1267,6 @@ const CreateRental = () => {
         }
       }
 
-      // Generate first charge for this specific rental (works for Pending status)
-      const { error: chargeError } = await supabase.rpc("generate_first_charge_for_rental", {
-        rental_id_param: rental.id
-      });
-
-      if (chargeError) {
-        console.error("Error generating first charge:", chargeError);
-        // Don't throw - rental is already created, charge can be created manually
-      }
-
       const customerName = selectedCustomer?.name || "Customer";
       const vehicleReg = selectedVehicle?.reg || "Vehicle";
 
@@ -1394,7 +1335,7 @@ const CreateRental = () => {
         service_fee: serviceFee,
         security_deposit: securityDeposit,
         insurance_premium: insurancePremium,
-        delivery_fee: effectiveDeliveryFee + effectiveCollectionFee,
+        delivery_fee: effectiveDeliveryFee,
         extras_total: extrasTotal,
         total_amount: totalAmount,
         notes: invoiceNotes,
@@ -1408,7 +1349,15 @@ const CreateRental = () => {
         promo_code: promoDetails?.code,
       } as any);
       invoiceCreated = true;
-      {
+
+      // Generate charges split by category (uses invoice breakdown created above)
+      const { error: chargeError } = await supabase.rpc("generate_first_charge_for_rental", {
+        rental_id_param: rental.id
+      });
+
+      if (chargeError) {
+        console.error("Error generating charges:", chargeError);
+        // Don't throw - rental is already created, charges can be created manually
       }
 
       // Create installment plan if selected
@@ -1734,6 +1683,109 @@ const CreateRental = () => {
 
   if (isManager && !canEdit('rentals')) return null;
 
+  // Dev-only: auto-fill form with test data for quick manual testing
+  const handleDevAutoFill = () => {
+    if (process.env.NODE_ENV !== 'development') return;
+
+    // Pick test customer by email, fallback to first available
+    const customer = customers?.find(c => c.email === 'bscs21028@itu.edu.pk') || customers?.[0];
+
+    // Pick a Bonzah-eligible vehicle (skip excluded luxury brands)
+    const BONZAH_EXCLUDED_BRANDS = [
+      'alfa romeo', 'aston martin', 'bentley', 'bmw', 'bugatti', 'ferrari',
+      'jaguar', 'koenigsegg', 'lamborghini', 'lotus', 'maserati', 'maybach',
+      'mclaren', 'pagani', 'porsche', 'rolls royce', 'rover', 'tvr',
+    ];
+    const vehicle = vehicles?.find(v =>
+      !BONZAH_EXCLUDED_BRANDS.includes(v.make?.toLowerCase())
+    ) || vehicles?.[0];
+
+    if (!customer || !vehicle) {
+      toast({ title: "No data", description: "Need at least 1 customer and 1 vehicle to auto-fill", variant: "destructive" });
+      return;
+    }
+
+    const startDate = new Date();
+    const endDate = addMonths(startDate, 1);
+
+    form.setValue("customer_id", customer.id, { shouldValidate: true });
+    form.setValue("vehicle_id", vehicle.id, { shouldValidate: true });
+    form.setValue("start_date", startDate, { shouldValidate: true });
+    form.setValue("end_date", endDate, { shouldValidate: true });
+    form.setValue("rental_period_type", "Monthly", { shouldValidate: true });
+    // Location: "Our Location" (fixed) for both, not same as pickup, $20 each
+    setPickupMethod('fixed');
+    setReturnMethod('fixed');
+    setSameAsPickup(false);
+    form.setValue("pickup_location", "Office Pickup", { shouldValidate: true });
+    form.setValue("return_location", "Office Return", { shouldValidate: true });
+    setDeliveryFeeOverride(20);
+    setCollectionFeeOverride(20);
+    form.setValue("pickup_time", "09:00", { shouldValidate: true });
+    form.setValue("return_time", "09:00", { shouldValidate: true });
+    form.setValue("driver_age", 30, { shouldValidate: true });
+    // Bonzah insurance: CDW only — bump key to force remount with new initialCoverage
+    form.setValue("insurance_status", "bonzah", { shouldValidate: true });
+    setBonzahCoverage({ cdw: true, rcli: false, sli: false, pai: false });
+    setBonzahKey(k => k + 1);
+
+    // Extras: select first available extra with quantity 1
+    if (activeExtras && activeExtras.length > 0) {
+      setSelectedExtras({ [activeExtras[0].id]: 1 });
+    }
+
+    // Mileage overrides: 100 mi/month, $1/mi excess
+    setMonthlyMileageOverride(100);
+    setExcessRateOverride(1);
+
+    // Notes
+    form.setValue("notes", "test note from ghulam", { shouldValidate: true });
+
+    // Auto-apply promo code OFF20
+    form.setValue("promo_code", "OFF20", { shouldValidate: true });
+    validatePromoCode("OFF20");
+
+    // Set monthly_amount after a tick so the vehicle auto-calc effect doesn't overwrite it
+    setTimeout(() => {
+      form.setValue("monthly_amount", 100, { shouldValidate: true });
+    }, 300);
+
+    toast({ title: "Form auto-filled", description: `${customer.name} → ${vehicle.make} ${vehicle.model} (${vehicle.reg})` });
+  };
+
+  // Dev-only: reset form to blank state
+  const handleDevClear = () => {
+    if (process.env.NODE_ENV !== 'development') return;
+
+    form.reset();
+    setSelectedExtras({});
+    setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+    setBonzahPremium(0);
+    setBonzahKey(k => k + 1);
+    setPromoDetails(null);
+    setPromoError(null);
+    setTaxOverride(null);
+    setServiceFeeOverride(null);
+    setDepositOverride(null);
+    setDeliveryFeeOverride(null);
+    setCollectionFeeOverride(null);
+    setDailyMileageOverride(null);
+    setWeeklyMileageOverride(null);
+    setMonthlyMileageOverride(null);
+    setExcessRateOverride(null);
+    setInstallmentPlanType('full');
+    setInstallmentAmountOverride(null);
+    setDeliveryMethod('in_person');
+    setPickupMethod('fixed');
+    setReturnMethod('fixed');
+    setSameAsPickup(true);
+    setPickupIsCustom(false);
+    setReturnIsCustom(false);
+    setInsuranceDocId(null);
+
+    toast({ title: "Form cleared" });
+  };
+
   return (
     <>
     <RentalProgressOverlay
@@ -1760,6 +1812,30 @@ const CreateRental = () => {
             {renewalSource ? "Continue from a previous rental" : "Set up a new rental agreement for a customer"}
           </p>
         </div>
+        {process.env.NODE_ENV === 'development' && (
+          <div className="flex gap-2 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleDevAutoFill}
+              className="border-dashed border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950/20"
+            >
+              <Zap className="h-3.5 w-3.5 mr-1.5" />
+              Auto-fill
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleDevClear}
+              className="border-dashed border-red-400 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
+            >
+              <XCircle className="h-3.5 w-3.5 mr-1.5" />
+              Clear
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Renewal Banner */}
@@ -3470,6 +3546,7 @@ const CreateRental = () => {
                               );
                             })()}
                             <BonzahInsuranceSelector
+                              key={bonzahKey}
                               tripStartDate={(() => {
                                 const d = watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null;
                                 if (!d) return null;

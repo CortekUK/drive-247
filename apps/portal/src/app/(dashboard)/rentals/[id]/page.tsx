@@ -391,14 +391,15 @@ const RentalDetail = () => {
     // Then, fill in from invoice breakdown for categories without ledger entries
     if (invoiceBreakdown) {
       const insuranceCharge = (rentalCharges || []).find((c: any) => c.category === 'Insurance');
+      const collectionCharge = (rentalCharges || []).find((c: any) => c.category === 'Collection Fee');
       const invoiceCategoryMap: Record<string, number> = {
         'Rental': invoiceBreakdown.rentalFee,
         'Tax': invoiceBreakdown.taxAmount,
         'Insurance': insuranceCharge?.amount ?? invoiceBreakdown.insurancePremium ?? 0,
         'Service Fee': invoiceBreakdown.serviceFee,
         'Security Deposit': invoiceBreakdown.securityDeposit,
-        'Delivery Fee': invoiceBreakdown.deliveryFee || rental?.delivery_fee || 0,
-        'Collection Fee': rental?.collection_fee ?? 0,
+        'Delivery Fee': rental?.delivery_fee || invoiceBreakdown.deliveryFee || 0,
+        'Collection Fee': collectionCharge ? Number(collectionCharge.amount) : (rental?.collection_fee ?? 0),
         'Extras': invoiceBreakdown.extrasTotal ?? 0,
       };
 
@@ -1221,16 +1222,23 @@ const RentalDetail = () => {
     const upfrontCoveredCategories = new Set(['Security Deposit', 'Service Fee', 'Tax', 'Delivery Fee']);
     const installmentUpfrontPaid = hasInstallmentPlan && installmentPlan?.upfront_paid;
 
-    for (const [cat, remaining] of Object.entries(categoryRemainingAmounts)) {
-      // Skip Fine — handled separately below
-      if (cat === 'Fine') continue;
-      const hasLedgerCharge = paymentBreakdown?.[cat] !== undefined;
-      if (!hasLedgerCharge && remaining > 0) {
-        // Skip fees that are covered by the installment upfront payment
-        if (installmentUpfrontPaid && upfrontCoveredCategories.has(cat)) {
-          continue;
+    // If total payments cover the full invoice amount, no invoice-only categories are outstanding
+    const totalPaid = rentalTotals?.totalPayments || 0;
+    const invoiceTotal = invoiceBreakdown?.totalAmount || 0;
+    const fullyCoveredByPayments = totalPaid >= invoiceTotal && totalPaid > 0;
+
+    if (!fullyCoveredByPayments) {
+      for (const [cat, remaining] of Object.entries(categoryRemainingAmounts)) {
+        // Skip Fine — handled separately below
+        if (cat === 'Fine') continue;
+        const hasLedgerCharge = paymentBreakdown?.[cat] !== undefined;
+        if (!hasLedgerCharge && remaining > 0) {
+          // Skip fees that are covered by the installment upfront payment
+          if (installmentUpfrontPaid && upfrontCoveredCategories.has(cat)) {
+            continue;
+          }
+          invoiceOnlyOutstanding += remaining;
         }
-        invoiceOnlyOutstanding += remaining;
       }
     }
     // Only add fines to outstanding if they're NOT already tracked in the ledger
@@ -1238,7 +1246,7 @@ const RentalDetail = () => {
     const finesInLedger = paymentBreakdown?.['Fine'] !== undefined;
     const finesOutstanding = finesInLedger ? 0 : rentalFinesOpenAmount;
     return ledgerOutstanding + invoiceOnlyOutstanding + finesOutstanding;
-  }, [rentalTotals, categoryRemainingAmounts, paymentBreakdown, hasInstallmentPlan, installmentPlan, rentalFinesOpenAmount]);
+  }, [rentalTotals, categoryRemainingAmounts, paymentBreakdown, hasInstallmentPlan, installmentPlan, rentalFinesOpenAmount, invoiceBreakdown]);
 
   if (isLoading) {
     return <div>Loading rental details...</div>;
@@ -2005,14 +2013,21 @@ const RentalDetail = () => {
         const insuranceCharge = (rentalCharges || []).find(c => c.category === 'Insurance');
         const insuranceAmount = insuranceCharge?.amount ?? invoiceBreakdown.insurancePremium ?? 0;
 
+        // Determine delivery/collection amounts
+        const deliveryLedgerCharge = (rentalCharges || []).find(c => c.category === 'Delivery Fee');
+        const collectionLedgerCharge = (rentalCharges || []).find(c => c.category === 'Collection Fee');
+        // Use rental record as source of truth for delivery/collection split
+        const deliveryFeeAmount = rental.delivery_fee || invoiceBreakdown.deliveryFee || 0;
+        const collectionFeeAmount = collectionLedgerCharge ? Number(collectionLedgerCharge.amount) : (rental.collection_fee ?? 0);
+
         const rows: { label: string; category: string; amount: number; detail: string; icon: any; color: string; bg: string; nonRefundable?: boolean; onClick?: () => void }[] = [
           { label: 'Rental', category: 'Rental', amount: invoiceBreakdown.rentalFee, detail: rental.rental_period_type || 'Monthly', icon: Car, color: 'text-green-500', bg: 'bg-green-500/10' },
           { label: 'Tax', category: 'Tax', amount: invoiceBreakdown.taxAmount, detail: invoiceBreakdown.taxAmount > 0 && invoiceBreakdown.rentalFee > 0 ? `${((invoiceBreakdown.taxAmount / invoiceBreakdown.rentalFee) * 100).toFixed(1)}% rate` : 'Tax on rental', icon: Percent, color: 'text-blue-500', bg: 'bg-blue-500/10' },
           { label: 'Bonzah Insurance', category: 'Insurance', amount: insuranceAmount, detail: bonzahPolicy ? 'Bonzah Insurance' : 'Insurance coverage', icon: ShieldCheck, color: 'text-teal-500', bg: 'bg-teal-500/10' },
           { label: 'Service Fee', category: 'Service Fee', amount: invoiceBreakdown.serviceFee, detail: 'Platform fee', icon: Receipt, color: 'text-purple-500', bg: 'bg-purple-500/10' },
           { label: 'Security Deposit', category: 'Security Deposit', amount: invoiceBreakdown.securityDeposit, detail: invoiceBreakdown.securityDeposit > 0 ? (rental.status === 'Closed' ? 'Eligible for refund' : 'Held') : '', icon: Shield, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-          { label: 'Delivery Fee', category: 'Delivery Fee', amount: invoiceBreakdown.deliveryFee || rental.delivery_fee || 0, detail: 'Vehicle delivery', icon: Truck, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
-          { label: 'Collection Fee', category: 'Collection Fee', amount: rental.collection_fee ?? 0, detail: 'Vehicle collection', icon: MapPin, color: 'text-rose-500', bg: 'bg-rose-500/10' },
+          { label: 'Delivery Fee', category: 'Delivery Fee', amount: deliveryFeeAmount, detail: 'Vehicle delivery', icon: Truck, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
+          { label: 'Collection Fee', category: 'Collection Fee', amount: collectionFeeAmount, detail: 'Vehicle collection', icon: MapPin, color: 'text-rose-500', bg: 'bg-rose-500/10' },
           { label: 'Extras', category: 'Extras', amount: extrasTotal, detail: (extrasDetails?.length || 0) > 0 ? `${extrasDetails!.length} item${extrasDetails!.length > 1 ? 's' : ''}` : 'Add-ons', icon: Package, color: 'text-indigo-500', bg: 'bg-indigo-500/10', onClick: extrasTotal > 0 ? () => setShowExtrasDialog(true) : undefined },
         ];
 
@@ -2364,9 +2379,9 @@ const RentalDetail = () => {
                           }
                           return <span className="text-muted-foreground/30">-</span>;
                         })() : (() => {
-                          // Show Refund if category has been paid (dimmed for completed rentals)
+                          // Show Refund if category has been paid (via ledger or total payment coverage)
                           const catPayment = paymentBreakdown?.[category];
-                          const categoryHasBeenPaid = catPayment ? catPayment.paid > 0 : false;
+                          const categoryHasBeenPaid = catPayment ? catPayment.paid > 0 : (totalPayments >= (invoiceBreakdown?.totalAmount || 0) && totalPayments > 0);
                           const wouldShowRefund = applied && !fullyRefunded && categoryHasBeenPaid && canRefund;
                           return wouldShowRefund;
                         })() ? (
@@ -2386,8 +2401,10 @@ const RentalDetail = () => {
                         ) : applied && fullyRefunded ? (
                           <Check className="h-4 w-4 text-green-500 inline-block" />
                         ) : (() => {
-                          // Show Add Payment if category has remaining amount
-                          const wouldBeSelectable = isSelectable || (applied && !fullyRefunded && (categoryRemainingAmounts[category] ?? 0) > 0);
+                          // Show Add Payment if category has remaining amount AND is NOT covered by total payments
+                          const catRemaining = categoryRemainingAmounts[category] ?? 0;
+                          const coveredByTotalPayment = totalPayments >= (invoiceBreakdown?.totalAmount || 0) && totalPayments > 0;
+                          const wouldBeSelectable = (isSelectable || (applied && !fullyRefunded && catRemaining > 0)) && !coveredByTotalPayment && !isCancelledOrRejected;
                           return wouldBeSelectable;
                         })() ? (
                           <button
