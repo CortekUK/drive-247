@@ -12,6 +12,7 @@ interface UseExtensionPricingParams {
   vehicleId?: string;
   currentEndDate?: string; // YYYY-MM-DD
   newEndDate?: string;     // YYYY-MM-DD
+  rentalPeriodType?: string; // 'Daily' | 'Weekly' | 'Monthly' — use same rate tier as original rental
 }
 
 interface ExtensionPricingResult {
@@ -23,24 +24,46 @@ interface ExtensionPricingResult {
   isLoading: boolean;
 }
 
+/**
+ * Derive an effective daily rate from the rental's period type.
+ * Monthly → monthly_rent / 30, Weekly → weekly_rent / 7, Daily → daily_rent.
+ * Falls back to daily_rent if the tier rate is missing.
+ */
+function getEffectiveDailyRate(
+  rentalPeriodType: string | undefined,
+  dailyRent: number | null,
+  weeklyRent: number | null,
+  monthlyRent: number | null
+): number | null {
+  const type = (rentalPeriodType || '').toLowerCase();
+  if (type === 'monthly' && monthlyRent && monthlyRent > 0) {
+    return Math.round((monthlyRent / 30) * 100) / 100;
+  }
+  if (type === 'weekly' && weeklyRent && weeklyRent > 0) {
+    return Math.round((weeklyRent / 7) * 100) / 100;
+  }
+  return dailyRent;
+}
+
 export function useExtensionPricing({
   vehicleId,
   currentEndDate,
   newEndDate,
+  rentalPeriodType,
 }: UseExtensionPricingParams): ExtensionPricingResult {
   const { tenant } = useTenant();
   const { holidays, vehicleOverrides, isLoading: loadingDynamic } = useDynamicPricing(vehicleId);
 
-  // Fetch vehicle daily rate
+  // Fetch vehicle rates (all tiers)
   const { data: vehicleData, isLoading: loadingRate } = useQuery({
-    queryKey: ['extension-vehicle-rate', vehicleId],
+    queryKey: ['extension-vehicle-rate-v2', vehicleId],
     queryFn: async () => {
       const { data } = await supabase
         .from('vehicles')
-        .select('daily_rent')
+        .select('daily_rent, weekly_rent, monthly_rent')
         .eq('id', vehicleId!)
         .single();
-      return data?.daily_rent ?? null;
+      return data;
     },
     enabled: !!vehicleId,
   });
@@ -54,16 +77,19 @@ export function useExtensionPricing({
   }, [tenant]);
 
   const result = useMemo(() => {
-    const dailyRate = vehicleData ?? null;
-    if (!dailyRate || !currentEndDate || !newEndDate) {
-      return { extensionCost: 0, extensionDays: 0, dailyRate, dayBreakdown: [] as DayBreakdown[], hasSurcharges: false };
+    const effectiveRate = vehicleData
+      ? getEffectiveDailyRate(rentalPeriodType, vehicleData.daily_rent, vehicleData.weekly_rent, vehicleData.monthly_rent)
+      : null;
+
+    if (!effectiveRate || !currentEndDate || !newEndDate) {
+      return { extensionCost: 0, extensionDays: 0, dailyRate: effectiveRate, dayBreakdown: [] as DayBreakdown[], hasSurcharges: false };
     }
 
-    // Use calculateRentalPriceBreakdown with daily-only rates to force daily tier
+    // Use calculateRentalPriceBreakdown with the effective rate as the daily rate
     const priceResult = calculateRentalPriceBreakdown(
       currentEndDate,
       newEndDate,
-      { daily_rent: dailyRate, weekly_rent: 0, monthly_rent: 0 },
+      { daily_rent: effectiveRate, weekly_rent: 0, monthly_rent: 0 },
       weekendConfig,
       holidays,
       vehicleOverrides,
@@ -73,11 +99,11 @@ export function useExtensionPricing({
     return {
       extensionCost: priceResult.rentalPrice,
       extensionDays: priceResult.rentalDays,
-      dailyRate,
+      dailyRate: effectiveRate,
       dayBreakdown: priceResult.dayBreakdown,
       hasSurcharges: priceResult.dayBreakdown.some(d => d.type !== 'regular'),
     };
-  }, [vehicleData, currentEndDate, newEndDate, weekendConfig, holidays, vehicleOverrides, vehicleId]);
+  }, [vehicleData, currentEndDate, newEndDate, weekendConfig, holidays, vehicleOverrides, vehicleId, rentalPeriodType]);
 
   return {
     ...result,
