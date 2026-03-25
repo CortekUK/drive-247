@@ -305,6 +305,8 @@ export const AddPaymentDialog = ({
           payment_date: formatInTimeZone(data.payment_date, 'America/New_York', 'yyyy-MM-dd'),
           method: data.method,
           payment_type: 'Payment',
+          status: 'Completed',
+          remaining_amount: data.amount,
           tenant_id: tenant?.id,
           verification_status: 'approved',
           ...(targetCategories && targetCategories.length > 0 ? { target_categories: targetCategories } : {}),
