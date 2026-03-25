@@ -241,7 +241,7 @@ export function AdminExtendRentalDialog({
         tenant_id: tenant.id,
         type: 'Charge' as const,
         entry_date: today,
-        due_date: today,
+        due_date: newEndDate.split('T')[0],
       };
 
       if (extensionCost > 0) {

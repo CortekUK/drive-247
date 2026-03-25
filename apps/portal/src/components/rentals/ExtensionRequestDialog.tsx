@@ -231,7 +231,7 @@ export function ExtensionRequestDialog({
           tenant_id: tenant.id,
           type: 'Charge' as const,
           entry_date: new Date().toISOString().split('T')[0],
-          due_date: new Date().toISOString().split('T')[0],
+          due_date: (rental.previous_end_date || new Date().toISOString()).split('T')[0],
         };
         const ledgerEntries: any[] = [
           { ...baseLedger, category: 'Extension Rental', reference: extRef, amount: extensionCost, remaining_amount: extensionCost },
