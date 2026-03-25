@@ -64,6 +64,8 @@ export function AdminExtendRentalDialog({
   const [newEndDate, setNewEndDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
+  // Capture the current end date at dialog open so it doesn't change during submission
+  const [snapshotEndDate] = useState(rental.end_date);
   const [extensionInsuranceType, setExtensionInsuranceType] = useState<'bonzah' | 'own'>(
     rental.bonzah_policy_id ? 'bonzah' : 'own'
   );
@@ -110,7 +112,7 @@ export function AdminExtendRentalDialog({
     setCoverageInitialized(true);
   }
 
-  const currentEndDate = new Date(rental.end_date);
+  const currentEndDate = new Date(snapshotEndDate);
   const minDate = format(
     new Date(currentEndDate.getTime() + 24 * 60 * 60 * 1000),
     'yyyy-MM-dd'
@@ -118,7 +120,7 @@ export function AdminExtendRentalDialog({
 
   const { extensionCost, extensionDays, dailyRate, dayBreakdown, hasSurcharges, isLoading: loadingRate } = useExtensionPricing({
     vehicleId: rental.vehicles?.id,
-    currentEndDate: rental.end_date,
+    currentEndDate: snapshotEndDate,
     newEndDate: newEndDate || undefined,
     rentalPeriodType: rental.rental_period_type,
   });
@@ -195,7 +197,7 @@ export function AdminExtendRentalDialog({
 
   const { rentalConflicts, blockedDateConflicts, hasConflicts, isChecking: isCheckingConflicts } = useExtensionConflicts({
     vehicleId: rental.vehicles?.id,
-    currentEndDate: rental.end_date,
+    currentEndDate: snapshotEndDate,
     newEndDate: newEndDate || undefined,
     excludeRentalId: rental.id,
   });
