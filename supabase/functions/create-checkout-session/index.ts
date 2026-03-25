@@ -158,7 +158,8 @@ serve(async (req) => {
     // CRITICAL FIX: Save stripe_checkout_session_id to payment record
     // This allows the webhook to find and update the payment when checkout completes
     if (referenceId) {
-      // First try to update existing payment record (portal flow)
+      // First try to update existing PENDING payment record (portal flow)
+      // Only update payments that match status=Pending to avoid corrupting existing paid records
       const updateData: any = {
         stripe_checkout_session_id: session.id,
         updated_at: new Date().toISOString(),
@@ -172,6 +173,7 @@ serve(async (req) => {
         .update(updateData)
         .eq('rental_id', referenceId)
         .is('stripe_checkout_session_id', null)
+        .eq('status', 'Pending')
         .select('id')
 
       if (updateError) {
