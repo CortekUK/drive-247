@@ -307,6 +307,7 @@ export const AddPaymentDialog = ({
           payment_type: 'Payment',
           tenant_id: tenant?.id,
           verification_status: 'approved',
+          ...(targetCategories && targetCategories.length > 0 ? { target_categories: targetCategories } : {}),
         })
         .select()
         .single();
