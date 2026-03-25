@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
       mode: 'payment',
       customer_email: customerEmail,
       client_reference_id: rentalId,
-      success_url: `${origin}/portal/bookings?extension=success`,
+      success_url: `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rentalId}`,
       cancel_url: `${origin}/portal/bookings?extension=cancelled`,
       metadata: {
         type: 'extension',
@@ -84,6 +84,7 @@ Deno.serve(async (req) => {
         new_end_date: newEndDate,
         previous_end_date: previousEndDate,
         stripe_mode: stripeMode,
+        target_categories: JSON.stringify(['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance']),
       },
     }, stripeOptions);
 
@@ -102,8 +103,9 @@ Deno.serve(async (req) => {
         payment_date: today,
         method: 'Card',
         payment_type: 'Payment',
-        status: 'Applied',
-        verification_status: 'auto_approved',
+        status: 'Pending',
+        verification_status: 'pending',
+        target_categories: ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance'],
         stripe_checkout_session_id: session.id,
         capture_status: 'requires_capture',
         booking_source: 'portal',

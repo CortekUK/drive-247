@@ -477,7 +477,9 @@ serve(async (req) => {
                   },
                   body: JSON.stringify({
                     paymentId: extensionPayment.id,
-                    targetCategories: ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance'],
+                    targetCategories: session.metadata?.target_categories
+                      ? JSON.parse(session.metadata.target_categories)
+                      : ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance'],
                   }),
                 }
               );
