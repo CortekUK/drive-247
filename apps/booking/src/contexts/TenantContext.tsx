@@ -85,6 +85,8 @@ export interface Tenant {
   // Service fee settings
   service_fee_enabled: boolean | null;
   service_fee_amount: number | null;
+  service_fee_type: string | null;
+  service_fee_value: number | null;
 
   // Deposit settings
   deposit_mode: 'global' | 'per_vehicle' | null;
@@ -287,7 +289,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 pickup_area_radius_km, return_area_radius_km, area_center_lat, area_center_lon,
                 integration_veriff, integration_bonzah,
                 tax_enabled, tax_percentage,
-                service_fee_enabled, service_fee_amount,
+                service_fee_enabled, service_fee_amount, service_fee_type, service_fee_value,
                 deposit_mode, global_deposit_amount,
                 working_hours_enabled, working_hours_open, working_hours_close, working_hours_always_open,
                 monday_enabled, monday_open, monday_close,
@@ -397,6 +399,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           tax_percentage,
           service_fee_enabled,
           service_fee_amount,
+          service_fee_type,
+          service_fee_value,
           deposit_mode,
           global_deposit_amount,
           working_hours_enabled,
