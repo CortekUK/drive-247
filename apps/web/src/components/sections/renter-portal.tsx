@@ -7,6 +7,7 @@ import {
   Eye,
   CreditCard,
   Smartphone,
+  type LucideIcon,
 } from "lucide-react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 
@@ -58,7 +59,7 @@ function FeatureItem({
   description,
   align,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   title: string;
   description: string;
   align: "left" | "right";

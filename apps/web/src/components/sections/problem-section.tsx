@@ -6,11 +6,12 @@ import {
   Users,
   ShieldAlert,
   TrendingDown,
+  type LucideIcon,
 } from "lucide-react";
 import { PROBLEM_POINTS } from "@/lib/constants";
 import { useFadeIn } from "@/hooks/use-fade-in";
 
-const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+const iconMap: Record<string, LucideIcon> = {
   DollarSign,
   Palette,
   Users,
