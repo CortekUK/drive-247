@@ -363,7 +363,7 @@ export function RentalTimeline({ rentalId }: RentalTimelineProps) {
   const policyCount = policies.length;
   const summaryParts: string[] = [];
   if (agreementCount > 0) summaryParts.push(`${agreementCount} agreement${agreementCount > 1 ? 's' : ''}`);
-  if (policyCount > 0) summaryParts.push(`${policyCount} policy${policyCount > 1 ? 'ies' : ''}`);
+  if (policyCount > 0) summaryParts.push(`${policyCount} ${policyCount > 1 ? 'policies' : 'policy'}`);
   const summaryText = summaryParts.join(' · ');
 
   return (

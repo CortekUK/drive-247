@@ -2196,7 +2196,7 @@ const RentalDetail = () => {
                           // Skip generic refund checks for Fine — handled in Fine-specific block below
                           if (category !== 'Fine') {
                             if (fullyRefunded) {
-                              return <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Refunded</Badge>;
+                              return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Refunded</Badge>;
                             }
                             if (refunded > 0) {
                               return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>;
@@ -2214,7 +2214,7 @@ const RentalDetail = () => {
                               return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Waived</Badge>;
                             }
                             if (allRefundedOrWaived && hasRefunded) {
-                              return <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Refunded</Badge>;
+                              return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Refunded</Badge>;
                             }
                             if (hasPartiallyRefunded) {
                               return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>;
@@ -2269,7 +2269,7 @@ const RentalDetail = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         {refunded > 0 ? (
-                          <span className="text-sm text-green-500 font-medium">{formatCurrencyUtil(refunded, tenant?.currency_code || 'USD')}</span>
+                          <span className="text-sm text-amber-500 font-medium">{formatCurrencyUtil(refunded, tenant?.currency_code || 'USD')}</span>
                         ) : (
                           <span className="text-sm text-muted-foreground/40">-</span>
                         )}
@@ -2631,7 +2631,7 @@ const RentalDetail = () => {
                             return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">Not Applied</Badge>;
                           }
                           if (fullyRefunded) {
-                            return <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Refunded</Badge>;
+                            return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Refunded</Badge>;
                           }
                           if (refunded > 0) {
                             return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>;
@@ -2660,7 +2660,7 @@ const RentalDetail = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         {refunded > 0 ? (
-                          <span className="text-sm text-green-500 font-medium">{formatCurrencyUtil(refunded, tenant?.currency_code || 'USD')}</span>
+                          <span className="text-sm text-amber-500 font-medium">{formatCurrencyUtil(refunded, tenant?.currency_code || 'USD')}</span>
                         ) : (
                           <span className="text-sm text-muted-foreground/40">-</span>
                         )}
