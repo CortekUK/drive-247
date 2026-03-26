@@ -332,7 +332,9 @@ const RentalDetail = () => {
   const { data: rentalCharges } = useRentalCharges(id);
   const { data: invoiceBreakdown } = useRentalInvoice(id);
   const { data: paymentBreakdown, isLoading: isPaymentBreakdownLoading } = useRentalPaymentBreakdown(id);
-  const { data: refundBreakdown } = useRentalRefundBreakdown(id);
+  const { data: refundData } = useRentalRefundBreakdown(id);
+  const refundBreakdown = refundData?.categoryRefunds || null;
+  const chargeRefunds = refundData?.chargeRefunds || {};
 
   // Fetch fines linked to this rental
   const { data: rentalFines } = useQuery({
@@ -2588,8 +2590,10 @@ const RentalDetail = () => {
               <TableBody>
                 {extRows.map(({ label, category, amount, remaining_amount, detail, icon: Icon, color, bg }) => {
                   const applied = amount > 0;
-                  const refunded = refundBreakdown?.[category] ?? 0;
-                  const fullyRefunded = applied && refunded >= amount;
+                  // For extensions, scope refunds to THIS extension's specific charge
+                  const thisCharge = group.charges.find(c => c.category === category);
+                  const refunded = thisCharge ? (chargeRefunds[thisCharge.id] ?? 0) : 0;
+                  const fullyRefunded = applied && refunded > 0 && refunded >= amount;
                   const isInsuranceRow = category === 'Extension Insurance';
                   const isPaid = applied && remaining_amount === 0;
                   const isPartial = !isInsuranceRow && applied && remaining_amount > 0 && remaining_amount < amount;

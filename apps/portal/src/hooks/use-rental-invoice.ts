@@ -136,11 +136,10 @@ export const useRentalRefundBreakdown = (rentalId: string | undefined) => {
 
       console.log("[REFUND-BREAKDOWN] Fetching refunds for rental:", rentalId, "tenant:", tenant?.id);
 
-      // Get all refund entries for this rental grouped by category
-      // Don't filter by tenant_id - rental_id is sufficient and refunds may have different tenant_id
+      // Get all refund entries for this rental — include reference to scope per-extension
       const { data: refunds, error: refundsError } = await supabase
         .from("ledger_entries")
-        .select("id, category, amount, tenant_id, type")
+        .select("id, category, amount, tenant_id, type, reference, due_date")
         .eq("rental_id", rentalId)
         .eq("type", "Refund");
 
@@ -149,23 +148,55 @@ export const useRentalRefundBreakdown = (rentalId: string | undefined) => {
         throw refundsError;
       }
 
-      console.log("[REFUND-BREAKDOWN] Query result for rental", rentalId, ":", refunds);
-
       // Group refunds by category (amounts are negative, so we use Math.abs)
+      // For extension categories, also track which charge was refunded via payment_applications
       const categoryRefunds: Record<string, number> = {};
+      // Also build a per-charge refund map (charge_entry_id → refund amount)
+      const chargeRefunds: Record<string, number> = {};
 
       refunds?.forEach((refund) => {
         const category = refund.category || "Other";
         if (!categoryRefunds[category]) {
           categoryRefunds[category] = 0;
         }
-        // Refund amounts are stored as negative, so use Math.abs
         categoryRefunds[category] += Math.abs(refund.amount);
       });
 
-      console.log("[REFUND-BREAKDOWN] Category refunds result:", categoryRefunds);
+      // For extension refunds, try to find which specific charge was refunded
+      // by checking payment_applications linked to refund payments
+      if (refunds && refunds.length > 0) {
+        const extensionRefunds = refunds.filter(r => r.category?.startsWith('Extension'));
+        if (extensionRefunds.length > 0) {
+          // Get all charge entries for this rental to match refunds to specific charges
+          const { data: charges } = await supabase
+            .from("ledger_entries")
+            .select("id, category, reference, due_date, amount")
+            .eq("rental_id", rentalId)
+            .eq("type", "Charge")
+            .in("category", [...new Set(extensionRefunds.map(r => r.category!))]);
 
-      return categoryRefunds;
+          // Match each refund to the most likely charge by category + closest amount
+          extensionRefunds.forEach(refund => {
+            const matchingCharges = charges?.filter(c => c.category === refund.category) || [];
+            if (matchingCharges.length > 0) {
+              // If only one charge with this category, assign refund to it
+              if (matchingCharges.length === 1) {
+                const chargeId = matchingCharges[0].id;
+                chargeRefunds[chargeId] = (chargeRefunds[chargeId] || 0) + Math.abs(refund.amount);
+              } else {
+                // Multiple charges — match by closest amount
+                const refundAmt = Math.abs(refund.amount);
+                const best = matchingCharges.reduce((prev, curr) =>
+                  Math.abs(curr.amount - refundAmt) < Math.abs(prev.amount - refundAmt) ? curr : prev
+                );
+                chargeRefunds[best.id] = (chargeRefunds[best.id] || 0) + Math.abs(refund.amount);
+              }
+            }
+          });
+        }
+      }
+
+      return { categoryRefunds, chargeRefunds };
     },
     enabled: !!tenant && !!rentalId,
     staleTime: 0, // Always refetch
