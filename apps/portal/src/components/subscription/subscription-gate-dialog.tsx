@@ -28,6 +28,16 @@ export function SubscriptionGateDialog() {
   const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
   const { createCheckoutSession } = useTenantSubscription();
 
+  // Derive trial duration text from plans
+  const trialDays = plans?.length
+    ? Math.max(...plans.map((p) => p.trial_days ?? 0))
+    : 0;
+  const trialLabel = trialDays > 0
+    ? trialDays >= 1
+      ? `${trialDays} day${trialDays !== 1 ? "s" : ""}`
+      : `${trialDays * 24} hours`
+    : null;
+
   const handleSubscribe = async (planId: string) => {
     setSubscribing(true);
     try {
@@ -68,13 +78,15 @@ export function SubscriptionGateDialog() {
                 To complete your Drive247 setup, please add your billing
                 details.
               </p>
-              <p>
-                Your subscription will begin automatically{" "}
-                <span className="font-medium text-foreground">
-                  48 hours after setup is completed
-                </span>
-                .
-              </p>
+              {trialLabel && (
+                <p>
+                  Your subscription will begin automatically{" "}
+                  <span className="font-medium text-foreground">
+                    {trialLabel} after setup is completed
+                  </span>
+                  .
+                </p>
+              )}
               <p className="font-medium text-foreground">
                 No charges are taken at this stage.
               </p>

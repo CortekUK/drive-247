@@ -1671,14 +1671,14 @@ const RentalDetail = () => {
                 <Plus className="h-4 w-4 mr-2" />
                 Add Fine
               </Button>
-              <div className="flex items-center gap-1 border-l pl-2 ml-1">
-                <TooltipProvider>
+              <TooltipProvider>
+                <div className="flex items-center gap-1">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="icon"
-                        className="h-9 w-9"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
                         onClick={() => setShowCloseDialog(true)}
                       >
                         <X className="h-4 w-4" />
@@ -1689,9 +1689,9 @@ const RentalDetail = () => {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="icon"
-                        className="h-9 w-9 text-destructive"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         onClick={() => setShowCancelDialog(true)}
                       >
                         <Ban className="h-4 w-4" />
@@ -1702,9 +1702,9 @@ const RentalDetail = () => {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="icon"
-                        className="h-9 w-9 text-destructive"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         onClick={() => setShowDeleteDialog(true)}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -1712,8 +1712,8 @@ const RentalDetail = () => {
                     </TooltipTrigger>
                     <TooltipContent>Delete Rental</TooltipContent>
                   </Tooltip>
-                </TooltipProvider>
-              </div>
+                </div>
+              </TooltipProvider>
             </>
           )}
 
