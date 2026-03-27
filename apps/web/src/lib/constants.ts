@@ -1,5 +1,5 @@
 export const SITE_URL = "https://drive247.co";
-export const CALENDLY_URL = "https://calendly.com/neemaghanbarinia/30min";
+export const CALENDLY_URL = "https://calendly.com/georgerclemson/strategy-call-george-clemson";
 
 export const SITE_META = {
   title: "Drive247 — Direct Booking Platform for Independent Car Rental Operators",
