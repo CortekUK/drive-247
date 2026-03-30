@@ -44,15 +44,36 @@ Deno.serve(async (req) => {
 
     console.log('Sending signing email to:', customerEmail, 'for document:', documentId);
 
-    // Get embedded signing link from BoldSign (with retry — document may still be processing)
+    // Get signing link from BoldSign (with retry — document may still be processing)
     const apiKey = getBoldSignApiKey(boldsignMode);
     const baseUrl = getBoldSignBaseUrl();
 
     let signingLink = '';
+    // Small initial delay — document was just created in BoldSign and may still be processing
+    await new Promise(r => setTimeout(r, 2000));
     for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt > 0) await new Promise(r => setTimeout(r, 2000)); // wait 2s between retries
+      if (attempt > 0) await new Promise(r => setTimeout(r, 3000)); // wait 3s between retries
 
       try {
+        // First try the properties endpoint to get the signer's sign link
+        const propsResponse = await fetch(
+          `${baseUrl}/v1/document/properties?documentId=${documentId}`,
+          { headers: { 'X-API-KEY': apiKey } }
+        );
+
+        if (propsResponse.ok) {
+          const propsData = await propsResponse.json();
+          // Find the matching signer and get their signing link
+          const signer = propsData.signerDetails?.find(
+            (s: any) => s.signerEmail?.toLowerCase() === customerEmail.toLowerCase()
+          );
+          if (signer?.signLink) {
+            signingLink = signer.signLink;
+            break;
+          }
+        }
+
+        // Fallback: try embedded sign link (works as a direct link too)
         const signLinkResponse = await fetch(
           `${baseUrl}/v1/document/getEmbeddedSignLink?documentId=${documentId}&signerEmail=${encodeURIComponent(customerEmail)}`,
           { headers: { 'X-API-KEY': apiKey } }
@@ -63,15 +84,15 @@ Deno.serve(async (req) => {
           signingLink = signLinkData.signLink || '';
           if (signingLink) break;
         } else {
-          console.warn(`Embedded sign link attempt ${attempt + 1} failed:`, signLinkResponse.status);
+          console.warn(`Sign link attempt ${attempt + 1} failed:`, signLinkResponse.status);
         }
       } catch (e) {
-        console.warn(`Embedded sign link attempt ${attempt + 1} error:`, e);
+        console.warn(`Sign link attempt ${attempt + 1} error:`, e);
       }
     }
 
     if (!signingLink) {
-      console.warn('Could not get embedded signing link after 3 attempts');
+      console.warn('Could not get signing link after 3 attempts');
     }
 
     // Get tenant branding
