@@ -117,8 +117,8 @@ function AgreementCard({
       const data = await response.json();
       if (data?.ok) {
         toast({ title: 'Status Updated', description: `Document status: ${data.status}` });
-        queryClient.invalidateQueries({ queryKey: ['rental-agreements', rentalId] });
-        queryClient.invalidateQueries({ queryKey: ['rental', rentalId] });
+        queryClient.invalidateQueries({ queryKey: ['rental-agreements'] });
+        queryClient.invalidateQueries({ queryKey: ['rental'] });
       } else {
         toast({ title: 'Check Failed', description: data?.error || 'Could not check status', variant: 'destructive' });
       }
@@ -148,12 +148,12 @@ function AgreementCard({
       const data = await response.json();
       if (data?.ok) {
         toast({ title: 'Agreement Resent', description: 'A new agreement has been sent for signing' });
-        queryClient.invalidateQueries({ queryKey: ['rental-agreements', rentalId] });
-        queryClient.invalidateQueries({ queryKey: ['rental', rentalId] });
+        queryClient.invalidateQueries({ queryKey: ['rental-agreements'] });
+        queryClient.invalidateQueries({ queryKey: ['rental'] });
       } else if (data?.error === 'insufficient_credits') {
         toast({ title: 'Insufficient Credits', description: 'Top up your credits to send this agreement', variant: 'destructive' });
-        queryClient.invalidateQueries({ queryKey: ['rental-agreements', rentalId] });
-        queryClient.invalidateQueries({ queryKey: ['rental', rentalId] });
+        queryClient.invalidateQueries({ queryKey: ['rental-agreements'] });
+        queryClient.invalidateQueries({ queryKey: ['rental'] });
       } else {
         toast({ title: 'Resend Failed', description: data?.error || data?.detail || 'Failed to resend agreement', variant: 'destructive' });
       }
@@ -306,8 +306,8 @@ export function AgreementTimeline({
           description: 'Top up your credits to send this agreement',
           variant: 'destructive',
         });
-        queryClient.invalidateQueries({ queryKey: ['rental-agreements', rentalId] });
-        queryClient.invalidateQueries({ queryKey: ['rental', rentalId] });
+        queryClient.invalidateQueries({ queryKey: ['rental-agreements'] });
+        queryClient.invalidateQueries({ queryKey: ['rental'] });
       } else if (!response.ok || !data?.ok) {
         toast({ title: 'Agreement Error', description: data?.detail || data?.error || 'Failed to send agreement.', variant: 'destructive' });
       } else {
@@ -317,8 +317,8 @@ export function AgreementTimeline({
             ? `Extension #${extGroup?.extensionNumber} agreement has been sent for signing`
             : 'Rental agreement has been sent for signing',
         });
-        queryClient.invalidateQueries({ queryKey: ['rental-agreements', rentalId] });
-        queryClient.invalidateQueries({ queryKey: ['rental', rentalId] });
+        queryClient.invalidateQueries({ queryKey: ['rental-agreements'] });
+        queryClient.invalidateQueries({ queryKey: ['rental'] });
       }
     } catch (error: any) {
       toast({ title: 'Agreement Error', description: error?.message || 'Failed to send agreement', variant: 'destructive' });
