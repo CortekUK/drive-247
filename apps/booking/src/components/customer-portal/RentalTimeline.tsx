@@ -16,7 +16,13 @@ import {
   Download,
   Loader2,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
+
+const safeFormat = (dateStr: string | null | undefined, fmt: string): string | null => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  return isValid(d) ? format(d, fmt) : null;
+};
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
 import { useRentalAgreements } from '@/hooks/use-rental-agreements';
@@ -186,17 +192,17 @@ function AgreementItem({
             {/* Period dates */}
             <p className="text-[11px] text-muted-foreground mt-0.5">
               {isExtension
-                ? `Extended to ${agreement.period_end_date ? format(new Date(agreement.period_end_date), 'MMM d, yyyy') : 'N/A'}`
+                ? `Extended to ${safeFormat(agreement.period_end_date, 'MMM d, yyyy') ?? 'N/A'}`
                 : agreement.period_start_date && agreement.period_end_date
-                ? `${format(new Date(agreement.period_start_date), 'MMM d, yyyy')} – ${format(new Date(agreement.period_end_date), 'MMM d, yyyy')}`
+                ? `${safeFormat(agreement.period_start_date, 'MMM d, yyyy') ?? ''} – ${safeFormat(agreement.period_end_date, 'MMM d, yyyy') ?? ''}`
                 : ''}
             </p>
 
             {/* Timestamps */}
             <p className="text-[10px] text-muted-foreground mt-0.5">
-              {agreement.envelope_sent_at && `Sent ${format(new Date(agreement.envelope_sent_at), 'MMM d')}`}
-              {agreement.envelope_sent_at && agreement.envelope_completed_at && ' · '}
-              {agreement.envelope_completed_at && `Signed ${format(new Date(agreement.envelope_completed_at), 'MMM d')}`}
+              {safeFormat(agreement.envelope_sent_at, 'MMM d') && `Sent ${safeFormat(agreement.envelope_sent_at, 'MMM d')}`}
+              {safeFormat(agreement.envelope_sent_at, 'MMM d') && safeFormat(agreement.envelope_completed_at, 'MMM d') && ' · '}
+              {safeFormat(agreement.envelope_completed_at, 'MMM d') && `Signed ${safeFormat(agreement.envelope_completed_at, 'MMM d')}`}
             </p>
           </div>
 
@@ -310,7 +316,7 @@ function InsuranceItem({
                 </Badge>
               ))}
               <span className="text-[10px] text-muted-foreground ml-1">
-                {format(new Date(policy.trip_start_date), 'MMM dd')} – {format(new Date(policy.trip_end_date), 'MMM dd, yyyy')}
+                {safeFormat(policy.trip_start_date, 'MMM dd') ?? '—'} – {safeFormat(policy.trip_end_date, 'MMM dd, yyyy') ?? '—'}
               </span>
             </div>
           </div>

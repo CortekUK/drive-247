@@ -34,7 +34,13 @@ import {
   PenLine,
   CalendarPlus,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
+
+const safeFormat = (dateStr: string | null | undefined, fmt: string): string => {
+  if (!dateStr) return 'N/A';
+  const d = new Date(dateStr);
+  return isValid(d) ? format(d, fmt) : 'N/A';
+};
 import { toast } from 'sonner';
 
 function StatCard({
@@ -138,13 +144,13 @@ function AgreementCard({
                   {agreement.period_start_date && (
                     <div>
                       <span className="text-muted-foreground">Previous End:</span>{' '}
-                      {format(new Date(agreement.period_start_date), 'MMM d, yyyy')}
+                      {safeFormat(agreement.period_start_date, 'MMM d, yyyy')}
                     </div>
                   )}
                   {agreement.period_end_date && (
                     <div>
                       <span className="text-muted-foreground">Extended To:</span>{' '}
-                      {format(new Date(agreement.period_end_date), 'MMM d, yyyy')}
+                      {safeFormat(agreement.period_end_date, 'MMM d, yyyy')}
                     </div>
                   )}
                 </>
@@ -153,13 +159,13 @@ function AgreementCard({
                   {agreement.rental_start_date && (
                     <div>
                       <span className="text-muted-foreground">Start Date:</span>{' '}
-                      {format(new Date(agreement.rental_start_date), 'MMM d, yyyy')}
+                      {safeFormat(agreement.rental_start_date, 'MMM d, yyyy')}
                     </div>
                   )}
                   {agreement.rental_end_date && (
                     <div>
                       <span className="text-muted-foreground">End Date:</span>{' '}
-                      {format(new Date(agreement.rental_end_date), 'MMM d, yyyy')}
+                      {safeFormat(agreement.rental_end_date, 'MMM d, yyyy')}
                     </div>
                   )}
                 </>
@@ -167,13 +173,13 @@ function AgreementCard({
               {agreement.envelope_sent_at && (
                 <div>
                   <span className="text-muted-foreground">Sent:</span>{' '}
-                  {format(new Date(agreement.envelope_sent_at), 'MMM d, yyyy')}
+                  {safeFormat(agreement.envelope_sent_at, 'MMM d, yyyy')}
                 </div>
               )}
               {agreement.envelope_completed_at && (
                 <div>
                   <span className="text-muted-foreground">Signed:</span>{' '}
-                  {format(new Date(agreement.envelope_completed_at), 'MMM d, yyyy')}
+                  {safeFormat(agreement.envelope_completed_at, 'MMM d, yyyy')}
                 </div>
               )}
             </div>

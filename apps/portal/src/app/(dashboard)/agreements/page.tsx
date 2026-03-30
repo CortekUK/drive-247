@@ -5,22 +5,30 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { FileSignature, Download, ExternalLink, Loader2, Search, BarChart3 } from "lucide-react";
+import { FileSignature, Download, ExternalLink, Loader2, Search, BarChart3, Eye, PenLine } from "lucide-react";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { format } from "date-fns";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { useTenant } from "@/contexts/TenantContext";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import Link from "next/link";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface AgreementDoc {
   id: string;
+  rental_id?: string;
   document_name: string;
   file_name?: string;
   file_url?: string | null;
+  document_id?: string | null;
   created_at: string;
   document_type?: string;
   customer_id?: string;
@@ -36,9 +44,22 @@ export default function AgreementsList() {
   const [pageSize] = useState(25);
   const { tenant } = useTenant();
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [viewDialogDoc, setViewDialogDoc] = useState<AgreementDoc | null>(null);
+  const [viewDialogUrl, setViewDialogUrl] = useState<string | null>(null);
+  const [viewDialogLoading, setViewDialogLoading] = useState(false);
+  const [signingDocId, setSigningDocId] = useState<string | null>(null);
+  const [signDialogOpen, setSignDialogOpen] = useState(false);
+  const [signingUrl, setSigningUrl] = useState<string | null>(null);
+  const [signingDoc, setSigningDoc] = useState<AgreementDoc | null>(null);
+  const [signLoading, setSignLoading] = useState(false);
+  const signingIframeLoadCount = useRef(0);
+  // Track IDs that were just signed so UI can optimistically show "Signed"
+  const [justSignedIds, setJustSignedIds] = useState<Set<string>>(new Set());
 
   // Fetch signed agreements from customer_documents
-  const { data: signedAgreements = [], isLoading: isLoadingSigned } = useQuery({
+  const { data: signedAgreements = [], isLoading: isLoadingSigned, refetch: refetchSigned } = useQuery({
     queryKey: ["signed-agreements", tenant?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -58,7 +79,7 @@ export default function AgreementsList() {
   });
 
   // Fetch pending rental agreements from rentals table
-  const { data: rentalAgreements = [], isLoading: isLoadingRentals } = useQuery({
+  const { data: rentalAgreements = [], isLoading: isLoadingRentals, refetch: refetchRentals } = useQuery({
     queryKey: ["rental-agreements-page", tenant?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -68,6 +89,7 @@ export default function AgreementsList() {
           created_at,
           document_status,
           signed_document_id,
+          docusign_envelope_id,
           customers!rentals_customer_id_fkey(name),
           vehicles!rentals_vehicle_id_fkey(reg, make, model)
         `)
@@ -82,7 +104,7 @@ export default function AgreementsList() {
   });
 
   // Fetch extension agreements from rental_agreements table
-  const { data: extensionAgreements = [], isLoading: isLoadingExtensions } = useQuery({
+  const { data: extensionAgreements = [], isLoading: isLoadingExtensions, refetch: refetchExtensions } = useQuery({
     queryKey: ["extension-agreements-page", tenant?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -92,7 +114,9 @@ export default function AgreementsList() {
           created_at,
           document_status,
           signed_document_id,
+          document_id,
           agreement_type,
+          rental_id,
           rentals!rental_agreements_rental_id_fkey(
             id,
             customers!rentals_customer_id_fkey(name),
@@ -116,10 +140,12 @@ export default function AgreementsList() {
   const allAgreements: AgreementDoc[] = [
     ...rentalAgreements.map((rental: any) => ({
       id: rental.id,
+      rental_id: rental.id,
       document_name: `Rental Agreement - ${rental.vehicles?.reg || 'Vehicle'}`,
       created_at: rental.created_at,
       document_type: 'Agreement',
       status: rental.document_status || 'pending',
+      document_id: rental.docusign_envelope_id || null,
       customer_id: rental.customers?.id,
       customers: rental.customers,
       file_url: null,
@@ -128,10 +154,12 @@ export default function AgreementsList() {
     })),
     ...extensionAgreements.map((agreement: any) => ({
       id: agreement.id,
+      rental_id: agreement.rental_id,
       document_name: `Extension Agreement - ${agreement.rentals?.vehicles?.reg || 'Vehicle'}`,
       created_at: agreement.created_at,
       document_type: 'Agreement',
       status: agreement.document_status || 'pending',
+      document_id: agreement.document_id || null,
       customer_id: agreement.rentals?.customers?.id,
       customers: agreement.rentals?.customers,
       file_url: null,
@@ -195,6 +223,193 @@ export default function AgreementsList() {
     const publicUrl = getPublicUrl(fileUrl);
     window.open(publicUrl, "_blank");
   };
+
+  const handleViewAgreement = async (doc: AgreementDoc) => {
+    setViewDialogDoc(doc);
+    setViewDialogOpen(true);
+    setViewDialogUrl(null);
+    setViewDialogLoading(true);
+
+    try {
+      const body: Record<string, string> = {};
+      if (doc.agreementType === "extension") {
+        body.agreementId = doc.id;
+      } else {
+        body.rentalId = doc.rental_id || doc.id;
+      }
+
+      const response = await fetch("/api/esign/view", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+
+      if (result.ok && result.documentUrl) {
+        setViewDialogUrl(result.documentUrl);
+      } else if (result.ok && result.documentBase64) {
+        const byteCharacters = atob(result.documentBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: "application/pdf" });
+        setViewDialogUrl(URL.createObjectURL(blob));
+      } else {
+        toast.error(result.error || "Failed to load document");
+        setViewDialogOpen(false);
+      }
+    } catch {
+      toast.error("Failed to load document");
+      setViewDialogOpen(false);
+    } finally {
+      setViewDialogLoading(false);
+    }
+  };
+
+  const handleDownloadAgreement = async (doc: AgreementDoc) => {
+    setDownloadingDocId(doc.id);
+    try {
+      const body: Record<string, string> = {};
+      if (doc.agreementType === "extension") {
+        body.agreementId = doc.id;
+      } else {
+        body.rentalId = doc.rental_id || doc.id;
+      }
+
+      const response = await fetch("/api/esign/view", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+
+      if (!result.ok) {
+        toast.error(result.error || "Failed to download document");
+        return;
+      }
+
+      let blob: Blob;
+      if (result.documentUrl) {
+        const docResponse = await fetch(result.documentUrl);
+        blob = await docResponse.blob();
+      } else if (result.documentBase64) {
+        const byteCharacters = atob(result.documentBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        blob = new Blob([new Uint8Array(byteNumbers)], { type: "application/pdf" });
+      } else {
+        toast.error("No document data received");
+        return;
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${doc.document_name}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Agreement downloaded");
+    } catch {
+      toast.error("Failed to download document");
+    } finally {
+      setDownloadingDocId(null);
+    }
+  };
+
+  const handleCloseViewDialog = () => {
+    setViewDialogOpen(false);
+    if (viewDialogUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(viewDialogUrl);
+    }
+    setViewDialogUrl(null);
+    setViewDialogDoc(null);
+  };
+
+  const handleSign = async (doc: AgreementDoc) => {
+    setSigningDocId(doc.id);
+    setSignLoading(true);
+    try {
+      const body: Record<string, string> = {};
+      if (doc.agreementType === "extension") {
+        body.agreementId = doc.id;
+        body.rentalId = doc.rental_id || "";
+      } else {
+        body.rentalId = doc.rental_id || doc.id;
+      }
+
+      const response = await fetch("/api/esign/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+
+      if (result.signingUrl) {
+        signingIframeLoadCount.current = 0;
+        setSigningUrl(result.signingUrl);
+        setSigningDoc(doc);
+        setSignDialogOpen(true);
+      } else if (result.emailSent) {
+        toast.info(result.error || "Signing link sent to customer's email");
+      } else {
+        toast.error(result.error || "Failed to get signing link");
+      }
+    } catch {
+      toast.error("Failed to get signing link");
+    } finally {
+      setSigningDocId(null);
+      setSignLoading(false);
+    }
+  };
+
+  const handleCloseSignDialog = (wasSigned = false) => {
+    const doc = signingDoc;
+    setSignDialogOpen(false);
+    setSigningUrl(null);
+    setSigningDoc(null);
+    signingIframeLoadCount.current = 0;
+
+    if (wasSigned && doc) {
+      // Optimistically mark as signed in the UI immediately
+      setJustSignedIds((prev) => new Set(prev).add(doc.id));
+
+      // Sync status from BoldSign to DB after a delay (BoldSign needs time to process)
+      const body: Record<string, string> = {};
+      if (doc.agreementType === "extension") {
+        body.agreementId = doc.id;
+      } else {
+        body.rentalId = doc.rental_id || doc.id;
+      }
+
+      // First sync after 3s, then refetch all data after 5s
+      setTimeout(async () => {
+        try {
+          await fetch("/api/esign/status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+        } catch {}
+        refetchRentals();
+        refetchExtensions();
+        refetchSigned();
+      }, 3000);
+    }
+  };
+
+  const handleSigningIframeLoad = useCallback(() => {
+    signingIframeLoadCount.current += 1;
+    if (signingIframeLoadCount.current > 1) {
+      handleCloseSignDialog(true);
+      toast.success("Agreement signed successfully");
+    }
+  }, [signingDoc]);
 
   const generateAgreementPdf = (doc: AgreementDoc, index: number): { blob: Blob; fileName: string } => {
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -469,7 +684,9 @@ export default function AgreementsList() {
                         {doc.customers?.name || "—"}
                       </TableCell>
                       <TableCell>
-                        {doc.isRentalAgreement ? (
+                        {justSignedIds.has(doc.id) || doc.status === "completed" || doc.status === "signed" ? (
+                          <span className="text-sm text-green-600 dark:text-green-400">Signed</span>
+                        ) : doc.isRentalAgreement ? (
                           <span className="text-sm text-orange-600 dark:text-orange-400">Pending signature</span>
                         ) : (
                           <span className="text-sm text-green-600 dark:text-green-400">Signed</span>
@@ -486,6 +703,7 @@ export default function AgreementsList() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleDownload(doc.file_url!, doc.file_name || doc.document_name)}
+                                title="Download"
                               >
                                 <Download className="h-4 w-4" />
                               </Button>
@@ -493,12 +711,58 @@ export default function AgreementsList() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleView(doc.file_url!)}
+                                title="Open in new tab"
                               >
                                 <ExternalLink className="h-4 w-4" />
                               </Button>
                             </>
+                          ) : doc.document_id ? (
+                            <>
+                              {!justSignedIds.has(doc.id) && doc.status !== "completed" && doc.status !== "signed" && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleSign(doc)}
+                                  disabled={signingDocId === doc.id}
+                                  title="Sign agreement"
+                                  className="gap-1"
+                                >
+                                  {signingDocId === doc.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <PenLine className="h-4 w-4" />
+                                  )}
+                                  Sign
+                                </Button>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleViewAgreement(doc)}
+                                disabled={viewDialogLoading && viewDialogDoc?.id === doc.id}
+                                title="View document"
+                              >
+                                {viewDialogLoading && viewDialogDoc?.id === doc.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDownloadAgreement(doc)}
+                                disabled={downloadingDocId === doc.id}
+                                title="Download document"
+                              >
+                                {downloadingDocId === doc.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Download className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </>
                           ) : (
-                            <span className="text-sm text-muted-foreground">—</span>
+                            <span className="text-sm text-muted-foreground">No document</span>
                           )}
                         </div>
                       </TableCell>
@@ -539,6 +803,119 @@ export default function AgreementsList() {
           </div>
         </>
       )}
+
+      {/* Document Viewer Dialog */}
+      <Dialog open={viewDialogOpen} onOpenChange={(open) => !open && handleCloseViewDialog()}>
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
+            <div className="flex items-center justify-between pr-8">
+              <div>
+                <DialogTitle>{viewDialogDoc?.document_name}</DialogTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {viewDialogDoc?.customers?.name}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {viewDialogDoc && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDownloadAgreement(viewDialogDoc)}
+                    disabled={downloadingDocId === viewDialogDoc.id}
+                  >
+                    {downloadingDocId === viewDialogDoc.id ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4 mr-1" />
+                    )}
+                    Download
+                  </Button>
+                )}
+                {viewDialogUrl && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(viewDialogUrl, "_blank")}
+                  >
+                    <ExternalLink className="h-4 w-4 mr-1" />
+                    Open in New Tab
+                  </Button>
+                )}
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden bg-muted">
+            {viewDialogLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                  <p className="text-muted-foreground mt-2">Loading document...</p>
+                </div>
+              </div>
+            ) : viewDialogUrl ? (
+              <iframe
+                src={`${viewDialogUrl}#toolbar=1&navpanes=0`}
+                className="w-full h-full border-0"
+                title="Agreement Document"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-muted-foreground">Document not available</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Embedded Signing Dialog */}
+      <Dialog open={signDialogOpen} onOpenChange={(open) => !open && handleCloseSignDialog()}>
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
+            <div className="flex items-center justify-between pr-8">
+              <div>
+                <DialogTitle>
+                  Sign {signingDoc?.document_name}
+                </DialogTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Review and sign the agreement below
+                </p>
+              </div>
+              {signingUrl && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open(signingUrl, "_blank")}
+                >
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  Open in New Tab
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden">
+            {signLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                  <p className="text-muted-foreground mt-2">Loading signing page...</p>
+                </div>
+              </div>
+            ) : signingUrl ? (
+              <iframe
+                src={signingUrl}
+                className="w-full h-full border-0"
+                title="Sign Agreement"
+                allow="camera; microphone"
+                onLoad={handleSigningIframeLoad}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-muted-foreground">Signing page not available</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
