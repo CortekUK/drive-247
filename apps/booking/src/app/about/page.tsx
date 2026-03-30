@@ -67,6 +67,7 @@ const About = () => {
   const replaceCompanyName = createCompanyNameReplacer(appName);
 
   useEffect(() => {
+    if (!tenant?.id) return;
     loadFAQs();
     loadStats();
 
@@ -144,6 +145,7 @@ const About = () => {
     const { data } = await supabase
       .from("faqs")
       .select("*")
+      .eq("tenant_id", tenant?.id)
       .eq("is_active", true)
       .order("display_order");
 
