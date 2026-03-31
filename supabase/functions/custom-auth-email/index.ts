@@ -265,7 +265,7 @@ Deno.serve(async (req) => {
       const { data: appUser } = await supabaseAdmin
         .from("app_users")
         .select("tenant_id")
-        .eq("user_id", user.id)
+        .eq("auth_user_id", user.id)
         .maybeSingle();
 
       if (appUser?.tenant_id) {
@@ -286,8 +286,15 @@ Deno.serve(async (req) => {
           slug: "drive247",
         };
 
-    // Build proper redirect URL (not localhost) using tenant slug
-    const redirectTo = buildRedirectUrl(tenantSlug || branding.slug);
+    // Use the client-provided redirect URL if it's a valid production URL,
+    // otherwise build one from the tenant slug (covers localhost/missing cases)
+    const clientRedirect = email_data.redirect_to;
+    const isValidProductionRedirect = clientRedirect &&
+      !clientRedirect.includes('localhost') &&
+      (clientRedirect.includes('drive-247.com') || clientRedirect.includes('vercel.app'));
+    const redirectTo = isValidProductionRedirect
+      ? clientRedirect
+      : buildRedirectUrl(tenantSlug || branding.slug);
 
     // Build the Supabase verification URL
     const confirmationUrl = buildVerificationUrl(
