@@ -20,6 +20,7 @@ import {
   LoginFormData,
 } from '@/client-schemas/auth';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
+import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import {
   Check,
@@ -37,7 +38,7 @@ import {
 import { toast } from 'sonner';
 import { BlockedAccountDialog } from '@/components/BlockedAccountDialog';
 
-type AuthMode = 'prompt' | 'signup' | 'login' | 'forgot-password' | 'verify-otp';
+type AuthMode = 'prompt' | 'signup' | 'login' | 'forgot-password' | 'verify-otp' | 'reset-verify-otp' | 'reset-new-password';
 
 interface AuthPromptDialogProps {
   open: boolean;
@@ -92,7 +93,14 @@ export function AuthPromptDialog({
   const [otpValues, setOtpValues] = useState<string[]>(['', '', '', '', '', '']);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [showBlockedDialog, setShowBlockedDialog] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetOtpValues, setResetOtpValues] = useState<string[]>(['', '', '', '', '', '']);
+  const [resetCooldown, setResetCooldown] = useState(0);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const resetOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const { signUp, signIn, verifyOTP, resendOTP, resetPassword } = useCustomerAuthStore();
   const { tenant } = useTenant();
@@ -203,15 +211,19 @@ export function AuthPromptDialog({
 
     setIsLoading(true);
     try {
-      const { error } = await resetPassword(email);
+      const { error } = await supabase.functions.invoke('send-verification-otp', {
+        body: { email, tenant_id: tenant?.id, type: 'password_reset' },
+      });
 
       if (error) {
-        toast.error(error.message || 'Failed to send reset email');
+        toast.error(error.message || 'Failed to send reset code');
         return;
       }
 
-      toast.success('Password reset email sent! Check your inbox.');
-      setMode('login');
+      setResetEmail(email);
+      setResetOtpValues(['', '', '', '', '', '']);
+      setResetCooldown(60);
+      setMode('reset-verify-otp');
     } catch (error) {
       toast.error('An unexpected error occurred');
     } finally {
@@ -219,17 +231,26 @@ export function AuthPromptDialog({
     }
   };
 
-  // Resend cooldown timer
+  // Resend cooldown timers
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
     return () => clearTimeout(timer);
   }, [resendCooldown]);
 
+  useEffect(() => {
+    if (resetCooldown <= 0) return;
+    const timer = setTimeout(() => setResetCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resetCooldown]);
+
   // Auto-focus first OTP input when entering verify mode
   useEffect(() => {
     if (mode === 'verify-otp') {
       setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
+    }
+    if (mode === 'reset-verify-otp') {
+      setTimeout(() => resetOtpRefs.current[0]?.focus(), 100);
     }
   }, [mode]);
 
@@ -314,6 +335,126 @@ export function AuthPromptDialog({
       setResendCooldown(60);
       setOtpValues(['', '', '', '', '', '']);
       setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
+    } catch (error) {
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetOtpChange = (index: number, value: string) => {
+    const digit = value.replace(/\D/g, '').slice(-1);
+    setResetOtpValues((prev) => {
+      const next = [...prev];
+      next[index] = digit;
+      if (digit && index < 5) {
+        setTimeout(() => resetOtpRefs.current[index + 1]?.focus(), 0);
+      }
+      return next;
+    });
+  };
+
+  const handleResetOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      if (!resetOtpValues[index] && index > 0) {
+        resetOtpRefs.current[index - 1]?.focus();
+        setResetOtpValues((prev) => {
+          const next = [...prev];
+          next[index - 1] = '';
+          return next;
+        });
+        e.preventDefault();
+      }
+    }
+  };
+
+  const handleResetOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length === 0) return;
+    const newValues = [...resetOtpValues];
+    for (let i = 0; i < pasted.length && i < 6; i++) {
+      newValues[i] = pasted[i];
+    }
+    setResetOtpValues(newValues);
+    const nextEmptyIndex = newValues.findIndex((v) => v === '');
+    const focusIndex = nextEmptyIndex === -1 ? 5 : nextEmptyIndex;
+    setTimeout(() => resetOtpRefs.current[focusIndex]?.focus(), 0);
+  };
+
+  const handleResetOtpSubmit = async () => {
+    const code = resetOtpValues.join('');
+    if (code.length !== 6) {
+      toast.error('Please enter the full 6-digit code');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('verify-otp', {
+        body: { email: resetEmail, code, tenant_id: tenant?.id },
+      });
+      if (error || !result?.verified) {
+        toast.error(result?.error || error?.message || 'Invalid or expired code');
+        setResetOtpValues(['', '', '', '', '', '']);
+        setTimeout(() => resetOtpRefs.current[0]?.focus(), 100);
+        return;
+      }
+      // OTP verified — show new password form
+      setMode('reset-new-password');
+    } catch (error) {
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendResetOTP = async () => {
+    if (resetCooldown > 0) return;
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.functions.invoke('send-verification-otp', {
+        body: { email: resetEmail, tenant_id: tenant?.id, type: 'password_reset' },
+      });
+      if (error) {
+        toast.error('Failed to resend code');
+        return;
+      }
+      toast.success('A new code has been sent');
+      setResetCooldown(60);
+      setResetOtpValues(['', '', '', '', '', '']);
+      setTimeout(() => resetOtpRefs.current[0]?.focus(), 100);
+    } catch (error) {
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSetNewPassword = async () => {
+    if (newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      // Sign in first (OTP already confirmed the email), then update password
+      // Use admin API via edge function to reset the password
+      const { data: result, error } = await supabase.functions.invoke('reset-password-with-otp', {
+        body: { email: resetEmail, new_password: newPassword, tenant_id: tenant?.id },
+      });
+      if (error || result?.error) {
+        toast.error(result?.error || error?.message || 'Failed to reset password');
+        return;
+      }
+      toast.success('Password reset successfully! Please log in.');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setMode('login');
+      loginForm.setValue('email', resetEmail);
     } catch (error) {
       toast.error('An unexpected error occurred');
     } finally {
@@ -634,7 +775,7 @@ export function AuthPromptDialog({
           <DialogTitle>Reset Password</DialogTitle>
         </div>
         <DialogDescription>
-          Enter your email and we'll send you a reset link
+          Enter your email and we'll send you a reset code
         </DialogDescription>
       </DialogHeader>
 
@@ -657,7 +798,7 @@ export function AuthPromptDialog({
               Sending...
             </>
           ) : (
-            'Send Reset Link'
+            'Send Reset Code'
           )}
         </Button>
       </div>
@@ -671,6 +812,157 @@ export function AuthPromptDialog({
           Log in
         </button>
       </p>
+    </>
+  );
+
+  const renderResetVerifyOTPMode = () => (
+    <>
+      <DialogHeader className="text-center">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent/10">
+          <Shield className="h-8 w-8 text-accent" />
+        </div>
+        <DialogTitle className="text-xl">Enter Reset Code</DialogTitle>
+        <DialogDescription className="text-center">
+          Enter the 6-digit code sent to
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="py-4 space-y-4">
+        <div className="bg-muted/50 rounded-lg p-3 text-center">
+          <p className="font-medium text-foreground">{resetEmail}</p>
+        </div>
+
+        <div className="flex justify-center gap-2" onPaste={handleResetOtpPaste}>
+          {resetOtpValues.map((digit, index) => (
+            <input
+              key={index}
+              ref={(el) => { resetOtpRefs.current[index] = el; }}
+              type="text"
+              inputMode="numeric"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => handleResetOtpChange(index, e.target.value)}
+              onKeyDown={(e) => handleResetOtpKeyDown(index, e)}
+              className="w-11 h-13 text-center text-xl font-bold rounded-lg border-2 border-input bg-background focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
+              disabled={isLoading}
+            />
+          ))}
+        </div>
+
+        <p className="text-xs text-muted-foreground text-center">
+          Code expires in 15 minutes
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-3 pt-2">
+        <Button
+          onClick={handleResetOtpSubmit}
+          disabled={isLoading || resetOtpValues.join('').length !== 6}
+          className="w-full"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              Verifying...
+            </>
+          ) : (
+            'Verify Code'
+          )}
+        </Button>
+
+        <div className="flex items-center justify-center gap-1 text-sm">
+          <span className="text-muted-foreground">Didn't receive it?</span>
+          <Button
+            variant="link"
+            size="sm"
+            onClick={handleResendResetOTP}
+            disabled={resetCooldown > 0 || isLoading}
+            className="p-0 h-auto"
+          >
+            {resetCooldown > 0 ? `Resend in ${resetCooldown}s` : 'Resend code'}
+          </Button>
+        </div>
+
+        <Button variant="ghost" onClick={() => setMode('forgot-password')} className="w-full text-xs">
+          Try a different email
+        </Button>
+      </div>
+    </>
+  );
+
+  const renderResetNewPasswordMode = () => (
+    <>
+      <DialogHeader>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setMode('login')} className="rounded-full p-1 hover:bg-muted">
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <DialogTitle>Set New Password</DialogTitle>
+        </div>
+        <DialogDescription>
+          Enter a new password for {resetEmail}
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-4 py-4">
+        <div className="space-y-2">
+          <Label>New Password</Label>
+          <div className="relative">
+            <Input
+              type={showNewPassword ? 'text' : 'password'}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Enter new password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowNewPassword(!showNewPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            >
+              {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Confirm New Password</Label>
+          <Input
+            type="password"
+            value={confirmNewPassword}
+            onChange={(e) => setConfirmNewPassword(e.target.value)}
+            placeholder="Confirm new password"
+          />
+        </div>
+
+        {newPassword.length > 0 && (
+          <div className="flex gap-3 text-xs">
+            <span className={newPassword.length >= 8 ? 'text-green-600' : 'text-muted-foreground'}>
+              {newPassword.length >= 8 ? '✓' : '○'} 8+ chars
+            </span>
+            <span className={/[A-Z]/.test(newPassword) ? 'text-green-600' : 'text-muted-foreground'}>
+              {/[A-Z]/.test(newPassword) ? '✓' : '○'} Uppercase
+            </span>
+            <span className={/\d/.test(newPassword) ? 'text-green-600' : 'text-muted-foreground'}>
+              {/\d/.test(newPassword) ? '✓' : '○'} Number
+            </span>
+          </div>
+        )}
+
+        <Button
+          onClick={handleSetNewPassword}
+          disabled={isLoading || newPassword.length < 8 || newPassword !== confirmNewPassword}
+          className="w-full"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              Resetting...
+            </>
+          ) : (
+            'Reset Password'
+          )}
+        </Button>
+      </div>
     </>
   );
 
@@ -765,6 +1057,8 @@ export function AuthPromptDialog({
           {mode === 'signup' && renderSignupMode()}
           {mode === 'login' && renderLoginMode()}
           {mode === 'forgot-password' && renderForgotPasswordMode()}
+          {mode === 'reset-verify-otp' && renderResetVerifyOTPMode()}
+          {mode === 'reset-new-password' && renderResetNewPasswordMode()}
           {mode === 'verify-otp' && renderVerifyOTPMode()}
         </DialogContent>
       </Dialog>

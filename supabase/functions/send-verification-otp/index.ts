@@ -12,7 +12,8 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { email, tenant_id } = await req.json();
+    const { email, tenant_id, type } = await req.json();
+    const isPasswordReset = type === 'password_reset';
 
     if (!email) {
       return errorResponse('Email is required', 400);
@@ -64,13 +65,21 @@ Deno.serve(async (req) => {
         };
 
     // Build branded OTP email
+    const heading = isPasswordReset ? 'Reset Your Password' : 'Verify Your Email';
+    const bodyText = isPasswordReset
+      ? `Enter the following code to reset your password for your <strong>${branding.companyName}</strong> account.`
+      : `Enter the following code to verify your email address and complete your registration with <strong>${branding.companyName}</strong>.`;
+    const footerText = isPasswordReset
+      ? `If you didn't request a password reset, you can safely ignore this email.`
+      : `If you didn't create an account with ${branding.companyName}, you can safely ignore this email.`;
+
     const emailContent = `
       <tr>
         <td style="padding: 40px 35px;">
-          <h1 style="color: #1a1a1a; margin: 0 0 20px; font-size: 24px;">Verify Your Email</h1>
+          <h1 style="color: #1a1a1a; margin: 0 0 20px; font-size: 24px;">${heading}</h1>
 
           <p style="color: #444; line-height: 1.7; font-size: 15px;">
-            Enter the following code to verify your email address and complete your registration with <strong>${branding.companyName}</strong>.
+            ${bodyText}
           </p>
 
           <div style="text-align: center; margin: 32px 0;">
@@ -84,7 +93,7 @@ Deno.serve(async (req) => {
           </p>
 
           <p style="color: #999; font-size: 12px; line-height: 1.5; margin-top: 24px; border-top: 1px solid #eee; padding-top: 16px;">
-            If you didn't create an account with ${branding.companyName}, you can safely ignore this email.
+            ${footerText}
           </p>
         </td>
       </tr>`;
@@ -94,7 +103,9 @@ Deno.serve(async (req) => {
     const result = await sendResendEmail(
       {
         to: email,
-        subject: `Your verification code: ${code} | ${branding.companyName}`,
+        subject: isPasswordReset
+          ? `Your password reset code: ${code} | ${branding.companyName}`
+          : `Your verification code: ${code} | ${branding.companyName}`,
         html,
         tenantId: tenant_id,
       },
