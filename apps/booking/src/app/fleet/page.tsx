@@ -213,6 +213,11 @@ const Pricing = () => {
   // Filter and sort vehicles
   const filteredAndSortedVehicles = vehicles
     .filter((vehicle) => {
+      // Hide disposed/sold vehicles
+      if (vehicle.status === 'Disposed' || vehicle.status === 'Sold') {
+        return false;
+      }
+
       // Hide vehicles with all availability toggles off
       if (vehicle.available_daily === false && vehicle.available_weekly === false && vehicle.available_monthly === false) {
         return false;
