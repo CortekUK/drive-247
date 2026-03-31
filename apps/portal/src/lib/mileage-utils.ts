@@ -7,8 +7,8 @@ interface VehicleMileage {
 }
 
 /** Determine mileage tier based on rental days (matches pricing tier logic). */
-export function getMileageTier(rentalDays: number): MileageTier {
-  if (rentalDays > 30) return 'monthly';
+export function getMileageTier(rentalDays: number, monthlyTierDays: number = 30): MileageTier {
+  if (rentalDays >= monthlyTierDays) return 'monthly';
   if (rentalDays >= 7) return 'weekly';
   return 'daily';
 }
@@ -25,19 +25,19 @@ export function getTierMileage(vehicle: VehicleMileage, tier: MileageTier): numb
 /**
  * Calculate total mileage allowance for a rental.
  * daily (<7d): days × daily_mileage
- * weekly (7-30d): (days/7) × weekly_mileage
- * monthly (>30d): (days/30) × monthly_mileage
+ * weekly (7 to monthlyTierDays-1): (days/7) × weekly_mileage
+ * monthly (>= monthlyTierDays): (days/monthlyTierDays) × monthly_mileage
  * Returns null if the tier has unlimited mileage.
  */
-export function calculateTotalMileageAllowance(vehicle: VehicleMileage, rentalDays: number): number | null {
-  const tier = getMileageTier(rentalDays);
+export function calculateTotalMileageAllowance(vehicle: VehicleMileage, rentalDays: number, monthlyTierDays: number = 30): number | null {
+  const tier = getMileageTier(rentalDays, monthlyTierDays);
   const perUnit = getTierMileage(vehicle, tier);
   if (perUnit === null) return null;
 
   switch (tier) {
     case 'daily': return rentalDays * perUnit;
     case 'weekly': return Math.ceil(rentalDays / 7) * perUnit;
-    case 'monthly': return Math.ceil(rentalDays / 30) * perUnit;
+    case 'monthly': return Math.ceil(rentalDays / monthlyTierDays) * perUnit;
   }
 }
 

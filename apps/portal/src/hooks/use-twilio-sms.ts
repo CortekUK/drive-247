@@ -10,7 +10,14 @@ interface TwilioStatus {
   subaccountSid: string | null;
   hasPhoneNumber: boolean;
   phoneNumber: string | null;
+  phoneNumberSid: string | null;
   isConfigured: boolean;
+  // 10DLC registration
+  brandSid: string | null;
+  brandStatus: string | null;  // 'pending' | 'approved' | 'failed'
+  campaignSid: string | null;
+  campaignStatus: string | null;  // 'pending' | 'approved' | 'failed'
+  messagingServiceSid: string | null;
 }
 
 interface AvailableNumber {
@@ -133,6 +140,60 @@ export function useTwilioSms() {
     },
   });
 
+  const registerBrand = useMutation({
+    mutationFn: (params: { brandName: string; companyType?: string; taxId?: string; taxIdCountry?: string; website?: string }) =>
+      invoke('register-brand', params),
+    onSuccess: () => {
+      invalidateStatus();
+      toast({ title: 'Brand Submitted', description: 'Your brand registration has been submitted for review.' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const createMessagingService = useMutation({
+    mutationFn: () => invoke('create-messaging-service'),
+    onSuccess: () => {
+      invalidateStatus();
+      toast({ title: 'Messaging Service Created', description: 'Your messaging service has been set up.' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const registerCampaign = useMutation({
+    mutationFn: () => invoke('register-campaign'),
+    onSuccess: () => {
+      invalidateStatus();
+      toast({ title: 'Campaign Submitted', description: 'Your campaign registration has been submitted for carrier review.' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const refreshRegistrationStatus = useMutation({
+    mutationFn: () => invoke('get-registration-status'),
+    onSuccess: () => {
+      invalidateStatus();
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const configureWebhooks = useMutation({
+    mutationFn: () => invoke('configure-webhooks'),
+    onSuccess: () => {
+      toast({ title: 'Webhooks Configured', description: 'SMS webhook URLs have been configured on your phone number.' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
   return {
     status: statusQuery.data ?? null,
     isLoading: statusQuery.isLoading,
@@ -142,5 +203,10 @@ export function useTwilioSms() {
     assignOwnNumber,
     sendTestSms,
     disconnect,
+    registerBrand,
+    createMessagingService,
+    registerCampaign,
+    refreshRegistrationStatus,
+    configureWebhooks,
   };
 }

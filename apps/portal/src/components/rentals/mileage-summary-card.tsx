@@ -152,13 +152,14 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
   }
 
   const allowedMileage = effectiveVehicle && rentalDays > 0
-    ? calculateTotalMileageAllowance(effectiveVehicle, rentalDays)
+    ? calculateTotalMileageAllowance(effectiveVehicle, rentalDays, tenant?.monthly_tier_days ?? 30)
     : null;
 
-  const tier = rentalDays > 0 ? getMileageTier(rentalDays) : null;
+  const mtd = tenant?.monthly_tier_days ?? 30;
+  const tier = rentalDays > 0 ? getMileageTier(rentalDays, mtd) : null;
   const tierLabel = tier ? getMileageTierLabel(tier, distanceUnit) : null;
   const perUnitMileage = effectiveVehicle && tier ? getTierMileage(effectiveVehicle, tier) : null;
-  const tierUnits = tier === 'daily' ? rentalDays : tier === 'weekly' ? Math.ceil(rentalDays / 7) : tier === 'monthly' ? Math.ceil(rentalDays / 30) : 0;
+  const tierUnits = tier === 'daily' ? rentalDays : tier === 'weekly' ? Math.ceil(rentalDays / 7) : tier === 'monthly' ? Math.ceil(rentalDays / mtd) : 0;
   const tierUnitLabel = tier === 'daily' ? 'day' : tier === 'weekly' ? 'week' : 'month';
   const excessRate = effectiveExcessRate;
 

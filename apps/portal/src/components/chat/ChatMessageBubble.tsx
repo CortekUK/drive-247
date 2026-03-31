@@ -2,11 +2,12 @@
 
 import { cn } from '@/lib/utils';
 import { format, isToday, isYesterday } from 'date-fns';
-import { Check, CheckCheck } from 'lucide-react';
+import { Check, CheckCheck, MessageSquare, Smartphone, AlertCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { ChatMessage } from '@/hooks/use-chat-messages';
+import type { ChatMessage, MessageChannel } from '@/hooks/use-chat-messages';
 import { BookingReferenceCard } from './BookingReferenceCard';
 import type { BookingReference } from './BookingPicker';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ChatMessageBubbleProps {
   message: ChatMessage;
@@ -104,13 +105,22 @@ export function ChatMessageBubble({
             <BookingReferenceCard booking={metadata.booking} isOwnMessage={isOwnMessage} />
           )}
 
-          {/* Timestamp and read status */}
+          {/* Timestamp, channel indicator, and read status */}
           <div
             className={cn(
               'flex items-center gap-1.5 mt-1',
               isOwnMessage ? 'justify-end' : 'justify-start'
             )}
           >
+            {/* Channel indicator */}
+            {message.channel && message.channel !== 'in_app' && (
+              <ChannelIndicator
+                channel={message.channel}
+                externalStatus={message.external_status}
+                isOwnMessage={isOwnMessage}
+              />
+            )}
+
             <span
               className={cn(
                 'text-[11px]',
@@ -120,9 +130,11 @@ export function ChatMessageBubble({
               {formattedTime}
             </span>
 
-            {/* Read status indicator for own messages */}
+            {/* Read/delivery status indicator for own messages */}
             {isOwnMessage && (
-              message.is_read ? (
+              message.channel === 'sms' ? (
+                <SmsDeliveryStatus status={message.external_status} isOwnMessage />
+              ) : message.is_read ? (
                 <CheckCheck className="h-4 w-4 text-primary-foreground/70" />
               ) : (
                 <Check className="h-4 w-4 text-primary-foreground/50" />
@@ -133,6 +145,67 @@ export function ChatMessageBubble({
       </div>
     </div>
   );
+}
+
+// Channel indicator component
+function ChannelIndicator({
+  channel,
+  externalStatus,
+  isOwnMessage,
+}: {
+  channel: MessageChannel;
+  externalStatus?: string | null;
+  isOwnMessage: boolean;
+}) {
+  const colorClass = isOwnMessage ? 'text-primary-foreground/60' : 'text-muted-foreground';
+
+  const label = channel === 'sms' ? 'SMS' : channel === 'whatsapp' ? 'WhatsApp' : channel === 'email' ? 'Email' : '';
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className={cn('inline-flex items-center gap-0.5', colorClass)}>
+            <Smartphone className="h-3 w-3" />
+            <span className="text-[10px] font-medium uppercase">{label}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          Sent via {label}{externalStatus ? ` - ${externalStatus}` : ''}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+// SMS delivery status icon
+function SmsDeliveryStatus({ status, isOwnMessage }: { status?: string | null; isOwnMessage: boolean }) {
+  const colorClass = isOwnMessage ? 'text-primary-foreground/70' : 'text-muted-foreground';
+  const dimClass = isOwnMessage ? 'text-primary-foreground/50' : 'text-muted-foreground/50';
+
+  switch (status) {
+    case 'delivered':
+      return <CheckCheck className={cn('h-4 w-4', colorClass)} />;
+    case 'sent':
+      return <Check className={cn('h-4 w-4', colorClass)} />;
+    case 'failed':
+    case 'undelivered':
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <AlertCircle className="h-4 w-4 text-red-400" />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              {status === 'failed' ? 'Failed to send' : 'Not delivered'}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    case 'queued':
+    default:
+      return <Check className={cn('h-4 w-4', dimClass)} />;
+  }
 }
 
 // Date separator component

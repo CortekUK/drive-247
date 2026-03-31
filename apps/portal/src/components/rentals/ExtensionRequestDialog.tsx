@@ -164,11 +164,12 @@ export function ExtensionRequestDialog({
   const mileageImpact = (() => {
     if (!vehicleMileage || isUnlimitedMileage(vehicleMileage)) return null;
     const currentDays = Math.max(1, Math.ceil((new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
-    const currentAllowance = calculateTotalMileageAllowance(vehicleMileage, currentDays);
-    if (!rental.previous_end_date) return { currentAllowance, newAllowance: null, currentTier: getMileageTier(currentDays), newTier: null };
+    const _mtd = tenant?.monthly_tier_days ?? 30;
+    const currentAllowance = calculateTotalMileageAllowance(vehicleMileage, currentDays, _mtd);
+    if (!rental.previous_end_date) return { currentAllowance, newAllowance: null, currentTier: getMileageTier(currentDays, _mtd), newTier: null };
     const newDays = Math.max(1, Math.ceil((new Date(rental.previous_end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
-    const newAllowance = calculateTotalMileageAllowance(vehicleMileage, newDays);
-    return { currentAllowance, newAllowance, currentTier: getMileageTier(currentDays), newTier: getMileageTier(newDays) };
+    const newAllowance = calculateTotalMileageAllowance(vehicleMileage, newDays, _mtd);
+    return { currentAllowance, newAllowance, currentTier: getMileageTier(currentDays, _mtd), newTier: getMileageTier(newDays, _mtd) };
   })();
 
   // Count existing extensions to determine the next extension number

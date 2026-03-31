@@ -84,10 +84,11 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
     new Date(rental.start_date)
   );
 
+  const mtd = tenant?.monthly_tier_days ?? 30;
   const formatDuration = (days: number): string => {
-    if (days >= 30) {
-      const months = Math.floor(days / 30);
-      const remainingDays = days % 30;
+    if (days >= mtd) {
+      const months = Math.floor(days / mtd);
+      const remainingDays = days % mtd;
       return remainingDays > 0
         ? `${months} month${months > 1 ? 's' : ''} ${remainingDays} day${remainingDays > 1 ? 's' : ''}`
         : `${months} month${months > 1 ? 's' : ''}`;
@@ -291,7 +292,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                   ) : (
                     <span>
                       {(() => {
-                        const totalAllowance = calculateTotalMileageAllowance(vehicle, durationDays);
+                        const totalAllowance = calculateTotalMileageAllowance(vehicle, durationDays, mtd);
                         if (totalAllowance === null) return getUnlimitedLabel(distanceUnit);
                         return `${totalAllowance.toLocaleString()} ${getDistanceUnitShort(distanceUnit)} allowance`;
                       })()}

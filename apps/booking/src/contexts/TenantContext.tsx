@@ -147,6 +147,7 @@ export interface Tenant {
   lockbox_enabled: boolean | null;
 
   // Dynamic pricing
+  monthly_tier_days: number | null;
   weekend_surcharge_percent: number | null;
   weekend_days: number[] | null;
 
@@ -306,6 +307,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 pickup_area_enabled, return_area_enabled,
                 installments_enabled, installment_config,
                 lockbox_enabled,
+                monthly_tier_days,
                 weekend_surcharge_percent, weekend_days,
                 maintenance_banner_enabled, maintenance_banner_message
               `)
@@ -443,6 +445,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           installments_enabled,
           installment_config,
           lockbox_enabled,
+          monthly_tier_days,
           weekend_surcharge_percent,
           weekend_days,
           maintenance_banner_enabled,

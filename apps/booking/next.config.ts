@@ -6,6 +6,7 @@ import { config } from 'dotenv';
 config({ path: path.resolve(__dirname, '../../.env') });
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ['test.localhost', '*.localhost'],
   typescript: {
     // Disable type checking during build for now
     ignoreBuildErrors: true,

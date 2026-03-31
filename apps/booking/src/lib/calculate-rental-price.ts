@@ -277,7 +277,7 @@ function getDayRate(
  * Calculate the full rental price with dynamic pricing support.
  *
  * Dynamic pricing only applies to the daily tier (< 7 days).
- * Weekly (7-30 days) and monthly (> 30 days) use standard pro-rata rates.
+ * Weekly (7–monthlyTierDays) and monthly (>= monthlyTierDays) use standard pro-rata rates.
  */
 export function calculateRentalPriceBreakdown(
   pickupDate: string,
@@ -286,7 +286,8 @@ export function calculateRentalPriceBreakdown(
   weekendConfig?: TenantWeekendConfig | null,
   holidays?: Holiday[],
   overrides?: VehicleOverride[],
-  vehicleId?: string
+  vehicleId?: string,
+  monthlyTierDays: number = 30
 ): RentalPriceResult {
   const pickup = parseDateString(pickupDate);
   const dropoff = parseDateString(dropoffDate);
@@ -296,18 +297,18 @@ export function calculateRentalPriceBreakdown(
   const weeklyRent = rates.weekly_rent || 0;
   const monthlyRent = rates.monthly_rent || 0;
 
-  // Monthly tier (> 30 days) — no dynamic pricing
-  if (rentalDays > 30 && monthlyRent > 0) {
+  // Monthly tier (>= monthlyTierDays) — no dynamic pricing
+  if (rentalDays >= monthlyTierDays && monthlyRent > 0) {
     return {
-      rentalPrice: (rentalDays / 30) * monthlyRent,
+      rentalPrice: (rentalDays / monthlyTierDays) * monthlyRent,
       rentalDays,
       pricingTier: 'monthly',
       dayBreakdown: [],
     };
   }
 
-  // Weekly tier (7-30 days) — no dynamic pricing
-  if (rentalDays >= 7 && rentalDays <= 30 && weeklyRent > 0) {
+  // Weekly tier (7 to monthlyTierDays-1 days) — no dynamic pricing
+  if (rentalDays >= 7 && rentalDays < monthlyTierDays && weeklyRent > 0) {
     return {
       rentalPrice: (rentalDays / 7) * weeklyRent,
       rentalDays,

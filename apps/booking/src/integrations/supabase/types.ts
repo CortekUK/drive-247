@@ -5870,21 +5870,22 @@ export type Database = {
           collection_location_id: string | null
           created_at: string | null
           customer_id: string | null
+          daily_mileage_override: number | null
           delivery_address: string | null
           delivery_fee: number | null
           delivery_location_id: string | null
           delivery_method: string | null
-          daily_mileage_override: number | null
           delivery_option: string | null
           discount_applied: number | null
           document_status: string | null
           docusign_envelope_id: string | null
           driver_age_range: string | null
-          excess_mileage_rate_override: number | null
           end_date: string | null
           envelope_completed_at: string | null
           envelope_created_at: string | null
           envelope_sent_at: string | null
+          excess_mileage_rate_override: number | null
+          extension_amount: number | null
           extension_checkout_url: string | null
           has_installment_plan: boolean | null
           id: string
@@ -5895,6 +5896,7 @@ export type Database = {
           is_gig_driver: boolean | null
           monthly_amount: number
           monthly_mileage_override: number | null
+          original_end_date: string | null
           payment_mode: string | null
           payment_status: string | null
           pickup_location: string | null
@@ -5930,11 +5932,11 @@ export type Database = {
           collection_location_id?: string | null
           created_at?: string | null
           customer_id?: string | null
+          daily_mileage_override?: number | null
           delivery_address?: string | null
           delivery_fee?: number | null
           delivery_location_id?: string | null
           delivery_method?: string | null
-          daily_mileage_override?: number | null
           delivery_option?: string | null
           discount_applied?: number | null
           document_status?: string | null
@@ -5945,6 +5947,7 @@ export type Database = {
           envelope_created_at?: string | null
           envelope_sent_at?: string | null
           excess_mileage_rate_override?: number | null
+          extension_amount?: number | null
           extension_checkout_url?: string | null
           has_installment_plan?: boolean | null
           id?: string
@@ -5955,6 +5958,7 @@ export type Database = {
           is_gig_driver?: boolean | null
           monthly_amount: number
           monthly_mileage_override?: number | null
+          original_end_date?: string | null
           payment_mode?: string | null
           payment_status?: string | null
           pickup_location?: string | null
@@ -5990,11 +5994,11 @@ export type Database = {
           collection_location_id?: string | null
           created_at?: string | null
           customer_id?: string | null
+          daily_mileage_override?: number | null
           delivery_address?: string | null
           delivery_fee?: number | null
           delivery_location_id?: string | null
           delivery_method?: string | null
-          daily_mileage_override?: number | null
           delivery_option?: string | null
           discount_applied?: number | null
           document_status?: string | null
@@ -6005,6 +6009,7 @@ export type Database = {
           envelope_created_at?: string | null
           envelope_sent_at?: string | null
           excess_mileage_rate_override?: number | null
+          extension_amount?: number | null
           extension_checkout_url?: string | null
           has_installment_plan?: boolean | null
           id?: string
@@ -6014,6 +6019,8 @@ export type Database = {
           is_extended?: boolean | null
           is_gig_driver?: boolean | null
           monthly_amount?: number
+          monthly_mileage_override?: number | null
+          original_end_date?: string | null
           payment_mode?: string | null
           payment_status?: string | null
           pickup_location?: string | null
@@ -6171,6 +6178,35 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      review_tags: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_tags_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -6895,6 +6931,7 @@ export type Database = {
           monday_close: string | null
           monday_enabled: boolean | null
           monday_open: string | null
+          monthly_tier_days: number
           multiple_locations_enabled: boolean | null
           og_image_url: string | null
           payment_mode: string | null
@@ -6954,6 +6991,7 @@ export type Database = {
           twilio_subaccount_sid: string | null
           twitter_url: string | null
           updated_at: string | null
+          verification_document_type: string
           wednesday_close: string | null
           wednesday_enabled: boolean | null
           wednesday_open: string | null
@@ -7048,6 +7086,7 @@ export type Database = {
           monday_close?: string | null
           monday_enabled?: boolean | null
           monday_open?: string | null
+          monthly_tier_days?: number
           multiple_locations_enabled?: boolean | null
           og_image_url?: string | null
           payment_mode?: string | null
@@ -7107,6 +7146,7 @@ export type Database = {
           twilio_subaccount_sid?: string | null
           twitter_url?: string | null
           updated_at?: string | null
+          verification_document_type?: string
           wednesday_close?: string | null
           wednesday_enabled?: boolean | null
           wednesday_open?: string | null
@@ -7201,6 +7241,7 @@ export type Database = {
           monday_close?: string | null
           monday_enabled?: boolean | null
           monday_open?: string | null
+          monthly_tier_days?: number
           multiple_locations_enabled?: boolean | null
           og_image_url?: string | null
           payment_mode?: string | null
@@ -7260,6 +7301,7 @@ export type Database = {
           twilio_subaccount_sid?: string | null
           twitter_url?: string | null
           updated_at?: string | null
+          verification_document_type?: string
           wednesday_close?: string | null
           wednesday_enabled?: boolean | null
           wednesday_open?: string | null

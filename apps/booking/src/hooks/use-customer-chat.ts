@@ -93,6 +93,7 @@ export function useCustomerChat() {
         .from('chat_channel_messages')
         .select('*')
         .eq('channel_id', channel.id)
+        .eq('channel', 'in_app')  // Customer portal only sees in-app messages
         .order('created_at', { ascending: false })
         .limit(PAGE_SIZE);
 

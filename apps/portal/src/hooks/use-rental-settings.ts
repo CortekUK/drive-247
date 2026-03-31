@@ -58,6 +58,8 @@ export interface RentalSettings {
   lockbox_default_instructions: string | null;
   // Verification
   verification_document_type: string | null;
+  // Monthly tier threshold
+  monthly_tier_days: number | null;
 }
 
 const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
@@ -106,6 +108,8 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   lockbox_default_instructions: null,
   // Verification
   verification_document_type: 'driving_license',
+  // Monthly tier threshold
+  monthly_tier_days: 30,
 };
 
 /**
@@ -164,7 +168,8 @@ export const useRentalSettings = () => {
           lockbox_code_length,
           lockbox_notification_methods,
           lockbox_default_instructions,
-          verification_document_type
+          verification_document_type,
+          monthly_tier_days
         `)
         .eq('id', tenant.id)
         .single();
@@ -233,7 +238,8 @@ export const useRentalSettings = () => {
           lockbox_code_length,
           lockbox_notification_methods,
           lockbox_default_instructions,
-          verification_document_type
+          verification_document_type,
+          monthly_tier_days
         `);
 
       if (error) {

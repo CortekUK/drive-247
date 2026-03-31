@@ -3484,13 +3484,18 @@ const CreateRental = () => {
                     )}
 
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <p className="text-sm text-muted-foreground">Upload customer&apos;s insurance certificate for verification</p>
+                      <p className="text-sm text-muted-foreground">
+                        {selectedCustomerId
+                          ? "Upload customer\u2019s insurance certificate for verification"
+                          : "Select a customer first to upload insurance"}
+                      </p>
                       <div className="flex items-center gap-2 flex-wrap">
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           onClick={() => setShowInsuranceUpload(true)}
+                          disabled={!selectedCustomerId}
                           className="whitespace-nowrap"
                         >
                           <Upload className="h-4 w-4 mr-2" />

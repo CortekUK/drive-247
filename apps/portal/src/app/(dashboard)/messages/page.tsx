@@ -4,12 +4,15 @@ import { useState } from "react";
 import { ChannelList, ChatWindow, BulkMessageModal } from "@/components/chat";
 import type { ChatChannel } from "@/hooks/use-chat-channels";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useTenant } from "@/contexts/TenantContext";
 import { cn } from "@/lib/utils";
 
 export default function MessagesPage() {
   const [selectedChannel, setSelectedChannel] = useState<ChatChannel | null>(null);
   const [bulkMessageOpen, setBulkMessageOpen] = useState(false);
   const { canEdit } = useManagerPermissions();
+  const { tenant } = useTenant();
+  const smsEnabled = !!(tenant as any)?.integration_twilio_sms;
 
   const handleSelectChannel = (channel: ChatChannel) => {
     setSelectedChannel(channel);
@@ -43,6 +46,8 @@ export default function MessagesPage() {
             customerAvatar={selectedChannel?.customer?.profile_photo_url || null}
             customerEmail={selectedChannel?.customer?.email || null}
             onBack={() => setSelectedChannel(null)}
+            lastChannel={selectedChannel?.last_channel || 'in_app'}
+            smsEnabled={smsEnabled}
           />
         </div>
       </div>

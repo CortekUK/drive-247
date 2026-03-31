@@ -26,18 +26,19 @@ interface ExtensionPricingResult {
 
 /**
  * Derive an effective daily rate from the rental's period type.
- * Monthly → monthly_rent / 30, Weekly → weekly_rent / 7, Daily → daily_rent.
+ * Monthly → monthly_rent / monthlyTierDays, Weekly → weekly_rent / 7, Daily → daily_rent.
  * Falls back to daily_rent if the tier rate is missing.
  */
 function getEffectiveDailyRate(
   rentalPeriodType: string | undefined,
   dailyRent: number | null,
   weeklyRent: number | null,
-  monthlyRent: number | null
+  monthlyRent: number | null,
+  monthlyTierDays: number = 30
 ): number | null {
   const type = (rentalPeriodType || '').toLowerCase();
   if (type === 'monthly' && monthlyRent && monthlyRent > 0) {
-    return Math.round((monthlyRent / 30) * 100) / 100;
+    return Math.round((monthlyRent / monthlyTierDays) * 100) / 100;
   }
   if (type === 'weekly' && weeklyRent && weeklyRent > 0) {
     return Math.round((weeklyRent / 7) * 100) / 100;
@@ -77,8 +78,9 @@ export function useExtensionPricing({
   }, [tenant]);
 
   const result = useMemo(() => {
+    const mtd = tenant?.monthly_tier_days ?? 30;
     const effectiveRate = vehicleData
-      ? getEffectiveDailyRate(rentalPeriodType, vehicleData.daily_rent, vehicleData.weekly_rent, vehicleData.monthly_rent)
+      ? getEffectiveDailyRate(rentalPeriodType, vehicleData.daily_rent, vehicleData.weekly_rent, vehicleData.monthly_rent, mtd)
       : null;
 
     if (!effectiveRate || !currentEndDate || !newEndDate) {

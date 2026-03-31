@@ -10,6 +10,13 @@ import {
   getTenantTwilioCredentials,
   sendTenantSMS,
   normalizePhoneNumber,
+  registerBrand,
+  createMessagingService,
+  addNumberToMessagingService,
+  registerCampaign,
+  getBrandStatus,
+  getCampaignStatus,
+  configureNumberWebhooks,
 } from '../_shared/twilio-sms-client.ts';
 
 Deno.serve(async (req) => {
@@ -163,6 +170,20 @@ Deno.serve(async (req) => {
 
         if (updateError) throw updateError;
 
+        // Auto-configure SMS webhook URLs on the number
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        try {
+          await configureNumberWebhooks(
+            creds.sid,
+            creds.authToken,
+            purchased.sid,
+            `${supabaseUrl}/functions/v1/twilio-inbound-sms`,
+            `${supabaseUrl}/functions/v1/twilio-sms-status`
+          );
+        } catch (webhookErr: any) {
+          console.warn('[Twilio] Failed to auto-configure webhooks:', webhookErr.message);
+        }
+
         return jsonResponse({
           success: true,
           phoneNumber: purchased.phoneNumber,
@@ -234,14 +255,253 @@ Deno.serve(async (req) => {
 
       case 'get-status': {
         const creds = await getTenantTwilioCredentials(supabase, tenantId);
+
+        // Fetch 10DLC registration status from DB
+        const { data: tenantData } = await supabase
+          .from('tenants')
+          .select('twilio_brand_sid, twilio_brand_status, twilio_campaign_sid, twilio_campaign_status, twilio_messaging_service_sid')
+          .eq('id', tenantId)
+          .single();
+
         return jsonResponse({
           success: true,
           hasSubaccount: !!creds.sid,
           subaccountSid: creds.sid || null,
           hasPhoneNumber: !!creds.phoneNumber,
           phoneNumber: creds.phoneNumber || null,
+          phoneNumberSid: creds.phoneNumberSid || null,
           isConfigured: creds.isConfigured,
+          // 10DLC registration status
+          brandSid: tenantData?.twilio_brand_sid || null,
+          brandStatus: tenantData?.twilio_brand_status || null,
+          campaignSid: tenantData?.twilio_campaign_sid || null,
+          campaignStatus: tenantData?.twilio_campaign_status || null,
+          messagingServiceSid: tenantData?.twilio_messaging_service_sid || null,
         });
+      }
+
+      case 'register-brand': {
+        const creds = await getTenantTwilioCredentials(supabase, tenantId);
+        if (!creds.sid) return errorResponse('No Twilio subaccount. Create one first.');
+
+        const { brandName, companyType, taxId, taxIdCountry, website, vertical } = params;
+        if (!brandName) return errorResponse('brandName is required');
+
+        try {
+          const result = await registerBrand(creds.sid, creds.authToken, {
+            brandName,
+            companyType: companyType || 'private',
+            taxId: taxId || '',
+            taxIdCountry: taxIdCountry || 'US',
+            website: website || '',
+            vertical: vertical || 'TRANSPORTATION',
+          });
+
+          // Save to DB
+          await supabase
+            .from('tenants')
+            .update({
+              twilio_brand_sid: result.brandSid,
+              twilio_brand_status: result.status.toLowerCase(),
+            })
+            .eq('id', tenantId);
+
+          return jsonResponse({
+            success: true,
+            brandSid: result.brandSid,
+            status: result.status,
+          });
+        } catch (err: any) {
+          console.error('[Twilio] Brand registration error:', err.message);
+          return errorResponse(`Brand registration failed: ${err.message}`);
+        }
+      }
+
+      case 'create-messaging-service': {
+        const creds = await getTenantTwilioCredentials(supabase, tenantId);
+        if (!creds.sid) return errorResponse('No Twilio subaccount. Create one first.');
+
+        const { data: tenant } = await supabase
+          .from('tenants')
+          .select('company_name, slug')
+          .eq('id', tenantId)
+          .single();
+
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const inboundUrl = `${supabaseUrl}/functions/v1/twilio-inbound-sms`;
+        const statusUrl = `${supabaseUrl}/functions/v1/twilio-sms-status`;
+
+        try {
+          const result = await createMessagingService(
+            creds.sid,
+            creds.authToken,
+            `Drive247 - ${tenant?.company_name || tenant?.slug || tenantId}`,
+            inboundUrl,
+            statusUrl
+          );
+
+          // Save to DB
+          await supabase
+            .from('tenants')
+            .update({ twilio_messaging_service_sid: result.serviceSid })
+            .eq('id', tenantId);
+
+          // If phone number exists, add it to the messaging service
+          if (creds.phoneNumberSid) {
+            try {
+              await addNumberToMessagingService(
+                creds.sid,
+                creds.authToken,
+                result.serviceSid,
+                creds.phoneNumberSid
+              );
+            } catch (addErr: any) {
+              console.warn('[Twilio] Failed to add number to messaging service:', addErr.message);
+            }
+          }
+
+          return jsonResponse({
+            success: true,
+            messagingServiceSid: result.serviceSid,
+          });
+        } catch (err: any) {
+          console.error('[Twilio] Messaging service error:', err.message);
+          return errorResponse(`Messaging service creation failed: ${err.message}`);
+        }
+      }
+
+      case 'register-campaign': {
+        const creds = await getTenantTwilioCredentials(supabase, tenantId);
+        if (!creds.sid) return errorResponse('No Twilio subaccount. Create one first.');
+
+        const { data: tenantData } = await supabase
+          .from('tenants')
+          .select('twilio_brand_sid, twilio_messaging_service_sid, company_name')
+          .eq('id', tenantId)
+          .single();
+
+        if (!tenantData?.twilio_brand_sid) return errorResponse('Brand must be registered first.');
+        if (!tenantData?.twilio_messaging_service_sid) return errorResponse('Messaging service must be created first.');
+
+        const companyName = tenantData?.company_name || 'our company';
+
+        try {
+          const result = await registerCampaign(creds.sid, creds.authToken, {
+            brandRegistrationSid: tenantData.twilio_brand_sid,
+            messagingServiceSid: tenantData.twilio_messaging_service_sid,
+            description: `Customer communication for ${companyName} car rental operations including booking confirmations, pickup reminders, payment notifications, and customer support.`,
+            useCase: 'MIXED',
+            sampleMessages: [
+              `Hi {{name}}, your rental booking #{{ref}} has been confirmed. Pickup: {{date}} at {{location}}.`,
+              `Reminder: Your rental is due for return tomorrow. Please ensure the vehicle is returned on time.`,
+              `Your payment of ${{amount}} has been received. Thank you for choosing ${companyName}.`,
+            ],
+            hasEmbeddedLinks: true,
+            hasEmbeddedPhone: true,
+            messageFlow: `Customers opt-in to receive SMS when they create a booking through our website or when a rental operator needs to communicate important rental information.`,
+          });
+
+          // Save to DB
+          await supabase
+            .from('tenants')
+            .update({
+              twilio_campaign_sid: result.campaignSid,
+              twilio_campaign_status: result.status.toLowerCase(),
+            })
+            .eq('id', tenantId);
+
+          return jsonResponse({
+            success: true,
+            campaignSid: result.campaignSid,
+            status: result.status,
+          });
+        } catch (err: any) {
+          console.error('[Twilio] Campaign registration error:', err.message);
+          return errorResponse(`Campaign registration failed: ${err.message}`);
+        }
+      }
+
+      case 'get-registration-status': {
+        const creds = await getTenantTwilioCredentials(supabase, tenantId);
+        if (!creds.sid) return errorResponse('No Twilio subaccount.');
+
+        const { data: tenantData } = await supabase
+          .from('tenants')
+          .select('twilio_brand_sid, twilio_brand_status, twilio_campaign_sid, twilio_campaign_status, twilio_messaging_service_sid')
+          .eq('id', tenantId)
+          .single();
+
+        const result: any = {
+          success: true,
+          brand: { sid: tenantData?.twilio_brand_sid, status: tenantData?.twilio_brand_status },
+          campaign: { sid: tenantData?.twilio_campaign_sid, status: tenantData?.twilio_campaign_status },
+          messagingService: { sid: tenantData?.twilio_messaging_service_sid },
+        };
+
+        // Refresh brand status from Twilio if pending
+        if (tenantData?.twilio_brand_sid && tenantData?.twilio_brand_status === 'pending') {
+          try {
+            const brandResult = await getBrandStatus(creds.sid, creds.authToken, tenantData.twilio_brand_sid);
+            const newStatus = brandResult.status.toLowerCase();
+            result.brand.status = newStatus;
+            result.brand.failureReason = brandResult.failureReason;
+
+            if (newStatus !== tenantData.twilio_brand_status) {
+              await supabase.from('tenants').update({ twilio_brand_status: newStatus }).eq('id', tenantId);
+            }
+          } catch (err: any) {
+            console.warn('[Twilio] Failed to refresh brand status:', err.message);
+          }
+        }
+
+        // Refresh campaign status from Twilio if pending
+        if (tenantData?.twilio_campaign_sid && tenantData?.twilio_campaign_status === 'pending' && tenantData?.twilio_messaging_service_sid) {
+          try {
+            const campaignResult = await getCampaignStatus(
+              creds.sid,
+              creds.authToken,
+              tenantData.twilio_messaging_service_sid,
+              tenantData.twilio_campaign_sid
+            );
+            const newStatus = campaignResult.status.toLowerCase();
+            result.campaign.status = newStatus;
+            result.campaign.failureReason = campaignResult.failureReason;
+
+            if (newStatus !== tenantData.twilio_campaign_status) {
+              await supabase.from('tenants').update({ twilio_campaign_status: newStatus }).eq('id', tenantId);
+            }
+          } catch (err: any) {
+            console.warn('[Twilio] Failed to refresh campaign status:', err.message);
+          }
+        }
+
+        return jsonResponse(result);
+      }
+
+      case 'configure-webhooks': {
+        const creds = await getTenantTwilioCredentials(supabase, tenantId);
+        if (!creds.sid || !creds.phoneNumberSid) {
+          return errorResponse('Phone number must be configured first.');
+        }
+
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const smsUrl = `${supabaseUrl}/functions/v1/twilio-inbound-sms`;
+        const statusUrl = `${supabaseUrl}/functions/v1/twilio-sms-status`;
+
+        try {
+          await configureNumberWebhooks(
+            creds.sid,
+            creds.authToken,
+            creds.phoneNumberSid,
+            smsUrl,
+            statusUrl
+          );
+
+          return jsonResponse({ success: true });
+        } catch (err: any) {
+          console.error('[Twilio] Webhook config error:', err.message);
+          return errorResponse(`Failed to configure webhooks: ${err.message}`);
+        }
       }
 
       case 'disconnect': {

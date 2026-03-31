@@ -4,6 +4,8 @@ import { useTenant } from '@/contexts/TenantContext';
 import { useSocket } from '@/contexts/RealtimeChatContext';
 import { useEffect, useCallback, useRef } from 'react';
 
+export type MessageChannel = 'in_app' | 'sms' | 'whatsapp' | 'email';
+
 export interface ChatMessage {
   id: number;
   channel_id: string;
@@ -14,6 +16,10 @@ export interface ChatMessage {
   read_at: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
+  channel: MessageChannel;
+  external_id: string | null;
+  external_status: string | null;
+  from_number: string | null;
 }
 
 const PAGE_SIZE = 25;
@@ -114,6 +120,10 @@ export function useChatMessages(channelId: string | null, customerId: string | n
             read_at: null,
             metadata: payload.metadata || {},
             created_at: payload.createdAt,
+            channel: (payload as any).channel || 'in_app',
+            external_id: (payload as any).externalId || null,
+            external_status: (payload as any).externalStatus || null,
+            from_number: null,
           };
 
           // Add to the last page

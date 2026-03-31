@@ -29,6 +29,7 @@ interface Tenant {
   meta_whatsapp_phone_number: string | null;
   maintenance_banner_enabled: boolean | null;
   maintenance_banner_message: string | null;
+  monthly_tier_days: number | null;
 }
 
 interface TenantContextType {
@@ -135,7 +136,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // Query the tenants table by slug
       const { data, error: queryError } = await supabase
         .from('tenants')
-        .select('id, slug, company_name, status, contact_email, phone, admin_name, integration_veriff, integration_bonzah, bonzah_username, bonzah_mode, boldsign_mode, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message')
+        .select('id, slug, company_name, status, contact_email, phone, admin_name, integration_veriff, integration_bonzah, bonzah_username, bonzah_mode, boldsign_mode, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days')
         .eq('slug', slug)
         .eq('status', 'active')
         .single();

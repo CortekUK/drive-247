@@ -1,24 +1,33 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Send, X, Car } from 'lucide-react';
+import { Send, X, Car, MessageSquare, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useSocket } from '@/contexts/RealtimeChatContext';
+import { useSocket, type MessageChannel } from '@/contexts/RealtimeChatContext';
 import { cn } from '@/lib/utils';
 import { BookingPicker, BookingReference } from './BookingPicker';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface CustomerChatInputProps {
   customerId: string;
   disabled?: boolean;
   onSend?: () => void;
+  defaultChannel?: MessageChannel;
+  smsEnabled?: boolean;
 }
 
-export function CustomerChatInput({ customerId, disabled, onSend }: CustomerChatInputProps) {
+export function CustomerChatInput({ customerId, disabled, onSend, defaultChannel = 'in_app', smsEnabled = false }: CustomerChatInputProps) {
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<BookingReference | null>(null);
+  const [activeChannel, setActiveChannel] = useState<MessageChannel>(defaultChannel);
   const { sendMessage, sendTyping } = useSocket();
+
+  // Update active channel when default changes (e.g., customer replies via SMS)
+  useEffect(() => {
+    setActiveChannel(defaultChannel);
+  }, [defaultChannel]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -70,7 +79,7 @@ export function CustomerChatInput({ customerId, disabled, onSend }: CustomerChat
         }
       : undefined;
 
-    sendMessage(customerId, trimmedMessage || 'Shared a booking', metadata);
+    sendMessage(customerId, trimmedMessage || 'Shared a booking', metadata, activeChannel);
     setMessage('');
     setSelectedBooking(null);
     sendTyping(customerId, false);
@@ -157,8 +166,36 @@ export function CustomerChatInput({ customerId, disabled, onSend }: CustomerChat
             isFocused ? 'border-primary/50 ring-2 ring-primary/10' : 'border-border/50'
           )}
         >
-          {/* Booking picker */}
-          <div className="pb-1">
+          {/* Channel toggle + Booking picker */}
+          <div className="pb-1 flex items-center gap-1">
+            {smsEnabled && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        'h-9 w-9 rounded-xl transition-all',
+                        activeChannel === 'sms'
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                      onClick={() => setActiveChannel(activeChannel === 'sms' ? 'in_app' : 'sms')}
+                    >
+                      {activeChannel === 'sms' ? (
+                        <Smartphone className="h-4 w-4" />
+                      ) : (
+                        <MessageSquare className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    {activeChannel === 'sms' ? 'Sending via SMS — click to switch to In-App' : 'Sending In-App — click to switch to SMS'}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             <BookingPicker customerId={customerId} onSelect={handleBookingSelect} disabled={disabled} />
           </div>
 

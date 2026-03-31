@@ -6,6 +6,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './TenantContext';
 import { useAuthStore } from '@/stores/auth-store';
 
+export type MessageChannel = 'in_app' | 'sms' | 'whatsapp' | 'email';
+
 // Event payload types matching the Socket.io API for backward compatibility
 interface NewMessagePayload {
   id: number;
@@ -16,6 +18,9 @@ interface NewMessagePayload {
   isRead: boolean;
   createdAt: string;
   metadata?: Record<string, unknown>;
+  channel?: MessageChannel;
+  externalId?: string;
+  externalStatus?: string;
 }
 
 interface TypingPayload {
@@ -56,7 +61,7 @@ interface RealtimeChatContextType {
   isConnected: boolean;
   joinRoom: (customerId: string) => void;
   leaveRoom: (customerId: string) => void;
-  sendMessage: (customerId: string, content: string, metadata?: Record<string, unknown>) => void;
+  sendMessage: (customerId: string, content: string, metadata?: Record<string, unknown>, channel?: MessageChannel) => void;
   markRead: (channelId: string) => void;
   sendTyping: (customerId: string, isTyping: boolean) => void;
   sendBulkMessage: (customerIds: string[], content: string) => void;
@@ -152,6 +157,9 @@ export function RealtimeChatProvider({ children }: { children: React.ReactNode }
             isRead: payload.new.is_read,
             createdAt: payload.new.created_at,
             metadata: payload.new.metadata || {},
+            channel: payload.new.channel || 'in_app',
+            externalId: payload.new.external_id,
+            externalStatus: payload.new.external_status,
           };
 
           messageListenersRef.current.forEach((listener) => listener(newMessage));
@@ -361,13 +369,34 @@ export function RealtimeChatProvider({ children }: { children: React.ReactNode }
   );
 
   const sendMessage = useCallback(
-    async (customerId: string, content: string, metadata?: Record<string, unknown>) => {
+    async (customerId: string, content: string, metadata?: Record<string, unknown>, channel: MessageChannel = 'in_app') => {
       if (!tenant || !appUser) return;
 
       const channelId = await getOrCreateChannel(customerId);
       if (!channelId) return;
 
-      // Insert message directly - Postgres Changes will broadcast it
+      // For SMS: call the edge function which handles Twilio + DB insert
+      if (channel === 'sms') {
+        try {
+          const { data, error } = await supabase.functions.invoke('send-sms-message', {
+            body: {
+              channelId,
+              customerId,
+              content,
+            },
+          });
+
+          if (error) {
+            console.error('[RealtimeChat] SMS send error:', error);
+          }
+          // The edge function inserts the message, Postgres Changes will broadcast it
+        } catch (err) {
+          console.error('[RealtimeChat] SMS send failed:', err);
+        }
+        return;
+      }
+
+      // For in-app: insert message directly - Postgres Changes will broadcast it
       const { data: message, error } = await supabase
         .from('chat_channel_messages')
         .insert({
@@ -375,6 +404,7 @@ export function RealtimeChatProvider({ children }: { children: React.ReactNode }
           sender_type: 'tenant',
           sender_id: appUser.id,
           content,
+          channel: 'in_app',
           metadata: metadata || {},
         })
         .select()

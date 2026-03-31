@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Search, Loader2, MessageCircle, Sparkles, X } from 'lucide-react';
+import { Search, Loader2, MessageCircle, Sparkles, X, Smartphone } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { UnreadBadge } from './UnreadBadge';
-import { useChatChannels, type ChatChannel } from '@/hooks/use-chat-channels';
+import { useChatChannels, type ChatChannel, type UnknownSmsThread } from '@/hooks/use-chat-channels';
+import { LinkUnknownThreadDialog } from './LinkUnknownThreadDialog';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -18,8 +19,9 @@ interface ChannelListProps {
 }
 
 export function ChannelList({ selectedChannelId, onSelectChannel, onBulkMessage }: ChannelListProps) {
-  const { channels, isLoading } = useChatChannels();
+  const { channels, unknownThreads, isLoading } = useChatChannels();
   const [searchQuery, setSearchQuery] = useState('');
+  const [linkThread, setLinkThread] = useState<UnknownSmsThread | null>(null);
 
   // Filter channels by search query - searches name, email, phone, and message content
   const filteredChannels = useMemo(() => {
@@ -127,6 +129,42 @@ export function ChannelList({ selectedChannelId, onSelectChannel, onBulkMessage 
         </div>
       </ScrollArea>
 
+      {/* Unknown SMS threads */}
+      {unknownThreads.length > 0 && !searchQuery && (
+        <div className="px-2 pb-2">
+          <div className="px-3 py-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Unknown Numbers</p>
+          </div>
+          {unknownThreads.map((thread) => (
+            <div
+              key={thread.id}
+              className="flex items-center gap-3 p-3 rounded-xl hover:bg-accent/50 transition-colors"
+            >
+              <div className="relative">
+                <div className="h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                  <Smartphone className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm truncate">Unknown</p>
+                <p className="text-xs text-muted-foreground font-mono">{thread.phone_number}</p>
+                <p className="text-xs text-muted-foreground">
+                  {thread.message_count} message{thread.message_count !== 1 ? 's' : ''}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 text-xs h-7"
+                onClick={() => setLinkThread(thread)}
+              >
+                Link
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Bulk message button */}
       {onBulkMessage && (
         <div className="p-4 border-t border-border/50">
@@ -139,6 +177,16 @@ export function ChannelList({ selectedChannelId, onSelectChannel, onBulkMessage 
             Bulk Message
           </Button>
         </div>
+      )}
+
+      {/* Link unknown thread dialog */}
+      {linkThread && (
+        <LinkUnknownThreadDialog
+          open={!!linkThread}
+          onOpenChange={(open) => !open && setLinkThread(null)}
+          threadId={linkThread.id}
+          phoneNumber={linkThread.phone_number}
+        />
       )}
     </div>
   );
@@ -248,12 +296,18 @@ function ChannelItem({ channel, isSelected, onClick, searchQuery }: ChannelItemP
         </div>
         <div className="flex items-center justify-between gap-2">
           <p className={cn(
-            'text-sm truncate',
+            'text-sm truncate flex items-center gap-1',
             hasUnread ? 'text-foreground/70 font-medium' : 'text-muted-foreground'
           )}>
-            {searchQuery && channel.last_message_preview
-              ? highlightText(channel.last_message_preview, searchQuery)
-              : channel.last_message_preview || 'No messages yet'}
+            {/* Channel indicator for last message */}
+            {channel.last_message_channel === 'sms' && (
+              <Smartphone className="h-3 w-3 shrink-0 text-green-600" />
+            )}
+            <span className="truncate">
+              {searchQuery && channel.last_message_preview
+                ? highlightText(channel.last_message_preview, searchQuery)
+                : channel.last_message_preview || 'No messages yet'}
+            </span>
           </p>
           <UnreadBadge count={channel.unread_count} size="sm" />
         </div>

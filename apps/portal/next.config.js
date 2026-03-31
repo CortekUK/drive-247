@@ -4,6 +4,7 @@ dotenv.config({ path: '../../.env' });
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  allowedDevOrigins: ['test.portal.localhost', '*.portal.localhost'],
 
   // Ignore TypeScript build errors (Supabase types out of sync with schema)
   typescript: {

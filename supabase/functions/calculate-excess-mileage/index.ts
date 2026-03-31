@@ -4,18 +4,19 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 
-// Tier logic inlined (matches pricing tiers: daily <7d, weekly 7-30d, monthly >30d)
-function getMileageTier(rentalDays: number): 'daily' | 'weekly' | 'monthly' {
-  if (rentalDays > 30) return 'monthly';
+// Tier logic inlined (matches pricing tiers)
+function getMileageTier(rentalDays: number, monthlyTierDays: number = 30): 'daily' | 'weekly' | 'monthly' {
+  if (rentalDays >= monthlyTierDays) return 'monthly';
   if (rentalDays >= 7) return 'weekly';
   return 'daily';
 }
 
 function calculateTotalMileageAllowance(
   vehicle: { daily_mileage: number | null; weekly_mileage: number | null; monthly_mileage: number | null },
-  rentalDays: number
+  rentalDays: number,
+  monthlyTierDays: number = 30
 ): number | null {
-  const tier = getMileageTier(rentalDays);
+  const tier = getMileageTier(rentalDays, monthlyTierDays);
   let perUnit: number | null;
   switch (tier) {
     case 'daily': perUnit = vehicle.daily_mileage; break;
@@ -27,7 +28,7 @@ function calculateTotalMileageAllowance(
   switch (tier) {
     case 'daily': return rentalDays * perUnit;
     case 'weekly': return Math.ceil(rentalDays / 7) * perUnit;
-    case 'monthly': return Math.ceil(rentalDays / 30) * perUnit;
+    case 'monthly': return Math.ceil(rentalDays / monthlyTierDays) * perUnit;
   }
 }
 
@@ -104,6 +105,17 @@ Deno.serve(async (req) => {
 
     const effectiveTenantId = tenantId || rental.tenant_id;
 
+    // Fetch tenant's monthly tier setting
+    let monthlyTierDays = 30;
+    if (effectiveTenantId) {
+      const { data: tenantData } = await supabase
+        .from("tenants")
+        .select("monthly_tier_days")
+        .eq("id", effectiveTenantId)
+        .single();
+      if (tenantData?.monthly_tier_days) monthlyTierDays = tenantData.monthly_tier_days;
+    }
+
     // Calculate rental days
     let rentalDays = 1;
     if (rental.start_date && rental.end_date) {
@@ -142,8 +154,8 @@ Deno.serve(async (req) => {
     }
 
     // Calculate tier-based total allowance using effective values
-    const totalAllowance = calculateTotalMileageAllowance(effectiveVehicle, rentalDays);
-    const tier = getMileageTier(rentalDays);
+    const totalAllowance = calculateTotalMileageAllowance(effectiveVehicle, rentalDays, monthlyTierDays);
+    const tier = getMileageTier(rentalDays, monthlyTierDays);
 
     // If unlimited mileage for this tier or no rate set, no charge
     if (totalAllowance === null || !effectiveExcessRate || effectiveExcessRate <= 0) {

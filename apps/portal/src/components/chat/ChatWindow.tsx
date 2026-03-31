@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Circle, ChevronDown, MessageCircle, Send, ArrowLeft } from 'lucide-react';
+import { Loader2, Circle, ChevronDown, MessageCircle, Send, ArrowLeft, Smartphone } from 'lucide-react';
 import { useChatMessages, type ChatMessage } from '@/hooks/use-chat-messages';
 import { ChatMessageBubble, DateSeparator } from './ChatMessageBubble';
 import { CustomerChatInput } from './CustomerChatInput';
@@ -21,9 +21,11 @@ interface ChatWindowProps {
   customerAvatar?: string | null;
   customerEmail?: string | null;
   onBack?: () => void;
+  lastChannel?: 'in_app' | 'sms' | 'whatsapp' | 'email';
+  smsEnabled?: boolean;
 }
 
-export function ChatWindow({ channelId, customerId, customerName, customerAvatar, customerEmail, onBack }: ChatWindowProps) {
+export function ChatWindow({ channelId, customerId, customerName, customerAvatar, customerEmail, onBack, lastChannel = 'in_app', smsEnabled = false }: ChatWindowProps) {
   const { messages, isLoading, loadMore, hasMore, isLoadingMore } = useChatMessages(channelId, customerId);
   const { onTyping, onPresenceUpdate } = useSocket();
   const { appUser } = useAuthStore();
@@ -242,7 +244,11 @@ export function ChatWindow({ channelId, customerId, customerName, customerAvatar
       </div>
 
       {/* Input */}
-      <CustomerChatInput customerId={customerId} />
+      <CustomerChatInput
+        customerId={customerId}
+        defaultChannel={lastChannel}
+        smsEnabled={smsEnabled}
+      />
     </div>
   );
 }
