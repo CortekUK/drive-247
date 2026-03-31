@@ -401,7 +401,7 @@ export default function SettingsPage() {
               <PhoneInput
                 value={phone}
                 onChange={(val) => setPhone(val)}
-                defaultCountry="GB"
+                defaultCountry="US"
               />
               <p className="text-xs text-muted-foreground">
                 Your phone number will be used to auto-fill booking forms

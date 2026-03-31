@@ -242,7 +242,7 @@ export async function sendWhatsAppImage(
 
 // --- Phone normalization ---
 
-export function normalizeWhatsAppPhone(phone: string, defaultCountryCode = '+44'): string {
+export function normalizeWhatsAppPhone(phone: string, defaultCountryCode = '+1'): string {
   let cleaned = phone.replace(/[^+\d]/g, '');
 
   if (!cleaned.startsWith('+')) {

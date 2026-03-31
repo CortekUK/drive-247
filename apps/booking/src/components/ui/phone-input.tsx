@@ -111,7 +111,7 @@ export const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
         }, [value]);
 
         const selectedCountry = COUNTRY_CODES.find(c => c.country === selectedKey);
-        const selectedCode = selectedCountry?.code || "+44";
+        const selectedCode = selectedCountry?.code || "+1";
         const displayFlag = selectedCountry?.flag || "🌍";
         const maxLen = selectedCountry?.maxLen || 12;
         const minLen = selectedCountry?.minLen || 7;

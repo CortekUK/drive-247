@@ -694,7 +694,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
                       <PhoneInput
                         value={field.value || ""}
                         onChange={(val) => field.onChange(val)}
-                        defaultCountry="GB"
+                        defaultCountry="US"
                       />
                     </FormControl>
                     <FormMessage />
@@ -901,7 +901,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
                             <PhoneInput
                               value={field.value || ""}
                               onChange={(val) => field.onChange(val)}
-                              defaultCountry="GB"
+                              defaultCountry="US"
                             />
                           </FormControl>
                           <FormMessage />

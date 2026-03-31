@@ -617,7 +617,7 @@ export const KeyHandoverSection = ({
                     <PhoneInput
                       value={smsPhone}
                       onChange={(val) => setSmsPhone(val)}
-                      defaultCountry="GB"
+                      defaultCountry="US"
                     />
                   </div>
                 )}
@@ -631,7 +631,7 @@ export const KeyHandoverSection = ({
                     <PhoneInput
                       value={whatsAppPhone}
                       onChange={(val) => setWhatsAppPhone(val)}
-                      defaultCountry="GB"
+                      defaultCountry="US"
                     />
                     <p className="text-xs text-muted-foreground">
                       Please enter the number with WhatsApp on it

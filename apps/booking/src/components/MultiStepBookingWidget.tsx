@@ -5134,7 +5134,7 @@ const MultiStepBookingWidget = () => {
                   <PhoneInput
                     id="customerPhone"
                     value={formData.customerPhone}
-                    defaultCountry="GB"
+                    defaultCountry="US"
                     onChange={value => {
                       setFormData({
                         ...formData,
