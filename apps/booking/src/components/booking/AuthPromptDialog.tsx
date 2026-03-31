@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -37,7 +37,7 @@ import {
 import { toast } from 'sonner';
 import { BlockedAccountDialog } from '@/components/BlockedAccountDialog';
 
-type AuthMode = 'prompt' | 'signup' | 'login' | 'forgot-password' | 'check-email';
+type AuthMode = 'prompt' | 'signup' | 'login' | 'forgot-password' | 'verify-otp';
 
 interface AuthPromptDialogProps {
   open: boolean;
@@ -88,9 +88,13 @@ export function AuthPromptDialog({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [confirmationEmail, setConfirmationEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [otpValues, setOtpValues] = useState<string[]>(['', '', '', '', '', '']);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [showBlockedDialog, setShowBlockedDialog] = useState(false);
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const { signUp, signIn, resetPassword } = useCustomerAuthStore();
+  const { signUp, signIn, verifyOTP, resendOTP, resetPassword } = useCustomerAuthStore();
   const { tenant } = useTenant();
 
   const signupForm = useForm<SignupFormData>({
@@ -138,10 +142,13 @@ export function AuthPromptDialog({
         return;
       }
 
-      // Check if email confirmation is required
-      if (signupData?.needsEmailConfirmation) {
+      // Check if OTP verification is required
+      if (signupData?.needsOTPVerification) {
         setConfirmationEmail(data.email);
-        setMode('check-email');
+        setSignupPassword(data.password);
+        setOtpValues(['', '', '', '', '', '']);
+        setResendCooldown(60);
+        setMode('verify-otp');
         return;
       }
 
@@ -212,24 +219,130 @@ export function AuthPromptDialog({
     }
   };
 
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  // Auto-focus first OTP input when entering verify mode
+  useEffect(() => {
+    if (mode === 'verify-otp') {
+      setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
+    }
+  }, [mode]);
+
+  const handleOtpChange = (index: number, value: string) => {
+    const digit = value.replace(/\D/g, '').slice(-1);
+    setOtpValues((prev) => {
+      const next = [...prev];
+      next[index] = digit;
+      if (digit && index < 5) {
+        setTimeout(() => otpInputRefs.current[index + 1]?.focus(), 0);
+      }
+      return next;
+    });
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      if (!otpValues[index] && index > 0) {
+        otpInputRefs.current[index - 1]?.focus();
+        setOtpValues((prev) => {
+          const next = [...prev];
+          next[index - 1] = '';
+          return next;
+        });
+        e.preventDefault();
+      }
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length === 0) return;
+    const newValues = [...otpValues];
+    for (let i = 0; i < pasted.length && i < 6; i++) {
+      newValues[i] = pasted[i];
+    }
+    setOtpValues(newValues);
+    const nextEmptyIndex = newValues.findIndex((v) => v === '');
+    const focusIndex = nextEmptyIndex === -1 ? 5 : nextEmptyIndex;
+    setTimeout(() => otpInputRefs.current[focusIndex]?.focus(), 0);
+  };
+
+  const handleOtpSubmit = async () => {
+    const otpCode = otpValues.join('');
+    if (otpCode.length !== 6) {
+      toast.error('Please enter the full 6-digit code');
+      return;
+    }
+    if (!tenant?.id) {
+      toast.error('Tenant information missing');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const result = await verifyOTP(confirmationEmail, otpCode, signupPassword, tenant.id);
+      if (result.error) {
+        toast.error(result.error.message || 'Invalid or expired code');
+        setOtpValues(['', '', '', '', '', '']);
+        setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
+        return;
+      }
+      toast.success('Account verified successfully!');
+      window.location.href = '/portal';
+    } catch (error) {
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendOTP = async () => {
+    if (resendCooldown > 0 || !tenant?.id) return;
+    setIsLoading(true);
+    try {
+      const result = await resendOTP(confirmationEmail, tenant.id);
+      if (result.error) {
+        toast.error(result.error.message || 'Failed to resend code');
+        return;
+      }
+      toast.success('A new verification code has been sent');
+      setResendCooldown(60);
+      setOtpValues(['', '', '', '', '', '']);
+      setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
+    } catch (error) {
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSkip = () => {
     onSkip();
-    // Reset state when dialog closes
     setTimeout(() => {
       setMode('prompt');
       signupForm.reset();
       loginForm.reset();
+      setOtpValues(['', '', '', '', '', '']);
+      setSignupPassword('');
+      setResendCooldown(0);
     }, 300);
   };
 
   const handleClose = (open: boolean) => {
     onOpenChange(open);
     if (!open) {
-      // Reset state when dialog closes
       setTimeout(() => {
         setMode('prompt');
         signupForm.reset();
         loginForm.reset();
+        setOtpValues(['', '', '', '', '', '']);
+        setSignupPassword('');
+        setResendCooldown(0);
       }, 300);
     }
   };
@@ -561,15 +674,15 @@ export function AuthPromptDialog({
     </>
   );
 
-  const renderCheckEmailMode = () => (
+  const renderVerifyOTPMode = () => (
     <>
       <DialogHeader className="text-center">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent/10">
-          <Mail className="h-8 w-8 text-accent" />
+          <Shield className="h-8 w-8 text-accent" />
         </div>
-        <DialogTitle className="text-xl">Check Your Email</DialogTitle>
+        <DialogTitle className="text-xl">Verify Your Email</DialogTitle>
         <DialogDescription className="text-center">
-          We've sent a confirmation link to
+          Enter the 6-digit code sent to
         </DialogDescription>
       </DialogHeader>
 
@@ -578,21 +691,58 @@ export function AuthPromptDialog({
           <p className="font-medium text-foreground">{confirmationEmail}</p>
         </div>
 
-        <p className="text-sm text-muted-foreground text-center">
-          Click the link in the email to confirm your account. You'll be automatically logged in and redirected back here.
-        </p>
-
-        <div className="bg-accent/5 border border-accent/20 rounded-lg p-3">
-          <p className="text-xs text-muted-foreground">
-            <strong className="text-foreground">Didn't receive the email?</strong> Check your spam folder or try signing up again.
-          </p>
+        {/* OTP Input */}
+        <div className="flex justify-center gap-2" onPaste={handleOtpPaste}>
+          {otpValues.map((digit, index) => (
+            <input
+              key={index}
+              ref={(el) => { otpInputRefs.current[index] = el; }}
+              type="text"
+              inputMode="numeric"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => handleOtpChange(index, e.target.value)}
+              onKeyDown={(e) => handleOtpKeyDown(index, e)}
+              className="w-11 h-13 text-center text-xl font-bold rounded-lg border-2 border-input bg-background focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
+              disabled={isLoading}
+            />
+          ))}
         </div>
+
+        <p className="text-xs text-muted-foreground text-center">
+          Code expires in 15 minutes
+        </p>
       </div>
 
       <div className="flex flex-col gap-3 pt-2">
-        <Button variant="outline" onClick={handleSkip} className="w-full">
-          Continue Without Account
+        <Button
+          onClick={handleOtpSubmit}
+          disabled={isLoading || otpValues.join('').length !== 6}
+          className="w-full"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              Verifying...
+            </>
+          ) : (
+            'Verify & Continue'
+          )}
         </Button>
+
+        <div className="flex items-center justify-center gap-1 text-sm">
+          <span className="text-muted-foreground">Didn't receive it?</span>
+          <Button
+            variant="link"
+            size="sm"
+            onClick={handleResendOTP}
+            disabled={resendCooldown > 0 || isLoading}
+            className="p-0 h-auto"
+          >
+            {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
+          </Button>
+        </div>
+
         <Button
           variant="ghost"
           onClick={() => {
@@ -615,7 +765,7 @@ export function AuthPromptDialog({
           {mode === 'signup' && renderSignupMode()}
           {mode === 'login' && renderLoginMode()}
           {mode === 'forgot-password' && renderForgotPasswordMode()}
-          {mode === 'check-email' && renderCheckEmailMode()}
+          {mode === 'verify-otp' && renderVerifyOTPMode()}
         </DialogContent>
       </Dialog>
       <BlockedAccountDialog

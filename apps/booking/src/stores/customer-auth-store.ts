@@ -59,12 +59,27 @@ interface CustomerAuthState {
     }
   ) => Promise<{ error: any; data?: any; isBlocked?: boolean }>;
 
+  verifyOTP: (
+    email: string,
+    code: string,
+    password: string,
+    tenantId: string
+  ) => Promise<{ error: any; verified?: boolean }>;
+
+  resendOTP: (
+    email: string,
+    tenantId: string
+  ) => Promise<{ error: any }>;
+
   signIn: (email: string, password: string, tenantId?: string) => Promise<{ error: any; isBlocked?: boolean }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   initialize: () => Promise<void>;
   refetchCustomerUser: () => Promise<void>;
 }
+
+// Flag to prevent auth state listener from interfering during explicit auth operations
+let _authOpInProgress = false;
 
 const fetchCustomerUser = async (authUser: User, tenantId?: string): Promise<CustomerUser | null> => {
   try {
@@ -141,11 +156,24 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
   },
 
   signUp: async (email, password, options = {}) => {
+    _authOpInProgress = true;
     try {
       set({ loading: true });
 
-      // Create the auth user with tenant metadata so the custom auth email hook
-      // can look up tenant branding and build the correct redirect URL
+      // Check if email is blocked before creating auth user
+      const globalCheck = await isGloballyBlacklisted(email);
+      if (globalCheck.isBlacklisted) {
+        return { error: { message: 'Your account has been blocked. Please contact support.' }, isBlocked: true };
+      }
+
+      if (options.tenantId) {
+        const identityCheck = await isIdentityBlocked(options.tenantId, email);
+        if (identityCheck.isBlocked) {
+          return { error: { message: 'Your account has been blocked. Please contact support.' }, isBlocked: true };
+        }
+      }
+
+      // Create the auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -153,8 +181,21 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
           data: {
             tenant_id: options.tenantId || undefined,
             tenant_slug: (typeof window !== 'undefined'
-              ? window.location.hostname.split('.')[0]
+              ? (() => {
+                  const host = window.location.hostname.split(':')[0];
+                  const parts = host.split('.');
+                  if (parts.length >= 2 && parts[parts.length - 1] === 'localhost' && parts[0] !== 'localhost') {
+                    return parts[0];
+                  }
+                  if (parts.length >= 3) {
+                    const sub = parts[0];
+                    const reserved = ['www', 'admin', 'portal', 'api', 'app'];
+                    return reserved.includes(sub) ? undefined : sub;
+                  }
+                  return undefined;
+                })()
               : undefined),
+            name: options.customerName || email.split('@')[0],
           },
           emailRedirectTo: typeof window !== 'undefined'
             ? `${window.location.origin}/auth/callback`
@@ -171,107 +212,155 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
         return { error: { message: 'Failed to create user account' } };
       }
 
-      // Check if this is a "fake" user response (email already exists)
-      // Supabase returns a user object even when the email exists for security reasons,
-      // but the user won't have identities if it's a fake response
+      // Check if email already exists on another tenant
       if (!authData.user.identities || authData.user.identities.length === 0) {
-        return {
-          error: {
-            message: 'An account with this email already exists. Please sign in instead.'
-          }
-        };
-      }
-
-      // Check if email is blocked before creating customer record
-      const globalCheck = await isGloballyBlacklisted(email);
-      if (globalCheck.isBlacklisted) {
-        await supabase.auth.signOut();
-        return { error: { message: 'Your account has been blocked. Please contact support.' }, isBlocked: true };
-      }
-
-      if (options.tenantId) {
-        const identityCheck = await isIdentityBlocked(options.tenantId, email);
-        if (identityCheck.isBlocked) {
-          await supabase.auth.signOut();
-          return { error: { message: 'Your account has been blocked. Please contact support.' }, isBlocked: true };
-        }
-      }
-
-      // Create customer record if we have a customer ID from booking
-      // or find existing / create a new customer with provided details
-      let customerId = options.customerId;
-
-      if (!customerId) {
-        // First, check if a customer with this email already exists
-        const { data: existingCustomer } = await supabase
-          .from('customers')
-          .select('id')
-          .eq('email', email)
-          .maybeSingle();
-
-        if (existingCustomer) {
-          // Use the existing customer
-          customerId = existingCustomer.id;
-          console.log('Found existing customer:', customerId);
-        } else {
-          // Create a new customer record
-          const { data: newCustomer, error: customerError } = await supabase
-            .from('customers')
-            .insert({
-              email,
-              name: options.customerName || email.split('@')[0],
-              phone: options.customerPhone || null,
-              tenant_id: options.tenantId || null,
-              type: 'Individual',
-              status: 'Active',
-            })
-            .select()
-            .single();
-
-          if (customerError) {
-            console.error('Error creating customer:', customerError);
-            return { error: customerError };
-          }
-
-          customerId = newCustomer.id;
-          console.log('Created new customer:', customerId);
-        }
-      }
-
-      // Create the customer_users link
-      const { error: linkError } = await supabase
-        .from('customer_users')
-        .insert({
-          auth_user_id: authData.user.id,
-          customer_id: customerId,
-          tenant_id: options.tenantId || null,
+        // Auth user exists — use edge function for cross-tenant signup
+        console.log('Email exists on another tenant, using cross-tenant signup');
+        const { data: signupResult, error: fnError } = await supabase.functions.invoke('customer-signup', {
+          body: {
+            email,
+            password,
+            customer_id: options.customerId || undefined,
+            tenant_id: options.tenantId || undefined,
+            customer_name: options.customerName || undefined,
+            customer_phone: options.customerPhone || undefined,
+          },
         });
 
-      if (linkError) {
-        console.error('Error linking customer user:', linkError);
-        return { error: linkError };
+        if (fnError) {
+          console.error('Cross-tenant signup error:', fnError);
+          return { error: { message: fnError.message || 'Failed to create account' } };
+        }
+
+        if (signupResult?.error) {
+          return { error: { message: signupResult.error } };
+        }
+
+        // Send OTP for verification
+        if (options.tenantId) {
+          await supabase.functions.invoke('send-verification-otp', {
+            body: { email, tenant_id: options.tenantId },
+          });
+        }
+
+        return { error: null, data: { user: null, session: null, needsOTPVerification: true, email } };
       }
 
-      // Fetch the complete customer user data
-      const customerUser = await fetchCustomerUser(authData.user, options.tenantId);
+      // New user created — send OTP verification email
+      if (options.tenantId) {
+        const { error: otpError } = await supabase.functions.invoke('send-verification-otp', {
+          body: { email, tenant_id: options.tenantId },
+        });
 
-      // Note: If email confirmation is enabled, authData.session will be null
-      // The user will be logged in automatically when they click the confirmation link
-      set({
-        user: authData.user,
-        session: authData.session,
-        customerUser,
-        loading: false
-      });
+        if (otpError) {
+          console.error('Failed to send OTP:', otpError);
+        }
+      }
 
-      // Return needsEmailConfirmation flag so UI can show appropriate message
-      const needsEmailConfirmation = !authData.session;
-      return { error: null, data: { ...authData, needsEmailConfirmation, email } };
+      return { error: null, data: { user: null, session: null, needsOTPVerification: true, email } };
     } catch (error) {
       console.error('Unexpected sign up error:', error);
       return { error: { message: 'An unexpected error occurred' } };
     } finally {
+      _authOpInProgress = false;
       set({ loading: false });
+    }
+  },
+
+  verifyOTP: async (email, code, password, tenantId) => {
+    _authOpInProgress = true;
+    try {
+      set({ loading: true });
+
+      // Verify the OTP via edge function
+      const { data: verifyResult, error: fnError } = await supabase.functions.invoke('verify-otp', {
+        body: { email, code, tenant_id: tenantId },
+      });
+
+      if (fnError) {
+        console.error('OTP verification error:', fnError);
+        return { error: { message: fnError.message || 'Failed to verify code' } };
+      }
+
+      if (!verifyResult?.verified) {
+        return { error: { message: verifyResult?.error || 'Invalid or expired code' } };
+      }
+
+      // OTP verified — sign in with password
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        console.error('Sign in after OTP error:', signInError);
+        return { error: { message: signInError.message || 'Failed to sign in' } };
+      }
+
+      if (data.user) {
+        // Check for existing customer user or auto-create
+        let customerUser = await fetchCustomerUser(data.user, tenantId);
+
+        if (!customerUser && tenantId) {
+          // Auto-create customer record after email verification
+          const displayName = data.user.user_metadata?.name || email.split('@')[0];
+
+          const { data: newCustomer } = await supabase
+            .from('customers')
+            .insert({
+              email,
+              name: displayName,
+              tenant_id: tenantId,
+              type: 'Individual',
+              status: 'Active',
+            })
+            .select('id')
+            .single();
+
+          if (newCustomer) {
+            await supabase
+              .from('customer_users')
+              .insert({
+                auth_user_id: data.user.id,
+                customer_id: newCustomer.id,
+                tenant_id: tenantId,
+              });
+
+            customerUser = await fetchCustomerUser(data.user, tenantId);
+          }
+        }
+
+        set({
+          user: data.user,
+          session: data.session,
+          customerUser,
+          loading: false,
+        });
+      }
+
+      return { error: null, verified: true };
+    } catch (error) {
+      console.error('Unexpected OTP error:', error);
+      return { error: { message: 'An unexpected error occurred' } };
+    } finally {
+      _authOpInProgress = false;
+      set({ loading: false });
+    }
+  },
+
+  resendOTP: async (email, tenantId) => {
+    try {
+      const { error } = await supabase.functions.invoke('send-verification-otp', {
+        body: { email, tenant_id: tenantId },
+      });
+
+      if (error) {
+        return { error: { message: error.message || 'Failed to resend code' } };
+      }
+
+      return { error: null };
+    } catch (error) {
+      return { error: { message: 'An unexpected error occurred' } };
     }
   },
 
