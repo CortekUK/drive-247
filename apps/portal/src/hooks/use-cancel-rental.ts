@@ -113,7 +113,7 @@ export const useCancelRental = () => {
       let successMessage = "Rental cancelled successfully.";
       if (data.refund) {
         if (data.refund.type === "full" || data.refund.type === "partial") {
-          const currencyCode = tenant?.currency_code || 'GBP';
+          const currencyCode = tenant?.currency_code || 'USD';
           successMessage += ` Refund of ${formatCurrency(data.refund.amount || 0, currencyCode)} processed.`;
         } else if (data.refund.type === "cancelled") {
           successMessage += " Payment hold released.";

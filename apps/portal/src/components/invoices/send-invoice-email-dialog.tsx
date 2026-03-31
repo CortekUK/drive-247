@@ -328,19 +328,19 @@ export const SendInvoiceEmailDialog = ({
                       </div>
                     </td>
                     <td className="p-3 text-sm text-right font-medium">
-                      {formatCurrency(invoice.subtotal, tenant?.currency_code || 'GBP')}
+                      {formatCurrency(invoice.subtotal, tenant?.currency_code || 'USD')}
                     </td>
                   </tr>
                   {invoice.tax_amount > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">Tax</td>
-                      <td className="p-3 text-sm text-right">{formatCurrency(invoice.tax_amount, tenant?.currency_code || 'GBP')}</td>
+                      <td className="p-3 text-sm text-right">{formatCurrency(invoice.tax_amount, tenant?.currency_code || 'USD')}</td>
                     </tr>
                   )}
                   <tr className="bg-muted/50">
                     <td className="p-3 text-sm font-bold">Total</td>
                     <td className="p-3 text-lg font-bold text-right text-primary">
-                      {formatCurrency(invoice.total_amount, tenant?.currency_code || 'GBP')}
+                      {formatCurrency(invoice.total_amount, tenant?.currency_code || 'USD')}
                     </td>
                   </tr>
                 </tbody>

@@ -32,7 +32,7 @@ function getStatusConfig(status: string) {
 
 export function InsurancePoliciesSection({ rentalId }: InsurancePoliciesSectionProps) {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const { data: policies, isLoading } = useRentalInsurancePolicies(rentalId);
 
   if (isLoading || !policies || policies.length === 0) return null;

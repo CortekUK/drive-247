@@ -11,7 +11,7 @@ interface NetPLChipProps {
   currencyCode?: string;
 }
 
-export function NetPLChip({ revenue, costs, net, compact = false, showTooltip = true, currencyCode = 'GBP' }: NetPLChipProps) {
+export function NetPLChip({ revenue, costs, net, compact = false, showTooltip = true, currencyCode = 'USD' }: NetPLChipProps) {
   const isPositive = net >= 0;
   const chipClassName = isPositive 
     ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" 

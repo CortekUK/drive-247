@@ -6,7 +6,7 @@ import { formatCurrency } from "@/lib/format-utils";
 
 export const FineKPIs = () => {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const { data: kpiData, isLoading } = useQuery({
     queryKey: ["fines-kpis", tenant?.id],
     queryFn: async () => {

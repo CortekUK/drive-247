@@ -172,7 +172,7 @@ export default function PlateDetail() {
                 <div className="text-sm text-muted-foreground">Cost</div>
                 <div className="flex items-center gap-1">
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  {formatCurrency(plate.cost, tenant?.currency_code || 'GBP')}
+                  {formatCurrency(plate.cost, tenant?.currency_code || 'USD')}
                 </div>
               </div>
             )}

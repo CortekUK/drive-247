@@ -36,9 +36,9 @@ function formatDate(date: string | Date | null): string {
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-function formatCurrency(amount: number | null, currencyCode: string = 'GBP'): string {
+function formatCurrency(amount: number | null, currencyCode: string = 'USD'): string {
     const value = amount ?? 0;
-    const code = currencyCode?.toUpperCase() || 'GBP';
+    const code = currencyCode?.toUpperCase() || 'USD';
     const localeMap: Record<string, string> = { USD: 'en-US', GBP: 'en-GB', EUR: 'en-IE' };
     const locale = localeMap[code] || 'en-US';
     try {
@@ -52,7 +52,7 @@ function formatCurrency(amount: number | null, currencyCode: string = 'GBP'): st
 // TEMPLATE PROCESSING
 // ============================================================================
 
-function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'GBP', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number }): string {
+function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number }): string {
     // Compose full address from separate fields (DB stores street/city/state/zip separately)
     const customerAddress = [
         customer?.address_street,
@@ -115,10 +115,11 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
             if (!vehicle?.daily_mileage && !vehicle?.weekly_mileage && !vehicle?.monthly_mileage) return 'Unlimited';
             if (rental?.start_date && rental?.end_date) {
                 const days = Math.max(1, Math.ceil((new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
-                let tier: 'daily' | 'weekly' | 'monthly' = days > 30 ? 'monthly' : days >= 7 ? 'weekly' : 'daily';
+                const _mtd = (tenant as any)?.monthly_tier_days ?? 30;
+                let tier: 'daily' | 'weekly' | 'monthly' = days >= _mtd ? 'monthly' : days >= 7 ? 'weekly' : 'daily';
                 const perUnit = tier === 'daily' ? vehicle.daily_mileage : tier === 'weekly' ? vehicle.weekly_mileage : vehicle.monthly_mileage;
                 if (perUnit == null) return 'Unlimited';
-                const total = tier === 'daily' ? days * perUnit : tier === 'weekly' ? Math.ceil(days / 7) * perUnit : Math.ceil(days / 30) * perUnit;
+                const total = tier === 'daily' ? days * perUnit : tier === 'weekly' ? Math.ceil(days / 7) * perUnit : Math.ceil(days / _mtd) * perUnit;
                 return total.toString();
             }
             return vehicle?.monthly_mileage?.toString() || '';
@@ -688,7 +689,7 @@ function renderTextToPdf(ctx: PdfCtx, text: string) {
 // DEFAULT TEXT TEMPLATE (when tenant has no custom template)
 // ============================================================================
 
-function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'GBP', extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number }): string {
+function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number }): string {
     const companyName = tenant?.company_name || 'Drive 247';
     const line = (label: string, value: string | null | undefined) => value ? `${label}: ${value}` : '';
     const lines = (...parts: string[]) => parts.filter(Boolean).join('\n');
@@ -855,14 +856,14 @@ export async function POST(request: NextRequest) {
         if (body.tenantId) {
             const { data: tenantData } = await supabase
                 .from('tenants')
-                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id')
+                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days')
                 .eq('id', body.tenantId)
                 .single();
             tenant = tenantData;
         }
 
         // ── Generate PDF ──
-        const currencyCode = tenant?.currency_code || 'GBP';
+        const currencyCode = tenant?.currency_code || 'USD';
         const pdfDoc = await PDFDocument.create();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);

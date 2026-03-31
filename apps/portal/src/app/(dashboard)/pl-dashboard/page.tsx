@@ -83,7 +83,7 @@ const PLDashboard: React.FC = () => {
   const router = useRouter();
   const { toast } = useToast();
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const searchParams = useSearchParams();
 
   // State for filters and sorting - initialize from URL params

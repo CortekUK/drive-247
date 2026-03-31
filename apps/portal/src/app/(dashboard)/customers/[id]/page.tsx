@@ -112,7 +112,7 @@ const CustomerDetail = () => {
 
   const { tenant } = useTenant();
   const { toast } = useToast();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   const { blockCustomer, unblockCustomer, isLoading: blockingLoading } = useCustomerBlockingActions();
 

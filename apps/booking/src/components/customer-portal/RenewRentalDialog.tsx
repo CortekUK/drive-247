@@ -137,7 +137,7 @@ export function RenewRentalDialog({ open, onOpenChange, rental }: RenewRentalDia
     setShowConfirmation(false);
   };
 
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>

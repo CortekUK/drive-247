@@ -290,7 +290,7 @@ export function formatEmailDate(date: string | Date | null | undefined): string 
 // Format currency for display (delegates to shared format-utils)
 export function formatEmailCurrency(
   amount: number | null | undefined,
-  currencyCode: string = 'GBP'
+  currencyCode: string = 'USD'
 ): string {
   if (amount === null || amount === undefined) return '';
   return formatCurrency(amount, currencyCode);

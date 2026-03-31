@@ -62,7 +62,7 @@ const CreateFine = () => {
   const [showOtherTypeDialog, setShowOtherTypeDialog] = useState(false);
   const [otherTypeValue, setOtherTypeValue] = useState("");
   const [selectedTypeOption, setSelectedTypeOption] = useState("PCN");
-  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
+  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');
 
   const form = useForm<FineFormData>({
     resolver: zodResolver(fineSchema),
@@ -615,7 +615,7 @@ const CreateFine = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Amount</p>
                 <p className="font-medium text-lg text-destructive">
-                  {formatCurrency(form.watch("amount") || 0, tenant?.currency_code || 'GBP')}
+                  {formatCurrency(form.watch("amount") || 0, tenant?.currency_code || 'USD')}
                 </p>
               </div>
 

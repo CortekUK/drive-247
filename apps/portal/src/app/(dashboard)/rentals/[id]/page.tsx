@@ -1845,7 +1845,7 @@ const RentalDetail = () => {
             }, 0)
           : 0;
         const netReceived = totalPayments - totalRefunded;
-        const cur = tenant?.currency_code || 'GBP';
+        const cur = tenant?.currency_code || 'USD';
         return (
           <div className={`grid gap-4 grid-cols-2 lg:grid-cols-4 ${isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}`}>
             {/* Total Collected */}
@@ -2998,7 +2998,7 @@ const RentalDetail = () => {
               {(() => {
                 const periodType = (rental.rental_period_type || 'Monthly').toLowerCase();
                 const vehicle = rental.vehicles;
-                const currCode = tenant?.currency_code || 'GBP';
+                const currCode = tenant?.currency_code || 'USD';
                 const totalAmount = Number(rental.monthly_amount);
 
                 // Get the per-unit rate from the vehicle
@@ -3739,19 +3739,19 @@ const RentalDetail = () => {
                           {extractedData.coverageLimits?.liability && (
                             <div>
                               <span className="text-muted-foreground">Liability:</span>{' '}
-                              <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.liability, tenant?.currency_code || 'GBP')}</span>
+                              <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.liability, tenant?.currency_code || 'USD')}</span>
                             </div>
                           )}
                           {extractedData.coverageLimits?.collision && (
                             <div>
                               <span className="text-muted-foreground">Collision:</span>{' '}
-                              <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.collision, tenant?.currency_code || 'GBP')}</span>
+                              <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.collision, tenant?.currency_code || 'USD')}</span>
                             </div>
                           )}
                           {extractedData.coverageLimits?.comprehensive && (
                             <div>
                               <span className="text-muted-foreground">Comprehensive:</span>{' '}
-                              <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.comprehensive, tenant?.currency_code || 'GBP')}</span>
+                              <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.comprehensive, tenant?.currency_code || 'USD')}</span>
                             </div>
                           )}
                         </div>
@@ -4474,19 +4474,19 @@ const RentalDetail = () => {
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between">
                         <span>Deposit Available:</span>
-                        <span className="font-medium">{formatCurrencyUtil(depositAvailable, tenant?.currency_code || 'GBP')}</span>
+                        <span className="font-medium">{formatCurrencyUtil(depositAvailable, tenant?.currency_code || 'USD')}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Excess Mileage Owed:</span>
-                        <span className="font-medium">{formatCurrencyUtil(excessRemaining, tenant?.currency_code || 'GBP')}</span>
+                        <span className="font-medium">{formatCurrencyUtil(excessRemaining, tenant?.currency_code || 'USD')}</span>
                       </div>
                       <div className="flex justify-between border-t pt-1 font-semibold">
                         <span>Amount to Deduct:</span>
-                        <span>{formatCurrencyUtil(deductAmount, tenant?.currency_code || 'GBP')}</span>
+                        <span>{formatCurrencyUtil(deductAmount, tenant?.currency_code || 'USD')}</span>
                       </div>
                       {excessRemaining > depositAvailable && (
                         <p className="text-xs text-amber-600 mt-2">
-                          The deposit does not fully cover the charge. The remaining {formatCurrencyUtil(excessRemaining - depositAvailable, tenant?.currency_code || 'GBP')} can be collected via a payment link.
+                          The deposit does not fully cover the charge. The remaining {formatCurrencyUtil(excessRemaining - depositAvailable, tenant?.currency_code || 'USD')} can be collected via a payment link.
                         </p>
                       )}
                     </div>
@@ -4505,7 +4505,7 @@ const RentalDetail = () => {
                         body: { rentalId: rental.id, amount: deductAmount, tenantId: tenant?.id },
                       });
                       if (error) throw error;
-                      toast({ title: 'Deposit Deducted', description: `${formatCurrencyUtil(deductAmount, tenant?.currency_code || 'GBP')} deducted from security deposit for excess mileage.` });
+                      toast({ title: 'Deposit Deducted', description: `${formatCurrencyUtil(deductAmount, tenant?.currency_code || 'USD')} deducted from security deposit for excess mileage.` });
                       queryClient.invalidateQueries({ queryKey: ["rental-charges"] });
                       queryClient.invalidateQueries({ queryKey: ["rental-totals"] });
                       queryClient.invalidateQueries({ queryKey: ["rental-invoice"] });
@@ -4519,7 +4519,7 @@ const RentalDetail = () => {
                     }
                   }}
                 >
-                  {isDeductingDeposit ? 'Processing...' : `Deduct ${formatCurrencyUtil(deductAmount, tenant?.currency_code || 'GBP')}`}
+                  {isDeductingDeposit ? 'Processing...' : `Deduct ${formatCurrencyUtil(deductAmount, tenant?.currency_code || 'USD')}`}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

@@ -77,7 +77,7 @@ serve(async (req) => {
     async function getTenantCurrency(tid: string): Promise<string> {
       if (tenantCurrencyCache[tid]) return tenantCurrencyCache[tid];
       const { data: t } = await supabase.from('tenants').select('currency_code').eq('id', tid).single();
-      const code = t?.currency_code || 'GBP';
+      const code = t?.currency_code || 'USD';
       tenantCurrencyCache[tid] = code;
       return code;
     }

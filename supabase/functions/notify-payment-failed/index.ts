@@ -24,7 +24,7 @@ interface NotifyRequest {
   currencyCode?: string;
 }
 
-const getCustomerEmailHtml = (data: NotifyRequest, currencyCode: string = 'GBP') => {
+const getCustomerEmailHtml = (data: NotifyRequest, currencyCode: string = 'USD') => {
   return `
 <!DOCTYPE html>
 <html>
@@ -136,7 +136,7 @@ const getCustomerEmailHtml = (data: NotifyRequest, currencyCode: string = 'GBP')
 `;
 };
 
-const getAdminEmailHtml = (data: NotifyRequest, currencyCode: string = 'GBP') => {
+const getAdminEmailHtml = (data: NotifyRequest, currencyCode: string = 'USD') => {
   return `
 <!DOCTYPE html>
 <html>
@@ -222,7 +222,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get currency code from tenant if available
-    let currencyCode = data.currencyCode || 'GBP';
+    let currencyCode = data.currencyCode || 'USD';
     if (data.tenantId && !data.currencyCode) {
       const { data: tenant } = await supabase
         .from('tenants')

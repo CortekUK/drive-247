@@ -375,7 +375,7 @@ export default function VehiclesListEnhanced() {
     return years.sort((a, b) => b - a); // Sort descending (newest first)
   }, [vehicles]);
 
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   const handleRowClick = (vehicleId: string) => {
     router.push(`/vehicles/${vehicleId}`);

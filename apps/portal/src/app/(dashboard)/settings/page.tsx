@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -40,6 +40,7 @@ import { BonzahSettings } from '@/components/settings/bonzah-settings';
 import { ESignSettings } from '@/components/settings/esign-settings';
 import { TwilioSmsSettings } from '@/components/settings/twilio-sms-settings';
 import { WhatsAppMetaSettings } from '@/components/settings/whatsapp-meta-settings';
+import { CommunicationSettings } from '@/components/settings/communication-settings';
 import { SubscriptionSettings } from '@/components/settings/subscription-settings';
 import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates-section';
 import { PricingRulesSettings } from '@/components/settings/pricing-rules-settings';
@@ -66,6 +67,7 @@ const Settings = () => {
   const [showDataCleanupDialog, setShowDataCleanupDialog] = useState(false);
   const [resetGeneralDialogOpen, setResetGeneralDialogOpen] = useState(false);
   const [installmentDialogOpen, setInstallmentDialogOpen] = useState(false);
+  const [showCommunicationSettings, setShowCommunicationSettings] = useState(false);
   const [generalForm, setGeneralForm] = useState({
     currency_code: 'USD',
     distance_unit: 'miles' as 'km' | 'miles',
@@ -147,6 +149,7 @@ const Settings = () => {
     lockbox_code_length: number | null;
     lockbox_notification_methods: string[];
     verification_document_type: string;
+    monthly_tier_days: number;
   }>({
     minimum_rental_age: '',
     tax_enabled: false,
@@ -198,6 +201,8 @@ const Settings = () => {
     lockbox_notification_methods: ['email'] as string[],
     // Verification
     verification_document_type: 'driving_license',
+    // Monthly tier
+    monthly_tier_days: 30,
   });
 
   // Sync rental form with loaded settings
@@ -244,6 +249,8 @@ const Settings = () => {
         lockbox_notification_methods: (rentalSettings.lockbox_notification_methods as string[]) ?? ['email'],
         // Verification
         verification_document_type: (rentalSettings as any).verification_document_type ?? 'driving_license',
+        // Monthly tier
+        monthly_tier_days: rentalSettings.monthly_tier_days ?? 30,
       });
     }
   }, [rentalSettings]);
@@ -405,7 +412,8 @@ const Settings = () => {
       rentalForm.min_rental_days !== (rs.min_rental_days ?? 0) ||
       rentalForm.min_rental_hours !== (rs.min_rental_hours ?? 1) ||
       rentalForm.max_rental_days !== (rs.max_rental_days ?? 90) ||
-      rentalForm.verification_document_type !== ((rs as any).verification_document_type ?? 'driving_license')
+      rentalForm.verification_document_type !== ((rs as any).verification_document_type ?? 'driving_license') ||
+      rentalForm.monthly_tier_days !== (rs.monthly_tier_days ?? 30)
     );
   }, [rentalForm, rentalSettings]);
 
@@ -2234,6 +2242,58 @@ const Settings = () => {
             </CardContent>
           </Card>
 
+          {/* Monthly Tier Threshold Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarIcon className="h-5 w-5 text-primary" />
+                Monthly Pricing Tier
+              </CardTitle>
+              <CardDescription>
+                Set when the monthly pricing rate applies instead of the weekly rate
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Label className="text-sm">Monthly tier starts at</Label>
+                <Select
+                  value={String(rentalForm.monthly_tier_days)}
+                  onValueChange={(value) => setRentalForm(prev => ({ ...prev, monthly_tier_days: parseInt(value) }))}
+                >
+                  <SelectTrigger className="w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30">30 days</SelectItem>
+                    <SelectItem value="31">31 days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Bookings of {rentalForm.monthly_tier_days} days or more will use the monthly rate. This also affects mileage allowance and extension pricing calculations.
+              </p>
+              <Button
+                onClick={async () => {
+                  try {
+                    await updateRentalSettings({ monthly_tier_days: rentalForm.monthly_tier_days });
+                    await refetchTenant();
+                  } catch (error) {
+                    console.error('Failed to update monthly tier setting:', error);
+                  }
+                }}
+                disabled={isUpdatingRentalSettings}
+                className="flex items-center gap-2"
+              >
+                {isUpdatingRentalSettings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save
+              </Button>
+            </CardContent>
+          </Card>
+
           {/* Tax Configuration Card */}
           <Card>
             <CardHeader>
@@ -3284,6 +3344,7 @@ const Settings = () => {
                         <li>Min Rental: 0 days, 1 hour</li>
                         <li>Max Rental: 90 days</li>
                         <li>Lockbox: Disabled</li>
+                        <li>Monthly Tier: 30 days</li>
                       </ul>
                     </div>
                   </AlertDialogHeader>
@@ -3324,6 +3385,7 @@ const Settings = () => {
                             lockbox_enabled: false,
                             lockbox_code_length: 4,
                             lockbox_notification_methods: ['email'],
+                            monthly_tier_days: 30,
                           };
                           await updateRentalSettings(defaults);
                           setRentalForm({
@@ -3358,6 +3420,9 @@ const Settings = () => {
                             lockbox_enabled: false,
                             lockbox_code_length: null,
                             lockbox_notification_methods: ['email'],
+                            security_deposit_enabled: true,
+                            verification_document_type: 'driving_license',
+                            monthly_tier_days: 30,
                           });
                           toast({ title: "Settings Reset", description: "All booking settings have been restored to defaults." });
                         } catch (error: any) {
@@ -3445,39 +3510,62 @@ const Settings = () => {
           <LockboxTemplatesSection />
         </TabsContent>
 
-        {/* Integrations Tab (SMS + E-Sign + Bonzah + Blacklist) */}
+        {/* Integrations Tab (Communication + E-Sign + Bonzah + Blacklist) */}
         <TabsContent value="integrations" className="space-y-6">
-          {/* TODO: Re-enable when SMS & WhatsApp integrations are complete */}
-          {/* <TwilioSmsSettings /> */}
-          {/* <WhatsAppMetaSettings /> */}
-          <ESignSettings />
-          <BonzahSettings />
+          {showCommunicationSettings ? (
+            <CommunicationSettings onBack={() => setShowCommunicationSettings(false)} />
+          ) : (
+            <>
+              {/* Communication Card — opens sub-view */}
+              <Card className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => setShowCommunicationSettings(true)}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5 text-primary" />
+                    Communication
+                    <Badge variant="secondary" className="text-xs ml-auto">SMS, WhatsApp, Email, Calling</Badge>
+                  </CardTitle>
+                  <CardDescription>
+                    Configure messaging channels to communicate with customers — SMS, WhatsApp, Email, and Voice Calling.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button variant="outline" className="gap-2">
+                    Configure Channels
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
 
-          {/* Global Blacklist */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldX className="h-5 w-5 text-primary" />
-                Global Blacklist
-              </CardTitle>
-              <CardDescription>
-                View customers blocked by multiple rental companies
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">
-                When a customer is blocked by 3 or more rental companies, they are automatically added to the global blacklist.
-                Blacklisted customers cannot make bookings with any rental company on the platform.
-              </p>
-              <Button
-                onClick={() => router.push('/settings/blacklist')}
-                className="flex items-center gap-2"
-              >
-                <ShieldX className="h-4 w-4" />
-                View Global Blacklist
-              </Button>
-            </CardContent>
-          </Card>
+              <ESignSettings />
+              <BonzahSettings />
+
+              {/* Global Blacklist */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldX className="h-5 w-5 text-primary" />
+                    Global Blacklist
+                  </CardTitle>
+                  <CardDescription>
+                    View customers blocked by multiple rental companies
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    When a customer is blocked by 3 or more rental companies, they are automatically added to the global blacklist.
+                    Blacklisted customers cannot make bookings with any rental company on the platform.
+                  </p>
+                  <Button
+                    onClick={() => router.push('/settings/blacklist')}
+                    className="flex items-center gap-2"
+                  >
+                    <ShieldX className="h-4 w-4" />
+                    View Global Blacklist
+                  </Button>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
 
         {/* Subscription Tab */}

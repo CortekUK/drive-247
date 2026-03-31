@@ -50,7 +50,7 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { logAction } = useAuditLog();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   useAuditLogOnOpen({
     open,

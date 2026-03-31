@@ -112,7 +112,7 @@ const LoadingSkeleton = () => (
 export const DashboardKPICards = ({ data, isLoading, error, visibleCards }: DashboardKPICardsProps) => {
   const router = useRouter();
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   const cards = [];
 

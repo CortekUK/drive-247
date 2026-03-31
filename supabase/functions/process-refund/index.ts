@@ -57,7 +57,7 @@ serve(async (req) => {
     let tenantId = requestTenantId;
 
     // Fetch tenant currency code early for error messages
-    let currencyCode = 'GBP';
+    let currencyCode = 'USD';
     if (tenantId) {
       const { data: tenantCurrency } = await supabase
         .from("tenants")

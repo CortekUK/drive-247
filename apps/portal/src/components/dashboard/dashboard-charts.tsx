@@ -43,7 +43,7 @@ interface DailyPoint {
 }
 
 // ─── Custom Tooltip ─────────────────────────────────────────────────
-function ChartTooltip({ active, payload, label, currencyCode = 'GBP' }: any) {
+function ChartTooltip({ active, payload, label, currencyCode = 'USD' }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-xl border border-border/60 bg-card px-4 py-3 shadow-lg backdrop-blur-sm text-xs">
@@ -92,7 +92,7 @@ function getDefaultRange(): { from: Date; to: Date } {
 // ─── Main Component ─────────────────────────────────────────────────
 export function DashboardCharts() {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const currencySymbol = getCurrencySymbol(currencyCode);
 
   // Date range state — default last 30 days

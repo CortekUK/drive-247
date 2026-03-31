@@ -20,7 +20,7 @@ interface BookingConfirmationProps {
 
 const BookingConfirmation = ({ bookingDetails, onClose }: BookingConfirmationProps) => {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   return (
     <Card className="p-8 shadow-metal bg-card/50 backdrop-blur max-w-2xl mx-auto">

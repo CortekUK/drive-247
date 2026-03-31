@@ -100,7 +100,7 @@ function getTitleTemplate(ruleCode: string, context: ReminderContext): string {
 }
 
 function getMessageTemplate(ruleCode: string, context: ReminderContext): string {
-  const fmtCurrency = (amount: number) => formatCurrency(amount, context.currency_code || 'GBP', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const fmtCurrency = (amount: number) => formatCurrency(amount, context.currency_code || 'USD', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
   const templates: Record<string, (ctx: ReminderContext) => string> = {
     // Inspection reminders (MOT)
@@ -278,7 +278,7 @@ serve(async (req) => {
       .from('tenants')
       .select('id, currency_code');
     for (const t of tenantCurrencies || []) {
-      tenantCurrencyMap.set(t.id, t.currency_code || 'GBP');
+      tenantCurrencyMap.set(t.id, t.currency_code || 'USD');
     }
 
     // 3. Generate Vehicle MOT/TAX/Immobiliser reminders
@@ -321,7 +321,7 @@ serve(async (req) => {
           model: vehicle.model,
           due_date: vehicle.mot_due_date,
           days_until: Math.max(0, daysUntilDue),
-          currency_code: tenantCurrencyMap.get(vehicle.tenant_id) || 'GBP',
+          currency_code: tenantCurrencyMap.get(vehicle.tenant_id) || 'USD',
         };
 
         // Check if reminder already exists and is snoozed - if so, don't overwrite
@@ -396,7 +396,7 @@ serve(async (req) => {
           model: vehicle.model,
           due_date: vehicle.tax_due_date,
           days_until: Math.max(0, daysUntilDue),
-          currency_code: tenantCurrencyMap.get(vehicle.tenant_id) || 'GBP',
+          currency_code: tenantCurrencyMap.get(vehicle.tenant_id) || 'USD',
         };
 
         // Check if reminder already exists and is snoozed - if so, don't overwrite
@@ -480,7 +480,7 @@ serve(async (req) => {
               make: vehicle.make,
               model: vehicle.model,
               due_date: vehicle.warranty_end_date,
-              currency_code: tenantCurrencyMap.get(vehicle.tenant_id) || 'GBP',
+              currency_code: tenantCurrencyMap.get(vehicle.tenant_id) || 'USD',
             };
 
             const { error: reminderError } = await supabase
@@ -528,7 +528,7 @@ serve(async (req) => {
               model: vehicle.model,
               due_date: vehicle.acquisition_date,
               days_until: daysSinceAcquisition,
-              currency_code: tenantCurrencyMap.get(vehicle.tenant_id) || 'GBP',
+              currency_code: tenantCurrencyMap.get(vehicle.tenant_id) || 'USD',
             };
 
             // Check if reminder already exists and is snoozed - if so, don't overwrite
@@ -595,7 +595,7 @@ serve(async (req) => {
             vehicle_id: rental.vehicle_id,
             reg: rental.vehicles.reg,
             rental_id: rental.id,
-            currency_code: tenantCurrencyMap.get(rental.tenant_id) || 'GBP',
+            currency_code: tenantCurrencyMap.get(rental.tenant_id) || 'USD',
           };
 
           // Calculate next verification date (30 days from rental start, then monthly intervals)
@@ -709,7 +709,7 @@ serve(async (req) => {
             overdue_total: totalOverdue,
             oldest_due_date: oldestCharge.due_date,
             days_overdue: daysSinceOldest,
-            currency_code: tenantCurrencyMap.get(oldestCharge.tenant_id) || 'GBP',
+            currency_code: tenantCurrencyMap.get(oldestCharge.tenant_id) || 'USD',
           };
 
           // Check if reminder already exists and is snoozed - if so, don't overwrite

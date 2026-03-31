@@ -66,7 +66,7 @@ serve(async (req) => {
     });
 
     // Use currency_code from variables if provided, otherwise default to GBP
-    const currencyCode = variables?.currency_code || 'GBP';
+    const currencyCode = variables?.currency_code || 'USD';
 
     Handlebars.registerHelper('formatCurrency', function(amount: number) {
       if (typeof amount !== 'number') return amount;

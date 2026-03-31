@@ -31,7 +31,7 @@ const getChargeStatus = (charge: RentalCharge) => {
 export const RentalChargeRow = ({ charge }: RentalChargeRowProps) => {
   const { tenant } = useTenant();
   const status = getChargeStatus(charge);
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   return (
     <TableRow className="hover:bg-muted/50">

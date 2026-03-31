@@ -293,18 +293,18 @@ const Reports = () => {
       title: 'Payments Export',
       description: 'Applied/unapplied payment analysis (CSV/XLSX)',
       icon: CreditCard,
-      value: formatCurrency(reportStats?.payments.totalAmount || 0, tenant?.currency_code || 'GBP'),
+      value: formatCurrency(reportStats?.payments.totalAmount || 0, tenant?.currency_code || 'USD'),
       subtitle: `${reportStats?.payments.count || 0} payments`,
-      metadata: `Applied: ${formatCurrency(reportStats?.payments.appliedAmount || 0, tenant?.currency_code || 'GBP')}`
+      metadata: `Applied: ${formatCurrency(reportStats?.payments.appliedAmount || 0, tenant?.currency_code || 'USD')}`
     },
     {
       id: 'pl-report',
       title: 'P&L Report',
       description: 'Vehicle & consolidated profit/loss (CSV/XLSX)',
       icon: TrendingUp,
-      value: formatCurrency(reportStats?.pl.net_profit || 0, tenant?.currency_code || 'GBP'),
+      value: formatCurrency(reportStats?.pl.net_profit || 0, tenant?.currency_code || 'USD'),
       subtitle: 'Net Profit',
-      metadata: `Revenue: ${formatCurrency(reportStats?.pl.total_revenue || 0, tenant?.currency_code || 'GBP')}`
+      metadata: `Revenue: ${formatCurrency(reportStats?.pl.total_revenue || 0, tenant?.currency_code || 'USD')}`
     },
     {
       id: 'customer-statements',
@@ -313,7 +313,7 @@ const Reports = () => {
       icon: FileText,
       value: `${reportStats?.aging.count || 0}`,
       subtitle: 'Customers with balances',
-      metadata: `Total Due: ${formatCurrency(reportStats?.aging.totalDue || 0, tenant?.currency_code || 'GBP')}`
+      metadata: `Total Due: ${formatCurrency(reportStats?.aging.totalDue || 0, tenant?.currency_code || 'USD')}`
     },
     {
       id: 'rentals',
@@ -322,7 +322,7 @@ const Reports = () => {
       icon: Car,
       value: `${reportStats?.rentals.count || 0}`,
       subtitle: 'Active rentals',
-      metadata: `Outstanding: ${formatCurrency(reportStats?.rentals.totalBalance || 0, tenant?.currency_code || 'GBP')}`
+      metadata: `Outstanding: ${formatCurrency(reportStats?.rentals.totalBalance || 0, tenant?.currency_code || 'USD')}`
     },
     {
       id: 'fines',
@@ -331,14 +331,14 @@ const Reports = () => {
       icon: AlertTriangle,
       value: `${reportStats?.fines?.count || 0}`,
       subtitle: 'Total fines',
-      metadata: `Outstanding: ${formatCurrency(reportStats?.fines?.totalOutstanding || 0, tenant?.currency_code || 'GBP')}`
+      metadata: `Outstanding: ${formatCurrency(reportStats?.fines?.totalOutstanding || 0, tenant?.currency_code || 'USD')}`
     },
     {
       id: 'aging',
       title: 'Aging Receivables',
       description: 'Age buckets 0-30/31-60/61-90/90+ days (CSV/XLSX)',
       icon: Clock,
-      value: formatCurrency(reportStats?.aging.totalDue || 0, tenant?.currency_code || 'GBP'),
+      value: formatCurrency(reportStats?.aging.totalDue || 0, tenant?.currency_code || 'USD'),
       subtitle: 'Total overdue',
       metadata: `${reportStats?.aging.count || 0} customers`
     }
@@ -455,7 +455,7 @@ const Reports = () => {
                     <h2 className="text-lg font-medium mb-2">Available Reports</h2>
                     <p className="text-muted-foreground text-sm">
                       Click on a report card to preview data or use export icons for direct downloads.
-                      All amounts shown in {tenant?.currency_code || 'GBP'} with America/NewYork timezone.
+                      All amounts shown in {tenant?.currency_code || 'USD'} with America/NewYork timezone.
                     </p>
                   </div>
 
@@ -491,7 +491,7 @@ const Reports = () => {
                                       <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.fill }} />
                                       <span className="text-sm font-medium">{d.name}</span>
                                     </div>
-                                    <p className="text-sm font-semibold mt-0.5">{formatCurrency(d.amount, tenant?.currency_code || 'GBP')}</p>
+                                    <p className="text-sm font-semibold mt-0.5">{formatCurrency(d.amount, tenant?.currency_code || 'USD')}</p>
                                   </div>
                                 );
                               }} />
@@ -528,7 +528,7 @@ const Reports = () => {
                                       <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.fill }} />
                                       <span className="text-sm font-medium">{d.name}</span>
                                     </div>
-                                    <p className="text-sm font-semibold mt-0.5">{formatCurrency(d.value, tenant?.currency_code || 'GBP')}</p>
+                                    <p className="text-sm font-semibold mt-0.5">{formatCurrency(d.value, tenant?.currency_code || 'USD')}</p>
                                   </div>
                                 );
                               }} />
@@ -607,7 +607,7 @@ const Reports = () => {
                                       <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.fill }} />
                                       <span className="text-sm font-medium">{d.name}</span>
                                     </div>
-                                    <p className="text-sm font-semibold mt-0.5">{formatCurrency(d.value, tenant?.currency_code || 'GBP')}</p>
+                                    <p className="text-sm font-semibold mt-0.5">{formatCurrency(d.value, tenant?.currency_code || 'USD')}</p>
                                   </div>
                                 );
                               }} />

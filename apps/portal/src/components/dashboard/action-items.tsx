@@ -60,7 +60,7 @@ const fleetChartConfig = {
 
 export const ActionItems = () => {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || "GBP";
+  const currencyCode = tenant?.currency_code || "USD";
   const currencySymbol = getCurrencySymbol(currencyCode);
 
   // Fleet utilization from existing KPIs hook

@@ -21,7 +21,7 @@ export const CustomerBalanceChip = ({
   size = "default"
 }: CustomerBalanceChipProps) => {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   const tooltipContent = totalCharges !== undefined && totalPayments !== undefined
     ? `Charges ${formatCurrency(totalCharges, currencyCode)} • Payments ${formatCurrency(totalPayments, currencyCode)}`

@@ -98,7 +98,7 @@ export function AuthorityPaymentDialog({
     onSuccess: (data) => {
       toast({
         title: "Authority Payment Recorded",
-        description: `Payment of ${formatCurrency(form.getValues('amount'), tenant?.currency_code || 'GBP')} recorded successfully`,
+        description: `Payment of ${formatCurrency(form.getValues('amount'), tenant?.currency_code || 'USD')} recorded successfully`,
       });
 
       // Invalidate relevant queries

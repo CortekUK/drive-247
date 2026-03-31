@@ -198,7 +198,8 @@ const BookingCheckoutContent = () => {
       weekendConfig,
       holidays,
       vehicleOverrides,
-      vehicleIdParam
+      vehicleIdParam,
+      tenant?.monthly_tier_days ?? 30
     );
   };
 
@@ -302,7 +303,7 @@ const BookingCheckoutContent = () => {
   })();
 
   // Format currency based on tenant settings
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const formatCurrency = (amount: number) => formatCurrencyUtil(amount, currencyCode);
 
   const validateForm = () => {
@@ -546,7 +547,8 @@ const BookingCheckoutContent = () => {
 
       // Step 5: Create rental
       // Determine rental period type based on duration
-      const rentalPeriodType = days >= 28 ? "Monthly" : days >= 7 ? "Weekly" : "Daily";
+      const mtd = tenant?.monthly_tier_days ?? 30;
+      const rentalPeriodType = days >= mtd ? "Monthly" : days >= 7 ? "Weekly" : "Daily";
 
       // Get current totals for delivery/collection fees
       const currentTotals = calculateCompleteTotal();
@@ -956,14 +958,15 @@ const BookingCheckoutContent = () => {
                         let unitRate = 0;
                         let unitLabel = '';
                         let quantityLabel = '';
-                        if (days > 30 && monthlyRent > 0) {
+                        const _mtd = tenant?.monthly_tier_days ?? 30;
+                        if (days >= _mtd && monthlyRent > 0) {
                           unitRate = monthlyRent;
                           unitLabel = '/mo';
-                          const months = days / 30;
+                          const months = days / _mtd;
                           quantityLabel = months === Math.floor(months)
                             ? `${Math.floor(months)} month${Math.floor(months) !== 1 ? 's' : ''}`
                             : `${days} days`;
-                        } else if (days >= 7 && days <= 30 && weeklyRent > 0) {
+                        } else if (days >= 7 && days < _mtd && weeklyRent > 0) {
                           unitRate = weeklyRent;
                           unitLabel = '/wk';
                           const weeks = days / 7;

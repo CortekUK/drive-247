@@ -108,7 +108,7 @@ async function chargeFineToAccount(supabase: any, fineId: string): Promise<FineC
   }
 
   // Get tenant currency code
-  let currencyCode = 'GBP';
+  let currencyCode = 'USD';
   if (fine.tenant_id) {
     const { data: tenant } = await supabase
       .from('tenants')

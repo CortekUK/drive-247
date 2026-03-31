@@ -224,7 +224,7 @@ export const getBalanceStatus = (
   status?: 'In Credit' | 'Settled' | 'In Debt',
   currencyCode?: string
 ) => {
-  const currency = currencyCode || 'GBP'; // Default to GBP if not provided
+  const currency = currencyCode || 'USD'; // Default to USD if not provided
 
   if (balance === undefined) return { text: 'Unknown', type: 'secondary' };
   if (balance === 0 || status === 'Settled') return { text: 'Settled', type: 'secondary' };

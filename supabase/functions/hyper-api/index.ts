@@ -20,7 +20,7 @@ serve(async (req) => {
       customerName,
       bookingDetails,
       supportEmail,
-      currencyCode = 'GBP'
+      currencyCode = 'USD'
     } = await req.json()
 
     // This is for admin notifications - customerEmail is the admin's email

@@ -43,7 +43,7 @@ const RADAR_VEHICLE_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#3b82
 
 export default function VehiclesAnalyticsPage() {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   // Fetch vehicles
   const { data: vehicles = [], isLoading } = useQuery({

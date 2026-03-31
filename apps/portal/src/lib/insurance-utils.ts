@@ -99,7 +99,7 @@ export type InsuranceDocumentType = typeof INSURANCE_DOCUMENT_TYPES[number];
 /**
  * Format currency for display (delegates to shared format-utils)
  */
-export function formatInsuranceCurrency(amount: number, currencyCode: string = 'GBP'): string {
+export function formatInsuranceCurrency(amount: number, currencyCode: string = 'USD'): string {
   return _formatCurrency(amount, currencyCode);
 }
 

@@ -597,13 +597,13 @@ const BookingSuccessContent = () => {
                       {bookingDetails.monthly_amount && (
                         <div className="flex justify-between pt-3 border-t border-accent/20">
                           <span className="text-muted-foreground font-medium">Rental Amount:</span>
-                          <span className="font-bold text-accent text-lg">{formatCurrency(bookingDetails.monthly_amount, tenant?.currency_code || 'GBP')}</span>
+                          <span className="font-bold text-accent text-lg">{formatCurrency(bookingDetails.monthly_amount, tenant?.currency_code || 'USD')}</span>
                         </div>
                       )}
                       {bookingDetails.total && (
                         <div className="flex justify-between pt-3 border-t border-accent/20">
                           <span className="text-muted-foreground font-medium">Amount Paid:</span>
-                          <span className="font-bold text-accent text-lg">{formatCurrency(bookingDetails.total, tenant?.currency_code || 'GBP')}</span>
+                          <span className="font-bold text-accent text-lg">{formatCurrency(bookingDetails.total, tenant?.currency_code || 'USD')}</span>
                         </div>
                       )}
                     </div>

@@ -97,7 +97,7 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
   } = usePickupLocations();
 
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const distanceUnit: DistanceUnit = (tenant?.distance_unit as DistanceUnit) || 'miles';
   const distanceUnitLabel = getDistanceUnitShort(distanceUnit);
   const currencySymbol = getCurrencySymbol(currencyCode);

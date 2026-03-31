@@ -67,7 +67,7 @@ export default function BonzahInsuranceSelector({
   initialCoverage = DEFAULT_COVERAGE,
 }: BonzahInsuranceSelectorProps) {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const [coverage, setCoverage] = useState<CoverageOptions>(initialCoverage);
   const [showInsurance, setShowInsurance] = useState(true);
   const [expandedCoverage, setExpandedCoverage] = useState<string | null>(null);

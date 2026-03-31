@@ -52,7 +52,7 @@ export function AddServiceRecordDialog({
     entityType: "vehicle",
     entityId: vehicleId,
   });
-  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
+  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');
 
   const form = useForm<ServiceFormData>({
     resolver: zodResolver(addServiceRecordSchema),

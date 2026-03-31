@@ -73,7 +73,7 @@ const rankResults = (results: SearchResult[], query: string): SearchResult[] => 
 };
 
 export const searchService = {
-  async searchAll(query: string, entityFilter: string = 'all', tenantId?: string, currencyCode: string = 'GBP'): Promise<SearchResults> {
+  async searchAll(query: string, entityFilter: string = 'all', tenantId?: string, currencyCode: string = 'USD'): Promise<SearchResults> {
     if (!query.trim()) {
       return {
         customers: [],

@@ -16,7 +16,7 @@ export const RentalPaymentRow = ({ payment }: RentalPaymentRowProps) => {
   const { tenant } = useTenant();
   const [showAllocations, setShowAllocations] = useState(false);
   const totalAllocated = payment.allocations.reduce((sum, alloc) => sum + alloc.amount_applied, 0);
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   const getAllocationSummary = () => {
     const grouped = payment.allocations.reduce((acc, alloc) => {

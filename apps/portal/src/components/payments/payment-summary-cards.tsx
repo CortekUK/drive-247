@@ -6,7 +6,7 @@ import { formatCurrency } from "@/lib/format-utils";
 
 export const PaymentSummaryCards = () => {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   const { data: summaryData } = useQuery({
     queryKey: ["payment-summary", tenant?.id],

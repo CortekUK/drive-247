@@ -102,7 +102,7 @@ serve(async (req) => {
           .single()
 
         const stripeMode: StripeMode = (tenant?.stripe_mode as StripeMode) || 'test'
-        const currencyCode = (tenant?.currency_code || 'GBP').toLowerCase()
+        const currencyCode = (tenant?.currency_code || 'USD').toLowerCase()
         const stripe = getStripeClient(stripeMode)
         const stripeAccountId = tenant ? getConnectAccountId(tenant) : null
         const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined

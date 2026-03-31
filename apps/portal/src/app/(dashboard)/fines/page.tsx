@@ -272,7 +272,7 @@ const FinesList = () => {
         </TableCell>
 
         <TableCell className="text-left font-medium">
-          {formatCurrency(Number(fine.amount), tenant?.currency_code || 'GBP')}
+          {formatCurrency(Number(fine.amount), tenant?.currency_code || 'USD')}
         </TableCell>
 
         <TableCell>

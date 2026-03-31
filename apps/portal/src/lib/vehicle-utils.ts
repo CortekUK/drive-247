@@ -97,7 +97,7 @@ export function getContractTotal(vehicle: {
  * Format currency for display (delegates to shared format-utils)
  * Uses whole-number formatting (no decimals) for vehicle values.
  */
-export function formatVehicleCurrency(amount: number, currencyCode: string = 'GBP'): string {
+export function formatVehicleCurrency(amount: number, currencyCode: string = 'USD'): string {
   return _formatCurrency(amount, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 

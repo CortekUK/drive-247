@@ -317,7 +317,7 @@ serve(async (req) => {
       .eq("id", tenantId)
       .single();
 
-    const tenantCurrencyCode = tenant?.currency_code || "GBP";
+    const tenantCurrencyCode = tenant?.currency_code || "USD";
 
     // Use external payment URL if provided (from create-checkout-session), otherwise create our own
     let paymentUrl: string | undefined = externalPaymentUrl || undefined;

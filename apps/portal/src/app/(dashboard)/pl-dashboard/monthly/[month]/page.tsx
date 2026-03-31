@@ -413,7 +413,7 @@ const MonthlyPLDrilldown = () => {
                 <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                   <XAxis dataKey="vehicle" className="text-xs" />
-                  <YAxis className="text-xs" tickFormatter={(value) => `${formatCurrencyUtil(value / 1000, tenant?.currency_code || 'GBP').replace(/[^0-9.-]/g, '')}k`} />
+                  <YAxis className="text-xs" tickFormatter={(value) => `${formatCurrencyUtil(value / 1000, tenant?.currency_code || 'USD').replace(/[^0-9.-]/g, '')}k`} />
                   <Tooltip
                     formatter={(value: number, name: string) => [formatCurrency(value), name]}
                     labelClassName="text-foreground"

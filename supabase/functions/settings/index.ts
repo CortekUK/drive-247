@@ -117,7 +117,7 @@ serve(async (req) => {
         const defaultSettings: Partial<OrgSettings> = {
           company_name: 'Fleet Management System',
           timezone: 'Europe/London',
-          currency_code: 'GBP',
+          currency_code: 'USD',
           date_format: 'DD/MM/YYYY',
           reminder_due_today: true,
           reminder_overdue_1d: true,
@@ -255,7 +255,7 @@ serve(async (req) => {
         });
       }
 
-      if (filteredUpdate.currency_code && !['GBP', 'EUR', 'USD'].includes(filteredUpdate.currency_code)) {
+      if (filteredUpdate.currency_code && !['USD', 'EUR', 'GBP'].includes(filteredUpdate.currency_code)) {
         return new Response(JSON.stringify({ error: 'Invalid currency code' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

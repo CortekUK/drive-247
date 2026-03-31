@@ -29,7 +29,7 @@ interface Vehicle {
 
 const BookingWidget = () => {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);

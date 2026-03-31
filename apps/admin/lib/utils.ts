@@ -13,14 +13,14 @@ const CURRENCY_LOCALE_MAP: Record<string, string> = {
 
 /**
  * Format a number as currency using Intl.NumberFormat.
- * Defaults to GBP as the platform's base currency.
+ * Defaults to USD as the platform's base currency.
  */
 export function formatCurrency(
   amount: number,
-  currencyCode: string = 'GBP',
+  currencyCode: string = 'USD',
   options?: { minimumFractionDigits?: number; maximumFractionDigits?: number }
 ): string {
-  const code = currencyCode?.toUpperCase() || 'GBP';
+  const code = currencyCode?.toUpperCase() || 'USD';
   const locale = CURRENCY_LOCALE_MAP[code] || 'en-US';
   try {
     return new Intl.NumberFormat(locale, {

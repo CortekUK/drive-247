@@ -148,7 +148,7 @@ export const DeleteInvoiceDialog = ({
               )}
               <p>
                 <span className="font-medium">Amount:</span>{" "}
-                {formatCurrency(invoice.total_amount, tenant?.currency_code || 'GBP')}
+                {formatCurrency(invoice.total_amount, tenant?.currency_code || 'USD')}
               </p>
             </div>
           </div>

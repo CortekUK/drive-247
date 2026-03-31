@@ -93,7 +93,7 @@ export default function RejectionDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [renderingEmail, setRenderingEmail] = useState(false);
 
-  const currencyCode = (tenant as any)?.currency_code || 'GBP';
+  const currencyCode = (tenant as any)?.currency_code || 'USD';
 
   // Fetch ALL payments for this rental
   const { data: allPayments, isLoading: loadingPayments } = useQuery({

@@ -44,7 +44,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
-  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
+  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');
   const { logAction } = useAuditLog();
   const currentOpen = open !== undefined ? open : isOpen;
   useAuditLogOnOpen({

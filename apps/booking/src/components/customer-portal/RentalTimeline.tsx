@@ -335,7 +335,7 @@ function InsuranceItem({
 
 export function RentalTimeline({ rentalId }: RentalTimelineProps) {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   const { data: agreements = [], isLoading: agreementsLoading } = useRentalAgreements(rentalId);
   const { data: policies = [], isLoading: policiesLoading } = useRentalInsurancePolicies(rentalId);

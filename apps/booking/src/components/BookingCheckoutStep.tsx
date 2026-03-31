@@ -138,10 +138,10 @@ export default function BookingCheckoutStep({
   };
 
   // Calculate rental period type based on duration
-  // Pricing tiers: > 30 days = monthly, 7-30 days = weekly, < 7 days = daily
+  const mtd = tenant?.monthly_tier_days ?? 30;
   const calculateRentalPeriodType = (): "Daily" | "Weekly" | "Monthly" => {
     const days = rentalDuration.days;
-    if (days > 30) return "Monthly";
+    if (days >= mtd) return "Monthly";
     if (days >= 7) return "Weekly";
     return "Daily";
   };
@@ -153,20 +153,16 @@ export default function BookingCheckoutStep({
     const weeklyRent = selectedVehicle.weekly_rent || 0;
     const monthlyRent = selectedVehicle.monthly_rent || 0;
 
-    // Pricing tiers (pro-rata):
-    // > 30 days: monthly rate (days/30 × monthly_rent)
-    // 7-30 days: weekly rate (days/7 × weekly_rent)
-    // < 7 days: daily rate (days × daily_rent)
-    if (days > 30 && monthlyRent > 0) {
-      return (days / 30) * monthlyRent;
-    } else if (days >= 7 && days <= 30 && weeklyRent > 0) {
+    if (days >= mtd && monthlyRent > 0) {
+      return (days / mtd) * monthlyRent;
+    } else if (days >= 7 && days < mtd && weeklyRent > 0) {
       return (days / 7) * weeklyRent;
     } else if (dailyRent > 0) {
       return days * dailyRent;
     } else if (weeklyRent > 0) {
       return (days / 7) * weeklyRent;
     } else if (monthlyRent > 0) {
-      return (days / 30) * monthlyRent;
+      return (days / mtd) * monthlyRent;
     }
     return 0;
   };
@@ -285,7 +281,7 @@ export default function BookingCheckoutStep({
     return { installUpfrontAmount: upfront, installableAmount: installable };
   })();
 
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const fmt = (amount: number) => formatCurrency(amount, currencyCode);
 
   // Build rental breakdown for invoice display

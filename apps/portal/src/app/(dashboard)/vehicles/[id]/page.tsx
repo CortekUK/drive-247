@@ -150,7 +150,7 @@ export default function VehicleDetail() {
   const { settings: rentalSettings } = useRentalSettings();
   const { canEdit } = useManagerPermissions();
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const [showAddFineDialog, setShowAddFineDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDisposeDialog, setShowDisposeDialog] = useState(false);
@@ -821,7 +821,7 @@ export default function VehicleDetail() {
                   />
                   <MetricItem
                     label="Excess Rate"
-                    value={vehicle.excess_mileage_rate ? formatCurrency(vehicle.excess_mileage_rate, tenant?.currency_code || 'GBP') + `/${distanceUnit === 'miles' ? 'mile' : 'km'}` : 'Not set'}
+                    value={vehicle.excess_mileage_rate ? formatCurrency(vehicle.excess_mileage_rate, tenant?.currency_code || 'USD') + `/${distanceUnit === 'miles' ? 'mile' : 'km'}` : 'Not set'}
                   />
                 </div>
               )}

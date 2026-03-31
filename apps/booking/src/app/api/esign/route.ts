@@ -34,12 +34,12 @@ function formatDate(date: string | Date | null): string {
 }
 
 // Format currency with dynamic currency code
-function formatCurrency(amount: number | null, currencyCode: string = 'GBP'): string {
+function formatCurrency(amount: number | null, currencyCode: string = 'USD'): string {
     if (amount === null || amount === undefined) {
         const symbols: Record<string, string> = { USD: '$', GBP: '\u00a3', EUR: '\u20ac' };
         return `${symbols[currencyCode] || currencyCode}0`;
     }
-    const code = currencyCode?.toUpperCase() || 'GBP';
+    const code = currencyCode?.toUpperCase() || 'USD';
     const localeMap: Record<string, string> = { USD: 'en-US', GBP: 'en-GB', EUR: 'en-IE' };
     const locale = localeMap[code] || 'en-US';
     try {
@@ -51,7 +51,7 @@ function formatCurrency(amount: number | null, currencyCode: string = 'GBP'): st
 
 // Process template variables
 function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, verification?: any): string {
-    const cc = tenant?.currency_code || 'GBP';
+    const cc = tenant?.currency_code || 'USD';
 
     // Compose full address from separate fields
     const customerAddress = [
@@ -115,10 +115,11 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
             if (!vehicle?.daily_mileage && !vehicle?.weekly_mileage && !vehicle?.monthly_mileage) return 'Unlimited';
             if (rental?.start_date && rental?.end_date) {
                 const days = Math.max(1, Math.ceil((new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
-                let tier: 'daily' | 'weekly' | 'monthly' = days > 30 ? 'monthly' : days >= 7 ? 'weekly' : 'daily';
+                const _mtd = (tenant as any)?.monthly_tier_days ?? 30;
+                let tier: 'daily' | 'weekly' | 'monthly' = days >= _mtd ? 'monthly' : days >= 7 ? 'weekly' : 'daily';
                 const perUnit = tier === 'daily' ? vehicle.daily_mileage : tier === 'weekly' ? vehicle.weekly_mileage : vehicle.monthly_mileage;
                 if (perUnit == null) return 'Unlimited';
-                const total = tier === 'daily' ? days * perUnit : tier === 'weekly' ? Math.ceil(days / 7) * perUnit : Math.ceil(days / 30) * perUnit;
+                const total = tier === 'daily' ? days * perUnit : tier === 'weekly' ? Math.ceil(days / 7) * perUnit : Math.ceil(days / _mtd) * perUnit;
                 return total.toString();
             }
             return vehicle?.monthly_mileage?.toString() || '';
@@ -203,7 +204,7 @@ function htmlToText(html: string): string {
 // Generate default agreement
 function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any): string {
     const companyName = tenant?.company_name || 'Drive 247';
-    const cc = tenant?.currency_code || 'GBP';
+    const cc = tenant?.currency_code || 'USD';
 
     return `
 RENTAL AGREEMENT
@@ -326,7 +327,7 @@ export async function POST(request: NextRequest) {
         if (tenantId) {
             const { data: tenantData } = await supabase
                 .from('tenants')
-                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id')
+                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days')
                 .eq('id', tenantId)
                 .single();
             tenant = tenantData;

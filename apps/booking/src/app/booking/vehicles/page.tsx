@@ -83,7 +83,8 @@ const BookingVehiclesContent = () => {
         .eq("status", "Available");
 
       // Filter by availability based on rental duration
-      if (days >= 28) {
+      const mtd = tenant?.monthly_tier_days ?? 30;
+      if (days >= mtd) {
         query = query.eq("available_monthly", true);
       } else if (days >= 7) {
         query = query.eq("available_weekly", true);
@@ -266,7 +267,7 @@ const BookingVehiclesContent = () => {
                     <div className="pt-4 border-t border-border">
                       <div className="flex items-baseline justify-between mb-4">
                         <span className="text-2xl font-bold text-accent">
-                          {formatCurrency(calculatePrice(vehicle), tenant?.currency_code || 'GBP')}
+                          {formatCurrency(calculatePrice(vehicle), tenant?.currency_code || 'USD')}
                         </span>
                         <span className="text-sm text-muted-foreground">
                           monthly

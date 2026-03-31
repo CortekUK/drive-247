@@ -26,7 +26,8 @@ const checkoutSchema = z.object({
   customerEmail: z.string().email("Invalid email address"),
   customerPhone: z.string().min(10, "Phone number must be at least 10 digits"),
   licenseNumber: z.string().min(5, "License number is required"),
-  agreeTerms: z.boolean().refine(val => val === true, "You must agree to terms")
+  agreeTerms: z.boolean().refine(val => val === true, "You must agree to the rental terms"),
+  agreeAdditionalCharges: z.boolean().refine(val => val === true, "You must acknowledge additional charges")
 });
 
 interface PricingExtra {
@@ -40,7 +41,7 @@ const BookingCheckout = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const { context: bookingContext, pendingInsuranceFiles, clearPendingInsuranceFiles } = useBookingStore();
   const [loading, setLoading] = useState(false);
   const [extras, setExtras] = useState<PricingExtra[]>([]);
@@ -55,7 +56,8 @@ const BookingCheckout = () => {
     customerEmail: "",
     customerPhone: "",
     licenseNumber: "",
-    agreeTerms: false
+    agreeTerms: false,
+    agreeAdditionalCharges: false
   });
 
 
@@ -125,7 +127,8 @@ const BookingCheckout = () => {
       weekendConfig,
       holidays,
       vehicleOverrides,
-      vehicleId
+      vehicleId,
+      tenant?.monthly_tier_days ?? 30
     );
     return result.rentalPrice;
   };
@@ -588,12 +591,28 @@ const BookingCheckout = () => {
                       I agree to the{" "}
                       <a href="/terms" target="_blank" className="text-accent underline">Terms & Conditions</a>
                       {" "}and{" "}
-                      <a href="/privacy" target="_blank" className="text-accent underline">Privacy Policy</a>
+                      <a href="/privacy" target="_blank" className="text-accent underline">Privacy Policy</a>.
                     </Label>
                   </div>
                   {errors.agreeTerms && (
                     <p className="text-xs text-destructive">{errors.agreeTerms}</p>
                   )}
+
+                  <div className="flex items-start gap-2 pt-2">
+                    <Checkbox
+                      checked={formData.agreeAdditionalCharges}
+                      onCheckedChange={(checked) => setFormData({...formData, agreeAdditionalCharges: checked as boolean})}
+                    />
+                    <Label className="text-sm leading-relaxed cursor-pointer">
+                      I authorize {tenant?.company_name || "the rental company"} to charge my payment method for post-rental charges permitted under the rental agreement, including excess mileage, cleaning, fuel, tolls, damage, late return fees, and other agreed charges.
+                    </Label>
+                  </div>
+                  {errors.agreeAdditionalCharges && (
+                    <p className="text-xs text-destructive">{errors.agreeAdditionalCharges}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground pt-2">
+                    Additional post-rental charges may apply as described in the rental agreement.
+                  </p>
                 </div>
               </Card>
             </div>

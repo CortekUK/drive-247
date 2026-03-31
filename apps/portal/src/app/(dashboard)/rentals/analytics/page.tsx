@@ -91,7 +91,7 @@ export default function RentalsAnalyticsPage() {
     stats: null,
   };
 
-  const currencyCode = tenant?.currency_code || "GBP";
+  const currencyCode = tenant?.currency_code || "USD";
 
   // Chart 1: Status distribution donut
   const statusDonutData = useMemo(() => {

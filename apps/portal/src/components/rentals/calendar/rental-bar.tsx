@@ -128,7 +128,7 @@ export function RentalBar({ rental, position, topOffset, barHeight }: RentalBarP
             <div className="flex items-center gap-2">
               <DollarSign className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
               <span className="text-xs font-semibold text-foreground">
-                {formatCurrency(rental.monthly_amount, tenant?.currency_code || 'GBP')}
+                {formatCurrency(rental.monthly_amount, tenant?.currency_code || 'USD')}
                 <span className="text-muted-foreground/60 font-normal">/mo</span>
               </span>
             </div>

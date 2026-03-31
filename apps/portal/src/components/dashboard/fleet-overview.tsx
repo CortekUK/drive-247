@@ -53,7 +53,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 export const FleetOverview = () => {
   const { tenant } = useTenant();
   const router = useRouter();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   const { data: vehicles, isLoading } = useQuery({
     queryKey: ["vehicles", tenant?.id],

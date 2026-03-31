@@ -346,7 +346,7 @@ export function formatDate(date: string | Date | null | undefined): string {
 // Format currency for display (delegates to shared format-utils)
 export function formatTemplateCurrency(
   amount: number | null | undefined,
-  currencyCode: string = 'GBP'
+  currencyCode: string = 'USD'
 ): string {
   if (amount === null || amount === undefined) return '';
   return formatCurrency(amount, currencyCode);
@@ -358,7 +358,7 @@ export function buildTemplateData(
   customer: Record<string, any>,
   vehicle: Record<string, any>,
   tenant: Record<string, any>,
-  currencyCode: string = 'GBP'
+  currencyCode: string = 'USD'
 ): Record<string, string> {
   const customerAddress = [
     customer?.address_street,

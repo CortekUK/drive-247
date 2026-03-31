@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { getCurrencySymbol } from '@/lib/format-utils';
 
 // Default values when settings are not available
-const DEFAULT_CURRENCY = 'GBP';
+const DEFAULT_CURRENCY = 'USD';
 const DEFAULT_DATE_FORMAT = 'MM/DD/YYYY';
 const DEFAULT_TIMEZONE = 'America/New_York';
 

@@ -411,7 +411,7 @@ export default function Booking() {
                       // If multiple options are available, show the selection UI
                       const showDeliveryOptions = enabledCount > 1 || multipleEnabled || areaEnabled;
 
-                      const currencyCode = tenant?.currency_code || 'GBP';
+                      const currencyCode = tenant?.currency_code || 'USD';
                       const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
                       const fmtCurrency = (amount: number) => formatCurrency(amount, currencyCode);
 

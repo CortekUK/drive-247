@@ -51,7 +51,7 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
     rentalPeriodType: rental.rental_period_type,
   });
 
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   // Calculate tax and service fee to match admin portal pricing
   const taxPercentage = tenant?.tax_enabled ? (tenant?.tax_percentage || 0) : 0;

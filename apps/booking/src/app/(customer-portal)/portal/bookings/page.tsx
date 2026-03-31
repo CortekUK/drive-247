@@ -143,7 +143,7 @@ export default function BookingsPage() {
         />
         <StatCard
           title="Total Spent"
-          value={formatCurrency(stats?.totalSpent || 0, tenant?.currency_code || 'GBP')}
+          value={formatCurrency(stats?.totalSpent || 0, tenant?.currency_code || 'USD')}
           icon={DollarSign}
         />
       </div>

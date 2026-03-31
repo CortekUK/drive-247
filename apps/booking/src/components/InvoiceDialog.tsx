@@ -274,7 +274,7 @@ export const InvoiceDialog = ({
   const companyName = tenant?.app_name || tenant?.company_name || 'Invoice';
   const logoUrl = tenant?.logo_url;
   const accentColor = tenant?.accent_color || '#06b6d4';
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const fmt = (amount: number) => formatCurrency(amount, currencyCode);
   const printRef = useRef<HTMLDivElement>(null);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;

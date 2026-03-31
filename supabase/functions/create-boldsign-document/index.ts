@@ -52,7 +52,7 @@ function formatDate(date: string | Date | null): string {
   });
 }
 
-let _currencyCode = 'GBP';
+let _currencyCode = 'USD';
 function formatCurrency(amount: number | null): string {
   if (amount === null || amount === undefined) return sharedFormatCurrency(0, _currencyCode);
   return sharedFormatCurrency(amount, _currencyCode);
@@ -135,9 +135,10 @@ function processTemplate(
       const weeklyMileage = (rental?.weekly_mileage_override as number | null) ?? (vehicle?.weekly_mileage as number | null);
       const monthlyMileage = (rental?.monthly_mileage_override as number | null) ?? (vehicle?.monthly_mileage as number | null);
 
-      if (days > 30) {
+      const _mtd = (tenant?.monthly_tier_days as number) ?? 30;
+      if (days >= _mtd) {
         if (monthlyMileage == null) return 'Unlimited';
-        return (monthlyMileage * Math.ceil(days / 30)).toString();
+        return (monthlyMileage * Math.ceil(days / _mtd)).toString();
       } else if (days >= 7) {
         if (weeklyMileage == null) return 'Unlimited';
         return (weeklyMileage * Math.ceil(days / 7)).toString();
@@ -151,7 +152,8 @@ function processTemplate(
       const endDate = rental?.end_date as string | undefined;
       if (!startDate || !endDate) return 'monthly';
       const days = Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)));
-      if (days > 30) return 'monthly';
+      const __mtd = (tenant?.monthly_tier_days as number) ?? 30;
+      if (days >= __mtd) return 'monthly';
       if (days >= 7) return 'weekly';
       return 'daily';
     })(),
@@ -303,7 +305,7 @@ async function generateDocument(
 ): Promise<string> {
   const { data: tenant } = await supabase
     .from('tenants')
-    .select('company_name, contact_email, contact_phone')
+    .select('company_name, contact_email, contact_phone, monthly_tier_days')
     .eq('id', tenantId)
     .single();
 

@@ -117,7 +117,7 @@ serve(async (req) => {
           console.log(`    Found ${records.length} records`);
 
           // Get document loader for this table with tenant currency
-          const toDocument = getDocumentLoader(tableName, tenant.currency_code || 'GBP');
+          const toDocument = getDocumentLoader(tableName, tenant.currency_code || 'USD');
           if (!toDocument) {
             console.error(`    No document loader for ${tableName}`);
             tableResult.errors++;

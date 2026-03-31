@@ -886,7 +886,7 @@ export async function getTenantInfo(
       primary_color: data.primary_color || '#1a1a1a',
       accent_color: data.accent_color || '#C5A572',
       logo_url: data.logo_url || null,
-      currency_code: data.currency_code || 'GBP',
+      currency_code: data.currency_code || 'USD',
     };
   } catch (err) {
     console.warn('Error fetching tenant info:', err);
@@ -898,7 +898,7 @@ export async function getTenantInfo(
       primary_color: '#1a1a1a',
       accent_color: '#C5A572',
       logo_url: null,
-      currency_code: 'GBP',
+      currency_code: 'USD',
     };
   }
 }
@@ -922,7 +922,7 @@ export async function resolveEmailData(
   const result: EmailTemplateData = {};
 
   // Fetch tenant info if tenantId provided
-  let currencyCode = 'GBP';
+  let currencyCode = 'USD';
   if (tenantId) {
     try {
       const tenantInfo = await getTenantInfo(supabaseClient, tenantId);

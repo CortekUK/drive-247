@@ -118,7 +118,7 @@ export default function PaymentDetail() {
 
   const paymentStatus = payment.status || "Applied";
   const isFullyAllocated = (payment.remaining_amount || 0) === 0;
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   return (
     <div className="container mx-auto p-6 space-y-6">

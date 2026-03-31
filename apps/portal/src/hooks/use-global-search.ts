@@ -28,7 +28,7 @@ export const useGlobalSearch = () => {
     error,
   } = useQuery({
     queryKey: ["global-search", debouncedQuery, entityFilter, tenant?.id, tenant?.currency_code],
-    queryFn: () => searchService.searchAll(debouncedQuery, entityFilter, tenant?.id, tenant?.currency_code || 'GBP'),
+    queryFn: () => searchService.searchAll(debouncedQuery, entityFilter, tenant?.id, tenant?.currency_code || 'USD'),
     enabled: debouncedQuery.length > 0,
     staleTime: 30000, // 30 seconds
   });

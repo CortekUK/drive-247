@@ -21,7 +21,7 @@ interface PaymentVerificationRequest {
 
 // sendEmail is now imported from resend-service.ts
 
-function generateVerificationEmailContent(data: PaymentVerificationRequest, branding: TenantBranding, currencyCode: string = 'GBP'): string {
+function generateVerificationEmailContent(data: PaymentVerificationRequest, branding: TenantBranding, currencyCode: string = 'USD'): string {
   return `
                     <tr>
                         <td style="padding: 30px 30px 0; text-align: center;">
@@ -111,7 +111,7 @@ serve(async (req) => {
       ? await getTenantBranding(tenantId, supabase)
       : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
 
-    let currencyCode = 'GBP';
+    let currencyCode = 'USD';
     if (tenantId) {
       const { data: tenant } = await supabase
         .from('tenants')

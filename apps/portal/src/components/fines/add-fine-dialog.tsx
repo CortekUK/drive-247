@@ -70,7 +70,7 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId, prese
   const [otherTypeValue, setOtherTypeValue] = useState("");
   const [selectedTypeOption, setSelectedTypeOption] = useState("PCN");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
-  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
+  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');
 
   const form = useForm<FineFormData>({
     resolver: zodResolver(fineSchema),

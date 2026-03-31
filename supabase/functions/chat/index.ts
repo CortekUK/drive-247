@@ -54,7 +54,7 @@ interface ChatResponse {
 }
 
 // System prompt for the AI assistant
-function getSystemPrompt(userName: string, metricsJson: string, currencyCode: string = 'GBP', hasActions: boolean = false, pendingRequests?: { extension_requests: any[]; cancellation_requests: any[] }): string {
+function getSystemPrompt(userName: string, metricsJson: string, currencyCode: string = 'USD', hasActions: boolean = false, pendingRequests?: { extension_requests: any[]; cancellation_requests: any[] }): string {
   const sym = getCurrencySymbol(currencyCode);
   let prompt = `You are Trax AI, the intelligent assistant built into the Drive247 car rental management portal. You have three core capabilities:
 
@@ -280,7 +280,7 @@ serve(async (req) => {
       return errorResponse('Invalid tenant', 403);
     }
 
-    const currencyCode = tenantData.currency_code || 'GBP';
+    const currencyCode = tenantData.currency_code || 'USD';
     const userRole = appUser?.role || 'viewer';
 
     // Build action context (used for both chat and execute_action)

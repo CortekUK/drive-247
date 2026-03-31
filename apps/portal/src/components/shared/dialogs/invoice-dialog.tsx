@@ -54,7 +54,7 @@ interface InvoiceDialogProps {
 }
 
 // Separate printable component
-const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, selectedExtras, rentalBreakdown, companyName, logoUrl, accentColor, currencyCode = 'GBP' }: Omit<InvoiceDialogProps, "open" | "onOpenChange"> & { companyName: string; logoUrl?: string | null; accentColor: string }) => {
+const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, selectedExtras, rentalBreakdown, companyName, logoUrl, accentColor, currencyCode = 'USD' }: Omit<InvoiceDialogProps, "open" | "onOpenChange"> & { companyName: string; logoUrl?: string | null; accentColor: string }) => {
   const fc = (amount: number) => formatCurrency(amount, currencyCode);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   const hasDiscount = (invoice.discount_amount ?? 0) > 0;
@@ -262,7 +262,7 @@ export const InvoiceDialog = ({
   const companyName = branding?.app_name || tenant?.company_name || 'Invoice';
   const logoUrl = branding?.logo_url;
   const accentColor = branding?.accent_color || '#C5A572';
-  const currencyCode = currencyCodeProp || tenant?.currency_code || 'GBP';
+  const currencyCode = currencyCodeProp || tenant?.currency_code || 'USD';
   const fc = (amount: number) => formatCurrency(amount, currencyCode);
   const printRef = useRef<HTMLDivElement>(null);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;

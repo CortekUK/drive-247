@@ -45,7 +45,7 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
     }
 
     // Get tenant currency code
-    let currencyCode = 'GBP';
+    let currencyCode = 'USD';
     if (payment.tenant_id) {
       const { data: tenant } = await supabase
         .from('tenants')

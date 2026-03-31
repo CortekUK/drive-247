@@ -129,7 +129,7 @@ const MultiStepBookingWidget = () => {
   };
 
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const workingHours = useWorkingHours();
   const skipInsurance = isInsuranceExemptTenant(tenant?.id);
@@ -1656,7 +1656,8 @@ const MultiStepBookingWidget = () => {
         weekendConfig,
         holidays,
         vehicleOverrides,
-        selectedVehicle.id
+        selectedVehicle.id,
+        tenant?.monthly_tier_days ?? 30
       );
 
       rentalPrice = result.rentalPrice;
@@ -2233,8 +2234,9 @@ const MultiStepBookingWidget = () => {
       }
 
       // Calculate months, weeks, and remaining days from the ceiled total days
-      const months = Math.floor(days / 30);
-      const afterMonthsDays = days % 30;
+      const _mtd = tenant?.monthly_tier_days ?? 30;
+      const months = Math.floor(days / _mtd);
+      const afterMonthsDays = days % _mtd;
       const weeks = Math.floor(afterMonthsDays / 7);
       const finalDays = afterMonthsDays % 7;
 
@@ -2303,7 +2305,8 @@ const MultiStepBookingWidget = () => {
       weekendConfig,
       holidays,
       vehicleOverrides,
-      vehicle.id
+      vehicle.id,
+      tenant?.monthly_tier_days ?? 30
     );
 
     const vehicleTotal = result.rentalPrice;
@@ -2328,7 +2331,7 @@ const MultiStepBookingWidget = () => {
     const duration = calculateRentalDuration();
     const days = duration?.days || 0;
     if (days > 0) {
-      const totalAllowance = calculateTotalMileageAllowance(vehicle, days);
+      const totalAllowance = calculateTotalMileageAllowance(vehicle, days, tenant?.monthly_tier_days ?? 30);
       if (totalAllowance === null) return getUnlimitedLabel(distanceUnit);
       return `${formatDistance(totalAllowance, distanceUnit)} allowance`;
     }
@@ -2340,24 +2343,23 @@ const MultiStepBookingWidget = () => {
   };
 
   // Get the appropriate price display based on rental duration
-  // Pricing tiers: > 30 days = monthly, 7-30 days = weekly, < 7 days = daily
-  // For daily tier, applies dynamic pricing (weekend/holiday surcharges) and shows average effective rate
   const getDynamicPriceDisplay = (vehicle: Vehicle): { price: number; label: string; secondaryPrices: string[] } => {
     const duration = calculateRentalDuration();
     const days = duration?.days || 0;
+    const _mtd = tenant?.monthly_tier_days ?? 30;
 
     const dailyRent = vehicle.daily_rent || 0;
     const weeklyRent = vehicle.weekly_rent || 0;
     const monthlyRent = vehicle.monthly_rent || 0;
 
     // Determine primary price based on duration (matching pricing tiers)
-    if (days > 30 && monthlyRent > 0) {
+    if (days >= _mtd && monthlyRent > 0) {
       // Monthly rental - show monthly price as primary
       const secondaryPrices: string[] = [];
       if (weeklyRent > 0) secondaryPrices.push(`${formatCurrency(weeklyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / week`);
       if (dailyRent > 0) secondaryPrices.push(`${formatCurrency(dailyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / day`);
       return { price: monthlyRent, label: '/ month', secondaryPrices };
-    } else if (days >= 7 && days <= 30 && weeklyRent > 0) {
+    } else if (days >= 7 && days < _mtd && weeklyRent > 0) {
       // Weekly rental - show weekly price as primary
       const secondaryPrices: string[] = [];
       if (dailyRent > 0) secondaryPrices.push(`${formatCurrency(dailyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / day`);
@@ -2378,7 +2380,8 @@ const MultiStepBookingWidget = () => {
             weekendConfig,
             holidays,
             vehicle.id === formData.vehicleId ? vehicleOverrides : [],
-            vehicle.id
+            vehicle.id,
+            _mtd
           );
           if (result.pricingTier === 'daily' && result.rentalDays > 0) {
             effectiveDailyRate = Math.round((result.rentalPrice / result.rentalDays) * 100) / 100;
@@ -2493,8 +2496,9 @@ const MultiStepBookingWidget = () => {
       const pickup = parseDateString(formData.pickupDate);
       const dropoff = parseDateString(formData.dropoffDate);
       const days = Math.max(1, Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)));
+      const __mtd = tenant?.monthly_tier_days ?? 30;
       filtered = filtered.filter(v => {
-        if (days >= 28) return (v as any).available_monthly !== false;
+        if (days >= __mtd) return (v as any).available_monthly !== false;
         if (days >= 7) return (v as any).available_weekly !== false;
         return (v as any).available_daily !== false;
       });
@@ -4432,7 +4436,7 @@ const MultiStepBookingWidget = () => {
                         </div>
                       );
                     }
-                    const totalAllowance = calculateTotalMileageAllowance(selectedVehicle, days);
+                    const totalAllowance = calculateTotalMileageAllowance(selectedVehicle, days, tenant?.monthly_tier_days ?? 30);
                     if (totalAllowance === null) return null;
                     return (
                       <div className="text-xs space-y-1 pt-2 border-t border-border/30">

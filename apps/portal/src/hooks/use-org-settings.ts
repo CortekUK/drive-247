@@ -102,7 +102,7 @@ export const useOrgSettings = () => {
       org_id: 'placeholder',
       company_name: 'Fleet Management System',
       timezone: 'America/New_York',
-      currency_code: 'GBP',
+      currency_code: 'USD',
       distance_unit: 'miles',
       date_format: 'MM/DD/YYYY',
       reminder_due_today: true,

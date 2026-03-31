@@ -24,7 +24,7 @@ interface NotifyRequest {
   distanceUnit?: string;
 }
 
-const getFallbackHtml = (data: NotifyRequest, currencyCode: string = 'GBP') => {
+const getFallbackHtml = (data: NotifyRequest, currencyCode: string = 'USD') => {
   const paymentSection = data.paymentUrl
     ? `<table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
         <tr>
@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     let customerSubject = `Your Rental Has Been Extended | DRIVE 247`;
-    let currencyCode = 'GBP';
+    let currencyCode = 'USD';
     let customerHtml = getFallbackHtml(data, currencyCode);
     let resolvedEmail = data.customerEmail;
     let resolvedPhone = data.customerPhone;

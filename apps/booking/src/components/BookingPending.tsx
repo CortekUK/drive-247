@@ -16,7 +16,7 @@ import { useTenant } from "@/contexts/TenantContext";
 const BookingPending = () => {
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const sessionId = searchParams?.get("session_id");

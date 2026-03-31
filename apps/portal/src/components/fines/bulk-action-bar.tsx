@@ -152,7 +152,7 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
                 <CheckSquare className="h-5 w-5 text-primary" />
                 <span className="font-medium">{selectedFines.length} fines selected</span>
                 <Badge variant="outline">
-                  Total: {formatCurrency(totalAmount, tenant?.currency_code || 'GBP')}
+                  Total: {formatCurrency(totalAmount, tenant?.currency_code || 'USD')}
                 </Badge>
               </div>
             </div>
@@ -211,7 +211,7 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
           <AlertDialogHeader>
             <AlertDialogTitle>Charge {chargeableFines.length} Fines to Customer Accounts</AlertDialogTitle>
             <AlertDialogDescription>
-              This will create charges of {formatCurrency(chargeableFines.reduce((sum, fine) => sum + fine.amount, 0), tenant?.currency_code || 'GBP')}
+              This will create charges of {formatCurrency(chargeableFines.reduce((sum, fine) => sum + fine.amount, 0), tenant?.currency_code || 'USD')}
               to the respective customer accounts. This action cannot be undone.
 
               <div className="mt-4 p-3 bg-muted rounded">
@@ -220,7 +220,7 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
                   {chargeableFines.map(fine => (
                     <div key={fine.id} className="text-xs flex justify-between">
                       <span>{fine.reference_no || fine.id.slice(0, 8)}</span>
-                      <span>{formatCurrency(fine.amount, tenant?.currency_code || 'GBP')}</span>
+                      <span>{formatCurrency(fine.amount, tenant?.currency_code || 'USD')}</span>
                     </div>
                   ))}
                 </div>
@@ -246,7 +246,7 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
           <AlertDialogHeader>
             <AlertDialogTitle>Waive {waivableFines.length} Selected Fines</AlertDialogTitle>
             <AlertDialogDescription>
-              This will waive the selected fines totaling {formatCurrency(waivableFines.reduce((sum, fine) => sum + fine.amount, 0), tenant?.currency_code || 'GBP')}.
+              This will waive the selected fines totaling {formatCurrency(waivableFines.reduce((sum, fine) => sum + fine.amount, 0), tenant?.currency_code || 'USD')}.
               Waived fines will not be charged to customers. This action cannot be undone.
 
               <div className="mt-4 p-3 bg-muted rounded">
@@ -255,7 +255,7 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
                   {waivableFines.map(fine => (
                     <div key={fine.id} className="text-xs flex justify-between">
                       <span>{fine.reference_no || fine.id.slice(0, 8)}</span>
-                      <span>{formatCurrency(fine.amount, tenant?.currency_code || 'GBP')}</span>
+                      <span>{formatCurrency(fine.amount, tenant?.currency_code || 'USD')}</span>
                     </div>
                   ))}
                 </div>

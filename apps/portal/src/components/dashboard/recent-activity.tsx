@@ -39,7 +39,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 export const RecentActivity = ({ allowedTypes }: { allowedTypes?: string[] }) => {
   const { data: activities = [], isLoading } = useRecentActivity(allowedTypes);
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   return (
     <Card className="shadow-card rounded-lg overflow-hidden">

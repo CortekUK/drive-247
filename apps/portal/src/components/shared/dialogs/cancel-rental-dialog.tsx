@@ -62,7 +62,7 @@ export function CancelRentalDialog({
 
   const maxRefundAmount = payment?.amount || rental.monthly_amount || 0;
   const isPreAuth = payment?.capture_status === "requires_capture";
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const currencySymbol = getCurrencySymbol(currencyCode);
 
   // Fetch insurance charges for this rental

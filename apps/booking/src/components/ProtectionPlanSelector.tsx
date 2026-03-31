@@ -54,7 +54,7 @@ const TierIcon = ({ tier, className }: { tier: string; className?: string }) => 
 
 const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: ProtectionPlanSelectorProps) => {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const [plans, setPlans] = useState<ProtectionPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);

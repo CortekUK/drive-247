@@ -36,7 +36,7 @@ export function useVehicleDisposal(vehicleId: string) {
       queryClient.invalidateQueries({ queryKey: ['pnlEntries'] });
       
       const gainLoss = data?.gain_loss || 0;
-      const currencyCode = tenant?.currency_code || 'GBP';
+      const currencyCode = tenant?.currency_code || 'USD';
       const message = gainLoss > 0
         ? `Vehicle disposed with gain of ${formatCurrency(gainLoss, currencyCode)}`
         : gainLoss < 0

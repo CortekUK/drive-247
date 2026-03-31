@@ -295,7 +295,7 @@ const FineDetail = () => {
         <div className="grid gap-4 md:grid-cols-3">
           <KPICard
             title="Fine Amount"
-            value={formatCurrency(Number(fine.amount), tenant?.currency_code || 'GBP')}
+            value={formatCurrency(Number(fine.amount), tenant?.currency_code || 'USD')}
             valueClassName="text-destructive dark:text-destructive"
             className="bg-destructive/10 border-destructive/20"
           />

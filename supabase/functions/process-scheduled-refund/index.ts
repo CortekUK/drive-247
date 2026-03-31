@@ -64,7 +64,7 @@ serve(async (req) => {
       const tenantId = requestBody.tenantId || payment.tenant_id || payment.rentals?.tenant_id;
       let stripeMode: StripeMode = 'test'; // Default to test
       let stripeAccountId: string | null = null;
-      let currencyCode = 'GBP';
+      let currencyCode = 'USD';
 
       if (tenantId) {
         const { data: tenant } = await supabase

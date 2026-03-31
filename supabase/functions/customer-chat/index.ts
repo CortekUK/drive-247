@@ -124,13 +124,13 @@ function parseChartData(content: string): { cleanContent: string; chart?: ChartD
 // ============================================================================
 // Currency Helpers (inlined - this function is self-contained)
 // ============================================================================
-function getCurrencySymbolLocal(currencyCode: string = 'GBP'): string {
+function getCurrencySymbolLocal(currencyCode: string = 'USD'): string {
   const symbols: Record<string, string> = { USD: '$', GBP: '\u00a3', EUR: '\u20ac' };
   return symbols[currencyCode?.toUpperCase()] || currencyCode;
 }
 
-function formatCurrencyLocal(amount: number, currencyCode: string = 'GBP'): string {
-  const code = currencyCode?.toUpperCase() || 'GBP';
+function formatCurrencyLocal(amount: number, currencyCode: string = 'USD'): string {
+  const code = currencyCode?.toUpperCase() || 'USD';
   const localeMap: Record<string, string> = { USD: 'en-US', GBP: 'en-GB', EUR: 'en-IE' };
   const locale = localeMap[code] || 'en-US';
   try {
@@ -143,7 +143,7 @@ function formatCurrencyLocal(amount: number, currencyCode: string = 'GBP'): stri
 // ============================================================================
 // System Prompt Builder
 // ============================================================================
-function getSystemPrompt(customerName: string, context: Record<string, unknown>, tenantName: string, currencyCode: string = 'GBP'): string {
+function getSystemPrompt(customerName: string, context: Record<string, unknown>, tenantName: string, currencyCode: string = 'USD'): string {
   const currencySymbol = getCurrencySymbolLocal(currencyCode);
   const customer = context.customer as Record<string, unknown> || {};
   const rentals = context.rentals as Array<Record<string, unknown>> || [];
@@ -325,7 +325,7 @@ serve(async (req) => {
       .single();
 
     const tenantName = tenantData?.company_name || 'Drive247';
-    const currencyCode = tenantData?.currency_code || 'GBP';
+    const currencyCode = tenantData?.currency_code || 'USD';
 
     // Parse request body
     let body: CustomerChatRequest;

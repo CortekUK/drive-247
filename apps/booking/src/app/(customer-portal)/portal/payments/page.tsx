@@ -178,7 +178,7 @@ function NextPaymentCard({
   isPaying: boolean;
 }) {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const dueDate = new Date(installment.due_date);
   const isOverdue = isPast(dueDate) && !isToday(dueDate);
   const isDueToday = isToday(dueDate);
@@ -327,7 +327,7 @@ function InstallmentPlanCard({
   isPaying: boolean;
 }) {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const vehicle = plan.rentals?.vehicles;
   const vehicleName = vehicle
     ? `${vehicle.make || ''} ${vehicle.model || ''} (${vehicle.reg})`.trim()
@@ -539,7 +539,7 @@ function InstallmentPlanCard({
 
 function PaymentHistoryList() {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const { data: payments, isLoading } = useCustomerPaymentHistory(10);
 
   if (isLoading) {
@@ -621,7 +621,7 @@ function InvoiceList({
   onViewInvoice: (invoice: CustomerInvoice) => void;
 }) {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const { data: invoices, isLoading } = useCustomerInvoices();
 
   if (isLoading) {
@@ -751,7 +751,7 @@ function InvoiceDetailSheet({
   invoice: CustomerInvoice | null;
 }) {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   if (!invoice) return null;
 
   const vehicle = invoice.vehicles;
@@ -913,7 +913,7 @@ function DemoInstallmentCard({
   onClick: () => void;
 }) {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const progressPercent = (plan.paidAmount / plan.totalAmount) * 100;
   const paidInstallments = plan.installments.filter(i => i.status === 'paid').length;
 
@@ -966,7 +966,7 @@ function DemoInstallmentTimeline({
   plan: MockInstallmentPlan | null;
 }) {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   if (!plan) return null;
 
   return (
@@ -1064,7 +1064,7 @@ function DemoInstallmentTimeline({
 
 export default function PaymentsPage() {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const { data: plans, isLoading: plansLoading } = useCustomerInstallmentPlans();
   const { data: installmentStats, isLoading: installmentStatsLoading } = useInstallmentStats();
   const { data: invoiceStats, isLoading: invoiceStatsLoading } = useInvoiceStats();

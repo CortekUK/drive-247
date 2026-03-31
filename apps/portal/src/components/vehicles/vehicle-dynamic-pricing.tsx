@@ -44,7 +44,7 @@ const emptyDialog: OverrideDialogState = {
 
 export function VehicleDynamicPricing({ vehicleId, dailyRent }: Props) {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const { settings: weekendSettings, isLoading: weekendLoading } = useWeekendPricing();
   const { holidays, isLoading: holidaysLoading } = useTenantHolidays();
   const { overrides, isLoading: overridesLoading, upsertOverride, isUpserting, resetOverride, isResetting } = useVehiclePricingOverrides(vehicleId);

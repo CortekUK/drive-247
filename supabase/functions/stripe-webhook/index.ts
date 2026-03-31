@@ -825,7 +825,7 @@ serve(async (req) => {
           // Create portal notification
           if (payment.tenant_id) {
             // Get tenant currency for formatting
-            let refundCurrencyCode = 'GBP';
+            let refundCurrencyCode = 'USD';
             const { data: refundTenant } = await supabase
               .from("tenants")
               .select("currency_code")

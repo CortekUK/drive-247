@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       return errorResponse("Tenant not found", 404);
     }
 
-    const currencyCode = tenantData.currency_code || "GBP";
+    const currencyCode = tenantData.currency_code || "USD";
     const stripeMode = (tenantData.stripe_mode || "test") as "test" | "live";
     const stripe = getStripeClient(stripeMode);
     const connectAccountId = getConnectAccountId(tenantData);

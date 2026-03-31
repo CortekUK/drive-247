@@ -49,7 +49,7 @@ export const DeleteRentalDialog = ({
   const queryClient = useQueryClient();
   const { logAction } = useAuditLog();
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   useAuditLogOnOpen({
     open,

@@ -77,7 +77,7 @@ const PaymentStatusBadge = ({ status, remaining_amount }: { status?: string; rem
 export const PaymentManagement = () => {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   const { data: payments, isLoading } = useQuery({
     queryKey: ["payments"],

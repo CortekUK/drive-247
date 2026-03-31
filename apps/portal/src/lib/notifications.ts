@@ -30,7 +30,7 @@ export async function sendPaymentVerificationNotification(data: PaymentVerificat
 
   try {
     // Format amount with tenant currency (default to GBP if not provided)
-    const formattedAmount = formatCurrency(data.amount, data.currencyCode || 'GBP');
+    const formattedAmount = formatCurrency(data.amount, data.currencyCode || 'USD');
 
     // Create in-app notification for all admins
     await notificationService.notifyAdmins(

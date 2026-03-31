@@ -197,14 +197,14 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch tenant currency code
-    let currencyCode = 'GBP';
+    let currencyCode = 'USD';
     if (data.tenantId) {
       const { data: tenantInfo } = await supabase
         .from('tenants')
         .select('currency_code')
         .eq('id', data.tenantId)
         .single();
-      currencyCode = tenantInfo?.currency_code || 'GBP';
+      currencyCode = tenantInfo?.currency_code || 'USD';
     }
 
     const results = {

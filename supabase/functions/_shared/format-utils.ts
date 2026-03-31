@@ -11,10 +11,10 @@ const CURRENCY_LOCALE_MAP: Record<string, string> = {
  */
 export function formatCurrency(
   amount: number,
-  currencyCode: string = 'GBP',
+  currencyCode: string = 'USD',
   options?: { minimumFractionDigits?: number; maximumFractionDigits?: number }
 ): string {
-  const code = currencyCode?.toUpperCase() || 'GBP';
+  const code = currencyCode?.toUpperCase() || 'USD';
   const locale = CURRENCY_LOCALE_MAP[code] || 'en-US';
   try {
     return new Intl.NumberFormat(locale, {
@@ -31,7 +31,7 @@ export function formatCurrency(
 /**
  * Get the symbol for a currency code.
  */
-export function getCurrencySymbol(currencyCode: string = 'GBP'): string {
+export function getCurrencySymbol(currencyCode: string = 'USD'): string {
   const symbols: Record<string, string> = {
     USD: '$',
     GBP: '\u00a3',

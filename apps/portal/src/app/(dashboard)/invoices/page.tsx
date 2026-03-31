@@ -386,7 +386,7 @@ const InvoicesList = () => {
                         {invoice.due_date ? format(new Date(invoice.due_date), "PP") : "—"}
                       </TableCell>
                       <TableCell className="text-left font-medium">
-                        {formatCurrency(invoice.total_amount, tenant?.currency_code || 'GBP')}
+                        {formatCurrency(invoice.total_amount, tenant?.currency_code || 'USD')}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">

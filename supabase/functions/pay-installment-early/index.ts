@@ -70,7 +70,7 @@ serve(async (req) => {
     }
 
     // Get currency from tenant settings (Stripe expects lowercase)
-    const currencyCode = (tenantData?.currency_code || 'GBP').toLowerCase()
+    const currencyCode = (tenantData?.currency_code || 'USD').toLowerCase()
 
     const stripe = getStripeClient(stripeMode)
     const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null

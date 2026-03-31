@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
       .eq("id", effectiveTenantId)
       .single();
 
-    const currencyCode = tenantData?.currency_code || "GBP";
+    const currencyCode = tenantData?.currency_code || "USD";
     const stripeMode = (tenantData?.stripe_mode as StripeMode) || "test";
     const stripe = getStripeClient(stripeMode);
     const connectAccountId = tenantData ? getConnectAccountId(tenantData) : null;

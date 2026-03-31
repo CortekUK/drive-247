@@ -43,7 +43,7 @@ const BookingVehicles = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const { updateContext } = useBookingStore();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);

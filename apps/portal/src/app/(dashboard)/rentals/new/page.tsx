@@ -41,6 +41,7 @@ import { useOrgSettings } from "@/hooks/use-org-settings";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useBlockedDates } from "@/hooks/use-blocked-dates";
 import { InsuranceUploadDialog } from "@/components/shared/dialogs/insurance-upload-dialog";
+import { AIScanProgress } from "@/components/insurance/ai-scan-progress";
 import { LocationPicker, type LocationMethod } from "@/components/ui/location-picker";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TimePicker } from "@/components/ui/time-picker";
@@ -273,7 +274,7 @@ const CreateRental = () => {
         title: "Promo code applied!",
         description: data.type === 'percentage'
           ? `${data.value}% discount will be applied`
-          : `${formatCurrency(data.value, tenant?.currency_code || 'GBP')} discount will be applied`,
+          : `${formatCurrency(data.value, tenant?.currency_code || 'USD')} discount will be applied`,
       });
 
     } catch (err) {
@@ -434,13 +435,13 @@ const CreateRental = () => {
   const watchedPickupLocation = form.watch("pickup_location");
   const watchedPromoCode = form.watch("promo_code");
 
-  // Auto-determine rental period type from date range (same logic as booking side)
-  // > 30 days = Monthly, 7-30 days = Weekly, < 7 days = Daily
+  // Auto-determine rental period type from date range
+  const mtd = tenant?.monthly_tier_days ?? 30;
   useEffect(() => {
     if (watchedStartDate && watchedEndDate) {
       const days = Math.max(1, differenceInDays(watchedEndDate, watchedStartDate));
       let periodType: "Daily" | "Weekly" | "Monthly";
-      if (days > 30) {
+      if (days >= mtd) {
         periodType = "Monthly";
       } else if (days >= 7) {
         periodType = "Weekly";
@@ -772,10 +773,6 @@ const CreateRental = () => {
   }, [isBonzahEligible, isBonzahEligibilityLoading]);
 
   // Auto-populate rental amount based on selected vehicle, dates, and auto-determined period type
-  // Uses pro-rata calculation matching booking side:
-  // > 30 days: (days/30) × monthly_rent
-  // 7-30 days: (days/7) × weekly_rent
-  // < 7 days: days × daily_rent (with dynamic pricing for weekend/holiday surcharges)
   useEffect(() => {
     if (selectedVehicleId && vehicles && watchedStartDate && watchedEndDate) {
       const vehicle = vehicles.find(v => v.id === selectedVehicleId);
@@ -787,10 +784,10 @@ const CreateRental = () => {
       const monthlyRent = vehicle.monthly_rent || 0;
       let amount: number | undefined;
 
-      if (days > 30 && monthlyRent > 0) {
+      if (days >= mtd && monthlyRent > 0) {
         // Monthly tier: pro-rata
-        amount = Math.round(((days / 30) * monthlyRent) * 100) / 100;
-      } else if (days >= 7 && days <= 30 && weeklyRent > 0) {
+        amount = Math.round(((days / mtd) * monthlyRent) * 100) / 100;
+      } else if (days >= 7 && days < mtd && weeklyRent > 0) {
         // Weekly tier: pro-rata
         amount = Math.round(((days / 7) * weeklyRent) * 100) / 100;
       } else if (dailyRent > 0) {
@@ -852,7 +849,7 @@ const CreateRental = () => {
       } else if (weeklyRent > 0) {
         amount = Math.round(((days / 7) * weeklyRent) * 100) / 100;
       } else if (monthlyRent > 0) {
-        amount = Math.round(((days / 30) * monthlyRent) * 100) / 100;
+        amount = Math.round(((days / mtd) * monthlyRent) * 100) / 100;
       }
 
       if (amount !== undefined && amount !== watchedMonthlyAmount) {
@@ -1290,7 +1287,7 @@ const CreateRental = () => {
           object_type: 'Rental',
           object_id: rental.id,
           title: `Payment due — ${customerName} (${vehicleReg})`,
-          message: `${formatCurrency(data.monthly_amount, tenant?.currency_code || 'GBP')} payment due for rental of ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg}). Due date: ${dueDate}.`,
+          message: `${formatCurrency(data.monthly_amount, tenant?.currency_code || 'USD')} payment due for rental of ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg}). Due date: ${dueDate}.`,
           due_on: dueDate,
           remind_on: dueDate,
           severity: 'warning',
@@ -2232,7 +2229,7 @@ const CreateRental = () => {
                                 { label: "Monthly", value: selectedVehicle.monthly_rent },
                               ].filter(r => r.value && r.value > 0);
                               if (rates.length === 0) return null;
-                              const cur = tenant?.currency_code || 'GBP';
+                              const cur = tenant?.currency_code || 'USD';
                               return (
                                 <div className="flex gap-2 mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
                                   {rates.map(r => (
@@ -2461,7 +2458,7 @@ const CreateRental = () => {
                 const effectiveDeposit = depositOverride !== null ? depositOverride : autoDeposit;
                 const feesTotal = (showTax ? effectiveTax : 0) + (showServiceFee ? effectiveServiceFee : 0) + (showDeposit ? effectiveDeposit : 0) + effDeliveryFee + (sameAsPickup ? 0 : effCollectionFee);
                 const grandTotal = discountedAmount + feesTotal + bonzahPremium;
-                const currency = tenant?.currency_code || 'GBP';
+                const currency = tenant?.currency_code || 'USD';
                 const feeType = rentalSettings?.service_fee_type || 'fixed_amount';
                 const feeValue = rentalSettings?.service_fee_value ?? rentalSettings?.service_fee_amount ?? 0;
                 const hasOverrides = taxOverride !== null || serviceFeeOverride !== null || depositOverride !== null || deliveryFeeOverride !== null || collectionFeeOverride !== null;
@@ -2523,8 +2520,8 @@ const CreateRental = () => {
                               const dailyRent = vehicle.daily_rent || 0;
                               const weeklyRent = vehicle.weekly_rent || 0;
                               const monthlyRent = vehicle.monthly_rent || 0;
-                              const tier = days > 30 && monthlyRent > 0 ? 'monthly'
-                                : days >= 7 && days <= 30 && weeklyRent > 0 ? 'weekly'
+                              const tier = days >= mtd && monthlyRent > 0 ? 'monthly'
+                                : days >= 7 && days < mtd && weeklyRent > 0 ? 'weekly'
                                 : dailyRent > 0 ? 'daily'
                                 : weeklyRent > 0 ? 'weekly' : 'monthly';
 
@@ -2644,7 +2641,7 @@ const CreateRental = () => {
                                       } else if (tier === 'weekly' && weeklyRent > 0) {
                                         autoTotal = Math.round(((days / 7) * weeklyRent) * 100) / 100;
                                       } else if (tier === 'monthly' && monthlyRent > 0) {
-                                        autoTotal = Math.round(((days / 30) * monthlyRent) * 100) / 100;
+                                        autoTotal = Math.round(((days / mtd) * monthlyRent) * 100) / 100;
                                       }
                                       const isOverridden = autoTotal > 0 && Math.abs((field.value || 0) - autoTotal) > 0.01;
                                       return (
@@ -2722,7 +2719,7 @@ const CreateRental = () => {
                                               <span className="text-xs text-muted-foreground">
                                                 {promo.type === 'percentage'
                                                   ? `${promo.value}% off`
-                                                  : `${formatCurrency(promo.value, tenant?.currency_code || 'GBP')} off`}
+                                                  : `${formatCurrency(promo.value, tenant?.currency_code || 'USD')} off`}
                                                 {promo.expires_at && ` · Expires ${format(new Date(promo.expires_at), "MMM d, yyyy")}`}
                                               </span>
                                             </div>
@@ -2764,7 +2761,7 @@ const CreateRental = () => {
                             {promoDetails && (
                               <p className="text-sm text-green-600 font-medium flex items-center gap-1">
                                 <Check className="w-4 h-4" />
-                                Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `${formatCurrency(promoDetails.value, tenant?.currency_code || 'GBP')} off`}
+                                Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `${formatCurrency(promoDetails.value, tenant?.currency_code || 'USD')} off`}
                               </p>
                             )}
                             <FormMessage />
@@ -2975,7 +2972,7 @@ const CreateRental = () => {
                 }
 
                 const chargeFirstUpfront = installmentConfig.charge_first_upfront !== false;
-                const currency = tenant?.currency_code || 'GBP';
+                const currency = tenant?.currency_code || 'USD';
 
                 // Calculate installments helper
                 const calcInstallments = (total: number, count: number) => {
@@ -3152,9 +3149,9 @@ const CreateRental = () => {
                 if (!vehicle) return null;
                 const distUnit: DistanceUnit = (tenant?.distance_unit as DistanceUnit) || 'miles';
                 const unitShort = getDistanceUnitShort(distUnit);
-                const mCurrency = tenant?.currency_code || 'GBP';
+                const mCurrency = tenant?.currency_code || 'USD';
                 const days = Math.max(1, differenceInDays(watchedEndDate, watchedStartDate));
-                const tier = getMileageTier(days);
+                const tier = getMileageTier(days, mtd);
                 const currentMileage = vehicle.current_mileage;
                 const effDaily = dailyMileageOverride !== null ? dailyMileageOverride : vehicle.daily_mileage;
                 const effWeekly = weeklyMileageOverride !== null ? weeklyMileageOverride : vehicle.weekly_mileage;
@@ -3162,9 +3159,9 @@ const CreateRental = () => {
                 const effExcessRate = excessRateOverride !== null ? excessRateOverride : vehicle.excess_mileage_rate;
                 const effVehicle = { daily_mileage: effDaily, weekly_mileage: effWeekly, monthly_mileage: effMonthly };
                 const perUnit = getTierMileage(effVehicle, tier);
-                const totalAllowance = calculateTotalMileageAllowance(effVehicle, days);
+                const totalAllowance = calculateTotalMileageAllowance(effVehicle, days, mtd);
                 const unlimited = isUnlimitedMileage(effVehicle);
-                const tierMultiplier = tier === 'daily' ? days : tier === 'weekly' ? Math.ceil(days / 7) : Math.ceil(days / 30);
+                const tierMultiplier = tier === 'daily' ? days : tier === 'weekly' ? Math.ceil(days / 7) : Math.ceil(days / mtd);
                 const tierUnitLabel = tier === 'daily' ? 'day' : tier === 'weekly' ? 'week' : 'month';
                 const hasMileageOverrides = dailyMileageOverride !== null || weeklyMileageOverride !== null || monthlyMileageOverride !== null || excessRateOverride !== null;
                 const tierItems: { key: 'daily' | 'weekly' | 'monthly'; label: string; vehicleVal: number | null; override: number | null; setOverride: (v: number | null) => void }[] = [
@@ -3260,7 +3257,7 @@ const CreateRental = () => {
                           onMethodChange={(m) => { setPickupMethod(m); setDeliveryFee(0); setDeliveryFeeOverride(null); setPickupOutOfRadius(false); setPickupIsCustom(false); }}
                           onChange={(address, locId, fee, outOfRadius) => { field.onChange(address); setPickupLocationId(locId); if (fee !== undefined) setDeliveryFee(fee); setPickupOutOfRadius(outOfRadius || false); if (!address) { setTimeout(() => { form.clearErrors("pickup_location"); if (sameAsPickup) form.clearErrors("return_location"); }, 0); } if (sameAsPickup) { form.setValue("return_location", address, { shouldValidate: !!address }); setReturnLocationId(locId); if (fee !== undefined) setCollectionFee(fee); setReturnOutOfRadius(outOfRadius || false); } }}
                           onCustomAddressChange={(isCustom) => setPickupIsCustom(isCustom)}
-                          placeholder="Enter pickup address" currency={tenant?.currency_code || 'GBP'} distanceUnit={(tenant?.distance_unit as 'km' | 'miles') || 'miles'}
+                          placeholder="Enter pickup address" currency={tenant?.currency_code || 'USD'} distanceUnit={(tenant?.distance_unit as 'km' | 'miles') || 'miles'}
                         />
                       </FormControl>
                       {pickupOutOfRadius && <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />Address is outside the configured service radius. Proceeding as admin override.</p>}
@@ -3272,7 +3269,7 @@ const CreateRental = () => {
                     <div className="flex items-center gap-3">
                       <Label className="text-sm text-muted-foreground whitespace-nowrap">Delivery Fee</Label>
                       <CurrencyInput value={deliveryFeeOverride !== null ? deliveryFeeOverride : deliveryFee} onChange={(val) => setDeliveryFeeOverride(val)} currencySymbol={currencySymbol} className="w-32" />
-                      {deliveryFeeOverride !== null && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 underline" onClick={() => setDeliveryFeeOverride(null)}>Reset to {formatCurrency(deliveryFee, tenant?.currency_code || 'GBP')}</button>}
+                      {deliveryFeeOverride !== null && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 underline" onClick={() => setDeliveryFeeOverride(null)}>Reset to {formatCurrency(deliveryFee, tenant?.currency_code || 'USD')}</button>}
                     </div>
                   )}
 
@@ -3298,7 +3295,7 @@ const CreateRental = () => {
                               onMethodChange={(m) => { setReturnMethod(m); setCollectionFee(0); setCollectionFeeOverride(null); setReturnOutOfRadius(false); setReturnIsCustom(false); }}
                               onChange={(address, locId, fee, outOfRadius) => { field.onChange(address); setReturnLocationId(locId); if (fee !== undefined) setCollectionFee(fee); setReturnOutOfRadius(outOfRadius || false); if (!address) { setTimeout(() => form.clearErrors("return_location"), 0); } }}
                               onCustomAddressChange={(isCustom) => setReturnIsCustom(isCustom)}
-                              placeholder="Enter return address" currency={tenant?.currency_code || 'GBP'} distanceUnit={(tenant?.distance_unit as 'km' | 'miles') || 'miles'}
+                              placeholder="Enter return address" currency={tenant?.currency_code || 'USD'} distanceUnit={(tenant?.distance_unit as 'km' | 'miles') || 'miles'}
                             />
                           </FormControl>
                           {returnOutOfRadius && <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />Address is outside the configured service radius. Proceeding as admin override.</p>}
@@ -3317,7 +3314,7 @@ const CreateRental = () => {
                     <div className="flex items-center gap-3">
                       <Label className="text-sm text-muted-foreground whitespace-nowrap">Collection Fee</Label>
                       <CurrencyInput value={collectionFeeOverride !== null ? collectionFeeOverride : collectionFee} onChange={(val) => setCollectionFeeOverride(val)} currencySymbol={currencySymbol} className="w-32" />
-                      {collectionFeeOverride !== null && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 underline" onClick={() => setCollectionFeeOverride(null)}>Reset to {formatCurrency(collectionFee, tenant?.currency_code || 'GBP')}</button>}
+                      {collectionFeeOverride !== null && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 underline" onClick={() => setCollectionFeeOverride(null)}>Reset to {formatCurrency(collectionFee, tenant?.currency_code || 'USD')}</button>}
                     </div>
                   )}
 
@@ -3505,6 +3502,11 @@ const CreateRental = () => {
                         )}
                       </div>
                     </div>
+
+                    {/* AI Insurance Scan Results */}
+                    {insuranceDocId && (
+                      <AIScanProgress documentId={insuranceDocId} />
+                    )}
 
                     {/* Bonzah Insurance Selection */}
                     {!skipInsurance && watchedStartDate && watchedEndDate && (
@@ -3892,7 +3894,7 @@ const CreateRental = () => {
 
                     {/* Financial Summary — Full Breakdown */}
                     {(() => {
-                      const currency = tenant?.currency_code || 'GBP';
+                      const currency = tenant?.currency_code || 'USD';
                       const rentalAmount = watchedMonthlyAmount || 0;
                       const discountAmt = promoDetails ? calculateDiscount(rentalAmount) : 0;
                       const discountedAmount = rentalAmount - discountAmt;

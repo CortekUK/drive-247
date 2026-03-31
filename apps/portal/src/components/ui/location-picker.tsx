@@ -53,7 +53,7 @@ export function LocationPicker({
   placeholder,
   className,
   disabled = false,
-  currency = 'GBP',
+  currency = 'USD',
   distanceUnit = 'miles',
 }: LocationPickerProps) {
   const {

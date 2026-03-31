@@ -52,7 +52,7 @@ const StatCard = ({ title, value, change, trend, variant = "default" }: StatCard
 
 export const DashboardStats = () => {
   const { tenant } = useTenant();
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
 
   const { data: vehicleCount } = useQuery({
     queryKey: ["vehicle-count", tenant?.id],

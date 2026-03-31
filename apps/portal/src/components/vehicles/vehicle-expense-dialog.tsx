@@ -30,7 +30,7 @@ export const VehicleExpenseDialog = ({ onSubmit, isLoading, vehicleId }: Vehicle
     entityType: "vehicle",
     entityId: vehicleId,
   });
-  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
+  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');
 
   const form = useForm<ExpenseFormData>({
     resolver: zodResolver(vehicleExpenseSchema),

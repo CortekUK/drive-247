@@ -213,6 +213,11 @@ const Pricing = () => {
   // Filter and sort vehicles
   const filteredAndSortedVehicles = vehicles
     .filter((vehicle) => {
+      // Hide vehicles with all availability toggles off
+      if (vehicle.available_daily === false && vehicle.available_weekly === false && vehicle.available_monthly === false) {
+        return false;
+      }
+
       // Make filter
       const makeMatch = makeFilter === "all" || vehicle.make === makeFilter;
 
@@ -415,7 +420,7 @@ const Pricing = () => {
                                 </span>
                                 {mileage.excess != null && (
                                   <span className="text-xs text-muted-foreground/70">
-                                    · {formatCurrency(mileage.excess, tenant?.currency_code || 'GBP')}/{getDistanceUnitShort(distanceUnit)} excess
+                                    · {formatCurrency(mileage.excess, tenant?.currency_code || 'USD')}/{getDistanceUnitShort(distanceUnit)} excess
                                   </span>
                                 )}
                               </div>
@@ -428,7 +433,7 @@ const Pricing = () => {
                           <div className="flex items-center gap-3 text-right">
                             {vehicle.available_daily !== false && (
                               <div>
-                                <div className="text-lg font-bold text-gradient-metal">{formatCurrency(vehicle.daily_rent, tenant?.currency_code || 'GBP')}</div>
+                                <div className="text-lg font-bold text-gradient-metal">{formatCurrency(vehicle.daily_rent, tenant?.currency_code || 'USD')}</div>
                                 <div className="text-[10px] text-muted-foreground">/day</div>
                               </div>
                             )}
@@ -437,7 +442,7 @@ const Pricing = () => {
                             )}
                             {vehicle.available_weekly !== false && (
                               <div>
-                                <div className="text-sm font-semibold text-accent">{formatCurrency(vehicle.weekly_rent, tenant?.currency_code || 'GBP')}</div>
+                                <div className="text-sm font-semibold text-accent">{formatCurrency(vehicle.weekly_rent, tenant?.currency_code || 'USD')}</div>
                                 <div className="text-[10px] text-muted-foreground">/week</div>
                               </div>
                             )}
@@ -446,7 +451,7 @@ const Pricing = () => {
                             )}
                             {vehicle.available_monthly !== false && (
                               <div>
-                                <div className="text-sm font-semibold text-accent/80">{formatCurrency(vehicle.monthly_rent, tenant?.currency_code || 'GBP')}</div>
+                                <div className="text-sm font-semibold text-accent/80">{formatCurrency(vehicle.monthly_rent, tenant?.currency_code || 'USD')}</div>
                                 <div className="text-[10px] text-muted-foreground">/month</div>
                               </div>
                             )}
@@ -551,7 +556,7 @@ const Pricing = () => {
                           )}
                         </div>
                       </div>
-                      <span className="text-accent font-semibold whitespace-nowrap text-sm">{formatCurrency(extra.price, tenant?.currency_code || 'GBP')}</span>
+                      <span className="text-accent font-semibold whitespace-nowrap text-sm">{formatCurrency(extra.price, tenant?.currency_code || 'USD')}</span>
                     </li>
                   ))}
                 </ul>

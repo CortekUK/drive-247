@@ -106,7 +106,7 @@ export function RevenueChart() {
     return { totalRevenue, totalRentals, avgDaily, trend };
   }, [chartData]);
 
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = tenant?.currency_code || 'USD';
   const currencySymbol = getCurrencySymbol(currencyCode);
 
   if (isLoading) {

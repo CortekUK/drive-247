@@ -163,7 +163,7 @@ export function customerToDocument(customer: CustomerRecord): DocumentResult {
 /**
  * Convert vehicle record to searchable text
  */
-export function vehicleToDocument(vehicle: VehicleRecord, currencyCode: string = 'GBP'): DocumentResult {
+export function vehicleToDocument(vehicle: VehicleRecord, currencyCode: string = 'USD'): DocumentResult {
   const sym = getCurrencySymbol(currencyCode);
   const color = vehicle.colour || vehicle.color;
   const vehicleName = [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(' ');
@@ -208,7 +208,7 @@ export function vehicleToDocument(vehicle: VehicleRecord, currencyCode: string =
 /**
  * Convert rental record to searchable text
  */
-export function rentalToDocument(rental: RentalRecord, currencyCode: string = 'GBP'): DocumentResult {
+export function rentalToDocument(rental: RentalRecord, currencyCode: string = 'USD'): DocumentResult {
   const sym = getCurrencySymbol(currencyCode);
   const parts: string[] = [];
 
@@ -257,7 +257,7 @@ export function rentalToDocument(rental: RentalRecord, currencyCode: string = 'G
 /**
  * Convert payment record to searchable text
  */
-export function paymentToDocument(payment: PaymentRecord, currencyCode: string = 'GBP'): DocumentResult {
+export function paymentToDocument(payment: PaymentRecord, currencyCode: string = 'USD'): DocumentResult {
   const sym = getCurrencySymbol(currencyCode);
   const parts: string[] = [
     `Payment of ${sym}${payment.amount}`,
@@ -295,7 +295,7 @@ export function paymentToDocument(payment: PaymentRecord, currencyCode: string =
 /**
  * Convert fine record to searchable text
  */
-export function fineToDocument(fine: FineRecord, currencyCode: string = 'GBP'): DocumentResult {
+export function fineToDocument(fine: FineRecord, currencyCode: string = 'USD'): DocumentResult {
   const sym = getCurrencySymbol(currencyCode);
   const parts: string[] = [
     `Fine: ${fine.type}`,
@@ -328,7 +328,7 @@ export function fineToDocument(fine: FineRecord, currencyCode: string = 'GBP'): 
 /**
  * Convert plate record to searchable text
  */
-export function plateToDocument(plate: PlateRecord, currencyCode: string = 'GBP'): DocumentResult {
+export function plateToDocument(plate: PlateRecord, currencyCode: string = 'USD'): DocumentResult {
   const sym = getCurrencySymbol(currencyCode);
   const parts: string[] = [
     `Plate: ${plate.plate_number}`,
@@ -386,7 +386,7 @@ function knowledgeArticleToDocument(article: KnowledgeArticleRecord): DocumentRe
 /**
  * Get document loader for a given table
  */
-export function getDocumentLoader(tableName: string, currencyCode: string = 'GBP'): ((record: unknown) => DocumentResult) | null {
+export function getDocumentLoader(tableName: string, currencyCode: string = 'USD'): ((record: unknown) => DocumentResult) | null {
   const loaders: Record<string, (record: unknown) => DocumentResult> = {
     customers: (r) => customerToDocument(r as CustomerRecord),
     vehicles: (r) => vehicleToDocument(r as VehicleRecord, currencyCode),
