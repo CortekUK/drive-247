@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { useKeyHandover, HandoverType } from "@/hooks/use-key-handover";
 import { KeyHandoverPhotos } from "@/components/rentals/key-handover-photos";
 import { LockboxSendTimeline } from "@/components/rentals/lockbox-send-timeline";
+import { LockboxCountdownTicker } from "@/components/rentals/lockbox-countdown-ticker";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
@@ -706,6 +707,11 @@ export const KeyHandoverSection = ({
                 )}
               </div>
             )}
+            {/* Lockbox Countdown Ticker */}
+            {savedDeliveryMethod === 'lockbox' && (
+              <LockboxCountdownTicker rentalId={rentalId} />
+            )}
+
             {/* Lockbox Send Log Timeline */}
             {savedDeliveryMethod === 'lockbox' && (
               <LockboxSendTimeline rentalId={rentalId} />
