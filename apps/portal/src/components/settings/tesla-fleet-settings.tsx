@@ -68,7 +68,7 @@ export function TeslaFleetSettings() {
         body: {
           action: 'get_auth_url',
           tenantId: tenantContext?.id,
-          redirectUri: `${window.location.origin}/settings?tesla_callback=true`,
+          returnUrl: `${window.location.origin}/settings`,
         },
       });
 
