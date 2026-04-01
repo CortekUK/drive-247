@@ -434,6 +434,13 @@ export const KeyHandoverSection = ({
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {/* Lockbox Countdown Ticker — prominent at the top, only for approved/active lockbox rentals */}
+        {savedDeliveryMethod === 'lockbox' && ['Approved', 'Active', 'Pending'].includes(rentalStatus) && (
+          <div className="mb-6">
+            <LockboxCountdownTicker rentalId={rentalId} />
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Vehicle Collection Section */}
           <div className="space-y-4 p-4 border rounded-lg bg-muted/20">
@@ -726,11 +733,6 @@ export const KeyHandoverSection = ({
                 )}
               </div>
             )}
-            {/* Lockbox Countdown Ticker */}
-            {(savedDeliveryMethod === 'lockbox' || deliveryMethodChoice === 'lockbox') && (
-              <LockboxCountdownTicker rentalId={rentalId} />
-            )}
-
             {/* Lockbox Send Log Timeline */}
             {(savedDeliveryMethod === 'lockbox' || deliveryMethodChoice === 'lockbox') && (
               <LockboxSendTimeline rentalId={rentalId} />
