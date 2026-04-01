@@ -549,8 +549,18 @@ const CreateRental = () => {
       // Restore form values
       if (draft.customer_id) form.setValue("customer_id", draft.customer_id);
       if (draft.vehicle_id) form.setValue("vehicle_id", draft.vehicle_id);
-      if (draft.start_date) form.setValue("start_date", new Date(draft.start_date));
-      if (draft.end_date) form.setValue("end_date", new Date(draft.end_date));
+      if (draft.start_date) {
+        const savedStart = new Date(draft.start_date);
+        if (!isBefore(savedStart, todayAtMidnight)) {
+          form.setValue("start_date", savedStart);
+          if (draft.end_date) {
+            const savedEnd = new Date(draft.end_date);
+            if (isAfter(savedEnd, savedStart)) {
+              form.setValue("end_date", savedEnd);
+            }
+          }
+        }
+      }
       if (draft.rental_period_type) form.setValue("rental_period_type", draft.rental_period_type);
       if (draft.monthly_amount != null) form.setValue("monthly_amount", draft.monthly_amount);
       if (draft.pickup_location) form.setValue("pickup_location", draft.pickup_location);
