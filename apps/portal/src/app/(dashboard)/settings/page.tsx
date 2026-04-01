@@ -2327,23 +2327,36 @@ const Settings = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-3">
-                <Label className="text-sm">Buffer time</Label>
+                <Label className="text-sm">Hours</Label>
                 <Input
                   type="number"
                   min={0}
-                  max={480}
-                  value={rentalForm.buffer_time_minutes}
+                  max={72}
+                  value={Math.floor(rentalForm.buffer_time_minutes / 60)}
                   onChange={(e) => {
-                    const val = parseInt(e.target.value) || 0;
-                    setRentalForm(prev => ({ ...prev, buffer_time_minutes: Math.min(480, Math.max(0, val)) }));
+                    const hours = Math.min(72, Math.max(0, parseInt(e.target.value) || 0));
+                    const currentMins = rentalForm.buffer_time_minutes % 60;
+                    setRentalForm(prev => ({ ...prev, buffer_time_minutes: hours * 60 + currentMins }));
                   }}
-                  className="w-24"
+                  className="w-20"
                 />
-                <span className="text-sm text-muted-foreground">minutes (max 480)</span>
+                <Label className="text-sm">Minutes</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={59}
+                  value={rentalForm.buffer_time_minutes % 60}
+                  onChange={(e) => {
+                    const mins = Math.min(59, Math.max(0, parseInt(e.target.value) || 0));
+                    const currentHours = Math.floor(rentalForm.buffer_time_minutes / 60);
+                    setRentalForm(prev => ({ ...prev, buffer_time_minutes: currentHours * 60 + mins }));
+                  }}
+                  className="w-20"
+                />
               </div>
               <p className="text-sm text-muted-foreground">
                 {rentalForm.buffer_time_minutes > 0
-                  ? `Vehicles will be hidden from booking results for ${rentalForm.buffer_time_minutes} minutes after a rental ends. This gives you time to inspect and prepare the vehicle.`
+                  ? `Vehicles will be hidden from booking results for ${Math.floor(rentalForm.buffer_time_minutes / 60) > 0 ? `${Math.floor(rentalForm.buffer_time_minutes / 60)}h ` : ''}${rentalForm.buffer_time_minutes % 60 > 0 ? `${rentalForm.buffer_time_minutes % 60}m` : Math.floor(rentalForm.buffer_time_minutes / 60) > 0 ? '' : '0m'} after a rental ends. This gives you time to inspect and prepare the vehicle.`
                   : 'No buffer time — vehicles are available immediately after a rental ends.'}
               </p>
               {canEditSettings('rental') && (
