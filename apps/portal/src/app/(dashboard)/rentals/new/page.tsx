@@ -1875,7 +1875,26 @@ const CreateRental = () => {
           )}
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
+            <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+              const fieldErrors = Object.entries(errors).map(([key, e]) => ({ key, message: e?.message })).filter(e => e.message);
+              toast({
+                title: `${fieldErrors.length} missing field${fieldErrors.length > 1 ? 's' : ''}`,
+                description: (
+                  <ul className="list-disc pl-4 space-y-0.5 mt-1 text-sm">
+                    {fieldErrors.map((e, i) => <li key={i}>{e.message}</li>)}
+                  </ul>
+                ),
+                variant: "destructive",
+              });
+              // Scroll to the first invalid field
+              setTimeout(() => {
+                const firstInvalid = document.querySelector('[aria-invalid="true"]');
+                if (firstInvalid) {
+                  firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  if (firstInvalid instanceof HTMLElement) firstInvalid.focus();
+                }
+              }, 50);
+            })}>
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:h-[calc(100vh-180px)]">
             {/* ── Left: Scrollable Form ─────────────────────── */}
             <div className="lg:col-span-3 lg:overflow-y-auto lg:pr-2 space-y-6">
@@ -3781,7 +3800,7 @@ const CreateRental = () => {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={loading || !isFormValid}
+                  disabled={loading}
                   className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg px-8"
                 >
                   <Save className="h-4 w-4 mr-2" />
