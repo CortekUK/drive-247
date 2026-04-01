@@ -2333,10 +2333,13 @@ const Settings = () => {
                   min={0}
                   max={480}
                   value={rentalForm.buffer_time_minutes}
-                  onChange={(e) => setRentalForm(prev => ({ ...prev, buffer_time_minutes: parseInt(e.target.value) || 0 }))}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    setRentalForm(prev => ({ ...prev, buffer_time_minutes: Math.min(480, Math.max(0, val)) }));
+                  }}
                   className="w-24"
                 />
-                <span className="text-sm text-muted-foreground">minutes</span>
+                <span className="text-sm text-muted-foreground">minutes (max 480)</span>
               </div>
               <p className="text-sm text-muted-foreground">
                 {rentalForm.buffer_time_minutes > 0
