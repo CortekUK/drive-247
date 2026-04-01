@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.twilio-sms-status]
 verify_jwt = false
+
+[functions.send-lockbox-scheduled]
+verify_jwt = false

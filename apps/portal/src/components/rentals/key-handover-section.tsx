@@ -24,6 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { useKeyHandover, HandoverType } from "@/hooks/use-key-handover";
 import { KeyHandoverPhotos } from "@/components/rentals/key-handover-photos";
+import { LockboxSendTimeline } from "@/components/rentals/lockbox-send-timeline";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
@@ -261,12 +262,33 @@ export const KeyHandoverSection = ({
 
         if (error) {
           console.error("Failed to send lockbox notification:", error);
+          // Log failure
+          await supabase.from("lockbox_send_log").insert({
+            rental_id: rentalId,
+            tenant_id: tenant?.id,
+            event_type: "failed",
+            channel: "email",
+            details: `Manual send failed: ${error.message || "Unknown error"}`,
+          } as any);
           toast({
             title: "Warning",
             description: "Lockbox code notification failed to send. You may need to contact the customer manually.",
             variant: "destructive",
           });
         } else {
+          // Log successful send and stamp lockbox_sent_at
+          await supabase.from("lockbox_send_log").insert({
+            rental_id: rentalId,
+            tenant_id: tenant?.id,
+            event_type: givingHandover?.handed_at ? "resent" : "sent",
+            channel: "email",
+            sent_by_name: "Admin",
+            details: `Lockbox code sent to ${customerEmail || 'customer'} via email`,
+          } as any);
+          await supabase
+            .from("rentals")
+            .update({ lockbox_sent_at: new Date().toISOString() })
+            .eq("id", rentalId);
           toast({
             title: "Lockbox Code Sent",
             description: `Lockbox code sent to ${customerEmail || 'customer'}`,
@@ -683,6 +705,10 @@ export const KeyHandoverSection = ({
                   </div>
                 )}
               </div>
+            )}
+            {/* Lockbox Send Log Timeline */}
+            {savedDeliveryMethod === 'lockbox' && (
+              <LockboxSendTimeline rentalId={rentalId} />
             )}
           </div>
 

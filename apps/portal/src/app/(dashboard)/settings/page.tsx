@@ -149,6 +149,7 @@ const Settings = () => {
     lockbox_enabled: boolean;
     lockbox_code_length: number | null;
     lockbox_notification_methods: string[];
+    lockbox_send_offset_minutes: number | null;
     verification_document_type: string;
     monthly_tier_days: number;
   }>({
@@ -200,6 +201,7 @@ const Settings = () => {
     lockbox_enabled: false,
     lockbox_code_length: null as number | null,
     lockbox_notification_methods: ['email'] as string[],
+    lockbox_send_offset_minutes: null as number | null,
     // Verification
     verification_document_type: 'driving_license',
     // Monthly tier
@@ -248,6 +250,7 @@ const Settings = () => {
         lockbox_enabled: rentalSettings.lockbox_enabled ?? false,
         lockbox_code_length: rentalSettings.lockbox_code_length ?? null,
         lockbox_notification_methods: (rentalSettings.lockbox_notification_methods as string[]) ?? ['email'],
+        lockbox_send_offset_minutes: (rentalSettings as any).lockbox_send_offset_minutes ?? null,
         // Verification
         verification_document_type: (rentalSettings as any).verification_document_type ?? 'driving_license',
         // Monthly tier
@@ -3290,6 +3293,35 @@ const Settings = () => {
                       </div>
                     </div>
                   </div>
+
+                  {/* Auto-Send Timing */}
+                  <div className="space-y-2">
+                    <Label>Auto-Send Timing</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically send lockbox code to the customer before the rental starts. Select when the code should be sent.
+                    </p>
+                    <Select
+                      value={rentalForm.lockbox_send_offset_minutes === null ? 'manual' : String(rentalForm.lockbox_send_offset_minutes)}
+                      onValueChange={(value) => {
+                        setRentalForm(prev => ({
+                          ...prev,
+                          lockbox_send_offset_minutes: value === 'manual' ? null : parseInt(value),
+                        }));
+                      }}
+                    >
+                      <SelectTrigger className="w-64">
+                        <SelectValue placeholder="Select timing" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="manual">Manual only</SelectItem>
+                        <SelectItem value="0">At rental start time</SelectItem>
+                        <SelectItem value="15">15 minutes before</SelectItem>
+                        <SelectItem value="30">30 minutes before</SelectItem>
+                        <SelectItem value="60">1 hour before</SelectItem>
+                        <SelectItem value="120">2 hours before</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
 
@@ -3302,7 +3334,8 @@ const Settings = () => {
                         lockbox_enabled: rentalForm.lockbox_enabled,
                         lockbox_code_length: rentalForm.lockbox_code_length,
                         lockbox_notification_methods: rentalForm.lockbox_notification_methods as any,
-                      });
+                        lockbox_send_offset_minutes: rentalForm.lockbox_send_offset_minutes,
+                      } as any);
                     } catch (error) {
                       console.error('Failed to update lockbox settings:', error);
                     }

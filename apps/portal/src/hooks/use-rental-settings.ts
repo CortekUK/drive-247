@@ -56,6 +56,7 @@ export interface RentalSettings {
   lockbox_code_length: number | null;
   lockbox_notification_methods: string[] | null;
   lockbox_default_instructions: string | null;
+  lockbox_send_offset_minutes: number | null;
   // Verification
   verification_document_type: string | null;
   // Monthly tier threshold
@@ -106,6 +107,7 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   lockbox_code_length: null,
   lockbox_notification_methods: ['email'],
   lockbox_default_instructions: null,
+  lockbox_send_offset_minutes: null,
   // Verification
   verification_document_type: 'driving_license',
   // Monthly tier threshold
@@ -168,6 +170,7 @@ export const useRentalSettings = () => {
           lockbox_code_length,
           lockbox_notification_methods,
           lockbox_default_instructions,
+          lockbox_send_offset_minutes,
           verification_document_type,
           monthly_tier_days
         `)
@@ -238,6 +241,7 @@ export const useRentalSettings = () => {
           lockbox_code_length,
           lockbox_notification_methods,
           lockbox_default_instructions,
+          lockbox_send_offset_minutes,
           verification_document_type,
           monthly_tier_days
         `);
