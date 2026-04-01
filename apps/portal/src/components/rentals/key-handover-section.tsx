@@ -727,12 +727,12 @@ export const KeyHandoverSection = ({
               </div>
             )}
             {/* Lockbox Countdown Ticker */}
-            {savedDeliveryMethod === 'lockbox' && (
+            {(savedDeliveryMethod === 'lockbox' || deliveryMethodChoice === 'lockbox') && (
               <LockboxCountdownTicker rentalId={rentalId} />
             )}
 
             {/* Lockbox Send Log Timeline */}
-            {savedDeliveryMethod === 'lockbox' && (
+            {(savedDeliveryMethod === 'lockbox' || deliveryMethodChoice === 'lockbox') && (
               <LockboxSendTimeline rentalId={rentalId} />
             )}
           </div>

@@ -53,8 +53,8 @@ export function LockboxCountdownTicker({ rentalId }: LockboxCountdownTickerProps
     return () => clearInterval(interval);
   }, []);
 
-  // Don't render if not a lockbox rental or no auto-send configured
-  if (!rental || rental.delivery_method !== 'lockbox' || offsetMinutes === null) {
+  // Don't render if no rental data or no auto-send configured
+  if (!rental || offsetMinutes === null) {
     return null;
   }
 
