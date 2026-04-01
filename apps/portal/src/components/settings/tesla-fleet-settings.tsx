@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, AlertCircle, Loader2, TestTube2, Zap, Unplug, Car } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, Zap, Unplug, Car } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
 import { TeslaLogo } from '@/components/icons/tesla-logo';
@@ -48,7 +48,7 @@ export function TeslaFleetSettings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tenants')
-        .select('integration_tesla_fleet, tesla_fleet_mode, tesla_fleet_token_expires_at')
+        .select('integration_tesla_fleet, tesla_fleet_token_expires_at')
         .eq('id', tenantContext!.id)
         .single();
       if (error) throw error;
@@ -73,7 +73,6 @@ export function TeslaFleetSettings() {
   });
 
   const isConnected = status?.integration_tesla_fleet || false;
-  const currentMode = status?.tesla_fleet_mode || 'test';
 
   const handleConnect = async () => {
     setConnecting(true);
@@ -170,37 +169,6 @@ export function TeslaFleetSettings() {
         <CardContent className="space-y-4">
           {isConnected ? (
             <>
-              {/* Mode Display */}
-              <div className="p-4 rounded-lg border bg-gradient-to-r from-red-50 to-orange-50 border-red-200 dark:from-red-950/30 dark:to-orange-950/30 dark:border-red-800">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <h4 className="font-medium flex items-center gap-2">
-                      {currentMode === 'live' ? (
-                        <>
-                          <Zap className="h-4 w-4 text-green-600 dark:text-green-400" />
-                          <span className="dark:text-white">Live Mode</span>
-                        </>
-                      ) : (
-                        <>
-                          <TestTube2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                          <span className="dark:text-white">Test Mode</span>
-                        </>
-                      )}
-                    </h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {currentMode === 'live'
-                        ? 'Real Supercharger charges are being tracked'
-                        : 'Using sandbox data for testing'}
-                    </p>
-                  </div>
-                  {currentMode === 'live' ? (
-                    <Badge className="bg-green-600 hover:bg-green-700 shrink-0">LIVE</Badge>
-                  ) : (
-                    <Badge className="bg-blue-600 hover:bg-blue-700 shrink-0">TEST</Badge>
-                  )}
-                </div>
-              </div>
-
               {/* Stats */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 rounded-lg border">

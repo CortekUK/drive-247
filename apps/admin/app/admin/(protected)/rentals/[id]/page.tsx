@@ -1797,22 +1797,6 @@ export default function TenantDetailsPage() {
                     </Button>
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Mode</span>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={(tenant.tesla_fleet_mode || 'test') === 'live' ? 'success' : 'warning'} className="capitalize">
-                      {tenant.tesla_fleet_mode || 'test'}
-                    </Badge>
-                    <Button
-                      variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                      disabled={modeUpdating}
-                      onClick={() => handleModeToggle('tesla_fleet', (tenant.tesla_fleet_mode || 'test') === 'test' ? 'live' : 'test')}
-                    >
-                      <ArrowRightLeft className="h-3 w-3" />
-                      Switch
-                    </Button>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </Card>
