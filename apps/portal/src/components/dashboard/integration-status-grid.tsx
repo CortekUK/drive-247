@@ -11,6 +11,7 @@ import {
   ScanFace,
   MessageSquare,
   ArrowRight,
+  Zap,
 } from "lucide-react";
 import type { ChecklistItem, IntegrationStatus } from "@/hooks/use-platform-status";
 
@@ -34,6 +35,7 @@ const iconMap: Record<string, React.ElementType> = {
   credits: CircleDollarSign,
   veriff: ScanFace,
   notifications: MessageSquare,
+  tesla_fleet: Zap,
 };
 
 const statusConfig: Record<

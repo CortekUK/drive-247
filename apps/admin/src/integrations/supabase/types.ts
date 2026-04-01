@@ -538,9 +538,13 @@ export type Database = {
       }
       chat_channel_messages: {
         Row: {
+          channel: string
           channel_id: string
           content: string
           created_at: string | null
+          external_id: string | null
+          external_status: string | null
+          from_number: string | null
           id: number
           is_read: boolean
           metadata: Json | null
@@ -549,9 +553,13 @@ export type Database = {
           sender_type: string
         }
         Insert: {
+          channel?: string
           channel_id: string
           content: string
           created_at?: string | null
+          external_id?: string | null
+          external_status?: string | null
+          from_number?: string | null
           id?: number
           is_read?: boolean
           metadata?: Json | null
@@ -560,9 +568,13 @@ export type Database = {
           sender_type: string
         }
         Update: {
+          channel?: string
           channel_id?: string
           content?: string
           created_at?: string | null
+          external_id?: string | null
+          external_status?: string | null
+          from_number?: string | null
           id?: number
           is_read?: boolean
           metadata?: Json | null
@@ -632,6 +644,7 @@ export type Database = {
           created_at: string | null
           customer_id: string
           id: string
+          last_channel: string | null
           last_message_at: string | null
           status: string
           tenant_id: string
@@ -641,6 +654,7 @@ export type Database = {
           created_at?: string | null
           customer_id: string
           id?: string
+          last_channel?: string | null
           last_message_at?: string | null
           status?: string
           tenant_id: string
@@ -650,6 +664,7 @@ export type Database = {
           created_at?: string | null
           customer_id?: string
           id?: string
+          last_channel?: string | null
           last_message_at?: string | null
           status?: string
           tenant_id?: string
@@ -6491,6 +6506,160 @@ export type Database = {
           },
         ]
       }
+      sms_message_log: {
+        Row: {
+          created_at: string | null
+          error_code: string | null
+          error_message: string | null
+          id: string
+          message_id: number | null
+          raw_payload: Json | null
+          status: string
+          twilio_sid: string
+        }
+        Insert: {
+          created_at?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          message_id?: number | null
+          raw_payload?: Json | null
+          status: string
+          twilio_sid: string
+        }
+        Update: {
+          created_at?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          message_id?: number | null
+          raw_payload?: Json | null
+          status?: string
+          twilio_sid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_message_log_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channel_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sms_unknown_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          direction: string
+          external_id: string | null
+          external_status: string | null
+          id: number
+          sender_id: string | null
+          thread_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          direction: string
+          external_id?: string | null
+          external_status?: string | null
+          id?: number
+          sender_id?: string | null
+          thread_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          direction?: string
+          external_id?: string | null
+          external_status?: string | null
+          id?: number
+          sender_id?: string | null
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_unknown_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "sms_unknown_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sms_unknown_threads: {
+        Row: {
+          created_at: string | null
+          id: string
+          last_message_at: string | null
+          linked_at: string | null
+          linked_customer_id: string | null
+          message_count: number
+          phone_number: string
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          last_message_at?: string | null
+          linked_at?: string | null
+          linked_customer_id?: string | null
+          message_count?: number
+          phone_number: string
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          last_message_at?: string | null
+          linked_at?: string | null
+          linked_customer_id?: string | null
+          message_count?: number
+          phone_number?: string
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_unknown_threads_linked_customer_id_fkey"
+            columns: ["linked_customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_unknown_threads_linked_customer_id_fkey"
+            columns: ["linked_customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "sms_unknown_threads_linked_customer_id_fkey"
+            columns: ["linked_customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "sms_unknown_threads_linked_customer_id_fkey"
+            columns: ["linked_customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "sms_unknown_threads_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_plans: {
         Row: {
           amount: number
@@ -6874,6 +7043,8 @@ export type Database = {
           contact_phone: string | null
           created_at: string | null
           currency_code: string | null
+          custom_booking_domain: string | null
+          custom_portal_domain: string | null
           dark_accent_color: string | null
           dark_background_color: string | null
           dark_header_footer_color: string | null
@@ -6901,6 +7072,7 @@ export type Database = {
           installments_enabled: boolean | null
           integration_bonzah: boolean | null
           integration_canopy: boolean | null
+          integration_tesla_fleet: boolean | null
           integration_twilio_sms: boolean | null
           integration_veriff: boolean | null
           integration_whatsapp: boolean | null
@@ -6977,6 +7149,10 @@ export type Database = {
           tax_percentage: number | null
           tenant_type: string | null
           terms_version: string | null
+          tesla_fleet_api_token: string | null
+          tesla_fleet_mode: string | null
+          tesla_fleet_refresh_token: string | null
+          tesla_fleet_token_expires_at: string | null
           thursday_close: string | null
           thursday_enabled: boolean | null
           thursday_open: string | null
@@ -6985,6 +7161,11 @@ export type Database = {
           tuesday_close: string | null
           tuesday_enabled: boolean | null
           tuesday_open: string | null
+          twilio_brand_sid: string | null
+          twilio_brand_status: string | null
+          twilio_campaign_sid: string | null
+          twilio_campaign_status: string | null
+          twilio_messaging_service_sid: string | null
           twilio_phone_number: string | null
           twilio_phone_number_sid: string | null
           twilio_subaccount_auth_token: string | null
@@ -7029,6 +7210,8 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string | null
           currency_code?: string | null
+          custom_booking_domain?: string | null
+          custom_portal_domain?: string | null
           dark_accent_color?: string | null
           dark_background_color?: string | null
           dark_header_footer_color?: string | null
@@ -7056,6 +7239,7 @@ export type Database = {
           installments_enabled?: boolean | null
           integration_bonzah?: boolean | null
           integration_canopy?: boolean | null
+          integration_tesla_fleet?: boolean | null
           integration_twilio_sms?: boolean | null
           integration_veriff?: boolean | null
           integration_whatsapp?: boolean | null
@@ -7132,6 +7316,10 @@ export type Database = {
           tax_percentage?: number | null
           tenant_type?: string | null
           terms_version?: string | null
+          tesla_fleet_api_token?: string | null
+          tesla_fleet_mode?: string | null
+          tesla_fleet_refresh_token?: string | null
+          tesla_fleet_token_expires_at?: string | null
           thursday_close?: string | null
           thursday_enabled?: boolean | null
           thursday_open?: string | null
@@ -7140,6 +7328,11 @@ export type Database = {
           tuesday_close?: string | null
           tuesday_enabled?: boolean | null
           tuesday_open?: string | null
+          twilio_brand_sid?: string | null
+          twilio_brand_status?: string | null
+          twilio_campaign_sid?: string | null
+          twilio_campaign_status?: string | null
+          twilio_messaging_service_sid?: string | null
           twilio_phone_number?: string | null
           twilio_phone_number_sid?: string | null
           twilio_subaccount_auth_token?: string | null
@@ -7184,6 +7377,8 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string | null
           currency_code?: string | null
+          custom_booking_domain?: string | null
+          custom_portal_domain?: string | null
           dark_accent_color?: string | null
           dark_background_color?: string | null
           dark_header_footer_color?: string | null
@@ -7211,6 +7406,7 @@ export type Database = {
           installments_enabled?: boolean | null
           integration_bonzah?: boolean | null
           integration_canopy?: boolean | null
+          integration_tesla_fleet?: boolean | null
           integration_twilio_sms?: boolean | null
           integration_veriff?: boolean | null
           integration_whatsapp?: boolean | null
@@ -7287,6 +7483,10 @@ export type Database = {
           tax_percentage?: number | null
           tenant_type?: string | null
           terms_version?: string | null
+          tesla_fleet_api_token?: string | null
+          tesla_fleet_mode?: string | null
+          tesla_fleet_refresh_token?: string | null
+          tesla_fleet_token_expires_at?: string | null
           thursday_close?: string | null
           thursday_enabled?: boolean | null
           thursday_open?: string | null
@@ -7295,6 +7495,11 @@ export type Database = {
           tuesday_close?: string | null
           tuesday_enabled?: boolean | null
           tuesday_open?: string | null
+          twilio_brand_sid?: string | null
+          twilio_brand_status?: string | null
+          twilio_campaign_sid?: string | null
+          twilio_campaign_status?: string | null
+          twilio_messaging_service_sid?: string | null
           twilio_phone_number?: string | null
           twilio_phone_number_sid?: string | null
           twilio_subaccount_auth_token?: string | null
@@ -7313,6 +7518,131 @@ export type Database = {
           working_hours_open?: string | null
         }
         Relationships: []
+      }
+      tesla_supercharger_charges: {
+        Row: {
+          amount: number
+          charge_date: string
+          charged_amount: number | null
+          created_at: string | null
+          currency: string | null
+          id: string
+          kwh_used: number | null
+          ledger_entry_id: string | null
+          location: string | null
+          rental_id: string | null
+          status: string | null
+          tenant_id: string
+          tesla_charge_id: string | null
+          updated_at: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          amount: number
+          charge_date: string
+          charged_amount?: number | null
+          created_at?: string | null
+          currency?: string | null
+          id?: string
+          kwh_used?: number | null
+          ledger_entry_id?: string | null
+          location?: string | null
+          rental_id?: string | null
+          status?: string | null
+          tenant_id: string
+          tesla_charge_id?: string | null
+          updated_at?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          amount?: number
+          charge_date?: string
+          charged_amount?: number | null
+          created_at?: string | null
+          currency?: string | null
+          id?: string
+          kwh_used?: number | null
+          ledger_entry_id?: string | null
+          location?: string | null
+          rental_id?: string | null
+          status?: string | null
+          tenant_id?: string
+          tesla_charge_id?: string | null
+          updated_at?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tesla_supercharger_charges_ledger_entry_id_fkey"
+            columns: ["ledger_entry_id"]
+            isOneToOne: false
+            referencedRelation: "ledger_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tesla_supercharger_charges_ledger_entry_id_fkey"
+            columns: ["ledger_entry_id"]
+            isOneToOne: false
+            referencedRelation: "view_customer_statements"
+            referencedColumns: ["entry_id"]
+          },
+          {
+            foreignKeyName: "tesla_supercharger_charges_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tesla_supercharger_charges_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "tesla_supercharger_charges_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "tesla_supercharger_charges_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tesla_supercharger_charges_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "tesla_supercharger_charges_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tesla_supercharger_charges_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "tesla_supercharger_charges_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
+          },
+        ]
       }
       testimonials: {
         Row: {
@@ -7772,6 +8102,8 @@ export type Database = {
           tax_due_date: string | null
           tenant_id: string | null
           term_months: number | null
+          tesla_fleet_enabled: boolean | null
+          tesla_fleet_vehicle_id: string | null
           updated_at: string
           vin: string | null
           warranty_end_date: string | null
@@ -7830,6 +8162,8 @@ export type Database = {
           tax_due_date?: string | null
           tenant_id?: string | null
           term_months?: number | null
+          tesla_fleet_enabled?: boolean | null
+          tesla_fleet_vehicle_id?: string | null
           updated_at?: string
           vin?: string | null
           warranty_end_date?: string | null
@@ -7888,6 +8222,8 @@ export type Database = {
           tax_due_date?: string | null
           tenant_id?: string | null
           term_months?: number | null
+          tesla_fleet_enabled?: boolean | null
+          tesla_fleet_vehicle_id?: string | null
           updated_at?: string
           vin?: string | null
           warranty_end_date?: string | null

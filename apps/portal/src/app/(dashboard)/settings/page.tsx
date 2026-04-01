@@ -42,6 +42,7 @@ import { TwilioSmsSettings } from '@/components/settings/twilio-sms-settings';
 import { WhatsAppMetaSettings } from '@/components/settings/whatsapp-meta-settings';
 import { CommunicationSettings } from '@/components/settings/communication-settings';
 import { SubscriptionSettings } from '@/components/settings/subscription-settings';
+import { TeslaFleetSettings } from '@/components/settings/tesla-fleet-settings';
 import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates-section';
 import { PricingRulesSettings } from '@/components/settings/pricing-rules-settings';
 import { InstallmentConfigDialog } from '@/components/settings/installment-config-dialog';
@@ -3538,6 +3539,7 @@ const Settings = () => {
 
               <ESignSettings />
               <BonzahSettings />
+              <TeslaFleetSettings />
 
               {/* Global Blacklist */}
               <Card>

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, AlertTriangle, Pencil, CalendarPlus, XCircle, RefreshCw, ExternalLink, Lock, FileSignature, Gauge } from 'lucide-react';
+import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, AlertTriangle, Pencil, CalendarPlus, XCircle, RefreshCw, ExternalLink, Lock, FileSignature, Gauge, Zap } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday } from 'date-fns';
 import { CustomerRental } from '@/hooks/use-customer-rentals';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,7 @@ import { ExtendRentalDialog } from './ExtendRentalDialog';
 import { CancelBookingDialog } from './CancelBookingDialog';
 import { RenewRentalDialog } from './RenewRentalDialog';
 import { RentalTimeline } from './RentalTimeline';
+import { useQuery } from '@tanstack/react-query';
 
 interface RentalCardProps {
   rental: CustomerRental;
@@ -52,6 +53,26 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showRenewDialog, setShowRenewDialog] = useState(false);
   const vehicle = rental.vehicles;
+
+  // Fetch supercharger charges for this rental (if any)
+  const { data: superchargerData } = useQuery({
+    queryKey: ['supercharger-charges-customer', rental.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tesla_supercharger_charges')
+        .select('amount, status, charged_amount')
+        .eq('rental_id', rental.id);
+      if (error) return null;
+      if (!data?.length) return null;
+      const total = data.reduce((sum: number, c: any) => sum + Number(c.amount), 0);
+      const pendingCount = data.filter((c: any) => c.status === 'pending').length;
+      const chargedTotal = data
+        .filter((c: any) => c.status === 'charged')
+        .reduce((sum: number, c: any) => sum + Number(c.charged_amount || c.amount), 0);
+      return { total, count: data.length, pendingCount, chargedTotal };
+    },
+    enabled: !!rental.id,
+  });
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
 
   // Check if booking can be edited (only Pending status)
@@ -303,6 +324,21 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                       )}
                     </span>
                   )}
+                </div>
+              )}
+
+              {/* Supercharger Charges */}
+              {superchargerData && superchargerData.count > 0 && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Zap className="h-4 w-4 text-red-500" />
+                  <span>
+                    Supercharger: {formatCurrency(superchargerData.chargedTotal || superchargerData.total, currencyCode)}
+                    {superchargerData.pendingCount > 0 && (
+                      <span className="text-amber-600 ml-1">
+                        ({superchargerData.pendingCount} pending)
+                      </span>
+                    )}
+                  </span>
                 </div>
               )}
 
