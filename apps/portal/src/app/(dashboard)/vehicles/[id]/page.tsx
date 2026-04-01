@@ -680,6 +680,7 @@ export default function VehicleDetail() {
                                 const { data, error } = await supabase.functions.invoke('tesla-fleet-api', {
                                   body: {
                                     action: 'check_vehicle',
+                                    tenantId: tenant?.id,
                                     vehicleId: id,
                                     vin: vehicle.vin,
                                   },
