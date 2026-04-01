@@ -67,6 +67,7 @@ export function TeslaFleetSettings() {
       const { data, error } = await supabase.functions.invoke('tesla-fleet-api', {
         body: {
           action: 'get_auth_url',
+          tenantId: tenantContext?.id,
           redirectUri: `${window.location.origin}/settings?tesla_callback=true`,
         },
       });
@@ -96,7 +97,7 @@ export function TeslaFleetSettings() {
     setDisconnecting(true);
     try {
       const { error } = await supabase.functions.invoke('tesla-fleet-api', {
-        body: { action: 'disconnect' },
+        body: { action: 'disconnect', tenantId: tenantContext?.id },
       });
 
       if (error) throw error;
