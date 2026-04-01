@@ -59,6 +59,7 @@ Deno.serve(async (req) => {
           customer_id,
           vehicle_id,
           tenant_id,
+          approved_at,
           customers!rentals_customer_id_fkey (
             id, name, email, phone
           ),
@@ -68,7 +69,9 @@ Deno.serve(async (req) => {
         `)
         .eq("tenant_id", tenant.id)
         .eq("delivery_method", "lockbox")
+        .eq("approval_status", "approved")
         .is("lockbox_sent_at", null)
+        .not("approved_at", "is", null)
         .in("status", ["Pending", "Active", "Approved"]);
 
       if (rentalError) {
@@ -80,10 +83,10 @@ Deno.serve(async (req) => {
 
       for (const rental of rentals) {
         try {
-          // Calculate the send time: start_date + pickup_time - offset
-          const pickupTime = rental.pickup_time || "09:00";
-          const sendAt = new Date(`${rental.start_date}T${pickupTime}`);
-          sendAt.setMinutes(sendAt.getMinutes() - offsetMinutes);
+          // Calculate the send time: approved_at + offset minutes
+          if (!rental.approved_at) continue;
+          const approvedAt = new Date(rental.approved_at);
+          const sendAt = new Date(approvedAt.getTime() + offsetMinutes * 60 * 1000);
 
           // Skip if send time hasn't arrived yet
           if (sendAt > now) continue;

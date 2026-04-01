@@ -3354,6 +3354,7 @@ const RentalDetail = () => {
           vehicleReg={rental?.vehicles?.reg || ''}
           deliveryAddress={rental?.delivery_address || rental?.pickup_location || null}
           bookingRef={rental?.id?.slice(0, 8)?.toUpperCase() || ''}
+          approvalStatus={rental?.approval_status || null}
         />
       )}
 
@@ -4991,6 +4992,7 @@ const RentalDetail = () => {
                   const rentalUpdateData: any = {
                     approval_status: 'approved',
                     payment_status: 'fulfilled',
+                    approved_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
                   };
 

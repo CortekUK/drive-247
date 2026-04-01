@@ -61,6 +61,7 @@ interface KeyHandoverSectionProps {
   vehicleReg?: string;
   deliveryAddress?: string | null;
   bookingRef?: string;
+  approvalStatus?: string | null;
 }
 
 export const KeyHandoverSection = ({
@@ -79,6 +80,7 @@ export const KeyHandoverSection = ({
   vehicleReg = '',
   deliveryAddress = null,
   bookingRef = '',
+  approvalStatus = null,
 }: KeyHandoverSectionProps) => {
   const {
     givingHandover,
@@ -435,7 +437,7 @@ export const KeyHandoverSection = ({
       </CardHeader>
       <CardContent>
         {/* Lockbox Countdown Ticker — prominent at the top, only for approved/active lockbox rentals */}
-        {(savedDeliveryMethod === 'lockbox' || (showLockboxOption && deliveryMethodChoice === 'lockbox')) && !givingCompleted && (
+        {(savedDeliveryMethod === 'lockbox' || (showLockboxOption && deliveryMethodChoice === 'lockbox')) && approvalStatus === 'approved' && !givingCompleted && (
           <div className="mb-6">
             <LockboxCountdownTicker rentalId={rentalId} />
           </div>
