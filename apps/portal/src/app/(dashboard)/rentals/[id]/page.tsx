@@ -78,7 +78,7 @@ interface Rental {
   cancellation_requested?: boolean;
   customer_id?: string;
   customers: { id: string; name: string; email?: string; phone?: string | null };
-  vehicles: { id: string; reg: string; make: string; model: string; status?: string; lockbox_code?: string | null; lockbox_instructions?: string | null; daily_rent?: number | null; weekly_rent?: number | null; monthly_rent?: number | null };
+  vehicles: { id: string; reg: string; make: string; model: string; status?: string; lockbox_code?: string | null; lockbox_instructions?: string | null; daily_rent?: number | null; weekly_rent?: number | null; monthly_rent?: number | null; tesla_fleet_enabled?: boolean };
   // Location fields
   pickup_location?: string | null;
   pickup_location_id?: string | null;
@@ -305,7 +305,7 @@ const RentalDetail = () => {
         .select(`
           *,
           customers!rentals_customer_id_fkey(id, name, email, phone),
-          vehicles!rentals_vehicle_id_fkey(id, reg, make, model, status, lockbox_code, lockbox_instructions, daily_rent, weekly_rent, monthly_rent)
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model, status, lockbox_code, lockbox_instructions, daily_rent, weekly_rent, monthly_rent, tesla_fleet_enabled)
         `)
         .eq("id", id)
         .eq("tenant_id", tenant.id)
@@ -1552,6 +1552,23 @@ const RentalDetail = () => {
             </p>
             {/* Key Status Badges */}
             <div className="flex flex-wrap gap-2 mt-2">
+              {/* Tesla Fleet indicator */}
+              {rental.vehicles?.tesla_fleet_enabled && (
+                <Badge
+                  variant="outline"
+                  className="bg-red-500/10 text-red-600 border-red-500/30 gap-1"
+                >
+                  <TeslaLogo size={12} className="text-red-500" />
+                  Supercharger Tracking
+                  {teslaCharges.chargeCount > 0 && (
+                    <span className="ml-1 text-xs font-normal">
+                      · {teslaCharges.chargeCount} charge{teslaCharges.chargeCount !== 1 ? 's' : ''} (${teslaCharges.totalAmount.toFixed(2)})
+                    </span>
+                  )}
+                </Badge>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2 mt-1">
               <Badge
                 variant="outline"
                 className={`cursor-pointer transition-colors ${
