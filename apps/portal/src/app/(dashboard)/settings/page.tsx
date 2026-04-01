@@ -2327,32 +2327,21 @@ const Settings = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-3">
-                <Label className="text-sm">Hours</Label>
+                <Label className="text-sm">Buffer time</Label>
                 <Input
-                  type="number"
-                  min={0}
-                  max={72}
-                  value={Math.floor(rentalForm.buffer_time_minutes / 60)}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={rentalForm.buffer_time_minutes || ''}
                   onChange={(e) => {
-                    const hours = Math.min(72, Math.max(0, parseInt(e.target.value) || 0));
-                    const currentMins = rentalForm.buffer_time_minutes % 60;
-                    setRentalForm(prev => ({ ...prev, buffer_time_minutes: hours * 60 + currentMins }));
+                    const raw = e.target.value.replace(/[^0-9]/g, '');
+                    const val = raw === '' ? 0 : Math.min(4320, parseInt(raw));
+                    setRentalForm(prev => ({ ...prev, buffer_time_minutes: val }));
                   }}
-                  className="w-20"
+                  placeholder="e.g. 30"
+                  className="w-32"
                 />
-                <Label className="text-sm">Minutes</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={59}
-                  value={rentalForm.buffer_time_minutes % 60}
-                  onChange={(e) => {
-                    const mins = Math.min(59, Math.max(0, parseInt(e.target.value) || 0));
-                    const currentHours = Math.floor(rentalForm.buffer_time_minutes / 60);
-                    setRentalForm(prev => ({ ...prev, buffer_time_minutes: currentHours * 60 + mins }));
-                  }}
-                  className="w-20"
-                />
+                <span className="text-sm text-muted-foreground">minutes</span>
               </div>
               <p className="text-sm text-muted-foreground">
                 {rentalForm.buffer_time_minutes > 0
