@@ -435,7 +435,7 @@ export const KeyHandoverSection = ({
       </CardHeader>
       <CardContent>
         {/* Lockbox Countdown Ticker — prominent at the top, only for approved/active lockbox rentals */}
-        {savedDeliveryMethod === 'lockbox' && ['Approved', 'Active', 'Pending'].includes(rentalStatus) && (
+        {savedDeliveryMethod === 'lockbox' && rentalStatus === 'Approved' && !givingCompleted && (
           <div className="mb-6">
             <LockboxCountdownTicker rentalId={rentalId} />
           </div>
