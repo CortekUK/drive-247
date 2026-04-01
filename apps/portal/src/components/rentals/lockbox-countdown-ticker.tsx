@@ -27,7 +27,7 @@ function formatCountdown(ms: number): { value: string; unit: string } {
 }
 
 export function LockboxCountdownTicker({ rentalId }: LockboxCountdownTickerProps) {
-  const { rentalSettings } = useRentalSettings();
+  const { settings: rentalSettings } = useRentalSettings();
   const [now, setNow] = useState(() => Date.now());
 
   const { data: rental } = useQuery({
