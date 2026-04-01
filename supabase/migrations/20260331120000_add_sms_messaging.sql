@@ -32,7 +32,7 @@ ALTER TABLE chat_channels
 -- NEW TABLE: SMS Unknown Threads
 -- For inbound SMS from phone numbers that don't match any customer
 -- ============================================================================
-CREATE TABLE sms_unknown_threads (
+CREATE TABLE IF NOT EXISTS sms_unknown_threads (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     phone_number TEXT NOT NULL,
@@ -45,15 +45,15 @@ CREATE TABLE sms_unknown_threads (
     UNIQUE(tenant_id, phone_number)
 );
 
-CREATE INDEX idx_sms_unknown_tenant ON sms_unknown_threads(tenant_id);
-CREATE INDEX idx_sms_unknown_phone ON sms_unknown_threads(tenant_id, phone_number);
-CREATE INDEX idx_sms_unknown_unlinked ON sms_unknown_threads(tenant_id) WHERE linked_customer_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_sms_unknown_tenant ON sms_unknown_threads(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_sms_unknown_phone ON sms_unknown_threads(tenant_id, phone_number);
+CREATE INDEX IF NOT EXISTS idx_sms_unknown_unlinked ON sms_unknown_threads(tenant_id) WHERE linked_customer_id IS NULL;
 
 -- ============================================================================
 -- NEW TABLE: SMS Message Log
 -- Audit trail for Twilio delivery status webhooks
 -- ============================================================================
-CREATE TABLE sms_message_log (
+CREATE TABLE IF NOT EXISTS sms_message_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id BIGINT REFERENCES chat_channel_messages(id) ON DELETE SET NULL,
     twilio_sid TEXT NOT NULL,
@@ -64,14 +64,14 @@ CREATE TABLE sms_message_log (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_sms_log_message ON sms_message_log(message_id);
-CREATE INDEX idx_sms_log_twilio_sid ON sms_message_log(twilio_sid);
+CREATE INDEX IF NOT EXISTS idx_sms_log_message ON sms_message_log(message_id);
+CREATE INDEX IF NOT EXISTS idx_sms_log_twilio_sid ON sms_message_log(twilio_sid);
 
 -- ============================================================================
 -- NEW TABLE: SMS Unknown Messages
 -- Messages from unknown numbers (no channel_id since no customer match)
 -- ============================================================================
-CREATE TABLE sms_unknown_messages (
+CREATE TABLE IF NOT EXISTS sms_unknown_messages (
     id BIGSERIAL PRIMARY KEY,
     thread_id UUID NOT NULL REFERENCES sms_unknown_threads(id) ON DELETE CASCADE,
     direction TEXT NOT NULL CHECK (direction IN ('inbound', 'outbound')),
@@ -82,13 +82,13 @@ CREATE TABLE sms_unknown_messages (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_sms_unknown_msgs_thread ON sms_unknown_messages(thread_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sms_unknown_msgs_thread ON sms_unknown_messages(thread_id, created_at DESC);
 
 -- ============================================================================
 -- INDEXES ON ALTERED TABLES
 -- ============================================================================
-CREATE INDEX idx_chat_messages_channel ON chat_channel_messages(channel);
-CREATE INDEX idx_chat_messages_external_id ON chat_channel_messages(external_id) WHERE external_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_channel_messages(channel);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_external_id ON chat_channel_messages(external_id) WHERE external_id IS NOT NULL;
 
 -- ============================================================================
 -- TENANT COLUMNS FOR 10DLC REGISTRATION
@@ -109,19 +109,23 @@ ALTER TABLE sms_message_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sms_unknown_messages ENABLE ROW LEVEL SECURITY;
 
 -- Service role has full access
+DROP POLICY IF EXISTS "Service role has full access to sms_unknown_threads" ON sms_unknown_threads;
 CREATE POLICY "Service role has full access to sms_unknown_threads"
     ON sms_unknown_threads FOR ALL TO service_role
     USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Service role has full access to sms_message_log" ON sms_message_log;
 CREATE POLICY "Service role has full access to sms_message_log"
     ON sms_message_log FOR ALL TO service_role
     USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Service role has full access to sms_unknown_messages" ON sms_unknown_messages;
 CREATE POLICY "Service role has full access to sms_unknown_messages"
     ON sms_unknown_messages FOR ALL TO service_role
     USING (true) WITH CHECK (true);
 
 -- Portal users can read their tenant's unknown threads
+DROP POLICY IF EXISTS "Portal users can read tenant unknown threads" ON sms_unknown_threads;
 CREATE POLICY "Portal users can read tenant unknown threads"
     ON sms_unknown_threads FOR SELECT TO authenticated
     USING (
@@ -131,6 +135,7 @@ CREATE POLICY "Portal users can read tenant unknown threads"
     );
 
 -- Portal users can update their tenant's unknown threads (link to customer)
+DROP POLICY IF EXISTS "Portal users can update tenant unknown threads" ON sms_unknown_threads;
 CREATE POLICY "Portal users can update tenant unknown threads"
     ON sms_unknown_threads FOR UPDATE TO authenticated
     USING (
@@ -145,6 +150,7 @@ CREATE POLICY "Portal users can update tenant unknown threads"
     );
 
 -- Portal users can read unknown messages for their tenant's threads
+DROP POLICY IF EXISTS "Portal users can read tenant unknown messages" ON sms_unknown_messages;
 CREATE POLICY "Portal users can read tenant unknown messages"
     ON sms_unknown_messages FOR SELECT TO authenticated
     USING (
@@ -157,6 +163,7 @@ CREATE POLICY "Portal users can read tenant unknown messages"
     );
 
 -- Portal users can read SMS logs for messages in their tenant's channels
+DROP POLICY IF EXISTS "Portal users can read tenant sms logs" ON sms_message_log;
 CREATE POLICY "Portal users can read tenant sms logs"
     ON sms_message_log FOR SELECT TO authenticated
     USING (
@@ -170,12 +177,14 @@ CREATE POLICY "Portal users can read tenant sms logs"
     );
 
 -- Super admin access
+DROP POLICY IF EXISTS "Super admins can read all unknown threads" ON sms_unknown_threads;
 CREATE POLICY "Super admins can read all unknown threads"
     ON sms_unknown_threads FOR SELECT TO authenticated
     USING (
         EXISTS (SELECT 1 FROM app_users au WHERE au.auth_user_id = auth.uid() AND au.is_super_admin = true)
     );
 
+DROP POLICY IF EXISTS "Super admins can read all unknown messages" ON sms_unknown_messages;
 CREATE POLICY "Super admins can read all unknown messages"
     ON sms_unknown_messages FOR SELECT TO authenticated
     USING (
@@ -185,6 +194,7 @@ CREATE POLICY "Super admins can read all unknown messages"
 -- ============================================================================
 -- UPDATED_AT TRIGGERS
 -- ============================================================================
+DROP TRIGGER IF EXISTS set_sms_unknown_threads_updated_at ON sms_unknown_threads;
 CREATE TRIGGER set_sms_unknown_threads_updated_at
     BEFORE UPDATE ON sms_unknown_threads
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();

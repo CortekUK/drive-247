@@ -38,3 +38,9 @@ verify_jwt = false
 
 [functions.send-lockbox-scheduled]
 verify_jwt = false
+
+[functions.refresh-deposit-holds]
+verify_jwt = false
+
+[functions.send-return-reminders]
+verify_jwt = false

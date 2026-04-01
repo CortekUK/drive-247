@@ -3,6 +3,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
+import { calculateTotalMileageAllowance, getMileageTier, isUnlimitedMileage } from "@/lib/mileage-utils";
+
+export interface MileageSummary {
+  pickupMileage: number;
+  returnMileage: number;
+  milesDriven: number;
+  allowedMileage: number | null; // null = unlimited
+  excessMiles: number;
+  excessRate: number | null;
+  chargeAmount: number | null;
+  tier: string;
+  isUnlimited: boolean;
+}
 
 export type HandoverType = "giving" | "receiving";
 
@@ -332,13 +345,35 @@ export function useKeyHandover(rentalId: string | undefined) {
             // Don't throw - notification failure shouldn't block the handover
           }
 
-          return { type, becameActive: true, depositRefunded: false, depositAmount: 0 };
+          // Place deposit hold on customer's saved card
+          let depositHoldResult: any = null;
+          try {
+            const { data: holdData, error: holdError } = await supabase.functions.invoke('place-deposit-hold', {
+              body: { rentalId, tenantId: tenant?.id },
+            });
+            if (holdError) {
+              console.warn('[KEY-HANDOVER] Deposit hold failed:', holdError);
+            } else {
+              depositHoldResult = holdData;
+              console.log('[KEY-HANDOVER] Deposit hold result:', holdData);
+            }
+          } catch (holdErr) {
+            console.warn('[KEY-HANDOVER] Deposit hold error (non-blocking):', holdErr);
+          }
+
+          return {
+            type,
+            becameActive: true,
+            depositRefunded: false,
+            depositAmount: depositHoldResult?.amount || 0,
+            depositHoldPlaced: depositHoldResult?.success && !depositHoldResult?.skipped && !depositHoldResult?.alreadyHeld,
+          };
         }
 
         return { type, becameActive: false, depositRefunded: false, depositAmount: 0 };
       }
 
-      // If receiving key, update rental status to Closed, vehicle to Available, and refund security deposit
+      // If receiving key, update rental status to Closed, vehicle to Available
       if (type === "receiving") {
         // Get the rental details including vehicle_id and tenant_id
         const { data: rental } = await supabase
@@ -363,7 +398,19 @@ export function useKeyHandover(rentalId: string | undefined) {
             .eq("id", rental.vehicle_id);
         }
 
-        // Security deposit refund is handled manually by admin — not auto-refunded on key return
+        // Release deposit hold (if one exists)
+        try {
+          const { data: releaseData, error: releaseError } = await supabase.functions.invoke('release-deposit-hold', {
+            body: { rentalId, tenantId: rental?.tenant_id || tenant?.id },
+          });
+          if (releaseError) {
+            console.warn('[KEY-HANDOVER] Deposit hold release failed:', releaseError);
+          } else {
+            console.log('[KEY-HANDOVER] Deposit hold release result:', releaseData);
+          }
+        } catch (releaseErr) {
+          console.warn('[KEY-HANDOVER] Deposit hold release error (non-blocking):', releaseErr);
+        }
 
         // Send rental completed notification
         try {
@@ -383,7 +430,7 @@ export function useKeyHandover(rentalId: string | undefined) {
 
       return { type, becameActive: false, depositRefunded: false, depositAmount: 0 };
     },
-    onSuccess: ({ type, becameActive, depositRefunded, depositAmount }) => {
+    onSuccess: ({ type, becameActive, depositRefunded, depositAmount, depositHoldPlaced }: any) => {
       queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["key-handover-status", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["key-return-status", rentalId] });
@@ -401,16 +448,17 @@ export function useKeyHandover(rentalId: string | undefined) {
       queryClient.invalidateQueries({ queryKey: ["excess-mileage-charge", rentalId] });
 
       if (type === "giving") {
+        const depositMsg = depositHoldPlaced ? ` Deposit hold of $${depositAmount} placed on card.` : '';
         toast({
           title: "Key Handed Over",
           description: becameActive
-            ? "Rental is now active."
+            ? `Rental is now active.${depositMsg}`
             : "Key handover recorded. Rental will become active once approved.",
         });
       } else {
         toast({
           title: "Key Received",
-          description: "Rental is now closed.",
+          description: "Rental is now closed. Deposit hold released.",
         });
       }
     },
@@ -583,12 +631,83 @@ export function useKeyHandover(rentalId: string | undefined) {
     },
   });
 
+  // Fetch mileage summary after return — used to show the excess mileage popup
+  const fetchMileageSummary = async (): Promise<MileageSummary | null> => {
+    if (!rentalId) return null;
+
+    // Fetch both handovers
+    const { data: ho } = await supabase
+      .from("rental_key_handovers")
+      .select("handover_type, mileage")
+      .eq("rental_id", rentalId);
+
+    const pickupMileage = ho?.find((h) => h.handover_type === "giving")?.mileage;
+    const returnMileage = ho?.find((h) => h.handover_type === "receiving")?.mileage;
+
+    if (!pickupMileage || !returnMileage) return null;
+
+    // Fetch rental dates + mileage overrides
+    const { data: rental } = await supabase
+      .from("rentals")
+      .select("vehicle_id, start_date, end_date, daily_mileage_override, weekly_mileage_override, monthly_mileage_override, excess_mileage_rate_override")
+      .eq("id", rentalId)
+      .single();
+
+    if (!rental?.vehicle_id) return null;
+
+    // Fetch vehicle mileage config
+    const { data: vehicle } = await supabase
+      .from("vehicles")
+      .select("daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate")
+      .eq("id", rental.vehicle_id)
+      .single();
+
+    if (!vehicle) return null;
+
+    const effectiveVehicle = {
+      daily_mileage: rental.daily_mileage_override ?? vehicle.daily_mileage,
+      weekly_mileage: rental.weekly_mileage_override ?? vehicle.weekly_mileage,
+      monthly_mileage: rental.monthly_mileage_override ?? vehicle.monthly_mileage,
+    };
+    const effectiveExcessRate = rental.excess_mileage_rate_override ?? vehicle.excess_mileage_rate;
+
+    let rentalDays = 1;
+    if (rental.start_date && rental.end_date) {
+      rentalDays = Math.max(1, Math.ceil(
+        (new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)
+      ));
+    }
+
+    const monthlyTierDays = tenant?.monthly_tier_days ?? 30;
+    const unlimited = isUnlimitedMileage(effectiveVehicle);
+    const allowedMileage = calculateTotalMileageAllowance(effectiveVehicle, rentalDays, monthlyTierDays);
+    const tier = getMileageTier(rentalDays, monthlyTierDays);
+    const milesDriven = returnMileage - pickupMileage;
+    const excessMiles = allowedMileage !== null ? Math.max(0, milesDriven - allowedMileage) : 0;
+    const chargeAmount = excessMiles > 0 && effectiveExcessRate
+      ? Math.round(excessMiles * effectiveExcessRate * 100) / 100
+      : null;
+
+    return {
+      pickupMileage,
+      returnMileage,
+      milesDriven,
+      allowedMileage,
+      excessMiles,
+      excessRate: effectiveExcessRate,
+      chargeAmount,
+      tier,
+      isUnlimited: unlimited,
+    };
+  };
+
   return {
     handovers,
     isLoading,
     getHandover,
     givingHandover: getHandover("giving"),
     receivingHandover: getHandover("receiving"),
+    fetchMileageSummary,
     uploadPhoto,
     deletePhoto,
     markKeyHanded,

@@ -152,6 +152,9 @@ const Settings = () => {
     lockbox_send_offset_minutes: number | null;
     verification_document_type: string;
     monthly_tier_days: number;
+    buffer_time_minutes: number;
+    return_reminder_enabled: boolean;
+    return_reminder_hours: number;
   }>({
     minimum_rental_age: '',
     tax_enabled: false,
@@ -206,6 +209,11 @@ const Settings = () => {
     verification_document_type: 'driving_license',
     // Monthly tier
     monthly_tier_days: 30,
+    // Buffer time between rentals
+    buffer_time_minutes: 0,
+    // Return reminder
+    return_reminder_enabled: false,
+    return_reminder_hours: 24,
   });
 
   // Sync rental form with loaded settings
@@ -255,6 +263,11 @@ const Settings = () => {
         verification_document_type: (rentalSettings as any).verification_document_type ?? 'driving_license',
         // Monthly tier
         monthly_tier_days: rentalSettings.monthly_tier_days ?? 30,
+        // Buffer time
+        buffer_time_minutes: rentalSettings.buffer_time_minutes ?? 0,
+        // Return reminder
+        return_reminder_enabled: (rentalSettings as any).return_reminder_enabled ?? false,
+        return_reminder_hours: (rentalSettings as any).return_reminder_hours ?? 24,
       });
     }
   }, [rentalSettings]);
@@ -417,7 +430,10 @@ const Settings = () => {
       rentalForm.min_rental_hours !== (rs.min_rental_hours ?? 1) ||
       rentalForm.max_rental_days !== (rs.max_rental_days ?? 90) ||
       rentalForm.verification_document_type !== ((rs as any).verification_document_type ?? 'driving_license') ||
-      rentalForm.monthly_tier_days !== (rs.monthly_tier_days ?? 30)
+      rentalForm.monthly_tier_days !== (rs.monthly_tier_days ?? 30) ||
+      rentalForm.buffer_time_minutes !== (rs.buffer_time_minutes ?? 0) ||
+      rentalForm.return_reminder_enabled !== ((rs as any).return_reminder_enabled ?? false) ||
+      rentalForm.return_reminder_hours !== ((rs as any).return_reminder_hours ?? 24)
     );
   }, [rentalForm, rentalSettings]);
 
@@ -2298,6 +2314,146 @@ const Settings = () => {
             </CardContent>
           </Card>
 
+          {/* Buffer Time Between Rentals Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                Buffer Time Between Rentals
+              </CardTitle>
+              <CardDescription>
+                Set a cooldown period after each rental before the vehicle becomes available again
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Label className="text-sm">Buffer time</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={480}
+                  value={rentalForm.buffer_time_minutes}
+                  onChange={(e) => setRentalForm(prev => ({ ...prev, buffer_time_minutes: parseInt(e.target.value) || 0 }))}
+                  className="w-24"
+                />
+                <span className="text-sm text-muted-foreground">minutes</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {rentalForm.buffer_time_minutes > 0
+                  ? `Vehicles will be hidden from booking results for ${rentalForm.buffer_time_minutes} minutes after a rental ends. This gives you time to inspect and prepare the vehicle.`
+                  : 'No buffer time — vehicles are available immediately after a rental ends.'}
+              </p>
+              {canEditSettings('rental') && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      await updateRentalSettings({ buffer_time_minutes: rentalForm.buffer_time_minutes } as any);
+                      await refetchTenant();
+                    } catch (error) {
+                      console.error('Failed to update buffer time setting:', error);
+                    }
+                  }}
+                  disabled={isUpdatingRentalSettings}
+                  className="flex items-center gap-2"
+                >
+                  {isUpdatingRentalSettings ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Return Reminder Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bell className="h-5 w-5 text-primary" />
+                    Return Reminder
+                  </CardTitle>
+                  <CardDescription className="mt-1.5">
+                    Automatically notify customers before their rental return date
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="return-reminder-toggle" className="text-sm">
+                    {rentalForm.return_reminder_enabled ? 'Enabled' : 'Disabled'}
+                  </Label>
+                  <Switch
+                    id="return-reminder-toggle"
+                    checked={rentalForm.return_reminder_enabled}
+                    onCheckedChange={(checked) =>
+                      setRentalForm(prev => ({ ...prev, return_reminder_enabled: checked }))
+                    }
+                    disabled={!canEditSettings('rental')}
+                  />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {rentalForm.return_reminder_enabled ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Label className="text-sm">Send reminder</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={168}
+                      value={rentalForm.return_reminder_hours}
+                      onChange={(e) => setRentalForm(prev => ({
+                        ...prev,
+                        return_reminder_hours: Math.max(1, Math.min(168, parseInt(e.target.value) || 24))
+                      }))}
+                      className="w-20"
+                      disabled={!canEditSettings('rental')}
+                    />
+                    <span className="text-sm text-muted-foreground">hours before return</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Customers will receive an email{' '}
+                    {rentalForm.return_reminder_hours >= 24
+                      ? `${Math.floor(rentalForm.return_reminder_hours / 24)} day${Math.floor(rentalForm.return_reminder_hours / 24) !== 1 ? 's' : ''}${rentalForm.return_reminder_hours % 24 > 0 ? ` ${rentalForm.return_reminder_hours % 24}h` : ''}`
+                      : `${rentalForm.return_reminder_hours} hours`}{' '}
+                    before their scheduled return. SMS will also be sent if Twilio is configured.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Enable to automatically send return reminders to customers via email and SMS.
+                </p>
+              )}
+              {canEditSettings('rental') && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      await updateRentalSettings({
+                        return_reminder_enabled: rentalForm.return_reminder_enabled,
+                        return_reminder_hours: rentalForm.return_reminder_hours,
+                      } as any);
+                      await refetchTenant();
+                    } catch (error) {
+                      console.error('Failed to update return reminder settings:', error);
+                    }
+                  }}
+                  disabled={isUpdatingRentalSettings}
+                  className="flex items-center gap-2"
+                >
+                  {isUpdatingRentalSettings ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Tax Configuration Card */}
           <Card>
             <CardHeader>
@@ -3379,6 +3535,7 @@ const Settings = () => {
                         <li>Max Rental: 90 days</li>
                         <li>Lockbox: Disabled</li>
                         <li>Monthly Tier: 30 days</li>
+                        <li>Buffer Time: 0 minutes</li>
                       </ul>
                     </div>
                   </AlertDialogHeader>
@@ -3420,6 +3577,7 @@ const Settings = () => {
                             lockbox_code_length: 4,
                             lockbox_notification_methods: ['email'],
                             monthly_tier_days: 30,
+                            buffer_time_minutes: 0,
                           };
                           await updateRentalSettings(defaults);
                           setRentalForm({
@@ -3457,6 +3615,7 @@ const Settings = () => {
                             security_deposit_enabled: true,
                             verification_document_type: 'driving_license',
                             monthly_tier_days: 30,
+                            buffer_time_minutes: 0,
                           });
                           toast({ title: "Settings Reset", description: "All booking settings have been restored to defaults." });
                         } catch (error: any) {

@@ -16,7 +16,7 @@ serve(async (req) => {
   }
 
   try {
-    const { bookingId, rentalId, customerEmail, customerName, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId, successUrl, cancelUrl, targetCategories, source } = await req.json()
+    const { bookingId, rentalId, customerEmail, customerName, customerId, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId, successUrl, cancelUrl, targetCategories, source } = await req.json()
 
     // Get tenant slug from header or body
     const slug = tenantSlug || req.headers.get('x-tenant-slug')
@@ -107,6 +107,54 @@ serve(async (req) => {
 
     console.log('Checkout session - tenantId:', tenantId, 'mode:', stripeMode, 'connectAccount:', stripeAccountId)
 
+    // Create or reuse Stripe Customer so we can save the payment method for deposit holds
+    const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
+    let stripeCustomerId: string | null = null;
+
+    // Try to get customer ID from body or from rental
+    let resolvedCustomerId = customerId;
+    if (!resolvedCustomerId && referenceId) {
+      const { data: rental } = await supabaseClient
+        .from('rentals')
+        .select('customer_id')
+        .eq('id', referenceId)
+        .single();
+      resolvedCustomerId = rental?.customer_id;
+    }
+
+    if (resolvedCustomerId) {
+      // Check if customer already has a Stripe customer ID
+      const { data: existingCustomer } = await supabaseClient
+        .from('customers')
+        .select('stripe_customer_id')
+        .eq('id', resolvedCustomerId)
+        .single();
+
+      if (existingCustomer?.stripe_customer_id) {
+        stripeCustomerId = existingCustomer.stripe_customer_id;
+        console.log('Using existing Stripe customer:', stripeCustomerId);
+      } else {
+        // Create new Stripe customer
+        const customer = await stripe.customers.create({
+          email: customerEmail,
+          name: customerName,
+          metadata: {
+            drive247_customer_id: resolvedCustomerId,
+            tenant_id: tenantId || '',
+          },
+        }, stripeOptions);
+
+        stripeCustomerId = customer.id;
+        console.log('Created new Stripe customer:', stripeCustomerId);
+
+        // Save Stripe customer ID to our database
+        await supabaseClient
+          .from('customers')
+          .update({ stripe_customer_id: stripeCustomerId })
+          .eq('id', resolvedCustomerId);
+      }
+    }
+
     // Create Stripe Checkout Session
     const sessionConfig: any = {
       payment_method_types: ['card'],
@@ -124,7 +172,12 @@ serve(async (req) => {
         },
       ],
       mode: 'payment',
-      customer_email: customerEmail,
+      // Use Stripe Customer if available, otherwise fall back to email
+      ...(stripeCustomerId ? { customer: stripeCustomerId } : { customer_email: customerEmail }),
+      // Save payment method for future deposit holds
+      payment_intent_data: {
+        setup_future_usage: 'off_session',
+      },
       client_reference_id: referenceId,
       success_url: successUrl || (rentalId
         ? `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rentalId}`
@@ -146,7 +199,6 @@ serve(async (req) => {
     }
 
     // For direct charges: create checkout session on connected account
-    const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
     if (stripeAccountId) {
       console.log(`Creating checkout session on connected account (${stripeMode} mode):`, stripeAccountId)
     } else {

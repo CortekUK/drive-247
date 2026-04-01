@@ -154,6 +154,9 @@ export interface Tenant {
   // Maintenance banner
   maintenance_banner_enabled: boolean | null;
   maintenance_banner_message: string | null;
+
+  // Buffer time between rentals (minutes)
+  buffer_time_minutes: number | null;
 }
 
 interface TenantContextType {
@@ -423,7 +426,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           weekend_surcharge_percent,
           weekend_days,
           maintenance_banner_enabled,
-          maintenance_banner_message
+          maintenance_banner_message,
+          buffer_time_minutes
         `)
         .eq('slug', slug)
         .eq('status', 'active')

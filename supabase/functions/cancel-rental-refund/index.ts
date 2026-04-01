@@ -46,7 +46,7 @@ serve(async (req) => {
     // Get rental details (separate query to avoid join issues)
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
-      .select("id, status, customer_id, vehicle_id, monthly_amount, tenant_id")
+      .select("id, status, customer_id, vehicle_id, monthly_amount, tenant_id, deposit_hold_status, deposit_hold_payment_intent_id")
       .eq("id", rentalId)
       .single();
 
@@ -280,6 +280,17 @@ serve(async (req) => {
           updated_at: new Date().toISOString(),
         })
         .eq("id", rental.vehicle_id);
+    }
+
+    // Release deposit hold if one exists
+    if (rental.deposit_hold_status === 'held' && rental.deposit_hold_payment_intent_id) {
+      try {
+        await stripe.paymentIntents.cancel(rental.deposit_hold_payment_intent_id, stripeOptions);
+        await supabase.from("rentals").update({ deposit_hold_status: "released" }).eq("id", rentalId);
+        console.log("Released deposit hold:", rental.deposit_hold_payment_intent_id);
+      } catch (holdErr: any) {
+        console.warn("Failed to release deposit hold:", holdErr.message);
+      }
     }
 
     // Update payment record if exists

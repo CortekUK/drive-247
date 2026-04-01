@@ -435,6 +435,40 @@ const CreateRental = () => {
   const watchedPickupLocation = form.watch("pickup_location");
   const watchedPromoCode = form.watch("promo_code");
 
+  // Buffer time: check if selected vehicle has a recently completed rental still in cooldown
+  const bufferMinutes = tenant?.buffer_time_minutes || 0;
+  const { data: bufferWarning } = useQuery({
+    queryKey: ['vehicle-buffer-check', tenant?.id, selectedVehicleId],
+    queryFn: async () => {
+      if (!selectedVehicleId || !tenant?.id || bufferMinutes <= 0) return null;
+
+      // Get the most recent completed rental for this vehicle
+      const { data } = await supabase
+        .from("rentals")
+        .select("id, end_date, dropoff_time")
+        .eq("tenant_id", tenant.id)
+        .eq("vehicle_id", selectedVehicleId)
+        .eq("status", "Completed")
+        .order("end_date", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!data) return null;
+
+      const rentalEnd = new Date(`${data.end_date}T${data.dropoff_time || '23:59'}`);
+      const bufferDeadline = new Date(rentalEnd.getTime() + bufferMinutes * 60 * 1000);
+      const now = new Date();
+
+      if (now < bufferDeadline) {
+        const remainingMs = bufferDeadline.getTime() - now.getTime();
+        const remainingMin = Math.ceil(remainingMs / 60000);
+        return { inBuffer: true, remainingMin, bufferDeadline };
+      }
+      return null;
+    },
+    enabled: !!selectedVehicleId && !!tenant?.id && bufferMinutes > 0,
+  });
+
   // Auto-determine rental period type from date range
   const mtd = tenant?.monthly_tier_days ?? 30;
   useEffect(() => {
@@ -2249,6 +2283,14 @@ const CreateRental = () => {
                             <FormDescription className="flex items-center gap-2">
                               Only available vehicles are shown
                             </FormDescription>
+                            {bufferWarning?.inBuffer && field.value && (
+                              <Alert variant="default" className="mt-2 border-orange-300 bg-orange-50 dark:bg-orange-950/20">
+                                <AlertTriangle className="h-4 w-4 text-orange-500" />
+                                <AlertDescription className="text-orange-700 dark:text-orange-400 text-sm">
+                                  Buffer time for this vehicle hasn't ended yet — {bufferWarning.remainingMin} min remaining. You can still proceed.
+                                </AlertDescription>
+                              </Alert>
+                            )}
                             {(() => {
                               const selectedVehicle = vehicles?.find(v => v.id === field.value);
                               if (!selectedVehicle) return null;

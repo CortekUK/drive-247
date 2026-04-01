@@ -61,6 +61,11 @@ export interface RentalSettings {
   verification_document_type: string | null;
   // Monthly tier threshold
   monthly_tier_days: number | null;
+  // Buffer time between rentals (minutes)
+  buffer_time_minutes: number | null;
+  // Return reminder settings
+  return_reminder_enabled: boolean | null;
+  return_reminder_hours: number | null;
 }
 
 const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
@@ -112,6 +117,11 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   verification_document_type: 'driving_license',
   // Monthly tier threshold
   monthly_tier_days: 30,
+  // Buffer time between rentals
+  buffer_time_minutes: 0,
+  // Return reminder
+  return_reminder_enabled: false,
+  return_reminder_hours: 24,
 };
 
 /**
@@ -172,7 +182,10 @@ export const useRentalSettings = () => {
           lockbox_default_instructions,
           lockbox_send_offset_minutes,
           verification_document_type,
-          monthly_tier_days
+          monthly_tier_days,
+          buffer_time_minutes,
+          return_reminder_enabled,
+          return_reminder_hours
         `)
         .eq('id', tenant.id)
         .single();
@@ -243,7 +256,10 @@ export const useRentalSettings = () => {
           lockbox_default_instructions,
           lockbox_send_offset_minutes,
           verification_document_type,
-          monthly_tier_days
+          monthly_tier_days,
+          buffer_time_minutes,
+          return_reminder_enabled,
+          return_reminder_hours
         `);
 
       if (error) {

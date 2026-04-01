@@ -104,17 +104,48 @@ const BookingVehiclesContent = () => {
       console.log('First vehicle data:', data?.[0]);
       console.log('Vehicle photos:', data?.[0]?.vehicle_photos);
 
-      if (!data || data.length === 0) {
+      let filteredData = data || [];
+
+      // Buffer time: hide vehicles whose last completed rental ended within the buffer period
+      const bufferMinutes = tenant?.buffer_time_minutes || 0;
+      if (bufferMinutes > 0 && filteredData.length > 0 && tenant?.id && pickupDate) {
+        const { data: rentalsData } = await supabase
+          .from("rentals")
+          .select("id, vehicle_id, start_date, end_date, pickup_time, dropoff_time")
+          .eq("tenant_id", tenant.id)
+          .eq("status", "Completed")
+          .not("vehicle_id", "is", null);
+
+        if (rentalsData && rentalsData.length > 0) {
+          const bufferMs = bufferMinutes * 60 * 1000;
+          const pickupDateTime = new Date(pickupDate);
+
+          filteredData = filteredData.filter(vehicle => {
+            const vehicleRentals = rentalsData.filter(r => r.vehicle_id === vehicle.id);
+            for (const rental of vehicleRentals) {
+              const rentalEnd = new Date(`${rental.end_date}T${rental.dropoff_time || '23:59'}`);
+              const bufferDeadline = new Date(rentalEnd.getTime() + bufferMs);
+              // If pickup falls within the buffer window after rental ended, hide it
+              if (pickupDateTime < bufferDeadline && pickupDateTime >= rentalEnd) {
+                return false;
+              }
+            }
+            return true;
+          });
+        }
+      }
+
+      if (filteredData.length === 0) {
         toast.info("No vehicles available at the moment");
       }
 
       // Sort vehicle_photos by display_order for each vehicle
-      const vehiclesWithSortedPhotos = data?.map(vehicle => ({
+      const vehiclesWithSortedPhotos = filteredData.map(vehicle => ({
         ...vehicle,
-        vehicle_photos: vehicle.vehicle_photos
-          ? [...vehicle.vehicle_photos].sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+        vehicle_photos: (vehicle as any).vehicle_photos
+          ? [...(vehicle as any).vehicle_photos].sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
           : []
-      })) || [];
+      }));
       setVehicles(vehiclesWithSortedPhotos as any);
     } catch (error: any) {
       toast.error("Failed to load vehicles");

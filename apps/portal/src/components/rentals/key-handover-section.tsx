@@ -22,7 +22,9 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { useKeyHandover, HandoverType } from "@/hooks/use-key-handover";
+import { useKeyHandover, HandoverType, MileageSummary } from "@/hooks/use-key-handover";
+import { formatCurrency, getDistanceUnitShort } from "@/lib/format-utils";
+import type { DistanceUnit } from "@/lib/format-utils";
 import { KeyHandoverPhotos } from "@/components/rentals/key-handover-photos";
 import { LockboxSendTimeline } from "@/components/rentals/lockbox-send-timeline";
 import { LockboxCountdownTicker } from "@/components/rentals/lockbox-countdown-ticker";
@@ -87,6 +89,7 @@ export const KeyHandoverSection = ({
     unmarkKeyHanded,
     updateNotes,
     updateMileage,
+    fetchMileageSummary,
     isLoading,
     isUploading,
     isDeleting,
@@ -101,6 +104,7 @@ export const KeyHandoverSection = ({
   const [confirmHandover, setConfirmHandover] = useState<HandoverType | null>(null);
   const [confirmUndo, setConfirmUndo] = useState<HandoverType | null>(null);
   const [mileageWarning, setMileageWarning] = useState<HandoverType | null>(null);
+  const [mileageSummary, setMileageSummary] = useState<MileageSummary | null>(null);
   const [givingNotes, setGivingNotes] = useState<string>("");
   const [receivingNotes, setReceivingNotes] = useState<string>("");
   const [givingMileage, setGivingMileage] = useState<string>("");
@@ -358,14 +362,29 @@ export const KeyHandoverSection = ({
         updateMileage.mutate({ type: 'giving', mileage: mileageVal });
       }
     }
-    if (confirmHandover === 'receiving' && receivingMileage && !receivingHandover?.mileage) {
-      const mileageVal = parseInt(receivingMileage, 10);
-      if (!isNaN(mileageVal)) {
-        updateMileage.mutate({ type: 'receiving', mileage: mileageVal });
+
+    // For receiving: await mileage save (triggers excess calc), then show summary
+    if (confirmHandover === 'receiving') {
+      if (receivingMileage && !receivingHandover?.mileage) {
+        const mileageVal = parseInt(receivingMileage, 10);
+        if (!isNaN(mileageVal)) {
+          await updateMileage.mutateAsync({ type: 'receiving', mileage: mileageVal });
+        }
       }
+      await markKeyHanded.mutateAsync(confirmHandover);
+      // Fetch and show mileage summary popup
+      try {
+        const summary = await fetchMileageSummary();
+        if (summary) {
+          setMileageSummary(summary);
+        }
+      } catch (err) {
+        console.warn('[KEY-HANDOVER] Failed to fetch mileage summary:', err);
+      }
+    } else {
+      markKeyHanded.mutate(confirmHandover);
     }
 
-    markKeyHanded.mutate(confirmHandover);
     setConfirmHandover(null);
   };
 
@@ -967,6 +986,104 @@ export const KeyHandoverSection = ({
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={handleConfirmUndo} className="bg-amber-600 hover:bg-amber-700">
                 Undo
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Mileage Summary Dialog — shown after vehicle return */}
+        <AlertDialog open={!!mileageSummary} onOpenChange={() => setMileageSummary(null)}>
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <Gauge className="h-5 w-5 text-primary" />
+                Mileage Summary
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-4 pt-2">
+                  {mileageSummary && (() => {
+                    const distUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
+                    const unitShort = getDistanceUnitShort(distUnit);
+                    const unitSingular = distUnit === 'miles' ? 'mile' : 'km';
+                    const currCode = tenant?.currency_code || 'GBP';
+                    const s = mileageSummary;
+
+                    return (
+                      <>
+                        {/* Odometer readings */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 bg-muted/50 rounded-lg text-center">
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide">At Pickup</p>
+                            <p className="text-lg font-semibold text-foreground">{s.pickupMileage.toLocaleString()} {unitShort}</p>
+                          </div>
+                          <div className="p-3 bg-muted/50 rounded-lg text-center">
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide">At Return</p>
+                            <p className="text-lg font-semibold text-foreground">{s.returnMileage.toLocaleString()} {unitShort}</p>
+                          </div>
+                        </div>
+
+                        {/* Miles driven */}
+                        <div className="p-3 bg-primary/5 rounded-lg text-center border border-primary/10">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide">Total {distUnit === 'miles' ? 'Miles' : 'Km'} Driven</p>
+                          <p className="text-2xl font-bold text-primary">{s.milesDriven.toLocaleString()} {unitShort}</p>
+                        </div>
+
+                        {/* Allowance & excess */}
+                        {s.isUnlimited ? (
+                          <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
+                            <p className="text-sm font-medium text-green-700 dark:text-green-400 text-center">
+                              Unlimited mileage — no excess charge
+                            </p>
+                          </div>
+                        ) : s.allowedMileage !== null ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Allowed ({s.tier} tier)</span>
+                              <span className="font-medium text-foreground">{s.allowedMileage.toLocaleString()} {unitShort}</span>
+                            </div>
+                            {s.excessMiles > 0 ? (
+                              <>
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-destructive font-medium">Excess</span>
+                                  <span className="font-semibold text-destructive">+{s.excessMiles.toLocaleString()} {unitShort}</span>
+                                </div>
+                                {s.excessRate != null && s.chargeAmount != null && (
+                                  <div className="p-3 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-900 mt-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm text-muted-foreground">
+                                        {s.excessMiles.toLocaleString()} {unitShort} x {formatCurrency(s.excessRate, currCode)}/{unitSingular}
+                                      </span>
+                                      <span className="text-lg font-bold text-destructive">
+                                        {formatCurrency(s.chargeAmount, currCode)}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Excess mileage charge has been added to the rental ledger.
+                                    </p>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
+                                <p className="text-sm font-medium text-green-700 dark:text-green-400 text-center">
+                                  Within allowance — no excess mileage charge
+                                </p>
+                                <p className="text-xs text-muted-foreground text-center mt-0.5">
+                                  {s.milesDriven.toLocaleString()} of {s.allowedMileage.toLocaleString()} {unitShort} used
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
+                      </>
+                    );
+                  })()}
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={() => setMileageSummary(null)}>
+                Got it
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

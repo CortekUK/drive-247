@@ -264,7 +264,7 @@ const BookingCheckoutContent = () => {
       taxPercentage,
       serviceFee,
       deposit,
-      grandTotal: subtotal + taxAmount + serviceFee + deposit,
+      grandTotal: subtotal + taxAmount + serviceFee, // Deposit is a hold at pickup, not charged at booking
     };
   };
 
@@ -277,8 +277,8 @@ const BookingCheckoutContent = () => {
   const whatGetsSplit = installmentConfig.what_gets_split || 'rental_only';
 
   const { upfrontAmount, installableAmount } = (() => {
-    // Always upfront: Deposit + Service Fee
-    let upfront = totals.deposit + totals.serviceFee;
+    // Always upfront: Service Fee (deposit is a hold at pickup, not charged)
+    let upfront = totals.serviceFee;
     let installable = 0;
 
     switch (whatGetsSplit) {
@@ -638,7 +638,7 @@ const BookingCheckoutContent = () => {
           rental_fee: currentTotalsForPayment.discountedVehiclePrice,
           tax_amount: currentTotalsForPayment.taxAmount,
           service_fee: currentTotalsForPayment.serviceFee,
-          security_deposit: currentTotalsForPayment.deposit,
+          security_deposit: 0, // Deposit is a card hold at pickup, not charged at booking
           insurance_premium: 0, // Insurance is handled separately via Bonzah
           delivery_fee: currentTotalsForPayment.deliveryFee,
           extras_total: currentTotalsForPayment.extrasTotal,
@@ -1038,8 +1038,8 @@ const BookingCheckoutContent = () => {
                   )}
                   {totals.deposit > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Security Deposit</span>
-                      <span className="font-medium">+{formatCurrency(totals.deposit)}</span>
+                      <span className="text-muted-foreground">Security Deposit (hold at pickup)</span>
+                      <span className="font-medium text-muted-foreground">{formatCurrency(totals.deposit)}</span>
                     </div>
                   )}
                 </div>

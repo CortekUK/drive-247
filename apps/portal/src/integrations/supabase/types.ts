@@ -3604,6 +3604,74 @@ export type Database = {
           },
         ]
       }
+      lockbox_send_log: {
+        Row: {
+          channel: string
+          created_at: string
+          details: string | null
+          event_type: string
+          id: string
+          rental_id: string
+          scheduled_for: string | null
+          sent_by: string | null
+          sent_by_name: string | null
+          tenant_id: string
+        }
+        Insert: {
+          channel?: string
+          created_at?: string
+          details?: string | null
+          event_type: string
+          id?: string
+          rental_id: string
+          scheduled_for?: string | null
+          sent_by?: string | null
+          sent_by_name?: string | null
+          tenant_id: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          details?: string | null
+          event_type?: string
+          id?: string
+          rental_id?: string
+          scheduled_for?: string | null
+          sent_by?: string | null
+          sent_by_name?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lockbox_send_log_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lockbox_send_log_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "lockbox_send_log_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "lockbox_send_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lockbox_templates: {
         Row: {
           body: string
@@ -5891,6 +5959,13 @@ export type Database = {
           delivery_location_id: string | null
           delivery_method: string | null
           delivery_option: string | null
+          deposit_hold_amount: number | null
+          deposit_hold_expires_at: string | null
+          deposit_hold_payment_intent_id: string | null
+          deposit_hold_payment_method_id: string | null
+          deposit_hold_placed_at: string | null
+          deposit_hold_status: string | null
+          deposit_hold_stripe_customer_id: string | null
           discount_applied: number | null
           document_status: string | null
           docusign_envelope_id: string | null
@@ -5909,8 +5984,10 @@ export type Database = {
           insurance_status: string | null
           is_extended: boolean | null
           is_gig_driver: boolean | null
+          lockbox_sent_at: string | null
           monthly_amount: number
           monthly_mileage_override: number | null
+          return_reminder_sent_at: string | null
           original_end_date: string | null
           payment_mode: string | null
           payment_status: string | null
@@ -5953,6 +6030,13 @@ export type Database = {
           delivery_location_id?: string | null
           delivery_method?: string | null
           delivery_option?: string | null
+          deposit_hold_amount?: number | null
+          deposit_hold_expires_at?: string | null
+          deposit_hold_payment_intent_id?: string | null
+          deposit_hold_payment_method_id?: string | null
+          deposit_hold_placed_at?: string | null
+          deposit_hold_status?: string | null
+          deposit_hold_stripe_customer_id?: string | null
           discount_applied?: number | null
           document_status?: string | null
           docusign_envelope_id?: string | null
@@ -5971,8 +6055,10 @@ export type Database = {
           insurance_status?: string | null
           is_extended?: boolean | null
           is_gig_driver?: boolean | null
+          lockbox_sent_at?: string | null
           monthly_amount: number
           monthly_mileage_override?: number | null
+          return_reminder_sent_at?: string | null
           original_end_date?: string | null
           payment_mode?: string | null
           payment_status?: string | null
@@ -6015,6 +6101,13 @@ export type Database = {
           delivery_location_id?: string | null
           delivery_method?: string | null
           delivery_option?: string | null
+          deposit_hold_amount?: number | null
+          deposit_hold_expires_at?: string | null
+          deposit_hold_payment_intent_id?: string | null
+          deposit_hold_payment_method_id?: string | null
+          deposit_hold_placed_at?: string | null
+          deposit_hold_status?: string | null
+          deposit_hold_stripe_customer_id?: string | null
           discount_applied?: number | null
           document_status?: string | null
           docusign_envelope_id?: string | null
@@ -6033,8 +6126,10 @@ export type Database = {
           insurance_status?: string | null
           is_extended?: boolean | null
           is_gig_driver?: boolean | null
+          lockbox_sent_at?: string | null
           monthly_amount?: number
           monthly_mileage_override?: number | null
+          return_reminder_sent_at?: string | null
           original_end_date?: string | null
           payment_mode?: string | null
           payment_status?: string | null
@@ -7036,9 +7131,12 @@ export type Database = {
           bonzah_username: string | null
           booking_lead_time_hours: number | null
           booking_lead_time_unit: string | null
+          buffer_time_minutes: number
           business_hours: string | null
           collection_enabled: boolean | null
           company_name: string
+          return_reminder_enabled: boolean
+          return_reminder_hours: number
           contact_email: string | null
           contact_phone: string | null
           created_at: string | null
@@ -7086,6 +7184,7 @@ export type Database = {
           lockbox_default_instructions: string | null
           lockbox_enabled: boolean | null
           lockbox_notification_methods: Json | null
+          lockbox_send_offset_minutes: number | null
           logo_url: string | null
           maintenance_banner_enabled: boolean
           maintenance_banner_message: string
@@ -7203,9 +7302,12 @@ export type Database = {
           bonzah_username?: string | null
           booking_lead_time_hours?: number | null
           booking_lead_time_unit?: string | null
+          buffer_time_minutes?: number
           business_hours?: string | null
           collection_enabled?: boolean | null
           company_name: string
+          return_reminder_enabled?: boolean
+          return_reminder_hours?: number
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string | null
@@ -7253,6 +7355,7 @@ export type Database = {
           lockbox_default_instructions?: string | null
           lockbox_enabled?: boolean | null
           lockbox_notification_methods?: Json | null
+          lockbox_send_offset_minutes?: number | null
           logo_url?: string | null
           maintenance_banner_enabled?: boolean
           maintenance_banner_message?: string
@@ -7370,10 +7473,13 @@ export type Database = {
           bonzah_username?: string | null
           booking_lead_time_hours?: number | null
           booking_lead_time_unit?: string | null
+          buffer_time_minutes?: number
           business_hours?: string | null
           collection_enabled?: boolean | null
           company_name?: string
           contact_email?: string | null
+          return_reminder_enabled?: boolean
+          return_reminder_hours?: number
           contact_phone?: string | null
           created_at?: string | null
           currency_code?: string | null
@@ -7420,6 +7526,7 @@ export type Database = {
           lockbox_default_instructions?: string | null
           lockbox_enabled?: boolean | null
           lockbox_notification_methods?: Json | null
+          lockbox_send_offset_minutes?: number | null
           logo_url?: string | null
           maintenance_banner_enabled?: boolean
           maintenance_banner_message?: string
@@ -9575,3 +9682,5 @@ export const Constants = {
     },
   },
 } as const
+A new version of Supabase CLI is available: v2.84.2 (currently installed v2.75.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

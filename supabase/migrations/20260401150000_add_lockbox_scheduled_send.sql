@@ -31,10 +31,12 @@ COMMENT ON TABLE public.lockbox_send_log IS 'Audit log for lockbox code send eve
 
 ALTER TABLE public.lockbox_send_log ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Tenant users can view their lockbox send logs" ON public.lockbox_send_log;
 CREATE POLICY "Tenant users can view their lockbox send logs"
   ON public.lockbox_send_log FOR SELECT
   USING (tenant_id = get_user_tenant_id() OR is_super_admin());
 
+DROP POLICY IF EXISTS "Service role can manage lockbox send logs" ON public.lockbox_send_log;
 CREATE POLICY "Service role can manage lockbox send logs"
   ON public.lockbox_send_log FOR ALL
   USING (true)

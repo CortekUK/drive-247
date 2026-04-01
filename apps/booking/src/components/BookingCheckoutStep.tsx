@@ -238,18 +238,19 @@ export default function BookingCheckoutStep({
   };
 
   const calculateGrandTotal = () => {
-    // Grand total = discounted vehicle price + delivery fees + extras + tax + service fee + security deposit + insurance
-    return calculateDiscountedVehicleTotal() + calculateDeliveryFees() + calculateExtrasTotal() + calculateTaxAmount() + calculateServiceFee() + calculateSecurityDeposit() + bonzahPremium;
+    // Grand total = discounted vehicle price + delivery fees + extras + tax + service fee + insurance
+    // NOTE: Security deposit is NOT included — it's placed as a card hold at key handover, not charged at booking
+    return calculateDiscountedVehicleTotal() + calculateDeliveryFees() + calculateExtrasTotal() + calculateTaxAmount() + calculateServiceFee() + bonzahPremium;
   };
 
   // Check if this is an enquiry-based tenant (e.g., Kedic Services)
   // For enquiry tenants: only charge security deposit upfront (if any), rental fees collected later
   const isEnquiry = isEnquiryBasedTenant(tenant?.id);
 
-  // For enquiry-based tenants, only charge security deposit (if any)
+  // For enquiry-based tenants: no upfront payment (deposit is placed as hold at key handover)
   const getPayableAmount = (): number => {
     if (isEnquiry) {
-      return calculateSecurityDeposit(); // Only security deposit for enquiry tenants
+      return 0; // No upfront charge — deposit hold placed at key handover
     }
     return calculateGrandTotal();
   };
@@ -257,7 +258,7 @@ export default function BookingCheckoutStep({
   // Calculate installment breakdown based on what_gets_split setting
   const whatGetsSplit = installmentConfig.what_gets_split || 'rental_only';
   const { installUpfrontAmount, installableAmount } = (() => {
-    let upfront = calculateSecurityDeposit() + calculateServiceFee();
+    let upfront = calculateServiceFee(); // Deposit is a hold, not upfront charge
     let installable = 0;
     const discountedVehicle = calculateDiscountedVehicleTotal();
     const extrasTotal = calculateExtrasTotal();
@@ -451,6 +452,7 @@ export default function BookingCheckoutStep({
       const { data, error: functionError } = await supabase.functions.invoke('create-checkout-session', {
         body: {
           rentalId: createdRentalData.rental.id,
+          customerId: createdRentalData.customer.id,
           customerEmail: formData.customerEmail,
           customerName: formData.customerName,
           totalAmount: getPayableAmount(), // Use payable amount (deposit only for enquiry tenants)
@@ -1025,7 +1027,7 @@ export default function BookingCheckoutStep({
         protection_fee: 0,
         tax_amount: calculateTaxAmount(),
         service_fee: calculateServiceFee(),
-        security_deposit: calculateSecurityDeposit(),
+        security_deposit: 0, // Deposit is a card hold at pickup, not charged at booking
         insurance_premium: bonzahPremium || 0,
         delivery_fee: pickupDeliveryFee || 0,
         collection_fee: returnDeliveryFee || 0,

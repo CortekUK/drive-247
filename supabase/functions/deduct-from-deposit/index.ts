@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
     // Fetch rental details
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
-      .select("id, customer_id, vehicle_id, tenant_id")
+      .select("id, customer_id, vehicle_id, tenant_id, deposit_hold_status, deposit_hold_payment_intent_id, deposit_hold_amount")
       .eq("id", rentalId)
       .single();
 
@@ -109,7 +109,53 @@ Deno.serve(async (req) => {
     const connectAccountId = tenantData ? getConnectAccountId(tenantData) : null;
     const stripeOptions = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
 
-    // Find the payment with a Stripe payment intent for this rental (the main booking payment)
+    // If there's an active deposit hold, capture from it instead of refunding
+    if (rental.deposit_hold_status === 'held' && rental.deposit_hold_payment_intent_id) {
+      if (amount > (rental.deposit_hold_amount || 0)) {
+        return errorResponse(`Deduction amount (${amount}) exceeds hold amount (${rental.deposit_hold_amount})`);
+      }
+
+      try {
+        const amountInCents = Math.round(amount * 100);
+        const capturedIntent = await stripe.paymentIntents.capture(
+          rental.deposit_hold_payment_intent_id,
+          { amount_to_capture: amountInCents },
+          stripeOptions
+        );
+        console.log("[DEDUCT-DEPOSIT] Captured from hold:", capturedIntent.id, "amount:", amount);
+
+        // Update rental deposit hold status
+        await supabase.from("rentals").update({ deposit_hold_status: "captured" }).eq("id", rentalId);
+
+        // Create ledger entries
+        const today = new Date().toISOString().split("T")[0];
+
+        // Deposit capture ledger entry
+        await supabase.from("ledger_entries").insert({
+          rental_id: rentalId, customer_id: rental.customer_id, vehicle_id: rental.vehicle_id,
+          tenant_id: effectiveTenantId, entry_date: today, due_date: today,
+          type: "Payment", category: "Security Deposit", amount: amount, remaining_amount: 0,
+          reference: `Deposit captured for excess mileage`,
+        });
+
+        // Update excess mileage charge remaining
+        const newRemaining = Math.max(0, excessCharge.remaining_amount - amount);
+        await supabase.from("ledger_entries").update({ remaining_amount: newRemaining }).eq("id", excessCharge.id);
+
+        return jsonResponse({
+          success: true,
+          method: "hold_capture",
+          deductedAmount: amount,
+          excessMileageRemaining: newRemaining,
+          depositAvailableAfter: (rental.deposit_hold_amount || 0) - amount,
+        });
+      } catch (captureErr: any) {
+        console.error("[DEDUCT-DEPOSIT] Hold capture failed:", captureErr.message);
+        return errorResponse(`Failed to capture from deposit hold: ${captureErr.message}`);
+      }
+    }
+
+    // Fallback: Find the payment with a Stripe payment intent for this rental (legacy flow — deposit was charged)
     const { data: payment } = await supabase
       .from("payments")
       .select("*")

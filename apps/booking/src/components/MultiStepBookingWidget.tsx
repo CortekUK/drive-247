@@ -95,6 +95,14 @@ interface BlockedDate {
   vehicle_id: string | null;
   reason?: string | null;
 }
+interface ExistingRental {
+  id: string;
+  vehicle_id: string;
+  start_date: string;
+  end_date: string;
+  pickup_time: string | null;
+  dropoff_time: string | null;
+}
 
 function LiveClock({ timezone }: { timezone: string }) {
   const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -221,6 +229,7 @@ const MultiStepBookingWidget = () => {
   }, []);
   const [blockedDates, setBlockedDates] = useState<string[]>([]); // Global blocked dates (vehicle_id is null)
   const [allBlockedDates, setAllBlockedDates] = useState<BlockedDate[]>([]); // All blocked dates including vehicle-specific
+  const [existingRentals, setExistingRentals] = useState<ExistingRental[]>([]); // Completed rentals for buffer time checking
   const [errors, setErrors] = useState<{
     [key: string]: string;
   }>({});
@@ -1168,6 +1177,20 @@ const MultiStepBookingWidget = () => {
 
     // Load blocked dates
     await loadBlockedDates();
+
+    // Load recently completed rentals for buffer time checking
+    if (tenant?.buffer_time_minutes && tenant.buffer_time_minutes > 0) {
+      const { data: rentalsData } = await supabase
+        .from("rentals")
+        .select("id, vehicle_id, start_date, end_date, pickup_time, dropoff_time")
+        .eq("tenant_id", tenant.id)
+        .eq("status", "Completed")
+        .not("vehicle_id", "is", null);
+
+      if (rentalsData) {
+        setExistingRentals(rentalsData as ExistingRental[]);
+      }
+    }
   };
 
   // Check verification status - first tries database, then falls back to Veriff API directly
@@ -2557,6 +2580,31 @@ const MultiStepBookingWidget = () => {
 
         return true; // Include this vehicle
       });
+
+      // Buffer time: hide vehicles whose last completed rental ended within the buffer period
+      const bufferMinutes = tenant?.buffer_time_minutes || 0;
+      if (bufferMinutes > 0 && existingRentals.length > 0) {
+        const bufferMs = bufferMinutes * 60 * 1000;
+        const pickupDateTime = new Date(`${formData.pickupDate}T${formData.pickupTime || '00:00'}`);
+
+        filtered = filtered.filter(vehicle => {
+          const vehicleRentals = existingRentals.filter(r => r.vehicle_id === vehicle.id);
+
+          for (const rental of vehicleRentals) {
+            // When the rental ended
+            const rentalEnd = new Date(`${rental.end_date}T${rental.dropoff_time || '23:59'}`);
+            // Buffer deadline = rental end + buffer minutes
+            const bufferDeadline = new Date(rentalEnd.getTime() + bufferMs);
+
+            // If pickup falls before buffer deadline, vehicle is still in cooldown
+            if (pickupDateTime < bufferDeadline && pickupDateTime >= rentalEnd) {
+              console.log(`[BufferTime] Vehicle ${vehicle.reg} hidden: rental ended ${rental.end_date} ${rental.dropoff_time || '23:59'}, buffer until ${bufferDeadline.toISOString()}`);
+              return false;
+            }
+          }
+          return true;
+        });
+      }
     }
 
     // Sort
