@@ -385,6 +385,7 @@ export const AddPaymentDialog = ({
       window.open(data.url, '_blank');
 
       toast({ title: "Stripe Checkout Opened", description: "Payment link opened in a new tab. Payment will be recorded automatically when the customer completes checkout." });
+      if (onPaymentSuccess) onPaymentSuccess();
       onOpenChange(false);
     } catch (error: any) {
       console.error("Error creating Stripe checkout:", error);
@@ -451,6 +452,7 @@ export const AddPaymentDialog = ({
       }
 
       toast({ title: "Invoice Sent", description: `Invoice with payment link emailed to ${customerEmail}. Payment will be recorded automatically when the customer pays.` });
+      if (onPaymentSuccess) onPaymentSuccess();
       onOpenChange(false);
     } catch (error: any) {
       console.error("Error sending invoice:", error);
