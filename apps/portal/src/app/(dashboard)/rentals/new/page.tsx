@@ -398,8 +398,8 @@ const CreateRental = () => {
     defaultValues: {
       customer_id: "",
       vehicle_id: "",
-      start_date: today,
-      end_date: defaultEndDate,
+      start_date: undefined as any,
+      end_date: undefined as any,
       rental_period_type: "Monthly",
       monthly_amount: undefined,
       // New booking-aligned fields
