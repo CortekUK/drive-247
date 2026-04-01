@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,10 +24,23 @@ import {
 
 export function TeslaFleetSettings() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
   const { tenant: tenantContext, refetchTenant } = useTenant();
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll and show success toast when redirected back after Tesla OAuth
+  useEffect(() => {
+    if (searchParams.get('tesla_connected') === 'true') {
+      toast({ title: 'Tesla Fleet API Connected', description: 'You can now check vehicle compatibility and track Supercharger charges.' });
+      queryClient.invalidateQueries({ queryKey: ['tesla-fleet-status'] });
+      queryClient.invalidateQueries({ queryKey: ['tesla-fleet-vehicles-count'] });
+      refetchTenant();
+      setTimeout(() => cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+    }
+  }, [searchParams]);
 
   // Fetch Tesla Fleet status
   const { data: status, isLoading } = useQuery({
@@ -68,7 +82,7 @@ export function TeslaFleetSettings() {
         body: {
           action: 'get_auth_url',
           tenantId: tenantContext?.id,
-          returnUrl: `${window.location.origin}/settings`,
+          returnUrl: `${window.location.origin}/settings?tab=integrations`,
         },
       });
 
@@ -134,7 +148,7 @@ export function TeslaFleetSettings() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" ref={cardRef}>
       {/* Main Tesla Fleet Card */}
       <Card>
         <CardHeader>
