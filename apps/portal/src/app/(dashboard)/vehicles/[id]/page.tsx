@@ -617,6 +617,103 @@ export default function VehicleDetail() {
             />
           </div>
 
+          {/* Tesla Fleet API Section */}
+          {tenant?.integration_tesla_fleet && (
+            <div className="mb-6">
+              <Card className="shadow-card rounded-lg border-red-200/50 dark:border-red-900/30">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-red-500/10">
+                          <TeslaLogo size={18} className="text-red-500" />
+                        </div>
+                        Tesla Fleet API
+                      </CardTitle>
+                      <CardDescription>Supercharger usage tracking for this vehicle</CardDescription>
+                    </div>
+                    {vehicle?.tesla_fleet_enabled ? (
+                      <Badge className="bg-green-600 hover:bg-green-700 gap-1">
+                        <Zap className="h-3 w-3" />
+                        Enabled
+                      </Badge>
+                    ) : null}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {vehicle?.tesla_fleet_enabled ? (
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30">
+                      <TeslaLogo size={24} className="text-green-600 dark:text-green-400" />
+                      <div>
+                        <p className="text-sm font-medium text-green-800 dark:text-green-300">Supercharger Tracking Active</p>
+                        <p className="text-xs text-green-600 dark:text-green-400">
+                          Charging sessions will automatically appear on rental payment breakdowns
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {!vehicle?.vin ? (
+                        <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30">
+                          <TeslaLogo size={20} className="text-amber-600" />
+                          <p className="text-sm text-amber-800 dark:text-amber-300">
+                            This vehicle needs a VIN number before checking Tesla Fleet API compatibility. Edit the vehicle to add a VIN.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          {vehicle?.fuel_type === 'Electric' && (
+                            <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/30">
+                              <Zap className="h-4 w-4 text-blue-500" />
+                              <p className="text-xs text-blue-700 dark:text-blue-300">
+                                This electric vehicle may be compatible with Tesla Fleet API
+                              </p>
+                            </div>
+                          )}
+                          <Button
+                            variant="outline"
+                            className="gap-2"
+                            disabled={teslaChecking}
+                            onClick={async () => {
+                              setTeslaChecking(true);
+                              try {
+                                const { data, error } = await supabase.functions.invoke('tesla-fleet-api', {
+                                  body: {
+                                    action: 'check_vehicle',
+                                    vehicleId: id,
+                                    vin: vehicle.vin,
+                                  },
+                                });
+                                if (error) throw error;
+                                if (data?.compatible) {
+                                  toast({ title: 'Tesla Fleet Compatible', description: data.message });
+                                  queryClient.invalidateQueries({ queryKey: ['vehicle', id] });
+                                } else {
+                                  toast({ title: 'Not Compatible', description: data?.message || 'This vehicle is not available in your Tesla account', variant: 'destructive' });
+                                }
+                              } catch (err: any) {
+                                toast({ title: 'Check Failed', description: err.message || 'Failed to check compatibility', variant: 'destructive' });
+                              } finally {
+                                setTeslaChecking(false);
+                              }
+                            }}
+                          >
+                            {teslaChecking ? (
+                              <SpinnerIcon className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <TeslaLogo size={16} className="text-red-500" />
+                            )}
+                            {teslaChecking ? 'Checking...' : 'Check Tesla Fleet Compatibility'}
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* Vehicle Details Section */}
           <div className="mt-6">
             <Card className="shadow-card rounded-lg">
@@ -1120,102 +1217,6 @@ export default function VehicleDetail() {
             </Card>
           </div>
 
-          {/* Tesla Fleet API Section */}
-          {tenant?.integration_tesla_fleet && (
-            <div className="mt-8">
-              <Card className="shadow-card rounded-lg border-red-200/50 dark:border-red-900/30">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                        <div className="p-1.5 rounded-lg bg-red-500/10">
-                          <TeslaLogo size={18} className="text-red-500" />
-                        </div>
-                        Tesla Fleet API
-                      </CardTitle>
-                      <CardDescription>Supercharger usage tracking for this vehicle</CardDescription>
-                    </div>
-                    {vehicle?.tesla_fleet_enabled ? (
-                      <Badge className="bg-green-600 hover:bg-green-700 gap-1">
-                        <Zap className="h-3 w-3" />
-                        Enabled
-                      </Badge>
-                    ) : null}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {vehicle?.tesla_fleet_enabled ? (
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30">
-                      <TeslaLogo size={24} className="text-green-600 dark:text-green-400" />
-                      <div>
-                        <p className="text-sm font-medium text-green-800 dark:text-green-300">Supercharger Tracking Active</p>
-                        <p className="text-xs text-green-600 dark:text-green-400">
-                          Charging sessions will automatically appear on rental payment breakdowns
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {!vehicle?.vin ? (
-                        <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30">
-                          <TeslaLogo size={20} className="text-amber-600" />
-                          <p className="text-sm text-amber-800 dark:text-amber-300">
-                            This vehicle needs a VIN number before checking Tesla Fleet API compatibility. Edit the vehicle to add a VIN.
-                          </p>
-                        </div>
-                      ) : (
-                        <>
-                          {vehicle?.fuel_type === 'Electric' && (
-                            <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/30">
-                              <Zap className="h-4 w-4 text-blue-500" />
-                              <p className="text-xs text-blue-700 dark:text-blue-300">
-                                This electric vehicle may be compatible with Tesla Fleet API
-                              </p>
-                            </div>
-                          )}
-                          <Button
-                            variant="outline"
-                            className="gap-2"
-                            disabled={teslaChecking}
-                            onClick={async () => {
-                              setTeslaChecking(true);
-                              try {
-                                const { data, error } = await supabase.functions.invoke('tesla-fleet-api', {
-                                  body: {
-                                    action: 'check_vehicle',
-                                    vehicleId: id,
-                                    vin: vehicle.vin,
-                                  },
-                                });
-                                if (error) throw error;
-                                if (data?.compatible) {
-                                  toast({ title: 'Tesla Fleet Compatible', description: data.message });
-                                  queryClient.invalidateQueries({ queryKey: ['vehicle', id] });
-                                } else {
-                                  toast({ title: 'Not Compatible', description: data?.message || 'This vehicle is not available in your Tesla account', variant: 'destructive' });
-                                }
-                              } catch (err: any) {
-                                toast({ title: 'Check Failed', description: err.message || 'Failed to check compatibility', variant: 'destructive' });
-                              } finally {
-                                setTeslaChecking(false);
-                              }
-                            }}
-                          >
-                            {teslaChecking ? (
-                              <SpinnerIcon className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <TeslaLogo size={16} className="text-red-500" />
-                            )}
-                            {teslaChecking ? 'Checking...' : 'Check Tesla Fleet Compatibility'}
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          )}
         </div>
 
       {/* Add Fine Dialog */}
