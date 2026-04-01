@@ -594,8 +594,8 @@ const CreateRental = () => {
       const draft = {
         customer_id: values.customer_id,
         vehicle_id: values.vehicle_id,
-        start_date: values.start_date?.toISOString(),
-        end_date: values.end_date?.toISOString(),
+        start_date: null,
+        end_date: null,
         rental_period_type: values.rental_period_type,
         monthly_amount: values.monthly_amount,
         pickup_location: values.pickup_location,
