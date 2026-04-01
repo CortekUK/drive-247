@@ -2285,6 +2285,28 @@ const RentalDetail = () => {
                             }
                             return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
                           }
+                          // Special handling for Supercharger — status from tesla charges, not ledger
+                          if (category === 'Supercharger' && teslaCharges.chargeCount > 0) {
+                            const allCharged = teslaCharges.charges.every(c => c.status === 'charged');
+                            const allWaived = teslaCharges.charges.every(c => c.status === 'waived');
+                            const someCharged = teslaCharges.charges.some(c => c.status === 'charged');
+                            const someWaived = teslaCharges.charges.some(c => c.status === 'waived');
+                            const allResolved = teslaCharges.charges.every(c => c.status === 'charged' || c.status === 'waived');
+                            if (allWaived) {
+                              return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Waived</Badge>;
+                            }
+                            if (allCharged) {
+                              return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
+                            }
+                            if (allResolved) {
+                              return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
+                            }
+                            if (someCharged || someWaived) {
+                              return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
+                            }
+                            return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
+                          }
+
                           // Check payment status from ledger breakdown
                           const catPayment = paymentBreakdown?.[category];
                           // Also check directly from rentalCharges (loaded with allocations)
