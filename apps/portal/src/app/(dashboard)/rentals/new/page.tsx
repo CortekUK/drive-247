@@ -3404,7 +3404,7 @@ const CreateRental = () => {
                                       {policy.vehicles ? `${policy.vehicles.reg}` : "—"}
                                     </td>
                                     <td className="px-3 py-2 text-muted-foreground">
-                                      {policy.expiry_date ? format(parseISO(policy.expiry_date), "dd MMM yyyy") : "—"}
+                                      {policy.expiry_date ? format(parseISO(policy.expiry_date), "MMM dd, yyyy") : "—"}
                                     </td>
                                     <td className="px-3 py-2">
                                       <Badge
@@ -3480,7 +3480,7 @@ const CreateRental = () => {
                                         {doc.end_date && (
                                           <>
                                             <span>·</span>
-                                            <span>Expires {format(parseISO(doc.end_date), "dd MMM yyyy")}</span>
+                                            <span>Expires {format(parseISO(doc.end_date), "MMM dd, yyyy")}</span>
                                           </>
                                         )}
                                       </div>
@@ -3901,14 +3901,14 @@ const CreateRental = () => {
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-muted-foreground">Start</p>
                         <p className="text-xs font-medium">
-                          {watchedStartDate ? format(watchedStartDate, "dd MMM yyyy") : "—"}
+                          {watchedStartDate ? format(watchedStartDate, "MMM dd, yyyy") : "—"}
                           {form.watch("pickup_time") ? ` at ${form.watch("pickup_time")}` : ""}
                         </p>
                       </div>
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-muted-foreground">End</p>
                         <p className={cn("text-xs font-medium", watchedStartDate && watchedEndDate && !isAfter(watchedEndDate, watchedStartDate) && "text-red-500")}>
-                          {watchedEndDate ? format(watchedEndDate, "dd MMM yyyy") : "—"}
+                          {watchedEndDate ? format(watchedEndDate, "MMM dd, yyyy") : "—"}
                           {form.watch("return_time") ? ` at ${form.watch("return_time")}` : ""}
                         </p>
                       </div>

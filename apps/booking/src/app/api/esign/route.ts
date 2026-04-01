@@ -40,7 +40,7 @@ function formatCurrency(amount: number | null, currencyCode: string = 'USD'): st
         return `${symbols[currencyCode] || currencyCode}0`;
     }
     const code = currencyCode?.toUpperCase() || 'USD';
-    const localeMap: Record<string, string> = { USD: 'en-US', GBP: 'en-GB', EUR: 'en-IE' };
+    const localeMap: Record<string, string> = { USD: 'en-US', GBP: 'en-US', EUR: 'en-IE' };
     const locale = localeMap[code] || 'en-US';
     try {
         return new Intl.NumberFormat(locale, { style: 'currency', currency: code }).format(amount);

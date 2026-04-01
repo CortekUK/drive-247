@@ -174,7 +174,7 @@ ${rentals.map((r, i) => `${i + 1}. Rental #${r.rental_number || 'N/A'}
 Recent Payments (${payments.length}):
 ${payments.slice(0, 5).map((p, i) => `${i + 1}. ${formatCurrencyLocal(Number(p.amount) || 0, currencyCode)} - ${p.status || 'N/A'} (${p.payment_type || 'N/A'})
    - Rental: ${p.rental_number || 'N/A'}
-   - Date: ${p.created_at ? new Date(p.created_at as string).toLocaleDateString('en-GB') : 'N/A'}`).join('\n')}` : '\nNo recent payments.';
+   - Date: ${p.created_at ? new Date(p.created_at as string).toLocaleDateString('en-US') : 'N/A'}`).join('\n')}` : '\nNo recent payments.';
 
   const agreementsInfo = agreements.length > 0 ? `
 Rental Agreements:
@@ -234,7 +234,7 @@ Guidelines:
 - Be friendly, helpful, and conversational
 - Use the customer's data above to answer questions accurately
 - Format currency using the ${currencySymbol} symbol (${currencyCode})
-- Use British date formats (DD/MM/YYYY)
+- Use American date formats (MM/DD/YYYY)
 - If you don't have specific information, say so politely
 - For complex issues (disputes, refunds, changes), suggest contacting support via the Chat tab
 - NEVER reveal information about other customers or business metrics

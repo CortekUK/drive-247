@@ -427,7 +427,7 @@ Access URLs:
                   </Badge>
                 </TableCell>
                 <TableCell className="text-muted-foreground tabular-nums">
-                  {new Date(tenant.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  {new Date(tenant.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </TableCell>
                 <TableCell className="text-right">
                   <Button variant="ghost" size="sm" asChild>

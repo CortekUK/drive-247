@@ -462,7 +462,7 @@ export default function RequestsPage() {
                         </Select>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground tabular-nums">
-                        {new Date(request.created_at).toLocaleDateString('en-GB', {
+                        {new Date(request.created_at).toLocaleDateString('en-US', {
                           day: '2-digit',
                           month: 'short',
                           year: 'numeric',

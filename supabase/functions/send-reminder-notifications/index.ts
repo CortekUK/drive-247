@@ -52,7 +52,7 @@ function generateReminderEmailContent(reminders: Reminder[], recipientName: stri
         <span style="color: #666; font-size: 13px;">${reminder.message}</span>
       </td>
       <td style="padding: 12px; border-bottom: 1px solid #eee; white-space: nowrap;">
-        ${new Date(reminder.due_on).toLocaleDateString('en-GB')}
+        ${new Date(reminder.due_on).toLocaleDateString('en-US')}
       </td>
     </tr>
   `;

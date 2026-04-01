@@ -2,7 +2,7 @@ export type DistanceUnit = 'km' | 'miles';
 
 const CURRENCY_LOCALE_MAP: Record<string, string> = {
   USD: 'en-US',
-  GBP: 'en-GB',
+  GBP: 'en-US',
   EUR: 'en-IE',
 };
 

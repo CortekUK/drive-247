@@ -857,7 +857,7 @@ export default function VehicleDetail() {
                       <MetricItem label="Balloon Payment" value={Number(vehicle.balloon)} isAmount />
                     )}
                     {vehicle.finance_start_date && (
-                      <MetricItem label="Finance Start" value={format(new Date(vehicle.finance_start_date), "dd/MM/yyyy")} />
+                      <MetricItem label="Finance Start" value={format(new Date(vehicle.finance_start_date), "MM/dd/yyyy")} />
                     )}
                     <MetricItem
                       label="Contract Total"
@@ -973,7 +973,7 @@ export default function VehicleDetail() {
                         {serviceRecords.map((service) => (
                           <TableRow key={service.id} className="hover:bg-muted/50">
                             <TableCell className="whitespace-nowrap">
-                              {format(new Date(service.service_date), "dd/MM/yyyy")}
+                              {format(new Date(service.service_date), "MM/dd/yyyy")}
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline">{service.service_type}</Badge>

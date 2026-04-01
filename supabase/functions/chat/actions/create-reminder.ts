@@ -175,7 +175,7 @@ export const createReminderAction: ActionDefinition = {
 function formatDisplayDate(dateStr: string): string {
   try {
     const date = new Date(dateStr + 'T00:00:00');
-    return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    return date.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
   } catch {
     return dateStr;
   }

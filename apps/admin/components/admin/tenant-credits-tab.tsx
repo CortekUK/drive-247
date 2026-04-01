@@ -30,7 +30,7 @@ interface CreditTransaction {
 }
 
 function formatDateTime(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-GB', {
+  return new Date(dateStr).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',

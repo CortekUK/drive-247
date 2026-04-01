@@ -56,11 +56,11 @@ function generateCustomerEmailContent(data: BookingNotificationRequest, branding
                                             </tr>
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">Start Date:</td>
-                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${new Date(data.startDate).toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${new Date(data.startDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
                                             </tr>
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">End Date:</td>
-                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${new Date(data.endDate).toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${new Date(data.endDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
                                             </tr>
                                         </table>
                                     </td>
@@ -116,11 +116,11 @@ function generateAdminEmailContent(data: BookingNotificationRequest, branding: T
                                             </tr>
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">Start Date:</td>
-                                                <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;">${new Date(data.startDate).toLocaleDateString('en-GB')}</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;">${new Date(data.startDate).toLocaleDateString('en-US')}</td>
                                             </tr>
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">End Date:</td>
-                                                <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;">${new Date(data.endDate).toLocaleDateString('en-GB')}</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;">${new Date(data.endDate).toLocaleDateString('en-US')}</td>
                                             </tr>
                                         </table>
                                     </td>

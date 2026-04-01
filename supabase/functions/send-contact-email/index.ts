@@ -55,10 +55,10 @@ function generateContactEmailContent(
                             <table role="presentation" style="width: 100%; border-collapse: collapse; background: #fef3c7; border-left: 4px solid ${branding.accentColor}; border-radius: 0 8px 8px 0; margin-bottom: 25px;">
                                 <tr>
                                     <td style="padding: 15px 20px;">
-                                        <p style="margin: 0; color: #92400e; font-size: 14px;"><strong>Received:</strong> ${new Date().toLocaleString('en-GB', {
+                                        <p style="margin: 0; color: #92400e; font-size: 14px;"><strong>Received:</strong> ${new Date().toLocaleString('en-US', {
                                           dateStyle: 'full',
                                           timeStyle: 'short',
-                                          timeZone: 'Europe/London'
+                                          timeZone: 'America/New_York'
                                         })}</p>
                                     </td>
                                 </tr>

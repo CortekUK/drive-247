@@ -1,11 +1,44 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-export function middleware(request: NextRequest) {
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+// Domains that belong to us — NOT custom tenant domains
+const PLATFORM_DOMAINS = ['drive-247.com', 'localhost', 'vercel.app'];
+
+function isPlatformDomain(hostname: string): boolean {
+  const host = hostname.split(':')[0];
+  return PLATFORM_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+}
+
+export async function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || '';
 
-  // Extract tenant slug from hostname
-  const tenantSlug = extractTenantSlug(hostname);
+  // 1. Try subdomain extraction first (fast path — no DB call)
+  let tenantSlug = extractTenantSlug(hostname);
+
+  // 2. If no slug and not a platform domain, try custom portal domain lookup
+  if (!tenantSlug && !isPlatformDomain(hostname)) {
+    let host = hostname.split(':')[0];
+    if (host.startsWith('www.')) {
+      host = host.slice(4);
+    }
+
+    const { data } = await supabase
+      .from('tenants')
+      .select('slug')
+      .eq('custom_portal_domain', host)
+      .eq('status', 'active')
+      .single();
+
+    if (data) {
+      tenantSlug = data.slug;
+    }
+  }
 
   // Add tenant context to headers so it's available in server components
   const requestHeaders = new Headers(request.headers);

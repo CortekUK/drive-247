@@ -37,7 +37,7 @@ export const RentalChargeRow = ({ charge }: RentalChargeRowProps) => {
     <TableRow className="hover:bg-muted/50">
       <TableCell className="font-medium">
         {charge.rental_start_date
-          ? formatInTimeZone(new Date(charge.rental_start_date), 'Europe/London', "dd MMM yyyy")
+          ? formatInTimeZone(new Date(charge.rental_start_date), 'America/New_York', "MMM dd, yyyy")
           : '-'}
       </TableCell>
       <TableCell>
@@ -57,7 +57,7 @@ export const RentalChargeRow = ({ charge }: RentalChargeRowProps) => {
         </Badge>
       </TableCell>
       <TableCell>
-        {charge.due_date ? formatInTimeZone(new Date(charge.due_date), 'Europe/London', "dd MMM yyyy") : '-'}
+        {charge.due_date ? formatInTimeZone(new Date(charge.due_date), 'America/New_York', "MMM dd, yyyy") : '-'}
       </TableCell>
       <TableCell className="text-right font-medium">
         {formatCurrency(Math.abs(Number(charge.amount)), currencyCode)}

@@ -181,7 +181,7 @@ export default function PlateDetail() {
                 <div className="text-sm text-muted-foreground">Order Date</div>
                 <div className="flex items-center gap-1">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
-                  {formatInTimeZone(new Date(plate.order_date), 'Europe/London', 'dd/MM/yyyy')}
+                  {formatInTimeZone(new Date(plate.order_date), 'America/New_York', 'MM/dd/yyyy')}
                 </div>
               </div>
             )}
@@ -316,7 +316,7 @@ export default function PlateDetail() {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Created:</span>
-              <span>{formatInTimeZone(new Date(plate.created_at), 'Europe/London', 'dd/MM/yyyy HH:mm')}</span>
+              <span>{formatInTimeZone(new Date(plate.created_at), 'America/New_York', 'MM/dd/yyyy HH:mm')}</span>
             </div>
             {plate.assigned_vehicle_id && (
               <div className="flex justify-between">

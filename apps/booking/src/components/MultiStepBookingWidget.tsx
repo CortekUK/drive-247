@@ -2843,7 +2843,7 @@ const MultiStepBookingWidget = () => {
       if (overlappingBlock) {
         const formatDate = (d: string) => {
           const date = parseDateString(d);
-          return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+          return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
         };
         newErrors.dropoffDate = `Your dates overlap with unavailable dates (${formatDate(overlappingBlock.start_date)} – ${formatDate(overlappingBlock.end_date)}). Please choose different dates.`;
       }

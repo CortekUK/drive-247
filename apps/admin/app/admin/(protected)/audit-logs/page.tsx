@@ -627,7 +627,7 @@ export default function AuditLogsPage() {
   }
 
   function formatDate(dateString: string) {
-    return new Date(dateString).toLocaleDateString('en-GB', {
+    return new Date(dateString).toLocaleDateString('en-US', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',

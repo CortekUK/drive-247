@@ -165,6 +165,14 @@ interface TenantContextType {
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
+// Domains that belong to us — NOT custom tenant domains
+const PLATFORM_DOMAINS = ['drive-247.com', 'localhost', 'vercel.app'];
+
+function isPlatformDomain(hostname: string): boolean {
+  const host = hostname.split(':')[0];
+  return PLATFORM_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+}
+
 /**
  * Extract subdomain from hostname
  * Examples:
@@ -256,78 +264,44 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
       // Extract subdomain from current URL
       const hostname = window.location.hostname;
-      const slug = extractSubdomain(hostname);
-      setTenantSlug(slug);
+      let slug = extractSubdomain(hostname);
 
-      // If no subdomain, this is the main domain
-      if (!slug) {
-        // In development, try to load a default tenant for easier testing
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[TenantContext] No subdomain detected in development, checking for NEXT_PUBLIC_DEFAULT_TENANT_SLUG');
-
-          // Check for default tenant slug from env or use 'test' as fallback
-          const defaultSlug = process.env.NEXT_PUBLIC_DEFAULT_TENANT_SLUG;
-
-          if (defaultSlug) {
-            console.log(`[TenantContext] Using default tenant slug: ${defaultSlug}`);
-            // Query the default tenant
-            const { data: defaultTenant, error: defaultError } = await supabase
-              .from('tenants')
-              .select(`
-                id, slug, company_name, status, contact_email, contact_phone,
-                app_name, primary_color, secondary_color, accent_color,
-                light_primary_color, light_secondary_color, light_accent_color, light_background_color,
-                dark_primary_color, dark_secondary_color, dark_accent_color, dark_background_color,
-                light_header_footer_color, dark_header_footer_color,
-                logo_url, dark_logo_url, favicon_url, hero_background_url,
-                meta_title, meta_description, og_image_url,
-                phone, address, business_hours, google_maps_url,
-                facebook_url, instagram_url, twitter_url, linkedin_url,
-                currency_code, distance_unit, timezone, date_format,
-                min_rental_days, min_rental_hours, max_rental_days, booking_lead_time_hours, minimum_rental_age,
-                require_identity_verification, require_insurance_upload, payment_mode,
-                pickup_location_mode, return_location_mode, fixed_pickup_address, fixed_return_address,
-                pickup_area_radius_km, return_area_radius_km, area_center_lat, area_center_lon,
-                integration_veriff, integration_bonzah,
-                tax_enabled, tax_percentage,
-                service_fee_enabled, service_fee_amount, service_fee_type, service_fee_value,
-                deposit_mode, global_deposit_amount,
-                working_hours_enabled, working_hours_open, working_hours_close, working_hours_always_open,
-                monday_enabled, monday_open, monday_close,
-                tuesday_enabled, tuesday_open, tuesday_close,
-                wednesday_enabled, wednesday_open, wednesday_close,
-                thursday_enabled, thursday_open, thursday_close,
-                friday_enabled, friday_open, friday_close,
-                saturday_enabled, saturday_open, saturday_close,
-                sunday_enabled, sunday_open, sunday_close,
-                delivery_enabled, collection_enabled,
-                fixed_address_enabled, multiple_locations_enabled, area_around_enabled, area_delivery_fee,
-                pickup_fixed_enabled, return_fixed_enabled,
-                pickup_multiple_locations_enabled, return_multiple_locations_enabled,
-                pickup_area_enabled, return_area_enabled,
-                installments_enabled, installment_config,
-                lockbox_enabled,
-                monthly_tier_days,
-                weekend_surcharge_percent, weekend_days,
-                maintenance_banner_enabled, maintenance_banner_message
-              `)
-              .eq('slug', defaultSlug)
-              .eq('status', 'active')
-              .single();
-
-            if (defaultTenant && !defaultError) {
-              console.log(`[TenantContext] Loaded default tenant: ${defaultTenant.company_name} (${defaultTenant.id})`);
-              console.log('[TenantContext] tenant_id:', defaultTenant.id);
-              setTenantSlug(defaultSlug);
-              setTenant(defaultTenant as Tenant);
-              setLoading(false);
-              return;
-            } else {
-              console.warn('[TenantContext] Default tenant not found or inactive:', defaultError?.message);
-            }
-          }
+      // If no subdomain and not a platform domain, try custom domain lookup
+      if (!slug && !isPlatformDomain(hostname)) {
+        let host = hostname;
+        if (host.startsWith('www.')) {
+          host = host.slice(4);
         }
 
+        console.log(`[TenantContext] No subdomain detected, trying custom domain lookup: ${host}`);
+        const { data: customDomainTenant } = await supabase
+          .from('tenants')
+          .select('slug')
+          .eq('custom_booking_domain', host)
+          .eq('status', 'active')
+          .single();
+
+        if (customDomainTenant) {
+          slug = customDomainTenant.slug;
+          console.log(`[TenantContext] Resolved custom domain ${host} → slug: ${slug}`);
+        }
+      }
+
+      // If still no slug, try dev fallback
+      if (!slug) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[TenantContext] No subdomain detected in development, checking for NEXT_PUBLIC_DEFAULT_TENANT_SLUG');
+          const defaultSlug = process.env.NEXT_PUBLIC_DEFAULT_TENANT_SLUG;
+          if (defaultSlug) {
+            slug = defaultSlug;
+            console.log(`[TenantContext] Using default tenant slug: ${slug}`);
+          }
+        }
+      }
+
+      setTenantSlug(slug);
+
+      if (!slug) {
         console.log('[TenantContext] No subdomain detected, running without tenant context');
         console.log('[TenantContext] TIP: Access via subdomain (e.g., test.localhost:3000) or set NEXT_PUBLIC_DEFAULT_TENANT_SLUG in .env.local');
         setTenant(null);

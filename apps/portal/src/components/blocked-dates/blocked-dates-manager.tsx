@@ -103,7 +103,7 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
         });
         if (existingOverlap) {
           setOverlapWarning(
-            `Note: This overlaps with an existing block (${format(new Date(existingOverlap.start_date), 'dd MMM yyyy')} – ${format(new Date(existingOverlap.end_date), 'dd MMM yyyy')}).`
+            `Note: This overlaps with an existing block (${format(new Date(existingOverlap.start_date), 'MMM dd, yyyy')} – ${format(new Date(existingOverlap.end_date), 'MMM dd, yyyy')}).`
           );
         }
       }
@@ -374,7 +374,7 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
                       <span className="font-medium">{rental.customer_name}</span>
                       <span className="text-muted-foreground">{rental.vehicle_reg}</span>
                       <span className="text-muted-foreground">
-                        {format(new Date(rental.start_date), 'dd MMM')} – {format(new Date(rental.end_date), 'dd MMM yyyy')}
+                        {format(new Date(rental.start_date), 'MMM dd')} – {format(new Date(rental.end_date), 'MMM dd, yyyy')}
                       </span>
                     </div>
                   ))}

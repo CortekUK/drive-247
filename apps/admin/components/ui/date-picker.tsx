@@ -35,7 +35,7 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date", class
           )}
         >
           <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-          {value ? format(value, "dd MMM yyyy") : <span>{placeholder}</span>}
+          {value ? format(value, "MMM dd, yyyy") : <span>{placeholder}</span>}
           {value && (
             <span
               role="button"

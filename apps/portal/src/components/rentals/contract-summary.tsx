@@ -143,11 +143,11 @@ export const ContractSummary = ({
             <div className="space-y-1 pl-6">
               <div className="flex justify-between items-center text-sm">
                 <span>First Charge:</span>
-                <span className="font-medium">{format(startDate, 'dd MMM yyyy')}</span>
+                <span className="font-medium">{format(startDate, 'MMM dd, yyyy')}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span>Last Charge:</span>
-                <span className="font-medium">{format(endDate, 'dd MMM yyyy')}</span>
+                <span className="font-medium">{format(endDate, 'MMM dd, yyyy')}</span>
               </div>
             </div>
           </div>

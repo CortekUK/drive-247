@@ -42,6 +42,14 @@ interface TenantContextType {
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
+// Domains that belong to us — NOT custom tenant domains
+const PLATFORM_DOMAINS = ['drive-247.com', 'localhost', 'vercel.app'];
+
+function isPlatformDomain(hostname: string): boolean {
+  const host = hostname.split(':')[0];
+  return PLATFORM_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+}
+
 /**
  * Extract tenant slug from hostname for portal app
  * Portal uses the pattern: {tenant}.portal.domain.com
@@ -113,13 +121,34 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // Extract tenant slug from subdomain (e.g., acme-portal.drive-247.com → acme)
       const hostname = window.location.hostname;
       let slug = extractTenantSlug(hostname);
-      
+
+      // If no subdomain and not a platform domain, try custom portal domain lookup
+      if (!slug && !isPlatformDomain(hostname)) {
+        let host = hostname;
+        if (host.startsWith('www.')) {
+          host = host.slice(4);
+        }
+
+        console.log(`[TenantContext] No subdomain detected, trying custom portal domain lookup: ${host}`);
+        const { data: customDomainTenant } = await supabase
+          .from('tenants')
+          .select('slug')
+          .eq('custom_portal_domain', host)
+          .eq('status', 'active')
+          .single();
+
+        if (customDomainTenant) {
+          slug = customDomainTenant.slug;
+          console.log(`[TenantContext] Resolved custom portal domain ${host} → slug: ${slug}`);
+        }
+      }
+
       // DEV FALLBACK: If no slug detected on localhost, use 'drive-247' as default
       if (!slug && (hostname === 'localhost' || hostname === '127.0.0.1')) {
         console.log('[TenantContext] DEV MODE: Using default tenant "drive-247"');
         slug = 'drive-247';
       }
-      
+
       setTenantSlug(slug);
 
       // If no tenant subdomain, show error (portal requires tenant context)

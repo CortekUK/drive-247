@@ -148,7 +148,7 @@ Guidelines:
 - Reference specific data when available
 - If you don't have enough information, say so
 - Format currency using the ${sym} symbol (${currencyCode})
-- Use British English spelling and date formats (DD/MM/YYYY)
+- Use American English spelling and date formats (MM/DD/YYYY)
 - When mentioning specific records, include relevant identifiers (rental numbers, registration plates, etc.)
 - Use **markdown formatting** for all responses: bold for emphasis, numbered lists for steps, bullet points for options
 - When explaining how to navigate to a feature, be specific: mention the exact sidebar item, tab name, and section`;

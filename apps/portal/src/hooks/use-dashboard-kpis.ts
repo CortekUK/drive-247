@@ -26,7 +26,7 @@ interface UseDashboardKPIsParams {
 
 export const useDashboardKPIs = ({ from, to }: UseDashboardKPIsParams = {}) => {
   const { settings } = useSettings();
-  const timezone = settings?.timezone || 'Europe/London';
+  const timezone = settings?.timezone || 'America/New_York';
   
   return useQuery({
     queryKey: ['dashboard-kpis', from, to, timezone],

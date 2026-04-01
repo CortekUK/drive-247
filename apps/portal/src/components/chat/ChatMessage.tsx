@@ -35,7 +35,7 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const formattedTime = message.timestamp.toLocaleTimeString('en-GB', {
+  const formattedTime = message.timestamp.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
   });

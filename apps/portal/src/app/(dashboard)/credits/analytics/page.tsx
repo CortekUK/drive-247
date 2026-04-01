@@ -13,12 +13,12 @@ import { useCreditWallet } from "@/hooks/use-credit-wallet";
 function formatMonthLabel(monthStr: string) {
   const [year, month] = monthStr.split("-");
   const date = new Date(Number(year), Number(month) - 1);
-  return date.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+  return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
 }
 
 function formatDayLabel(dayStr: string) {
   const d = new Date(dayStr);
-  return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 type TimeRange = "7d" | "30d" | "3m" | "6m" | "12m";

@@ -125,7 +125,7 @@ export function RejectedCustomerDialog({
                 <p className="text-xs text-muted-foreground">Registered</p>
                 <p className="text-sm">
                   {customer.created_at
-                    ? format(new Date(customer.created_at), "dd MMM yyyy")
+                    ? format(new Date(customer.created_at), "MMM dd, yyyy")
                     : "—"}
                 </p>
               </div>
@@ -160,7 +160,7 @@ export function RejectedCustomerDialog({
                     {customer.rejected_at
                       ? format(
                           new Date(customer.rejected_at),
-                          "dd MMM yyyy, HH:mm"
+                          "MMM dd, yyyy, HH:mm"
                         )
                       : "—"}
                   </p>

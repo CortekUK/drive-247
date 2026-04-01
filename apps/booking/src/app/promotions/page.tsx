@@ -294,7 +294,7 @@ const Promotions = () => {
                           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
                             <Calendar className="w-4 h-4" />
                             <span>
-                              Valid: {format(new Date(promo.start_date), "dd MMM")} – {format(new Date(promo.end_date), "dd MMM yyyy")}
+                              Valid: {format(new Date(promo.start_date), "MMM dd")} – {format(new Date(promo.end_date), "MMM dd, yyyy")}
                             </span>
                           </div>
 

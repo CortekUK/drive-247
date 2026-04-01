@@ -330,7 +330,7 @@ const AuditLogs = () => {
                           <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                           <div>
                             <div className="font-medium">
-                              {format(new Date(log.created_at), "dd MMM yyyy")}
+                              {format(new Date(log.created_at), "MMM dd, yyyy")}
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {format(new Date(log.created_at), "HH:mm:ss")}

@@ -169,7 +169,7 @@ export default function PaymentDetail() {
               <div className="text-sm text-muted-foreground">Payment Date</div>
               <div className="flex items-center gap-1">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
-                {formatInTimeZone(new Date(payment.payment_date), 'Europe/London', 'dd/MM/yyyy')}
+                {formatInTimeZone(new Date(payment.payment_date), 'America/New_York', 'MM/dd/yyyy')}
               </div>
             </div>
             <div>

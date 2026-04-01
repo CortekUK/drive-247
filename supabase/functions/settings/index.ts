@@ -118,7 +118,7 @@ serve(async (req) => {
           company_name: 'Fleet Management System',
           timezone: 'Europe/London',
           currency_code: 'USD',
-          date_format: 'DD/MM/YYYY',
+          date_format: 'MM/DD/YYYY',
           reminder_due_today: true,
           reminder_overdue_1d: true,
           reminder_overdue_multi: true,

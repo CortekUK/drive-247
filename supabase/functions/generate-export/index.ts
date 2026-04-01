@@ -199,7 +199,7 @@ serve(async (req) => {
         if (!value) return '';
         try {
           const date = new Date(value);
-          return date.toLocaleDateString('en-GB'); // DD/MM/YYYY format
+          return date.toLocaleDateString('en-US'); // MM/DD/YYYY format
         } catch {
           return String(value);
         }
@@ -331,7 +331,7 @@ serve(async (req) => {
         if (!value) return '';
         try {
           const date = new Date(value);
-          return date.toLocaleDateString('en-GB'); // DD/MM/YYYY format
+          return date.toLocaleDateString('en-US'); // MM/DD/YYYY format
         } catch {
           return String(value);
         }

@@ -153,7 +153,7 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
       case 'currency':
         return `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       case 'date':
-        return format(new Date(value), 'dd/MM/yyyy');
+        return format(new Date(value), 'MM/dd/yyyy');
       default:
         return String(value);
     }
@@ -192,7 +192,7 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
             <CardContent className="space-y-2">
               <div className="flex items-center gap-2 text-sm">
                 <Badge variant="outline">
-                  {format(filters.fromDate, 'dd/MM/yyyy')} - {format(filters.toDate, 'dd/MM/yyyy')}
+                  {format(filters.fromDate, 'MM/dd/yyyy')} - {format(filters.toDate, 'MM/dd/yyyy')}
                 </Badge>
                 {activeFilters.map((filter, index) => (
                   <Badge key={index} variant="secondary" className="text-xs">

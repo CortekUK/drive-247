@@ -205,7 +205,7 @@ export const DataTable: React.FC<DataTableProps> = ({ reportType, filters }) => 
       case 'currency':
         return `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       case 'date':
-        return format(new Date(value), 'dd/MM/yyyy');
+        return format(new Date(value), 'MM/dd/yyyy');
       default:
         return String(value);
     }

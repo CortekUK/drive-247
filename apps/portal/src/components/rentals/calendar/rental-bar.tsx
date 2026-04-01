@@ -26,7 +26,7 @@ interface RentalBarProps {
 }
 
 function formatDate(dateStr: string) {
-  return format(parseISO(dateStr), "dd MMM yyyy");
+  return format(parseISO(dateStr), "MMM dd, yyyy");
 }
 
 function getDuration(start: string, end: string | null) {

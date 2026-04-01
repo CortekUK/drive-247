@@ -38,7 +38,7 @@ export const RentalPaymentRow = ({ payment }: RentalPaymentRowProps) => {
     <>
       <TableRow className="hover:bg-muted/50">
         <TableCell className="font-medium">
-          {formatInTimeZone(new Date(payment.payment_date), 'Europe/London', "dd/MM/yyyy")}
+          {formatInTimeZone(new Date(payment.payment_date), 'America/New_York', "MM/dd/yyyy")}
         </TableCell>
         <TableCell>
           <Badge variant="default" className="bg-green-600 hover:bg-green-700">Payment</Badge>
@@ -86,7 +86,7 @@ export const RentalPaymentRow = ({ payment }: RentalPaymentRowProps) => {
                 <div key={index} className="text-xs text-muted-foreground flex justify-between">
                   <span>
                     {allocation.charge_category}
-                    {allocation.charge_due_date && ` (due ${formatInTimeZone(new Date(allocation.charge_due_date), 'Europe/London', "dd/MM/yyyy")})`}
+                    {allocation.charge_due_date && ` (due ${formatInTimeZone(new Date(allocation.charge_due_date), 'America/New_York', "MM/dd/yyyy")})`}
                   </span>
                   <span>{formatCurrency(allocation.amount_applied, currencyCode)}</span>
                 </div>
