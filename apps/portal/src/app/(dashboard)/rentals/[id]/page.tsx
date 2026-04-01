@@ -4358,12 +4358,14 @@ const RentalDetail = () => {
           open={showTargetedPayment}
           onOpenChange={(open) => {
             setShowTargetedPayment(open);
-            if (!open) setSelectedCategories(new Set());
+            if (!open) { setSelectedCategories(new Set()); setSuperchargerPaymentCharge(null); }
           }}
           customer_id={rental.customers?.id}
           vehicle_id={rental.vehicles?.id}
           rental_id={rental.id}
           defaultAmount={(() => {
+            // If charging from supercharger dialog, use individual charge amount
+            if (superchargerPaymentCharge) return Number(superchargerPaymentCharge.amount);
             if (selectedCategories.size === 0) return undefined;
             return Array.from(selectedCategories).reduce((sum, c) => sum + (categoryRemainingAmounts[c] ?? 0), 0);
           })()}
@@ -4661,10 +4663,11 @@ const RentalDetail = () => {
           });
         }}
         onCharge={(charge) => {
-          // Close supercharger dialog, open Add Payment with pre-filled amount
+          // Close supercharger dialog, open targeted payment with individual charge amount
           setShowSuperchargerDialog(false);
           setSuperchargerPaymentCharge(charge);
-          setShowAddPayment(true);
+          setSelectedCategories(new Set(['Supercharger']));
+          setShowTargetedPayment(true);
         }}
       />
 
