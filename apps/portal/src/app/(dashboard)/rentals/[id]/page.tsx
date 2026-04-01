@@ -4401,6 +4401,15 @@ const RentalDetail = () => {
               queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
               queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
             }
+
+            // Mark supercharger charge as "charged" after payment
+            if (superchargerPaymentCharge) {
+              teslaCharges.markCharged.mutate({
+                chargeId: superchargerPaymentCharge.id,
+                chargedAmount: Number(superchargerPaymentCharge.amount),
+              });
+              setSuperchargerPaymentCharge(null);
+            }
           }}
         />
       )}
