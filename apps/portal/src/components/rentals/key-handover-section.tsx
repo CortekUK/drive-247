@@ -695,7 +695,7 @@ export const KeyHandoverSection = ({
             {/* Handed timestamp */}
             {givingCompleted && givingHandover?.handed_at && (
               <p className="text-sm text-muted-foreground">
-                Collected on: {new Date(givingHandover.handed_at).toLocaleString()}
+                Collected on: {new Date(givingHandover.handed_at).toLocaleString('en-US')}
               </p>
             )}
 
@@ -836,7 +836,7 @@ export const KeyHandoverSection = ({
             {/* Handed timestamp */}
             {receivingCompleted && receivingHandover?.handed_at && (
               <p className="text-sm text-muted-foreground">
-                Returned on: {new Date(receivingHandover.handed_at).toLocaleString()}
+                Returned on: {new Date(receivingHandover.handed_at).toLocaleString('en-US')}
               </p>
             )}
 

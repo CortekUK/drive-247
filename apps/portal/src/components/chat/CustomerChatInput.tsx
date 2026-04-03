@@ -1,33 +1,43 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Send, X, Car, MessageSquare, Smartphone } from 'lucide-react';
+import { Send, X, Car, Paperclip, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSocket, type MessageChannel } from '@/contexts/RealtimeChatContext';
 import { cn } from '@/lib/utils';
 import { BookingPicker, BookingReference } from './BookingPicker';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { toast } from '@/hooks/use-toast';
+
+interface ChannelConfig {
+  key: MessageChannel | 'call';
+  label: string;
+  sendBg: string;
+  sendHover: string;
+}
 
 interface CustomerChatInputProps {
   customerId: string;
   disabled?: boolean;
   onSend?: () => void;
-  defaultChannel?: MessageChannel;
-  smsEnabled?: boolean;
+  activeChannel: MessageChannel;
+  channelConfig: ChannelConfig;
+  customerPhone?: string | null;
 }
 
-export function CustomerChatInput({ customerId, disabled, onSend, defaultChannel = 'in_app', smsEnabled = false }: CustomerChatInputProps) {
+export function CustomerChatInput({
+  customerId,
+  disabled,
+  onSend,
+  activeChannel,
+  channelConfig,
+  customerPhone,
+}: CustomerChatInputProps) {
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<BookingReference | null>(null);
-  const [activeChannel, setActiveChannel] = useState<MessageChannel>(defaultChannel);
   const { sendMessage, sendTyping } = useSocket();
 
-  // Update active channel when default changes (e.g., customer replies via SMS)
-  useEffect(() => {
-    setActiveChannel(defaultChannel);
-  }, [defaultChannel]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -43,13 +53,7 @@ export function CustomerChatInput({ customerId, disabled, onSend, defaultChannel
   // Handle typing indicator
   const handleTyping = useCallback(() => {
     sendTyping(customerId, true);
-
-    // Clear existing timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    // Stop typing indicator after 2 seconds of no input
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
       sendTyping(customerId, false);
     }, 2000);
@@ -58,44 +62,41 @@ export function CustomerChatInput({ customerId, disabled, onSend, defaultChannel
   // Cleanup typing timeout on unmount
   useEffect(() => {
     return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
   }, []);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     const trimmedMessage = message.trim();
-    // Allow sending if there's a message OR a booking attached
     if ((!trimmedMessage && !selectedBooking) || isSending) return;
+
+    // Block SMS if no phone number
+    if (activeChannel === 'sms' && !customerPhone) {
+      toast({ title: 'No phone number', description: 'Add a phone number to send SMS.', variant: 'destructive' });
+      return;
+    }
 
     setIsSending(true);
 
-    // Build metadata if booking is attached
     const metadata = selectedBooking
-      ? {
-          type: 'booking_reference',
-          booking: selectedBooking,
-        }
+      ? { type: 'booking_reference', booking: selectedBooking }
       : undefined;
 
-    sendMessage(customerId, trimmedMessage || 'Shared a booking', metadata, activeChannel);
+    // Clear input immediately for responsive feel
+    const msgToSend = trimmedMessage || 'Shared a booking';
     setMessage('');
     setSelectedBooking(null);
     sendTyping(customerId, false);
-    setIsSending(false);
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-    // Reset textarea height
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
+    try {
+      await sendMessage(customerId, msgToSend, metadata, activeChannel);
+    } finally {
+      setIsSending(false);
+      textareaRef.current?.focus();
+      onSend?.();
     }
-
-    // Focus back on textarea
-    textareaRef.current?.focus();
-
-    // Callback for parent component
-    onSend?.();
-  }, [message, selectedBooking, customerId, sendMessage, sendTyping, isSending, onSend]);
+  }, [message, selectedBooking, customerId, sendMessage, sendTyping, isSending, onSend, activeChannel, customerPhone]);
 
   const handleBookingSelect = useCallback((booking: BookingReference) => {
     setSelectedBooking(booking);
@@ -108,7 +109,6 @@ export function CustomerChatInput({ customerId, disabled, onSend, defaultChannel
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Send on Enter (without Shift)
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSend();
@@ -131,6 +131,13 @@ export function CustomerChatInput({ customerId, disabled, onSend, defaultChannel
     ? [selectedBooking.vehicle.make, selectedBooking.vehicle.model].filter(Boolean).join(' ')
     : '';
 
+  const placeholderMap: Record<string, string> = {
+    in_app: 'Type a message...',
+    sms: 'Type an SMS...',
+    whatsapp: 'Type a WhatsApp message...',
+    email: 'Type an email...',
+  };
+
   return (
     <div className="border-t border-border/50 bg-card/50 backdrop-blur-sm">
       {/* Selected booking preview */}
@@ -145,12 +152,7 @@ export function CustomerChatInput({ customerId, disabled, onSend, defaultChannel
                 <span className="text-muted-foreground">{selectedBooking.rentalNumber}</span>
               </>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-5 w-5 ml-1 hover:bg-background/50"
-              onClick={handleRemoveBooking}
-            >
+            <Button variant="ghost" size="icon" className="h-5 w-5 ml-1 hover:bg-background/50" onClick={handleRemoveBooking}>
               <X className="h-3 w-3" />
               <span className="sr-only">Remove booking</span>
             </Button>
@@ -162,40 +164,12 @@ export function CustomerChatInput({ customerId, disabled, onSend, defaultChannel
       <div className="p-4">
         <div
           className={cn(
-            'flex items-end gap-3 rounded-2xl border bg-background p-2 transition-all duration-200',
+            'flex items-end gap-2 rounded-2xl border bg-background p-2 transition-all duration-200',
             isFocused ? 'border-primary/50 ring-2 ring-primary/10' : 'border-border/50'
           )}
         >
-          {/* Channel toggle + Booking picker */}
-          <div className="pb-1 flex items-center gap-1">
-            {smsEnabled && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={cn(
-                        'h-9 w-9 rounded-xl transition-all',
-                        activeChannel === 'sms'
-                          ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'
-                          : 'text-muted-foreground hover:text-foreground'
-                      )}
-                      onClick={() => setActiveChannel(activeChannel === 'sms' ? 'in_app' : 'sms')}
-                    >
-                      {activeChannel === 'sms' ? (
-                        <Smartphone className="h-4 w-4" />
-                      ) : (
-                        <MessageSquare className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    {activeChannel === 'sms' ? 'Sending via SMS — click to switch to In-App' : 'Sending In-App — click to switch to SMS'}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+          {/* Booking picker */}
+          <div className="pb-1">
             <BookingPicker customerId={customerId} onSelect={handleBookingSelect} disabled={disabled} />
           </div>
 
@@ -207,7 +181,7 @@ export function CustomerChatInput({ customerId, disabled, onSend, defaultChannel
             onKeyDown={handleKeyDown}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
-            placeholder="Type a message..."
+            placeholder={placeholderMap[activeChannel] || 'Type a message...'}
             disabled={disabled}
             className={cn(
               'flex-1 resize-none bg-transparent border-0 outline-none',
@@ -219,18 +193,26 @@ export function CustomerChatInput({ customerId, disabled, onSend, defaultChannel
             rows={1}
           />
 
-          {/* Send button */}
+          {/* Send button — color matches active channel */}
           <Button
             size="icon"
             onClick={handleSend}
-            disabled={!canSend}
+            disabled={!canSend && !isSending}
             className={cn(
-              'h-10 w-10 shrink-0 rounded-xl transition-all',
-              canSend ? 'bg-primary hover:bg-primary/90' : 'bg-muted text-muted-foreground'
+              'h-10 w-10 shrink-0 rounded-xl transition-all text-white',
+              isSending
+                ? cn(channelConfig.sendBg, 'opacity-70')
+                : canSend
+                ? cn(channelConfig.sendBg, channelConfig.sendHover)
+                : 'bg-muted text-muted-foreground'
             )}
           >
-            <Send className="h-4 w-4" />
-            <span className="sr-only">Send message</span>
+            {isSending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            <span className="sr-only">{isSending ? 'Sending...' : 'Send message'}</span>
           </Button>
         </div>
       </div>

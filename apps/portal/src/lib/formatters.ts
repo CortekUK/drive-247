@@ -59,7 +59,7 @@ export const formatDate = (
     return format(dateObj, dateFnsFormat);
   } catch (error) {
     console.error('Date formatting error:', error);
-    return dateObj.toLocaleDateString();
+    return dateObj.toLocaleDateString('en-US');
   }
 };
 
@@ -87,7 +87,7 @@ export const formatDateTime = (
     return format(dateObj, fullFormat);
   } catch (error) {
     console.error('DateTime formatting error:', error);
-    return dateObj.toLocaleString();
+    return dateObj.toLocaleString('en-US');
   }
 };
 

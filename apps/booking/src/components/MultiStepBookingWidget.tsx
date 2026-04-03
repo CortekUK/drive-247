@@ -4635,7 +4635,7 @@ const MultiStepBookingWidget = () => {
                                   <SelectItem key={doc.id} value={doc.id}>
                                     {doc.insurance_provider || doc.document_name}
                                     {doc.policy_number && ` - ${doc.policy_number}`}
-                                    {doc.end_date && ` (Expires: ${new Date(doc.end_date).toLocaleDateString()})`}
+                                    {doc.end_date && ` (Expires: ${new Date(doc.end_date).toLocaleDateString('en-US')})`}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -4934,7 +4934,7 @@ const MultiStepBookingWidget = () => {
                 const effectiveStart = d && d < todayStr ? todayStr : d;
                 const warnings: string[] = [];
                 if (d && d < todayStr) {
-                  warnings.push(`Your rental starts ${new Date(d + 'T00:00:00').toLocaleDateString()} which is in the past. Insurance coverage will begin from today.`);
+                  warnings.push(`Your rental starts ${new Date(d + 'T00:00:00').toLocaleDateString('en-US')} which is in the past. Insurance coverage will begin from today.`);
                 }
                 if (effectiveStart && e) {
                   const s = new Date(effectiveStart + 'T00:00:00');

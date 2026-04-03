@@ -84,7 +84,7 @@ export const DASHBOARD_SLIDES = [
     title: "Payments & Documents",
     description: "Centralised payment processing and document management.",
     bullets: [
-      "Collect deposits and rental payments",
+      "Collect pre-authorizations and rental payments",
       "Track payment status and transaction history",
       "Upload and verify renter documents",
       "Store agreements and booking files securely",

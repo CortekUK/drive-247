@@ -53,7 +53,7 @@ export const Timeline = React.forwardRef<HTMLDivElement, TimelineProps>(
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-medium">{item.title}</h4>
                 <time className="text-xs text-muted-foreground">
-                  {new Date(item.date).toLocaleDateString()}
+                  {new Date(item.date).toLocaleDateString('en-US')}
                 </time>
               </div>
               {item.description && (

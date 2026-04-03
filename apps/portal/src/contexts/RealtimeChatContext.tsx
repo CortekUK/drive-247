@@ -375,23 +375,52 @@ export function RealtimeChatProvider({ children }: { children: React.ReactNode }
       const channelId = await getOrCreateChannel(customerId);
       if (!channelId) return;
 
-      // For SMS: call the edge function which handles Twilio + DB insert
-      if (channel === 'sms') {
+      // For SMS / Email: call the edge function which handles delivery + DB insert
+      if (channel === 'sms' || channel === 'email') {
+        const fnName = channel === 'sms' ? 'send-sms-message' : 'send-email-message';
         try {
-          const { data, error } = await supabase.functions.invoke('send-sms-message', {
+          const { data, error } = await supabase.functions.invoke(fnName, {
             body: {
               channelId,
               customerId,
               content,
+              tenantId: tenant.id,
             },
           });
 
           if (error) {
-            console.error('[RealtimeChat] SMS send error:', error);
+            console.error(`[RealtimeChat] ${channel} send error:`, error);
+            return;
           }
-          // The edge function inserts the message, Postgres Changes will broadcast it
+
+          // Manually emit the new message to listeners so the UI updates immediately
+          // (Postgres Changes from service_role inserts can be delayed or missed)
+          if (data?.messageId) {
+            const { data: inserted } = await supabase
+              .from('chat_channel_messages')
+              .select('*')
+              .eq('id', data.messageId)
+              .single();
+
+            if (inserted) {
+              const payload: NewMessagePayload = {
+                id: inserted.id,
+                channelId: inserted.channel_id,
+                senderType: inserted.sender_type,
+                senderId: inserted.sender_id,
+                content: inserted.content,
+                isRead: inserted.is_read,
+                createdAt: inserted.created_at,
+                metadata: inserted.metadata || {},
+                channel: inserted.channel || channel,
+                externalId: inserted.external_id,
+                externalStatus: inserted.external_status,
+              };
+              messageListenersRef.current.forEach((listener) => listener(payload));
+            }
+          }
         } catch (err) {
-          console.error('[RealtimeChat] SMS send failed:', err);
+          console.error(`[RealtimeChat] ${channel} send failed:`, err);
         }
         return;
       }
@@ -414,6 +443,22 @@ export function RealtimeChatProvider({ children }: { children: React.ReactNode }
         console.error('[RealtimeChat] Error sending message:', error);
         return;
       }
+
+      // Manually notify listeners so the UI updates immediately
+      const payload: NewMessagePayload = {
+        id: message.id,
+        channelId: message.channel_id,
+        senderType: message.sender_type,
+        senderId: message.sender_id,
+        content: message.content,
+        isRead: message.is_read,
+        createdAt: message.created_at,
+        metadata: message.metadata || {},
+        channel: message.channel || 'in_app',
+        externalId: message.external_id,
+        externalStatus: message.external_status,
+      };
+      messageListenersRef.current.forEach((listener) => listener(payload));
 
       // Update channel's last_message_at
       await supabase

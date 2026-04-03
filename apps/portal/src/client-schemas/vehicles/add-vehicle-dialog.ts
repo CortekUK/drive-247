@@ -17,7 +17,7 @@ export const addVehicleDialogSchema = z.object({
   daily_rent: z.number({ required_error: "Daily rent is required", invalid_type_error: "Daily rent must be a number" }).min(0, "Daily rent must be positive"),
   weekly_rent: z.number({ required_error: "Weekly rent is required", invalid_type_error: "Weekly rent must be a number" }).min(0, "Weekly rent must be positive"),
   monthly_rent: z.number({ required_error: "Monthly rent is required", invalid_type_error: "Monthly rent must be a number" }).min(0, "Monthly rent must be positive"),
-  security_deposit: z.union([z.number().min(0, "Security deposit must be positive"), z.undefined(), z.null()]).optional(),
+  security_deposit: z.union([z.number().min(0, "Pre-authorization amount must be positive"), z.undefined(), z.null()]).optional(),
   daily_mileage: z.union([z.number().int().min(1, "Mileage must be at least 1"), z.undefined(), z.null()]).optional(),
   weekly_mileage: z.union([z.number().int().min(1, "Mileage must be at least 1"), z.undefined(), z.null()]).optional(),
   monthly_mileage: z.union([z.number().int().min(1, "Mileage must be at least 1"), z.undefined(), z.null()]).optional(),

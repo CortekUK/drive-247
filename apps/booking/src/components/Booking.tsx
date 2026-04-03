@@ -668,7 +668,7 @@ export default function Booking() {
                     </p>
                     <p className="flex items-center gap-2">
                       <span className="w-1 h-1 rounded-full bg-accent" />
-                      Security deposit required
+                      Pre-authorization required
                     </p>
                   </div>
                 </div>

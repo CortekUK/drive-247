@@ -154,7 +154,7 @@ export const DeleteRentalDialog = ({
               </p>
               <p>
                 <span className="font-medium">Start Date:</span>{" "}
-                {new Date(rental.start_date).toLocaleDateString()}
+                {new Date(rental.start_date).toLocaleDateString('en-US')}
               </p>
               <p>
                 <span className="font-medium">Monthly Amount:</span>{" "}

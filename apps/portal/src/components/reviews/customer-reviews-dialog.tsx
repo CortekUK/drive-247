@@ -67,7 +67,7 @@ export function CustomerReviewsDialog({
                     )}
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    {new Date(review.created_at).toLocaleDateString()}
+                    {new Date(review.created_at).toLocaleDateString('en-US')}
                   </span>
                 </div>
 
@@ -76,8 +76,8 @@ export function CustomerReviewsDialog({
                   <p className="text-xs text-muted-foreground">
                     {review.rental.vehicle.make} {review.rental.vehicle.model} ({review.rental.vehicle.reg})
                     {" — "}
-                    {new Date(review.rental.start_date).toLocaleDateString()}
-                    {review.rental.end_date && ` to ${new Date(review.rental.end_date).toLocaleDateString()}`}
+                    {new Date(review.rental.start_date).toLocaleDateString('en-US')}
+                    {review.rental.end_date && ` to ${new Date(review.rental.end_date).toLocaleDateString('en-US')}`}
                   </p>
                 )}
 

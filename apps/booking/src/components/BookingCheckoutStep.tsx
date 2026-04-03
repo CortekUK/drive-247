@@ -1530,10 +1530,10 @@ export default function BookingCheckoutStep({
                     </p>
                   </div>
 
-                  {/* Only show security deposit if > 0 */}
+                  {/* Only show pre-authorization if > 0 */}
                   {calculateSecurityDeposit() > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Security Deposit</span>
+                      <span className="text-muted-foreground">Pre-Authorization</span>
                       <span className="font-medium">{fmt(calculateSecurityDeposit())}</span>
                     </div>
                   )}
@@ -1550,7 +1550,7 @@ export default function BookingCheckoutStep({
 
                   <p className="text-xs text-muted-foreground mt-4">
                     {calculateSecurityDeposit() > 0
-                      ? "Security deposit will be collected now. Rental charges confirmed after approval."
+                      ? "Pre-authorization will be collected now. Rental charges confirmed after approval."
                       : "No payment required now. You'll be contacted to confirm your booking."}
                   </p>
                 </>
@@ -1713,10 +1713,10 @@ export default function BookingCheckoutStep({
                     </div>
                   )}
 
-                  {/* Security deposit line item - only show when > 0 */}
+                  {/* Pre-authorization line item - only show when > 0 */}
                   {calculateSecurityDeposit() > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Security Deposit</span>
+                      <span className="text-muted-foreground">Pre-Authorization</span>
                       <span className="font-medium">{fmt(calculateSecurityDeposit())}</span>
                     </div>
                   )}

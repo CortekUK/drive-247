@@ -76,7 +76,7 @@ export default function PaymentsAnalyticsPage() {
     });
     return days.map(d => {
       const key = format(d, 'yyyy-MM-dd');
-      return { date: format(d, 'dd MMM'), amount: dayMap.get(key) || 0 };
+      return { date: format(d, 'MMM dd'), amount: dayMap.get(key) || 0 };
     });
   }, [chartPayments]);
 

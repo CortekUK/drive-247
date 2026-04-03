@@ -1601,7 +1601,7 @@ const CreateRental = () => {
       });
       if (effectiveDeliveryFee > 0) breakdownForPayment.push({ label: 'Delivery Fee', amount: effectiveDeliveryFee });
       if (!sameAsPickup && effectiveCollectionFee > 0) breakdownForPayment.push({ label: 'Collection Fee', amount: effectiveCollectionFee });
-      if (securityDeposit > 0) breakdownForPayment.push({ label: 'Security Deposit', amount: securityDeposit });
+      if (securityDeposit > 0) breakdownForPayment.push({ label: 'Pre-Authorization', amount: securityDeposit });
 
       // Store rental data for invoice dialog
       setCreatedRentalData({
@@ -2955,7 +2955,7 @@ const CreateRental = () => {
                             {showDeposit && (
                               <div className="flex items-center justify-between gap-4">
                                 <div className="flex-1 min-w-0">
-                                  <Label className="text-sm">Security Deposit</Label>
+                                  <Label className="text-sm">Pre-Authorization</Label>
                                   <p className="text-xs text-muted-foreground mt-0.5">
                                     Auto: {formatCurrency(autoDeposit, currency)}{rentalSettings?.deposit_mode === 'per_vehicle' ? ' (per-vehicle)' : ' (global)'}
                                   </p>
@@ -3174,7 +3174,7 @@ const CreateRental = () => {
                           <div className="rounded-md bg-muted/50 p-3 text-xs space-y-1.5">
                             <p className="font-medium text-sm mb-2">Payment Schedule</p>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">Today (deposit + fees{chargeFirstUpfront ? ' + 1st installment' : ''})</span>
+                              <span className="text-muted-foreground">Today (pre-auth + fees{chargeFirstUpfront ? ' + 1st installment' : ''})</span>
                               <span className="font-medium">
                                 {formatCurrency(
                                   chargeFirstUpfront ? upfrontOnlyAmount + effectiveInstallmentAmount : upfrontOnlyAmount,
@@ -3619,7 +3619,7 @@ const CreateRental = () => {
                               const effectiveStart = startStr && startStr < todayStr ? todayStr : startStr;
                               const warnings: string[] = [];
                               if (startStr && startStr < todayStr) {
-                                warnings.push(`Rental starts ${new Date(startStr + 'T00:00:00').toLocaleDateString()} which is in the past. Insurance coverage will begin from today.`);
+                                warnings.push(`Rental starts ${new Date(startStr + 'T00:00:00').toLocaleDateString('en-US')} which is in the past. Insurance coverage will begin from today.`);
                               }
                               if (effectiveStart && endStr) {
                                 const s = new Date(effectiveStart + 'T00:00:00');
@@ -4074,7 +4074,7 @@ const CreateRental = () => {
                           {effectiveDeposit > 0 && (
                             <div className="flex items-center justify-between">
                               <p className="text-xs text-muted-foreground">
-                                Security Deposit
+                                Pre-Authorization
                                 {depositOverride !== null && <span className="text-amber-500 ml-1">*</span>}
                               </p>
                               <p className="text-xs font-medium">{formatCurrency(effectiveDeposit, currency)}</p>

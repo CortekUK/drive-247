@@ -469,12 +469,12 @@ export function BuyInsuranceDialog({
                     return (
                       <>
                         <p className="font-medium">
-                          {new Date(effectiveStart + 'T00:00:00').toLocaleDateString()} - {new Date(rentalEnd + 'T00:00:00').toLocaleDateString()}
+                          {new Date(effectiveStart + 'T00:00:00').toLocaleDateString('en-US')} - {new Date(rentalEnd + 'T00:00:00').toLocaleDateString('en-US')}
                         </p>
                         {isClamped && (
                           <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
                             <AlertTriangle className="h-3 w-3" />
-                            Rental started {new Date(rentalStart + 'T00:00:00').toLocaleDateString()} — coverage begins today
+                            Rental started {new Date(rentalStart + 'T00:00:00').toLocaleDateString('en-US')} — coverage begins today
                           </p>
                         )}
                         {isChained && (

@@ -378,11 +378,11 @@ const RentalsList = () => {
                           {rental.customer.name.split(' ')[0]}
                         </TableCell>
                         <TableCell>
-                          {new Date(rental.start_date).toLocaleDateString()}
+                          {new Date(rental.start_date).toLocaleDateString('en-US')}
                         </TableCell>
                         <TableCell>
                           {rental.end_date
-                            ? new Date(rental.end_date).toLocaleDateString()
+                            ? new Date(rental.end_date).toLocaleDateString('en-US')
                             : "—"}
                         </TableCell>
                         <TableCell>

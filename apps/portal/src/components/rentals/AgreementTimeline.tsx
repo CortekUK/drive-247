@@ -116,7 +116,8 @@ function AgreementCard({
       });
       const data = await response.json();
       if (data?.ok) {
-        toast({ title: 'Status Updated', description: `Document status: ${data.status}` });
+        const friendlyStatus: Record<string, string> = { sent: 'Awaiting Signature', delivered: 'Viewed', signed: 'Signed', completed: 'Signed', declined: 'Declined', voided: 'Voided', expired: 'Expired', pending: 'Draft' };
+        toast({ title: 'Status Updated', description: `Document status: ${friendlyStatus[data.status] || data.status}` });
         queryClient.invalidateQueries({ queryKey: ['rental-agreements'] });
         queryClient.invalidateQueries({ queryKey: ['rental'] });
       } else {

@@ -206,7 +206,7 @@ export function InsuranceDocumentUpload({ policyId, documents }: InsuranceDocume
                     <p className="font-medium text-sm">{doc.doc_type}</p>
                     <p className="text-xs text-muted-foreground">
                       {doc.file_name} • 
-                      {new Date(doc.uploaded_at).toLocaleDateString()}
+                      {new Date(doc.uploaded_at).toLocaleDateString('en-US')}
                     </p>
                   </div>
                 </div>

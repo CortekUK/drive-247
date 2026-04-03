@@ -11,7 +11,7 @@ export type BoldSignMode = 'test' | 'live';
 export function getBoldSignApiKey(mode: BoldSignMode): string {
   const apiKey = mode === 'live'
     ? (Deno.env.get('BOLDSIGN_LIVE_API_KEY') || Deno.env.get('BOLDSIGN_API_KEY'))
-    : Deno.env.get('BOLDSIGN_TEST_API_KEY');
+    : (Deno.env.get('BOLDSIGN_TEST_API_KEY') || Deno.env.get('BOLDSIGN_API_KEY'));
 
   if (!apiKey) {
     throw new Error(`Missing BoldSign API key for ${mode} mode`);

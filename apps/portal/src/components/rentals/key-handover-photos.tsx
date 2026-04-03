@@ -158,7 +158,7 @@ export const KeyHandoverPhotos = ({
                 className="w-full h-auto max-h-[70vh] object-contain rounded-lg"
               />
               <p className="text-xs text-muted-foreground mt-2">
-                Uploaded: {new Date(selectedPhoto.uploaded_at).toLocaleString()}
+                Uploaded: {new Date(selectedPhoto.uploaded_at).toLocaleString('en-US')}
               </p>
             </div>
           )}

@@ -1038,7 +1038,7 @@ const BookingCheckoutContent = () => {
                   )}
                   {totals.deposit > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Security Deposit (hold at pickup)</span>
+                      <span className="text-muted-foreground">Pre-Authorization (hold at pickup)</span>
                       <span className="font-medium text-muted-foreground">{formatCurrency(totals.deposit)}</span>
                     </div>
                   )}
@@ -1052,12 +1052,12 @@ const BookingCheckoutContent = () => {
                         <div className="flex justify-between items-center mb-3">
                           <div>
                             <span className="text-sm text-muted-foreground block">Pay Today</span>
-                            <span className="text-lg font-semibold">Deposit + Fees + 1st Installment</span>
+                            <span className="text-lg font-semibold">Pre-Auth + Fees + 1st Installment</span>
                           </div>
                           <span className="text-2xl font-bold text-accent">{formatCurrency(selectedInstallmentPlan.upfrontTotal)}</span>
                         </div>
                         <div className="text-xs text-muted-foreground mb-3 -mt-1">
-                          Includes: Deposit ({formatCurrency(totals.deposit)}) + Fees ({formatCurrency(totals.serviceFee + totals.deliveryFee + totals.collectionFee)}) + 1st installment ({formatCurrency(selectedInstallmentPlan.firstInstallmentAmount)})
+                          Includes: Pre-Auth ({formatCurrency(totals.deposit)}) + Fees ({formatCurrency(totals.serviceFee + totals.deliveryFee + totals.collectionFee)}) + 1st installment ({formatCurrency(selectedInstallmentPlan.firstInstallmentAmount)})
                         </div>
                         <div className="border-t border-accent/20 pt-3">
                           <div className="flex justify-between text-sm">

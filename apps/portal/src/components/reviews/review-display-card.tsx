@@ -80,7 +80,7 @@ export function ReviewDisplayCard({ rentalId, onEdit, onLeaveReview }: ReviewDis
             {review.rating}/10
           </span>
           <span className="text-sm text-muted-foreground">
-            {new Date(review.created_at).toLocaleDateString()}
+            {new Date(review.created_at).toLocaleDateString('en-US')}
           </span>
         </div>
 

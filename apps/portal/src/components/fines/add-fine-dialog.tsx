@@ -409,7 +409,7 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId, prese
                           <SelectTrigger>
                             <SelectValue placeholder={!selectedCustomerId ? "Select customer first" : "Select rental"}>
                               {selectedRental
-                                ? `${(selectedRental as any).rental_number || selectedRental.id.slice(0, 8)} — ${new Date((selectedRental as any).start_date).toLocaleDateString()} to ${new Date((selectedRental as any).end_date).toLocaleDateString()}`
+                                ? `${(selectedRental as any).rental_number || selectedRental.id.slice(0, 8)} — ${new Date((selectedRental as any).start_date).toLocaleDateString('en-US')} to ${new Date((selectedRental as any).end_date).toLocaleDateString('en-US')}`
                                 : (!selectedCustomerId ? "Select customer first" : "Select rental")}
                             </SelectValue>
                           </SelectTrigger>
@@ -419,7 +419,7 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId, prese
                             customerRentals.map((rental: any) => (
                               <SelectItem key={rental.id} value={rental.id} className="py-2">
                                 <span className="truncate">
-                                  {rental.rental_number || rental.id.slice(0, 8)} — {new Date(rental.start_date).toLocaleDateString()} to {new Date(rental.end_date).toLocaleDateString()}
+                                  {rental.rental_number || rental.id.slice(0, 8)} — {new Date(rental.start_date).toLocaleDateString('en-US')} to {new Date(rental.end_date).toLocaleDateString('en-US')}
                                 </span>
                               </SelectItem>
                             ))

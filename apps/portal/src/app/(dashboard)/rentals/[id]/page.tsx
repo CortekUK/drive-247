@@ -1952,9 +1952,9 @@ const RentalDetail = () => {
                       </TooltipTrigger>
                       <TooltipContent side="bottom" className="max-w-[280px] p-3 text-xs leading-relaxed">
                         <p className="font-medium mb-1">Total returned to the customer</p>
-                        <p className="text-muted-foreground mb-2">Partial or full refunds across any category — rental, deposit, fees, etc. Reduces your Net Received but does not change Balance Due.</p>
+                        <p className="text-muted-foreground mb-2">Partial or full refunds across any category — rental, pre-auth, fees, etc. Reduces your Net Received but does not change Balance Due.</p>
                         <div className="font-mono text-[11px] bg-muted/50 rounded p-2 space-y-0.5">
-                          <p className="text-muted-foreground">Example: Collected £500, refund deposit £100</p>
+                          <p className="text-muted-foreground">Example: Collected £500, refund pre-auth £100</p>
                           <p className="font-medium">Refunded = £100</p>
                         </div>
                       </TooltipContent>
@@ -2031,7 +2031,7 @@ const RentalDetail = () => {
           { label: 'Tax', category: 'Tax', amount: invoiceBreakdown.taxAmount, detail: invoiceBreakdown.taxAmount > 0 && invoiceBreakdown.rentalFee > 0 ? `${((invoiceBreakdown.taxAmount / invoiceBreakdown.rentalFee) * 100).toFixed(1)}% rate` : 'Tax on rental', icon: Percent, color: 'text-blue-500', bg: 'bg-blue-500/10' },
           { label: 'Bonzah Insurance', category: 'Insurance', amount: insuranceAmount, detail: bonzahPolicy ? 'Bonzah Insurance' : 'Insurance coverage', icon: ShieldCheck, color: 'text-teal-500', bg: 'bg-teal-500/10' },
           { label: 'Service Fee', category: 'Service Fee', amount: invoiceBreakdown.serviceFee, detail: 'Platform fee', icon: Receipt, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-          { label: 'Security Deposit', category: 'Security Deposit', amount: invoiceBreakdown.securityDeposit, detail: (() => {
+          { label: 'Pre-Authorization', category: 'Security Deposit', amount: invoiceBreakdown.securityDeposit, detail: (() => {
             if (invoiceBreakdown.securityDeposit <= 0) return '';
             const depositRefunded = refundBreakdown?.['Security Deposit'] ?? 0;
             const hasExcessMileage = (rentalCharges || []).some(c => c.category === 'Excess Mileage');
@@ -2461,7 +2461,7 @@ const RentalDetail = () => {
                               setShowRefundDialog(true);
                             }}
                           >
-                            {refunded > 0 ? 'Refund More' : 'Refund'}
+                            {category === 'Security Deposit' ? (refunded > 0 ? 'Release More' : 'Release') : (refunded > 0 ? 'Refund More' : 'Refund')}
                           </button>
                         ) : applied && fullyRefunded ? (
                           <Check className="h-4 w-4 text-green-500 inline-block" />
@@ -2944,7 +2944,7 @@ const RentalDetail = () => {
               <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/30">
                 <CreditCard className="h-4 w-4 text-muted-foreground" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium">Upfront Payment (Deposit + Fees)</p>
+                  <p className="text-sm font-medium">Upfront Payment (Pre-Auth + Fees)</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold">{formatCurrency(installmentPlan.upfront_amount)}</p>
@@ -3065,7 +3065,7 @@ const RentalDetail = () => {
               <p className="text-lg font-semibold">{rental.customers?.name}</p>
               {identityVerification?.date_of_birth && (
                 <p className="text-sm text-muted-foreground">
-                  DOB: {new Date(identityVerification.date_of_birth).toLocaleDateString()} ({Math.floor((Date.now() - new Date(identityVerification.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} yrs)
+                  DOB: {new Date(identityVerification.date_of_birth).toLocaleDateString('en-US')} ({Math.floor((Date.now() - new Date(identityVerification.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} yrs)
                 </p>
               )}
             </div>
@@ -3177,15 +3177,15 @@ const RentalDetail = () => {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
               <div>
                 <p className="text-sm text-muted-foreground">Start Date</p>
-                <p className="text-base font-medium">{new Date(rental.start_date).toLocaleDateString()}</p>
+                <p className="text-base font-medium">{new Date(rental.start_date).toLocaleDateString('en-US')}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">End Date</p>
-                <p className="text-base font-medium">{new Date(rental.end_date).toLocaleDateString()}</p>
+                <p className="text-base font-medium">{new Date(rental.end_date).toLocaleDateString('en-US')}</p>
                 {/* Show original end date if rental has been extended */}
                 {(rental.original_end_date || (!rental.is_extended && rental.previous_end_date)) && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Originally: {new Date(rental.original_end_date || rental.previous_end_date!).toLocaleDateString()}
+                    Originally: {new Date(rental.original_end_date || rental.previous_end_date!).toLocaleDateString('en-US')}
                   </p>
                 )}
               </div>
@@ -3222,7 +3222,7 @@ const RentalDetail = () => {
                 <CalendarPlus className="h-4 w-4 text-amber-600" />
                 <AlertDescription className="text-amber-800 dark:text-amber-200">
                   <span className="font-medium">Extension Requested:</span> Customer wants to extend until{' '}
-                  <strong>{new Date(rental.previous_end_date).toLocaleDateString()}</strong>
+                  <strong>{new Date(rental.previous_end_date).toLocaleDateString('en-US')}</strong>
                   <Button
                     variant="link"
                     className="ml-2 h-auto p-0 text-amber-700 dark:text-amber-300"
@@ -3364,7 +3364,7 @@ const RentalDetail = () => {
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Shield className="h-4 w-4 text-amber-500" />
-              Security Deposit Hold
+              Pre-Authorization Hold
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -3391,7 +3391,7 @@ const RentalDetail = () => {
             {rental.deposit_hold_expires_at && rental.deposit_hold_status === 'held' && (
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Expires</span>
-                <span className="text-sm">{new Date(rental.deposit_hold_expires_at).toLocaleDateString()}</span>
+                <span className="text-sm">{new Date(rental.deposit_hold_expires_at).toLocaleDateString('en-US')}</span>
               </div>
             )}
             {rental.deposit_hold_status === 'held' && (
@@ -3437,7 +3437,7 @@ const RentalDetail = () => {
                     });
                   }}
                 >
-                  Capture Deposit
+                  Charge
                 </Button>
               </div>
             )}
@@ -3728,7 +3728,7 @@ const RentalDetail = () => {
                           )}
                         </div>
                         <span className="text-sm text-muted-foreground">
-                          Uploaded: {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : 'N/A'}
+                          Uploaded: {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString('en-US') : 'N/A'}
                         </span>
                       </div>
 
@@ -4184,7 +4184,7 @@ const RentalDetail = () => {
                 </div>
                 {identityVerification.verification_completed_at && (
                   <span className="text-sm text-muted-foreground">
-                    Verified: {new Date(identityVerification.verification_completed_at).toLocaleDateString()}
+                    Verified: {new Date(identityVerification.verification_completed_at).toLocaleDateString('en-US')}
                   </span>
                 )}
               </div>
@@ -4273,7 +4273,7 @@ const RentalDetail = () => {
                     {identityVerification.date_of_birth && (
                       <div>
                         <span className="text-muted-foreground">Date of Birth:</span>
-                        <p className="font-medium">{showSensitiveInfo ? new Date(identityVerification.date_of_birth).toLocaleDateString() : '••/••/••••'}</p>
+                        <p className="font-medium">{showSensitiveInfo ? new Date(identityVerification.date_of_birth).toLocaleDateString('en-US') : '••/••/••••'}</p>
                       </div>
                     )}
                   </div>
@@ -4309,7 +4309,7 @@ const RentalDetail = () => {
                     {identityVerification.document_expiry_date && (
                       <div>
                         <span className="text-muted-foreground">Expiry:</span>
-                        <p className="font-medium">{showSensitiveInfo ? new Date(identityVerification.document_expiry_date).toLocaleDateString() : '••/••/••••'}</p>
+                        <p className="font-medium">{showSensitiveInfo ? new Date(identityVerification.document_expiry_date).toLocaleDateString('en-US') : '••/••/••••'}</p>
                       </div>
                     )}
                   </div>
@@ -4399,7 +4399,7 @@ const RentalDetail = () => {
                   </div>
                   {identityVerification.media_fetched_at && (
                     <p className="text-xs text-muted-foreground mt-3">
-                      Images fetched: {new Date(identityVerification.media_fetched_at).toLocaleString()}
+                      Images fetched: {new Date(identityVerification.media_fetched_at).toLocaleString('en-US')}
                     </p>
                   )}
                 </div>
@@ -4646,13 +4646,13 @@ const RentalDetail = () => {
           <AlertDialog open={showDeductFromDepositDialog} onOpenChange={setShowDeductFromDepositDialog}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Deduct from Security Deposit</AlertDialogTitle>
+                <AlertDialogTitle>Deduct from Pre-Authorization</AlertDialogTitle>
                 <AlertDialogDescription asChild>
                   <div className="space-y-3">
-                    <p>Deduct excess mileage charge from the customer&apos;s security deposit:</p>
+                    <p>Deduct excess mileage charge from the customer&apos;s pre-authorization hold:</p>
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between">
-                        <span>Deposit Available:</span>
+                        <span>Pre-Auth Available:</span>
                         <span className="font-medium">{formatCurrencyUtil(depositAvailable, tenant?.currency_code || 'USD')}</span>
                       </div>
                       <div className="flex justify-between">
@@ -4665,7 +4665,7 @@ const RentalDetail = () => {
                       </div>
                       {excessRemaining > depositAvailable && (
                         <p className="text-xs text-amber-600 mt-2">
-                          The deposit does not fully cover the charge. The remaining {formatCurrencyUtil(excessRemaining - depositAvailable, tenant?.currency_code || 'USD')} can be collected via a payment link.
+                          The pre-authorization does not fully cover the charge. The remaining {formatCurrencyUtil(excessRemaining - depositAvailable, tenant?.currency_code || 'USD')} can be collected via a payment link.
                         </p>
                       )}
                     </div>
@@ -4684,7 +4684,7 @@ const RentalDetail = () => {
                         body: { rentalId: rental.id, amount: deductAmount, tenantId: tenant?.id },
                       });
                       if (error) throw error;
-                      toast({ title: 'Deposit Deducted', description: `${formatCurrencyUtil(deductAmount, tenant?.currency_code || 'USD')} deducted from security deposit for excess mileage.` });
+                      toast({ title: 'Pre-Authorization Deducted', description: `${formatCurrencyUtil(deductAmount, tenant?.currency_code || 'USD')} deducted from pre-authorization for excess mileage.` });
                       queryClient.invalidateQueries({ queryKey: ["rental-charges"] });
                       queryClient.invalidateQueries({ queryKey: ["rental-totals"] });
                       queryClient.invalidateQueries({ queryKey: ["rental-invoice"] });

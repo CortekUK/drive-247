@@ -69,6 +69,38 @@ const COUNTRY_OPTIONS = [
   { code: 'IN', label: 'India (+91)', flag: '\u{1F1EE}\u{1F1F3}' },
 ];
 
+// Countries that require 10DLC registration (US A2P messaging)
+const TEN_DLC_COUNTRIES = ['US', 'CA'];
+
+const COUNTRY_CODE_TO_PREFIX: Record<string, string> = {
+  US: '+1', CA: '+1', GB: '+44', AU: '+61', DE: '+49', FR: '+33',
+  ES: '+34', IT: '+39', NL: '+31', IE: '+353', SE: '+46', NO: '+47',
+  DK: '+45', PL: '+48', BE: '+32', AT: '+43', CH: '+41', PT: '+351',
+  NZ: '+64', ZA: '+27', AE: '+971', IN: '+91',
+};
+
+/** Detect country code from E.164 phone number */
+function detectCountryFromPhone(phone: string | null): string | null {
+  if (!phone) return null;
+  const cleaned = phone.replace(/\s/g, '');
+  // Check longest prefixes first to avoid +1 matching before +44 etc.
+  const sorted = Object.entries(COUNTRY_CODE_TO_PREFIX).sort((a, b) => b[1].length - a[1].length);
+  for (const [code, prefix] of sorted) {
+    if (cleaned.startsWith(prefix)) {
+      // +1 is shared between US and CA — default to US
+      if (prefix === '+1') return 'US';
+      return code;
+    }
+  }
+  return null;
+}
+
+/** Check if a country requires 10DLC registration */
+function requires10DLC(countryCode: string | null): boolean {
+  if (!countryCode) return false;
+  return TEN_DLC_COUNTRIES.includes(countryCode);
+}
+
 function StatusBadge({ status }: { status: string | null }) {
   if (!status) return <Badge variant="secondary">Not Started</Badge>;
   switch (status) {
@@ -128,11 +160,12 @@ export function TwilioSmsSettings() {
   // UI state
   const [showDisconnectWarning, setShowDisconnectWarning] = useState(false);
   const [numberMode, setNumberMode] = useState<'search' | 'own' | null>(null);
-  const [countryCode, setCountryCode] = useState('US');
+  const [countryCode, setCountryCode] = useState('GB');
   const [searchContains, setSearchContains] = useState('');
   const [availableNumbers, setAvailableNumbers] = useState<any[]>([]);
   const [ownNumber, setOwnNumber] = useState('');
   const [testPhoneNumber, setTestPhoneNumber] = useState('');
+  const [testMessage, setTestMessage] = useState('');
   // Brand registration
   const [brandName, setBrandName] = useState('');
   const [taxId, setTaxId] = useState('');
@@ -161,7 +194,7 @@ export function TwilioSmsSettings() {
 
   const handleSendTest = async () => {
     if (!testPhoneNumber) return;
-    await sendTestSms.mutateAsync(testPhoneNumber);
+    await sendTestSms.mutateAsync({ to: testPhoneNumber, message: testMessage || undefined });
   };
 
   const handleDisconnect = async () => {
@@ -204,29 +237,50 @@ export function TwilioSmsSettings() {
   const campaignApproved = status?.campaignStatus === 'approved';
   const hasMessagingService = !!status?.messagingServiceSid;
 
-  // Determine current setup step
-  const getStepStatus = (step: number): 'complete' | 'active' | 'pending' | 'failed' => {
-    switch (step) {
-      case 1: // Subaccount
+  // Detect country from the assigned phone number
+  // Before a number is assigned, we don't know the country yet — show minimal steps
+  const phoneCountry = detectCountryFromPhone(status?.phoneNumber ?? null);
+  const needs10DLC = hasPhoneNumber ? requires10DLC(phoneCountry) : false;
+
+  // Build dynamic steps based on country
+  const steps = [
+    { key: 'subaccount', label: 'Create Messaging Account' },
+    { key: 'phone', label: 'Add Phone Number' },
+    ...(needs10DLC ? [
+      { key: 'brand', label: 'Register Business (10DLC)' },
+      { key: 'campaign', label: 'Register Campaign' },
+    ] : []),
+    { key: 'test', label: 'Test & Go Live' },
+  ];
+
+  // Determine step status by key
+  const getStepStatusByKey = (key: string): 'complete' | 'active' | 'pending' | 'failed' => {
+    switch (key) {
+      case 'subaccount':
         return hasSubaccount ? 'complete' : 'active';
-      case 2: // Phone Number
+      case 'phone':
         if (!hasSubaccount) return 'pending';
         return hasPhoneNumber ? 'complete' : 'active';
-      case 3: // Brand Registration
+      case 'brand':
         if (!hasPhoneNumber) return 'pending';
         if (status?.brandStatus === 'failed') return 'failed';
-        return brandApproved ? 'complete' : hasBrand ? 'active' : 'active';
-      case 4: // Campaign Registration
+        return brandApproved ? 'complete' : 'active';
+      case 'campaign':
         if (!brandApproved) return 'pending';
         if (status?.campaignStatus === 'failed') return 'failed';
-        return campaignApproved ? 'complete' : hasCampaign ? 'active' : 'active';
-      case 5: // Test SMS
+        return campaignApproved ? 'complete' : 'active';
+      case 'test':
         if (!hasPhoneNumber) return 'pending';
-        return 'active';
+        if (needs10DLC) return campaignApproved ? 'complete' : 'pending';
+        return isConfigured ? 'complete' : 'active';
       default:
         return 'pending';
     }
   };
+
+  // For non-10DLC countries, SMS is fully active once phone number is configured
+  const isFullyActive = needs10DLC ? (isConfigured && campaignApproved) : isConfigured;
+  const isRegistrationPending = needs10DLC && isConfigured && !campaignApproved;
 
   return (
     <div className="space-y-6">
@@ -244,32 +298,30 @@ export function TwilioSmsSettings() {
         <CardContent>
           {/* Setup Progress */}
           <div className="space-y-3 mb-6">
-            <StepIndicator step={1} label="Create Messaging Account" status={getStepStatus(1)} />
-            <StepIndicator step={2} label="Add Phone Number" status={getStepStatus(2)} />
-            <StepIndicator step={3} label="Register Business (10DLC)" status={getStepStatus(3)} />
-            <StepIndicator step={4} label="Register Campaign" status={getStepStatus(4)} />
-            <StepIndicator step={5} label="Test & Go Live" status={getStepStatus(5)} />
+            {steps.map((s, i) => (
+              <StepIndicator key={s.key} step={i + 1} label={s.label} status={getStepStatusByKey(s.key)} />
+            ))}
           </div>
 
           {/* Status Banner */}
           <div className={`p-4 rounded-lg border ${
-            isConfigured && campaignApproved
+            isFullyActive
               ? 'bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-800'
-              : isConfigured
+              : isRegistrationPending
               ? 'bg-amber-50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800'
               : 'bg-muted/50 border-border'
           }`}>
             <div className="flex items-start gap-3">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                isConfigured && campaignApproved
+                isFullyActive
                   ? 'bg-green-100 text-green-600 dark:bg-green-900/30'
-                  : isConfigured
+                  : isRegistrationPending
                   ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30'
                   : 'bg-muted text-muted-foreground'
               }`}>
-                {isConfigured && campaignApproved ? (
+                {isFullyActive ? (
                   <CheckCircle2 className="h-5 w-5" />
-                ) : isConfigured ? (
+                ) : isRegistrationPending ? (
                   <Clock className="h-5 w-5" />
                 ) : (
                   <AlertCircle className="h-5 w-5" />
@@ -277,18 +329,18 @@ export function TwilioSmsSettings() {
               </div>
               <div>
                 <h4 className="font-medium">
-                  {isConfigured && campaignApproved
+                  {isFullyActive
                     ? 'SMS Fully Active'
-                    : isConfigured
+                    : isRegistrationPending
                     ? 'SMS Active (Registration Pending)'
                     : hasSubaccount
                     ? 'Account Created — Continue Setup'
                     : 'Not Connected'}
                 </h4>
                 <p className="text-sm mt-1 text-muted-foreground">
-                  {isConfigured && campaignApproved
-                    ? `Sending SMS from ${status?.phoneNumber} with full 10DLC compliance.`
-                    : isConfigured
+                  {isFullyActive
+                    ? `Sending SMS from ${status?.phoneNumber}.${needs10DLC ? ' Full 10DLC compliance active.' : ''}`
+                    : isRegistrationPending
                     ? `SMS is active from ${status?.phoneNumber}. Complete 10DLC registration for best deliverability.`
                     : hasSubaccount
                     ? 'Your messaging account is ready. Complete the remaining steps.'
@@ -405,8 +457,8 @@ export function TwilioSmsSettings() {
                 </div>
                 <div className="space-y-2">
                   <Label>Phone Number (E.164 format)</Label>
-                  <Input placeholder="+1 555 123 4567" value={ownNumber} onChange={(e) => setOwnNumber(e.target.value)} />
-                  <p className="text-xs text-muted-foreground">Enter your Twilio number with country code.</p>
+                  <Input placeholder="+44 7911 123456" value={ownNumber} onChange={(e) => setOwnNumber(e.target.value)} />
+                  <p className="text-xs text-muted-foreground">Enter your Twilio number with country code (e.g. +44 for UK, +1 for US).</p>
                 </div>
                 <Button onClick={handleAssignOwn} disabled={!ownNumber || assignOwnNumber.isPending}>
                   {assignOwnNumber.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Assigning...</> : <><Phone className="mr-2 h-4 w-4" />Assign Number</>}
@@ -417,8 +469,8 @@ export function TwilioSmsSettings() {
         </Card>
       )}
 
-      {/* Step 3: Brand Registration (10DLC) */}
-      {hasPhoneNumber && (
+      {/* Step 3: Brand Registration (10DLC) — US/CA only */}
+      {hasPhoneNumber && needs10DLC && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -492,8 +544,8 @@ export function TwilioSmsSettings() {
         </Card>
       )}
 
-      {/* Step 4: Campaign Registration */}
-      {brandApproved && (
+      {/* Step 4: Campaign Registration — US/CA only */}
+      {brandApproved && needs10DLC && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -559,8 +611,8 @@ export function TwilioSmsSettings() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Phone number display */}
-            <div className="p-4 rounded-lg border bg-muted/50">
+            {/* Phone number display + capabilities */}
+            <div className="p-4 rounded-lg border bg-muted/50 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                   <Phone className="h-5 w-5 text-primary" />
@@ -570,6 +622,30 @@ export function TwilioSmsSettings() {
                   <p className="text-lg font-mono font-bold">{status?.phoneNumber}</p>
                 </div>
               </div>
+
+              {/* Number capabilities */}
+              {status?.capabilities && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {[
+                    { key: 'sms' as const, label: 'SMS', icon: <MessageSquare className="h-3 w-3" /> },
+                    { key: 'voice' as const, label: 'Voice', icon: <Phone className="h-3 w-3" /> },
+                    { key: 'mms' as const, label: 'MMS', icon: <MessageSquare className="h-3 w-3" /> },
+                    { key: 'fax' as const, label: 'Fax', icon: <MessageSquare className="h-3 w-3" /> },
+                  ].map(cap => (
+                    <span
+                      key={cap.key}
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium ${
+                        status.capabilities![cap.key]
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                          : 'bg-red-50 text-red-400 line-through dark:bg-red-900/10 dark:text-red-400/60'
+                      }`}
+                    >
+                      {cap.icon}
+                      {cap.label}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Test SMS */}
@@ -578,17 +654,23 @@ export function TwilioSmsSettings() {
                 <Send className="h-4 w-4" />
                 Send Test SMS
               </h4>
-              <div className="flex gap-2">
+              <div className="space-y-2">
                 <Input
-                  placeholder="+1 555 123 4567"
+                  placeholder="Enter phone number with country code"
                   value={testPhoneNumber}
                   onChange={(e) => setTestPhoneNumber(e.target.value)}
-                  className="flex-1"
                 />
-                <Button onClick={handleSendTest} disabled={!testPhoneNumber || sendTestSms.isPending}>
-                  {sendTestSms.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
-                </Button>
+                <textarea
+                  placeholder="Enter your message (optional — a default test message will be sent if left empty)"
+                  value={testMessage}
+                  onChange={(e) => setTestMessage(e.target.value)}
+                  rows={3}
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                />
               </div>
+              <Button onClick={handleSendTest} disabled={!testPhoneNumber || sendTestSms.isPending} className="w-full">
+                {sendTestSms.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending...</> : <><Send className="mr-2 h-4 w-4" />Send Test SMS</>}
+              </Button>
             </div>
 
             {/* Configure Webhooks */}

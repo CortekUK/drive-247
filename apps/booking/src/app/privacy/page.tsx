@@ -82,7 +82,7 @@ const Privacy = () => {
 
               {privacyContent.last_updated && (
                 <p className="text-sm text-muted-foreground pt-6 mt-6 border-t border-border">
-                  Last updated: {new Date(privacyContent.last_updated).toLocaleDateString()}
+                  Last updated: {new Date(privacyContent.last_updated).toLocaleDateString('en-US')}
                 </p>
               )}
             </Card>

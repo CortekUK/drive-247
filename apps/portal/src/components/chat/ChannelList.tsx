@@ -278,7 +278,7 @@ function ChannelItem({ channel, isSelected, onClick, searchQuery }: ChannelItemP
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-w-0 py-0.5">
+      <div className="flex-1 min-w-0 overflow-hidden py-0.5">
         <div className="flex items-center justify-between gap-2 mb-0.5">
           <span className={cn(
             'font-medium truncate',
@@ -294,20 +294,14 @@ function ChannelItem({ channel, isSelected, onClick, searchQuery }: ChannelItemP
             {timeAgo}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 overflow-hidden">
           <p className={cn(
-            'text-sm truncate flex items-center gap-1',
+            'text-sm truncate block',
             hasUnread ? 'text-foreground/70 font-medium' : 'text-muted-foreground'
           )}>
-            {/* Channel indicator for last message */}
-            {channel.last_message_channel === 'sms' && (
-              <Smartphone className="h-3 w-3 shrink-0 text-green-600" />
-            )}
-            <span className="truncate">
-              {searchQuery && channel.last_message_preview
-                ? highlightText(channel.last_message_preview, searchQuery)
-                : channel.last_message_preview || 'No messages yet'}
-            </span>
+            {searchQuery && channel.last_message_preview
+              ? highlightText(channel.last_message_preview, searchQuery)
+              : channel.last_message_preview || 'No messages yet'}
           </p>
           <UnreadBadge count={channel.unread_count} size="sm" />
         </div>

@@ -12,6 +12,7 @@ interface TwilioStatus {
   phoneNumber: string | null;
   phoneNumberSid: string | null;
   isConfigured: boolean;
+  capabilities: { sms: boolean; voice: boolean; mms: boolean; fax: boolean } | null;
   // 10DLC registration
   brandSid: string | null;
   brandStatus: string | null;  // 'pending' | 'approved' | 'failed'
@@ -119,8 +120,8 @@ export function useTwilioSms() {
   });
 
   const sendTestSms = useMutation({
-    mutationFn: (to: string) =>
-      invoke('send-test-sms', { to }),
+    mutationFn: ({ to, message }: { to: string; message?: string }) =>
+      invoke('send-test-sms', { to, message }),
     onSuccess: () => {
       toast({ title: 'Test SMS Sent', description: 'Check your phone for the test message.' });
     },

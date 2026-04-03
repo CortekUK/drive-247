@@ -214,7 +214,7 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
             )}
             {(invoice.security_deposit ?? 0) > 0 && (
               <tr className="border-b border-gray-300">
-                <td className="p-3 text-sm">Security Deposit</td>
+                <td className="p-3 text-sm">Pre-Authorization</td>
                 <td className="p-3 text-sm text-right">{fc(invoice.security_deposit ?? 0)}</td>
               </tr>
             )}
@@ -470,7 +470,7 @@ export const InvoiceDialog = ({
                   )}
                   {(invoice.security_deposit ?? 0) > 0 && (
                     <tr className="border-b">
-                      <td className="p-3 text-sm">Security Deposit</td>
+                      <td className="p-3 text-sm">Pre-Authorization</td>
                       <td className="p-3 text-sm text-right">{fc(invoice.security_deposit ?? 0)}</td>
                     </tr>
                   )}

@@ -346,8 +346,8 @@ const FineDetail = () => {
                   { label: "Vehicle", value: `${fine.vehicles.reg} (${fine.vehicles.make} ${fine.vehicles.model})` },
                   { label: "Customer", value: fine.customers?.name || 'No customer assigned' },
                   { label: "Rental #", value: fine.rentals?.rental_number || '-' },
-                  { label: "Issue Date", value: new Date(fine.issue_date + 'T00:00:00').toLocaleDateString() },
-                  { label: "Due Date", value: new Date(fine.due_date + 'T00:00:00').toLocaleDateString() }
+                  { label: "Issue Date", value: new Date(fine.issue_date + 'T00:00:00').toLocaleDateString('en-US') },
+                  { label: "Due Date", value: new Date(fine.due_date + 'T00:00:00').toLocaleDateString('en-US') }
                 ]} />
                 {fine.notes && (
                   <div className="mt-6 pt-4 border-t">
@@ -377,7 +377,7 @@ const FineDetail = () => {
                         <div>
                           <p className="font-medium">{file.file_name}</p>
                           <p className="text-sm text-muted-foreground">
-                            Uploaded {new Date(file.uploaded_at).toLocaleDateString()}
+                            Uploaded {new Date(file.uploaded_at).toLocaleDateString('en-US')}
                           </p>
                         </div>
                         <Button

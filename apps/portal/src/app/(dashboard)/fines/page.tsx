@@ -251,11 +251,11 @@ const FinesList = () => {
         </TableCell>
 
         <TableCell>
-          {new Date(fine.issue_date + 'T00:00:00').toLocaleDateString()}
+          {new Date(fine.issue_date + 'T00:00:00').toLocaleDateString('en-US')}
         </TableCell>
 
         <TableCell className={cn(fine.isOverdue && "text-destructive font-medium")}>
-          {new Date(fine.due_date + 'T00:00:00').toLocaleDateString()}
+          {new Date(fine.due_date + 'T00:00:00').toLocaleDateString('en-US')}
           {fine.isOverdue && (
             <Badge variant="destructive" className="ml-2 text-xs">
               {Math.abs(fine.daysUntilDue)} days overdue

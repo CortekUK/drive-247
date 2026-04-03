@@ -306,7 +306,7 @@ const BookingSuccess = () => {
                     </li>
                     <li className="flex items-start gap-2">
                       <CheckCircle className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
-                      <span>Your security deposit is held and will be released after the rental period</span>
+                      <span>Your pre-authorization hold will be released after the rental period</span>
                     </li>
                   </ul>
                 </div>

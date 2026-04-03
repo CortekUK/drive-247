@@ -43,7 +43,7 @@ const RIGHT_FEATURES = [
     icon: CreditCard,
     title: "Payment history",
     description:
-      "Full transaction visibility — deposits, balances, and receipts.",
+      "Full transaction visibility — pre-authorizations, balances, and receipts.",
   },
   {
     icon: Smartphone,

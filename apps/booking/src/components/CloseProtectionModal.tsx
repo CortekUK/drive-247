@@ -196,7 +196,7 @@ const CloseProtectionModal = ({
         customerPhone: formData.phone,
         enquiryDetails: {
           serviceType: 'Combined with Chauffeur Service',
-          date: fullBookingData?.pickupDate || new Date().toLocaleDateString(),
+          date: fullBookingData?.pickupDate || new Date().toLocaleDateString('en-US'),
           startTime: fullBookingData?.pickupTime || 'TBD',
           durationHours: 'TBD',
           primaryLocation: fullBookingData?.pickupLocation || 'N/A',

@@ -82,7 +82,7 @@ const Terms = () => {
 
               {termsContent.last_updated && (
                 <p className="text-sm text-muted-foreground pt-6 mt-6 border-t border-border">
-                  Last updated: {new Date(termsContent.last_updated).toLocaleDateString()}
+                  Last updated: {new Date(termsContent.last_updated).toLocaleDateString('en-US')}
                 </p>
               )}
             </Card>

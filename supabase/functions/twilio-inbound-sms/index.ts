@@ -78,16 +78,33 @@ async function processInboundSms(
   messageSid: string
 ): Promise<Response> {
   // Step 2: Try to match 'From' number against customers.phone
-  // Normalize phone: try with and without + prefix, and partial matches
-  const normalizedFrom = from.startsWith('+') ? from : `+${from}`;
-  const fromWithout = from.startsWith('+') ? from.substring(1) : from;
+  // Normalize: strip all non-digit chars except leading +
+  const normalizedFrom = (from.startsWith('+') ? from : `+${from}`).replace(/[^+\d]/g, '');
+  const fromWithout = normalizedFrom.replace('+', '');
 
-  // Search for customer by phone number (multiple formats)
-  const { data: customers } = await supabase
+  // Search by exact match first, then by digits-only match (handles spaces/dashes in stored numbers)
+  let { data: customers } = await supabase
     .from('customers')
     .select('id, name, phone')
     .eq('tenant_id', tenantId)
     .or(`phone.eq.${normalizedFrom},phone.eq.${fromWithout},phone.eq.${from}`);
+
+  // If no exact match, try matching by stripping non-digits from stored phone numbers
+  if (!customers?.length) {
+    const { data: allCustomers } = await supabase
+      .from('customers')
+      .select('id, name, phone')
+      .eq('tenant_id', tenantId)
+      .not('phone', 'is', null);
+
+    if (allCustomers?.length) {
+      customers = allCustomers.filter((c: any) => {
+        if (!c.phone) return false;
+        const storedDigits = c.phone.replace(/[^+\d]/g, '');
+        return storedDigits === normalizedFrom || storedDigits === `+${fromWithout}` || storedDigits.endsWith(fromWithout);
+      });
+    }
+  }
 
   const customer = customers?.[0];
 

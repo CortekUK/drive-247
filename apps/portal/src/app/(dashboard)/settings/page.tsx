@@ -2677,16 +2677,16 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* Security Deposit Configuration Card */}
+          {/* Pre-Authorization Configuration Card */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5 text-primary" />
-                Security Deposit
+                Pre-Authorization
               </CardTitle>
               <div className="flex items-center justify-between">
                 <CardDescription>
-                  Configure security deposit for customer bookings
+                  Configure pre-authorization hold for customer bookings
                 </CardDescription>
                 <div className="flex items-center gap-2">
                   <Label htmlFor="security-deposit-toggle" className="text-sm text-muted-foreground">
@@ -2703,7 +2703,7 @@ const Settings = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               {!rentalForm.security_deposit_enabled && (
-                <p className="text-sm text-muted-foreground">Security deposit is disabled. No deposit will be charged on bookings.</p>
+                <p className="text-sm text-muted-foreground">Pre-authorization is disabled. No hold will be placed on bookings.</p>
               )}
 
               {/* Deposit Mode Selection */}
@@ -2719,9 +2719,9 @@ const Settings = () => {
                   onClick={() => setRentalForm(prev => ({ ...prev, deposit_mode: 'global' }))}>
                   <RadioGroupItem value="global" id="deposit-global" />
                   <Label htmlFor="deposit-global" className="flex-1 cursor-pointer">
-                    <div className="font-medium">Global Deposit</div>
+                    <div className="font-medium">Global Pre-Authorization</div>
                     <div className="text-sm text-muted-foreground">
-                      Same deposit amount for all vehicles
+                      Same pre-authorization amount for all vehicles
                     </div>
                   </Label>
                 </div>
@@ -2729,18 +2729,18 @@ const Settings = () => {
                   onClick={() => setRentalForm(prev => ({ ...prev, deposit_mode: 'per_vehicle' }))}>
                   <RadioGroupItem value="per_vehicle" id="deposit-per-vehicle" />
                   <Label htmlFor="deposit-per-vehicle" className="flex-1 cursor-pointer">
-                    <div className="font-medium">Per-Vehicle Deposit</div>
+                    <div className="font-medium">Per-Vehicle Pre-Authorization</div>
                     <div className="text-sm text-muted-foreground">
-                      Set deposit amount individually for each vehicle
+                      Set pre-authorization amount individually for each vehicle
                     </div>
                   </Label>
                 </div>
               </RadioGroup>}
 
-              {/* Global Deposit Amount (only when mode is global) */}
+              {/* Global Pre-Authorization Amount (only when mode is global) */}
               {rentalForm.security_deposit_enabled && rentalForm.deposit_mode === 'global' && (
                 <div className="space-y-2">
-                  <Label htmlFor="global_deposit_amount">Global Deposit Amount</Label>
+                  <Label htmlFor="global_deposit_amount">Global Pre-Authorization Amount</Label>
                   <div className="flex items-center gap-4">
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
@@ -2774,7 +2774,7 @@ const Settings = () => {
               {rentalForm.security_deposit_enabled && rentalForm.deposit_mode === 'per_vehicle' && (
                 <Alert>
                   <AlertDescription>
-                    Set deposit amounts when adding or editing vehicles. Vehicles without a deposit will show $0.
+                    Set pre-authorization amounts when adding or editing vehicles. Vehicles without a pre-authorization will show $0.
                   </AlertDescription>
                 </Alert>
               )}
@@ -2789,7 +2789,7 @@ const Settings = () => {
                         global_deposit_amount: rentalForm.global_deposit_amount,
                       });
                     } catch (error) {
-                      console.error('Failed to update deposit settings:', error);
+                      console.error('Failed to update pre-authorization settings:', error);
                     }
                   }}
                   disabled={isUpdatingRentalSettings}
@@ -2800,7 +2800,7 @@ const Settings = () => {
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
-                  Save Deposit Settings
+                  Save Pre-Authorization Settings
                 </Button>
               )}
             </CardContent>
@@ -3533,7 +3533,7 @@ const Settings = () => {
                         <li>Minimum Driver Age: 21</li>
                         <li>Tax: Disabled (0%)</li>
                         <li>Service Fee: Disabled</li>
-                        <li>Deposit Mode: Global ($0)</li>
+                        <li>Pre-Authorization Mode: Global ($0)</li>
                         <li>Installments: Disabled (defaults restored)</li>
                         <li>Booking Lead Time: 24 hours</li>
                         <li>Min Rental: 0 days, 1 hour</li>

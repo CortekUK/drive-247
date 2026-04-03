@@ -42,7 +42,7 @@ interface RefundDialogProps {
   onOpenChange: (open: boolean) => void;
   rentalId: string;
   paymentId?: string;
-  category: string; // Tax, Service Fee, Security Deposit, Rental
+  category: string; // Tax, Service Fee, Pre-Authorization, Rental
   totalAmount: number;
   paidAmount: number;
   onSuccess?: (refundAmount: number) => void;

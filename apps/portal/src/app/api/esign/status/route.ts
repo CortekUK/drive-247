@@ -7,7 +7,7 @@ const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign
 function getBoldSignApiKey(mode: 'test' | 'live'): string {
     return mode === 'live'
         ? (process.env.BOLDSIGN_LIVE_API_KEY || process.env.BOLDSIGN_API_KEY || '')
-        : (process.env.BOLDSIGN_TEST_API_KEY || '');
+        : (process.env.BOLDSIGN_TEST_API_KEY || process.env.BOLDSIGN_API_KEY || '');
 }
 
 // Supabase
@@ -19,7 +19,7 @@ function mapDocumentStatus(status: string): string {
     const statusMap: Record<string, string> = {
         'WaitingForOthers': 'sent',
         'NeedsSigning': 'sent',
-        'InProgress': 'signed',
+        'InProgress': 'sent',
         'Completed': 'completed',
         'Declined': 'declined',
         'Revoked': 'voided',

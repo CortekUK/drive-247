@@ -158,7 +158,7 @@ export function DashboardCharts() {
         const entry = dailyMap.get(key)!;
         return {
           date: key,
-          label: format(d, useShortLabel ? 'dd/MM' : 'dd MMM'),
+          label: format(d, useShortLabel ? 'MM/dd' : 'MMM dd'),
           ...entry,
         };
       });

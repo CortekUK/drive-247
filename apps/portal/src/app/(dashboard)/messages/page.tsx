@@ -13,6 +13,7 @@ export default function MessagesPage() {
   const { canEdit } = useManagerPermissions();
   const { tenant } = useTenant();
   const smsEnabled = !!(tenant as any)?.integration_twilio_sms;
+  const whatsappEnabled = !!(tenant as any)?.integration_whatsapp;
 
   const handleSelectChannel = (channel: ChatChannel) => {
     setSelectedChannel(channel);
@@ -45,9 +46,12 @@ export default function MessagesPage() {
             customerName={selectedChannel?.customer?.name || "Customer"}
             customerAvatar={selectedChannel?.customer?.profile_photo_url || null}
             customerEmail={selectedChannel?.customer?.email || null}
+            customerPhone={selectedChannel?.customer?.phone || null}
+            twilioPhoneNumber={(tenant as any)?.twilio_phone_number || null}
             onBack={() => setSelectedChannel(null)}
             lastChannel={selectedChannel?.last_channel || 'in_app'}
             smsEnabled={smsEnabled}
+            whatsappEnabled={whatsappEnabled}
           />
         </div>
       </div>

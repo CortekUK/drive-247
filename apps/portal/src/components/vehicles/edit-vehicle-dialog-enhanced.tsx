@@ -707,7 +707,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                   name="security_deposit"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="whitespace-nowrap">Deposit ({currencySymbol})</FormLabel>
+                      <FormLabel className="whitespace-nowrap">Pre-Auth ({currencySymbol})</FormLabel>
                       <FormControl>
                         <Input
                           type="number"

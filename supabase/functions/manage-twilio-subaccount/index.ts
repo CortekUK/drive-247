@@ -235,7 +235,7 @@ Deno.serve(async (req) => {
       }
 
       case 'send-test-sms': {
-        const { to } = params;
+        const { to, message } = params;
         if (!to) return errorResponse('to phone number is required');
 
         const creds = await getTenantTwilioCredentials(supabase, tenantId);
@@ -244,10 +244,11 @@ Deno.serve(async (req) => {
         }
 
         const normalized = normalizePhoneNumber(to);
+        const body = message?.trim() || 'This is a test SMS from your Drive247 portal. Your Twilio SMS integration is working!';
         const result = await sendTenantSMS(
           creds,
           normalized,
-          'This is a test SMS from your Drive247 portal. Your Twilio SMS integration is working!'
+          body
         );
 
         return jsonResponse(result);
@@ -263,6 +264,28 @@ Deno.serve(async (req) => {
           .eq('id', tenantId)
           .single();
 
+        // Fetch number capabilities from Twilio if we have a number
+        let capabilities: { sms: boolean; voice: boolean; mms: boolean; fax: boolean } | null = null;
+        if (creds.phoneNumberSid && creds.sid && creds.authToken) {
+          try {
+            const numUrl = `https://api.twilio.com/2010-04-01/Accounts/${creds.sid}/IncomingPhoneNumbers/${creds.phoneNumberSid}.json`;
+            const numResp = await fetch(numUrl, {
+              headers: { 'Authorization': `Basic ${btoa(`${creds.sid}:${creds.authToken}`)}` },
+            });
+            const numData = await numResp.json();
+            if (numData.capabilities) {
+              capabilities = {
+                sms: numData.capabilities.sms ?? false,
+                voice: numData.capabilities.voice ?? false,
+                mms: numData.capabilities.mms ?? false,
+                fax: numData.capabilities.fax ?? false,
+              };
+            }
+          } catch (err: any) {
+            console.warn('[Twilio] Failed to fetch number capabilities:', err.message);
+          }
+        }
+
         return jsonResponse({
           success: true,
           hasSubaccount: !!creds.sid,
@@ -271,6 +294,7 @@ Deno.serve(async (req) => {
           phoneNumber: creds.phoneNumber || null,
           phoneNumberSid: creds.phoneNumberSid || null,
           isConfigured: creds.isConfigured,
+          capabilities,
           // 10DLC registration status
           brandSid: tenantData?.twilio_brand_sid || null,
           brandStatus: tenantData?.twilio_brand_status || null,
