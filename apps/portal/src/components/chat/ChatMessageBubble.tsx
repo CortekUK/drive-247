@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { format, isToday, isYesterday } from 'date-fns';
-import { Check, CheckCheck, MessageSquare, Mail, AlertCircle } from 'lucide-react';
+import { Check, CheckCheck, MessageSquare, Mail, AlertCircle, Phone as PhoneIcon } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { ChatMessage, MessageChannel } from '@/hooks/use-chat-messages';
 import { BookingReferenceCard } from './BookingReferenceCard';
@@ -98,6 +98,8 @@ export function ChatMessageBubble({
                 ? 'bg-blue-500/15 text-foreground border border-blue-500/25'
                 : message.channel === 'whatsapp'
                 ? 'bg-[#25D366]/15 text-foreground border border-[#25D366]/25'
+                : message.channel === 'voice'
+                ? 'bg-amber-500/15 text-foreground border border-amber-500/25'
                 : 'bg-indigo-500/15 text-foreground border border-indigo-500/25'
               : message.channel === 'sms'
               ? 'bg-[#F22F46]/5 border border-[#F22F46]/15'
@@ -105,6 +107,8 @@ export function ChatMessageBubble({
               ? 'bg-blue-500/5 border border-blue-500/15'
               : message.channel === 'whatsapp'
               ? 'bg-[#25D366]/5 border border-[#25D366]/15'
+              : message.channel === 'voice'
+              ? 'bg-amber-500/5 border border-amber-500/15'
               : 'bg-indigo-500/5 border border-indigo-500/15',
             // WhatsApp-style rounded rectangle
             'rounded-lg'
@@ -175,6 +179,12 @@ function ChannelIndicator({
       label: 'Email',
       color: 'text-blue-500',
       ownColor: 'text-blue-500',
+    },
+    voice: {
+      icon: <PhoneIcon className="h-3 w-3" />,
+      label: 'Call',
+      color: 'text-amber-500',
+      ownColor: 'text-amber-500',
     },
   };
 

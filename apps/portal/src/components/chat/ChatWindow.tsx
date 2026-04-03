@@ -6,6 +6,8 @@ import { useChatMessages, type ChatMessage } from '@/hooks/use-chat-messages';
 import { ChatMessageBubble, DateSeparator } from './ChatMessageBubble';
 import { CustomerChatInput } from './CustomerChatInput';
 import { TypingIndicator } from './TypingIndicator';
+import { VoiceCallBar } from './VoiceCallBar';
+import { useVoiceCall } from '@/hooks/use-voice-call';
 import { useSocket, type MessageChannel } from '@/contexts/RealtimeChatContext';
 import { useAuthStore } from '@/stores/auth-store';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -159,6 +161,7 @@ export function ChatWindow({
   const [customerLastSeen, setCustomerLastSeen] = useState<string | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [activeChannel, setActiveChannel] = useState<MessageChannel | 'call'>(lastChannel);
+  const voiceCall = useVoiceCall();
 
   // Phone number management for SMS
   const [phone, setPhone] = useState(customerPhone || '');
@@ -351,11 +354,15 @@ export function ChatWindow({
                           if (!isEnabled) return;
                           if (ch.key === 'call') {
                             const phoneToCall = customerPhone || phone;
-                            if (phoneToCall) {
-                              window.open(`tel:${phoneToCall}`, '_self');
-                            } else {
+                            if (!phoneToCall) {
                               toast({ title: 'No phone number', description: 'Add a phone number to call this customer.', variant: 'destructive' });
+                              return;
                             }
+                            if (voiceCall.status !== 'idle') {
+                              toast({ title: 'Call in progress', description: 'End the current call before starting a new one.' });
+                              return;
+                            }
+                            voiceCall.makeCall(phoneToCall);
                             return;
                           }
                           setActiveChannel(ch.key);
@@ -506,6 +513,24 @@ export function ChatWindow({
           </div>
         )}
       </div>
+
+      {/* ── Voice Call Bar ─────────────────────────────────── */}
+      {voiceCall.status !== 'idle' && (
+        <VoiceCallBar
+          status={voiceCall.status}
+          duration={voiceCall.duration}
+          isMuted={voiceCall.isMuted}
+          isOnHold={voiceCall.isOnHold}
+          callerNumber={voiceCall.callerNumber}
+          callerName={voiceCall.incomingCall ? undefined : customerName}
+          incomingCall={voiceCall.incomingCall ? { from: voiceCall.incomingCall.from } : null}
+          onEndCall={voiceCall.endCall}
+          onToggleMute={voiceCall.toggleMute}
+          onToggleHold={voiceCall.toggleHold}
+          onAcceptCall={voiceCall.acceptCall}
+          onRejectCall={voiceCall.rejectCall}
+        />
+      )}
 
       {/* ── Messages area ───────────────────────────────────── */}
       <div className="flex-1 relative overflow-hidden">

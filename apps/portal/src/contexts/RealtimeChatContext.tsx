@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './TenantContext';
 import { useAuthStore } from '@/stores/auth-store';
 
-export type MessageChannel = 'in_app' | 'sms' | 'whatsapp' | 'email';
+export type MessageChannel = 'in_app' | 'sms' | 'whatsapp' | 'email' | 'voice';
 
 // Event payload types matching the Socket.io API for backward compatibility
 interface NewMessagePayload {

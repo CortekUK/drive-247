@@ -4,7 +4,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { useSocket } from '@/contexts/RealtimeChatContext';
 import { useEffect } from 'react';
 
-export type MessageChannel = 'in_app' | 'sms' | 'whatsapp' | 'email';
+export type MessageChannel = 'in_app' | 'sms' | 'whatsapp' | 'email' | 'voice';
 
 export interface ChatChannel {
   id: string;
