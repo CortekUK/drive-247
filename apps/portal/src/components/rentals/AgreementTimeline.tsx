@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -98,6 +98,21 @@ function AgreementCard({
   const queryClient = useQueryClient();
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [resending, setResending] = useState(false);
+  const [statusCooldown, setStatusCooldown] = useState(0);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Cooldown timers for rate-limit protection
+  useEffect(() => {
+    if (statusCooldown <= 0) return;
+    const timer = setTimeout(() => setStatusCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [statusCooldown]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
 
   const statusInfo = getStatusInfo(agreement);
   const isSigned = statusInfo.label === 'Signed';
@@ -118,8 +133,8 @@ function AgreementCard({
       if (data?.ok) {
         const friendlyStatus: Record<string, string> = { sent: 'Awaiting Signature', delivered: 'Viewed', signed: 'Signed', completed: 'Signed', declined: 'Declined', voided: 'Voided', expired: 'Expired', pending: 'Draft' };
         toast({ title: 'Status Updated', description: `Document status: ${friendlyStatus[data.status] || data.status}` });
-        queryClient.invalidateQueries({ queryKey: ['rental-agreements'] });
-        queryClient.invalidateQueries({ queryKey: ['rental'] });
+        await queryClient.refetchQueries({ queryKey: ['rental-agreements'] });
+        await queryClient.refetchQueries({ queryKey: ['rental'] });
       } else {
         toast({ title: 'Check Failed', description: data?.error || 'Could not check status', variant: 'destructive' });
       }
@@ -127,6 +142,7 @@ function AgreementCard({
       toast({ title: 'Error', description: error?.message || 'Failed to check status', variant: 'destructive' });
     } finally {
       setCheckingStatus(false);
+      setStatusCooldown(30); // 30s cooldown to protect BoldSign rate limit
     }
   };
 
@@ -149,12 +165,12 @@ function AgreementCard({
       const data = await response.json();
       if (data?.ok) {
         toast({ title: 'Agreement Resent', description: 'A new agreement has been sent for signing' });
-        queryClient.invalidateQueries({ queryKey: ['rental-agreements'] });
-        queryClient.invalidateQueries({ queryKey: ['rental'] });
+        await queryClient.refetchQueries({ queryKey: ['rental-agreements'] });
+        await queryClient.refetchQueries({ queryKey: ['rental'] });
       } else if (data?.error === 'insufficient_credits') {
         toast({ title: 'Insufficient Credits', description: 'Top up your credits to send this agreement', variant: 'destructive' });
-        queryClient.invalidateQueries({ queryKey: ['rental-agreements'] });
-        queryClient.invalidateQueries({ queryKey: ['rental'] });
+        await queryClient.refetchQueries({ queryKey: ['rental-agreements'] });
+        await queryClient.refetchQueries({ queryKey: ['rental'] });
       } else {
         toast({ title: 'Resend Failed', description: data?.error || data?.detail || 'Failed to resend agreement', variant: 'destructive' });
       }
@@ -162,6 +178,7 @@ function AgreementCard({
       toast({ title: 'Error', description: error?.message || 'Failed to resend', variant: 'destructive' });
     } finally {
       setResending(false);
+      setResendCooldown(60); // 60s cooldown to protect BoldSign rate limit
     }
   };
 
@@ -231,15 +248,15 @@ function AgreementCard({
           </Button>
         )}
         {hasSentDoc && !isSigned && (
-          <Button variant="ghost" size="sm" onClick={handleCheckStatus} disabled={checkingStatus}>
+          <Button variant="ghost" size="sm" onClick={handleCheckStatus} disabled={checkingStatus || statusCooldown > 0}>
             <RefreshCw className={`h-3.5 w-3.5 mr-1 ${checkingStatus ? 'animate-spin' : ''}`} />
-            {checkingStatus ? 'Checking...' : 'Check Status'}
+            {checkingStatus ? 'Checking...' : statusCooldown > 0 ? `Wait ${statusCooldown}s` : 'Check Status'}
           </Button>
         )}
         {canEdit && hasSentDoc && !isSigned && (
-          <Button variant="ghost" size="sm" onClick={handleResend} disabled={resending}>
+          <Button variant="ghost" size="sm" onClick={handleResend} disabled={resending || resendCooldown > 0}>
             <Send className="h-3.5 w-3.5 mr-1" />
-            {resending ? 'Sending...' : 'Resend'}
+            {resending ? 'Sending...' : resendCooldown > 0 ? `Wait ${resendCooldown}s` : 'Resend'}
           </Button>
         )}
       </div>
@@ -307,10 +324,18 @@ export function AgreementTimeline({
           description: 'Top up your credits to send this agreement',
           variant: 'destructive',
         });
-        queryClient.invalidateQueries({ queryKey: ['rental-agreements'] });
-        queryClient.invalidateQueries({ queryKey: ['rental'] });
+        await queryClient.refetchQueries({ queryKey: ['rental-agreements'] });
+        await queryClient.refetchQueries({ queryKey: ['rental'] });
       } else if (!response.ok || !data?.ok) {
-        toast({ title: 'Agreement Error', description: data?.detail || data?.error || 'Failed to send agreement.', variant: 'destructive' });
+        const detail = data?.detail || data?.error || 'Failed to send agreement.';
+        const isRateLimit = detail.toLowerCase().includes('quota exceeded') || detail.toLowerCase().includes('rate limit');
+        toast({
+          title: isRateLimit ? 'Rate Limit Reached' : 'Agreement Error',
+          description: isRateLimit
+            ? 'BoldSign API limit reached (50/hour). Please wait a few minutes before trying again.'
+            : detail,
+          variant: 'destructive',
+        });
       } else {
         toast({
           title: 'Agreement Sent',
@@ -318,8 +343,8 @@ export function AgreementTimeline({
             ? `Extension #${extGroup?.extensionNumber} agreement has been sent for signing`
             : 'Rental agreement has been sent for signing',
         });
-        queryClient.invalidateQueries({ queryKey: ['rental-agreements'] });
-        queryClient.invalidateQueries({ queryKey: ['rental'] });
+        await queryClient.refetchQueries({ queryKey: ['rental-agreements'] });
+        await queryClient.refetchQueries({ queryKey: ['rental'] });
       }
     } catch (error: any) {
       toast({ title: 'Agreement Error', description: error?.message || 'Failed to send agreement', variant: 'destructive' });

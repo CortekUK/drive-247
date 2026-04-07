@@ -79,5 +79,17 @@ export function useRentalAgreements(rentalId: string | undefined) {
       })) as RentalAgreement[];
     },
     enabled: !!rentalId && !!tenant,
+    // Poll every 5s if any agreement has been sent but not yet signed
+    refetchInterval: (query) => {
+      const agreements = query.state.data;
+      if (!agreements) return false;
+      const hasPending = agreements.some(
+        (a) =>
+          a.document_id &&
+          a.document_status !== 'completed' &&
+          a.document_status !== 'signed'
+      );
+      return hasPending ? 30000 : false;
+    },
   });
 }

@@ -606,6 +606,25 @@ export async function POST(request: NextRequest) {
         const agreementType = body.agreementType || 'original';
         const now = new Date().toISOString();
 
+        // Pre-fetch signing link so send-signing-email doesn't need extra BoldSign API calls
+        let signingLink = '';
+        try {
+            await new Promise(r => setTimeout(r, 2000));
+            const propsResponse = await fetch(
+                `${BOLDSIGN_BASE_URL}/v1/document/properties?documentId=${documentId}`,
+                { headers: { 'X-API-KEY': BOLDSIGN_API_KEY } }
+            );
+            if (propsResponse.ok) {
+                const propsData = await propsResponse.json();
+                const signer = propsData.signerDetails?.find(
+                    (s: any) => s.signerEmail?.toLowerCase() === body.customerEmail?.toLowerCase()
+                );
+                if (signer?.signLink) signingLink = signer.signLink;
+            }
+        } catch (e) {
+            console.warn('Pre-fetch signing link error:', e);
+        }
+
         // Insert into rental_agreements table
         console.log('Creating rental_agreements record, type:', agreementType);
         const { data: agreementRow, error: agreementError } = await supabase
@@ -687,6 +706,7 @@ export async function POST(request: NextRequest) {
                     vehicleInfo: vehicleDesc,
                     tenantId,
                     boldsignMode,
+                    signingLink: signingLink || undefined,
                 }),
             });
             emailSent = signingEmailResponse.ok;

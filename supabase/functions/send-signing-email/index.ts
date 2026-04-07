@@ -13,6 +13,7 @@ interface SigningEmailRequest {
   vehicleInfo: string;
   tenantId: string;
   boldsignMode: BoldSignMode;
+  signingLink?: string; // Pre-fetched signing link to avoid extra BoldSign API calls
 }
 
 Deno.serve(async (req) => {
@@ -36,6 +37,7 @@ Deno.serve(async (req) => {
       vehicleInfo,
       tenantId,
       boldsignMode = 'test',
+      signingLink: preFetchedSigningLink,
     } = body;
 
     if (!customerEmail || !documentId || !tenantId) {
@@ -44,18 +46,18 @@ Deno.serve(async (req) => {
 
     console.log('Sending signing email to:', customerEmail, 'for document:', documentId);
 
-    // Get signing link from BoldSign (with retry — document may still be processing)
-    const apiKey = getBoldSignApiKey(boldsignMode);
-    const baseUrl = getBoldSignBaseUrl();
+    // Use pre-fetched signing link if available, otherwise fetch from BoldSign (single attempt)
+    let signingLink = preFetchedSigningLink || '';
 
-    let signingLink = '';
-    // Small initial delay — document was just created in BoldSign and may still be processing
-    await new Promise(r => setTimeout(r, 2000));
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt > 0) await new Promise(r => setTimeout(r, 3000)); // wait 3s between retries
+    if (!signingLink) {
+      const apiKey = getBoldSignApiKey(boldsignMode);
+      const baseUrl = getBoldSignBaseUrl();
+
+      // Wait for BoldSign to finish processing the document
+      await new Promise(r => setTimeout(r, 3000));
 
       try {
-        // First try the properties endpoint to get the signer's sign link
+        // Try the properties endpoint to get the signer's sign link
         const propsResponse = await fetch(
           `${baseUrl}/v1/document/properties?documentId=${documentId}`,
           { headers: { 'X-API-KEY': apiKey } }
@@ -63,36 +65,37 @@ Deno.serve(async (req) => {
 
         if (propsResponse.ok) {
           const propsData = await propsResponse.json();
-          // Find the matching signer and get their signing link
           const signer = propsData.signerDetails?.find(
             (s: any) => s.signerEmail?.toLowerCase() === customerEmail.toLowerCase()
           );
           if (signer?.signLink) {
             signingLink = signer.signLink;
-            break;
           }
         }
 
-        // Fallback: try embedded sign link (works as a direct link too)
-        const signLinkResponse = await fetch(
-          `${baseUrl}/v1/document/getEmbeddedSignLink?documentId=${documentId}&signerEmail=${encodeURIComponent(customerEmail)}`,
-          { headers: { 'X-API-KEY': apiKey } }
-        );
+        // Fallback: try embedded sign link only if properties didn't have it
+        if (!signingLink) {
+          const signLinkResponse = await fetch(
+            `${baseUrl}/v1/document/getEmbeddedSignLink?documentId=${documentId}&signerEmail=${encodeURIComponent(customerEmail)}`,
+            { headers: { 'X-API-KEY': apiKey } }
+          );
 
-        if (signLinkResponse.ok) {
-          const signLinkData = await signLinkResponse.json();
-          signingLink = signLinkData.signLink || '';
-          if (signingLink) break;
-        } else {
-          console.warn(`Sign link attempt ${attempt + 1} failed:`, signLinkResponse.status);
+          if (signLinkResponse.ok) {
+            const signLinkData = await signLinkResponse.json();
+            signingLink = signLinkData.signLink || '';
+          } else {
+            console.warn('Sign link fetch failed:', signLinkResponse.status);
+          }
         }
       } catch (e) {
-        console.warn(`Sign link attempt ${attempt + 1} error:`, e);
+        console.warn('Sign link fetch error:', e);
       }
-    }
 
-    if (!signingLink) {
-      console.warn('Could not get signing link after 3 attempts');
+      if (!signingLink) {
+        console.warn('Could not get signing link from BoldSign');
+      }
+    } else {
+      console.log('Using pre-fetched signing link');
     }
 
     // Get tenant branding

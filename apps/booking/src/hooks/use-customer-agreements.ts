@@ -120,6 +120,18 @@ export function useCustomerAgreements() {
       })) as CustomerAgreement[];
     },
     enabled: !!customerUser?.customer_id,
+    // Poll every 5s if any agreement is awaiting signature
+    refetchInterval: (query) => {
+      const agreements = query.state.data;
+      if (!agreements) return false;
+      const hasPending = agreements.some(
+        (a) =>
+          a.document_id &&
+          a.document_status !== 'completed' &&
+          a.document_status !== 'signed'
+      );
+      return hasPending ? 30000 : false;
+    },
   });
 }
 
@@ -162,6 +174,12 @@ export function useCustomerAgreementStats() {
       return { total, signed, pending };
     },
     enabled: !!customerUser?.customer_id,
+    // Poll every 30s if any agreements are still pending
+    refetchInterval: (query) => {
+      const stats = query.state.data;
+      if (!stats) return false;
+      return stats.pending > 0 ? 30000 : false;
+    },
   });
 }
 

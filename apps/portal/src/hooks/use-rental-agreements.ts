@@ -54,7 +54,7 @@ export function useRentalAgreements(rentalId: string | undefined) {
       return (data || []) as RentalAgreement[];
     },
     enabled: !!rentalId && !!tenant,
-    // Poll every 5s if any agreement has a document_id but is not yet signed
+    // Poll every 30s if any agreement has a document_id but is not yet signed
     refetchInterval: (query) => {
       const agreements = query.state.data;
       if (!agreements) return false;
@@ -64,7 +64,7 @@ export function useRentalAgreements(rentalId: string | undefined) {
           a.document_status !== 'completed' &&
           a.document_status !== 'signed'
       );
-      return hasPending ? 5000 : false;
+      return hasPending ? 30000 : false;
     },
   });
 }
