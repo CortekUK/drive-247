@@ -3400,6 +3400,7 @@ const RentalDetail = () => {
           deliveryAddress={rental?.delivery_address || rental?.pickup_location || null}
           bookingRef={rental?.id?.slice(0, 8)?.toUpperCase() || ''}
           approvalStatus={rental?.approval_status || null}
+          startDate={rental?.start_date || null}
         />
       )}
 

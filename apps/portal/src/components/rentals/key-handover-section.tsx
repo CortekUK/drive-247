@@ -64,6 +64,7 @@ interface KeyHandoverSectionProps {
   deliveryAddress?: string | null;
   bookingRef?: string;
   approvalStatus?: string | null;
+  startDate?: string | null;
 }
 
 export const KeyHandoverSection = ({
@@ -83,6 +84,7 @@ export const KeyHandoverSection = ({
   deliveryAddress = null,
   bookingRef = '',
   approvalStatus = null,
+  startDate = null,
 }: KeyHandoverSectionProps) => {
   const {
     givingHandover,
@@ -192,8 +194,14 @@ export const KeyHandoverSection = ({
   const isActive = rentalStatus === "Active";
   const returnEnabled = isActive || isClosed; // Only allow return when rental is active (or already closed for viewing)
 
-  // "Upcoming" = approved/pending but start_date hasn't arrived yet — keys can't be handed over
-  const isUpcoming = !isActive && !isClosed && (rentalStatus === "Approved" || rentalStatus === "Pending" || rentalStatus === "Confirmed");
+  // "Upcoming" = approved/pending AND start_date is still in the future — keys can't be handed over yet
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const rentalStartDate = startDate ? new Date(startDate) : null;
+  if (rentalStartDate) rentalStartDate.setHours(0, 0, 0, 0);
+  const isUpcoming = !isActive && !isClosed
+    && (rentalStatus === "Approved" || rentalStatus === "Pending" || rentalStatus === "Confirmed")
+    && !!rentalStartDate && rentalStartDate > today;
 
   const givingCompleted = !!givingHandover?.handed_at;
   const receivingCompleted = !!receivingHandover?.handed_at;
