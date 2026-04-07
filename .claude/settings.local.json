@@ -36,7 +36,17 @@
       "mcp__ide__getDiagnostics",
       "Bash(npx tsc:*)",
       "Bash(npx shadcn@latest add \"https://lucide-animated.com/r/chart-bar-increasing.json\")",
-      "Bash(head:*)"
+      "Bash(head:*)",
+      "Bash(npx supabase:*)",
+      "Bash(npx supabase@latest db push)",
+      "Bash(npx supabase@latest db push --token sbp_6b139d9d0f78dd93e75f3683c8cfa4a5fc31f366)",
+      "Bash(SUPABASE_ACCESS_TOKEN=sbp_6b139d9d0f78dd93e75f3683c8cfa4a5fc31f366 npx supabase@latest db push --workdir /home/haseeb-raza/Desktop/drive-247)",
+      "Bash(SUPABASE_ACCESS_TOKEN=sbp_6b139d9d0f78dd93e75f3683c8cfa4a5fc31f366 npx supabase@latest migration repair --status reverted 20260401200252 20260403075116 20260407084243 20260407095835 20260407112136 20260407115354 20260407115740 20260407141152 --workdir /home/haseeb-raza/Desktop/drive-247)",
+      "Bash(SUPABASE_ACCESS_TOKEN=sbp_6b139d9d0f78dd93e75f3683c8cfa4a5fc31f366 npx supabase@latest migration repair --status reverted 20260402120000 20260403120000 20260407120000 --workdir /home/haseeb-raza/Desktop/drive-247)",
+      "Bash(SUPABASE_ACCESS_TOKEN=sbp_6b139d9d0f78dd93e75f3683c8cfa4a5fc31f366 npx supabase@latest gen types typescript --project-id hviqoaokxvlancmftwuo)",
+      "Bash(npx supabase@latest db execute --workdir /home/haseeb-raza/Desktop/drive-247 ':*)",
+      "Bash(npx supabase@latest db query --workdir /home/haseeb-raza/Desktop/drive-247 ':*)",
+      "Bash(python3 -m json.tool)"
     ],
     "deny": [],
     "ask": []

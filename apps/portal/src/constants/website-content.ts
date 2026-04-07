@@ -735,4 +735,15 @@ export const CMS_DEFAULTS = {
   },
   privacy: DEFAULT_PRIVACY_POLICY,
   terms: DEFAULT_TERMS_OF_SERVICE,
+  blog: {
+    hero: {
+      title: "Blog",
+      subtitle: "Latest news, tips and insights from our team",
+    } as HeroContent,
+    seo: {
+      title: "Blog — Latest Articles & News",
+      description: "Read the latest articles, tips, and news from our team.",
+      keywords: "blog, news, tips, car rental guide",
+    } as SEOContent,
+  },
 };

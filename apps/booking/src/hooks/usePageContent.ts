@@ -991,6 +991,19 @@ export const defaultSiteSettings: PageContent = {
   },
 };
 
+// Default content for Blog page
+export const defaultBlogContent: PageContent = {
+  hero: {
+    title: "Blog",
+    subtitle: "Latest news, tips and insights from our team",
+  },
+  seo: {
+    title: "Blog — Latest Articles & News",
+    description: "Read the latest articles, tips, and news from our team.",
+    keywords: "blog, news, tips, car rental guide",
+  },
+};
+
 // Helper to merge CMS content with defaults
 export const mergeWithDefaults = (
   cmsContent: PageContent | null | undefined,

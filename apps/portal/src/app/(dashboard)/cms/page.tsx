@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Globe, FileText, Edit, Eye, Clock, CheckCircle } from "lucide-react";
+import { Globe, FileText, Edit, Eye, Clock, CheckCircle, PenLine } from "lucide-react";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { formatDistanceToNow } from "date-fns";
 
@@ -23,15 +23,17 @@ export default function CMS() {
   // Debug logging
   console.log("CMS Debug:", { tenant: tenant?.slug, tenantId: tenant?.id, pagesCount: pages.length, error });
 
-  // Sort pages according to navigation order
+  // Sort pages according to navigation order, exclude blog (managed separately)
   const sortedPages = useMemo(() => {
-    return [...pages].sort((a, b) => {
-      const indexA = PAGE_ORDER.indexOf(a.slug);
-      const indexB = PAGE_ORDER.indexOf(b.slug);
-      const orderA = indexA === -1 ? PAGE_ORDER.length : indexA;
-      const orderB = indexB === -1 ? PAGE_ORDER.length : indexB;
-      return orderA - orderB;
-    });
+    return [...pages]
+      .filter((p) => p.slug !== "blog")
+      .sort((a, b) => {
+        const indexA = PAGE_ORDER.indexOf(a.slug);
+        const indexB = PAGE_ORDER.indexOf(b.slug);
+        const orderA = indexA === -1 ? PAGE_ORDER.length : indexA;
+        const orderB = indexB === -1 ? PAGE_ORDER.length : indexB;
+        return orderA - orderB;
+      });
   }, [pages]);
 
   if (isLoading) {
@@ -117,6 +119,39 @@ export default function CMS() {
             </CardContent>
           </Card>
         ))}
+
+        {/* Blog Card */}
+        {(
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50 flex flex-col h-full border-primary/20"
+            onClick={() => router.push("/cms/blog")}
+          >
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <PenLine className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-lg">Blog</CardTitle>
+                </div>
+                <Badge className="bg-primary/20 text-primary hover:bg-primary/30">
+                  <PenLine className="h-3 w-3 mr-1" />
+                  Manage
+                </Badge>
+              </div>
+              <CardDescription className="mt-2">
+                Create and manage blog posts, categories, and SEO
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col flex-1">
+              <Button variant="outline" className="w-full mt-auto pt-3">
+                {hasEditAccess ? (
+                  <><Edit className="h-4 w-4 mr-2" />Manage Blog</>
+                ) : (
+                  <><Eye className="h-4 w-4 mr-2" />View Blog</>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {sortedPages.length === 0 && (
           <Card className="col-span-full">

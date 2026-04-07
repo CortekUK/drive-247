@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
+import { useTenant } from '@/contexts/TenantContext';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { AuthPromptDialog } from '@/components/booking/AuthPromptDialog';
 import {
@@ -26,6 +27,7 @@ const Navigation = () => {
   const pathname = usePathname();
   const router = useRouter();
   const { settings } = useSiteSettings();
+  const { tenant } = useTenant();
   const { customerUser, session, signOut, loading: authLoading } = useCustomerAuthStore();
   const isActive = (path: string) => pathname === path;
 
@@ -61,13 +63,16 @@ const Navigation = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const blogEnabled = !!tenant?.blog_enabled;
+
   const navLinks = [
     { path: '/', label: 'Home' },
     { path: '/about', label: 'About' },
     { path: '/fleet', label: 'Fleet & Pricing' },
     { path: '/testimonials', label: 'Reviews' },
     { path: '/promotions', label: 'Promotions' },
-    { path: '/contact', label: 'Contact' }
+    { path: '/contact', label: 'Contact' },
+    ...(blogEnabled ? [{ path: '/blog', label: 'Blog' }] : []),
   ];
 
   return (

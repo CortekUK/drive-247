@@ -76,6 +76,7 @@ export type Database = {
           created_at: string | null
           id: string
           is_active: boolean | null
+          template_category: string
           template_content: string
           template_name: string
           tenant_id: string
@@ -85,6 +86,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          template_category?: string
           template_content: string
           template_name: string
           tenant_id: string
@@ -94,6 +96,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          template_category?: string
           template_content?: string
           template_name?: string
           tenant_id?: string
@@ -407,6 +410,212 @@ export type Database = {
           },
         ]
       }
+      blog_categories: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          display_order: number | null
+          id: string
+          name: string
+          slug: string
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          name: string
+          slug: string
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          name?: string
+          slug?: string
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_categories_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blog_post_versions: {
+        Row: {
+          content: string
+          created_at: string | null
+          created_by: string | null
+          excerpt: string | null
+          id: string
+          metadata: Json | null
+          post_id: string
+          tenant_id: string
+          title: string
+          version_number: number
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          excerpt?: string | null
+          id?: string
+          metadata?: Json | null
+          post_id: string
+          tenant_id: string
+          title: string
+          version_number: number
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          excerpt?: string | null
+          id?: string
+          metadata?: Json | null
+          post_id?: string
+          tenant_id?: string
+          title?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_post_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blog_post_versions_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blog_post_versions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blog_posts: {
+        Row: {
+          author_id: string | null
+          author_name: string | null
+          canonical_url: string | null
+          category_id: string | null
+          content: string | null
+          created_at: string | null
+          excerpt: string | null
+          featured_image_url: string | null
+          id: string
+          is_featured: boolean | null
+          meta_description: string | null
+          meta_keywords: string | null
+          meta_title: string | null
+          noindex: boolean | null
+          published_at: string | null
+          published_by: string | null
+          reading_time_minutes: number | null
+          slug: string
+          status: string
+          tenant_id: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          author_id?: string | null
+          author_name?: string | null
+          canonical_url?: string | null
+          category_id?: string | null
+          content?: string | null
+          created_at?: string | null
+          excerpt?: string | null
+          featured_image_url?: string | null
+          id?: string
+          is_featured?: boolean | null
+          meta_description?: string | null
+          meta_keywords?: string | null
+          meta_title?: string | null
+          noindex?: boolean | null
+          published_at?: string | null
+          published_by?: string | null
+          reading_time_minutes?: number | null
+          slug: string
+          status?: string
+          tenant_id: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          author_id?: string | null
+          author_name?: string | null
+          canonical_url?: string | null
+          category_id?: string | null
+          content?: string | null
+          created_at?: string | null
+          excerpt?: string | null
+          featured_image_url?: string | null
+          id?: string
+          is_featured?: boolean | null
+          meta_description?: string | null
+          meta_keywords?: string | null
+          meta_title?: string | null
+          noindex?: boolean | null
+          published_at?: string | null
+          published_by?: string | null
+          reading_time_minutes?: number | null
+          slug?: string
+          status?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_posts_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blog_posts_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "blog_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blog_posts_published_by_fkey"
+            columns: ["published_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blog_posts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bonzah_insurance_policies: {
         Row: {
           chain_id: string | null
@@ -529,6 +738,106 @@ export type Database = {
           },
           {
             foreignKeyName: "bonzah_insurance_policies_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      call_logs: {
+        Row: {
+          caller_id: string | null
+          caller_type: string
+          channel_id: string | null
+          created_at: string | null
+          customer_id: string | null
+          direction: string
+          duration_seconds: number | null
+          ended_at: string | null
+          from_number: string | null
+          id: string
+          started_at: string | null
+          status: string
+          tenant_id: string
+          to_number: string | null
+          twilio_call_sid: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          caller_id?: string | null
+          caller_type: string
+          channel_id?: string | null
+          created_at?: string | null
+          customer_id?: string | null
+          direction: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          from_number?: string | null
+          id?: string
+          started_at?: string | null
+          status?: string
+          tenant_id: string
+          to_number?: string | null
+          twilio_call_sid?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          caller_id?: string | null
+          caller_type?: string
+          channel_id?: string | null
+          created_at?: string | null
+          customer_id?: string | null
+          direction?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          from_number?: string | null
+          id?: string
+          started_at?: string | null
+          status?: string
+          tenant_id?: string
+          to_number?: string | null
+          twilio_call_sid?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_logs_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_logs_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_logs_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "call_logs_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "call_logs_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "call_logs_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -5944,6 +6253,7 @@ export type Database = {
       rentals: {
         Row: {
           approval_status: string | null
+          approved_at: string | null
           boldsign_mode: string | null
           bonzah_policy_id: string | null
           cancellation_reason: string | null
@@ -5984,10 +6294,10 @@ export type Database = {
           insurance_status: string | null
           is_extended: boolean | null
           is_gig_driver: boolean | null
+          is_pay_as_you_go: boolean
           lockbox_sent_at: string | null
           monthly_amount: number
           monthly_mileage_override: number | null
-          return_reminder_sent_at: string | null
           original_end_date: string | null
           payment_mode: string | null
           payment_status: string | null
@@ -6001,6 +6311,7 @@ export type Database = {
           rental_period_type: string | null
           return_location: string | null
           return_location_id: string | null
+          return_reminder_sent_at: string | null
           return_time: string | null
           schedule: string | null
           signed_document_id: string | null
@@ -6015,6 +6326,7 @@ export type Database = {
         }
         Insert: {
           approval_status?: string | null
+          approved_at?: string | null
           boldsign_mode?: string | null
           bonzah_policy_id?: string | null
           cancellation_reason?: string | null
@@ -6055,10 +6367,10 @@ export type Database = {
           insurance_status?: string | null
           is_extended?: boolean | null
           is_gig_driver?: boolean | null
+          is_pay_as_you_go?: boolean
           lockbox_sent_at?: string | null
           monthly_amount: number
           monthly_mileage_override?: number | null
-          return_reminder_sent_at?: string | null
           original_end_date?: string | null
           payment_mode?: string | null
           payment_status?: string | null
@@ -6072,6 +6384,7 @@ export type Database = {
           rental_period_type?: string | null
           return_location?: string | null
           return_location_id?: string | null
+          return_reminder_sent_at?: string | null
           return_time?: string | null
           schedule?: string | null
           signed_document_id?: string | null
@@ -6086,6 +6399,7 @@ export type Database = {
         }
         Update: {
           approval_status?: string | null
+          approved_at?: string | null
           boldsign_mode?: string | null
           bonzah_policy_id?: string | null
           cancellation_reason?: string | null
@@ -6126,10 +6440,10 @@ export type Database = {
           insurance_status?: string | null
           is_extended?: boolean | null
           is_gig_driver?: boolean | null
+          is_pay_as_you_go?: boolean
           lockbox_sent_at?: string | null
           monthly_amount?: number
           monthly_mileage_override?: number | null
-          return_reminder_sent_at?: string | null
           original_end_date?: string | null
           payment_mode?: string | null
           payment_status?: string | null
@@ -6143,6 +6457,7 @@ export type Database = {
           rental_period_type?: string | null
           return_location?: string | null
           return_location_id?: string | null
+          return_reminder_sent_at?: string | null
           return_time?: string | null
           schedule?: string | null
           signed_document_id?: string | null
@@ -7123,9 +7438,11 @@ export type Database = {
           area_center_lon: number | null
           area_delivery_fee: number | null
           auth_logo_url: string | null
+          blog_enabled: boolean | null
           boldsign_live_brand_id: string | null
           boldsign_mode: string
           boldsign_test_brand_id: string | null
+          bonzah_brochure_url: string | null
           bonzah_mode: string
           bonzah_password: string | null
           bonzah_username: string | null
@@ -7135,8 +7452,6 @@ export type Database = {
           business_hours: string | null
           collection_enabled: boolean | null
           company_name: string
-          return_reminder_enabled: boolean
-          return_reminder_hours: number
           contact_email: string | null
           contact_phone: string | null
           created_at: string | null
@@ -7172,6 +7487,7 @@ export type Database = {
           integration_canopy: boolean | null
           integration_tesla_fleet: boolean | null
           integration_twilio_sms: boolean | null
+          integration_twilio_whatsapp: boolean | null
           integration_veriff: boolean | null
           integration_whatsapp: boolean | null
           light_accent_color: string | null
@@ -7205,6 +7521,7 @@ export type Database = {
           monthly_tier_days: number
           multiple_locations_enabled: boolean | null
           og_image_url: string | null
+          pay_as_you_go_enabled: boolean
           payment_mode: string | null
           phone: string | null
           pickup_area_enabled: boolean | null
@@ -7222,6 +7539,8 @@ export type Database = {
           return_fixed_enabled: boolean | null
           return_location_mode: string | null
           return_multiple_locations_enabled: boolean | null
+          return_reminder_enabled: boolean
+          return_reminder_hours: number
           saturday_close: string | null
           saturday_enabled: boolean | null
           saturday_open: string | null
@@ -7260,6 +7579,8 @@ export type Database = {
           tuesday_close: string | null
           tuesday_enabled: boolean | null
           tuesday_open: string | null
+          twilio_api_key_secret: string | null
+          twilio_api_key_sid: string | null
           twilio_brand_sid: string | null
           twilio_brand_status: string | null
           twilio_campaign_sid: string | null
@@ -7269,6 +7590,11 @@ export type Database = {
           twilio_phone_number_sid: string | null
           twilio_subaccount_auth_token: string | null
           twilio_subaccount_sid: string | null
+          twilio_twiml_app_sid: string | null
+          twilio_voice_enabled: boolean | null
+          twilio_voice_webhook_configured: boolean | null
+          twilio_whatsapp_lockbox_template_sid: string | null
+          twilio_whatsapp_number: string | null
           twitter_url: string | null
           updated_at: string | null
           verification_document_type: string
@@ -7294,9 +7620,11 @@ export type Database = {
           area_center_lon?: number | null
           area_delivery_fee?: number | null
           auth_logo_url?: string | null
+          blog_enabled?: boolean | null
           boldsign_live_brand_id?: string | null
           boldsign_mode?: string
           boldsign_test_brand_id?: string | null
+          bonzah_brochure_url?: string | null
           bonzah_mode?: string
           bonzah_password?: string | null
           bonzah_username?: string | null
@@ -7306,8 +7634,6 @@ export type Database = {
           business_hours?: string | null
           collection_enabled?: boolean | null
           company_name: string
-          return_reminder_enabled?: boolean
-          return_reminder_hours?: number
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string | null
@@ -7343,6 +7669,7 @@ export type Database = {
           integration_canopy?: boolean | null
           integration_tesla_fleet?: boolean | null
           integration_twilio_sms?: boolean | null
+          integration_twilio_whatsapp?: boolean | null
           integration_veriff?: boolean | null
           integration_whatsapp?: boolean | null
           light_accent_color?: string | null
@@ -7376,6 +7703,7 @@ export type Database = {
           monthly_tier_days?: number
           multiple_locations_enabled?: boolean | null
           og_image_url?: string | null
+          pay_as_you_go_enabled?: boolean
           payment_mode?: string | null
           phone?: string | null
           pickup_area_enabled?: boolean | null
@@ -7393,6 +7721,8 @@ export type Database = {
           return_fixed_enabled?: boolean | null
           return_location_mode?: string | null
           return_multiple_locations_enabled?: boolean | null
+          return_reminder_enabled?: boolean
+          return_reminder_hours?: number
           saturday_close?: string | null
           saturday_enabled?: boolean | null
           saturday_open?: string | null
@@ -7431,6 +7761,8 @@ export type Database = {
           tuesday_close?: string | null
           tuesday_enabled?: boolean | null
           tuesday_open?: string | null
+          twilio_api_key_secret?: string | null
+          twilio_api_key_sid?: string | null
           twilio_brand_sid?: string | null
           twilio_brand_status?: string | null
           twilio_campaign_sid?: string | null
@@ -7440,6 +7772,11 @@ export type Database = {
           twilio_phone_number_sid?: string | null
           twilio_subaccount_auth_token?: string | null
           twilio_subaccount_sid?: string | null
+          twilio_twiml_app_sid?: string | null
+          twilio_voice_enabled?: boolean | null
+          twilio_voice_webhook_configured?: boolean | null
+          twilio_whatsapp_lockbox_template_sid?: string | null
+          twilio_whatsapp_number?: string | null
           twitter_url?: string | null
           updated_at?: string | null
           verification_document_type?: string
@@ -7465,9 +7802,11 @@ export type Database = {
           area_center_lon?: number | null
           area_delivery_fee?: number | null
           auth_logo_url?: string | null
+          blog_enabled?: boolean | null
           boldsign_live_brand_id?: string | null
           boldsign_mode?: string
           boldsign_test_brand_id?: string | null
+          bonzah_brochure_url?: string | null
           bonzah_mode?: string
           bonzah_password?: string | null
           bonzah_username?: string | null
@@ -7478,8 +7817,6 @@ export type Database = {
           collection_enabled?: boolean | null
           company_name?: string
           contact_email?: string | null
-          return_reminder_enabled?: boolean
-          return_reminder_hours?: number
           contact_phone?: string | null
           created_at?: string | null
           currency_code?: string | null
@@ -7514,6 +7851,7 @@ export type Database = {
           integration_canopy?: boolean | null
           integration_tesla_fleet?: boolean | null
           integration_twilio_sms?: boolean | null
+          integration_twilio_whatsapp?: boolean | null
           integration_veriff?: boolean | null
           integration_whatsapp?: boolean | null
           light_accent_color?: string | null
@@ -7547,6 +7885,7 @@ export type Database = {
           monthly_tier_days?: number
           multiple_locations_enabled?: boolean | null
           og_image_url?: string | null
+          pay_as_you_go_enabled?: boolean
           payment_mode?: string | null
           phone?: string | null
           pickup_area_enabled?: boolean | null
@@ -7564,6 +7903,8 @@ export type Database = {
           return_fixed_enabled?: boolean | null
           return_location_mode?: string | null
           return_multiple_locations_enabled?: boolean | null
+          return_reminder_enabled?: boolean
+          return_reminder_hours?: number
           saturday_close?: string | null
           saturday_enabled?: boolean | null
           saturday_open?: string | null
@@ -7602,6 +7943,8 @@ export type Database = {
           tuesday_close?: string | null
           tuesday_enabled?: boolean | null
           tuesday_open?: string | null
+          twilio_api_key_secret?: string | null
+          twilio_api_key_sid?: string | null
           twilio_brand_sid?: string | null
           twilio_brand_status?: string | null
           twilio_campaign_sid?: string | null
@@ -7611,6 +7954,11 @@ export type Database = {
           twilio_phone_number_sid?: string | null
           twilio_subaccount_auth_token?: string | null
           twilio_subaccount_sid?: string | null
+          twilio_twiml_app_sid?: string | null
+          twilio_voice_enabled?: boolean | null
+          twilio_voice_webhook_configured?: boolean | null
+          twilio_whatsapp_lockbox_template_sid?: string | null
+          twilio_whatsapp_number?: string | null
           twitter_url?: string | null
           updated_at?: string | null
           verification_document_type?: string
@@ -8377,6 +8725,59 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "verification_otps_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_content_templates: {
+        Row: {
+          approval_status: string
+          body: string
+          created_at: string
+          friendly_name: string
+          id: string
+          is_default: boolean | null
+          name: string
+          template_type: string
+          tenant_id: string
+          twilio_content_sid: string | null
+          updated_at: string
+          variables: Json | null
+        }
+        Insert: {
+          approval_status?: string
+          body: string
+          created_at?: string
+          friendly_name: string
+          id?: string
+          is_default?: boolean | null
+          name: string
+          template_type?: string
+          tenant_id: string
+          twilio_content_sid?: string | null
+          updated_at?: string
+          variables?: Json | null
+        }
+        Update: {
+          approval_status?: string
+          body?: string
+          created_at?: string
+          friendly_name?: string
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          template_type?: string
+          tenant_id?: string
+          twilio_content_sid?: string | null
+          updated_at?: string
+          variables?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_content_templates_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -9682,5 +10083,3 @@ export const Constants = {
     },
   },
 } as const
-A new version of Supabase CLI is available: v2.84.2 (currently installed v2.75.0)
-We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

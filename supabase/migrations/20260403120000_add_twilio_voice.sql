@@ -33,22 +33,26 @@ CREATE INDEX IF NOT EXISTS idx_call_logs_tenant_created
 ALTER TABLE call_logs ENABLE ROW LEVEL SECURITY;
 
 -- SELECT: tenant users can see their own tenant's call logs, super admins can see all
+DROP POLICY IF EXISTS "call_logs_select" ON call_logs;
 CREATE POLICY "call_logs_select"
   ON call_logs FOR SELECT
   USING (tenant_id = get_user_tenant_id() OR is_super_admin());
 
 -- INSERT: only service_role (edge functions)
+DROP POLICY IF EXISTS "call_logs_insert" ON call_logs;
 CREATE POLICY "call_logs_insert"
   ON call_logs FOR INSERT
   WITH CHECK (false);
 
 -- UPDATE: only service_role (edge functions)
+DROP POLICY IF EXISTS "call_logs_update" ON call_logs;
 CREATE POLICY "call_logs_update"
   ON call_logs FOR UPDATE
   USING (false)
   WITH CHECK (false);
 
 -- updated_at trigger using existing function
+DROP TRIGGER IF EXISTS set_call_logs_updated_at ON call_logs;
 CREATE TRIGGER set_call_logs_updated_at
   BEFORE UPDATE ON call_logs
   FOR EACH ROW
