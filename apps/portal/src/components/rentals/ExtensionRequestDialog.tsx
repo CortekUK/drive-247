@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Loader2, CalendarPlus, Check, X, AlertCircle, AlertTriangle, Calendar, CreditCard, Shield, ShieldCheck, Upload, Gauge } from 'lucide-react';
+import { Loader2, CalendarPlus, Check, X, AlertCircle, AlertTriangle, Calendar, CreditCard, Shield, ShieldCheck, Upload, Gauge, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
@@ -206,6 +206,26 @@ export function ExtensionRequestDialog({
 
     setIsApproving(true);
     try {
+      // Server-side conflict re-check before update (catches race conditions)
+      const vehicleId = rental.vehicle_id || rental.vehicles?.id;
+      const extensionEndDate = rental.previous_end_date;
+      if (vehicleId && extensionEndDate) {
+        const { data: overlapping } = await supabase
+          .from('rentals')
+          .select('id, start_date, end_date, status, customers(name)')
+          .eq('vehicle_id', vehicleId)
+          .eq('tenant_id', tenant.id)
+          .in('status', ['Pending', 'Active'])
+          .lte('start_date', extensionEndDate)
+          .or(`end_date.gte.${rental.end_date},end_date.is.null`)
+          .neq('id', rental.id);
+
+        if (overlapping && overlapping.length > 0) {
+          const names = overlapping.map((r: any) => r.customers?.name || 'Unknown').join(', ');
+          throw new Error(`Cannot approve extension: vehicle is booked by ${names} during the extension period. Please resolve the conflict first.`);
+        }
+      }
+
       // Swap dates: end_date ↔ previous_end_date (set original_end_date only on first extension)
       const isFirstExtension = !rental.original_end_date && (existingExtensionCount || 0) === 0;
       const { error: updateError } = await supabase
@@ -221,6 +241,10 @@ export function ExtensionRequestDialog({
         .eq('tenant_id', tenant.id);
 
       if (updateError) {
+        // Catch DB exclusion constraint violation with a friendly message
+        if (updateError.message?.includes('no_overlapping_vehicle_rentals')) {
+          throw new Error('Cannot approve extension: another rental overlaps with the new dates on this vehicle. Please resolve the scheduling conflict first.');
+        }
         throw new Error(`Failed to approve extension: ${updateError.message}`);
       }
 
@@ -601,18 +625,23 @@ export function ExtensionRequestDialog({
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription className="space-y-1">
-                <p className="font-medium">Vehicle has scheduling conflicts for the requested dates:</p>
+                <p className="font-medium">Resolve these conflicts before approving:</p>
                 {rentalConflicts.map((c) => (
-                  <p key={c.id} className="text-xs">
-                    Rental for {c.customerName} ({format(new Date(c.start_date), 'MMM dd')} – {format(new Date(c.end_date), 'MMM dd')})
-                  </p>
+                  <a
+                    key={c.id}
+                    href={`/rentals/${c.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs underline inline-flex items-center gap-1"
+                  >
+                    Rental for {c.customerName} ({format(new Date(c.start_date), 'MMM dd')} – {format(new Date(c.end_date), 'MMM dd')}) <ExternalLink className="h-3 w-3" />
+                  </a>
                 ))}
                 {blockedDateConflicts.map((c) => (
                   <p key={c.id} className="text-xs">
                     Blocked: {c.reason || 'No reason'} ({format(new Date(c.start_date), 'MMM dd')} – {format(new Date(c.end_date), 'MMM dd')})
                   </p>
                 ))}
-                <p className="text-xs font-medium pt-1">Consider rejecting this request or resolving the conflict first.</p>
               </AlertDescription>
             </Alert>
           )}
@@ -867,7 +896,7 @@ export function ExtensionRequestDialog({
           </Button>
           <Button
             onClick={handleApprove}
-            disabled={isProcessing || !requestedEndDate}
+            disabled={isProcessing || !requestedEndDate || hasConflicts}
             className="flex-1 sm:flex-none"
           >
             {isApproving ? (

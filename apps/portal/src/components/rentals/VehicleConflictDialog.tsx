@@ -1,0 +1,151 @@
+'use client';
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { AlertTriangle, ExternalLink, CalendarX, Loader2 } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import type { RentalConflict, BlockedDateConflict } from '@/hooks/use-rental-conflicts';
+
+interface VehicleConflictDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  rentalConflicts: RentalConflict[];
+  blockedDateConflicts: BlockedDateConflict[];
+  onRetry: () => void;
+  isRetrying?: boolean;
+}
+
+export function VehicleConflictDialog({
+  open,
+  onOpenChange,
+  rentalConflicts,
+  blockedDateConflicts,
+  onRetry,
+  isRetrying,
+}: VehicleConflictDialogProps) {
+  const formatDate = (dateStr: string) => {
+    try {
+      return format(parseISO(dateStr), 'MMM dd, yyyy');
+    } catch {
+      return dateStr;
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+            </div>
+            <div>
+              <DialogTitle className="text-base font-medium text-[#080812]">
+                Vehicle Has Scheduling Conflicts
+              </DialogTitle>
+              <DialogDescription className="text-sm text-[#737373]">
+                Resolve these conflicts before creating the rental.
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="space-y-3 py-2">
+          {rentalConflicts.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-[#737373]">
+                Overlapping Rentals
+              </p>
+              {rentalConflicts.map((conflict) => (
+                <div
+                  key={conflict.id}
+                  className="flex items-center justify-between rounded-md border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-[#080812] truncate">
+                      {conflict.customerName}
+                    </p>
+                    <p className="text-xs text-[#737373]">
+                      {formatDate(conflict.start_date)} — {conflict.end_date ? formatDate(conflict.end_date) : 'Ongoing'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 ml-3">
+                    <Badge
+                      className={
+                        conflict.status === 'Active'
+                          ? 'bg-green-100 text-green-700 border-green-200'
+                          : 'bg-amber-100 text-amber-700 border-amber-200'
+                      }
+                    >
+                      {conflict.status}
+                    </Badge>
+                    <a
+                      href={`/rentals/${conflict.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-[#6366f1] hover:bg-[#e0e7ff] transition-colors"
+                    >
+                      Open <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {blockedDateConflicts.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-[#737373]">
+                Blocked Dates
+              </p>
+              {blockedDateConflicts.map((block) => (
+                <div
+                  key={block.id}
+                  className="flex items-center gap-2 rounded-md border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2.5"
+                >
+                  <CalendarX className="h-4 w-4 text-red-500 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm text-[#080812]">
+                      {formatDate(block.start_date)} — {formatDate(block.end_date)}
+                    </p>
+                    {block.reason && (
+                      <p className="text-xs text-[#737373] truncate">{block.reason}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-xs text-[#737373] pt-1">
+            Open conflicting rentals in a new tab to cancel or reject them, then click "Check Again" to proceed.
+          </p>
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isRetrying}>
+            Cancel
+          </Button>
+          <Button onClick={onRetry} disabled={isRetrying}>
+            {isRetrying ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Checking...
+              </>
+            ) : (
+              'Check Again'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

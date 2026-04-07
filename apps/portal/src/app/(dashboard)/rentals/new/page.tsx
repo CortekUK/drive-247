@@ -30,6 +30,8 @@ import type { CoverageOptions } from "@/hooks/use-bonzah-premium";
 import { useBonzahVehicleEligibility } from "@/hooks/use-bonzah-vehicle-eligibility";
 import { useBonzahBalance } from "@/hooks/use-bonzah-balance";
 import { useCustomerActiveRentals } from "@/hooks/use-customer-active-rentals";
+import { checkRentalConflicts, type ConflictResult } from "@/hooks/use-rental-conflicts";
+import { VehicleConflictDialog } from "@/components/rentals/VehicleConflictDialog";
 import { PAYMENT_TYPES } from "@/constants";
 import { DatePickerInput } from "@/components/shared/forms/date-picker-input";
 import { CurrencyInput } from "@/components/shared/forms/currency-input";
@@ -128,6 +130,8 @@ const CreateRental = () => {
   const [bonzahKey, setBonzahKey] = useState(0);
   const [bonzahPremium, setBonzahPremium] = useState<number>(0);
   const [submitError, setSubmitError] = useState<string>("");
+  const [showConflictDialog, setShowConflictDialog] = useState(false);
+  const [conflictResult, setConflictResult] = useState<ConflictResult | null>(null);
   const [showDocuSignDialog, setShowDocuSignDialog] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
@@ -1103,7 +1107,21 @@ const CreateRental = () => {
         throw new Error("Monthly amount must be greater than 0");
       }
 
-      // Check for blocked dates (global and vehicle-specific)
+      // Check for vehicle scheduling conflicts (overlapping rentals + blocked dates)
+      if (tenant?.id) {
+        const startStr = data.start_date.toISOString().split('T')[0];
+        const endStr = data.end_date.toISOString().split('T')[0];
+        const conflicts = await checkRentalConflicts(supabase, tenant.id, data.vehicle_id, startStr, endStr);
+        if (conflicts.hasConflicts) {
+          setConflictResult(conflicts);
+          setShowConflictDialog(true);
+          setLoading(false);
+          setCreationProgress(0);
+          return;
+        }
+      }
+
+      // Check for blocked dates (global and vehicle-specific) — fallback for local blocked dates state
       const blockCheck = checkBlockedDatesOverlap(data.start_date, data.end_date, data.vehicle_id);
       if (blockCheck.blocked) {
         const blockType = blockCheck.isGlobal ? "Global blocked period" : "Vehicle blocked";
@@ -4558,6 +4576,19 @@ const CreateRental = () => {
       <GenerateInviteDialog
         open={inviteDialogOpen}
         onOpenChange={setInviteDialogOpen}
+      />
+
+      <VehicleConflictDialog
+        open={showConflictDialog}
+        onOpenChange={setShowConflictDialog}
+        rentalConflicts={conflictResult?.rentalConflicts || []}
+        blockedDateConflicts={conflictResult?.blockedDateConflicts || []}
+        onRetry={() => {
+          setShowConflictDialog(false);
+          setConflictResult(null);
+          form.handleSubmit(onSubmit)();
+        }}
+        isRetrying={loading}
       />
     </div>
     </>

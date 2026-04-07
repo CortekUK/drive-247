@@ -123,6 +123,34 @@ serve(async (req) => {
       }
     }
 
+    // 3c. Overlap check — hard block if another Pending/Active rental overlaps this vehicle's dates
+    if (payment.rental?.vehicle_id && payment.rental?.start_date && payment.rental?.end_date) {
+      const { data: overlapping, error: overlapErr } = await supabase
+        .from("rentals")
+        .select("id")
+        .eq("vehicle_id", payment.rental.vehicle_id)
+        .in("status", ["Pending", "Active"])
+        .lte("start_date", payment.rental.end_date)
+        .gte("end_date", payment.rental.start_date)
+        .neq("id", payment.rental_id)
+        .limit(1);
+
+      if (!overlapErr && overlapping && overlapping.length > 0) {
+        console.error("Overlap conflict detected:", { rentalId: payment.rental_id, conflictingRentalId: overlapping[0].id });
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Cannot approve booking: another rental overlaps with this vehicle's dates. Please resolve the conflict first.",
+            conflictingRentalId: overlapping[0].id,
+          }),
+          {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+    }
+
     // Get Stripe client for the tenant's mode
     const stripe = getStripeClient(stripeMode);
     const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;

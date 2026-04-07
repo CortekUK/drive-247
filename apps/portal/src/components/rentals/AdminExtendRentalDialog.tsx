@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Loader2, CalendarPlus, Calendar, AlertCircle, AlertTriangle, CreditCard, ArrowLeft, Shield, ShieldCheck, Upload, Gauge } from 'lucide-react';
+import { Loader2, CalendarPlus, Calendar, AlertCircle, AlertTriangle, CreditCard, ArrowLeft, Shield, ShieldCheck, Upload, Gauge, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
@@ -218,6 +218,25 @@ export function AdminExtendRentalDialog({
 
     setIsSubmitting(true);
     try {
+      // 0. Server-side conflict re-check before update (catches race conditions)
+      const vehicleId = rental.vehicles?.id || rental.vehicle_id;
+      if (vehicleId) {
+        const { data: overlapping } = await supabase
+          .from('rentals')
+          .select('id, start_date, end_date, status, customers(name)')
+          .eq('vehicle_id', vehicleId)
+          .eq('tenant_id', tenant.id)
+          .in('status', ['Pending', 'Active'])
+          .lte('start_date', newEndDate)
+          .or(`end_date.gte.${snapshotEndDate},end_date.is.null`)
+          .neq('id', rental.id);
+
+        if (overlapping && overlapping.length > 0) {
+          const names = overlapping.map((r: any) => r.customers?.name || 'Unknown').join(', ');
+          throw new Error(`Cannot extend: vehicle is booked by ${names} during the extension period. Please resolve the conflict first.`);
+        }
+      }
+
       // 1. Update rental dates (set original_end_date only on first extension)
       const isFirstExtension = !rental.original_end_date && (existingExtensionCount || 0) === 0;
       const { error: updateError } = await supabase
@@ -233,6 +252,10 @@ export function AdminExtendRentalDialog({
         .eq('tenant_id', tenant.id);
 
       if (updateError) {
+        // Catch DB exclusion constraint violation with a friendly message
+        if (updateError.message?.includes('no_overlapping_vehicle_rentals')) {
+          throw new Error('Cannot extend: another rental overlaps with the new dates on this vehicle. Please resolve the scheduling conflict first.');
+        }
         throw new Error(`Failed to extend rental: ${updateError.message}`);
       }
 
@@ -798,11 +821,17 @@ export function AdminExtendRentalDialog({
                 <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-900/20">
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
                   <AlertDescription className="text-amber-700 dark:text-amber-400 space-y-1">
-                    <p className="font-medium">Vehicle has scheduling conflicts during this period:</p>
+                    <p className="font-medium">Resolve these conflicts before extending:</p>
                     {rentalConflicts.map((c) => (
-                      <p key={c.id} className="text-xs">
-                        Rental for {c.customerName} ({format(new Date(c.start_date), 'MMM dd')} – {format(new Date(c.end_date), 'MMM dd')})
-                      </p>
+                      <a
+                        key={c.id}
+                        href={`/rentals/${c.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-amber-700 underline hover:text-amber-900 inline-flex items-center gap-1"
+                      >
+                        Rental for {c.customerName} ({format(new Date(c.start_date), 'MMM dd')} – {format(new Date(c.end_date), 'MMM dd')}) <ExternalLink className="h-3 w-3" />
+                      </a>
                     ))}
                     {blockedDateConflicts.map((c) => (
                       <p key={c.id} className="text-xs">
@@ -810,9 +839,15 @@ export function AdminExtendRentalDialog({
                       </p>
                     ))}
                     {bufferConflicts.map((c) => (
-                      <p key={c.rentalId} className="text-xs">
-                        Buffer conflict: {c.customerName} starts {format(new Date(c.start_date), 'MMM dd')} — needs buffer until {format(new Date(c.bufferDeadline), 'MMM dd HH:mm')}
-                      </p>
+                      <a
+                        key={c.rentalId}
+                        href={`/rentals/${c.rentalId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-amber-700 underline hover:text-amber-900 inline-flex items-center gap-1"
+                      >
+                        Buffer conflict: {c.customerName} starts {format(new Date(c.start_date), 'MMM dd')} — needs buffer until {format(new Date(c.bufferDeadline), 'MMM dd HH:mm')} <ExternalLink className="h-3 w-3" />
+                      </a>
                     ))}
                   </AlertDescription>
                 </Alert>
@@ -829,7 +864,7 @@ export function AdminExtendRentalDialog({
               </Button>
               <Button
                 onClick={handleNextStep}
-                disabled={!newEndDate || extensionDays <= 0}
+                disabled={!newEndDate || extensionDays <= 0 || hasConflicts}
               >
                 Review & Confirm
               </Button>

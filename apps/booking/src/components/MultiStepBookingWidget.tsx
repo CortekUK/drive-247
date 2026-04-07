@@ -230,6 +230,7 @@ const MultiStepBookingWidget = () => {
   const [blockedDates, setBlockedDates] = useState<string[]>([]); // Global blocked dates (vehicle_id is null)
   const [allBlockedDates, setAllBlockedDates] = useState<BlockedDate[]>([]); // All blocked dates including vehicle-specific
   const [existingRentals, setExistingRentals] = useState<ExistingRental[]>([]); // Completed rentals for buffer time checking
+  const [overlappingVehicleIds, setOverlappingVehicleIds] = useState<Set<string>>(new Set()); // Vehicles with Pending/Active rentals overlapping selected dates
   const [errors, setErrors] = useState<{
     [key: string]: string;
   }>({});
@@ -1189,6 +1190,23 @@ const MultiStepBookingWidget = () => {
 
       if (rentalsData) {
         setExistingRentals(rentalsData as ExistingRental[]);
+      }
+    }
+
+    // Load Pending/Active rentals that overlap with selected dates for clash prevention
+    if (formData.pickupDate && formData.dropoffDate) {
+      const { data: overlappingRentals } = await supabase
+        .from("rentals")
+        .select("vehicle_id")
+        .eq("tenant_id", tenant.id)
+        .in("status", ["Pending", "Active"])
+        .lte("start_date", formData.dropoffDate)
+        .or(`end_date.gte.${formData.pickupDate},end_date.is.null`);
+
+      if (overlappingRentals) {
+        setOverlappingVehicleIds(new Set(overlappingRentals.map(r => r.vehicle_id).filter(Boolean) as string[]));
+      } else {
+        setOverlappingVehicleIds(new Set());
       }
     }
   };
@@ -2604,6 +2622,11 @@ const MultiStepBookingWidget = () => {
           }
           return true;
         });
+      }
+
+      // Filter out vehicles with overlapping Pending/Active rentals (clash prevention)
+      if (overlappingVehicleIds.size > 0) {
+        filtered = filtered.filter(vehicle => !overlappingVehicleIds.has(vehicle.id));
       }
     }
 

@@ -135,6 +135,22 @@ const BookingVehiclesContent = () => {
         }
       }
 
+      // Overlap check: exclude vehicles with Pending/Active rentals overlapping selected dates
+      if (pickupDate && returnDate && tenant?.id) {
+        const { data: overlappingRentals } = await supabase
+          .from("rentals")
+          .select("vehicle_id")
+          .eq("tenant_id", tenant.id)
+          .in("status", ["Pending", "Active"])
+          .lte("start_date", returnDate)
+          .or(`end_date.gte.${pickupDate},end_date.is.null`);
+
+        if (overlappingRentals && overlappingRentals.length > 0) {
+          const overlappingIds = new Set(overlappingRentals.map(r => r.vehicle_id).filter(Boolean));
+          filteredData = filteredData.filter(v => !overlappingIds.has(v.id));
+        }
+      }
+
       if (filteredData.length === 0) {
         toast.info("No vehicles available at the moment");
       }

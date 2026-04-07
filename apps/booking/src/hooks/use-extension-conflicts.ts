@@ -30,7 +30,7 @@ export function useExtensionConflicts({
         .select('id', { count: 'exact', head: true })
         .eq('vehicle_id', vehicleId!)
         .eq('tenant_id', tenant!.id)
-        .in('status', ['Active', 'Confirmed'])
+        .in('status', ['Active', 'Pending'])
         .lte('start_date', extensionEnd)
         .gte('end_date', extensionStart);
 
@@ -74,7 +74,7 @@ export function useExtensionConflicts({
         .select('id, start_date')
         .eq('vehicle_id', vehicleId!)
         .eq('tenant_id', tenant!.id)
-        .in('status', ['Active', 'Confirmed', 'Pending', 'Approved'])
+        .in('status', ['Active', 'Pending'])
         .gt('start_date', extensionEnd);
 
       if (error) throw error;

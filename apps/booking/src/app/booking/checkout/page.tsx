@@ -570,6 +570,27 @@ const BookingCheckoutContent = () => {
         }
       }
 
+      // Step 3c: Vehicle overlap check — ensure no Pending/Active rental overlaps selected dates
+      {
+        if (vehicleId && pickupDate && returnDate) {
+          const { data: overlapping, error: overlapError } = await supabase
+            .from("rentals")
+            .select("id")
+            .eq("vehicle_id", vehicleId)
+            .in("status", ["Pending", "Active"])
+            .lte("start_date", returnDate)
+            .or(`end_date.gte.${pickupDate},end_date.is.null`)
+            .limit(1);
+
+          if (overlapError) throw overlapError;
+          if (overlapping && overlapping.length > 0) {
+            throw new Error(
+              "This vehicle is no longer available for your selected dates. Another booking was made while you were checking out. Please go back and choose a different vehicle or dates."
+            );
+          }
+        }
+      }
+
       // Step 4: Calculate monthly amount
       const days = calculateRentalDays();
       const monthlyAmount = vehicleDetails.monthly_rent || calculateVehiclePrice();
