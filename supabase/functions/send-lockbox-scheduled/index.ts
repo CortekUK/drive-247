@@ -7,7 +7,7 @@ import { corsHeaders } from "../_shared/cors.ts";
  * Finds lockbox rentals whose send time has arrived (based on tenant offset)
  * and triggers notify-lockbox-code for each. Logs every event to lockbox_send_log.
  *
- * Send time = rental start_date + pickup_time - lockbox_send_offset_minutes
+ * Send time = approved_at + lockbox_send_offset_minutes
  */
 
 Deno.serve(async (req) => {
@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     // 1. Find tenants with auto-send enabled
     const { data: tenants, error: tenantError } = await supabase
       .from("tenants")
-      .select("id, lockbox_send_offset_minutes, lockbox_default_instructions")
+      .select("id, lockbox_send_offset_minutes, lockbox_default_instructions, lockbox_notification_methods")
       .not("lockbox_send_offset_minutes", "is", null);
 
     if (tenantError) {
@@ -106,7 +106,14 @@ Deno.serve(async (req) => {
 
           console.log(`[LockboxCron] Sending lockbox code for rental ${rental.rental_number || rental.id}`);
 
-          // 3. Call notify-lockbox-code
+          // 3. Call notify-lockbox-code — respect tenant's notification method preferences
+          const methods: string[] = Array.isArray(tenant.lockbox_notification_methods)
+            ? tenant.lockbox_notification_methods
+            : ["email"];
+          const shouldEmail = methods.includes("email");
+          const shouldSms = methods.includes("sms");
+          const shouldWhatsapp = methods.includes("whatsapp");
+
           const { data: notifyResult, error: notifyError } = await supabase.functions.invoke(
             "notify-lockbox-code",
             {
@@ -122,11 +129,14 @@ Deno.serve(async (req) => {
                 bookingRef: rental.rental_number || rental.id,
                 tenantId: tenant.id,
                 defaultInstructions: tenant.lockbox_default_instructions || null,
-                sendEmail: true,
-                sendSms: false,
+                sendEmail: shouldEmail,
+                sendSms: shouldSms,
+                sendWhatsapp: shouldWhatsapp,
               },
             }
           );
+
+          const channelsSent = [shouldEmail && "email", shouldSms && "sms", shouldWhatsapp && "whatsapp"].filter(Boolean).join(", ") || "email";
 
           if (notifyError) {
             console.error(`[LockboxCron] notify-lockbox-code error for rental ${rental.id}:`, notifyError);
@@ -135,7 +145,7 @@ Deno.serve(async (req) => {
               rental_id: rental.id,
               tenant_id: tenant.id,
               event_type: "failed",
-              channel: "email",
+              channel: channelsSent,
               scheduled_for: sendAt.toISOString(),
               details: `Auto-send failed: ${notifyError.message || "Unknown error"}`,
             });
@@ -154,9 +164,9 @@ Deno.serve(async (req) => {
             rental_id: rental.id,
             tenant_id: tenant.id,
             event_type: "sent",
-            channel: "email",
+            channel: channelsSent,
             scheduled_for: sendAt.toISOString(),
-            details: `Auto-sent lockbox code to ${customer.email}`,
+            details: `Auto-sent lockbox code via ${channelsSent} to ${customer.email}${shouldSms && customer.phone ? ` / ${customer.phone}` : ""}`,
           });
 
           totalProcessed++;

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/cors.ts";
-import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
+import { getTenantTwilioCredentials, sendTenantSMS, sendTwilioWhatsApp, getTenantWhatsAppNumber, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
 import { sendEmail } from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
 
@@ -22,6 +22,8 @@ interface NotifyRequest {
   defaultInstructions?: string | null;
   sendEmail?: boolean;
   sendSms?: boolean;
+  sendWhatsapp?: boolean;
+  rentalId?: string;
 }
 
 interface TenantBranding {
@@ -501,6 +503,106 @@ serve(async (req) => {
       console.log('Customer SMS result:', results.customerSMS);
     } else {
       console.log('SMS sending skipped', !shouldSendSms ? '(sendSms=false)' : '(no phone number)');
+    }
+
+    // Send customer WhatsApp via Twilio (per-tenant)
+    const shouldSendWhatsapp = data.sendWhatsapp === true;
+    if (shouldSendWhatsapp && data.customerPhone && data.tenantId) {
+      try {
+        const twilioCreds = await getTenantTwilioCredentials(supabase, data.tenantId);
+        const whatsappFrom = await getTenantWhatsAppNumber(supabase, data.tenantId);
+        const normalizedPhone = normalizePhoneNumber(data.customerPhone);
+
+        // Check if there's any recent WhatsApp activity with this customer (sent or received)
+        // If we sent them a WhatsApp recently, the 24h window is likely still open
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        let hasRecentConversation = false;
+
+        // Look up customer_id from the rental (try rentalId first, fall back to rental_number)
+        let rentalData: any = null;
+        if (data.rentalId) {
+          const { data: r } = await supabase.from('rentals').select('customer_id').eq('id', data.rentalId).single();
+          rentalData = r;
+        }
+        if (!rentalData) {
+          const { data: r } = await supabase.from('rentals').select('customer_id').eq('rental_number', data.bookingRef).single();
+          rentalData = r;
+        }
+
+        if (rentalData?.customer_id) {
+          const { data: chatChannel } = await supabase
+            .from('chat_channels')
+            .select('id')
+            .eq('tenant_id', data.tenantId)
+            .eq('customer_id', rentalData.customer_id)
+            .single();
+
+          if (chatChannel) {
+            const { data: recentMessages } = await supabase
+              .from('chat_channel_messages')
+              .select('id')
+              .eq('channel_id', chatChannel.id)
+              .eq('channel', 'whatsapp')
+              .gte('created_at', twentyFourHoursAgo)
+              .limit(1);
+            hasRecentConversation = (recentMessages?.length || 0) > 0;
+          }
+        }
+
+        if (hasRecentConversation) {
+          // Customer has messaged recently — send lockbox code directly as free-form
+          results.customerWhatsApp = await sendTwilioWhatsApp(twilioCreds, whatsappFrom, normalizedPhone, smsMessage);
+          console.log('Customer WhatsApp result (free-form, active conversation):', results.customerWhatsApp);
+        } else {
+          // No recent conversation — need opener template first
+          const { data: openerTemplate } = await supabase
+            .from('whatsapp_content_templates')
+            .select('twilio_content_sid')
+            .eq('tenant_id', data.tenantId)
+            .eq('template_type', 'general')
+            .eq('approval_status', 'approved')
+            .limit(1)
+            .single();
+
+          if (openerTemplate?.twilio_content_sid) {
+            const { data: tenantInfo } = await supabase
+              .from('tenants')
+              .select('company_name')
+              .eq('id', data.tenantId)
+              .single();
+
+            const openerResult = await sendTwilioWhatsApp(
+              twilioCreds, whatsappFrom, normalizedPhone, '',
+              openerTemplate.twilio_content_sid,
+              { '1': tenantInfo?.company_name || 'our team' }
+            );
+            console.log('WhatsApp opener template result:', openerResult);
+
+            if (openerResult.success) {
+              await new Promise(r => setTimeout(r, 2000));
+              const followUp = await sendTwilioWhatsApp(twilioCreds, whatsappFrom, normalizedPhone, smsMessage);
+              console.log('Customer WhatsApp follow-up result:', followUp);
+              results.customerWhatsApp = {
+                success: true,
+                messageId: openerResult.messageId,
+                followUpSent: followUp.success,
+              };
+            } else {
+              results.customerWhatsApp = openerResult;
+              console.error('WhatsApp opener failed:', openerResult.error);
+            }
+          } else {
+            // No template — try free-form directly
+            results.customerWhatsApp = await sendTwilioWhatsApp(twilioCreds, whatsappFrom, normalizedPhone, smsMessage);
+            console.log('Customer WhatsApp result (free-form, no template):', results.customerWhatsApp);
+          }
+        }
+      } catch (waErr: any) {
+        console.error('[WhatsApp] Error:', waErr.message);
+        results.customerWhatsApp = { success: false, error: waErr.message };
+      }
+    } else if (shouldSendWhatsapp) {
+      console.log('WhatsApp sending skipped', !data.customerPhone ? '(no phone number)' : '(no tenantId)');
     }
 
     return new Response(

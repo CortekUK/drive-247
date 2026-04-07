@@ -186,6 +186,37 @@ export default function InstallmentSelector({
   }, [availableOptions.length]);
 
   if (availableOptions.length === 1) {
+    if (!enabled) return null;
+
+    // Show why installment plans aren't available
+    const perDayRate = rentalDays > 0 ? totalBill / rentalDays : 0;
+    const minPerDay = Math.min(
+      resolved.limitingAmountPerDayWeekly > 0 ? resolved.limitingAmountPerDayWeekly : Infinity,
+      resolved.limitingAmountPerDayMonthly > 0 ? resolved.limitingAmountPerDayMonthly : Infinity
+    );
+    const minDays = Math.min(resolved.minimumDaysWeekly, resolved.minimumDaysMonthly);
+    const reasons: string[] = [];
+    if (minPerDay !== Infinity && perDayRate < minPerDay) {
+      reasons.push(`minimum rate of ${formatCurrency(minPerDay)}/day required (this rental is ${formatCurrency(Math.round(perDayRate * 100) / 100)}/day)`);
+    }
+    if (rentalDays < minDays) {
+      reasons.push(`minimum ${minDays} days required (this rental is ${rentalDays} days)`);
+    }
+    if (reasons.length > 0) {
+      return (
+        <Card className="p-4 border border-border">
+          <div className="flex items-center gap-2">
+            <CreditCard className="w-5 h-5 text-muted-foreground" />
+            <div>
+              <h3 className="font-semibold text-sm">Installment Plans</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Not available for this booking — {reasons.join(', ')}.
+              </p>
+            </div>
+          </div>
+        </Card>
+      );
+    }
     return null;
   }
 

@@ -375,9 +375,9 @@ export function RealtimeChatProvider({ children }: { children: React.ReactNode }
       const channelId = await getOrCreateChannel(customerId);
       if (!channelId) return;
 
-      // For SMS / Email: call the edge function which handles delivery + DB insert
-      if (channel === 'sms' || channel === 'email') {
-        const fnName = channel === 'sms' ? 'send-sms-message' : 'send-email-message';
+      // For SMS / Email / WhatsApp: call the edge function which handles delivery + DB insert
+      if (channel === 'sms' || channel === 'email' || channel === 'whatsapp') {
+        const fnName = channel === 'sms' ? 'send-sms-message' : channel === 'whatsapp' ? 'send-whatsapp-message' : 'send-email-message';
         try {
           const { data, error } = await supabase.functions.invoke(fnName, {
             body: {

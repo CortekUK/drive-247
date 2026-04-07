@@ -29,12 +29,12 @@ function formatDate(dateStr: string) {
   return format(parseISO(dateStr), "MMM dd, yyyy");
 }
 
-function getDuration(start: string, end: string | null) {
+function getDuration(start: string, end: string | null, monthlyTierDays: number = 30) {
   if (!end) return "Ongoing";
   const days = differenceInDays(parseISO(end), parseISO(start));
-  if (days < 30) return `${days}d`;
-  const months = Math.floor(days / 30);
-  const remaining = days % 30;
+  if (days < monthlyTierDays) return `${days}d`;
+  const months = Math.floor(days / monthlyTierDays);
+  const remaining = days % monthlyTierDays;
   return remaining > 0 ? `${months}mo ${remaining}d` : `${months}mo`;
 }
 
@@ -120,7 +120,7 @@ export function RentalBar({ rental, position, topOffset, barHeight }: RentalBarP
                 <span className="mx-1 text-muted-foreground/40">&rarr;</span>
                 {rental.end_date ? formatDate(rental.end_date) : "Ongoing"}
                 <span className="ml-1.5 text-[10px] text-muted-foreground/50">
-                  ({getDuration(rental.start_date, rental.end_date)})
+                  ({getDuration(rental.start_date, rental.end_date, tenant?.monthly_tier_days ?? 30)})
                 </span>
               </span>
             </div>

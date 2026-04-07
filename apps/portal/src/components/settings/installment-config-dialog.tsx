@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Save, Loader2, Calendar, CreditCard, CheckCircle2, XCircle } from 'lucide-react';
 import { useTenant } from '@/contexts/TenantContext';
+import { getCurrencySymbol } from '@/lib/format-utils';
 import type { InstallmentConfig, WhatGetsSplit } from '@/hooks/use-rental-settings';
 
 interface InstallmentConfigDialogProps {
@@ -35,6 +36,7 @@ export function InstallmentConfigDialog({
   isSaving,
 }: InstallmentConfigDialogProps) {
   const { tenant } = useTenant();
+  const sym = getCurrencySymbol(tenant?.currency_code || 'USD');
   const [form, setForm] = useState<InstallmentConfig>({ ...config });
 
   // Track raw string values for number inputs so users can clear & retype
@@ -165,7 +167,7 @@ export function InstallmentConfigDialog({
                 </div>
               </div>
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Only allow if daily rate is at least ($)</Label>
+                <Label className="text-xs text-muted-foreground">{`Only allow if daily rate is at least (${getCurrencySymbol(tenant?.currency_code || 'USD')})`}</Label>
                 <Input
                   type="number"
                   min="0"
@@ -209,7 +211,7 @@ export function InstallmentConfigDialog({
                 </div>
               </div>
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Only allow if daily rate is at least ($)</Label>
+                <Label className="text-xs text-muted-foreground">{`Only allow if daily rate is at least (${getCurrencySymbol(tenant?.currency_code || 'USD')})`}</Label>
                 <Input
                   type="number"
                   min="0"
@@ -283,7 +285,7 @@ export function InstallmentConfigDialog({
                   <div key={i} className="border rounded-lg bg-background p-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-foreground">{s.days}-day rental</span>
-                      <span className="text-xs text-muted-foreground">${s.dailyRate}/day · ${s.total}</span>
+                      <span className="text-xs text-muted-foreground">{sym}{s.dailyRate}/day · {sym}{s.total}</span>
                     </div>
                     <div className="flex gap-2">
                       {s.weeklyEligible ? (
@@ -321,7 +323,7 @@ export function InstallmentConfigDialog({
                     <CreditCard className="w-4 h-4 text-[#6366f1]" />
                     <span className="text-sm font-medium text-foreground">{tenantName} — Payment Options</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">{previewData.days} days · ${previewData.total.toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground">{previewData.days} days · {sym}{previewData.total.toLocaleString()}</span>
                 </div>
                 <div className="p-4 space-y-3">
 
@@ -331,14 +333,14 @@ export function InstallmentConfigDialog({
                       <div className="w-1.5 h-1.5 rounded-full bg-[#6366f1]" />
                     </div>
                     <span className="text-sm font-medium flex-1">Pay in Full</span>
-                    <span className="text-xs text-muted-foreground">${previewData.total.toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground">{sym}{previewData.total.toLocaleString()}</span>
                   </div>
 
                   {previewData.options.map((opt, i) => (
                     <div key={i} className="flex items-center gap-2 p-2.5 border rounded-lg">
                       <div className="w-3.5 h-3.5 rounded-full border-2 border-muted-foreground/40" />
                       <span className="text-sm font-medium flex-1">{opt.type} ({opt.payments}x)</span>
-                      <span className="text-xs text-muted-foreground">${opt.amount.toFixed(2)}/each</span>
+                      <span className="text-xs text-muted-foreground">{sym}{opt.amount.toFixed(2)}/each</span>
                     </div>
                   ))}
 
@@ -358,7 +360,7 @@ export function InstallmentConfigDialog({
                       </span>
                       <span className="font-medium text-[#6366f1]">
                         {form.charge_first_upfront
-                          ? `$${previewData.options[0].amount.toFixed(2)} + deposit`
+                          ? `${sym}${previewData.options[0].amount.toFixed(2)} + deposit`
                           : 'Deposit only'
                         }
                       </span>
@@ -368,7 +370,7 @@ export function InstallmentConfigDialog({
                         <span className="text-muted-foreground">
                           {previewData.options[0].type === 'Weekly' ? `Week ${form.charge_first_upfront ? i + 2 : i + 1}` : `Month ${form.charge_first_upfront ? i + 2 : i + 1}`}
                         </span>
-                        <span className="text-[#404040]">${previewData.options[0].amount.toFixed(2)}</span>
+                        <span className="text-[#404040]">{sym}{previewData.options[0].amount.toFixed(2)}</span>
                       </div>
                     ))}
                     {(form.charge_first_upfront ? previewData.options[0].payments - 1 : previewData.options[0].payments) > 3 && (

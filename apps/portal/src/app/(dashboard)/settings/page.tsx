@@ -47,6 +47,7 @@ import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates
 import { PricingRulesSettings } from '@/components/settings/pricing-rules-settings';
 import { InstallmentConfigDialog } from '@/components/settings/installment-config-dialog';
 import { formatCurrency } from '@/lib/format-utils';
+import { cn } from '@/lib/utils';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
 import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
@@ -61,14 +62,20 @@ const Settings = () => {
   const { logAction } = useAuditLog();
 
   // All settings tab values
-  const allSettingsTabs = ['general', 'locations', 'branding', 'rental', 'pricing', 'extras', 'payments', 'reminders', 'templates', 'integrations', 'subscription'];
+  const allSettingsTabs = [
+    'general', 'locations', 'branding',
+    'requirements', 'duration', 'lockbox',
+    'pricing', 'fees', 'preauth', 'installments', 'payg', 'promos', 'extras', 'payments',
+    'reminders', 'templates',
+    'messaging', 'insurance', 'esign', 'tesla', 'blacklist',
+    'subscription',
+  ];
   const visibleTabs = allSettingsTabs.filter(t => canViewSettings(t));
   const [activeTab, setActiveTab] = useState(visibleTabs[0] || 'general');
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [showDataCleanupDialog, setShowDataCleanupDialog] = useState(false);
   const [resetGeneralDialogOpen, setResetGeneralDialogOpen] = useState(false);
   const [installmentDialogOpen, setInstallmentDialogOpen] = useState(false);
-  const [showCommunicationSettings, setShowCommunicationSettings] = useState(false);
   const [generalForm, setGeneralForm] = useState({
     currency_code: 'USD',
     distance_unit: 'miles' as 'km' | 'miles',
@@ -268,6 +275,8 @@ const Settings = () => {
         // Return reminder
         return_reminder_enabled: (rentalSettings as any).return_reminder_enabled ?? false,
         return_reminder_hours: (rentalSettings as any).return_reminder_hours ?? 24,
+        // Pay As You Go
+        pay_as_you_go_enabled: rentalSettings.pay_as_you_go_enabled ?? false,
       });
     }
   }, [rentalSettings]);
@@ -443,7 +452,13 @@ const Settings = () => {
   const tabDirtyMap: Record<string, boolean> = useMemo(() => ({
     general: generalFormDirty,
     branding: brandingFormDirty,
-    rental: rentalFormDirty,
+    requirements: rentalFormDirty,
+    duration: rentalFormDirty,
+    lockbox: rentalFormDirty,
+    fees: rentalFormDirty,
+    preauth: rentalFormDirty,
+    installments: rentalFormDirty,
+    promos: rentalFormDirty,
     locations: locationsDirty,
     pricing: pricingDirty,
   }), [generalFormDirty, brandingFormDirty, rentalFormDirty, locationsDirty, pricingDirty]);
@@ -1184,13 +1199,24 @@ const Settings = () => {
                 { value: 'general', icon: Building2, label: 'General' },
                 { value: 'locations', icon: MapPin, label: 'Locations' },
                 { value: 'branding', icon: Palette, label: 'Branding' },
-                { value: 'rental', icon: Car, label: 'Bookings' },
+                { value: 'requirements', icon: Shield, label: 'Requirements' },
+                { value: 'duration', icon: Clock, label: 'Duration' },
+                { value: 'lockbox', icon: Lock, label: 'Lockbox' },
                 { value: 'pricing', icon: TrendingUp, label: 'Pricing' },
+                { value: 'fees', icon: Receipt, label: 'Fees & Tax' },
+                { value: 'preauth', icon: CreditCard, label: 'Pre-Auth' },
+                { value: 'installments', icon: Banknote, label: 'Installments' },
+                { value: 'payg', icon: Clock, label: 'Pay As You Go' },
+                { value: 'promos', icon: Zap, label: 'Promos' },
                 { value: 'extras', icon: Package, label: 'Extras' },
-                { value: 'payments', icon: CreditCard, label: 'Payments' },
+                { value: 'payments', icon: CreditCard, label: 'Stripe' },
                 { value: 'reminders', icon: Bell, label: 'Notifications' },
                 { value: 'templates', icon: FileText, label: 'Templates' },
-                { value: 'integrations', icon: Shield, label: 'Integrations' },
+                { value: 'messaging', icon: MessageSquare, label: 'Messaging' },
+                { value: 'insurance', icon: Shield, label: 'Insurance' },
+                { value: 'esign', icon: FilePenLine, label: 'E-Sign' },
+                { value: 'tesla', icon: Zap, label: 'Tesla' },
+                { value: 'blacklist', icon: ShieldX, label: 'Blacklist' },
                 { value: 'subscription', icon: Crown, label: 'Subscription' },
               ] as const).filter(item => canViewSettings(item.value)).map(item => (
                 <TabsTrigger key={item.value} value={item.value} className="flex items-center gap-1.5 whitespace-nowrap text-xs px-3">
@@ -1954,8 +1980,8 @@ const Settings = () => {
           <LocationSettings onDirtyChange={setLocationsDirty} />
         </TabsContent>
 
-        {/* Rental Tab */}
-        <TabsContent value="rental" className="space-y-6">
+        {/* Requirements Tab */}
+        <TabsContent value="requirements" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -1994,7 +2020,7 @@ const Settings = () => {
 
 
               {/* Save Button */}
-              {canEditSettings('rental') && (
+              {canEditSettings('requirements') && (
                 <Button
                   onClick={async () => {
                     try {
@@ -2019,6 +2045,62 @@ const Settings = () => {
             </CardContent>
           </Card>
 
+          {/* Identity Verification */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                Identity Verification
+              </CardTitle>
+              <CardDescription>
+                Configure which document type customers must provide for identity verification.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Required Document Type</Label>
+                <Select
+                  value={rentalForm.verification_document_type}
+                  onValueChange={(value) => setRentalForm(prev => ({ ...prev, verification_document_type: value }))}
+                >
+                  <SelectTrigger className="w-full max-w-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="driving_license">Driver&apos;s License</SelectItem>
+                    <SelectItem value="passport">Passport</SelectItem>
+                    <SelectItem value="id_card">ID Card</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  This determines which document type is accepted during Veriff or AI verification.
+                </p>
+              </div>
+              {canEditSettings('requirements') && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      await updateRentalSettings({
+                        verification_document_type: rentalForm.verification_document_type,
+                      } as any);
+                    } catch (error) {
+                      console.error('Failed to update verification settings:', error);
+                    }
+                  }}
+                  disabled={isUpdatingRentalSettings || rentalForm.verification_document_type === ((rentalSettings as any).verification_document_type ?? 'driving_license')}
+                  className="flex items-center gap-2"
+                >
+                  {isUpdatingRentalSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+        </TabsContent>
+
+        {/* Duration Tab */}
+        <TabsContent value="duration" className="space-y-6">
           {/* Minimum Booking Notice Card */}
           <Card>
             <CardHeader>
@@ -2088,7 +2170,7 @@ const Settings = () => {
                   </>
                 );
               })()}
-              {canEditSettings('rental') && (
+              {canEditSettings('duration') && (
                 <Button
                   onClick={async () => {
                     const hours = rentalForm.booking_lead_time_unit === 'days'
@@ -2348,7 +2430,7 @@ const Settings = () => {
                   ? `Vehicles will be hidden from booking results for ${Math.floor(rentalForm.buffer_time_minutes / 60) > 0 ? `${Math.floor(rentalForm.buffer_time_minutes / 60)}h ` : ''}${rentalForm.buffer_time_minutes % 60 > 0 ? `${rentalForm.buffer_time_minutes % 60}m` : Math.floor(rentalForm.buffer_time_minutes / 60) > 0 ? '' : '0m'} after a rental ends. This gives you time to inspect and prepare the vehicle.`
                   : 'No buffer time — vehicles are available immediately after a rental ends.'}
               </p>
-              {canEditSettings('rental') && (
+              {canEditSettings('duration') && (
                 <Button
                   onClick={async () => {
                     try {
@@ -2395,7 +2477,7 @@ const Settings = () => {
                     onCheckedChange={(checked) =>
                       setRentalForm(prev => ({ ...prev, return_reminder_enabled: checked }))
                     }
-                    disabled={!canEditSettings('rental')}
+                    disabled={!canEditSettings('duration')}
                   />
                 </div>
               </div>
@@ -2415,7 +2497,7 @@ const Settings = () => {
                         return_reminder_hours: Math.max(1, Math.min(168, parseInt(e.target.value) || 24))
                       }))}
                       className="w-20"
-                      disabled={!canEditSettings('rental')}
+                      disabled={!canEditSettings('duration')}
                     />
                     <span className="text-sm text-muted-foreground">hours before return</span>
                   </div>
@@ -2426,13 +2508,24 @@ const Settings = () => {
                       : `${rentalForm.return_reminder_hours} hours`}{' '}
                     before their scheduled return. SMS will also be sent if Twilio is configured.
                   </p>
+                  <p className="text-xs text-muted-foreground/70">
+                    Reminders are checked every 15 minutes. Each customer receives only one reminder per rental.
+                  </p>
+                  <Button
+                    variant="link"
+                    className="h-auto p-0 text-sm text-primary"
+                    onClick={() => router.push('/settings/email-templates/rental_reminder')}
+                  >
+                    <Mail className="h-3.5 w-3.5 mr-1.5" />
+                    Customize reminder email template
+                  </Button>
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Enable to automatically send return reminders to customers via email and SMS.
                 </p>
               )}
-              {canEditSettings('rental') && (
+              {canEditSettings('duration') && (
                 <Button
                   onClick={async () => {
                     try {
@@ -2459,6 +2552,10 @@ const Settings = () => {
             </CardContent>
           </Card>
 
+        </TabsContent>
+
+        {/* Fees Tab */}
+        <TabsContent value="fees" className="space-y-6">
           {/* Tax Configuration Card */}
           <Card>
             <CardHeader>
@@ -2518,7 +2615,7 @@ const Settings = () => {
                 </div>
               )}
 
-              {canEditSettings('rental') && (
+              {canEditSettings('fees') && (
                 <Button
                   onClick={async () => {
                     try {
@@ -2649,7 +2746,7 @@ const Settings = () => {
                 </div>
               )}
 
-              {canEditSettings('rental') && (
+              {canEditSettings('fees') && (
                 <Button
                   onClick={async () => {
                     try {
@@ -2677,6 +2774,10 @@ const Settings = () => {
             </CardContent>
           </Card>
 
+        </TabsContent>
+
+        {/* Pre-Authorization Tab */}
+        <TabsContent value="preauth" className="space-y-6">
           {/* Pre-Authorization Configuration Card */}
           <Card>
             <CardHeader>
@@ -2696,7 +2797,7 @@ const Settings = () => {
                     id="security-deposit-toggle"
                     checked={rentalForm.security_deposit_enabled}
                     onCheckedChange={(checked) => setRentalForm(prev => ({ ...prev, security_deposit_enabled: checked }))}
-                    disabled={!canEditSettings('rental')}
+                    disabled={!canEditSettings('preauth')}
                   />
                 </div>
               </div>
@@ -2779,7 +2880,7 @@ const Settings = () => {
                 </Alert>
               )}
 
-              {canEditSettings('rental') && (
+              {canEditSettings('preauth') && (
                 <Button
                   onClick={async () => {
                     try {
@@ -2806,6 +2907,59 @@ const Settings = () => {
             </CardContent>
           </Card>
 
+        </TabsContent>
+
+        {/* Pay As You Go Tab */}
+        <TabsContent value="payg" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                Pay As You Go
+              </CardTitle>
+              <CardDescription>
+                Allow customers to pay rental charges incrementally instead of upfront
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-1">
+                  <h4 className="font-medium">Enable Pay As You Go</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Rental amount, tax, and percentage-based service fees are paid incrementally
+                  </p>
+                </div>
+                <Switch
+                  checked={rentalForm.pay_as_you_go_enabled ?? false}
+                  onCheckedChange={async (checked) => {
+                    setRentalForm(prev => ({ ...prev, pay_as_you_go_enabled: checked }));
+                    try {
+                      await updateRentalSettings({ pay_as_you_go_enabled: checked });
+                    } catch (error) {
+                      console.error('Failed to update PAYG toggle:', error);
+                    }
+                  }}
+                />
+              </div>
+
+              {rentalForm.pay_as_you_go_enabled && (
+                <div className="p-4 border rounded-lg bg-muted/30 space-y-2">
+                  <p className="text-sm font-medium">How it works</p>
+                  <ul className="text-sm text-muted-foreground space-y-1.5 list-disc list-inside">
+                    <li>When creating a rental, admins can choose <strong>Pay As You Go</strong> instead of regular payment</li>
+                    <li>Rental amount, tax, and percentage-based service fees are marked as PAYG charges</li>
+                    <li>Fixed-amount fees, pre-authorization, insurance, and delivery charges are handled separately</li>
+                    <li>Payments are recorded incrementally from the rental detail page</li>
+                    <li>Installment plans are not available for PAYG rentals</li>
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Installments Tab */}
+        <TabsContent value="installments" className="space-y-6">
           {/* Installment Payments Summary Card */}
           <Card>
             <CardHeader>
@@ -2842,14 +2996,14 @@ const Settings = () => {
                 <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
                   <div className="text-sm text-muted-foreground">
                     Weekly: {rentalForm.installment_config?.weekly_installments_limit ?? 4} installments (min {rentalForm.installment_config?.minimum_days_weekly ?? 7} days
-                    {(rentalForm.installment_config?.limiting_amount_per_day_weekly ?? 0) > 0 && `, min $${rentalForm.installment_config.limiting_amount_per_day_weekly}/day`})
+                    {(rentalForm.installment_config?.limiting_amount_per_day_weekly ?? 0) > 0 && `, min ${formatCurrency(rentalForm.installment_config.limiting_amount_per_day_weekly, tenant?.currency_code || 'USD')}/day`})
                     {' · '}
                     Monthly: {rentalForm.installment_config?.monthly_installments_limit ?? 6} installments (min {rentalForm.installment_config?.minimum_days_monthly ?? 30} days
-                    {(rentalForm.installment_config?.limiting_amount_per_day_monthly ?? 0) > 0 && `, min $${rentalForm.installment_config.limiting_amount_per_day_monthly}/day`})
+                    {(rentalForm.installment_config?.limiting_amount_per_day_monthly ?? 0) > 0 && `, min ${formatCurrency(rentalForm.installment_config.limiting_amount_per_day_monthly, tenant?.currency_code || 'USD')}/day`})
                     {' · '}
                     {rentalForm.installment_config?.charge_first_upfront ? 'First payment upfront' : 'All scheduled'}
                   </div>
-                  {canEditSettings('rental') && (
+                  {canEditSettings('installments') && (
                     <Button
                       variant="outline"
                       onClick={() => setInstallmentDialogOpen(true)}
@@ -2878,8 +3032,12 @@ const Settings = () => {
             isSaving={isUpdatingRentalSettings}
           />
 
+        </TabsContent>
+
+        {/* Promos Tab */}
+        <TabsContent value="promos" className="space-y-6">
           {/* Promo Code Card UI */}
-          <Card className="mt-8">
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <span className="inline-block bg-primary/10 rounded-full p-2">
@@ -3025,7 +3183,7 @@ const Settings = () => {
               </div>
 
               {/* Add Button */}
-              {canEditSettings('rental') && (
+              {canEditSettings('promos') && (
                 <div className="pt-2">
                   <Button
                     onClick={handleCreatePromo}
@@ -3287,58 +3445,10 @@ const Settings = () => {
             </AlertDialogContent>
           </AlertDialog>
 
-          {/* Identity Verification */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" />
-                Identity Verification
-              </CardTitle>
-              <CardDescription>
-                Configure which document type customers must provide for identity verification.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Required Document Type</Label>
-                <Select
-                  value={rentalForm.verification_document_type}
-                  onValueChange={(value) => setRentalForm(prev => ({ ...prev, verification_document_type: value }))}
-                >
-                  <SelectTrigger className="w-full max-w-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="driving_license">Driver&apos;s License</SelectItem>
-                    <SelectItem value="passport">Passport</SelectItem>
-                    <SelectItem value="id_card">ID Card</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  This determines which document type is accepted during Veriff or AI verification.
-                </p>
-              </div>
-              {canEditSettings('rental') && (
-                <Button
-                  onClick={async () => {
-                    try {
-                      await updateRentalSettings({
-                        verification_document_type: rentalForm.verification_document_type,
-                      } as any);
-                    } catch (error) {
-                      console.error('Failed to update verification settings:', error);
-                    }
-                  }}
-                  disabled={isUpdatingRentalSettings || rentalForm.verification_document_type === ((rentalSettings as any).verification_document_type ?? 'driving_license')}
-                  className="flex items-center gap-2"
-                >
-                  {isUpdatingRentalSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Save
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+        </TabsContent>
 
+        {/* Lockbox Tab */}
+        <TabsContent value="lockbox" className="space-y-6">
           {/* Lockbox Settings */}
           <Card>
             <CardHeader>
@@ -3394,72 +3504,72 @@ const Settings = () => {
                     </p>
                   </div>
 
-                  {/* Notification Methods */}
+                  {/* Notification Method */}
                   <div className="space-y-3">
-                    <Label>Notification Methods</Label>
+                    <Label>Delivery Method</Label>
                     <p className="text-xs text-muted-foreground">
-                      How should customers receive the lockbox code when a vehicle is delivered?
+                      How should the lockbox code be sent to the customer?
                     </p>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center gap-2">
+                    <RadioGroup
+                      value={rentalForm.lockbox_notification_methods[0] || 'email'}
+                      onValueChange={(value) => {
+                        setRentalForm(prev => ({
+                          ...prev,
+                          lockbox_notification_methods: [value],
+                        }));
+                      }}
+                    >
+                      <div className="space-y-2">
+                        {/* Email — always available */}
+                        <label className={cn(
+                          "flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors",
+                          rentalForm.lockbox_notification_methods[0] === 'email' ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                        )}>
+                          <RadioGroupItem value="email" id="lockbox-method-email" />
                           <Mail className="h-4 w-4 text-muted-foreground" />
                           <span className="text-sm font-medium">Email</span>
-                        </div>
-                        <Switch
-                          checked={rentalForm.lockbox_notification_methods.includes('email')}
-                          onCheckedChange={(checked) => {
-                            setRentalForm(prev => ({
-                              ...prev,
-                              lockbox_notification_methods: checked
-                                ? [...prev.lockbox_notification_methods.filter(m => m !== 'email'), 'email']
-                                : prev.lockbox_notification_methods.filter(m => m !== 'email'),
-                            }));
-                          }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center gap-2">
+                        </label>
+
+                        {/* SMS — requires Twilio */}
+                        <label className={cn(
+                          "flex items-center gap-3 p-3 border rounded-lg transition-colors",
+                          !tenant?.integration_twilio_sms ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
+                          rentalForm.lockbox_notification_methods[0] === 'sms' ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                        )}>
+                          <RadioGroupItem value="sms" id="lockbox-method-sms" disabled={!tenant?.integration_twilio_sms} />
+                          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <span className="text-sm font-medium">SMS</span>
+                            {!tenant?.integration_twilio_sms && (
+                              <p className="text-xs text-amber-600 dark:text-amber-400">Configure Twilio SMS in Integrations first</p>
+                            )}
+                          </div>
+                        </label>
+
+                        {/* WhatsApp — requires Twilio WhatsApp configured */}
+                        <label className={cn(
+                          "flex items-center gap-3 p-3 border rounded-lg transition-colors",
+                          !(tenant as any)?.integration_twilio_whatsapp ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
+                          rentalForm.lockbox_notification_methods[0] === 'whatsapp' ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                        )}>
+                          <RadioGroupItem value="whatsapp" id="lockbox-method-whatsapp" disabled={!(tenant as any)?.integration_twilio_whatsapp} />
                           <svg className="h-4 w-4 text-muted-foreground" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.625.846 5.059 2.284 7.034L.789 23.492a.5.5 0 00.612.612l4.458-1.495A11.943 11.943 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-2.319 0-4.476-.67-6.313-1.822l-.44-.264-2.645.887.887-2.645-.264-.44A9.952 9.952 0 012 12C2 6.486 6.486 2 12 2s10 4.486 10 10-4.486 10-10 10z"/></svg>
-                          <span className="text-sm font-medium">WhatsApp</span>
-                        </div>
-                        <Switch
-                          checked={rentalForm.lockbox_notification_methods.includes('whatsapp')}
-                          onCheckedChange={(checked) => {
-                            setRentalForm(prev => ({
-                              ...prev,
-                              lockbox_notification_methods: checked
-                                ? [...prev.lockbox_notification_methods.filter(m => m !== 'whatsapp'), 'whatsapp']
-                                : prev.lockbox_notification_methods.filter(m => m !== 'whatsapp'),
-                            }));
-                          }}
-                        />
+                          <div>
+                            <span className="text-sm font-medium">WhatsApp</span>
+                            {!(tenant as any)?.integration_twilio_whatsapp && (
+                              <p className="text-xs text-amber-600 dark:text-amber-400">Configure WhatsApp in Messaging settings first</p>
+                            )}
+                          </div>
+                        </label>
                       </div>
-                      <div className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <Bell className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm font-medium">SMS</span>
-                        </div>
-                        <Switch
-                          checked={rentalForm.lockbox_notification_methods.includes('sms')}
-                          onCheckedChange={(checked) => {
-                            setRentalForm(prev => ({
-                              ...prev,
-                              lockbox_notification_methods: checked
-                                ? [...prev.lockbox_notification_methods.filter(m => m !== 'sms'), 'sms']
-                                : prev.lockbox_notification_methods.filter(m => m !== 'sms'),
-                            }));
-                          }}
-                        />
-                      </div>
-                    </div>
+                    </RadioGroup>
                   </div>
 
                   {/* Auto-Send Timing */}
                   <div className="space-y-2">
                     <Label>Auto-Send Timing</Label>
                     <p className="text-xs text-muted-foreground">
-                      Automatically send lockbox code to the customer before the rental starts. Select when the code should be sent.
+                      Automatically send lockbox code to the customer after you approve the rental. Select the delay after approval.
                     </p>
                     <Select
                       value={rentalForm.lockbox_send_offset_minutes === null ? 'manual' : String(rentalForm.lockbox_send_offset_minutes)}
@@ -3475,11 +3585,12 @@ const Settings = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="manual">Manual only</SelectItem>
-                        <SelectItem value="0">At rental start time</SelectItem>
-                        <SelectItem value="15">15 minutes before</SelectItem>
-                        <SelectItem value="30">30 minutes before</SelectItem>
-                        <SelectItem value="60">1 hour before</SelectItem>
-                        <SelectItem value="120">2 hours before</SelectItem>
+                        <SelectItem value="0">Immediately on approval</SelectItem>
+                        <SelectItem value="5">5 minutes after approval</SelectItem>
+                        <SelectItem value="15">15 minutes after approval</SelectItem>
+                        <SelectItem value="30">30 minutes after approval</SelectItem>
+                        <SelectItem value="60">1 hour after approval</SelectItem>
+                        <SelectItem value="120">2 hours after approval</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -3487,7 +3598,7 @@ const Settings = () => {
               )}
 
               {/* Save Button */}
-              {canEditSettings('rental') && (
+              {canEditSettings('lockbox') && (
                 <Button
                   onClick={async () => {
                     try {
@@ -3514,127 +3625,6 @@ const Settings = () => {
               )}
             </CardContent>
           </Card>
-
-          {/* Reset All Booking Settings to Defaults */}
-          {canEditSettings('rental') && (
-            <div className="flex justify-start">
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10">
-                    Reset All Booking Settings to Defaults
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Reset All Booking Settings?</AlertDialogTitle>
-                    <div className="text-sm text-muted-foreground">
-                      This will reset all booking/rental settings to their default values:
-                      <ul className="mt-2 list-disc list-inside space-y-1">
-                        <li>Minimum Driver Age: 21</li>
-                        <li>Tax: Disabled (0%)</li>
-                        <li>Service Fee: Disabled</li>
-                        <li>Pre-Authorization Mode: Global ($0)</li>
-                        <li>Installments: Disabled (defaults restored)</li>
-                        <li>Booking Lead Time: 24 hours</li>
-                        <li>Min Rental: 0 days, 1 hour</li>
-                        <li>Max Rental: 90 days</li>
-                        <li>Lockbox: Disabled</li>
-                        <li>Monthly Tier: 30 days</li>
-                        <li>Buffer Time: 0 minutes</li>
-                      </ul>
-                    </div>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={async () => {
-                        try {
-                          const defaults = {
-                            minimum_rental_age: 21,
-                            tax_enabled: false,
-                            tax_percentage: 0,
-                            service_fee_enabled: false,
-                            service_fee_type: 'fixed_amount' as const,
-                            service_fee_value: 0,
-                            service_fee_amount: 0,
-                            deposit_mode: 'global' as const,
-                            global_deposit_amount: 0,
-                            installments_enabled: false,
-                            installment_config: {
-                              minimum_days_weekly: 7,
-                              minimum_days_monthly: 30,
-                              weekly_installments_limit: 4,
-                              monthly_installments_limit: 6,
-                              limiting_amount_per_day_weekly: 0,
-                              limiting_amount_per_day_monthly: 0,
-                              charge_first_upfront: true,
-                              what_gets_split: 'rental_only' as const,
-                              grace_period_days: 3,
-                              max_retry_attempts: 3,
-                              retry_interval_days: 1,
-                            },
-                            booking_lead_time_value: 24,
-                            booking_lead_time_unit: 'hours' as const,
-                            min_rental_days: 0,
-                            min_rental_hours: 1,
-                            max_rental_days: 90,
-                            lockbox_enabled: false,
-                            lockbox_code_length: 4,
-                            lockbox_notification_methods: ['email'],
-                            monthly_tier_days: 30,
-                            buffer_time_minutes: 0,
-                          };
-                          await updateRentalSettings(defaults);
-                          setRentalForm({
-                            minimum_rental_age: 21,
-                            tax_enabled: false,
-                            tax_percentage: 0,
-                            service_fee_enabled: false,
-                            service_fee_amount: 0,
-                            service_fee_type: 'fixed_amount',
-                            service_fee_value: 0,
-                            deposit_mode: 'global',
-                            global_deposit_amount: 0,
-                            installments_enabled: false,
-                            installment_config: {
-                              minimum_days_weekly: 7,
-                              minimum_days_monthly: 30,
-                              weekly_installments_limit: 4,
-                              monthly_installments_limit: 6,
-                              limiting_amount_per_day_weekly: 0,
-                              limiting_amount_per_day_monthly: 0,
-                              charge_first_upfront: true,
-                              what_gets_split: 'rental_only',
-                              grace_period_days: 3,
-                              max_retry_attempts: 3,
-                              retry_interval_days: 1,
-                            },
-                            booking_lead_time_value: 24,
-                            booking_lead_time_unit: 'hours',
-                            min_rental_days: 0,
-                            min_rental_hours: 1,
-                            max_rental_days: 90,
-                            lockbox_enabled: false,
-                            lockbox_code_length: null,
-                            lockbox_notification_methods: ['email'],
-                            security_deposit_enabled: true,
-                            verification_document_type: 'driving_license',
-                            monthly_tier_days: 30,
-                            buffer_time_minutes: 0,
-                          });
-                          toast({ title: "Settings Reset", description: "All booking settings have been restored to defaults." });
-                        } catch (error: any) {
-                          toast({ title: "Error", description: error.message || "Failed to reset booking settings", variant: "destructive" });
-                        }
-                      }}
-                    >
-                      Reset to Defaults
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          )}
 
         </TabsContent>
 
@@ -3709,62 +3699,52 @@ const Settings = () => {
         </TabsContent>
 
         {/* Integrations Tab (Communication + E-Sign + Bonzah + Blacklist) */}
-        <TabsContent value="integrations" className="space-y-6">
-          {showCommunicationSettings ? (
-            <CommunicationSettings onBack={() => setShowCommunicationSettings(false)} />
-          ) : (
-            <>
-              {/* Communication Card — opens sub-view */}
-              <Card className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => setShowCommunicationSettings(true)}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5 text-primary" />
-                    Communication
-                    <Badge variant="secondary" className="text-xs ml-auto">SMS, WhatsApp, Email, Calling</Badge>
-                  </CardTitle>
-                  <CardDescription>
-                    Configure messaging channels to communicate with customers — SMS, WhatsApp, Email, and Voice Calling.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button variant="outline" className="gap-2">
-                    Configure Channels
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </CardContent>
-              </Card>
+        {/* Messaging Tab */}
+        <TabsContent value="messaging" className="space-y-6">
+          <CommunicationSettings />
+        </TabsContent>
 
-              <ESignSettings />
-              <BonzahSettings />
-              <TeslaFleetSettings />
+        {/* Insurance Tab */}
+        <TabsContent value="insurance" className="space-y-6">
+          <BonzahSettings />
+        </TabsContent>
 
-              {/* Global Blacklist */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <ShieldX className="h-5 w-5 text-primary" />
-                    Global Blacklist
-                  </CardTitle>
-                  <CardDescription>
-                    View customers blocked by multiple rental companies
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    When a customer is blocked by 3 or more rental companies, they are automatically added to the global blacklist.
-                    Blacklisted customers cannot make bookings with any rental company on the platform.
-                  </p>
-                  <Button
-                    onClick={() => router.push('/settings/blacklist')}
-                    className="flex items-center gap-2"
-                  >
-                    <ShieldX className="h-4 w-4" />
-                    View Global Blacklist
-                  </Button>
-                </CardContent>
-              </Card>
-            </>
-          )}
+        {/* E-Signatures Tab */}
+        <TabsContent value="esign" className="space-y-6">
+          <ESignSettings />
+        </TabsContent>
+
+        {/* Tesla Fleet Tab */}
+        <TabsContent value="tesla" className="space-y-6">
+          <TeslaFleetSettings />
+        </TabsContent>
+
+        {/* Blacklist Tab */}
+        <TabsContent value="blacklist" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldX className="h-5 w-5 text-primary" />
+                Global Blacklist
+              </CardTitle>
+              <CardDescription>
+                View customers blocked by multiple rental companies
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                When a customer is blocked by 3 or more rental companies, they are automatically added to the global blacklist.
+                Blacklisted customers cannot make bookings with any rental company on the platform.
+              </p>
+              <Button
+                onClick={() => router.push('/settings/blacklist')}
+                className="flex items-center gap-2"
+              >
+                <ShieldX className="h-4 w-4" />
+                View Global Blacklist
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Subscription Tab */}

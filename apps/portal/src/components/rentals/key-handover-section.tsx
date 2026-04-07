@@ -19,6 +19,8 @@ import {
   Mail,
   MessageCircle,
   Phone,
+  Zap,
+  CheckCircle2,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
@@ -131,10 +133,15 @@ export const KeyHandoverSection = ({
     setLockboxCodeInput(vehicleLockboxCode || '');
   }, [vehicleLockboxCode]);
 
-  // Notification method state
-  const [sendEmail, setSendEmail] = useState(true);
-  const [sendWhatsApp, setSendWhatsApp] = useState(false);
-  const [sendSms, setSendSms] = useState(false);
+  useEffect(() => {
+    setCustomerEmailOverride(customerEmail || '');
+  }, [customerEmail]);
+
+  // Notification — driven by settings, with editable recipient
+  const sendEmail = emailEnabled;
+  const sendSms = smsEnabled;
+  const sendWhatsApp = whatsappEnabled;
+  const [customerEmailOverride, setCustomerEmailOverride] = useState(customerEmail || '');
   const [whatsAppPhone, setWhatsAppPhone] = useState(customerPhone || '');
   const [smsPhone, setSmsPhone] = useState(customerPhone || '');
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
@@ -249,14 +256,15 @@ export const KeyHandoverSection = ({
         const { error } = await supabase.functions.invoke("notify-lockbox-code", {
           body: {
             customerName,
-            customerEmail,
-            customerPhone: sendSms ? (smsPhone || customerPhone) : customerPhone,
+            customerEmail: customerEmailOverride || customerEmail,
+            customerPhone: (sendSms || sendWhatsApp) ? (smsPhone || whatsAppPhone || customerPhone) : customerPhone,
             vehicleName,
             vehicleReg,
             lockboxCode,
             lockboxInstructions: vehicleLockboxInstructions || '',
             deliveryAddress: deliveryAddress || '',
             bookingRef,
+            rentalId,
             tenantId: tenant?.id,
             odometerReading: givingMileage || null,
             notes: givingNotes || null,
@@ -264,33 +272,35 @@ export const KeyHandoverSection = ({
             defaultInstructions: rentalSettings?.lockbox_default_instructions || null,
             sendEmail,
             sendSms,
+            sendWhatsapp: sendWhatsApp,
           },
         });
 
+        const activeChannel = sendWhatsApp ? 'whatsapp' : sendSms ? 'sms' : 'email';
+        const recipientDisplay = sendWhatsApp ? (whatsAppPhone || customerPhone) : sendSms ? (smsPhone || customerPhone) : (customerEmailOverride || customerEmail);
+
         if (error) {
           console.error("Failed to send lockbox notification:", error);
-          // Log failure
           await supabase.from("lockbox_send_log").insert({
             rental_id: rentalId,
             tenant_id: tenant?.id,
             event_type: "failed",
-            channel: "email",
+            channel: activeChannel,
             details: `Manual send failed: ${error.message || "Unknown error"}`,
           } as any);
           toast({
             title: "Warning",
-            description: "Lockbox code notification failed to send. You may need to contact the customer manually.",
+            description: `WhatsApp notification failed to send. You may need to contact the customer manually.`,
             variant: "destructive",
           });
         } else {
-          // Log successful send and stamp lockbox_sent_at
           await supabase.from("lockbox_send_log").insert({
             rental_id: rentalId,
             tenant_id: tenant?.id,
             event_type: givingHandover?.handed_at ? "resent" : "sent",
-            channel: "email",
+            channel: activeChannel,
             sent_by_name: "Admin",
-            details: `Lockbox code sent to ${customerEmail || 'customer'} via email`,
+            details: `Lockbox code sent to ${recipientDisplay || 'customer'} via ${activeChannel}`,
           } as any);
           await supabase
             .from("rentals")
@@ -298,7 +308,7 @@ export const KeyHandoverSection = ({
             .eq("id", rentalId);
           toast({
             title: "Lockbox Code Sent",
-            description: `Lockbox code sent to ${customerEmail || 'customer'}`,
+            description: `Lockbox code sent to ${recipientDisplay || 'customer'} via ${activeChannel}`,
           });
         }
       } catch (err) {
@@ -314,48 +324,7 @@ export const KeyHandoverSection = ({
         .eq("id", rentalId);
     }
 
-    // Send WhatsApp notification if selected (applies to ALL collection types)
-    if (confirmHandover === "giving" && sendWhatsApp && whatsAppPhone) {
-      setIsSendingWhatsApp(true);
-      try {
-        const photoUrls = (givingHandover?.photos || []).map((p) => p.file_url);
-        const { error } = await supabase.functions.invoke("send-collection-whatsapp", {
-          body: {
-            customerName,
-            customerPhone: whatsAppPhone,
-            vehicleName,
-            vehicleReg,
-            bookingRef,
-            lockboxCode: resolvedLockboxCode || null,
-            lockboxInstructions: vehicleLockboxInstructions || null,
-            deliveryAddress: deliveryAddress || null,
-            odometerReading: givingMileage || null,
-            notes: givingNotes || null,
-            photoUrls,
-            tenantId: tenant?.id,
-            defaultInstructions: rentalSettings?.lockbox_default_instructions || null,
-          },
-        });
-
-        if (error) {
-          console.error("Failed to send WhatsApp notification:", error);
-          toast({
-            title: "Warning",
-            description: "WhatsApp notification failed to send. You may need to contact the customer manually.",
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "WhatsApp Sent",
-            description: `Collection details sent via WhatsApp to ${whatsAppPhone}`,
-          });
-        }
-      } catch (err) {
-        console.error("WhatsApp notification error:", err);
-      } finally {
-        setIsSendingWhatsApp(false);
-      }
-    }
+    // WhatsApp is now handled by notify-lockbox-code via sendWhatsapp flag — no separate call needed
 
     // Auto-save mileage if it has a value but hasn't been saved yet
     if (confirmHandover === 'giving' && givingMileage && !givingHandover?.mileage) {
@@ -611,60 +580,31 @@ export const KeyHandoverSection = ({
               />
             </div>
 
-            {/* Notification Method Selector */}
-            {!givingCompleted && !isClosed && (emailEnabled || whatsappEnabled || smsEnabled) && (
+            {/* Notification — shows configured method from settings with editable recipient */}
+            {!givingCompleted && !isClosed && (
               <div className="p-3 border rounded-lg bg-muted/20 space-y-3">
-                <Label className="text-sm font-medium">Notify customer on collection</Label>
-                <div className="space-y-2">
-                  {emailEnabled && (
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="notify-email"
-                        checked={sendEmail}
-                        onCheckedChange={(checked) => setSendEmail(!!checked)}
-                      />
-                      <Label htmlFor="notify-email" className="text-sm cursor-pointer flex items-center gap-1.5">
-                        <Mail className="h-3.5 w-3.5" />
-                        Email
-                      </Label>
+                <Label className="text-sm font-medium">Sending lockbox code via</Label>
+                {emailEnabled && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <Mail className="h-3.5 w-3.5 text-primary" />
+                      <span className="font-medium">Email</span>
                     </div>
-                  )}
-                  {smsEnabled && (
-                    <div className="flex items-center gap-2 opacity-50">
-                      <Checkbox
-                        id="notify-sms"
-                        checked={false}
-                        disabled
-                      />
-                      <Label htmlFor="notify-sms" className="text-sm cursor-not-allowed flex items-center gap-1.5">
-                        <Phone className="h-3.5 w-3.5" />
-                        SMS
-                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 ml-1">Coming soon</Badge>
-                      </Label>
+                    <Input
+                      type="email"
+                      value={customerEmailOverride}
+                      onChange={(e) => setCustomerEmailOverride(e.target.value)}
+                      placeholder="Customer email"
+                      className="text-sm"
+                    />
+                  </div>
+                )}
+                {smsEnabled && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <Phone className="h-3.5 w-3.5 text-primary" />
+                      <span className="font-medium">SMS</span>
                     </div>
-                  )}
-                  {whatsappEnabled && (
-                    <div className="flex items-center gap-2 opacity-50">
-                      <Checkbox
-                        id="notify-whatsapp"
-                        checked={false}
-                        disabled
-                      />
-                      <Label htmlFor="notify-whatsapp" className="text-sm cursor-not-allowed flex items-center gap-1.5">
-                        <MessageCircle className="h-3.5 w-3.5" />
-                        WhatsApp
-                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 ml-1">Coming soon</Badge>
-                      </Label>
-                    </div>
-                  )}
-                </div>
-
-                {/* SMS phone input */}
-                {sendSms && (
-                  <div className="space-y-1.5 pl-6">
-                    <Label htmlFor="sms-phone" className="text-xs text-muted-foreground">
-                      SMS number
-                    </Label>
                     <PhoneInput
                       value={smsPhone}
                       onChange={(val) => setSmsPhone(val)}
@@ -672,22 +612,21 @@ export const KeyHandoverSection = ({
                     />
                   </div>
                 )}
-
-                {/* WhatsApp phone input */}
-                {sendWhatsApp && (
-                  <div className="space-y-1.5 pl-6">
-                    <Label htmlFor="whatsapp-phone" className="text-xs text-muted-foreground">
-                      WhatsApp number
-                    </Label>
+                {whatsappEnabled && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <MessageCircle className="h-3.5 w-3.5 text-primary" />
+                      <span className="font-medium">WhatsApp</span>
+                    </div>
                     <PhoneInput
                       value={whatsAppPhone}
                       onChange={(val) => setWhatsAppPhone(val)}
                       defaultCountry="US"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Please enter the number with WhatsApp on it
-                    </p>
                   </div>
+                )}
+                {!emailEnabled && !smsEnabled && !whatsappEnabled && (
+                  <p className="text-xs text-muted-foreground">No notification method configured. Go to Settings → Bookings to set one up.</p>
                 )}
               </div>
             )}
@@ -887,7 +826,7 @@ export const KeyHandoverSection = ({
                         <br /><br />
                         <span className="flex items-center gap-1.5 text-primary font-medium">
                           <Lock className="h-3.5 w-3.5" />
-                          The lockbox code will be sent to the customer via {customerEmail ? 'email' : 'notification'}.
+                          The lockbox code will be sent to {customerEmailOverride || customerEmail || 'the customer'} via email.
                         </span>
                       </>
                     )}
@@ -1079,6 +1018,43 @@ export const KeyHandoverSection = ({
                             )}
                           </div>
                         ) : null}
+
+                        {/* Tesla Supercharger Section — only when vehicle has tesla_fleet_enabled */}
+                        {s.supercharger !== undefined && s.supercharger !== null && (
+                          <>
+                            <div className="border-t pt-3 mt-1" />
+                            <div className="flex items-center gap-2 mb-2">
+                              <Zap className="h-4 w-4 text-red-500" />
+                              <span className="text-sm font-semibold text-foreground">Supercharger</span>
+                            </div>
+                            {s.supercharger.chargeCount > 0 ? (
+                              <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-900">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-foreground font-medium">
+                                    {s.supercharger.chargeCount} charging session{s.supercharger.chargeCount !== 1 ? 's' : ''}
+                                  </span>
+                                  <span className="text-lg font-bold text-amber-700 dark:text-amber-400">
+                                    {formatCurrency(s.supercharger.totalAmount, tenant?.currency_code || 'USD')}
+                                  </span>
+                                </div>
+                                {s.supercharger.pendingCount > 0 && (
+                                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                                    {s.supercharger.pendingCount} pending — review in the Supercharger section on the rental page.
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                  <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                                    No Supercharger charges detected
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
                       </>
                     );
                   })()}

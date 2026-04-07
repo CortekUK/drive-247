@@ -13,7 +13,7 @@ export default function MessagesPage() {
   const { canEdit } = useManagerPermissions();
   const { tenant } = useTenant();
   const smsEnabled = !!(tenant as any)?.integration_twilio_sms;
-  const whatsappEnabled = !!(tenant as any)?.integration_whatsapp;
+  const whatsappEnabled = !!(tenant as any)?.integration_twilio_whatsapp || !!(tenant as any)?.integration_whatsapp;
 
   const handleSelectChannel = (channel: ChatChannel) => {
     setSelectedChannel(channel);

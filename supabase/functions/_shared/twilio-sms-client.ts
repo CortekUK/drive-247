@@ -252,6 +252,86 @@ export async function sendTenantSMS(
 }
 
 /**
+ * Send WhatsApp message via Twilio parent account.
+ * WhatsApp senders are registered at the parent account level in Twilio,
+ * not on subaccounts. So we always use parent credentials for WhatsApp.
+ *
+ * If contentSid + contentVariables are provided, sends a pre-approved template
+ * (works without 24-hour window). Otherwise falls back to free-form body text.
+ */
+export async function sendTwilioWhatsApp(
+  _credentials: TenantTwilioCredentials,
+  whatsappFromNumber: string,
+  to: string,
+  body: string,
+  contentSid?: string,
+  contentVariables?: Record<string, string>
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const parentSid = PARENT_ACCOUNT_SID();
+  const parentToken = PARENT_AUTH_TOKEN();
+
+  if (!parentSid || !parentToken) {
+    return { success: false, error: 'Twilio parent account not configured' };
+  }
+
+  if (!whatsappFromNumber) {
+    return { success: false, error: 'No WhatsApp sender number configured for this tenant' };
+  }
+
+  try {
+    const normalizedTo = normalizePhoneNumber(to);
+    const messageParams: Record<string, string> = {
+      To: `whatsapp:${normalizedTo}`,
+      From: `whatsapp:${whatsappFromNumber}`,
+    };
+
+    if (contentSid) {
+      // Use pre-approved Content Template — works outside 24-hour window
+      messageParams.ContentSid = contentSid;
+      if (contentVariables) {
+        messageParams.ContentVariables = JSON.stringify(contentVariables);
+      }
+    } else {
+      // Free-form text — only works within 24-hour window
+      messageParams.Body = body;
+    }
+
+    const data = await twilioFetch(
+      `${TWILIO_API_BASE}/Accounts/${parentSid}/Messages.json`,
+      parentSid,
+      parentToken,
+      'POST',
+      messageParams
+    );
+
+    return { success: true, messageId: data.sid };
+  } catch (err: any) {
+    console.error('[Twilio] WhatsApp send error:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Fetch tenant's Twilio WhatsApp number from the database
+ */
+export async function getTenantWhatsAppNumber(
+  supabaseClient: SupabaseClient,
+  tenantId: string
+): Promise<string> {
+  const { data, error } = await supabaseClient
+    .from('tenants')
+    .select('twilio_whatsapp_number')
+    .eq('id', tenantId)
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to fetch tenant WhatsApp number: ${error.message}`);
+  }
+
+  return data?.twilio_whatsapp_number || '';
+}
+
+/**
  * Normalize phone number to E.164 format
  * Unlike the old AWS SNS helper, this does NOT assume a default country code.
  * Numbers must already have a country code or be passed with one.

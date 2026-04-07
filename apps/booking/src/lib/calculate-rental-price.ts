@@ -360,7 +360,7 @@ export function calculateRentalPriceBreakdown(
   }
   if (monthlyRent > 0) {
     return {
-      rentalPrice: (rentalDays / 30) * monthlyRent,
+      rentalPrice: (rentalDays / monthlyTierDays) * monthlyRent,
       rentalDays,
       pricingTier: 'monthly',
       dayBreakdown: [],

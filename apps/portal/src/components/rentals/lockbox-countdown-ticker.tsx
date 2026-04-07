@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useRentalSettings } from '@/hooks/use-rental-settings';
-import { Timer, CheckCircle2, Send, Lock } from 'lucide-react';
+import { Timer, CheckCircle2, Send, Lock, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
@@ -35,16 +35,25 @@ export function LockboxCountdownTicker({ rentalId }: LockboxCountdownTickerProps
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('rentals')
-        .select('start_date, pickup_time, lockbox_sent_at, approved_at, approval_status')
+        .select('start_date, pickup_time, lockbox_sent_at, approved_at, approval_status, vehicles!rentals_vehicle_id_fkey(lockbox_code)')
         .eq('id', rentalId)
         .single();
       if (error) throw error;
-      return data as {
+      const vehicle = (data as any)?.vehicles;
+      return {
+        start_date: data.start_date,
+        pickup_time: data.pickup_time,
+        lockbox_sent_at: data.lockbox_sent_at,
+        approved_at: data.approved_at,
+        approval_status: data.approval_status,
+        lockbox_code: vehicle?.lockbox_code ?? null,
+      } as {
         start_date: string;
         pickup_time: string | null;
         lockbox_sent_at: string | null;
         approved_at: string | null;
         approval_status: string | null;
+        lockbox_code: string | null;
       };
     },
     enabled: !!rentalId,
@@ -66,6 +75,21 @@ export function LockboxCountdownTicker({ rentalId }: LockboxCountdownTickerProps
   // Not approved yet — don't show ticker
   if (rental.approval_status !== 'approved' || !rental.approved_at) {
     return null;
+  }
+
+  // No lockbox code set on the vehicle — show error
+  if (!rental.lockbox_code && !rental.lockbox_sent_at) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/20">
+        <div className="flex items-center justify-center h-10 w-10 rounded-full bg-destructive/20">
+          <AlertTriangle className="h-5 w-5 text-destructive" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-destructive">Lockbox code not set</p>
+          <p className="text-xs text-destructive/70">Set a lockbox code on the vehicle before the auto-send timer can run.</p>
+        </div>
+      </div>
+    );
   }
 
   // Calculate send time: approval time + offset minutes

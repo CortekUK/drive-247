@@ -439,7 +439,7 @@ const PaymentsList = () => {
                                 let units = 1;
                                 if (unitLabel === 'day') units = totalDays;
                                 else if (unitLabel === 'week') units = Math.ceil(totalDays / 7);
-                                else units = Math.max(1, Math.round(totalDays / 30));
+                                else units = Math.max(1, Math.round(totalDays / (tenant?.monthly_tier_days ?? 30)));
 
                                 const cc = tenant?.currency_code || 'USD';
                                 return (

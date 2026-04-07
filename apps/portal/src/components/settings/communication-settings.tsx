@@ -29,13 +29,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { TwilioSmsSettings } from './twilio-sms-settings';
-import { WhatsAppMetaSettings } from './whatsapp-meta-settings';
+import { TwilioWhatsAppSettings } from './twilio-whatsapp-settings';
 import { useTwilioSms } from '@/hooks/use-twilio-sms';
 import { useTwilioVoice } from '@/hooks/use-twilio-voice';
 import { useTenant } from '@/contexts/TenantContext';
 
 interface CommunicationSettingsProps {
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 function ChannelStatusBadge({ status }: { status: 'active' | 'pending' | 'not_configured' }) {
@@ -49,12 +49,12 @@ function ChannelStatusBadge({ status }: { status: 'active' | 'pending' | 'not_co
   }
 }
 
-export function CommunicationSettings({ onBack }: CommunicationSettingsProps) {
+export function CommunicationSettings({ onBack }: CommunicationSettingsProps = {}) {
   const [activeChannel, setActiveChannel] = useState('sms');
   const { status: twilioStatus } = useTwilioSms();
   const { status: voiceStatus, isLoading: voiceLoading, setup: voiceSetup, disable: voiceDisable } = useTwilioVoice();
   const { tenant } = useTenant();
-  const whatsappConnected = !!(tenant as any)?.integration_whatsapp;
+  const whatsappConnected = !!(tenant as any)?.integration_twilio_whatsapp;
 
   const [showDisableVoiceWarning, setShowDisableVoiceWarning] = useState(false);
 
@@ -66,11 +66,13 @@ export function CommunicationSettings({ onBack }: CommunicationSettingsProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header with back button */}
+      {/* Header with optional back button */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack} className="h-9 w-9 shrink-0">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
+        {onBack && (
+          <Button variant="ghost" size="icon" onClick={onBack} className="h-9 w-9 shrink-0">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+        )}
         <div>
           <h3 className="text-lg font-semibold text-foreground">Communication Channels</h3>
           <p className="text-sm text-muted-foreground">
@@ -110,62 +112,7 @@ export function CommunicationSettings({ onBack }: CommunicationSettingsProps) {
 
         {/* WhatsApp Tab */}
         <TabsContent value="whatsapp" className="mt-6 space-y-6">
-          <WhatsAppMetaSettings />
-
-          {/* Setup guide for tenants */}
-          {!whatsappConnected && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">How to Set Up WhatsApp Business</CardTitle>
-                <CardDescription>Follow these steps to connect your WhatsApp Business account</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex gap-3">
-                    <div className="w-7 h-7 rounded-full bg-[#25D366]/10 text-[#25D366] flex items-center justify-center text-xs font-bold shrink-0">1</div>
-                    <div>
-                      <p className="text-sm font-medium">Create a Meta Business Account</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Go to business.facebook.com and create a business account if you don't have one. You'll need a business name, address, and website.</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    <div className="w-7 h-7 rounded-full bg-[#25D366]/10 text-[#25D366] flex items-center justify-center text-xs font-bold shrink-0">2</div>
-                    <div>
-                      <p className="text-sm font-medium">Verify your business</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Meta requires business verification before you can use the WhatsApp Business API. This involves uploading business documents (takes 1-3 business days).</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    <div className="w-7 h-7 rounded-full bg-[#25D366]/10 text-[#25D366] flex items-center justify-center text-xs font-bold shrink-0">3</div>
-                    <div>
-                      <p className="text-sm font-medium">Have a phone number ready</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">You need a phone number that isn't already registered with WhatsApp. This number will become your business WhatsApp number. You can use your Twilio number if it supports voice (for OTP verification).</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    <div className="w-7 h-7 rounded-full bg-[#25D366]/10 text-[#25D366] flex items-center justify-center text-xs font-bold shrink-0">4</div>
-                    <div>
-                      <p className="text-sm font-medium">Click "Connect WhatsApp" above</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">You'll be guided through Meta's setup flow. This connects your WhatsApp Business account to Drive247 so you can send and receive messages from the Messages page.</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    <div className="w-7 h-7 rounded-full bg-[#25D366]/10 text-[#25D366] flex items-center justify-center text-xs font-bold shrink-0">5</div>
-                    <div>
-                      <p className="text-sm font-medium">Create message templates (optional)</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">WhatsApp requires pre-approved templates for outbound messages to customers who haven't messaged you in the last 24 hours. You can create templates in Meta Business Suite → WhatsApp Manager → Message Templates.</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/10 dark:border-amber-800">
-                    <p className="text-xs text-amber-800 dark:text-amber-300">
-                      <strong>Important:</strong> WhatsApp has a 24-hour messaging window. You can freely reply to customers who messaged you within the last 24 hours. Outside this window, you can only send pre-approved message templates.
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <TwilioWhatsAppSettings />
         </TabsContent>
 
         {/* Email Tab */}

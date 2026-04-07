@@ -159,8 +159,12 @@ const CreateRental = () => {
   const [installmentPlanType, setInstallmentPlanType] = useState<'full' | 'weekly' | 'monthly'>('full');
   const [installmentAmountOverride, setInstallmentAmountOverride] = useState<number | null>(null);
 
+  // Pay As You Go state
+  const [isPayAsYouGo, setIsPayAsYouGo] = useState(false);
+
   // Lockbox / delivery method state
   const [deliveryMethod, setDeliveryMethod] = useState<'in_person' | 'lockbox'>('in_person');
+  const [lockboxCodeInput, setLockboxCodeInput] = useState('');
 
   // Pickup/Return location method state
   const [pickupMethod, setPickupMethod] = useState<LocationMethod>('fixed');
@@ -442,13 +446,13 @@ const CreateRental = () => {
     queryFn: async () => {
       if (!selectedVehicleId || !tenant?.id || bufferMinutes <= 0) return null;
 
-      // Get the most recent completed rental for this vehicle
+      // Get the most recent completed/closed rental for this vehicle
       const { data } = await supabase
         .from("rentals")
         .select("id, end_date, dropoff_time")
         .eq("tenant_id", tenant.id)
         .eq("vehicle_id", selectedVehicleId)
-        .eq("status", "Completed")
+        .in("status", ["Completed", "Closed"])
         .order("end_date", { ascending: false })
         .limit(1)
         .single();
@@ -766,7 +770,7 @@ const CreateRental = () => {
     queryFn: async () => {
       let query = (supabase as any)
         .from("vehicles")
-        .select("id, reg, make, model, daily_rent, weekly_rent, monthly_rent, security_deposit, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, current_mileage")
+        .select("id, reg, make, model, daily_rent, weekly_rent, monthly_rent, security_deposit, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, current_mileage, lockbox_code")
         .eq("status", "Available");
 
       if (tenant?.id) {
@@ -775,6 +779,39 @@ const CreateRental = () => {
 
       const { data, error } = await query;
       if (error) throw error;
+
+      // Tag vehicles currently in buffer cooldown (admin can still select them)
+      const bufferMinutes = (tenant as any)?.buffer_time_minutes || 0;
+      if (bufferMinutes > 0 && data?.length > 0 && tenant?.id) {
+        const vehicleIds = data.map((v: any) => v.id);
+        const { data: recentRentals } = await (supabase as any)
+          .from("rentals")
+          .select("vehicle_id, end_date, return_time")
+          .in("vehicle_id", vehicleIds)
+          .in("status", ["Closed", "Active"])
+          .order("end_date", { ascending: false });
+
+        if (recentRentals?.length > 0) {
+          const now = new Date();
+          const bufferMs = bufferMinutes * 60 * 1000;
+          const latestByVehicle: Record<string, any> = {};
+          for (const r of recentRentals) {
+            if (!latestByVehicle[r.vehicle_id]) latestByVehicle[r.vehicle_id] = r;
+          }
+          return data.map((v: any) => {
+            const lastRental = latestByVehicle[v.id];
+            if (!lastRental) return v;
+            const rentalEnd = new Date(`${lastRental.end_date}T${lastRental.return_time || '23:59'}`);
+            const bufferDeadline = new Date(rentalEnd.getTime() + bufferMs);
+            return {
+              ...v,
+              _inBuffer: now < bufferDeadline,
+              _bufferUntil: bufferDeadline.toISOString(),
+            };
+          });
+        }
+      }
+
       return data;
     },
     enabled: !!tenant,
@@ -1116,12 +1153,21 @@ const CreateRental = () => {
           weekly_mileage_override: weeklyMileageOverride,
           monthly_mileage_override: monthlyMileageOverride,
           excess_mileage_rate_override: excessRateOverride,
-          has_installment_plan: installmentPlanType !== 'full' && rentalSettings?.installments_enabled,
+          has_installment_plan: !isPayAsYouGo && installmentPlanType !== 'full' && rentalSettings?.installments_enabled,
+          is_pay_as_you_go: isPayAsYouGo,
         } as any)
         .select()
         .single();
 
       if (rentalError) throw rentalError;
+
+      // Save lockbox code to the vehicle if one was entered
+      if (deliveryMethod === 'lockbox' && lockboxCodeInput && data.vehicle_id) {
+        await (supabase as any)
+          .from('vehicles')
+          .update({ lockbox_code: lockboxCodeInput })
+          .eq('id', data.vehicle_id);
+      }
 
       setCreationProgress(3); // Step 3: Setting up insurance
 
@@ -1836,6 +1882,7 @@ const CreateRental = () => {
     setInstallmentPlanType('full');
     setInstallmentAmountOverride(null);
     setDeliveryMethod('in_person');
+    setLockboxCodeInput('');
     setPickupMethod('fixed');
     setReturnMethod('fixed');
     setSameAsPickup(true);
@@ -2260,6 +2307,7 @@ const CreateRental = () => {
                                             setWeeklyMileageOverride(null);
                                             setMonthlyMileageOverride(null);
                                             setExcessRateOverride(null);
+                                            setLockboxCodeInput(vehicle.lockbox_code || '');
                                           }}
                                         >
                                           <Check
@@ -2268,8 +2316,13 @@ const CreateRental = () => {
                                               field.value === vehicle.id ? "opacity-100" : "opacity-0"
                                             )}
                                           />
-                                          <div className="flex flex-col gap-0.5">
-                                            <span className="font-medium">{vehicle.reg}</span>
+                                          <div className="flex flex-col gap-0.5 flex-1">
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-medium">{vehicle.reg}</span>
+                                              {vehicle._inBuffer && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">Buffer</span>
+                                              )}
+                                            </div>
                                             <span className="text-xs text-muted-foreground">{vehicle.make} {vehicle.model}</span>
                                           </div>
                                         </CommandItem>
@@ -2284,10 +2337,10 @@ const CreateRental = () => {
                               Only available vehicles are shown
                             </FormDescription>
                             {bufferWarning?.inBuffer && field.value && (
-                              <Alert variant="default" className="mt-2 border-orange-300 bg-orange-50 dark:bg-orange-950/20">
-                                <AlertTriangle className="h-4 w-4 text-orange-500" />
-                                <AlertDescription className="text-orange-700 dark:text-orange-400 text-sm">
-                                  Buffer time for this vehicle hasn't ended yet — {bufferWarning.remainingMin} min remaining. You can still proceed.
+                              <Alert variant="default" className="mt-2 border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+                                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                                <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
+                                  Buffer time for this vehicle hasn't ended yet — {bufferWarning.remainingMin} min remaining. Available after {new Date(bufferWarning.bufferDeadline).toLocaleString()}. You can still proceed if needed.
                                 </AlertDescription>
                               </Alert>
                             )}
@@ -3010,8 +3063,123 @@ const CreateRental = () => {
                 );
               })()}
 
+              {/* ── Payment Mode: Regular vs Pay As You Go ──────── */}
+              {rentalSettings?.pay_as_you_go_enabled && selectedVehicleId && (
+                <div className="rounded-xl border bg-card shadow-sm">
+                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
+                      <CreditCard className="h-4 w-4" />
+                    </div>
+                    <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Mode</h2>
+                  </div>
+                  <div className="p-5 space-y-4">
+                    <RadioGroup
+                      value={isPayAsYouGo ? 'payg' : 'regular'}
+                      onValueChange={(val) => {
+                        setIsPayAsYouGo(val === 'payg');
+                        if (val === 'payg') {
+                          setInstallmentPlanType('full');
+                          setInstallmentAmountOverride(null);
+                        }
+                      }}
+                      className="space-y-2"
+                    >
+                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", !isPayAsYouGo ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
+                        <RadioGroupItem value="regular" />
+                        <div>
+                          <span className="text-sm font-medium">Regular</span>
+                          <p className="text-xs text-muted-foreground">Standard payment — pay upfront or via installments</p>
+                        </div>
+                      </label>
+                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isPayAsYouGo ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
+                        <RadioGroupItem value="payg" />
+                        <div>
+                          <span className="text-sm font-medium">Pay As You Go</span>
+                          <p className="text-xs text-muted-foreground">Rental amount, tax, and percentage-based service fees are paid incrementally</p>
+                        </div>
+                      </label>
+                    </RadioGroup>
+
+                    {isPayAsYouGo && (() => {
+                      const currency = tenant?.currency_code || 'USD';
+                      const rentalAmount = watchedMonthlyAmount || 0;
+                      const discountAmt = promoDetails ? calculateDiscount(rentalAmount) : 0;
+                      const discounted = rentalAmount - discountAmt;
+                      const tax = taxOverride !== null ? taxOverride : calculateTaxAmount(discounted);
+                      const serviceFee = serviceFeeOverride !== null ? serviceFeeOverride : calculateServiceFee(discounted);
+                      const deposit = depositOverride !== null ? depositOverride : calculateSecurityDeposit(form.getValues("vehicle_id"));
+                      const isServiceFeePercentage = rentalSettings?.service_fee_type === 'percentage';
+                      const isServiceFeeEnabled = rentalSettings?.service_fee_enabled && serviceFee > 0;
+
+                      // PAYG items
+                      const paygItems: { label: string; amount: number }[] = [
+                        { label: 'Rental Amount', amount: discounted },
+                      ];
+                      if (rentalSettings?.tax_enabled && tax > 0) {
+                        paygItems.push({ label: `Tax (${rentalSettings.tax_percentage}%)`, amount: tax });
+                      }
+                      if (isServiceFeeEnabled && isServiceFeePercentage) {
+                        paygItems.push({ label: `Service Fee (${rentalSettings?.service_fee_value}%)`, amount: serviceFee });
+                      }
+                      const paygTotal = paygItems.reduce((s, i) => s + i.amount, 0);
+
+                      // Upfront / normal items
+                      const normalItems: { label: string; amount: number }[] = [];
+                      if (isServiceFeeEnabled && !isServiceFeePercentage) {
+                        normalItems.push({ label: 'Service Fee (fixed)', amount: serviceFee });
+                      }
+                      if (rentalSettings?.security_deposit_enabled && deposit > 0) {
+                        normalItems.push({ label: 'Pre-Authorization', amount: deposit });
+                      }
+
+                      return (
+                        <div className="mt-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 space-y-3">
+                          <div className="flex items-start gap-2">
+                            <Info className="h-4 w-4 text-indigo-600 dark:text-indigo-400 mt-0.5 flex-shrink-0" />
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">How Pay As You Go works</p>
+                              <p className="text-xs text-muted-foreground">
+                                The customer pays the rental charges incrementally over time instead of upfront. You record each payment as it comes in from the rental detail page.
+                              </p>
+                            </div>
+                          </div>
+
+                          {discounted > 0 && (
+                            <div className="space-y-2 pt-2 border-t border-indigo-200/60 dark:border-indigo-800/60">
+                              <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Paid Incrementally (PAYG)</p>
+                              {paygItems.map(item => (
+                                <div key={item.label} className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">{item.label}</span>
+                                  <span className="font-medium">{formatCurrency(item.amount, currency)}</span>
+                                </div>
+                              ))}
+                              <div className="flex justify-between text-sm font-semibold border-t border-indigo-200/60 dark:border-indigo-800/60 pt-1.5">
+                                <span className="text-indigo-700 dark:text-indigo-300">PAYG Total</span>
+                                <span className="text-indigo-700 dark:text-indigo-300">{formatCurrency(paygTotal, currency)}</span>
+                              </div>
+
+                              {normalItems.length > 0 && (
+                                <>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-2">Charged Separately</p>
+                                  {normalItems.map(item => (
+                                    <div key={item.label} className="flex justify-between text-sm">
+                                      <span className="text-muted-foreground">{item.label}</span>
+                                      <span className="font-medium">{formatCurrency(item.amount, currency)}</span>
+                                    </div>
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+
               {/* ── Installment Plan ──────────────────────────────── */}
-              {(() => {
+              {!isPayAsYouGo && (() => {
                 const installmentConfig = rentalSettings?.installment_config;
                 const installmentsEnabled = rentalSettings?.installments_enabled && installmentConfig;
                 if (!installmentsEnabled) return null;
@@ -3083,7 +3251,40 @@ const CreateRental = () => {
                   plans.push({ type: 'monthly', count: monthlyLimit, amount: base, scheduled: sched, firstAmount: first, upfrontTotal: upfrontOnlyAmount + first, label: `Monthly (${monthlyLimit} payments)` });
                 }
 
-                if (plans.length <= 1) return null; // Only "Pay in Full" — no installment options
+                if (plans.length <= 1) {
+                  // Show reason why installment options aren't available
+                  const reasons: string[] = [];
+                  const minPerDay = Math.min(
+                    limitPerDayWeekly > 0 ? limitPerDayWeekly : Infinity,
+                    limitPerDayMonthly > 0 ? limitPerDayMonthly : Infinity
+                  );
+                  if (minPerDay !== Infinity && perDayRate < minPerDay) {
+                    reasons.push(`Minimum rate of ${formatCurrency(minPerDay, currency)}/day required (this rental is ${formatCurrency(Math.round(perDayRate * 100) / 100, currency)}/day)`);
+                  }
+                  const minDays = Math.min(minDaysWeekly, minDaysMonthly);
+                  if (rentalDays < minDays) {
+                    reasons.push(`Minimum ${minDays} days required (this rental is ${rentalDays} days)`);
+                  }
+                  if (reasons.length > 0) {
+                    return (
+                      <div className="rounded-xl border bg-card shadow-sm">
+                        <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                          <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
+                            <CreditCard className="h-4 w-4" />
+                          </div>
+                          <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Plan</h2>
+                        </div>
+                        <div className="px-6 py-4">
+                          <p className="text-sm text-muted-foreground flex items-center gap-2">
+                            <Info className="h-4 w-4 flex-shrink-0" />
+                            Installment plans not available for this rental. {reasons.join('. ')}.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                }
 
                 const selectedPlan = plans.find(p => p.type === installmentPlanType) || plans[0];
                 const effectiveInstallmentAmount = installmentAmountOverride !== null ? installmentAmountOverride : selectedPlan.amount;
@@ -3403,7 +3604,49 @@ const CreateRental = () => {
                           <div className="flex items-center gap-1.5"><Lock className="h-3.5 w-3.5 text-muted-foreground" /><div><span className="text-sm font-medium">Lockbox</span><p className="text-xs text-muted-foreground">Keys placed in secure lockbox</p></div></div>
                         </label>
                       </RadioGroup>
-                      {deliveryMethod === 'lockbox' && <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1"><Info className="h-3 w-3" />Lockbox code and instructions will be sent to the customer after rental creation via the Key Handover section.</p>}
+                      {deliveryMethod === 'lockbox' && (
+                        <div className="mt-3 space-y-2">
+                          <Label className="text-xs text-muted-foreground">Lockbox Code</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              placeholder="Enter lockbox code"
+                              value={lockboxCodeInput}
+                              onChange={(e) => setLockboxCodeInput(e.target.value)}
+                              className="w-40 font-mono text-center tracking-widest"
+                            />
+                            {!lockboxCodeInput && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const length = rentalSettings?.lockbox_code_length || 4;
+                                  const max = Math.pow(10, length);
+                                  setLockboxCodeInput(Math.floor(Math.random() * max).toString().padStart(length, '0'));
+                                }}
+                              >
+                                Generate
+                              </Button>
+                            )}
+                            {lockboxCodeInput && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setLockboxCodeInput('')}
+                              >
+                                Clear
+                              </Button>
+                            )}
+                          </div>
+                          {!lockboxCodeInput && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              A lockbox code is required for the auto-send timer to work.
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
