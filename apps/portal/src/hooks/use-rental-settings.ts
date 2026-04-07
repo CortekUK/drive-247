@@ -68,6 +68,8 @@ export interface RentalSettings {
   return_reminder_hours: number | null;
   // Pay As You Go
   pay_as_you_go_enabled: boolean | null;
+  // Blog
+  blog_enabled: boolean | null;
 }
 
 const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
@@ -126,6 +128,8 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   return_reminder_hours: 24,
   // Pay As You Go
   pay_as_you_go_enabled: false,
+  // Blog
+  blog_enabled: false,
 };
 
 /**
@@ -190,7 +194,8 @@ export const useRentalSettings = () => {
           buffer_time_minutes,
           return_reminder_enabled,
           return_reminder_hours,
-          pay_as_you_go_enabled
+          pay_as_you_go_enabled,
+          blog_enabled
         `)
         .eq('id', tenant.id)
         .single();
@@ -211,7 +216,7 @@ export const useRentalSettings = () => {
       if (result.lockbox_notification_methods && !Array.isArray(result.lockbox_notification_methods)) {
         result.lockbox_notification_methods = result.lockbox_notification_methods as unknown as string[];
       }
-      return result as RentalSettings;
+      return result as unknown as RentalSettings;
     },
     enabled: !!tenant?.id,
     staleTime: 30 * 1000, // 30 seconds
@@ -229,7 +234,7 @@ export const useRentalSettings = () => {
 
       const { data, error } = await supabase
         .from('tenants')
-        .update(updates)
+        .update(updates as any)
         .eq('id', tenant.id)
         .select(`
           min_rental_days,
@@ -265,7 +270,8 @@ export const useRentalSettings = () => {
           buffer_time_minutes,
           return_reminder_enabled,
           return_reminder_hours,
-          pay_as_you_go_enabled
+          pay_as_you_go_enabled,
+          blog_enabled
         `);
 
       if (error) {
@@ -280,7 +286,7 @@ export const useRentalSettings = () => {
       }
 
       console.log('[RentalSettings] Settings updated:', data[0]);
-      return { ...DEFAULT_RENTAL_SETTINGS, ...data[0] } as RentalSettings;
+      return { ...DEFAULT_RENTAL_SETTINGS, ...data[0] } as unknown as RentalSettings;
     },
     onSuccess: (data) => {
       // Update the cache with new data

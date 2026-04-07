@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -162,6 +162,7 @@ const Settings = () => {
     buffer_time_minutes: number;
     return_reminder_enabled: boolean;
     return_reminder_hours: number;
+    blog_enabled: boolean;
   }>({
     minimum_rental_age: '',
     tax_enabled: false,
@@ -221,6 +222,8 @@ const Settings = () => {
     // Return reminder
     return_reminder_enabled: false,
     return_reminder_hours: 24,
+    // Blog
+    blog_enabled: false,
   });
 
   // Sync rental form with loaded settings
@@ -277,6 +280,7 @@ const Settings = () => {
         return_reminder_hours: (rentalSettings as any).return_reminder_hours ?? 24,
         // Pay As You Go
         pay_as_you_go_enabled: rentalSettings.pay_as_you_go_enabled ?? false,
+        blog_enabled: (rentalSettings as any).blog_enabled ?? false,
       });
     }
   }, [rentalSettings]);
@@ -3625,6 +3629,183 @@ const Settings = () => {
               )}
             </CardContent>
           </Card>
+
+          {/* Blog Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <PenLine className="h-5 w-5 text-primary" />
+                Blog
+              </CardTitle>
+              <CardDescription>
+                Enable the blog feature on your customer-facing booking website. When enabled, a Blog link appears in the navigation and published posts are visible to customers.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-1">
+                  <h4 className="font-medium">Enable Blog</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Show the blog section on your booking website
+                  </p>
+                </div>
+                <Switch
+                  checked={rentalForm.blog_enabled}
+                  onCheckedChange={(checked) => {
+                    setRentalForm(prev => ({ ...prev, blog_enabled: checked }));
+                  }}
+                />
+              </div>
+
+              {canEditSettings('rental') && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      await updateRentalSettings({
+                        blog_enabled: rentalForm.blog_enabled,
+                      } as any);
+                    } catch (error) {
+                      console.error('Failed to update blog settings:', error);
+                    }
+                  }}
+                  disabled={isUpdatingRentalSettings}
+                  className="flex items-center gap-2"
+                >
+                  {isUpdatingRentalSettings ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Reset All Booking Settings to Defaults */}
+          {canEditSettings('rental') && (
+            <div className="flex justify-start">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10">
+                    Reset All Booking Settings to Defaults
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reset All Booking Settings?</AlertDialogTitle>
+                    <div className="text-sm text-muted-foreground">
+                      This will reset all booking/rental settings to their default values:
+                      <ul className="mt-2 list-disc list-inside space-y-1">
+                        <li>Minimum Driver Age: 21</li>
+                        <li>Tax: Disabled (0%)</li>
+                        <li>Service Fee: Disabled</li>
+                        <li>Pre-Authorization Mode: Global ($0)</li>
+                        <li>Installments: Disabled (defaults restored)</li>
+                        <li>Booking Lead Time: 24 hours</li>
+                        <li>Min Rental: 0 days, 1 hour</li>
+                        <li>Max Rental: 90 days</li>
+                        <li>Lockbox: Disabled</li>
+                        <li>Monthly Tier: 30 days</li>
+                        <li>Buffer Time: 0 minutes</li>
+                      </ul>
+                    </div>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={async () => {
+                        try {
+                          const defaults = {
+                            minimum_rental_age: 21,
+                            tax_enabled: false,
+                            tax_percentage: 0,
+                            service_fee_enabled: false,
+                            service_fee_type: 'fixed_amount' as const,
+                            service_fee_value: 0,
+                            service_fee_amount: 0,
+                            deposit_mode: 'global' as const,
+                            global_deposit_amount: 0,
+                            installments_enabled: false,
+                            installment_config: {
+                              minimum_days_weekly: 7,
+                              minimum_days_monthly: 30,
+                              weekly_installments_limit: 4,
+                              monthly_installments_limit: 6,
+                              limiting_amount_per_day_weekly: 0,
+                              limiting_amount_per_day_monthly: 0,
+                              charge_first_upfront: true,
+                              what_gets_split: 'rental_only' as const,
+                              grace_period_days: 3,
+                              max_retry_attempts: 3,
+                              retry_interval_days: 1,
+                            },
+                            booking_lead_time_value: 24,
+                            booking_lead_time_unit: 'hours' as const,
+                            min_rental_days: 0,
+                            min_rental_hours: 1,
+                            max_rental_days: 90,
+                            lockbox_enabled: false,
+                            lockbox_code_length: 4,
+                            lockbox_notification_methods: ['email'],
+                            monthly_tier_days: 30,
+                            buffer_time_minutes: 0,
+                          };
+                          await updateRentalSettings(defaults);
+                          setRentalForm({
+                            minimum_rental_age: 21,
+                            tax_enabled: false,
+                            tax_percentage: 0,
+                            service_fee_enabled: false,
+                            service_fee_amount: 0,
+                            service_fee_type: 'fixed_amount',
+                            service_fee_value: 0,
+                            deposit_mode: 'global',
+                            global_deposit_amount: 0,
+                            installments_enabled: false,
+                            installment_config: {
+                              minimum_days_weekly: 7,
+                              minimum_days_monthly: 30,
+                              weekly_installments_limit: 4,
+                              monthly_installments_limit: 6,
+                              limiting_amount_per_day_weekly: 0,
+                              limiting_amount_per_day_monthly: 0,
+                              charge_first_upfront: true,
+                              what_gets_split: 'rental_only',
+                              grace_period_days: 3,
+                              max_retry_attempts: 3,
+                              retry_interval_days: 1,
+                            },
+                            booking_lead_time_value: 24,
+                            booking_lead_time_unit: 'hours',
+                            min_rental_days: 0,
+                            min_rental_hours: 1,
+                            max_rental_days: 90,
+                            lockbox_enabled: false,
+                            lockbox_code_length: null,
+                            lockbox_notification_methods: ['email'],
+                            lockbox_send_offset_minutes: null,
+                            security_deposit_enabled: true,
+                            verification_document_type: 'driving_license',
+                            monthly_tier_days: 30,
+                            buffer_time_minutes: 0,
+                            return_reminder_enabled: false,
+                            return_reminder_hours: 24,
+                            blog_enabled: false,
+                          });
+                          toast({ title: "Settings Reset", description: "All booking settings have been restored to defaults." });
+                        } catch (error: any) {
+                          toast({ title: "Error", description: error.message || "Failed to reset booking settings", variant: "destructive" });
+                        }
+                      }}
+                    >
+                      Reset to Defaults
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
 
         </TabsContent>
 
