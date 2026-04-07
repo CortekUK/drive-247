@@ -23,6 +23,10 @@ interface ExtractedData {
     collision?: number;
     comprehensive?: number;
   };
+  deductibles?: {
+    collision?: number;
+    comprehensive?: number;
+  };
   isValidDocument?: boolean;
   isExpired?: boolean;
   documentType?: string;
@@ -291,6 +295,29 @@ export default function AIScanProgress({ documentId }: Props) {
                     {extractedData.isExpired && (
                       <span className="ml-2 text-red-600 text-xs font-bold">(EXPIRED)</span>
                     )}
+                  </span>
+                </div>
+              )}
+              {extractedData.deductibles && (extractedData.deductibles.collision != null || extractedData.deductibles.comprehensive != null) && (
+                <div className="flex justify-between items-center py-2 border-b border-border/50">
+                  <span className="text-muted-foreground">Deductibles:</span>
+                  <span className="font-semibold">
+                    {[
+                      extractedData.deductibles.collision != null && `Collision: $${extractedData.deductibles.collision.toLocaleString()}`,
+                      extractedData.deductibles.comprehensive != null && `Comp: $${extractedData.deductibles.comprehensive.toLocaleString()}`,
+                    ].filter(Boolean).join(' • ')}
+                  </span>
+                </div>
+              )}
+              {extractedData.coverageLimits && (extractedData.coverageLimits.liability != null || extractedData.coverageLimits.collision != null || extractedData.coverageLimits.comprehensive != null) && (
+                <div className="flex justify-between items-center py-2 border-b border-border/50">
+                  <span className="text-muted-foreground">Coverage Limits:</span>
+                  <span className="font-semibold text-right">
+                    {[
+                      extractedData.coverageLimits.liability != null && `Liability: $${extractedData.coverageLimits.liability.toLocaleString()}`,
+                      extractedData.coverageLimits.collision != null && `Collision: $${extractedData.coverageLimits.collision.toLocaleString()}`,
+                      extractedData.coverageLimits.comprehensive != null && `Comp: $${extractedData.coverageLimits.comprehensive.toLocaleString()}`,
+                    ].filter(Boolean).join(' • ')}
                   </span>
                 </div>
               )}

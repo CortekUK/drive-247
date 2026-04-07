@@ -40,6 +40,10 @@ interface ExtractedInsuranceData {
     collision: number | null;
     comprehensive: number | null;
   } | null;
+  deductibles: {
+    collision: number | null;
+    comprehensive: number | null;
+  } | null;
 
   // Validation Results
   isValidDocument: boolean;
@@ -197,10 +201,12 @@ serve(async (req) => {
 
     // Build the AI prompt for comprehensive extraction
     const systemPrompt = `You are an expert insurance document verification specialist. Your task is to:
-1. Verify if the document is a legitimate insurance document
-2. Extract all relevant policy information accurately
+1. Verify if the document is a legitimate insurance document (declarations page, policy document, certificate, or ID card)
+2. Extract all relevant policy information accurately, including deductible amounts
 3. Check for signs of document tampering or fraud
 4. Determine if the policy is currently valid (not expired)
+
+Deductibles are typically found on declarations pages or full policy documents. If this is just an insurance ID card, deductibles will likely not be present — set them to null.
 
 Be thorough but only extract data you are confident about. If unsure, use null.`;
 
@@ -217,6 +223,10 @@ Be thorough but only extract data you are confident about. If unsure, use null.`
     "liability": numeric limit or null,
     "collision": numeric limit or null,
     "comprehensive": numeric limit or null
+  },
+  "deductibles": {
+    "collision": numeric deductible amount or null,
+    "comprehensive": numeric deductible amount or null
   },
   "isValidDocument": true if this appears to be a legitimate insurance document,
   "isExpired": true if expiration date is in the past,

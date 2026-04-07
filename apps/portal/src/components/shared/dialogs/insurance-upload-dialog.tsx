@@ -287,9 +287,9 @@ export function InsuranceUploadDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Upload Insurance Certificate</DialogTitle>
+          <DialogTitle>Upload Insurance Document</DialogTitle>
           <DialogDescription>
-            Upload the customer's insurance document. We'll verify it using AI.
+            Upload the customer's insurance declarations page or policy document. For best results, include a page that shows deductibles and coverage limits.
           </DialogDescription>
         </DialogHeader>
 
