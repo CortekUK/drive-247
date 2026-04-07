@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,17 +28,21 @@ import {
   RotateCcw,
   Plus,
   Info,
+  Clock,
+  CalendarPlus,
 } from 'lucide-react';
 import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
 import { useTenant } from '@/contexts/TenantContext';
+import { useRentalSettings } from '@/hooks/use-rental-settings';
 import {
   useTemplateSelection,
   type TemplateType,
+  type TemplateCategory,
   DEFAULT_TEMPLATE_NAME,
   CUSTOM_TEMPLATE_NAME,
 } from '@/hooks/use-agreement-templates';
 
-export default function AgreementTemplatesPage() {
+function TemplateCategorySection({ category }: { category: TemplateCategory }) {
   const router = useRouter();
   const {
     defaultTemplate,
@@ -54,7 +59,7 @@ export default function AgreementTemplatesPage() {
     isResetting,
     clearCustom,
     isClearing,
-  } = useTemplateSelection();
+  } = useTemplateSelection(category);
 
   const { tenant } = useTenant();
   const [initialized, setInitialized] = useState(false);
@@ -125,24 +130,7 @@ export default function AgreementTemplatesPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4 py-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push('/settings')}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold">Agreement Templates</h1>
-          <p className="text-muted-foreground text-sm">
-            Choose which template to use for rental agreements sent for electronic signing
-          </p>
-        </div>
-      </div>
-
+    <div className="space-y-6">
       {/* Template Selection */}
       <RadioGroup
         value={activeType || 'default'}
@@ -207,7 +195,7 @@ export default function AgreementTemplatesPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => router.push(`/settings/agreement-templates/edit?type=default`)}
+                  onClick={() => router.push(`/settings/agreement-templates/edit?type=default&category=${category}`)}
                 >
                   <Pencil className="h-4 w-4 mr-1.5" />
                   Edit
@@ -298,7 +286,7 @@ export default function AgreementTemplatesPage() {
                 <Button
                   variant={customTemplateIsEmpty ? "default" : "outline"}
                   size="sm"
-                  onClick={() => router.push(`/settings/agreement-templates/edit?type=custom`)}
+                  onClick={() => router.push(`/settings/agreement-templates/edit?type=custom&category=${category}`)}
                 >
                   {customTemplateIsEmpty ? (
                     <>
@@ -356,11 +344,71 @@ export default function AgreementTemplatesPage() {
         <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
         <div className="text-sm text-muted-foreground">
           <p>
-            The active template will be used when sending rental agreements for electronic signing.
+            The active template will be used when sending {category === 'payg' ? 'Pay As You Go' : category === 'extension' ? 'extension' : ''} rental agreements for electronic signing.
             You can edit either template to customize the content using dynamic variables.
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+export default function AgreementTemplatesPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { settings: rentalSettings } = useRentalSettings();
+  const initialCategory = (searchParams.get('category') as TemplateCategory) || 'standard';
+  const [activeCategory, setActiveCategory] = useState<TemplateCategory>(initialCategory);
+  const paygEnabled = rentalSettings?.pay_as_you_go_enabled;
+
+  return (
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4 py-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => router.push('/settings')}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div>
+          <h1 className="text-2xl font-bold">Agreement Templates</h1>
+          <p className="text-muted-foreground text-sm">
+            Choose which template to use for rental agreements sent for electronic signing
+          </p>
+        </div>
+      </div>
+
+      <Tabs value={activeCategory} onValueChange={(v) => setActiveCategory(v as TemplateCategory)}>
+        <TabsList>
+          <TabsTrigger value="standard" className="flex items-center gap-1.5">
+            <FileText className="h-3.5 w-3.5" />
+            Standard
+          </TabsTrigger>
+          <TabsTrigger value="extension" className="flex items-center gap-1.5">
+            <CalendarPlus className="h-3.5 w-3.5" />
+            Extension
+          </TabsTrigger>
+          {paygEnabled && (
+            <TabsTrigger value="payg" className="flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" />
+              Pay As You Go
+            </TabsTrigger>
+          )}
+        </TabsList>
+        <TabsContent value="standard" className="mt-4">
+          <TemplateCategorySection category="standard" />
+        </TabsContent>
+        <TabsContent value="extension" className="mt-4">
+          <TemplateCategorySection category="extension" />
+        </TabsContent>
+        {paygEnabled && (
+          <TabsContent value="payg" className="mt-4">
+            <TemplateCategorySection category="payg" />
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, ShieldX, Bolt } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -82,20 +82,46 @@ const settingsTabGroups = [
     ],
   },
   {
-    label: "Operations",
+    label: "Booking Rules",
     items: [
-      { value: 'rental', icon: Car, label: 'Bookings' },
-      { value: 'pricing', icon: TrendingUp, label: 'Dynamic Pricing' },
+      { value: 'requirements', icon: Shield, label: 'Requirements' },
+      { value: 'duration', icon: Clock, label: 'Duration & Timing' },
+      { value: 'lockbox', icon: Lock, label: 'Delivery & Lockbox' },
+    ],
+  },
+  {
+    label: "Pricing & Money",
+    items: [
+      { value: 'pricing', icon: TrendingUp, label: 'Pricing Rules' },
+      { value: 'fees', icon: Receipt, label: 'Fees & Tax' },
+      { value: 'preauth', icon: CreditCard, label: 'Pre-Authorization' },
+      { value: 'installments', icon: Banknote, label: 'Installments' },
+      { value: 'payg', icon: Clock, label: 'Pay As You Go' },
+      { value: 'promos', icon: Zap, label: 'Promo Codes' },
       { value: 'extras', icon: Package, label: 'Extras' },
-      { value: 'payments', icon: CreditCard, label: 'Payments & Stripe' },
+      { value: 'payments', icon: CreditCard, label: 'Stripe Connect' },
+    ],
+  },
+  {
+    label: "Communication",
+    items: [
       { value: 'reminders', icon: Bell, label: 'Notifications' },
       { value: 'templates', icon: FileText, label: 'Templates' },
     ],
   },
   {
-    label: "More",
+    label: "Integrations",
     items: [
-      { value: 'integrations', icon: Shield, label: 'Integrations' },
+      { value: 'messaging', icon: MessageSquare, label: 'Messaging' },
+      { value: 'insurance', icon: Shield, label: 'Insurance' },
+      { value: 'esign', icon: FileSignature, label: 'E-Signatures' },
+      { value: 'tesla', icon: Bolt, label: 'Tesla Fleet' },
+      { value: 'blacklist', icon: ShieldX, label: 'Blacklist' },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
       { value: 'subscription', icon: Crown, label: 'Subscription' },
     ],
   },
@@ -200,38 +226,7 @@ export function AppSidebar() {
    })} : g)
    .filter(g => g.items.length > 0);
 
-  // Track which groups are open — all open by default
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {};
-    groups.forEach(g => {
-      initial[g.label] = true;
-    });
-    return initial;
-  });
-
-  const allOpen = groups.every(g => openGroups[g.label]);
-  const toggleAll = () => {
-    const next: Record<string, boolean> = {};
-    groups.forEach(g => { next[g.label] = !allOpen; });
-    setOpenGroups(next);
-  };
-
-  // When route changes, ensure the active group is open
-  useEffect(() => {
-    setOpenGroups(prev => {
-      const next = { ...prev };
-      groups.forEach(g => {
-        if (groupHasActiveItem(g.items)) {
-          next[g.label] = true;
-        }
-      });
-      return next;
-    });
-  }, [pathname]);
-
-  const toggleGroup = (label: string) => {
-    setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
-  };
+  // Groups are always expanded (no collapse/expand toggle)
 
   // --- Render helpers ---
 
@@ -317,7 +312,7 @@ export function AppSidebar() {
             const GroupIcon = visibleItems[0].icon;
 
             return (
-              <SidebarGroup key={group.label} className="p-1.5 pb-0">
+              <SidebarGroup key={group.label} className={`p-1.5 pb-0 ${groupIndex === settingsTabGroups.length - 1 ? 'pb-16' : ''}`}>
                 {collapsed ? (
                   <Popover>
                     <SidebarMenu>
@@ -448,18 +443,6 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      {/* Collapse/Expand all toggle */}
-      {!collapsed && (
-        <div className="flex justify-end px-2 pt-1">
-          <button
-            onClick={toggleAll}
-            className="p-1 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50 transition-colors"
-            title={allOpen ? "Collapse all" : "Expand all"}
-          >
-            <Layers className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
 
       {/* Navigation with collapsible groups */}
       <SidebarContent className="transition-all duration-300 ease-in-out gap-0">
@@ -487,13 +470,12 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* Collapsible Groups */}
-        {groups.map(group => {
-          const isOpen = openGroups[group.label] ?? false;
+        {groups.map((group, groupIdx) => {
           const hasActive = groupHasActiveItem(group.items);
           const totalBadge = getTotalBadge(group.items);
 
           return (
-            <SidebarGroup key={group.label} className="p-1.5 pb-0">
+            <SidebarGroup key={group.label} className={`p-1.5 pb-0 ${groupIdx === groups.length - 1 ? 'pb-16' : ''}`}>
               {collapsed ? (
                 /* Collapsed: popover flyout with sub-items */
                 <Popover>
@@ -539,38 +521,29 @@ export function AppSidebar() {
                   </PopoverContent>
                 </Popover>
               ) : (
-                /* Expanded: collapsible groups */
-                <Collapsible open={isOpen} onOpenChange={() => toggleGroup(group.label)} className="group/collapsible">
+                /* Expanded: always-open groups */
+                <SidebarGroupContent>
                   <SidebarMenu>
                     <SidebarMenuItem>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton
-                          className={`h-8 w-full transition-all duration-200 ease-in-out ${
-                            hasActive && !isOpen ? "text-primary" : ""
-                          }`}
-                        >
-                          <group.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : ""}`} />
-                          <span className="flex-1 text-left text-[13.5px] font-semibold">
-                            {group.label}
+                      <SidebarMenuButton
+                        className="h-8 w-full pointer-events-none"
+                      >
+                        <group.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : ""}`} />
+                        <span className="flex-1 text-left text-[13.5px] font-semibold">
+                          {group.label}
+                        </span>
+                        {totalBadge > 0 && (
+                          <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-destructive rounded-full shrink-0">
+                            {totalBadge > 9 ? '9+' : totalBadge}
                           </span>
-                          {totalBadge > 0 && !isOpen && (
-                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-destructive rounded-full shrink-0">
-                              {totalBadge > 9 ? '9+' : totalBadge}
-                            </span>
-                          )}
-                          <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground/50 transition-all duration-200 opacity-0 group-hover/collapsible:opacity-100 ${isOpen ? "rotate-90" : ""}`} />
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
+                        )}
+                      </SidebarMenuButton>
                     </SidebarMenuItem>
                   </SidebarMenu>
-                  <CollapsibleContent>
-                    <SidebarGroupContent>
-                      <SidebarMenu className="relative ml-1">
-                        {group.items.map((item, i) => renderNavItem(item, i, group.items))}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </CollapsibleContent>
-                </Collapsible>
+                  <SidebarMenu className="relative ml-1">
+                    {group.items.map((item, i) => renderNavItem(item, i, group.items))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
               )}
             </SidebarGroup>
           );

@@ -62,9 +62,39 @@ export function useExtensionConflicts({
     enabled,
   });
 
-  const conflictCount = (rentalConflictsQuery.data || 0) + (blockedDateConflictsQuery.data || 0);
+  // Check if extending would violate buffer time with the next rental
+  const bufferMinutes = (tenant as any)?.buffer_time_minutes || 0;
+  const bufferConflictQuery = useQuery({
+    queryKey: ['extension-conflicts-buffer', tenant?.id, vehicleId, extensionEnd, excludeRentalId, bufferMinutes],
+    queryFn: async () => {
+      if (bufferMinutes <= 0) return 0;
+
+      const { data, error } = await supabase
+        .from('rentals')
+        .select('id, start_date')
+        .eq('vehicle_id', vehicleId!)
+        .eq('tenant_id', tenant!.id)
+        .in('status', ['Active', 'Confirmed', 'Pending', 'Approved'])
+        .gt('start_date', extensionEnd);
+
+      if (error) throw error;
+      if (!data?.length) return 0;
+
+      const bufferMs = bufferMinutes * 60 * 1000;
+      const newEnd = new Date(`${extensionEnd}T23:59:00`);
+      const bufferDeadline = new Date(newEnd.getTime() + bufferMs);
+
+      return data
+        .filter(r => r.id !== excludeRentalId)
+        .filter(r => new Date(r.start_date) < bufferDeadline)
+        .length;
+    },
+    enabled: enabled && bufferMinutes > 0,
+  });
+
+  const conflictCount = (rentalConflictsQuery.data || 0) + (blockedDateConflictsQuery.data || 0) + (bufferConflictQuery.data || 0);
   const hasConflicts = conflictCount > 0;
-  const isChecking = rentalConflictsQuery.isLoading || blockedDateConflictsQuery.isLoading;
+  const isChecking = rentalConflictsQuery.isLoading || blockedDateConflictsQuery.isLoading || bufferConflictQuery.isLoading;
 
   return {
     hasConflicts,

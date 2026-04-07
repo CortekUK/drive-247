@@ -173,16 +173,36 @@ export const WIDGET_TAB_REQUIREMENTS: Record<string, string | null> = {
 };
 
 // Settings tab value → settings sub-tab key mapping
+// New granular tabs map back to existing DB permission keys (no migration needed)
 export const SETTINGS_VALUE_TO_KEY: Record<string, string> = {
+  // Business
   general: 'settings.general',
   locations: 'settings.locations',
   branding: 'settings.branding',
+  // Booking Rules (all map to settings.rental)
   rental: 'settings.rental',
+  requirements: 'settings.rental',
+  duration: 'settings.rental',
+  lockbox: 'settings.rental',
+  // Pricing & Money
   pricing: 'settings.pricing',
+  fees: 'settings.rental',
+  preauth: 'settings.rental',
+  installments: 'settings.rental',
+  payg: 'settings.rental',
+  promos: 'settings.rental',
   extras: 'settings.extras',
   payments: 'settings.payments',
+  // Communication
   reminders: 'settings.reminders',
   templates: 'settings.templates',
+  // Integrations (all map to settings.integrations)
   integrations: 'settings.integrations',
+  messaging: 'settings.integrations',
+  insurance: 'settings.integrations',
+  esign: 'settings.integrations',
+  tesla: 'settings.integrations',
+  blacklist: 'settings.integrations',
+  // Account
   subscription: 'settings.subscription',
 };

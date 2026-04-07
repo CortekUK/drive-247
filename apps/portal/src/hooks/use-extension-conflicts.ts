@@ -23,6 +23,13 @@ interface BlockedDateConflict {
   reason: string | null;
 }
 
+interface BufferConflict {
+  rentalId: string;
+  start_date: string;
+  customerName: string;
+  bufferDeadline: string;
+}
+
 export function useExtensionConflicts({
   vehicleId,
   currentEndDate,
@@ -83,14 +90,52 @@ export function useExtensionConflicts({
     enabled,
   });
 
+  // Check if extending would violate buffer time with the next rental
+  const bufferMinutes = (tenant as any)?.buffer_time_minutes || 0;
+  const bufferConflictQuery = useQuery({
+    queryKey: ['extension-conflicts-buffer', tenant?.id, vehicleId, newEndDate, excludeRentalId, bufferMinutes],
+    queryFn: async () => {
+      if (bufferMinutes <= 0) return [];
+
+      // Find the next rental after the new end date
+      const { data, error } = await supabase
+        .from('rentals')
+        .select('id, start_date, end_date, customers(name)')
+        .eq('vehicle_id', vehicleId!)
+        .eq('tenant_id', tenant!.id)
+        .in('status', ['Active', 'Confirmed', 'Pending', 'Approved'])
+        .gt('start_date', extensionEnd);
+
+      if (error) throw error;
+      if (!data?.length) return [];
+
+      const bufferMs = bufferMinutes * 60 * 1000;
+      const newEnd = new Date(`${extensionEnd}T23:59:00`);
+      const bufferDeadline = new Date(newEnd.getTime() + bufferMs);
+
+      return data
+        .filter((r: any) => r.id !== excludeRentalId)
+        .filter((r: any) => new Date(r.start_date) < bufferDeadline)
+        .map((r: any) => ({
+          rentalId: r.id,
+          start_date: r.start_date,
+          customerName: (r as any).customers?.name || 'Unknown',
+          bufferDeadline: bufferDeadline.toISOString(),
+        })) as BufferConflict[];
+    },
+    enabled: enabled && bufferMinutes > 0,
+  });
+
   const rentalConflicts = rentalConflictsQuery.data || [];
   const blockedDateConflicts = blockedDateConflictsQuery.data || [];
-  const hasConflicts = rentalConflicts.length > 0 || blockedDateConflicts.length > 0;
-  const isChecking = rentalConflictsQuery.isLoading || blockedDateConflictsQuery.isLoading;
+  const bufferConflicts = bufferConflictQuery.data || [];
+  const hasConflicts = rentalConflicts.length > 0 || blockedDateConflicts.length > 0 || bufferConflicts.length > 0;
+  const isChecking = rentalConflictsQuery.isLoading || blockedDateConflictsQuery.isLoading || bufferConflictQuery.isLoading;
 
   return {
     rentalConflicts,
     blockedDateConflicts,
+    bufferConflicts,
     hasConflicts,
     isChecking,
   };

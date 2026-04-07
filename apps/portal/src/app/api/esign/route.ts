@@ -903,12 +903,29 @@ export async function POST(request: NextRequest) {
         ctx.y = bannerY - 16; // spacing after banner
 
         if (body.tenantId) {
-            const { data: templateData } = await supabase
+            // Pick template category: extension > payg > standard
+            const templateCategory = body.agreementType === 'extension'
+                ? 'extension'
+                : rental?.is_pay_as_you_go ? 'payg' : 'standard';
+            let { data: templateData } = await supabase
                 .from('agreement_templates')
                 .select('template_content')
                 .eq('tenant_id', body.tenantId)
+                .eq('template_category', templateCategory)
                 .eq('is_active', true)
                 .single();
+
+            // Fallback to standard template if no category-specific template configured
+            if (!templateData && templateCategory !== 'standard') {
+                const { data: fallback } = await supabase
+                    .from('agreement_templates')
+                    .select('template_content')
+                    .eq('tenant_id', body.tenantId)
+                    .eq('template_category', 'standard')
+                    .eq('is_active', true)
+                    .single();
+                templateData = fallback;
+            }
 
             if (templateData?.template_content) {
                 console.log('Using admin template (structured HTML → PDF)');

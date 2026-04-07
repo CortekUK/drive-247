@@ -318,16 +318,16 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
 <strong>The {{company_name}} Team</strong></p>`,
   },
   rental_reminder: {
-    subject: 'Payment Reminder - {{rental_number}} | {{company_name}}',
-    content: `<h1>Payment Reminder</h1>
+    subject: 'Return Reminder - {{rental_number}} | {{company_name}}',
+    content: `<h1>Return Reminder</h1>
 
 <p>Dear {{customer_name}},</p>
 
-<p>This is a friendly reminder about an upcoming payment for your rental with <strong>{{company_name}}</strong>.</p>
+<p>This is a friendly reminder that your rental with <strong>{{company_name}}</strong> is due for return soon.</p>
 
 <hr>
 
-<h2>Payment Details</h2>
+<h2>Rental Details</h2>
 
 <table>
   <tr>
@@ -339,27 +339,33 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
     <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
   </tr>
   <tr>
-    <td><strong>Amount Due:</strong></td>
-    <td>{{payment_amount}}</td>
-  </tr>
-  <tr>
-    <td><strong>Due Date:</strong></td>
+    <td><strong>Return Date:</strong></td>
     <td>{{due_date}}</td>
   </tr>
 </table>
 
 <hr>
 
-<h2>Need Assistance?</h2>
+<h2>Before You Return</h2>
 
-<p>If you're experiencing any difficulties or need to discuss payment options, please contact us:</p>
+<ul>
+  <li>Return the vehicle to the agreed location on time</li>
+  <li>Check you have all your personal belongings</li>
+  <li>Report any new damage or issues beforehand</li>
+</ul>
+
+<hr>
+
+<h2>Need to Extend?</h2>
+
+<p>If you need more time with the vehicle, please contact us as soon as possible. Late returns may incur additional charges.</p>
 
 <ul>
   <li><strong>Email:</strong> {{company_email}}</li>
   <li><strong>Phone:</strong> {{company_phone}}</li>
 </ul>
 
-<p>Thank you for your prompt attention to this matter.</p>
+<p>Thank you for renting with us!</p>
 
 <p>Kind regards,<br>
 <strong>The {{company_name}} Team</strong></p>`,

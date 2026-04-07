@@ -87,6 +87,42 @@ serve(async (req) => {
       }
     }
 
+    // 3b. Buffer time check — log warning but don't block (admin may intentionally override)
+    if (payment.rental?.vehicle_id && tenantId) {
+      const { data: tenantSettings } = await supabase
+        .from("tenants")
+        .select("buffer_time_minutes")
+        .eq("id", tenantId)
+        .single();
+
+      const bufferMinutes = tenantSettings?.buffer_time_minutes || 0;
+      if (bufferMinutes > 0) {
+        const { data: lastRental } = await supabase
+          .from("rentals")
+          .select("end_date, return_time")
+          .eq("vehicle_id", payment.rental.vehicle_id)
+          .in("status", ["Closed", "Completed"])
+          .neq("id", payment.rental_id)
+          .order("end_date", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (lastRental) {
+          const rentalEnd = new Date(`${lastRental.end_date}T${lastRental.return_time || '23:59'}`);
+          const bufferDeadline = new Date(rentalEnd.getTime() + bufferMinutes * 60 * 1000);
+          const pickupDate = new Date(payment.rental.start_date);
+
+          if (pickupDate < bufferDeadline && pickupDate >= rentalEnd) {
+            console.warn("Buffer time override: approving booking during buffer cooldown", {
+              rentalEnd: rentalEnd.toISOString(),
+              bufferDeadline: bufferDeadline.toISOString(),
+              pickupDate: pickupDate.toISOString(),
+            });
+          }
+        }
+      }
+    }
+
     // Get Stripe client for the tenant's mode
     const stripe = getStripeClient(stripeMode);
     const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;

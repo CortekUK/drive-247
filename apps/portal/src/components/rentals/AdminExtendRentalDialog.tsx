@@ -197,7 +197,7 @@ export function AdminExtendRentalDialog({
   })();
   const extensionTotalAmount = extensionCost + extensionTaxAmount + extensionServiceFee + insurancePremium;
 
-  const { rentalConflicts, blockedDateConflicts, hasConflicts, isChecking: isCheckingConflicts } = useExtensionConflicts({
+  const { rentalConflicts, blockedDateConflicts, bufferConflicts, hasConflicts, isChecking: isCheckingConflicts } = useExtensionConflicts({
     vehicleId: rental.vehicles?.id,
     currentEndDate: snapshotEndDate,
     newEndDate: newEndDate || undefined,
@@ -809,6 +809,11 @@ export function AdminExtendRentalDialog({
                         Blocked: {c.reason || 'No reason'} ({format(new Date(c.start_date), 'MMM dd')} – {format(new Date(c.end_date), 'MMM dd')})
                       </p>
                     ))}
+                    {bufferConflicts.map((c) => (
+                      <p key={c.rentalId} className="text-xs">
+                        Buffer conflict: {c.customerName} starts {format(new Date(c.start_date), 'MMM dd')} — needs buffer until {format(new Date(c.bufferDeadline), 'MMM dd HH:mm')}
+                      </p>
+                    ))}
                   </AlertDescription>
                 </Alert>
               )}
@@ -920,7 +925,7 @@ export function AdminExtendRentalDialog({
                   <div className="border-t pt-3 flex items-center gap-2 text-amber-600">
                     <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                     <span className="text-sm font-medium">
-                      {rentalConflicts.length + blockedDateConflicts.length} scheduling conflict{rentalConflicts.length + blockedDateConflicts.length !== 1 ? 's' : ''} detected
+                      {rentalConflicts.length + blockedDateConflicts.length + bufferConflicts.length} scheduling conflict{rentalConflicts.length + blockedDateConflicts.length + bufferConflicts.length !== 1 ? 's' : ''} detected
                     </span>
                   </div>
                 )}

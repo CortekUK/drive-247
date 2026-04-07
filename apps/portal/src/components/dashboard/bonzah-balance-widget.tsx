@@ -83,7 +83,7 @@ export function BonzahBalanceWidget() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => router.push("/settings?tab=integrations")}
+              onClick={() => router.push("/settings?tab=insurance")}
               className="h-8 w-8 text-muted-foreground"
             >
               <Settings className="h-3.5 w-3.5" />

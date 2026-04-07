@@ -81,7 +81,7 @@ export function TeslaFleetSettings() {
         body: {
           action: 'get_auth_url',
           tenantId: tenantContext?.id,
-          returnUrl: `${window.location.origin}/settings?tab=integrations`,
+          returnUrl: `${window.location.origin}/settings?tab=tesla`,
         },
       });
 

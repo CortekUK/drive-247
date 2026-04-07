@@ -376,17 +376,17 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
   },
   {
     key: 'rental_reminder',
-    name: 'Rental Reminder',
-    subject: 'Payment Reminder - {{rental_number}} | {{company_name}}',
-    content: `<h1>Payment Reminder</h1>
+    name: 'Return Reminder',
+    subject: 'Return Reminder - {{rental_number}} | {{company_name}}',
+    content: `<h1>Return Reminder</h1>
 
 <p>Dear {{customer_name}},</p>
 
-<p>This is a friendly reminder about an upcoming payment for your rental with <strong>{{company_name}}</strong>.</p>
+<p>This is a friendly reminder that your rental with <strong>{{company_name}}</strong> is due for return soon.</p>
 
 <hr>
 
-<h2>Payment Details</h2>
+<h2>Rental Details</h2>
 
 <table>
   <tr>
@@ -398,45 +398,41 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
     <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
   </tr>
   <tr>
-    <td><strong>Amount Due:</strong></td>
-    <td>{{payment_amount}}</td>
-  </tr>
-  <tr>
-    <td><strong>Due Date:</strong></td>
+    <td><strong>Return Date:</strong></td>
     <td>{{due_date}}</td>
   </tr>
 </table>
 
 <hr>
 
-<h2>How to Pay</h2>
+<h2>Before You Return</h2>
 
-<p>To ensure uninterrupted service, please ensure your payment is made by the due date. You can:</p>
+<p>Please ensure the following before returning your vehicle:</p>
 
 <ul>
-  <li>Log in to your account to make a payment online</li>
-  <li>Contact us to process payment over the phone</li>
-  <li>Set up automatic payments to avoid future reminders</li>
+  <li>Return the vehicle to the agreed location on time</li>
+  <li>Check you have all your personal belongings</li>
+  <li>Report any new damage or issues to us beforehand</li>
 </ul>
 
 <hr>
 
-<h2>Already Paid?</h2>
+<h2>Need to Extend?</h2>
 
-<p>If you've already made this payment, please disregard this reminder. Payments can take 1-2 business days to reflect in our system.</p>
+<p>If you need more time with the vehicle, please contact us as soon as possible to arrange an extension. Late returns may incur additional charges.</p>
 
 <hr>
 
-<h2>Need Assistance?</h2>
+<h2>Questions?</h2>
 
-<p>If you're experiencing any difficulties or need to discuss payment options, please contact us:</p>
+<p>If you have any questions about your return, please contact us:</p>
 
 <ul>
   <li><strong>Email:</strong> {{company_email}}</li>
   <li><strong>Phone:</strong> {{company_phone}}</li>
 </ul>
 
-<p>Thank you for your prompt attention to this matter.</p>
+<p>Thank you for renting with us!</p>
 
 <p>Kind regards,<br>
 <strong>The {{company_name}} Team</strong></p>`,

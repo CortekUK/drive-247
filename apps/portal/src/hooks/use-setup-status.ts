@@ -61,7 +61,7 @@ export function useSetupStatus() {
         ? "Connected and active"
         : "Connect your Stripe account to accept payments",
       isComplete: stripeComplete,
-      settingsPath: "/settings?tab=integrations",
+      settingsPath: "/settings?tab=payments",
     },
     {
       id: "bonzah-insurance",
@@ -70,7 +70,7 @@ export function useSetupStatus() {
         ? "Configured and active"
         : "Set up Bonzah to offer insurance to customers",
       isComplete: bonzahComplete,
-      settingsPath: "/settings?tab=integrations",
+      settingsPath: "/settings?tab=insurance",
     },
   ];
 

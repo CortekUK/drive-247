@@ -337,12 +337,27 @@ export async function POST(request: NextRequest) {
         let documentContent: string;
 
         if (tenantId) {
-            const { data: templateData } = await supabase
+            // Pick template category based on rental type, fall back to standard
+            const templateCategory = rental?.is_pay_as_you_go ? 'payg' : 'standard';
+            let { data: templateData } = await supabase
                 .from('agreement_templates')
                 .select('template_content, template_name, is_active')
                 .eq('tenant_id', tenantId)
+                .eq('template_category', templateCategory)
                 .eq('is_active', true)
                 .single();
+
+            // Fallback to standard if no category-specific template
+            if (!templateData && templateCategory !== 'standard') {
+                const { data: fallback } = await supabase
+                    .from('agreement_templates')
+                    .select('template_content, template_name, is_active')
+                    .eq('tenant_id', tenantId)
+                    .eq('template_category', 'standard')
+                    .eq('is_active', true)
+                    .single();
+                templateData = fallback;
+            }
 
             if (templateData?.template_content) {
                 console.log('Using admin custom template:', templateData.template_name);

@@ -29,6 +29,7 @@ import {
 import {
   useTemplateSelection,
   type TemplateType,
+  type TemplateCategory,
   DEFAULT_TEMPLATE_NAME,
   CUSTOM_TEMPLATE_NAME,
 } from '@/hooks/use-agreement-templates';
@@ -48,6 +49,7 @@ export default function EditAgreementTemplatePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const templateType = (searchParams.get('type') as TemplateType) || 'default';
+  const templateCategory = (searchParams.get('category') as TemplateCategory) || 'standard';
 
   const {
     defaultTemplate,
@@ -57,7 +59,7 @@ export default function EditAgreementTemplatePage() {
     isUpdating,
     resetDefaultAsync,
     isResetting,
-  } = useTemplateSelection();
+  } = useTemplateSelection(templateCategory);
 
   const [templateContent, setTemplateContent] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -120,7 +122,7 @@ export default function EditAgreementTemplatePage() {
   const handleSave = async () => {
     const success = await saveContent();
     if (success) {
-      router.push('/settings/agreement-templates');
+      router.push(`/settings/agreement-templates${templateCategory !== 'standard' ? `?category=${templateCategory}` : ''}`);
     }
   };
 
@@ -168,7 +170,7 @@ export default function EditAgreementTemplatePage() {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b bg-background">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/settings/agreement-templates')}>
+          <Button variant="ghost" size="icon" onClick={() => router.push(`/settings/agreement-templates${templateCategory !== 'standard' ? `?category=${templateCategory}` : ''}`)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
@@ -217,7 +219,7 @@ export default function EditAgreementTemplatePage() {
               </AlertDialogContent>
             </AlertDialog>
           )}
-          <Button variant="outline" onClick={() => router.push('/settings/agreement-templates')}>
+          <Button variant="outline" onClick={() => router.push(`/settings/agreement-templates${templateCategory !== 'standard' ? `?category=${templateCategory}` : ''}`)}>
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={isSaving || !hasChanges}>

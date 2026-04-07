@@ -5,12 +5,14 @@ import { toast } from '@/hooks/use-toast';
 import { DEFAULT_AGREEMENT_TEMPLATE } from '@/lib/default-agreement-template';
 
 export type TemplateType = 'default' | 'custom';
+export type TemplateCategory = 'standard' | 'payg' | 'extension';
 
 export interface AgreementTemplate {
   id: string;
   tenant_id: string;
   template_name: string;
   template_content: string;
+  template_category: string;
   is_active: boolean | null;
   created_at: string | null;
   updated_at: string | null;
@@ -325,8 +327,9 @@ export const useActiveAgreementTemplate = () => {
 
 /**
  * Hook specifically for managing the two-template system (Default vs Custom)
+ * @param category - 'standard' (default) or 'payg' for Pay As You Go templates
  */
-export const useTemplateSelection = () => {
+export const useTemplateSelection = (category: TemplateCategory = 'standard') => {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
 
@@ -336,7 +339,7 @@ export const useTemplateSelection = () => {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['agreement-templates-selection', tenant?.id],
+    queryKey: ['agreement-templates-selection', tenant?.id, category],
     queryFn: async (): Promise<{ defaultTemplate: AgreementTemplate | null; customTemplate: AgreementTemplate | null }> => {
       if (!tenant?.id) {
         return { defaultTemplate: null, customTemplate: null };
@@ -346,6 +349,7 @@ export const useTemplateSelection = () => {
         .from('agreement_templates')
         .select('*')
         .eq('tenant_id', tenant.id)
+        .eq('template_category', category)
         .in('template_name', [DEFAULT_TEMPLATE_NAME, CUSTOM_TEMPLATE_NAME]);
 
       if (error) {
@@ -374,6 +378,7 @@ export const useTemplateSelection = () => {
         .select('*')
         .eq('tenant_id', tenant.id)
         .eq('template_name', DEFAULT_TEMPLATE_NAME)
+        .eq('template_category', category)
         .limit(1);
 
       if (existingArr?.[0]) {
@@ -386,6 +391,7 @@ export const useTemplateSelection = () => {
           tenant_id: tenant.id,
           template_name: DEFAULT_TEMPLATE_NAME,
           template_content: DEFAULT_AGREEMENT_TEMPLATE,
+          template_category: category,
           is_active: true,
         })
         .select()
@@ -398,7 +404,7 @@ export const useTemplateSelection = () => {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id, category] });
     },
   });
 
@@ -415,6 +421,7 @@ export const useTemplateSelection = () => {
         .select('*')
         .eq('tenant_id', tenant.id)
         .eq('template_name', CUSTOM_TEMPLATE_NAME)
+        .eq('template_category', category)
         .limit(1);
 
       if (existingArr?.[0]) {
@@ -427,6 +434,7 @@ export const useTemplateSelection = () => {
           tenant_id: tenant.id,
           template_name: CUSTOM_TEMPLATE_NAME,
           template_content: '', // Start blank
+          template_category: category,
           is_active: false,
         })
         .select()
@@ -439,7 +447,7 @@ export const useTemplateSelection = () => {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id, category] });
     },
   });
 
@@ -458,6 +466,7 @@ export const useTemplateSelection = () => {
         .select('id')
         .eq('tenant_id', tenant.id)
         .eq('template_name', targetName)
+        .eq('template_category', category)
         .order('updated_at', { ascending: false })
         .limit(1);
 
@@ -465,11 +474,12 @@ export const useTemplateSelection = () => {
         throw new Error(`Template "${targetName}" not found`);
       }
 
-      // Deactivate all templates first
+      // Deactivate all templates in this category first
       await supabase
         .from('agreement_templates')
         .update({ is_active: false })
-        .eq('tenant_id', tenant.id);
+        .eq('tenant_id', tenant.id)
+        .eq('template_category', category);
 
       // Activate only the single selected template by ID
       const { error } = await supabase
@@ -482,7 +492,7 @@ export const useTemplateSelection = () => {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id, category] });
       toast({
         title: 'Template Updated',
         description: 'Active template has been changed successfully.',
@@ -513,6 +523,7 @@ export const useTemplateSelection = () => {
         .select('id')
         .eq('tenant_id', tenant.id)
         .eq('template_name', targetName)
+        .eq('template_category', category)
         .order('updated_at', { ascending: false })
         .limit(1);
 
@@ -532,12 +543,13 @@ export const useTemplateSelection = () => {
           throw error;
         }
       } else {
-        // If setting as active, deactivate all other templates first
+        // If setting as active, deactivate all other templates in this category first
         if (isDefaultType) {
           await supabase
             .from('agreement_templates')
             .update({ is_active: false })
-            .eq('tenant_id', tenant.id);
+            .eq('tenant_id', tenant.id)
+            .eq('template_category', category);
         }
 
         // Create new template
@@ -547,6 +559,7 @@ export const useTemplateSelection = () => {
             tenant_id: tenant.id,
             template_name: targetName,
             template_content: content,
+            template_category: category,
             is_active: isDefaultType, // Default template is active by default
           });
 
@@ -556,7 +569,7 @@ export const useTemplateSelection = () => {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id, category] });
       toast({
         title: 'Template Saved',
         description: 'Template content has been saved successfully.',
@@ -586,7 +599,8 @@ export const useTemplateSelection = () => {
           updated_at: new Date().toISOString()
         })
         .eq('tenant_id', tenant.id)
-        .eq('template_name', CUSTOM_TEMPLATE_NAME);
+        .eq('template_name', CUSTOM_TEMPLATE_NAME)
+        .eq('template_category', category);
 
       if (error) {
         throw error;
@@ -598,11 +612,12 @@ export const useTemplateSelection = () => {
           .from('agreement_templates')
           .update({ is_active: true })
           .eq('tenant_id', tenant.id)
-          .eq('template_name', DEFAULT_TEMPLATE_NAME);
+          .eq('template_name', DEFAULT_TEMPLATE_NAME)
+          .eq('template_category', category);
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id, category] });
       toast({
         title: 'Template Cleared',
         description: 'Custom template has been cleared.',
@@ -630,6 +645,7 @@ export const useTemplateSelection = () => {
         .select('id')
         .eq('tenant_id', tenant.id)
         .eq('template_name', DEFAULT_TEMPLATE_NAME)
+        .eq('template_category', category)
         .order('updated_at', { ascending: false })
         .limit(1);
 
@@ -649,11 +665,12 @@ export const useTemplateSelection = () => {
           throw error;
         }
       } else {
-        // Deactivate all other templates first
+        // Deactivate all other templates in this category first
         await supabase
           .from('agreement_templates')
           .update({ is_active: false })
-          .eq('tenant_id', tenant.id);
+          .eq('tenant_id', tenant.id)
+          .eq('template_category', category);
 
         // Create new template with default content
         const { error } = await supabase
@@ -662,6 +679,7 @@ export const useTemplateSelection = () => {
             tenant_id: tenant.id,
             template_name: DEFAULT_TEMPLATE_NAME,
             template_content: DEFAULT_AGREEMENT_TEMPLATE,
+            template_category: category,
             is_active: true,
           });
 
@@ -671,7 +689,7 @@ export const useTemplateSelection = () => {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id, category] });
       toast({
         title: 'Template Reset',
         description: 'Default template has been reset to original content.',

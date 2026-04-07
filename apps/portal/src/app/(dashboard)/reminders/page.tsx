@@ -131,7 +131,7 @@ export default function RemindersPageEnhanced() {
         return <Link href={`/fines/${objectId}`} className={baseClasses}>{reminder.context?.reference || objectId}</Link>;
       case 'Integration':
         return (
-          <Link href="/settings?tab=integrations" className="inline-block hover:opacity-80">
+          <Link href="/settings?tab=insurance" className="inline-block hover:opacity-80">
             <Image src="/bonzah-logo.svg" alt="Bonzah" width={72} height={23} className="dark:hidden" />
             <Image src="/bonzah-logo-dark.svg" alt="Bonzah" width={72} height={23} className="hidden dark:block" />
           </Link>

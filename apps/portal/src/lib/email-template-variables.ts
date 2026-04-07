@@ -203,9 +203,9 @@ export const EMAIL_TEMPLATE_TYPES: EmailTemplateType[] = [
   },
   {
     key: 'rental_reminder',
-    name: 'Rental Reminder',
-    description: 'Payment or general reminders during rental',
-    defaultSubject: 'Reminder - {{rental_number}}',
+    name: 'Return Reminder',
+    description: 'Sent to customers before their scheduled vehicle return date',
+    defaultSubject: 'Return Reminder - {{rental_number}}',
     availableVariables: ['customer_name', 'customer_email', 'vehicle_make', 'vehicle_model', 'vehicle_reg', 'rental_number', 'payment_amount', 'due_date', 'company_name', 'company_email', 'company_phone'],
   },
   {

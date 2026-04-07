@@ -5,6 +5,13 @@ import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
 import { calculateTotalMileageAllowance, getMileageTier, isUnlimitedMileage } from "@/lib/mileage-utils";
 
+export interface SuperchargerSummary {
+  chargeCount: number;
+  pendingCount: number;
+  totalAmount: number;
+  isSyncing: boolean;
+}
+
 export interface MileageSummary {
   pickupMileage: number;
   returnMileage: number;
@@ -15,6 +22,8 @@ export interface MileageSummary {
   chargeAmount: number | null;
   tier: string;
   isUnlimited: boolean;
+  /** Tesla Supercharger data — only present when vehicle has tesla_fleet_enabled */
+  supercharger?: SuperchargerSummary | null;
 }
 
 export type HandoverType = "giving" | "receiving";
@@ -655,10 +664,10 @@ export function useKeyHandover(rentalId: string | undefined) {
 
     if (!rental?.vehicle_id) return null;
 
-    // Fetch vehicle mileage config
+    // Fetch vehicle mileage config + Tesla Fleet status
     const { data: vehicle } = await supabase
       .from("vehicles")
-      .select("daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate")
+      .select("daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, tesla_fleet_enabled, tesla_fleet_vehicle_id")
       .eq("id", rental.vehicle_id)
       .single();
 
@@ -688,6 +697,46 @@ export function useKeyHandover(rentalId: string | undefined) {
       ? Math.round(excessMiles * effectiveExcessRate * 100) / 100
       : null;
 
+    // Tesla Supercharger: sync + fetch if vehicle is Tesla Fleet enabled
+    let supercharger: SuperchargerSummary | null = null;
+    if (vehicle.tesla_fleet_enabled) {
+      try {
+        // Trigger fresh sync from Tesla API
+        await supabase.functions.invoke('sync-tesla-charges', {
+          body: { rentalId, vehicleId: rental.vehicle_id },
+        });
+
+        // Fetch charges for this rental
+        const { data: charges } = await supabase
+          .from('tesla_supercharger_charges')
+          .select('amount, status')
+          .eq('rental_id', rentalId);
+
+        const allCharges = charges || [];
+        supercharger = {
+          chargeCount: allCharges.length,
+          pendingCount: allCharges.filter(c => c.status === 'pending').length,
+          totalAmount: allCharges.reduce((sum, c) => sum + Number(c.amount), 0),
+          isSyncing: false,
+        };
+      } catch (err) {
+        console.warn('[KEY-HANDOVER] Tesla sync failed (non-blocking):', err);
+        // Still show what we have in DB even if sync failed
+        const { data: charges } = await supabase
+          .from('tesla_supercharger_charges')
+          .select('amount, status')
+          .eq('rental_id', rentalId);
+
+        const allCharges = charges || [];
+        supercharger = {
+          chargeCount: allCharges.length,
+          pendingCount: allCharges.filter(c => c.status === 'pending').length,
+          totalAmount: allCharges.reduce((sum, c) => sum + Number(c.amount), 0),
+          isSyncing: false,
+        };
+      }
+    }
+
     return {
       pickupMileage,
       returnMileage,
@@ -698,6 +747,7 @@ export function useKeyHandover(rentalId: string | undefined) {
       chargeAmount,
       tier,
       isUnlimited: unlimited,
+      supercharger,
     };
   };
 

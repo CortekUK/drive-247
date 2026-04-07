@@ -192,6 +192,9 @@ export const KeyHandoverSection = ({
   const isActive = rentalStatus === "Active";
   const returnEnabled = isActive || isClosed; // Only allow return when rental is active (or already closed for viewing)
 
+  // "Upcoming" = approved/pending but start_date hasn't arrived yet — keys can't be handed over
+  const isUpcoming = !isActive && !isClosed && (rentalStatus === "Approved" || rentalStatus === "Pending" || rentalStatus === "Confirmed");
+
   const givingCompleted = !!givingHandover?.handed_at;
   const receivingCompleted = !!receivingHandover?.handed_at;
 
@@ -405,14 +408,27 @@ export const KeyHandoverSection = ({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {/* Lockbox Countdown Ticker — prominent at the top, only for approved/active lockbox rentals */}
-        {(savedDeliveryMethod === 'lockbox' || (showLockboxOption && deliveryMethodChoice === 'lockbox')) && approvalStatus === 'approved' && !givingCompleted && (
+        {/* Lockbox Countdown Ticker — prominent at the top, only for approved/active lockbox rentals (not upcoming) */}
+        {(savedDeliveryMethod === 'lockbox' || (showLockboxOption && deliveryMethodChoice === 'lockbox')) && approvalStatus === 'approved' && !givingCompleted && !isUpcoming && (
           <div className="mb-6">
             <LockboxCountdownTicker rentalId={rentalId} />
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Upcoming rental guard — keys can't be handed over before rental starts */}
+        {isUpcoming && (
+          <div className="flex items-center gap-3 p-4 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 mb-4">
+            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Rental is upcoming</p>
+              <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">
+                Keys cannot be handed over until the rental period begins. You can still approve the booking and prepare the vehicle.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className={`grid grid-cols-1 lg:grid-cols-2 gap-6 ${isUpcoming ? 'opacity-50 pointer-events-none select-none' : ''}`}>
           {/* Vehicle Collection Section */}
           <div className="space-y-4 p-4 border rounded-lg bg-muted/20">
             <div className="flex items-center gap-2">

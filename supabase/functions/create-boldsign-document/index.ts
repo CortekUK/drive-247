@@ -14,19 +14,25 @@ interface CreateDocumentRequest {
 // TEMPLATE PROCESSING FUNCTIONS
 // ============================================================================
 
-async function getActiveTemplate(supabase: ReturnType<typeof createClient>, tenantId: string): Promise<string | null> {
+async function getActiveTemplate(supabase: ReturnType<typeof createClient>, tenantId: string, category: string = 'standard'): Promise<string | null> {
   try {
-    console.log('Fetching active template for tenant:', tenantId);
+    console.log(`Fetching active ${category} template for tenant:`, tenantId);
 
     const { data, error } = await supabase
       .from('agreement_templates')
       .select('template_content')
       .eq('tenant_id', tenantId)
+      .eq('template_category', category)
       .eq('is_active', true)
       .single();
 
     if (error) {
       if (error.code === 'PGRST116') {
+        // Fallback to standard if no category-specific template
+        if (category !== 'standard') {
+          console.log(`No active ${category} template, falling back to standard`);
+          return getActiveTemplate(supabase, tenantId, 'standard');
+        }
         console.log('No active template found, will use default');
         return null;
       }
@@ -34,7 +40,7 @@ async function getActiveTemplate(supabase: ReturnType<typeof createClient>, tena
       return null;
     }
 
-    console.log('Found active template for tenant');
+    console.log(`Found active ${category} template for tenant`);
     return data?.template_content || null;
   } catch (error) {
     console.error('getActiveTemplate error:', error);
@@ -309,7 +315,8 @@ async function generateDocument(
     .eq('id', tenantId)
     .single();
 
-  const template = await getActiveTemplate(supabase, tenantId);
+  const templateCategory = (rental as Record<string, unknown>)?.is_pay_as_you_go ? 'payg' : 'standard';
+  const template = await getActiveTemplate(supabase, tenantId, templateCategory);
 
   if (template) {
     console.log('Using custom template from portal');

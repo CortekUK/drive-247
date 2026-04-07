@@ -66,6 +66,8 @@ export interface RentalSettings {
   // Return reminder settings
   return_reminder_enabled: boolean | null;
   return_reminder_hours: number | null;
+  // Pay As You Go
+  pay_as_you_go_enabled: boolean | null;
 }
 
 const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
@@ -122,6 +124,8 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   // Return reminder
   return_reminder_enabled: false,
   return_reminder_hours: 24,
+  // Pay As You Go
+  pay_as_you_go_enabled: false,
 };
 
 /**
@@ -185,7 +189,8 @@ export const useRentalSettings = () => {
           monthly_tier_days,
           buffer_time_minutes,
           return_reminder_enabled,
-          return_reminder_hours
+          return_reminder_hours,
+          pay_as_you_go_enabled
         `)
         .eq('id', tenant.id)
         .single();
@@ -259,7 +264,8 @@ export const useRentalSettings = () => {
           monthly_tier_days,
           buffer_time_minutes,
           return_reminder_enabled,
-          return_reminder_hours
+          return_reminder_hours,
+          pay_as_you_go_enabled
         `);
 
       if (error) {

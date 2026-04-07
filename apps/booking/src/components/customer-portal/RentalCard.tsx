@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, AlertTriangle, Pencil, CalendarPlus, XCircle, RefreshCw, ExternalLink, Lock, FileSignature, Gauge, Zap } from 'lucide-react';
+import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, AlertTriangle, Pencil, CalendarPlus, XCircle, RefreshCw, ExternalLink, Lock, FileSignature, Gauge, Zap, Loader2 } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday } from 'date-fns';
 import { CustomerRental } from '@/hooks/use-customer-rentals';
 import { cn } from '@/lib/utils';
@@ -14,12 +14,14 @@ import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency, getUnlimitedLabel, getDistanceUnitShort, type DistanceUnit } from '@/lib/format-utils';
 import { isUnlimitedMileage, calculateTotalMileageAllowance } from '@/lib/mileage-utils';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { EditInsuranceDialog } from './EditInsuranceDialog';
 import { ExtendRentalDialog } from './ExtendRentalDialog';
 import { CancelBookingDialog } from './CancelBookingDialog';
 import { RenewRentalDialog } from './RenewRentalDialog';
 import { RentalTimeline } from './RentalTimeline';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface RentalCardProps {
   rental: CustomerRental;
@@ -47,12 +49,33 @@ function getStatusBadgeVariant(
 
 export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProps) {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
   const currencyCode = tenant?.currency_code || 'GBP';
   const [showEditInsurance, setShowEditInsurance] = useState(false);
   const [showExtendDialog, setShowExtendDialog] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showRenewDialog, setShowRenewDialog] = useState(false);
+  const [showCancelExtension, setShowCancelExtension] = useState(false);
   const vehicle = rental.vehicles;
+
+  // Cancel extension request mutation
+  const cancelExtension = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from('rentals')
+        .update({ is_extended: false, previous_end_date: null })
+        .eq('id', rental.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customer-rentals'] });
+      toast.success('Extension request cancelled');
+      setShowCancelExtension(false);
+    },
+    onError: () => {
+      toast.error('Failed to cancel extension request');
+    },
+  });
 
   // Fetch supercharger charges for this rental (if any)
   const { data: superchargerData } = useQuery({
@@ -274,11 +297,26 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
 
               {/* Pending Extension Info */}
               {hasExtensionPending && rental.previous_end_date && (
-                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                  <CalendarPlus className="h-4 w-4" />
-                  <span className="text-sm">
-                    Requested: {format(new Date(rental.previous_end_date), 'MMM dd, yyyy')}
-                  </span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                    <CalendarPlus className="h-4 w-4" />
+                    <span className="text-sm">
+                      Requested: {format(new Date(rental.previous_end_date), 'MMM dd, yyyy')}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-xs px-2 text-muted-foreground hover:text-destructive"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowCancelExtension(true);
+                    }}
+                  >
+                    <XCircle className="h-3 w-3 mr-1" />
+                    Cancel
+                  </Button>
                 </div>
               )}
 
@@ -565,6 +603,31 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
         onOpenChange={setShowRenewDialog}
         rental={rental}
       />
+
+      {/* Cancel Extension Request Dialog */}
+      <AlertDialog open={showCancelExtension} onOpenChange={setShowCancelExtension}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Extension Request?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will cancel your request to extend until {rental.previous_end_date ? format(new Date(rental.previous_end_date), 'MMM dd, yyyy') : ''}. You can submit a new extension request later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Request</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => cancelExtension.mutate()}
+              disabled={cancelExtension.isPending}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {cancelExtension.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : null}
+              Cancel Request
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
