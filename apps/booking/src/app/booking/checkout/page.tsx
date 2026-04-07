@@ -26,7 +26,8 @@ const checkoutSchema = z.object({
   customerEmail: z.string().email("Invalid email address"),
   customerPhone: z.string().min(10, "Phone number must be at least 10 digits"),
   licenseNumber: z.string().min(5, "License number is required"),
-  agreeTerms: z.boolean().refine(val => val === true, "You must agree to terms")
+  agreeTerms: z.boolean().refine(val => val === true, "You must agree to the Terms & Conditions and Privacy Policy"),
+  agreeCharges: z.boolean().refine(val => val === true, "You must authorize post-rental charges")
 });
 
 interface DeliveryLocation {
@@ -102,7 +103,8 @@ const BookingCheckoutContent = () => {
     customerEmail: "",
     customerPhone: "",
     licenseNumber: "",
-    agreeTerms: false
+    agreeTerms: false,
+    agreeCharges: false
   });
 
   // Promo code state — read from localStorage (set by MultiStepBookingWidget)
@@ -541,6 +543,33 @@ const BookingCheckoutContent = () => {
         }
       }
 
+      // Step 3b: Buffer time validation — ensure pickup doesn't fall within buffer period
+      {
+        const bufferMinutes = tenant?.buffer_time_minutes || 0;
+        if (bufferMinutes > 0 && vehicleId && pickupDate) {
+          const { data: recentRentals } = await supabase
+            .from("rentals")
+            .select("end_date, return_time")
+            .eq("vehicle_id", vehicleId)
+            .in("status", ["Closed", "Active"])
+            .order("end_date", { ascending: false })
+            .limit(1);
+
+          if (recentRentals && recentRentals.length > 0) {
+            const lastRental = recentRentals[0];
+            const rentalEnd = new Date(`${lastRental.end_date}T${lastRental.return_time || '23:59'}`);
+            const bufferDeadline = new Date(rentalEnd.getTime() + bufferMinutes * 60 * 1000);
+            const pickupDateTime = new Date(pickupDate);
+
+            if (pickupDateTime < bufferDeadline && pickupDateTime >= rentalEnd) {
+              throw new Error(
+                `This vehicle has a ${bufferMinutes}-minute buffer period after its last rental. It will be available after ${bufferDeadline.toLocaleString()}.`
+              );
+            }
+          }
+        }
+      }
+
       // Step 4: Calculate monthly amount
       const days = calculateRentalDays();
       const monthlyAmount = vehicleDetails.monthly_rent || calculateVehiclePrice();
@@ -870,21 +899,42 @@ const BookingCheckoutContent = () => {
                     )}
                   </div>
 
-                  <div className="flex items-start gap-2 pt-4">
-                    <Checkbox
-                      checked={formData.agreeTerms}
-                      onCheckedChange={(checked) => setFormData({...formData, agreeTerms: checked as boolean})}
-                    />
-                    <Label className="text-sm leading-relaxed cursor-pointer">
-                      I agree to the{" "}
-                      <a href="/terms" target="_blank" className="text-accent underline">Terms & Conditions</a>
-                      {" "}and{" "}
-                      <a href="/privacy" target="_blank" className="text-accent underline">Privacy Policy</a>
-                    </Label>
+                  <div className="space-y-4 pt-4">
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="checkout-agree-terms"
+                        checked={formData.agreeTerms}
+                        onCheckedChange={(checked) => setFormData({...formData, agreeTerms: checked as boolean})}
+                        className="mt-0.5"
+                      />
+                      <Label htmlFor="checkout-agree-terms" className="text-sm leading-relaxed cursor-pointer">
+                        I agree to the{" "}
+                        <a href="/terms" target="_blank" className="text-accent underline">Terms &amp; Conditions</a>
+                        {" "}and{" "}
+                        <a href="/privacy" target="_blank" className="text-accent underline">Privacy Policy</a>.
+                      </Label>
+                    </div>
+                    {errors.agreeTerms && (
+                      <p className="text-xs text-destructive">{errors.agreeTerms}</p>
+                    )}
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="checkout-agree-charges"
+                        checked={formData.agreeCharges}
+                        onCheckedChange={(checked) => setFormData({...formData, agreeCharges: checked as boolean})}
+                        className="mt-0.5"
+                      />
+                      <Label htmlFor="checkout-agree-charges" className="text-sm leading-relaxed cursor-pointer">
+                        I authorize <span className="font-semibold">{tenant?.app_name || tenant?.company_name || "the rental company"}</span> to charge my payment method for post-rental charges permitted under the rental agreement, including excess mileage, cleaning, fuel, tolls, damage, late return fees, and other agreed charges.
+                      </Label>
+                    </div>
+                    {errors.agreeCharges && (
+                      <p className="text-xs text-destructive">{errors.agreeCharges}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Additional post-rental charges may apply as described in the rental agreement.
+                    </p>
                   </div>
-                  {errors.agreeTerms && (
-                    <p className="text-xs text-destructive">{errors.agreeTerms}</p>
-                  )}
                 </div>
               </Card>
 

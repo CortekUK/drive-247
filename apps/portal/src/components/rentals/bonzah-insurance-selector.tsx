@@ -601,7 +601,12 @@ export default function BonzahInsuranceSelector({
         <a href="https://bonzah.com/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Terms</a>,{' '}
         <a href="https://bonzah.com/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Privacy</a>, and{' '}
         <a href="https://bonzah.com/included-and-restricted-vehicle-types" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Covered Vehicles</a>.
-        Insurance is only for drivers 21+ with a valid license.
+        {tenant?.bonzah_brochure_url && (
+          <>
+            {' '}<a href={tenant.bonzah_brochure_url} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground font-medium">View full coverage details</a>.
+          </>
+        )}
+        {' '}Insurance is only for drivers 21+ with a valid license.
       </p>
     </div>
   );

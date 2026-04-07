@@ -50,6 +50,7 @@ import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
 import { ApprovalReviewSummary } from "@/components/reviews/approval-review-summary";
 import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-summary-card";
 import { useRentalAgreements } from "@/hooks/use-rental-agreements";
+import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
 import { InsuranceTimeline } from "@/components/rentals/InsuranceTimeline";
@@ -106,6 +107,8 @@ interface Rental {
   bonzah_policy_id?: string | null;
   // Gig driver
   is_gig_driver?: boolean;
+  // Pay As You Go
+  is_pay_as_you_go?: boolean;
 }
 
 function LocationCard({ type, address, location, fee, time, currencyCode }: {
@@ -227,6 +230,7 @@ const RentalDetail = () => {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
+  const { settings: rentalSettings } = useRentalSettings();
   const { balanceNumber: bonzahCdBalance, isBonzahConnected, portalUrl: bonzahPortalUrl } = useBonzahBalance();
   const { data: rentalAgreements = [], isLoading: loadingAgreements } = useRentalAgreements(id);
   const { data: insurancePolicies = [], isLoading: isLoadingInsurancePolicies } = useRentalInsurancePolicies(id);
@@ -2026,6 +2030,14 @@ const RentalDetail = () => {
         const deliveryFeeAmount = rental.delivery_fee || invoiceBreakdown.deliveryFee || 0;
         const collectionFeeAmount = collectionLedgerCharge ? Number(collectionLedgerCharge.amount) : (rental.collection_fee ?? 0);
 
+        // Pay As You Go detection
+        const isPayg = rental?.is_pay_as_you_go === true;
+        const paygCategories = isPayg ? [
+          'Rental',
+          ...(invoiceBreakdown.taxAmount > 0 ? ['Tax'] : []),
+          ...(invoiceBreakdown.serviceFee > 0 && rentalSettings?.service_fee_type === 'percentage' ? ['Service Fee'] : []),
+        ] : [];
+
         const rows: { label: string; category: string; amount: number; detail: string; icon: any; color: string; bg: string; nonRefundable?: boolean; onClick?: () => void; isDepositDeducted?: boolean }[] = [
           { label: 'Rental', category: 'Rental', amount: invoiceBreakdown.rentalFee, detail: rental.rental_period_type || 'Monthly', icon: Car, color: 'text-green-500', bg: 'bg-green-500/10' },
           { label: 'Tax', category: 'Tax', amount: invoiceBreakdown.taxAmount, detail: invoiceBreakdown.taxAmount > 0 && invoiceBreakdown.rentalFee > 0 ? `${((invoiceBreakdown.taxAmount / invoiceBreakdown.rentalFee) * 100).toFixed(1)}% rate` : 'Tax on rental', icon: Percent, color: 'text-blue-500', bg: 'bg-blue-500/10' },
@@ -2194,7 +2206,7 @@ const RentalDetail = () => {
                   const isSelected = selectedCategories.has(category);
 
                   return (
-                    <TableRow key={category} className={`${!applied || isDepositDeducted ? 'opacity-40' : ''} ${onClick ? 'cursor-pointer hover:bg-muted/30' : ''}`} onClick={onClick}>
+                    <TableRow key={category} className={`${!applied || isDepositDeducted ? 'opacity-40' : ''} ${onClick ? 'cursor-pointer hover:bg-muted/30' : ''} ${isPayg && paygCategories.includes(category) && applied ? 'bg-indigo-50 dark:bg-indigo-950/20' : ''}`} onClick={onClick}>
                       <TableCell className="pl-6 w-10">
                         <Checkbox
                           checked={isSelected}
@@ -2222,6 +2234,11 @@ const RentalDetail = () => {
                           <div>
                             <p className="text-sm font-medium flex items-center gap-1">
                               {label}
+                              {isPayg && paygCategories.includes(category) && applied && (
+                                <Badge variant="outline" className="text-indigo-600 border-indigo-300 bg-indigo-100 dark:text-indigo-400 dark:border-indigo-700 dark:bg-indigo-950/30 text-[10px] ml-1.5">
+                                  PAYG
+                                </Badge>
+                              )}
                               {onClick && <ExternalLink className="h-3 w-3 inline-block ml-1.5 text-muted-foreground" />}
                               {category === 'Supercharger' && (
                                 <button
@@ -2504,6 +2521,34 @@ const RentalDetail = () => {
                 })}
               </TableBody>
             </Table>
+
+            {/* PAYG cumulative payment button */}
+            {isPayg && (() => {
+              const paygWithRemaining = paygCategories.filter(c => (categoryRemainingAmounts[c] ?? 0) > 0);
+              const paygTotal = paygWithRemaining.reduce((sum, c) => sum + (categoryRemainingAmounts[c] ?? 0), 0);
+              if (paygTotal <= 0) return null;
+              return (
+                <div className="border-t bg-indigo-50/50 dark:bg-indigo-950/10 px-6 py-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Pay As You Go Balance</p>
+                    <p className="text-xs text-muted-foreground">
+                      {paygWithRemaining.join(', ')} &mdash; {formatCurrencyUtil(paygTotal, tenant?.currency_code || 'USD')} remaining
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                    onClick={() => {
+                      setSelectedCategories(new Set(paygWithRemaining));
+                      setShowTargetedPayment(true);
+                    }}
+                  >
+                    <DollarSign className="h-3.5 w-3.5 mr-1.5" />
+                    Add PAYG Payment
+                  </Button>
+                </div>
+              );
+            })()}
 
             {/* Selection footer for targeted payment */}
             {selectedCategories.size > 0 && (
@@ -3102,7 +3147,7 @@ const RentalDetail = () => {
                 let units = 1;
                 if (unitLabel === 'day') units = totalDays;
                 else if (unitLabel === 'week') units = Math.ceil(totalDays / 7);
-                else units = Math.max(1, Math.round(totalDays / 30));
+                else units = Math.max(1, Math.round(totalDays / (tenant?.monthly_tier_days ?? 30)));
 
                 const expectedAmount = Math.round(unitRate * units * 100) / 100;
                 const isCustomPrice = unitRate > 0 && Math.abs(totalAmount - expectedAmount) > 0.01;
@@ -4036,6 +4081,19 @@ const RentalDetail = () => {
               <span className="text-xs text-muted-foreground">No documents uploaded</span>
             </div>
             <div className="flex items-center gap-2">
+              {tenant?.bonzah_brochure_url && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  asChild
+                >
+                  <a href={tenant.bonzah_brochure_url} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    Coverage Brochure
+                  </a>
+                </Button>
+              )}
               {canEdit('rentals') && (
                 <Button
                   size="sm"

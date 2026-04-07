@@ -241,6 +241,21 @@ Deno.serve(async (req) => {
       user.email
     );
 
+    // Skip signup and recovery emails — these are handled via OTP flow
+    // (send-verification-otp / verify-otp / reset-password-with-otp)
+    if (
+      email_data.email_action_type === "signup" ||
+      email_data.email_action_type === "recovery"
+    ) {
+      console.log(
+        `Skipping ${email_data.email_action_type} email for ${user.email} — handled via OTP`
+      );
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Resolve tenant from user metadata first

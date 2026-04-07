@@ -13,6 +13,7 @@ interface Tenant {
   admin_name: string | null;
   integration_veriff: boolean | null;
   integration_bonzah: boolean | null;
+  bonzah_brochure_url: string | null;
   bonzah_username: string | null;
   bonzah_mode: 'test' | 'live' | null;
   boldsign_mode: 'test' | 'live' | null;
@@ -25,6 +26,9 @@ interface Tenant {
   policies_accepted_at: string | null;
   integration_twilio_sms: boolean | null;
   twilio_phone_number: string | null;
+  integration_twilio_whatsapp: boolean | null;
+  twilio_whatsapp_number: string | null;
+  twilio_whatsapp_lockbox_template_sid: string | null;
   integration_whatsapp: boolean | null;
   meta_whatsapp_phone_number: string | null;
   maintenance_banner_enabled: boolean | null;
@@ -166,7 +170,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // Query the tenants table by slug
       const { data, error: queryError } = await supabase
         .from('tenants')
-        .select('id, slug, company_name, status, contact_email, phone, admin_name, integration_veriff, integration_bonzah, bonzah_username, bonzah_mode, boldsign_mode, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, integration_tesla_fleet')
+        .select('id, slug, company_name, status, contact_email, phone, admin_name, integration_veriff, integration_bonzah, bonzah_brochure_url, bonzah_username, bonzah_mode, boldsign_mode, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number, integration_twilio_whatsapp, twilio_whatsapp_number, twilio_whatsapp_lockbox_template_sid, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, integration_tesla_fleet')
         .eq('slug', slug)
         .eq('status', 'active')
         .single();

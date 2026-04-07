@@ -571,6 +571,47 @@ export function BonzahSettings() {
             </div>
           )}
 
+          {/* Brochure URL */}
+          {isConnected && (
+            <div className="p-4 rounded-lg border bg-muted/50 dark:bg-gray-900/50 dark:border-gray-700">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center">
+                  <ExternalLink className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Coverage Brochure</p>
+                  <p className="text-xs text-muted-foreground">
+                    Link to your Bonzah coverage brochure PDF — shown to customers during insurance selection
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="https://example.com/bonzah-brochure.pdf"
+                  defaultValue={tenant?.bonzah_brochure_url || ''}
+                  onBlur={async (e) => {
+                    const url = e.target.value.trim();
+                    if (!tenant?.id) return;
+                    if (url === (tenant?.bonzah_brochure_url || '')) return;
+                    const { error } = await supabase.from('tenants').update({ bonzah_brochure_url: url || null }).eq('id', tenant.id);
+                    if (!error) {
+                      toast({ title: 'Brochure URL saved' });
+                      refetchTenant?.();
+                    }
+                  }}
+                  className="flex-1"
+                />
+                {tenant?.bonzah_brochure_url && (
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={tenant.bonzah_brochure_url} target="_blank" rel="noopener noreferrer">
+                      Preview
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Test mode info */}
           {isTestMode && (
             <div className="p-4 rounded-lg border bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800">

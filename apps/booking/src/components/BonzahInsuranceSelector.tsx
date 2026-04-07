@@ -159,6 +159,17 @@ export default function BonzahInsuranceSelector({
         <p className="text-muted-foreground">
           Add comprehensive insurance coverage powered by Bonzah. Select the coverages that fit your needs.
         </p>
+        {tenant?.bonzah_brochure_url && (
+          <a
+            href={tenant.bonzah_brochure_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 mt-2 text-sm text-primary hover:underline font-medium"
+          >
+            <Shield className="w-4 h-4" />
+            View coverage brochure
+          </a>
+        )}
       </div>
 
       {/* Error State */}
@@ -432,7 +443,16 @@ export default function BonzahInsuranceSelector({
           <a href="https://bonzah.com/included-and-restricted-vehicle-types" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
             Covered Vehicles
           </a>
-          . Insurance is only for drivers 21 years and older with a valid driver&apos;s license.
+          .{' '}
+          {tenant?.bonzah_brochure_url && (
+            <>
+              <a href={tenant.bonzah_brochure_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                View full coverage details
+              </a>
+              .{' '}
+            </>
+          )}
+          Insurance is only for drivers 21 years and older with a valid driver&apos;s license.
         </p>
         <p className="text-xs text-muted-foreground">
           Insurance provided by{' '}

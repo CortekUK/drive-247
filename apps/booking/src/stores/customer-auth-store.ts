@@ -73,7 +73,13 @@ interface CustomerAuthState {
 
   signIn: (email: string, password: string, tenantId?: string) => Promise<{ error: any; isBlocked?: boolean }>;
   signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<{ error: any }>;
+  resetPassword: (email: string, tenantId?: string) => Promise<{ error: any }>;
+  verifyPasswordResetOTP: (
+    email: string,
+    code: string,
+    newPassword: string,
+    tenantId?: string
+  ) => Promise<{ error: any; verified?: boolean }>;
   initialize: () => Promise<void>;
   refetchCustomerUser: () => Promise<void>;
 }
@@ -475,17 +481,43 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
     }
   },
 
-  resetPassword: async (email) => {
+  resetPassword: async (email, tenantId) => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: typeof window !== 'undefined'
-          ? `${window.location.origin}/reset-password`
-          : undefined,
+      const { error } = await supabase.functions.invoke('send-verification-otp', {
+        body: { email, tenant_id: tenantId || null, type: 'password_reset' },
       });
       return { error };
     } catch (error) {
       console.error('Password reset error:', error);
       return { error: { message: 'An unexpected error occurred' } };
+    }
+  },
+
+  verifyPasswordResetOTP: async (email, code, newPassword, tenantId) => {
+    try {
+      // Verify the OTP
+      const { data: verifyResult, error: verifyError } = await supabase.functions.invoke('verify-otp', {
+        body: { email, code, tenant_id: tenantId || null },
+      });
+      if (verifyError) {
+        return { error: { message: 'Failed to verify code' }, verified: false };
+      }
+      if (!verifyResult?.verified) {
+        return { error: { message: verifyResult?.error || 'Invalid verification code' }, verified: false };
+      }
+
+      // OTP verified — reset password via admin API
+      const { data: resetResult, error: resetError } = await supabase.functions.invoke('reset-password-with-otp', {
+        body: { email, new_password: newPassword },
+      });
+      if (resetError) {
+        return { error: { message: 'Failed to reset password' }, verified: true };
+      }
+
+      return { error: null, verified: true };
+    } catch (error) {
+      console.error('Password reset OTP error:', error);
+      return { error: { message: 'An unexpected error occurred' }, verified: false };
     }
   },
 
@@ -582,6 +614,7 @@ export const useCustomerAuth = () => {
     signIn: store.signIn,
     signOut: store.signOut,
     resetPassword: store.resetPassword,
+    verifyPasswordResetOTP: store.verifyPasswordResetOTP,
     refetchCustomerUser: store.refetchCustomerUser,
     setTenantId: store.setTenantId,
     isAuthenticated: !!store.customerUser && !!store.session,

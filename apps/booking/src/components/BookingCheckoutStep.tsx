@@ -96,6 +96,7 @@ export default function BookingCheckoutStep({
   const { pendingInsuranceFiles, clearPendingInsuranceFiles, pendingGigDriverFiles, clearPendingGigDriverFiles, context: bookingContext } = useBookingStore();
   const { locations: allDeliveryLocations } = useDeliveryLocations();
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreeCharges, setAgreeCharges] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
 
@@ -315,7 +316,7 @@ export default function BookingCheckoutStep({
     }
 
     if (pricingTier === 'monthly' && monthlyRent > 0) {
-      const months = days / 30;
+      const months = days / mtd;
       const qtyLabel = months === Math.floor(months)
         ? `${Math.floor(months)} month${Math.floor(months) !== 1 ? 's' : ''}`
         : `${days} days`;
@@ -1326,8 +1327,8 @@ export default function BookingCheckoutStep({
 
   // Handle payment button click - shows auth dialog if not authenticated
   const handlePayment = async () => {
-    if (!agreeTerms) {
-      toast.error("You must agree to the terms and conditions");
+    if (!agreeTerms || !agreeCharges) {
+      toast.error("You must agree to both checkboxes before proceeding");
       return;
     }
 
@@ -1478,19 +1479,34 @@ export default function BookingCheckoutStep({
           </Card>
 
           {/* Terms & Conditions */}
-          <Card className="p-6">
-            <div className="flex items-start gap-2">
+          <Card className="p-6 space-y-4">
+            <div className="flex items-start gap-3">
               <Checkbox
+                id="agree-terms"
                 checked={agreeTerms}
                 onCheckedChange={(checked) => setAgreeTerms(checked as boolean)}
-                className="mt-1"
+                className="mt-0.5"
               />
-              <Label className="text-sm leading-relaxed cursor-pointer">
-                By confirming, you agree to {tenant?.app_name || tenant?.company_name || "our"}'s{" "}
-                <a href="/terms" target="_blank" className="text-accent underline">Terms of Service</a> and{" "}
+              <Label htmlFor="agree-terms" className="text-sm leading-relaxed cursor-pointer">
+                I agree to the{" "}
+                <a href="/terms" target="_blank" className="text-accent underline">Terms &amp; Conditions</a> and{" "}
                 <a href="/privacy" target="_blank" className="text-accent underline">Privacy Policy</a>.
               </Label>
             </div>
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="agree-charges"
+                checked={agreeCharges}
+                onCheckedChange={(checked) => setAgreeCharges(checked as boolean)}
+                className="mt-0.5"
+              />
+              <Label htmlFor="agree-charges" className="text-sm leading-relaxed cursor-pointer">
+                I authorize <span className="font-semibold">{tenant?.app_name || tenant?.company_name || "the rental company"}</span> to charge my payment method for post-rental charges permitted under the rental agreement, including excess mileage, cleaning, fuel, tolls, damage, late return fees, and other agreed charges.
+              </Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Additional post-rental charges may apply as described in the rental agreement.
+            </p>
           </Card>
 
           {/* Installment Payment Options */}
@@ -1594,7 +1610,7 @@ export default function BookingCheckoutStep({
                     if (pricingTier === 'monthly') {
                       unitRate = monthlyRent;
                       unitLabel = '/mo';
-                      const months = days / 30;
+                      const months = days / mtd;
                       quantityLabel = months === Math.floor(months)
                         ? `${Math.floor(months)} month${Math.floor(months) !== 1 ? 's' : ''}`
                         : `${days} days`;
@@ -1785,7 +1801,7 @@ export default function BookingCheckoutStep({
             <div className="mt-4 space-y-3">
               <Button
                 onClick={handlePayment}
-                disabled={isProcessing || sendingDocuSign || !agreeTerms}
+                disabled={isProcessing || sendingDocuSign || !agreeTerms || !agreeCharges}
                 className="w-full gradient-accent hover-lift"
                 size="lg"
               >
