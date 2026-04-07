@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Loader2, ChevronDown, MessageCircle, Send, ArrowLeft, Mail, Phone as PhoneIcon, Check, X } from 'lucide-react';
+import { Loader2, ChevronDown, MessageCircle, Send, ArrowLeft, Mail, Phone as PhoneIcon, Check, X, Pencil } from 'lucide-react';
 import { useChatMessages, type ChatMessage } from '@/hooks/use-chat-messages';
 import { ChatMessageBubble, DateSeparator } from './ChatMessageBubble';
 import { CustomerChatInput } from './CustomerChatInput';
@@ -165,6 +165,8 @@ export function ChatWindow({
 
   // Phone number management for SMS
   const [phone, setPhone] = useState(customerPhone || '');
+  const [savedPhone, setSavedPhone] = useState<string | null>(null);
+  const [savedEmail, setSavedEmail] = useState<string | null>(null);
   const [isAddingPhone, setIsAddingPhone] = useState(false);
   const [isSavingPhone, setIsSavingPhone] = useState(false);
 
@@ -173,8 +175,8 @@ export function ChatWindow({
   const [isAddingEmail, setIsAddingEmail] = useState(false);
   const [isSavingEmail, setIsSavingEmail] = useState(false);
 
-  useEffect(() => { setPhone(customerPhone || ''); }, [customerPhone]);
-  useEffect(() => { setEmail(customerEmail || ''); }, [customerEmail]);
+  useEffect(() => { if (!savedPhone) setPhone(customerPhone || ''); }, [customerPhone]);
+  useEffect(() => { if (!savedEmail) setEmail(customerEmail || ''); }, [customerEmail]);
   useEffect(() => { setActiveChannel(lastChannel); }, [lastChannel]);
 
   // Auto-scroll to bottom on new messages
@@ -214,6 +216,7 @@ export function ChatWindow({
     try {
       const { error } = await supabase.from('customers').update({ phone: phone.trim() }).eq('id', customerId);
       if (error) throw error;
+      setSavedPhone(phone.trim());
       toast({ title: 'Phone saved', description: 'Customer phone number updated.' });
       setIsAddingPhone(false);
     } catch (err: any) {
@@ -229,6 +232,7 @@ export function ChatWindow({
     try {
       const { error } = await supabase.from('customers').update({ email: email.trim() }).eq('id', customerId);
       if (error) throw error;
+      setSavedEmail(email.trim());
       toast({ title: 'Email saved', description: 'Customer email updated.' });
       setIsAddingEmail(false);
     } catch (err: any) {
@@ -263,7 +267,9 @@ export function ChatWindow({
   };
 
   const activeChannelConfig = CHANNELS.find((ch) => ch.key === activeChannel) || CHANNELS[0];
-  const hasPhone = !!(customerPhone || phone);
+  const effectivePhone = savedPhone || customerPhone || phone;
+  const effectiveEmail = savedEmail || customerEmail || email;
+  const hasPhone = !!effectivePhone;
   const hasEmail = !!(customerEmail || email);
   const needsPhone = activeChannel === 'sms' && !hasPhone;
 
@@ -322,6 +328,67 @@ export function ChatWindow({
                     <span className="text-muted-foreground">Offline</span>
                   )}
                 </div>
+
+                {/* Contact details — edit phone & email */}
+                <div className="flex items-center gap-3 mt-1">
+                  {isAddingPhone ? (
+                    <div className="flex items-center gap-1">
+                      <PhoneIcon className="h-3 w-3 text-muted-foreground" />
+                      <Input
+                        placeholder="+44 7911 123456"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="h-5 text-[11px] w-[150px] font-mono px-1.5"
+                        autoFocus
+                      />
+                      <Button size="sm" variant="ghost" className="h-5 w-5 p-0" onClick={handleSavePhone} disabled={!phone.trim() || isSavingPhone}>
+                        {isSavingPhone ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 text-emerald-500" />}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-5 w-5 p-0" onClick={() => { setIsAddingPhone(false); setPhone(effectivePhone || ''); }}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setIsAddingPhone(true); setPhone(effectivePhone || ''); }}
+                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <PhoneIcon className="h-3 w-3" />
+                      {effectivePhone ? <span className="font-mono">{effectivePhone}</span> : <span className="italic">Add phone</span>}
+                      <Pencil className="h-2.5 w-2.5 ml-0.5 opacity-50" />
+                    </button>
+                  )}
+
+                  <span className="text-muted-foreground/30">|</span>
+
+                  {isAddingEmail ? (
+                    <div className="flex items-center gap-1">
+                      <Mail className="h-3 w-3 text-muted-foreground" />
+                      <Input
+                        placeholder="email@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="h-5 text-[11px] w-[180px] px-1.5"
+                        autoFocus
+                      />
+                      <Button size="sm" variant="ghost" className="h-5 w-5 p-0" onClick={handleSaveEmail} disabled={!email.trim() || isSavingEmail}>
+                        {isSavingEmail ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 text-blue-500" />}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-5 w-5 p-0" onClick={() => { setIsAddingEmail(false); setEmail(effectiveEmail || ''); }}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setIsAddingEmail(true); setEmail(effectiveEmail || ''); }}
+                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Mail className="h-3 w-3" />
+                      {effectiveEmail ? <span>{effectiveEmail}</span> : <span className="italic">Add email</span>}
+                      <Pencil className="h-2.5 w-2.5 ml-0.5 opacity-50" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -353,7 +420,7 @@ export function ChatWindow({
                         onClick={() => {
                           if (!isEnabled) return;
                           if (ch.key === 'call') {
-                            const phoneToCall = customerPhone || phone;
+                            const phoneToCall = effectivePhone;
                             if (!phoneToCall) {
                               toast({ title: 'No phone number', description: 'Add a phone number to call this customer.', variant: 'destructive' });
                               return;
@@ -398,120 +465,7 @@ export function ChatWindow({
           </div>
         </div>
 
-        {/* SMS phone bar */}
-        {activeChannel === 'sms' && (
-          <div className="px-6 pb-3">
-            <div className={cn(
-              'flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors',
-              hasPhone && !isAddingPhone
-                ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800'
-                : 'bg-amber-50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800'
-            )}>
-              <TwilioIcon className="h-3.5 w-3.5 text-[#F22F46] shrink-0" />
-              {hasPhone && !isAddingPhone ? (
-                <div className="flex items-center justify-between flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground text-xs">Sending to</span>
-                    <span className="font-mono font-medium text-xs">{customerPhone || phone}</span>
-                    <button
-                      onClick={() => { setIsAddingPhone(true); setPhone(customerPhone || phone); }}
-                      className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
-                    >
-                      Edit
-                    </button>
-                  </div>
-                  {isInternational(twilioPhoneNumber, customerPhone || phone) && (
-                    <span className="text-[10px] text-amber-600 dark:text-amber-400">One-way — customer can't reply to international numbers</span>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 flex-1">
-                  {!hasPhone && !isAddingPhone && (
-                    <>
-                      <span className="text-muted-foreground text-xs shrink-0">No phone —</span>
-                      <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setIsAddingPhone(true)}>
-                        Add phone number
-                      </Button>
-                    </>
-                  )}
-                  {isAddingPhone && (
-                    <div className="flex items-center gap-1.5 flex-1">
-                      <span className="text-muted-foreground text-xs shrink-0">{hasPhone ? 'Edit number' : 'Add number'}</span>
-                      <Input
-                        placeholder="+44 7911 123456"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className="h-6 text-xs flex-1 max-w-[200px]"
-                        autoFocus
-                      />
-                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={handleSavePhone} disabled={!phone.trim() || isSavingPhone}>
-                        {isSavingPhone ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 text-emerald-500" />}
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => { setIsAddingPhone(false); setPhone(customerPhone || ''); }}>
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Email bar */}
-        {activeChannel === 'email' && (
-          <div className="px-6 pb-3">
-            <div className={cn(
-              'flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors',
-              hasEmail && !isAddingEmail
-                ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-800'
-                : 'bg-amber-50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800'
-            )}>
-              <Mail className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-              {hasEmail && !isAddingEmail ? (
-                <>
-                  <span className="text-muted-foreground text-xs">Sending to</span>
-                  <span className="font-medium text-xs">{customerEmail || email}</span>
-                  <button
-                    onClick={() => { setIsAddingEmail(true); setEmail(customerEmail || email); }}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1 underline underline-offset-2"
-                  >
-                    Edit
-                  </button>
-                </>
-              ) : (
-                <div className="flex items-center gap-2 flex-1">
-                  {!hasEmail && !isAddingEmail && (
-                    <>
-                      <span className="text-muted-foreground text-xs shrink-0">No email —</span>
-                      <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setIsAddingEmail(true)}>
-                        Add email address
-                      </Button>
-                    </>
-                  )}
-                  {isAddingEmail && (
-                    <div className="flex items-center gap-1.5 flex-1">
-                      <span className="text-muted-foreground text-xs shrink-0">{hasEmail ? 'Edit email' : 'Add email'}</span>
-                      <Input
-                        placeholder="customer@example.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="h-6 text-xs flex-1 max-w-[240px]"
-                        autoFocus
-                      />
-                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={handleSaveEmail} disabled={!email.trim() || isSavingEmail}>
-                        {isSavingEmail ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 text-blue-500" />}
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => { setIsAddingEmail(false); setEmail(customerEmail || ''); }}>
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Phone/email editing moved to customer header above */}
       </div>
 
       {/* ── Voice Call Bar ─────────────────────────────────── */}
