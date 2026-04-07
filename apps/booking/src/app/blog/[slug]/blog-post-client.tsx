@@ -7,9 +7,15 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useBrandingSettings } from "@/hooks/useBrandingSettings";
 import { sanitizeHtml } from "@/lib/sanitize-html";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Calendar, Clock, User, FileText } from "lucide-react";
+import {
+  ArrowLeft,
+  Calendar,
+  Clock,
+  User,
+  FileText,
+  ChevronRight,
+} from "lucide-react";
 import { format } from "date-fns";
 import SEO from "@/components/SEO";
 
@@ -29,15 +35,23 @@ export default function BlogPostClient({ slug }: { slug: string }) {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-16 max-w-4xl">
-        <Skeleton className="h-8 w-32 mb-8" />
-        <Skeleton className="h-12 w-3/4 mb-4" />
-        <Skeleton className="h-6 w-1/2 mb-8" />
-        <Skeleton className="aspect-video w-full mb-8 rounded-lg" />
-        <div className="space-y-4">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-3/4" />
+      <div className="pt-32 pb-24">
+        <div className="container mx-auto px-4 max-w-4xl">
+          <Skeleton className="h-4 w-48 mb-10" />
+          <Skeleton className="h-6 w-24 mb-4" />
+          <Skeleton className="h-14 w-3/4 mb-6" />
+          <div className="flex gap-6 mb-10">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-4 w-24" />
+          </div>
+          <Skeleton className="aspect-[21/9] w-full rounded-xl mb-12" />
+          <div className="space-y-4">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+          </div>
         </div>
       </div>
     );
@@ -45,19 +59,30 @@ export default function BlogPostClient({ slug }: { slug: string }) {
 
   if (error || !post) {
     return (
-      <div className="container mx-auto px-4 py-24 text-center">
-        <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-6" />
-        <h1 className="text-3xl font-bold mb-4">Post not found</h1>
-        <p className="text-muted-foreground mb-8">
-          The blog post you&apos;re looking for doesn&apos;t exist or has been
-          removed.
-        </p>
-        <Link href="/blog">
-          <Button>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Blog
-          </Button>
-        </Link>
+      <div className="pt-32 pb-24">
+        <div className="container mx-auto px-4 text-center">
+          <div className="max-w-md mx-auto animate-fade-in">
+            <div className="p-6 rounded-full bg-accent/10 border border-accent/20 mx-auto w-fit mb-8">
+              <FileText className="h-12 w-12 text-accent" />
+            </div>
+            <h1 className="text-4xl font-display font-bold text-gradient-metal mb-4">
+              Post Not Found
+            </h1>
+            <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
+              The article you&apos;re looking for doesn&apos;t exist or has been removed.
+            </p>
+            <Link href="/blog">
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-accent/30 hover:bg-accent/10"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Blog
+              </Button>
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
@@ -84,7 +109,6 @@ export default function BlogPostClient({ slug }: { slug: string }) {
     },
   };
 
-  // Breadcrumb structured data
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -122,95 +146,139 @@ export default function BlogPostClient({ slug }: { slug: string }) {
         schema={[blogPostingSchema, breadcrumbSchema]}
       />
 
-      <div className="container mx-auto px-4 py-8 md:py-16 max-w-4xl">
-        {/* Breadcrumb */}
-        <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
-          <Link href="/" className="hover:text-foreground transition-colors">
-            Home
-          </Link>
-          <span>/</span>
-          <Link
-            href="/blog"
-            className="hover:text-foreground transition-colors"
-          >
-            Blog
-          </Link>
-          <span>/</span>
-          <span className="text-foreground truncate">{post.title}</span>
-        </nav>
+      {/* Hero / Header */}
+      <section className="pt-32 pb-12">
+        <div className="container mx-auto px-4 max-w-4xl animate-fade-in">
+          {/* Breadcrumb */}
+          <nav className="flex items-center gap-2 text-sm text-muted-foreground/60 mb-10">
+            <Link
+              href="/"
+              className="hover:text-accent transition-colors duration-300"
+            >
+              Home
+            </Link>
+            <ChevronRight className="h-3 w-3" />
+            <Link
+              href="/blog"
+              className="hover:text-accent transition-colors duration-300"
+            >
+              Blog
+            </Link>
+            <ChevronRight className="h-3 w-3" />
+            <span className="text-foreground/80 truncate max-w-[200px]">
+              {post.title}
+            </span>
+          </nav>
 
-        {/* Header */}
-        <header className="mb-8">
+          {/* Category */}
           {post.category && (
             <Link href={`/blog?category=${post.category.slug}`}>
-              <Badge variant="secondary" className="mb-4 hover:bg-secondary/80">
+              <span className="inline-block text-xs uppercase tracking-widest font-medium text-accent border border-accent/30 rounded-full px-4 py-1.5 mb-6 hover:bg-accent/10 transition-colors duration-300">
                 {post.category.name}
-              </Badge>
+              </span>
             </Link>
           )}
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 leading-tight">
+
+          {/* Title */}
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-bold text-gradient-metal leading-tight mb-6">
             {post.title}
           </h1>
 
-          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+          {/* Meta */}
+          <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground/60">
             {post.author_name && (
-              <span className="flex items-center gap-1.5">
-                <User className="h-4 w-4" />
-                {post.author_name}
+              <span className="flex items-center gap-2">
+                <div className="p-1.5 rounded-full bg-accent/10">
+                  <User className="h-3.5 w-3.5 text-accent" />
+                </div>
+                <span>{post.author_name}</span>
               </span>
             )}
             {post.published_at && (
-              <span className="flex items-center gap-1.5">
-                <Calendar className="h-4 w-4" />
-                {format(new Date(post.published_at), "MMMM d, yyyy")}
+              <span className="flex items-center gap-2">
+                <div className="p-1.5 rounded-full bg-accent/10">
+                  <Calendar className="h-3.5 w-3.5 text-accent" />
+                </div>
+                <span>{format(new Date(post.published_at), "MMMM d, yyyy")}</span>
               </span>
             )}
-            <span className="flex items-center gap-1.5">
-              <Clock className="h-4 w-4" />
-              {post.reading_time_minutes} min read
+            <span className="flex items-center gap-2">
+              <div className="p-1.5 rounded-full bg-accent/10">
+                <Clock className="h-3.5 w-3.5 text-accent" />
+              </div>
+              <span>{post.reading_time_minutes} min read</span>
             </span>
           </div>
-        </header>
+        </div>
+      </section>
 
-        {/* Featured image */}
-        {post.featured_image_url && (
-          <div className="mb-8 rounded-lg overflow-hidden">
+      {/* Featured Image */}
+      {post.featured_image_url && (
+        <section className="container mx-auto px-4 max-w-5xl pb-12 animate-fade-in animation-delay-200">
+          <div className="rounded-2xl overflow-hidden shadow-metal border border-accent/10">
             <img
               src={post.featured_image_url}
               alt={post.title}
-              className="w-full object-cover"
+              className="w-full object-cover max-h-[500px]"
             />
           </div>
-        )}
+        </section>
+      )}
 
-        {/* Content */}
-        {post.content && (
+      {/* Content */}
+      {post.content && (
+        <section className="container mx-auto px-4 max-w-4xl pb-16 animate-fade-in animation-delay-400">
           <div
             className="prose prose-lg dark:prose-invert max-w-none
-              [&>p]:mb-6
-              [&>ul]:list-disc [&>ul]:list-inside [&>ul]:pl-4
-              [&>ol]:list-decimal [&>ol]:list-inside [&>ol]:pl-4
-              [&>h2]:text-2xl [&>h2]:font-semibold [&>h2]:mt-10 [&>h2]:mb-4
-              [&>h3]:text-xl [&>h3]:font-semibold [&>h3]:mt-8 [&>h3]:mb-3
-              [&>blockquote]:border-l-4 [&>blockquote]:border-primary [&>blockquote]:pl-4 [&>blockquote]:italic
-              [&>img]:rounded-lg [&>img]:my-6
-              [&>iframe]:rounded-lg [&>iframe]:my-6 [&>iframe]:max-w-full"
+              prose-headings:font-display prose-headings:text-gradient-silver
+              prose-h2:text-3xl prose-h2:mt-12 prose-h2:mb-5
+              prose-h3:text-2xl prose-h3:mt-10 prose-h3:mb-4
+              prose-p:text-muted-foreground prose-p:leading-relaxed prose-p:mb-6
+              prose-a:text-accent prose-a:no-underline hover:prose-a:underline
+              prose-strong:text-foreground
+              prose-blockquote:border-l-accent prose-blockquote:border-l-2 prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:text-muted-foreground
+              prose-img:rounded-xl prose-img:shadow-metal prose-img:my-8
+              prose-ul:text-muted-foreground prose-ol:text-muted-foreground
+              [&>iframe]:rounded-xl [&>iframe]:shadow-metal [&>iframe]:my-8 [&>iframe]:max-w-full"
             dangerouslySetInnerHTML={{
               __html: sanitizeHtml(post.content),
             }}
           />
-        )}
+        </section>
+      )}
 
-        {/* Back to blog */}
-        <div className="mt-12 pt-8 border-t">
+      {/* Divider */}
+      <div className="container mx-auto px-4 max-w-4xl">
+        <div className="h-[1px] bg-gradient-to-r from-transparent via-accent/30 to-transparent" />
+      </div>
+
+      {/* Footer */}
+      <section className="container mx-auto px-4 max-w-4xl py-12">
+        <div className="flex items-center justify-between">
           <Link href="/blog">
-            <Button variant="outline">
+            <Button
+              variant="outline"
+              size="lg"
+              className="border-accent/30 hover:bg-accent/10 transition-all duration-300"
+            >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Blog
             </Button>
           </Link>
+
+          {post.category && (
+            <Link href={`/blog?category=${post.category.slug}`}>
+              <Button
+                variant="ghost"
+                className="text-muted-foreground hover:text-accent"
+              >
+                More in {post.category.name}
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </Link>
+          )}
         </div>
-      </div>
+      </section>
     </article>
   );
 }
