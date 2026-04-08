@@ -1,7 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { sendResendEmail, getTenantBranding, wrapWithBrandedTemplate } from '../_shared/resend-service.ts';
-import { getBoldSignApiKey, getBoldSignBaseUrl } from '../_shared/boldsign-client.ts';
 import type { BoldSignMode } from '../_shared/boldsign-client.ts';
 
 interface SigningEmailRequest {
@@ -13,7 +12,9 @@ interface SigningEmailRequest {
   vehicleInfo: string;
   tenantId: string;
   boldsignMode: BoldSignMode;
-  signingLink?: string; // Pre-fetched signing link to avoid extra BoldSign API calls
+  signingLink?: string; // Pre-fetched signing link (legacy support)
+  agreementId?: string; // Agreement ID for building portal signing URL
+  rentalId?: string; // Rental ID fallback for signing URL
 }
 
 Deno.serve(async (req) => {
@@ -38,6 +39,8 @@ Deno.serve(async (req) => {
       tenantId,
       boldsignMode = 'test',
       signingLink: preFetchedSigningLink,
+      agreementId,
+      rentalId,
     } = body;
 
     if (!customerEmail || !documentId || !tenantId) {
@@ -46,56 +49,27 @@ Deno.serve(async (req) => {
 
     console.log('Sending signing email to:', customerEmail, 'for document:', documentId);
 
-    // Use pre-fetched signing link if available, otherwise fetch from BoldSign (single attempt)
+    // Use pre-fetched signing link if provided (legacy support).
+    // Otherwise, we build a portal signing URL so the signing link is fetched
+    // on-demand when the customer clicks — saving BoldSign API calls.
     let signingLink = preFetchedSigningLink || '';
 
     if (!signingLink) {
-      const apiKey = getBoldSignApiKey(boldsignMode);
-      const baseUrl = getBoldSignBaseUrl();
+      // Build a portal signing URL that will fetch the BoldSign link on-demand
+      // Look up tenant slug for the portal URL
+      const { data: tenantData } = await supabase
+        .from('tenants')
+        .select('slug')
+        .eq('id', tenantId)
+        .single();
 
-      // Wait for BoldSign to finish processing the document
-      await new Promise(r => setTimeout(r, 3000));
-
-      try {
-        // Try the properties endpoint to get the signer's sign link
-        const propsResponse = await fetch(
-          `${baseUrl}/v1/document/properties?documentId=${documentId}`,
-          { headers: { 'X-API-KEY': apiKey } }
-        );
-
-        if (propsResponse.ok) {
-          const propsData = await propsResponse.json();
-          const signer = propsData.signerDetails?.find(
-            (s: any) => s.signerEmail?.toLowerCase() === customerEmail.toLowerCase()
-          );
-          if (signer?.signLink) {
-            signingLink = signer.signLink;
-          }
-        }
-
-        // Fallback: try embedded sign link only if properties didn't have it
-        if (!signingLink) {
-          const signLinkResponse = await fetch(
-            `${baseUrl}/v1/document/getEmbeddedSignLink?documentId=${documentId}&signerEmail=${encodeURIComponent(customerEmail)}`,
-            { headers: { 'X-API-KEY': apiKey } }
-          );
-
-          if (signLinkResponse.ok) {
-            const signLinkData = await signLinkResponse.json();
-            signingLink = signLinkData.signLink || '';
-          } else {
-            console.warn('Sign link fetch failed:', signLinkResponse.status);
-          }
-        }
-      } catch (e) {
-        console.warn('Sign link fetch error:', e);
+      const tenantSlug = tenantData?.slug || '';
+      // The customer portal agreements page handles signing via the booking app
+      // Use a direct link that the customer can click to view/sign their agreement
+      if (tenantSlug) {
+        const bookingDomain = Deno.env.get('NEXT_PUBLIC_BOOKING_DOMAIN') || 'drive-247.com';
+        signingLink = `https://${tenantSlug}.${bookingDomain}/portal/agreements`;
       }
-
-      if (!signingLink) {
-        console.warn('Could not get signing link from BoldSign');
-      }
-    } else {
-      console.log('Using pre-fetched signing link');
     }
 
     // Get tenant branding
