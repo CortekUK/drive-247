@@ -57,31 +57,41 @@ Deno.serve(async (req) => {
       const apiKey = getBoldSignApiKey(boldsignMode);
       const baseUrl = getBoldSignBaseUrl();
 
-      // BoldSign needs time to process the document after creation
-      // Wait 2s before first attempt, then retry after 1.5s if needed
-      await new Promise(r => setTimeout(r, 2000));
-      for (let attempt = 0; attempt < 2 && !signingLink; attempt++) {
-        if (attempt > 0) await new Promise(r => setTimeout(r, 1500));
+      // BoldSign needs ~3-5s to process a document after creation.
+      // The esign route calls us immediately after /v1/document/send,
+      // so we must wait before the signing link becomes available.
+      // Try up to 3 times: at 3s, 4.5s, and 6s after function start.
+      for (let attempt = 0; attempt < 3 && !signingLink; attempt++) {
+        await new Promise(r => setTimeout(r, attempt === 0 ? 3000 : 1500));
 
         try {
-          const signLinkResponse = await fetch(
-            `${baseUrl}/v1/document/getEmbeddedSignLink?documentId=${documentId}&signerEmail=${encodeURIComponent(customerEmail)}`,
+          // Use properties endpoint — returns the direct browser signing URL
+          const propsResponse = await fetch(
+            `${baseUrl}/v1/document/properties?documentId=${documentId}`,
             { headers: { 'X-API-KEY': apiKey } }
           );
 
-          if (signLinkResponse.ok) {
-            const signLinkData = await signLinkResponse.json();
-            signingLink = signLinkData.signLink || '';
+          if (propsResponse.ok) {
+            const propsData = await propsResponse.json();
+            const signer = propsData.signerDetails?.find(
+              (s: any) => s.signerEmail?.toLowerCase() === customerEmail.toLowerCase()
+            );
+            if (signer?.signLink) {
+              signingLink = signer.signLink;
+              console.log(`Got signing link from properties on attempt ${attempt + 1}`);
+            } else {
+              console.warn(`Attempt ${attempt + 1}: properties OK but no signLink for ${customerEmail}`);
+            }
           } else {
-            console.warn(`Sign link attempt ${attempt + 1} failed:`, signLinkResponse.status);
+            console.warn(`Attempt ${attempt + 1}: properties failed:`, propsResponse.status);
           }
         } catch (e) {
-          console.warn(`Sign link attempt ${attempt + 1} error:`, e);
+          console.warn(`Attempt ${attempt + 1} error:`, e);
         }
       }
 
       if (!signingLink) {
-        console.warn('Could not get signing link from BoldSign — email will have fallback text');
+        console.warn('Could not get signing link from BoldSign after 3 attempts');
       }
     }
 
