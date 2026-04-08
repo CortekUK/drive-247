@@ -50,40 +50,33 @@ Deno.serve(async (req) => {
 
     console.log('Sending signing email to:', customerEmail, 'for document:', documentId);
 
-    // Use pre-fetched signing link if provided, otherwise fetch from BoldSign (single attempt, no delay)
+    // Use pre-fetched signing link if provided, otherwise fetch from BoldSign
     let signingLink = preFetchedSigningLink || '';
 
     if (!signingLink) {
       const apiKey = getBoldSignApiKey(boldsignMode);
       const baseUrl = getBoldSignBaseUrl();
 
-      try {
-        // Try embedded sign link endpoint first (most reliable for direct signing)
-        const signLinkResponse = await fetch(
-          `${baseUrl}/v1/document/getEmbeddedSignLink?documentId=${documentId}&signerEmail=${encodeURIComponent(customerEmail)}`,
-          { headers: { 'X-API-KEY': apiKey } }
-        );
+      // BoldSign needs a moment to process the document after creation
+      // Try twice with a short delay between attempts
+      for (let attempt = 0; attempt < 2 && !signingLink; attempt++) {
+        if (attempt > 0) await new Promise(r => setTimeout(r, 1500));
 
-        if (signLinkResponse.ok) {
-          const signLinkData = await signLinkResponse.json();
-          signingLink = signLinkData.signLink || '';
-        } else {
-          console.warn('Embedded sign link fetch failed:', signLinkResponse.status);
-          // Fallback: try properties endpoint
-          const propsResponse = await fetch(
-            `${baseUrl}/v1/document/properties?documentId=${documentId}`,
+        try {
+          const signLinkResponse = await fetch(
+            `${baseUrl}/v1/document/getEmbeddedSignLink?documentId=${documentId}&signerEmail=${encodeURIComponent(customerEmail)}`,
             { headers: { 'X-API-KEY': apiKey } }
           );
-          if (propsResponse.ok) {
-            const propsData = await propsResponse.json();
-            const signer = propsData.signerDetails?.find(
-              (s: any) => s.signerEmail?.toLowerCase() === customerEmail.toLowerCase()
-            );
-            if (signer?.signLink) signingLink = signer.signLink;
+
+          if (signLinkResponse.ok) {
+            const signLinkData = await signLinkResponse.json();
+            signingLink = signLinkData.signLink || '';
+          } else {
+            console.warn(`Sign link attempt ${attempt + 1} failed:`, signLinkResponse.status);
           }
+        } catch (e) {
+          console.warn(`Sign link attempt ${attempt + 1} error:`, e);
         }
-      } catch (e) {
-        console.warn('Sign link fetch error:', e);
       }
 
       if (!signingLink) {
