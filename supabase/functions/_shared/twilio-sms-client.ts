@@ -351,7 +351,93 @@ export function normalizePhoneNumber(phone: string): string {
 // --- 10DLC Brand & Campaign Registration ---
 
 /**
- * Register a brand with The Campaign Registry (TCR) via Twilio
+ * Create a complete Trust Hub Customer Profile with entity info, then submit it.
+ * Twilio requires: Customer Profile → End User (entity) → attach entity → submit profile.
+ */
+async function createAndSubmitCustomerProfile(
+  accountSid: string,
+  authToken: string,
+  brandInfo: {
+    brandName: string;
+    companyType: string;
+    taxId: string;
+    taxIdCountry: string;
+    website: string;
+    vertical: string;
+  }
+): Promise<string> {
+  const trustHubBase = 'https://trusthub.twilio.com/v1';
+
+  // Step 1: Create Customer Profile
+  const profile = await twilioFetch(`${trustHubBase}/CustomerProfiles`, accountSid, authToken, 'POST', {
+    FriendlyName: brandInfo.brandName,
+    Email: 'support@drive-247.com',
+    PolicySid: 'RNdfbf3fae0e1107f8aded0e7cead80bf5', // A2P Messaging Policy SID
+  });
+  const profileSid = profile.sid;
+  console.log(`[Twilio] Created Customer Profile: ${profileSid}`);
+
+  // Step 2: Create End User (the business entity) with required attributes
+  const endUser = await twilioFetch(`${trustHubBase}/EndUsers`, accountSid, authToken, 'POST', {
+    FriendlyName: brandInfo.brandName,
+    Type: 'us_a2p_messaging_profile_information',
+    'Attributes': JSON.stringify({
+      company_type: brandInfo.companyType || 'private',
+      business_name: brandInfo.brandName,
+      business_identity: brandInfo.companyType === 'non-profit' ? 'non_profit' : 'direct_customer',
+      business_type: 'LLC',
+      business_industry: 'TRANSPORTATION',
+      business_registration_identifier: brandInfo.taxId || 'N/A',
+      business_registration_number: brandInfo.taxId || '',
+      business_regions_of_operation: 'USA_AND_CANADA',
+      website_url: brandInfo.website || '',
+      social_media_profile_urls: '',
+      ein_issuing_country: brandInfo.taxIdCountry || 'US',
+    }),
+  });
+  console.log(`[Twilio] Created End User: ${endUser.sid}`);
+
+  // Step 3: Attach End User to Customer Profile
+  await twilioFetch(`${trustHubBase}/CustomerProfiles/${profileSid}/EntityAssignments`, accountSid, authToken, 'POST', {
+    ObjectSid: endUser.sid,
+  });
+  console.log(`[Twilio] Attached End User to Profile`);
+
+  // Step 4: Create Authorized Representative (required by Trust Hub)
+  const authRep = await twilioFetch(`${trustHubBase}/EndUsers`, accountSid, authToken, 'POST', {
+    FriendlyName: `${brandInfo.brandName} Auth Rep`,
+    Type: 'authorized_representative_1',
+    'Attributes': JSON.stringify({
+      first_name: brandInfo.brandName.split(' ')[0] || 'Admin',
+      last_name: brandInfo.brandName.split(' ').slice(1).join(' ') || 'User',
+      email: 'support@drive-247.com',
+      phone_number: '',
+      business_title: 'Owner',
+      job_position: 'Director',
+    }),
+  });
+  console.log(`[Twilio] Created Auth Rep: ${authRep.sid}`);
+
+  // Step 5: Attach Auth Rep to Customer Profile
+  await twilioFetch(`${trustHubBase}/CustomerProfiles/${profileSid}/EntityAssignments`, accountSid, authToken, 'POST', {
+    ObjectSid: authRep.sid,
+  });
+  console.log(`[Twilio] Attached Auth Rep to Profile`);
+
+  // Step 6: Submit the profile for evaluation
+  await twilioFetch(`${trustHubBase}/CustomerProfiles/${profileSid}/Evaluations`, accountSid, authToken, 'POST', {
+    PolicySid: 'RNdfbf3fae0e1107f8aded0e7cead80bf5',
+  });
+  console.log(`[Twilio] Submitted Customer Profile for evaluation`);
+
+  return profileSid;
+}
+
+/**
+ * Register a brand with The Campaign Registry (TCR) via Twilio.
+ * Trust Hub operations (Customer Profile, End Users) must be done on the PARENT account
+ * because subaccounts cannot create their own primary customer profiles.
+ * Brand registration is also done on the parent account with the profile SID.
  */
 export async function registerBrand(
   accountSid: string,
@@ -368,28 +454,26 @@ export async function registerBrand(
     stockTicker?: string;
   }
 ): Promise<{ brandSid: string; status: string }> {
-  // Use Twilio Messaging API to create a Brand Registration
-  const url = `https://messaging.twilio.com/v1/a2p/BrandRegistrations`;
-
-  const body: Record<string, string> = {
-    A2PProfileBundleSid: brandInfo.customerProfileBundleSid || '',
-    BrandType: 'STANDARD',
-  };
-
-  // If no profile bundle, use the direct brand registration approach
-  if (!brandInfo.customerProfileBundleSid) {
-    // Create via Trust Hub Customer Profiles first
-    const profileUrl = `https://trusthub.twilio.com/v1/CustomerProfiles`;
-    const profileData = await twilioFetch(profileUrl, accountSid, authToken, 'POST', {
-      FriendlyName: brandInfo.brandName,
-      Email: 'support@drive-247.com',
-      PolicySid: 'RNdfbf3fae0e1107f8aded0e7cead80bf5', // A2P Messaging Policy SID
-    });
-
-    body.A2PProfileBundleSid = profileData.sid;
+  // Use parent account for Trust Hub and brand registration — subaccounts lack primary profile
+  const parentSid = PARENT_ACCOUNT_SID();
+  const parentToken = PARENT_AUTH_TOKEN();
+  if (!parentSid || !parentToken) {
+    throw new Error('Parent Twilio credentials not configured — required for brand registration');
   }
 
-  const data = await twilioFetch(url, accountSid, authToken, 'POST', body);
+  const url = `https://messaging.twilio.com/v1/a2p/BrandRegistrations`;
+
+  let profileBundleSid = brandInfo.customerProfileBundleSid || '';
+
+  // If no profile bundle, create a full Customer Profile with entity info on the parent account
+  if (!profileBundleSid) {
+    profileBundleSid = await createAndSubmitCustomerProfile(parentSid, parentToken, brandInfo);
+  }
+
+  const data = await twilioFetch(url, parentSid, parentToken, 'POST', {
+    A2PProfileBundleSid: profileBundleSid,
+    BrandType: 'STANDARD',
+  });
 
   return {
     brandSid: data.sid,
