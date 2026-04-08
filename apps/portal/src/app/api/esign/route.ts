@@ -1215,26 +1215,28 @@ export async function POST(request: NextRequest) {
             }).catch((e) => console.warn('Auto-refill trigger error:', e));
         }
 
-        // Pre-fetch signing link from BoldSign (runs on Vercel where timing is reliable)
+        // Fetch signing link from BoldSign — retry until ready (max 15s)
         let signingLink = '';
-        try {
-            await new Promise(r => setTimeout(r, 2000));
-            const propsResponse = await fetch(
-                `${BOLDSIGN_BASE_URL}/v1/document/properties?documentId=${documentId}`,
-                { headers: { 'X-API-KEY': BOLDSIGN_API_KEY } }
-            );
-            if (propsResponse.ok) {
-                const propsData = await propsResponse.json();
-                const signer = propsData.signerDetails?.find(
-                    (s: any) => s.signerEmail?.toLowerCase() === body.customerEmail?.toLowerCase()
+        for (let attempt = 1; attempt <= 6 && !signingLink; attempt++) {
+            await new Promise(r => setTimeout(r, attempt === 1 ? 3000 : 2000));
+            try {
+                const signLinkRes = await fetch(
+                    `${BOLDSIGN_BASE_URL}/v1/document/getEmbeddedSignLink?documentId=${documentId}&signerEmail=${encodeURIComponent(body.customerEmail)}`,
+                    { headers: { 'X-API-KEY': BOLDSIGN_API_KEY } }
                 );
-                if (signer?.signLink) signingLink = signer.signLink;
-                console.log('Pre-fetch signing link:', signingLink ? 'OK' : 'no signLink in properties');
-            } else {
-                console.warn('Pre-fetch properties failed:', propsResponse.status);
+                if (signLinkRes.ok) {
+                    const signLinkData = await signLinkRes.json();
+                    signingLink = signLinkData.signLink || '';
+                    if (signingLink) console.log(`Signing link fetched on attempt ${attempt}`);
+                } else {
+                    console.warn(`Signing link attempt ${attempt}/6:`, signLinkRes.status);
+                }
+            } catch (e) {
+                console.warn(`Signing link attempt ${attempt}/6 error:`, e);
             }
-        } catch (e) {
-            console.warn('Pre-fetch signing link error:', e);
+        }
+        if (!signingLink) {
+            console.warn('Could not fetch signing link after 6 attempts');
         }
 
         // Send signing email (we handle emails ourselves since DisableEmails is true)
