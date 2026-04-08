@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { sendResendEmail, getTenantBranding, wrapWithBrandedTemplate } from '../_shared/resend-service.ts';
+import { getBoldSignApiKey, getBoldSignBaseUrl } from '../_shared/boldsign-client.ts';
 import type { BoldSignMode } from '../_shared/boldsign-client.ts';
 
 interface SigningEmailRequest {
@@ -49,26 +50,44 @@ Deno.serve(async (req) => {
 
     console.log('Sending signing email to:', customerEmail, 'for document:', documentId);
 
-    // Use pre-fetched signing link if provided (legacy support).
-    // Otherwise, we build a portal signing URL so the signing link is fetched
-    // on-demand when the customer clicks — saving BoldSign API calls.
+    // Use pre-fetched signing link if provided, otherwise fetch from BoldSign (single attempt, no delay)
     let signingLink = preFetchedSigningLink || '';
 
     if (!signingLink) {
-      // Build a portal signing URL that will fetch the BoldSign link on-demand
-      // Look up tenant slug for the portal URL
-      const { data: tenantData } = await supabase
-        .from('tenants')
-        .select('slug')
-        .eq('id', tenantId)
-        .single();
+      const apiKey = getBoldSignApiKey(boldsignMode);
+      const baseUrl = getBoldSignBaseUrl();
 
-      const tenantSlug = tenantData?.slug || '';
-      // The customer portal agreements page handles signing via the booking app
-      // Use a direct link that the customer can click to view/sign their agreement
-      if (tenantSlug) {
-        const bookingDomain = Deno.env.get('NEXT_PUBLIC_BOOKING_DOMAIN') || 'drive-247.com';
-        signingLink = `https://${tenantSlug}.${bookingDomain}/portal/agreements`;
+      try {
+        // Try embedded sign link endpoint first (most reliable for direct signing)
+        const signLinkResponse = await fetch(
+          `${baseUrl}/v1/document/getEmbeddedSignLink?documentId=${documentId}&signerEmail=${encodeURIComponent(customerEmail)}`,
+          { headers: { 'X-API-KEY': apiKey } }
+        );
+
+        if (signLinkResponse.ok) {
+          const signLinkData = await signLinkResponse.json();
+          signingLink = signLinkData.signLink || '';
+        } else {
+          console.warn('Embedded sign link fetch failed:', signLinkResponse.status);
+          // Fallback: try properties endpoint
+          const propsResponse = await fetch(
+            `${baseUrl}/v1/document/properties?documentId=${documentId}`,
+            { headers: { 'X-API-KEY': apiKey } }
+          );
+          if (propsResponse.ok) {
+            const propsData = await propsResponse.json();
+            const signer = propsData.signerDetails?.find(
+              (s: any) => s.signerEmail?.toLowerCase() === customerEmail.toLowerCase()
+            );
+            if (signer?.signLink) signingLink = signer.signLink;
+          }
+        }
+      } catch (e) {
+        console.warn('Sign link fetch error:', e);
+      }
+
+      if (!signingLink) {
+        console.warn('Could not get signing link from BoldSign — email will have fallback text');
       }
     }
 
