@@ -1617,7 +1617,7 @@ const CreateRental = () => {
         const docuSignData = await docuSignResponse.json();
 
         if (!docuSignResponse.ok || !docuSignData?.ok) {
-          console.error("eSign error:", docuSignData);
+          console.warn("eSign error:", docuSignData);
           toast({
             title: "Rental Created - Agreement Pending",
             description: `Rental created but agreement failed to send. You can retry from the rental details page.`,
@@ -1632,7 +1632,7 @@ const CreateRental = () => {
           });
         }
       } catch (docuSignErr: any) {
-        console.error("Error sending agreement:", docuSignErr);
+        console.warn("Error sending agreement:", docuSignErr);
         toast({
           title: "Rental Created - Agreement Pending",
           description: `Rental created but agreement failed to send. You can retry from the rental details page.`,
@@ -4582,7 +4582,6 @@ const CreateRental = () => {
         open={showConflictDialog}
         onOpenChange={setShowConflictDialog}
         rentalConflicts={conflictResult?.rentalConflicts || []}
-        blockedDateConflicts={conflictResult?.blockedDateConflicts || []}
         onRetry={() => {
           setShowConflictDialog(false);
           setConflictResult(null);

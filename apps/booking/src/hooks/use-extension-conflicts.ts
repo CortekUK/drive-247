@@ -45,23 +45,6 @@ export function useExtensionConflicts({
     enabled,
   });
 
-  const blockedDateConflictsQuery = useQuery({
-    queryKey: ['extension-conflicts-blocked', tenant?.id, vehicleId, extensionStart, extensionEnd],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from('blocked_dates')
-        .select('id', { count: 'exact', head: true })
-        .eq('tenant_id', tenant!.id)
-        .lte('start_date', extensionEnd)
-        .gte('end_date', extensionStart)
-        .or(`vehicle_id.is.null,vehicle_id.eq.${vehicleId}`);
-
-      if (error) throw error;
-      return count || 0;
-    },
-    enabled,
-  });
-
   // Check if extending would violate buffer time with the next rental
   const bufferMinutes = (tenant as any)?.buffer_time_minutes || 0;
   const bufferConflictQuery = useQuery({
@@ -92,9 +75,9 @@ export function useExtensionConflicts({
     enabled: enabled && bufferMinutes > 0,
   });
 
-  const conflictCount = (rentalConflictsQuery.data || 0) + (blockedDateConflictsQuery.data || 0) + (bufferConflictQuery.data || 0);
+  const conflictCount = (rentalConflictsQuery.data || 0) + (bufferConflictQuery.data || 0);
   const hasConflicts = conflictCount > 0;
-  const isChecking = rentalConflictsQuery.isLoading || blockedDateConflictsQuery.isLoading || bufferConflictQuery.isLoading;
+  const isChecking = rentalConflictsQuery.isLoading || bufferConflictQuery.isLoading;
 
   return {
     hasConflicts,

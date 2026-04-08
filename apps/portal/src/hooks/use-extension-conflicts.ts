@@ -16,13 +16,6 @@ interface RentalConflict {
   customerName: string;
 }
 
-interface BlockedDateConflict {
-  id: string;
-  start_date: string;
-  end_date: string;
-  reason: string | null;
-}
-
 interface BufferConflict {
   rentalId: string;
   start_date: string;
@@ -73,23 +66,6 @@ export function useExtensionConflicts({
     enabled,
   });
 
-  const blockedDateConflictsQuery = useQuery({
-    queryKey: ['extension-conflicts-blocked', tenant?.id, vehicleId, extensionStart, extensionEnd],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('blocked_dates')
-        .select('id, start_date, end_date, reason, vehicle_id')
-        .eq('tenant_id', tenant!.id)
-        .lte('start_date', extensionEnd)
-        .gte('end_date', extensionStart)
-        .or(`vehicle_id.is.null,vehicle_id.eq.${vehicleId}`);
-
-      if (error) throw error;
-      return (data || []) as BlockedDateConflict[];
-    },
-    enabled,
-  });
-
   // Check if extending would violate buffer time with the next rental
   const bufferMinutes = (tenant as any)?.buffer_time_minutes || 0;
   const bufferConflictQuery = useQuery({
@@ -127,14 +103,12 @@ export function useExtensionConflicts({
   });
 
   const rentalConflicts = rentalConflictsQuery.data || [];
-  const blockedDateConflicts = blockedDateConflictsQuery.data || [];
   const bufferConflicts = bufferConflictQuery.data || [];
-  const hasConflicts = rentalConflicts.length > 0 || blockedDateConflicts.length > 0 || bufferConflicts.length > 0;
-  const isChecking = rentalConflictsQuery.isLoading || blockedDateConflictsQuery.isLoading || bufferConflictQuery.isLoading;
+  const hasConflicts = rentalConflicts.length > 0 || bufferConflicts.length > 0;
+  const isChecking = rentalConflictsQuery.isLoading || bufferConflictQuery.isLoading;
 
   return {
     rentalConflicts,
-    blockedDateConflicts,
     bufferConflicts,
     hasConflicts,
     isChecking,

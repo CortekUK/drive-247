@@ -8,16 +8,8 @@ export interface RentalConflict {
   customerName: string;
 }
 
-export interface BlockedDateConflict {
-  id: string;
-  start_date: string;
-  end_date: string;
-  reason: string | null;
-}
-
 export interface ConflictResult {
   rentalConflicts: RentalConflict[];
-  blockedDateConflicts: BlockedDateConflict[];
   hasConflicts: boolean;
 }
 
@@ -58,27 +50,8 @@ export async function checkRentalConflicts(
     customerName: r.customers?.name || 'Unknown',
   }));
 
-  // Query 2: Check for blocked dates (global + vehicle-specific) overlapping the period
-  const { data: blockedData, error: blockedError } = await supabase
-    .from('blocked_dates')
-    .select('id, start_date, end_date, reason, vehicle_id')
-    .eq('tenant_id', tenantId)
-    .lte('start_date', endDate)
-    .gte('end_date', startDate)
-    .or(`vehicle_id.is.null,vehicle_id.eq.${vehicleId}`);
-
-  if (blockedError) throw blockedError;
-
-  const blockedDateConflicts: BlockedDateConflict[] = (blockedData || []).map((b: any) => ({
-    id: b.id,
-    start_date: b.start_date,
-    end_date: b.end_date,
-    reason: b.reason,
-  }));
-
   return {
     rentalConflicts,
-    blockedDateConflicts,
-    hasConflicts: rentalConflicts.length > 0 || blockedDateConflicts.length > 0,
+    hasConflicts: rentalConflicts.length > 0,
   };
 }

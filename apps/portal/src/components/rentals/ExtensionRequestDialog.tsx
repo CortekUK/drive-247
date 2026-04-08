@@ -194,7 +194,7 @@ export function ExtensionRequestDialog({
     enabled: !!rental.id && !!tenant?.id,
   });
 
-  const { rentalConflicts, blockedDateConflicts, hasConflicts, isChecking: isCheckingConflicts } = useExtensionConflicts({
+  const { rentalConflicts, hasConflicts, isChecking: isCheckingConflicts } = useExtensionConflicts({
     vehicleId: rental.vehicle_id || rental.vehicles?.id,
     currentEndDate: rental.end_date,
     newEndDate: rental.previous_end_date || undefined,
@@ -636,11 +636,6 @@ export function ExtensionRequestDialog({
                   >
                     Rental for {c.customerName} ({format(new Date(c.start_date), 'MMM dd')} – {format(new Date(c.end_date), 'MMM dd')}) <ExternalLink className="h-3 w-3" />
                   </a>
-                ))}
-                {blockedDateConflicts.map((c) => (
-                  <p key={c.id} className="text-xs">
-                    Blocked: {c.reason || 'No reason'} ({format(new Date(c.start_date), 'MMM dd')} – {format(new Date(c.end_date), 'MMM dd')})
-                  </p>
                 ))}
               </AlertDescription>
             </Alert>

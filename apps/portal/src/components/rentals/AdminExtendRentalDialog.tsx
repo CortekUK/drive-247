@@ -64,6 +64,7 @@ export function AdminExtendRentalDialog({
 
   const [newEndDate, setNewEndDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionStep, setSubmissionStep] = useState('');
   const [step, setStep] = useState<1 | 2>(1);
   // Capture the current end date at dialog open so it doesn't change during submission
   const [snapshotEndDate] = useState(rental.end_date);
@@ -197,7 +198,7 @@ export function AdminExtendRentalDialog({
   })();
   const extensionTotalAmount = extensionCost + extensionTaxAmount + extensionServiceFee + insurancePremium;
 
-  const { rentalConflicts, blockedDateConflicts, bufferConflicts, hasConflicts, isChecking: isCheckingConflicts } = useExtensionConflicts({
+  const { rentalConflicts, bufferConflicts, hasConflicts, isChecking: isCheckingConflicts } = useExtensionConflicts({
     vehicleId: rental.vehicles?.id,
     currentEndDate: snapshotEndDate,
     newEndDate: newEndDate || undefined,
@@ -217,6 +218,7 @@ export function AdminExtendRentalDialog({
     if (!newEndDate || !tenant?.id) return;
 
     setIsSubmitting(true);
+    setSubmissionStep('Checking conflicts...');
     try {
       // 0. Server-side conflict re-check before update (catches race conditions)
       const vehicleId = rental.vehicles?.id || rental.vehicle_id;
@@ -237,6 +239,7 @@ export function AdminExtendRentalDialog({
         }
       }
 
+      setSubmissionStep('Updating rental dates...');
       // 1. Update rental dates (set original_end_date only on first extension)
       const isFirstExtension = !rental.original_end_date && (existingExtensionCount || 0) === 0;
       const { error: updateError } = await supabase
@@ -290,6 +293,7 @@ export function AdminExtendRentalDialog({
         if (ledgerError) console.error('Failed to create ledger entries:', ledgerError);
       }
 
+      setSubmissionStep('Creating payment link...');
       // 3. Create Stripe checkout for extension payment (total includes tax + service fee)
       let checkoutUrl: string | undefined;
       if (extensionTotalAmount > 0) {
@@ -337,6 +341,7 @@ export function AdminExtendRentalDialog({
         }
       }
 
+      setSubmissionStep('Sending notifications...');
       // 4. Send notification email
       try {
         const { data: session } = await supabase.auth.getSession();
@@ -399,9 +404,11 @@ export function AdminExtendRentalDialog({
         }
       }
 
-      // 7. Auto-send extension agreement (fire-and-forget)
+      // 7. Send extension agreement (awaited like original rental flow)
+      setSubmissionStep('Sending extension agreement...');
+      let agreementSent = false;
       try {
-        fetch('/api/esign', {
+        const esignResponse = await fetch('/api/esign', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -414,14 +421,21 @@ export function AdminExtendRentalDialog({
             extensionNewEndDate: newEndDate,
             extensionNumber: (existingExtensionCount || 0) + 1,
           }),
-        }).then(res => {
-          if (!res.ok) console.error('Extension agreement send failed:', res.status);
-          else console.log('Extension agreement sent successfully');
-        }).catch(err => console.error('Extension agreement send error:', err));
+        });
+        const esignData = await esignResponse.json();
+        if (esignResponse.ok && esignData?.ok) {
+          agreementSent = true;
+          console.log('Extension agreement sent successfully');
+        } else if (esignData?.error === 'insufficient_credits') {
+          console.warn('Insufficient credits for extension agreement');
+        } else {
+          console.warn('Extension agreement send failed:', esignData);
+        }
       } catch (e) {
-        console.error('Failed to trigger extension agreement:', e);
+        console.error('Failed to send extension agreement:', e);
       }
 
+      setSubmissionStep('Finalising...');
       // 8. Auto-create extension insurance (fire-and-forget) — only if Bonzah selected with coverage
       if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && originalPolicy) {
         try {
@@ -477,8 +491,11 @@ export function AdminExtendRentalDialog({
       }
 
       toast({
-        title: 'Rental Extended',
-        description: `Rental extended to ${format(new Date(newEndDate), 'MMMM dd, yyyy')}.${extensionTotalAmount > 0 ? ` Extension charge of ${tenant?.currency_code || '$'}${extensionTotalAmount.toFixed(2)} created with payment link sent to customer.` : ' Customer has been notified.'} An extension agreement has been sent for signing.`,
+        title: agreementSent ? 'Rental Extended — Agreement Sent' : 'Rental Extended — Agreement Pending',
+        description: agreementSent
+          ? `Rental extended to ${format(new Date(newEndDate), 'MMMM dd, yyyy')}.${extensionTotalAmount > 0 ? ` Extension charge of ${tenant?.currency_code || '$'}${extensionTotalAmount.toFixed(2)} created.` : ''} Agreement sent to customer for signing.`
+          : `Rental extended to ${format(new Date(newEndDate), 'MMMM dd, yyyy')}.${extensionTotalAmount > 0 ? ` Extension charge of ${tenant?.currency_code || '$'}${extensionTotalAmount.toFixed(2)} created.` : ''} Agreement failed to send — you can retry from the rental details page.`,
+        variant: agreementSent ? 'default' : 'default',
       });
 
       queryClient.invalidateQueries({ queryKey: ['rental', rental.id, tenant.id] });
@@ -541,6 +558,7 @@ export function AdminExtendRentalDialog({
       });
     } finally {
       setIsSubmitting(false);
+      setSubmissionStep('');
     }
   };
 
@@ -833,11 +851,6 @@ export function AdminExtendRentalDialog({
                         Rental for {c.customerName} ({format(new Date(c.start_date), 'MMM dd')} – {format(new Date(c.end_date), 'MMM dd')}) <ExternalLink className="h-3 w-3" />
                       </a>
                     ))}
-                    {blockedDateConflicts.map((c) => (
-                      <p key={c.id} className="text-xs">
-                        Blocked: {c.reason || 'No reason'} ({format(new Date(c.start_date), 'MMM dd')} – {format(new Date(c.end_date), 'MMM dd')})
-                      </p>
-                    ))}
                     {bufferConflicts.map((c) => (
                       <a
                         key={c.rentalId}
@@ -960,7 +973,7 @@ export function AdminExtendRentalDialog({
                   <div className="border-t pt-3 flex items-center gap-2 text-amber-600">
                     <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                     <span className="text-sm font-medium">
-                      {rentalConflicts.length + blockedDateConflicts.length + bufferConflicts.length} scheduling conflict{rentalConflicts.length + blockedDateConflicts.length + bufferConflicts.length !== 1 ? 's' : ''} detected
+                      {rentalConflicts.length + bufferConflicts.length} scheduling conflict{rentalConflicts.length + bufferConflicts.length !== 1 ? 's' : ''} detected
                     </span>
                   </div>
                 )}
@@ -988,7 +1001,7 @@ export function AdminExtendRentalDialog({
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Extending...
+                    {submissionStep || 'Extending...'}
                   </>
                 ) : (
                   <>

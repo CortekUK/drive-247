@@ -88,13 +88,6 @@ interface PricingExtra {
   price: number;
   description: string | null;
 }
-interface BlockedDate {
-  id: string;
-  start_date: string;
-  end_date: string;
-  vehicle_id: string | null;
-  reason?: string | null;
-}
 interface ExistingRental {
   id: string;
   vehicle_id: string;
@@ -227,8 +220,6 @@ const MultiStepBookingWidget = () => {
   useEffect(() => {
     return () => { clearTimeout(transitionTimerRef.current); clearTimeout(transitionTimer2Ref.current); };
   }, []);
-  const [blockedDates, setBlockedDates] = useState<string[]>([]); // Global blocked dates (vehicle_id is null)
-  const [allBlockedDates, setAllBlockedDates] = useState<BlockedDate[]>([]); // All blocked dates including vehicle-specific
   const [existingRentals, setExistingRentals] = useState<ExistingRental[]>([]); // Completed rentals for buffer time checking
   const [overlappingVehicleIds, setOverlappingVehicleIds] = useState<Set<string>>(new Set()); // Vehicles with Pending/Active rentals overlapping selected dates
   const [errors, setErrors] = useState<{
@@ -601,36 +592,6 @@ const MultiStepBookingWidget = () => {
     }
   }, []);
 
-  // Real-time subscription for blocked dates changes
-  useEffect(() => {
-    if (!tenant?.id) return;
-
-    // Subscribe to blocked_dates changes for this tenant
-    const channel = supabase
-      .channel(`blocked-dates-${tenant.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // Listen to INSERT, UPDATE, DELETE
-          schema: 'public',
-          table: 'blocked_dates',
-          filter: `tenant_id=eq.${tenant.id}`,
-        },
-        (payload) => {
-          console.log('[BlockedDates] Real-time update received:', payload.eventType);
-          // Refetch blocked dates when any change occurs
-          loadBlockedDates();
-        }
-      )
-      .subscribe((status) => {
-        console.log('[BlockedDates] Subscription status:', status);
-      });
-
-    // Cleanup subscription on unmount or tenant change
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [tenant?.id]);
 
   useEffect(() => {
     // Load view mode from localStorage
@@ -1087,43 +1048,6 @@ const MultiStepBookingWidget = () => {
     }
   }, [currentStep, authInitialized, authLoading, isAuthenticated]);
 
-  // Separate function to load blocked dates - used by both initial load and real-time updates
-  const loadBlockedDates = async () => {
-    if (!tenant?.id) return;
-
-    const { data: blockedDatesData } = await supabase
-      .from("blocked_dates")
-      .select("id, start_date, end_date, vehicle_id, reason")
-      .eq("tenant_id", tenant.id);
-
-    if (blockedDatesData) {
-      // Store all blocked dates (global + vehicle-specific)
-      setAllBlockedDates(blockedDatesData);
-      console.log('[BlockedDates] Loaded all blocked dates:', blockedDatesData.map(b => ({ id: b.id, vehicle_id: b.vehicle_id, start: b.start_date, end: b.end_date })));
-
-      // Filter only global blocked dates (vehicle_id is null) for Step 1 calendar
-      const globalBlockedDates = blockedDatesData.filter(range => range.vehicle_id === null);
-
-      // Expand global blocked date ranges into individual dates for calendar
-      const formattedDates: string[] = [];
-      globalBlockedDates.forEach(range => {
-        // Safari-safe date parsing: split YYYY-MM-DD and use Date constructor with numbers
-        const [startYear, startMonth, startDay] = range.start_date.split('-').map(Number);
-        const [endYear, endMonth, endDay] = range.end_date.split('-').map(Number);
-        const startDate = new Date(startYear, startMonth - 1, startDay);
-        const endDate = new Date(endYear, endMonth - 1, endDay);
-
-        // Generate all dates in the range
-        const currentDate = new Date(startDate);
-        while (currentDate <= endDate) {
-          formattedDates.push(format(currentDate, "yyyy-MM-dd"));
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
-      });
-      setBlockedDates(formattedDates);
-    }
-  };
-
   const loadData = async () => {
     // Wait for tenant to be loaded before querying
     if (!tenant?.id) {
@@ -1175,9 +1099,6 @@ const MultiStepBookingWidget = () => {
         }));
       }
     }
-
-    // Load blocked dates
-    await loadBlockedDates();
 
     // Load recently completed rentals for buffer time checking
     if (tenant?.buffer_time_minutes && tenant.buffer_time_minutes > 0) {
@@ -2440,37 +2361,6 @@ const MultiStepBookingWidget = () => {
       return { price: primaryPrice, label: primaryLabel, secondaryPrices: [] };
     }
   };
-  const isVehicleBlockedForPeriod = (vehicleId: string): { blocked: boolean; blockedRange?: { start: string; end: string } } => {
-    if (!formData.pickupDate || !formData.dropoffDate) {
-      return { blocked: false };
-    }
-
-    const pickupDate = parseDateString(formData.pickupDate);
-    const dropoffDate = parseDateString(formData.dropoffDate);
-
-    // Find any blocked dates for this specific vehicle that overlap with the rental period
-    const vehicleBlockedDates = allBlockedDates.filter(block => block.vehicle_id === vehicleId);
-
-    for (const block of vehicleBlockedDates) {
-      const blockStart = parseDateString(block.start_date);
-      const blockEnd = parseDateString(block.end_date);
-
-      // Check if there's any overlap between rental period and blocked period
-      const hasOverlap = pickupDate <= blockEnd && dropoffDate >= blockStart;
-
-      if (hasOverlap) {
-        return {
-          blocked: true,
-          blockedRange: {
-            start: block.start_date,
-            end: block.end_date
-          }
-        };
-      }
-    }
-
-    return { blocked: false };
-  };
 
   // Helper function to get vehicle price based on selected price filter mode
   const getVehiclePriceByMode = (vehicle: Vehicle, mode: "daily" | "weekly" | "monthly"): number => {
@@ -2574,31 +2464,8 @@ const MultiStepBookingWidget = () => {
       return price >= filters.priceRange[0] && price <= filters.priceRange[1];
     });
 
-    // Filter out vehicles with blocked dates for the selected rental period
+    // Filter out vehicles based on buffer time and overlapping rentals
     if (formData.pickupDate && formData.dropoffDate) {
-      const pickupDate = parseDateString(formData.pickupDate);
-      const dropoffDate = parseDateString(formData.dropoffDate);
-
-      filtered = filtered.filter(vehicle => {
-        // Check for vehicle-specific blocked dates
-        const vehicleBlockedDates = allBlockedDates.filter(block => block.vehicle_id === vehicle.id);
-
-        for (const block of vehicleBlockedDates) {
-          const blockStart = parseDateString(block.start_date);
-          const blockEnd = parseDateString(block.end_date);
-
-          // Check if there's any overlap between rental period and blocked period
-          const hasOverlap = pickupDate <= blockEnd && dropoffDate >= blockStart;
-
-          if (hasOverlap) {
-            console.log(`[BlockedDates] Vehicle ${vehicle.reg} blocked: rental ${formData.pickupDate}-${formData.dropoffDate} overlaps with block ${block.start_date}-${block.end_date}`);
-            return false; // Exclude this vehicle
-          }
-        }
-
-        return true; // Include this vehicle
-      });
-
       // Buffer time: hide vehicles whose last completed rental ended within the buffer period
       const bufferMinutes = tenant?.buffer_time_minutes || 0;
       if (bufferMinutes > 0 && existingRentals.length > 0) {
@@ -2898,25 +2765,6 @@ const MultiStepBookingWidget = () => {
         } else if (duration.days > maxDays) {
           newErrors.dropoffDate = `Maximum rental period is ${maxDays} day${maxDays !== 1 ? 's' : ''}.`;
         }
-      }
-    }
-
-    // Validate rental range doesn't span through globally blocked dates
-    if (formData.pickupDate && formData.dropoffDate) {
-      const pickupDate = parseDateString(formData.pickupDate);
-      const dropoffDate = parseDateString(formData.dropoffDate);
-      const globalBlocks = allBlockedDates.filter(b => !b.vehicle_id);
-      const overlappingBlock = globalBlocks.find(block => {
-        const blockStart = parseDateString(block.start_date);
-        const blockEnd = parseDateString(block.end_date);
-        return pickupDate <= blockEnd && dropoffDate >= blockStart;
-      });
-      if (overlappingBlock) {
-        const formatDate = (d: string) => {
-          const date = parseDateString(d);
-          return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
-        };
-        newErrors.dropoffDate = `Your dates overlap with unavailable dates (${formatDate(overlappingBlock.start_date)} – ${formatDate(overlappingBlock.end_date)}). Please choose different dates.`;
       }
     }
 
@@ -3515,10 +3363,6 @@ const MultiStepBookingWidget = () => {
                       <Calendar mode="single" selected={formData.pickupDate ? parseDateString(formData.pickupDate) : undefined} onSelect={date => {
                         if (date) {
                           const dateStr = format(date, "yyyy-MM-dd");
-                          if (blockedDates.includes(dateStr)) {
-                            toast.error("This date is not available for booking.");
-                            return;
-                          }
                           setFormData({
                             ...formData,
                             pickupDate: dateStr
@@ -3540,7 +3384,7 @@ const MultiStepBookingWidget = () => {
                         oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
                         const dayWorkingHours = getWorkingHoursForDate(date, tenant);
                         const isClosedDay = !dayWorkingHours.enabled;
-                        return date < earliestPickup || date > oneYearFromNow || blockedDates.includes(dateStr) || isClosedDay;
+                        return date < earliestPickup || date > oneYearFromNow || isClosedDay;
                       }} initialFocus className="pointer-events-auto" />
                     </PopoverContent>
                   </Popover>
@@ -3644,7 +3488,7 @@ const MultiStepBookingWidget = () => {
                         const dateStr = format(date, "yyyy-MM-dd");
                         const dayWorkingHours = getWorkingHoursForDate(date, tenant);
                         const isClosedDay = !dayWorkingHours.enabled;
-                        return date < earliestReturnDay || date > oneYearFromPickup || blockedDates.includes(dateStr) || isClosedDay;
+                        return date < earliestReturnDay || date > oneYearFromPickup || isClosedDay;
                       }} initialFocus className="pointer-events-auto" />
                     </PopoverContent>
                   </Popover>
@@ -3961,9 +3805,6 @@ const MultiStepBookingWidget = () => {
                     const isRollsRoyce = (vehicle.make || '').toLowerCase().includes("rolls") || (vehicle.model || '').toLowerCase().includes("phantom");
                     const isSelected = formData.vehicleId === vehicle.id;
                     const estimation = calculateEstimatedTotal(vehicle);
-                    const blockStatus = isVehicleBlockedForPeriod(vehicle.id);
-                    const isBlocked = blockStatus.blocked;
-
                     // Promo Logic for Display
                     let displayPrice = estimation?.total || 0;
                     let originalPrice = displayPrice;
@@ -3984,9 +3825,6 @@ const MultiStepBookingWidget = () => {
                         hasDiscount = true;
                       }
                     }
-
-                    // Hide blocked/unavailable vehicles completely
-                    if (isBlocked) return null;
 
                     if (viewMode === "list") {
                       // List View Card
@@ -4179,10 +4017,9 @@ const MultiStepBookingWidget = () => {
 
                     // Grid View Card (existing design)
                     return <Card key={vehicle.id} className={cn("group transition-all duration-300 overflow-hidden border-2 relative flex flex-col h-full",
-                      isBlocked ? "opacity-60 cursor-not-allowed border-destructive/30" : "cursor-pointer hover:shadow-2xl hover:scale-[1.02]",
-                      !isBlocked && isSelected ? "border-primary bg-primary/5 shadow-glow" : "border-border/30 hover:border-primary/40",
-                      !isBlocked && isRollsRoyce && "shadow-glow")} onClick={() => {
-                        if (isBlocked) return; // Prevent selection if blocked
+                      "cursor-pointer hover:shadow-2xl hover:scale-[1.02]",
+                      isSelected ? "border-primary bg-primary/5 shadow-glow" : "border-border/30 hover:border-primary/40",
+                      isRollsRoyce && "shadow-glow")} onClick={() => {
                         setFormData({
                           ...formData,
                           vehicleId: vehicle.id
@@ -4346,10 +4183,8 @@ const MultiStepBookingWidget = () => {
                         {/* CTA - pushed to bottom with mt-auto */}
                         <Button
                           className={cn("w-full h-11 font-medium transition-colors mt-auto",
-                            isBlocked ? "bg-muted text-muted-foreground cursor-not-allowed" :
                               isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
                                 "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
-                          disabled={isBlocked}
                           onClick={e => {
                             e.stopPropagation();
                             // Toggle: if already selected, deselect; otherwise select
