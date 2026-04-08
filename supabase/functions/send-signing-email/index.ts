@@ -57,8 +57,9 @@ Deno.serve(async (req) => {
       const apiKey = getBoldSignApiKey(boldsignMode);
       const baseUrl = getBoldSignBaseUrl();
 
-      // BoldSign needs a moment to process the document after creation
-      // Try twice with a short delay between attempts
+      // BoldSign needs time to process the document after creation
+      // Wait 2s before first attempt, then retry after 1.5s if needed
+      await new Promise(r => setTimeout(r, 2000));
       for (let attempt = 0; attempt < 2 && !signingLink; attempt++) {
         if (attempt > 0) await new Promise(r => setTimeout(r, 1500));
 
