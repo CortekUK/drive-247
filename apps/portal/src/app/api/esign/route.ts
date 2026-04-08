@@ -1215,6 +1215,28 @@ export async function POST(request: NextRequest) {
             }).catch((e) => console.warn('Auto-refill trigger error:', e));
         }
 
+        // Pre-fetch signing link from BoldSign (runs on Vercel where timing is reliable)
+        let signingLink = '';
+        try {
+            await new Promise(r => setTimeout(r, 2000));
+            const propsResponse = await fetch(
+                `${BOLDSIGN_BASE_URL}/v1/document/properties?documentId=${documentId}`,
+                { headers: { 'X-API-KEY': BOLDSIGN_API_KEY } }
+            );
+            if (propsResponse.ok) {
+                const propsData = await propsResponse.json();
+                const signer = propsData.signerDetails?.find(
+                    (s: any) => s.signerEmail?.toLowerCase() === body.customerEmail?.toLowerCase()
+                );
+                if (signer?.signLink) signingLink = signer.signLink;
+                console.log('Pre-fetch signing link:', signingLink ? 'OK' : 'no signLink in properties');
+            } else {
+                console.warn('Pre-fetch properties failed:', propsResponse.status);
+            }
+        } catch (e) {
+            console.warn('Pre-fetch signing link error:', e);
+        }
+
         // Send signing email (we handle emails ourselves since DisableEmails is true)
         let emailSent = false;
         try {
@@ -1237,8 +1259,7 @@ export async function POST(request: NextRequest) {
                     vehicleInfo: vehicleDesc,
                     tenantId: body.tenantId,
                     boldsignMode: boldsignMode,
-                    agreementId: agreementId || undefined,
-                    rentalId: body.rentalId,
+                    signingLink: signingLink || undefined,
                 }),
             });
             emailSent = signingEmailResponse.ok;

@@ -672,6 +672,28 @@ export async function POST(request: NextRequest) {
             const companyName = tenant?.company_name || 'Drive 247';
             const vehicleDesc = [vehicle?.make, vehicle?.model].filter(Boolean).join(' ') || 'your vehicle';
 
+            // Pre-fetch signing link from BoldSign
+            let signingLink = '';
+            try {
+                await new Promise(r => setTimeout(r, 2000));
+                const propsResponse = await fetch(
+                    `${BOLDSIGN_BASE_URL}/v1/document/properties?documentId=${documentId}`,
+                    { headers: { 'X-API-KEY': BOLDSIGN_API_KEY } }
+                );
+                if (propsResponse.ok) {
+                    const propsData = await propsResponse.json();
+                    const signer = propsData.signerDetails?.find(
+                        (s: any) => s.signerEmail?.toLowerCase() === body.customerEmail?.toLowerCase()
+                    );
+                    if (signer?.signLink) signingLink = signer.signLink;
+                    console.log('Pre-fetch signing link:', signingLink ? 'OK' : 'no signLink in properties');
+                } else {
+                    console.warn('Pre-fetch properties failed:', propsResponse.status);
+                }
+            } catch (e) {
+                console.warn('Pre-fetch signing link error:', e);
+            }
+
             const signingEmailResponse = await fetch(`${supabaseUrl}/functions/v1/send-signing-email`, {
                 method: 'POST',
                 headers: {
@@ -687,8 +709,7 @@ export async function POST(request: NextRequest) {
                     vehicleInfo: vehicleDesc,
                     tenantId,
                     boldsignMode,
-                    agreementId: agreementId || undefined,
-                    rentalId: body.rentalId,
+                    signingLink: signingLink || undefined,
                 }),
             });
             emailSent = signingEmailResponse.ok;

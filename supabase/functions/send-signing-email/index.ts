@@ -50,49 +50,16 @@ Deno.serve(async (req) => {
 
     console.log('Sending signing email to:', customerEmail, 'for document:', documentId);
 
-    // Use pre-fetched signing link if provided, otherwise fetch from BoldSign
+    // Use pre-fetched signing link from the esign route.
+    // The esign route pre-fetches the link from BoldSign after document creation
+    // and passes it here. If not provided, we skip the BoldSign fetch to avoid
+    // redundant API calls — the email will show fallback text instead.
     let signingLink = preFetchedSigningLink || '';
 
-    if (!signingLink) {
-      const apiKey = getBoldSignApiKey(boldsignMode);
-      const baseUrl = getBoldSignBaseUrl();
-
-      // BoldSign needs ~3-5s to process a document after creation.
-      // The esign route calls us immediately after /v1/document/send,
-      // so we must wait before the signing link becomes available.
-      // Try up to 3 times: at 3s, 4.5s, and 6s after function start.
-      for (let attempt = 0; attempt < 3 && !signingLink; attempt++) {
-        await new Promise(r => setTimeout(r, attempt === 0 ? 3000 : 1500));
-
-        try {
-          // Use properties endpoint — returns the direct browser signing URL
-          const propsResponse = await fetch(
-            `${baseUrl}/v1/document/properties?documentId=${documentId}`,
-            { headers: { 'X-API-KEY': apiKey } }
-          );
-
-          if (propsResponse.ok) {
-            const propsData = await propsResponse.json();
-            const signer = propsData.signerDetails?.find(
-              (s: any) => s.signerEmail?.toLowerCase() === customerEmail.toLowerCase()
-            );
-            if (signer?.signLink) {
-              signingLink = signer.signLink;
-              console.log(`Got signing link from properties on attempt ${attempt + 1}`);
-            } else {
-              console.warn(`Attempt ${attempt + 1}: properties OK but no signLink for ${customerEmail}`);
-            }
-          } else {
-            console.warn(`Attempt ${attempt + 1}: properties failed:`, propsResponse.status);
-          }
-        } catch (e) {
-          console.warn(`Attempt ${attempt + 1} error:`, e);
-        }
-      }
-
-      if (!signingLink) {
-        console.warn('Could not get signing link from BoldSign after 3 attempts');
-      }
+    if (signingLink) {
+      console.log('Using pre-fetched signing link');
+    } else {
+      console.warn('No pre-fetched signing link — email will have fallback text');
     }
 
     // Get tenant branding
