@@ -2378,7 +2378,53 @@ const RentalDetail = () => {
                       </TableCell>
                       <TableCell className="text-right pr-6">
                         <div className="flex items-center gap-2 justify-end">
-                        {isExcessMileageUnpaid && excessMileageCharge ? (
+                        {category === 'Security Deposit' && rental.deposit_hold_status === 'held' ? (
+                          <div className="flex items-center gap-2 justify-end">
+                            <button
+                              className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  await supabase.functions.invoke('release-deposit-hold', {
+                                    body: { rentalId: rental.id, tenantId: tenant?.id },
+                                  });
+                                  queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+                                  toast({ title: 'Deposit Released', description: 'The deposit hold has been released.' });
+                                } catch (err: any) {
+                                  toast({ title: 'Error', description: err.message, variant: 'destructive' });
+                                }
+                              }}
+                            >
+                              Release
+                            </button>
+                            <button
+                              className="text-xs font-medium text-red-500 hover:text-red-400 hover:underline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const captureAmount = prompt(`Enter amount to capture (max $${rental.deposit_hold_amount}):`);
+                                if (!captureAmount) return;
+                                const amt = parseFloat(captureAmount);
+                                if (isNaN(amt) || amt <= 0 || amt > (rental.deposit_hold_amount || 0)) {
+                                  toast({ title: 'Invalid Amount', description: `Amount must be between $0.01 and $${rental.deposit_hold_amount}`, variant: 'destructive' });
+                                  return;
+                                }
+                                const reason = prompt('Reason for capture (e.g., damages, fines):') || 'Deposit captured';
+                                supabase.functions.invoke('capture-deposit-hold', {
+                                  body: { rentalId: rental.id, tenantId: tenant?.id, amount: amt, reason },
+                                }).then(() => {
+                                  queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+                                  queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+                                  queryClient.invalidateQueries({ queryKey: ['payments-data'] });
+                                  toast({ title: 'Deposit Captured', description: `$${amt} captured from deposit hold.` });
+                                }).catch((err: any) => {
+                                  toast({ title: 'Error', description: err.message, variant: 'destructive' });
+                                });
+                              }}
+                            >
+                              Charge
+                            </button>
+                          </div>
+                        ) : isExcessMileageUnpaid && excessMileageCharge ? (
                           <div className="flex items-center gap-2 justify-end">
                             {(() => {
                               // Only show Deduct Deposit if deposit charge exists and has remaining > 0
@@ -3409,92 +3455,7 @@ const RentalDetail = () => {
         />
       )}
 
-      {/* Deposit Hold Status */}
-      {rental?.deposit_hold_status && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Shield className="h-4 w-4 text-amber-500" />
-              Pre-Authorization Hold
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Status</span>
-              <Badge variant={
-                rental.deposit_hold_status === 'held' ? 'default' :
-                rental.deposit_hold_status === 'captured' ? 'destructive' :
-                rental.deposit_hold_status === 'released' ? 'secondary' :
-                rental.deposit_hold_status === 'expired' ? 'outline' : 'outline'
-              }>
-                {rental.deposit_hold_status === 'held' ? 'Hold Active' :
-                 rental.deposit_hold_status === 'captured' ? 'Captured' :
-                 rental.deposit_hold_status === 'released' ? 'Released' :
-                 rental.deposit_hold_status === 'expired' ? 'Expired' :
-                 rental.deposit_hold_status === 'refreshing' ? 'Refreshing...' :
-                 rental.deposit_hold_status}
-              </Badge>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Amount</span>
-              <span className="text-sm font-medium">{formatCurrencyUtil(rental.deposit_hold_amount || 0, tenant?.currency_code || 'USD')}</span>
-            </div>
-            {rental.deposit_hold_expires_at && rental.deposit_hold_status === 'held' && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Expires</span>
-                <span className="text-sm">{new Date(rental.deposit_hold_expires_at).toLocaleDateString('en-US')}</span>
-              </div>
-            )}
-            {rental.deposit_hold_status === 'held' && (
-              <div className="flex gap-2 pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    try {
-                      await supabase.functions.invoke('release-deposit-hold', {
-                        body: { rentalId: rental.id, tenantId: tenant?.id },
-                      });
-                      queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
-                      toast({ title: 'Deposit Released', description: 'The deposit hold has been released.' });
-                    } catch (err: any) {
-                      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-                    }
-                  }}
-                >
-                  Release Hold
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => {
-                    const captureAmount = prompt(`Enter amount to capture (max $${rental.deposit_hold_amount}):`);
-                    if (!captureAmount) return;
-                    const amt = parseFloat(captureAmount);
-                    if (isNaN(amt) || amt <= 0 || amt > (rental.deposit_hold_amount || 0)) {
-                      toast({ title: 'Invalid Amount', description: `Amount must be between $0.01 and $${rental.deposit_hold_amount}`, variant: 'destructive' });
-                      return;
-                    }
-                    const reason = prompt('Reason for capture (e.g., damages, fines):') || 'Deposit captured';
-                    supabase.functions.invoke('capture-deposit-hold', {
-                      body: { rentalId: rental.id, tenantId: tenant?.id, amount: amt, reason },
-                    }).then(() => {
-                      queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
-                      queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
-                      queryClient.invalidateQueries({ queryKey: ['payments-data'] });
-                      toast({ title: 'Deposit Captured', description: `$${amt} captured from deposit hold.` });
-                    }).catch((err: any) => {
-                      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-                    });
-                  }}
-                >
-                  Charge
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* Deposit Hold Status — removed separate card; pre-auth info is shown in Payment Breakdown */}
 
       {/* Mileage Summary */}
       {id && rental?.vehicles?.id && (
