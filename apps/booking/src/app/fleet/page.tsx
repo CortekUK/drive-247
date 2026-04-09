@@ -379,19 +379,6 @@ const Pricing = () => {
                             >
                               {vehicle.colour}
                             </Badge>
-                            {/* Status badge with different styling for Rented */}
-                            <Badge
-                              variant="outline"
-                              className={`px-2 py-0.5 text-xs rounded-full ${
-                                vehicle.status === 'Rented'
-                                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-600 dark:text-amber-400 font-medium'
-                                  : vehicle.status === 'Available'
-                                    ? 'bg-green-500/20 border-green-500/50 text-green-600 dark:text-green-400 font-medium'
-                                    : 'bg-secondary/50 border-accent/30 text-foreground'
-                              }`}
-                            >
-                              {vehicle.status}
-                            </Badge>
                           </div>
 
                           {/* Description */}
