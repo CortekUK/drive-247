@@ -2055,7 +2055,7 @@ const RentalDetail = () => {
             if (depositRefunded > 0 && hasExcessMileage) return 'Applied to Excess Mileage';
             if (depositRefunded > 0) return 'Refunded to customer';
             if (rental.status === 'Closed') return 'Eligible for refund';
-            return 'Security deposit';
+            return 'Refundable deposit';
           })(), icon: Shield, color: 'text-amber-500', bg: 'bg-amber-500/10', isDepositDeducted: (() => {
             const depositRefunded = refundBreakdown?.['Security Deposit'] ?? 0;
             const hasExcessMileage = (rentalCharges || []).some(c => c.category === 'Excess Mileage');
