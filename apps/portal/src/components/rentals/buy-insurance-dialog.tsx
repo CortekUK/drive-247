@@ -174,8 +174,9 @@ export function BuyInsuranceDialog({
           trip_dates: {
             start: (() => {
               const rentalStart = rental.start_date.split('T')[0];
-              const today = new Date().toISOString().split('T')[0];
-              return rentalStart < today ? today : rentalStart;
+              const now = new Date();
+              const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+              return rentalStart < todayLocal ? todayLocal : rentalStart;
             })(),
             end: rental.end_date.split('T')[0],
           },
@@ -259,15 +260,16 @@ export function BuyInsuranceDialog({
         }
       }
 
-      // 6. Insert ledger entry for insurance charge
+      // 6. Insert ledger entry for insurance charge — use actual quote premium from Bonzah, not the client estimate
+      const actualPremium = quoteResult?.total_premium ?? premium;
 
       const { error: ledgerError } = await supabase
         .from('ledger_entries')
         .insert({
           type: 'Charge',
           category: 'Insurance',
-          amount: premium,
-          remaining_amount: premium,
+          amount: actualPremium,
+          remaining_amount: actualPremium,
           reference: `BONZAH-${quoteResult?.policy_record_id || 'POLICY'}`,
           rental_id: rental.id,
           customer_id: rental.customers.id,
@@ -303,7 +305,7 @@ export function BuyInsuranceDialog({
       if (policyActive) {
         toast({
           title: 'Insurance Active',
-          description: `Bonzah policy issued and active. Premium: ${formatCurrency(premium, tenant?.currency_code || 'USD')}`,
+          description: `Bonzah policy issued and active. Premium: ${formatCurrency(actualPremium, tenant?.currency_code || 'USD')}`,
         });
       } else if (!policyRecordId) {
         // Quote was created but no policy_record_id — unusual
@@ -316,7 +318,7 @@ export function BuyInsuranceDialog({
 
       // 8. Close dialog and trigger payment flow
       handleClose();
-      onPurchaseComplete(premium);
+      onPurchaseComplete(actualPremium);
     } catch (error: any) {
       console.error('Buy insurance error:', error);
       // Clean up error message — strip "Bonzah API error:" prefix for user-friendly display
@@ -409,8 +411,10 @@ export function BuyInsuranceDialog({
                 <BonzahInsuranceSelector
                   tripStartDate={(() => {
                     const rentalStart = rental.start_date.split('T')[0];
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    return rentalStart < todayStr ? todayStr : rental.start_date;
+                    // Use local date (not UTC) to match what the user sees
+                    const now = new Date();
+                    const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                    return rentalStart < todayLocal ? todayLocal : rental.start_date;
                   })()}
                   tripEndDate={rental.end_date}
                   pickupState={customerState}
