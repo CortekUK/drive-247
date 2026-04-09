@@ -182,11 +182,25 @@ serve(async (req) => {
 
     // 5. Capture the payment in Stripe (on connected account for direct charges)
     console.log("Capturing Stripe payment intent:", paymentIntentId, stripeAccountId ? `(Connect: ${stripeAccountId})` : '');
-    const capturedPaymentIntent = await stripe.paymentIntents.capture(
-      paymentIntentId,
-      undefined,
-      stripeOptions
-    );
+    let capturedPaymentIntent;
+    try {
+      capturedPaymentIntent = await stripe.paymentIntents.capture(
+        paymentIntentId,
+        undefined,
+        stripeOptions
+      );
+    } catch (captureError) {
+      // If already captured, retrieve the PaymentIntent and proceed
+      if (captureError?.message?.includes("already been captured")) {
+        console.log("PaymentIntent already captured, retrieving current state...");
+        capturedPaymentIntent = await stripe.paymentIntents.retrieve(
+          paymentIntentId,
+          stripeOptions
+        );
+      } else {
+        throw captureError;
+      }
+    }
 
     if (capturedPaymentIntent.status !== "succeeded") {
       return new Response(
@@ -289,7 +303,7 @@ serve(async (req) => {
     console.error("Error capturing payment:", error);
 
     let errorMessage = "Failed to capture payment";
-    if (error instanceof Stripe.errors.StripeError) {
+    if (error instanceof Error) {
       errorMessage = error.message;
     }
 

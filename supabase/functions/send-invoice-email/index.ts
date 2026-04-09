@@ -1,19 +1,22 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import { jsPDF } from "https://esm.sh/jspdf@2.5.1";
 import { corsHeaders } from "../_shared/aws-config.ts";
 import {
   getTenantBranding,
   TenantBranding,
   wrapWithBrandedTemplate,
+  sendResendEmail,
 } from "../_shared/resend-service.ts";
 import { getStripeClient, getConnectAccountId, type StripeMode } from "../_shared/stripe-client.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface SendInvoiceEmailRequest {
-  invoiceId: string;
+  invoiceId?: string;
   tenantId: string;
   recipientEmail?: string;
+  rentalId?: string;
+  customerName?: string;
+  amount?: number;
 }
 
 interface InvoiceData {
@@ -51,141 +54,6 @@ function formatDate(dateString: string): string {
   });
 }
 
-function generateInvoicePDF(invoice: InvoiceData, branding: TenantBranding, currencyCode: string): string {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  let yPos = 20;
-
-  // Company Header
-  doc.setFontSize(24);
-  doc.setTextColor(parseInt(branding.accentColor.slice(1, 3), 16), parseInt(branding.accentColor.slice(3, 5), 16), parseInt(branding.accentColor.slice(5, 7), 16));
-  doc.text(branding.companyName.toUpperCase(), 20, yPos);
-  yPos += 15;
-
-  // Invoice Title
-  doc.setFontSize(18);
-  doc.setTextColor(0, 0, 0);
-  doc.text("INVOICE", pageWidth - 20, 20, { align: "right" });
-
-  // Invoice Number and Date
-  doc.setFontSize(10);
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Invoice #: ${invoice.invoice_number}`, pageWidth - 20, 30, { align: "right" });
-  doc.text(`Date: ${formatDate(invoice.invoice_date)}`, pageWidth - 20, 37, { align: "right" });
-  if (invoice.due_date) {
-    doc.text(`Due Date: ${formatDate(invoice.due_date)}`, pageWidth - 20, 44, { align: "right" });
-  }
-
-  // Horizontal line
-  yPos = 55;
-  doc.setDrawColor(200, 200, 200);
-  doc.line(20, yPos, pageWidth - 20, yPos);
-  yPos += 15;
-
-  // Bill To Section
-  doc.setFontSize(12);
-  doc.setTextColor(0, 0, 0);
-  doc.text("Bill To:", 20, yPos);
-  yPos += 7;
-  doc.setFontSize(10);
-  doc.setTextColor(60, 60, 60);
-  if (invoice.customers) {
-    doc.text(invoice.customers.name, 20, yPos);
-    yPos += 5;
-    if (invoice.customers.email) {
-      doc.text(invoice.customers.email, 20, yPos);
-      yPos += 5;
-    }
-    if (invoice.customers.phone) {
-      doc.text(invoice.customers.phone, 20, yPos);
-      yPos += 5;
-    }
-  }
-
-  // Vehicle & Rental Info Box
-  yPos += 10;
-  doc.setFillColor(248, 249, 250);
-  doc.roundedRect(20, yPos, pageWidth - 40, 35, 3, 3, "F");
-  yPos += 8;
-
-  doc.setFontSize(11);
-  doc.setTextColor(0, 0, 0);
-  doc.text("Rental Information", 25, yPos);
-  yPos += 8;
-
-  doc.setFontSize(9);
-  doc.setTextColor(100, 100, 100);
-  if (invoice.vehicles) {
-    doc.text(`Vehicle: ${invoice.vehicles.make} ${invoice.vehicles.model} (${invoice.vehicles.reg})`, 25, yPos);
-    yPos += 5;
-  }
-  if (invoice.rentals) {
-    doc.text(`Period: ${formatDate(invoice.rentals.start_date)} - ${formatDate(invoice.rentals.end_date)}`, 25, yPos);
-  }
-
-  // Invoice Items Table
-  yPos += 25;
-
-  // Table Header
-  doc.setFillColor(240, 240, 240);
-  doc.rect(20, yPos, pageWidth - 40, 10, "F");
-  doc.setFontSize(10);
-  doc.setTextColor(0, 0, 0);
-  doc.text("Description", 25, yPos + 7);
-  doc.text("Amount", pageWidth - 25, yPos + 7, { align: "right" });
-  yPos += 15;
-
-  // Rental Fee Row
-  doc.setTextColor(60, 60, 60);
-  doc.text("Rental Fee", 25, yPos);
-  doc.text(formatCurrency(invoice.subtotal, currencyCode), pageWidth - 25, yPos, { align: "right" });
-  yPos += 8;
-
-  // Tax Row (if applicable)
-  if (invoice.tax_amount > 0) {
-    doc.text("Taxes & Fees", 25, yPos);
-    doc.text(formatCurrency(invoice.tax_amount, currencyCode), pageWidth - 25, yPos, { align: "right" });
-    yPos += 8;
-  }
-
-  // Divider line
-  doc.setDrawColor(200, 200, 200);
-  doc.line(20, yPos, pageWidth - 20, yPos);
-  yPos += 8;
-
-  // Total Row
-  doc.setFontSize(12);
-  doc.setTextColor(0, 0, 0);
-  doc.text("Total", 25, yPos);
-  doc.setTextColor(parseInt(branding.accentColor.slice(1, 3), 16), parseInt(branding.accentColor.slice(3, 5), 16), parseInt(branding.accentColor.slice(5, 7), 16));
-  doc.text(formatCurrency(invoice.total_amount, currencyCode), pageWidth - 25, yPos, { align: "right" });
-
-  // Notes (if any)
-  if (invoice.notes) {
-    yPos += 20;
-    doc.setFillColor(248, 249, 250);
-    doc.roundedRect(20, yPos, pageWidth - 40, 25, 3, 3, "F");
-    yPos += 8;
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
-    doc.text("Notes:", 25, yPos);
-    yPos += 6;
-    doc.setFontSize(9);
-    doc.setTextColor(100, 100, 100);
-    doc.text(invoice.notes, 25, yPos);
-  }
-
-  // Footer
-  const footerY = doc.internal.pageSize.getHeight() - 20;
-  doc.setFontSize(9);
-  doc.setTextColor(150, 150, 150);
-  doc.text("Thank you for your business!", pageWidth / 2, footerY, { align: "center" });
-  doc.text(`${branding.companyName} | ${branding.contactEmail}`, pageWidth / 2, footerY + 5, { align: "center" });
-
-  // Return base64 encoded PDF
-  return doc.output("datauristring").split(",")[1];
-}
-
 function generateEmailContent(invoice: InvoiceData, branding: TenantBranding, currencyCode: string, paymentUrl?: string, overrideAmount?: number, overrideDescription?: string): string {
   const displayAmount = overrideAmount ?? invoice.total_amount;
   const payNowButton = paymentUrl ? `
@@ -211,7 +79,7 @@ function generateEmailContent(invoice: InvoiceData, branding: TenantBranding, cu
       <td style="padding: 30px;">
         <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 22px;">Hello ${invoice.customers?.name || "Customer"},</h2>
         <p style="margin: 0 0 20px; color: #444; line-height: 1.6; font-size: 16px;">
-          Please find attached your invoice <strong>${invoice.invoice_number}</strong> from ${branding.companyName}.
+          Here is your invoice <strong>${invoice.invoice_number}</strong> from ${branding.companyName}.
         </p>
         <table role="presentation" style="width: 100%; border-collapse: collapse; background: #f8f9fa; border-left: 4px solid ${branding.accentColor}; border-radius: 0 8px 8px 0; margin-bottom: 25px;">
           <tr>
@@ -253,9 +121,6 @@ function generateEmailContent(invoice: InvoiceData, branding: TenantBranding, cu
         </table>
         ${payNowButton}
         <p style="margin: 0 0 15px; color: #444; line-height: 1.6; font-size: 16px;">
-          The invoice PDF is attached to this email for your records.
-        </p>
-        <p style="margin: 0 0 15px; color: #444; line-height: 1.6; font-size: 16px;">
           If you have any questions about this invoice, please don't hesitate to contact us.
         </p>
         <p style="margin: 0; color: #444; font-size: 16px;">Thank you for choosing ${branding.companyName}!</p>
@@ -274,30 +139,70 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { invoiceId, tenantId, recipientEmail, paymentUrl: externalPaymentUrl, overrideAmount, overrideDescription }: SendInvoiceEmailRequest & { paymentUrl?: string; overrideAmount?: number; overrideDescription?: string } = await req.json();
+    const { invoiceId, tenantId, recipientEmail, paymentUrl: externalPaymentUrl, overrideAmount, overrideDescription, rentalId: bodyRentalId, customerName: bodyCustomerName, amount: bodyAmount }: SendInvoiceEmailRequest & { paymentUrl?: string; overrideAmount?: number; overrideDescription?: string } = await req.json();
 
-    if (!invoiceId || !tenantId) {
-      throw new Error("Missing required fields: invoiceId and tenantId");
+    if (!tenantId) {
+      throw new Error("Missing required field: tenantId");
     }
 
-    console.log(`Sending invoice email for invoice: ${invoiceId}, tenant: ${tenantId}`);
+    let invoice: InvoiceData | null = null;
 
-    // Fetch invoice with related data
-    const { data: invoice, error: invoiceError } = await supabase
-      .from("invoices")
-      .select(`
-        *,
-        customers:customer_id (name, email, phone),
-        vehicles:vehicle_id (reg, make, model),
-        rentals:rental_id (start_date, end_date, monthly_amount)
-      `)
-      .eq("id", invoiceId)
-      .eq("tenant_id", tenantId)
-      .single();
+    if (invoiceId) {
+      console.log(`Sending invoice email for invoice: ${invoiceId}, tenant: ${tenantId}`);
 
-    if (invoiceError || !invoice) {
-      console.error("Error fetching invoice:", invoiceError);
-      throw new Error("Invoice not found or access denied");
+      // Fetch invoice with related data
+      const { data: invoiceData, error: invoiceError } = await supabase
+        .from("invoices")
+        .select(`
+          *,
+          customers:customer_id (name, email, phone),
+          vehicles:vehicle_id (reg, make, model),
+          rentals:rental_id (start_date, end_date, monthly_amount)
+        `)
+        .eq("id", invoiceId)
+        .eq("tenant_id", tenantId)
+        .single();
+
+      if (invoiceError || !invoiceData) {
+        console.error("Error fetching invoice:", invoiceError);
+        throw new Error("Invoice not found or access denied");
+      }
+      invoice = invoiceData as InvoiceData;
+    } else if (bodyRentalId) {
+      // No invoice — build a minimal invoice-like object from rental data
+      console.log(`Sending payment link email for rental: ${bodyRentalId}, tenant: ${tenantId}`);
+
+      const { data: rental, error: rentalError } = await supabase
+        .from("rentals")
+        .select(`
+          id, start_date, end_date, monthly_amount,
+          customers:customer_id (name, email, phone),
+          vehicles:vehicle_id (reg, make, model)
+        `)
+        .eq("id", bodyRentalId)
+        .single();
+
+      if (rentalError || !rental) {
+        console.error("Error fetching rental:", rentalError);
+        throw new Error("Rental not found");
+      }
+
+      invoice = {
+        id: bodyRentalId,
+        invoice_number: `PAY-${bodyRentalId.slice(0, 8).toUpperCase()}`,
+        invoice_date: new Date().toISOString(),
+        due_date: null,
+        subtotal: bodyAmount || rental.monthly_amount || 0,
+        tax_amount: 0,
+        total_amount: bodyAmount || rental.monthly_amount || 0,
+        notes: null,
+        rental_id: bodyRentalId,
+        customers: rental.customers as InvoiceData["customers"],
+        vehicles: rental.vehicles as InvoiceData["vehicles"],
+        rentals: { start_date: rental.start_date, end_date: rental.end_date, monthly_amount: rental.monthly_amount },
+      };
+    } else {
+      throw new Error("Missing required field: invoiceId or rentalId");
     }
 
     // Get tenant branding
@@ -386,72 +291,29 @@ serve(async (req) => {
       console.error("Failed to create Stripe checkout session (continuing without payment link):", stripeError);
     }
 
-    // Generate PDF
-    console.log("Generating invoice PDF...");
-    const pdfBase64 = generateInvoicePDF(invoice as InvoiceData, branding, tenantCurrencyCode);
-    console.log("PDF generated successfully");
-
     // Generate email HTML
     const emailContent = generateEmailContent(invoice as InvoiceData, branding, tenantCurrencyCode, paymentUrl, overrideAmount, overrideDescription);
     const emailHtml = wrapWithBrandedTemplate(emailContent, branding);
 
-    // Send via Resend with attachment
-    const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+    console.log(`Sending invoice email to: ${toEmail}`);
 
-    if (!RESEND_API_KEY) {
-      console.log("RESEND_API_KEY not configured, simulating email send");
-      return new Response(
-        JSON.stringify({
-          success: true,
-          simulated: true,
-          messageId: "simulated-" + Date.now(),
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    const fromEmail = `${branding.slug}@drive-247.com`;
-    const fromName = branding.companyName;
-
-    console.log(`Sending email from: ${fromName} <${fromEmail}> to: ${toEmail}`);
-
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: `${fromName} <${fromEmail}>`,
-        to: [toEmail],
+    const result = await sendResendEmail(
+      {
+        to: toEmail,
         subject: `Invoice ${invoice.invoice_number} - ${branding.companyName}`,
         html: emailHtml,
-        attachments: [
-          {
-            filename: `Invoice-${invoice.invoice_number}.pdf`,
-            content: pdfBase64,
-          },
-        ],
-      }),
-    });
+        tenantId,
+      },
+      supabase
+    );
 
-    const result = await response.json();
-    console.log("Resend API response:", response.status, result);
-
-    if (!response.ok) {
-      throw new Error(result.message || "Failed to send email via Resend");
+    if (!result.success) {
+      throw new Error(result.error || "Failed to send email via Resend");
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        messageId: result.id,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      JSON.stringify({ success: true, messageId: result.messageId }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error in send-invoice-email:", error);

@@ -400,16 +400,15 @@ export const AddPaymentDialog = ({
     const finalCustomerId = selectedCustomerId || customer_id;
     if (!finalCustomerId) { toast({ title: "Error", description: "Please select a customer first.", variant: "destructive" }); return; }
     if (!customerEmail) { toast({ title: "Error", description: "Customer has no email address.", variant: "destructive" }); return; }
-    if (!rentalId || !rentalDetails) { toast({ title: "Error", description: "No rental found for invoice.", variant: "destructive" }); return; }
+    if (!rentalId || !rentalDetails) { toast({ title: "Error", description: "No rental found.", variant: "destructive" }); return; }
 
     const invoiceToSend = latestInvoice;
-    if (!invoiceToSend) { toast({ title: "Error", description: "No invoice found for this rental.", variant: "destructive" }); return; }
 
     setEmailLoading(true);
     try {
-      const amount = form.getValues("amount") || breakdownTotal || invoiceToSend.total_amount || 0;
+      const amount = form.getValues("amount") || breakdownTotal || invoiceToSend?.total_amount || rentalDetails?.monthly_amount || 0;
 
-      // Step 1: Create Stripe checkout session (same as "Charge via Stripe" — uses the working webhook flow)
+      // Step 1: Create Stripe checkout session
       const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout-session', {
         body: {
           rentalId,
@@ -428,35 +427,33 @@ export const AddPaymentDialog = ({
         throw new Error(checkoutError?.message || 'Failed to create payment link');
       }
 
-      // Step 2: Send invoice email with the Stripe link
-      // Pass the actual amount and category info so the email shows the correct details
+      // Step 2: Send email with payment link (works with or without an existing invoice)
       const { data, error } = await supabase.functions.invoke('send-invoice-email', {
         body: {
-          invoiceId: invoiceToSend.id,
+          ...(invoiceToSend ? { invoiceId: invoiceToSend.id } : { rentalId, customerName, amount }),
           tenantId: tenant?.id,
           recipientEmail: customerEmail,
           paymentUrl: checkoutData.url,
-          // Override amount if paying for specific categories (e.g. extension charges)
           ...(targetCategories && targetCategories.length > 0 ? {
             overrideAmount: amount,
             overrideDescription: `Payment for: ${targetCategories.join(', ')}`,
           } : {}),
         },
       });
-      if (error) throw new Error(error.message || 'Failed to send invoice email');
-      if (data && !data.success) throw new Error(data.error || 'Failed to send invoice email');
+      if (error) throw new Error(error.message || 'Failed to send payment email');
+      if (data && !data.success) throw new Error(data.error || 'Failed to send payment email');
 
       // Store the checkout session ID so the rental detail page can poll for it
       if (checkoutData.sessionId && rentalId) {
         localStorage.setItem(`pending_email_payment_${rentalId}`, checkoutData.sessionId);
       }
 
-      toast({ title: "Invoice Sent", description: `Invoice with payment link emailed to ${customerEmail}. Payment will be recorded automatically when the customer pays.` });
+      toast({ title: "Payment Link Sent", description: `Payment link emailed to ${customerEmail}. Payment will be recorded automatically when the customer pays.` });
       if (onPaymentSuccess) onPaymentSuccess();
       onOpenChange(false);
     } catch (error: any) {
-      console.error("Error sending invoice:", error);
-      toast({ title: "Error", description: error.message || "Failed to send invoice email.", variant: "destructive" });
+      console.error("Error sending payment email:", error);
+      toast({ title: "Error", description: error.message || "Failed to send payment email.", variant: "destructive" });
     } finally {
       setEmailLoading(false);
     }

@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
 
         const normalized = normalizePhoneNumber(phoneNumber);
 
-        // Verify the number exists in the subaccount by listing incoming numbers
+        // Step 1: Check if the number already exists in the subaccount
         let existingSid: string | null = null;
         try {
           const url = `https://api.twilio.com/2010-04-01/Accounts/${creds.sid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(normalized)}`;
@@ -210,9 +210,72 @@ Deno.serve(async (req) => {
           const data = await resp.json();
           if (data.incoming_phone_numbers?.length > 0) {
             existingSid = data.incoming_phone_numbers[0].sid;
+            console.log(`[Twilio] Number ${normalized} already in subaccount: ${existingSid}`);
           }
         } catch {
-          // Number not found in subaccount — that's ok, they may be adding it
+          // Number not found in subaccount
+        }
+
+        // Step 2: If not in subaccount, check the parent account and transfer it
+        if (!existingSid) {
+          const parentSid = Deno.env.get('TWILIO_ACCOUNT_SID')!;
+          const parentToken = Deno.env.get('TWILIO_AUTH_TOKEN')!;
+
+          try {
+            // Look up the number on the parent account
+            const parentUrl = `https://api.twilio.com/2010-04-01/Accounts/${parentSid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(normalized)}`;
+            const parentResp = await fetch(parentUrl, {
+              headers: { 'Authorization': `Basic ${btoa(`${parentSid}:${parentToken}`)}` },
+            });
+            const parentData = await parentResp.json();
+
+            if (parentData.incoming_phone_numbers?.length > 0) {
+              const numberSid = parentData.incoming_phone_numbers[0].sid;
+              console.log(`[Twilio] Number ${normalized} found on parent account: ${numberSid}. Transferring to subaccount ${creds.sid}...`);
+
+              // Transfer number from parent to subaccount by updating AccountSid
+              const transferUrl = `https://api.twilio.com/2010-04-01/Accounts/${parentSid}/IncomingPhoneNumbers/${numberSid}.json`;
+              const transferResp = await fetch(transferUrl, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Basic ${btoa(`${parentSid}:${parentToken}`)}`,
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({ AccountSid: creds.sid }).toString(),
+              });
+              const transferData = await transferResp.json();
+
+              if (!transferResp.ok) {
+                console.error('[Twilio] Transfer failed:', transferData);
+                return errorResponse(`Failed to transfer number to subaccount: ${transferData.message || 'Unknown error'}`);
+              }
+
+              existingSid = transferData.sid;
+              console.log(`[Twilio] Number ${normalized} transferred to subaccount successfully`);
+            } else {
+              console.warn(`[Twilio] Number ${normalized} not found on parent or subaccount`);
+              return errorResponse(`Number ${normalized} not found on your Twilio account. Please ensure the number is active in your Twilio account.`);
+            }
+          } catch (err: any) {
+            console.error('[Twilio] Error checking/transferring number:', err.message);
+            return errorResponse(`Failed to verify number ownership: ${err.message}`);
+          }
+        }
+
+        // Configure webhooks for the number
+        if (existingSid) {
+          const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+          try {
+            await configureNumberWebhooks(
+              creds.sid,
+              creds.authToken,
+              existingSid,
+              `${supabaseUrl}/functions/v1/twilio-inbound-sms`,
+              `${supabaseUrl}/functions/v1/twilio-sms-status`
+            );
+          } catch (webhookErr: any) {
+            console.warn('[Twilio] Failed to auto-configure webhooks:', webhookErr.message);
+          }
         }
 
         // Save to DB

@@ -4621,6 +4621,7 @@ const RentalDetail = () => {
           vehicle_id={rental.vehicles?.id}
           rental_id={rental.id}
           defaultAmount={insurancePaymentAmount}
+          targetCategories={["Insurance"]}
           insuranceChargeMode
         />
       )}

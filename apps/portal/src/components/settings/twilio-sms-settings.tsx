@@ -460,6 +460,20 @@ export function TwilioSmsSettings() {
                   <Input placeholder="+44 7911 123456" value={ownNumber} onChange={(e) => setOwnNumber(e.target.value)} />
                   <p className="text-xs text-muted-foreground">Enter your Twilio number with country code (e.g. +44 for UK, +1 for US).</p>
                 </div>
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/10 dark:border-amber-800">
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">Using a number from another Twilio account?</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-300 mb-2">
+                    You must first transfer the number to our platform. Follow these steps in your Twilio Console:
+                  </p>
+                  <ol className="text-xs text-amber-700 dark:text-amber-300 list-decimal list-inside space-y-1">
+                    <li>Log into your Twilio account at <span className="font-medium">console.twilio.com</span></li>
+                    <li>Go to <span className="font-medium">Phone Numbers → Manage → Active Numbers</span></li>
+                    <li>Click on the number you want to transfer</li>
+                    <li>Look for <span className="font-medium">&quot;Transfer this number to another account&quot;</span></li>
+                    <li>Enter this Account SID: <code className="bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded font-mono text-xs select-all">{process.env.NEXT_PUBLIC_TWILIO_PLATFORM_ACCOUNT_SID || 'Contact support for Account SID'}</code></li>
+                    <li>Confirm the transfer, then come back here and assign the number</li>
+                  </ol>
+                </div>
                 <Button onClick={handleAssignOwn} disabled={!ownNumber || assignOwnNumber.isPending}>
                   {assignOwnNumber.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Assigning...</> : <><Phone className="mr-2 h-4 w-4" />Assign Number</>}
                 </Button>
