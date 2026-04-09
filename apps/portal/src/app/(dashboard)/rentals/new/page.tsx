@@ -3831,34 +3831,35 @@ const CreateRental = () => {
                       <AIScanProgress documentId={insuranceDocId} />
                     )}
 
-                    {/* Bonzah Insurance Selection */}
-                    {!skipInsurance && watchedStartDate && watchedEndDate && (
+                    {/* Bonzah Insurance — eligibility message shows as soon as vehicle is selected */}
+                    {!skipInsurance && selectedVehicleId && isBonzahEligibilityLoading && (
+                      <div className="flex items-center gap-2 py-3">
+                        <Loader2 className="h-4 w-4 animate-spin text-[#CC004A]" />
+                        <span className="text-sm text-muted-foreground">Checking Bonzah insurance eligibility...</span>
+                      </div>
+                    )}
+                    {!skipInsurance && selectedVehicleId && !isBonzahEligibilityLoading && !isBonzahEligible && (
+                      <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 space-y-2">
+                        <div className="flex items-start gap-2">
+                          <img src="/bonzah-logo.svg" alt="Bonzah" className="h-4 w-auto mt-0.5 flex-shrink-0 dark:hidden" />
+                          <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-4 w-auto mt-0.5 flex-shrink-0 hidden dark:block" />
+                          <p className="text-sm text-muted-foreground">
+                            <span className="font-medium">{eligibilityVehicle?.make} {eligibilityVehicle?.model}</span> is not covered by Bonzah&apos;s insurance program. This vehicle type is excluded from their coverage.
+                          </p>
+                        </div>
+                        <a
+                          href="https://bonzah.com/included-and-restricted-vehicle-types"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-[#CC004A]/70 hover:text-[#CC004A] underline ml-6"
+                        >
+                          View Bonzah vehicle restrictions
+                        </a>
+                      </div>
+                    )}
+                    {/* Bonzah coverage selector — requires dates */}
+                    {!skipInsurance && watchedStartDate && watchedEndDate && isBonzahEligible && !isBonzahEligibilityLoading && (
                       <div className="space-y-4">
-                        {isBonzahEligibilityLoading ? (
-                          <div className="flex items-center gap-2 py-3">
-                            <Loader2 className="h-4 w-4 animate-spin text-[#CC004A]" />
-                            <span className="text-sm text-muted-foreground">Checking Bonzah insurance eligibility...</span>
-                          </div>
-                        ) : !isBonzahEligible ? (
-                          <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 space-y-2">
-                            <div className="flex items-start gap-2">
-                              <img src="/bonzah-logo.svg" alt="Bonzah" className="h-4 w-auto mt-0.5 flex-shrink-0 dark:hidden" />
-                              <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-4 w-auto mt-0.5 flex-shrink-0 hidden dark:block" />
-                              <p className="text-sm text-muted-foreground">
-                                <span className="font-medium">{eligibilityVehicle?.make} {eligibilityVehicle?.model}</span> is not covered by Bonzah&apos;s insurance program. This vehicle type is excluded from their coverage.
-                              </p>
-                            </div>
-                            <a
-                              href="https://bonzah.com/included-and-restricted-vehicle-types"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-[#CC004A]/70 hover:text-[#CC004A] underline ml-6"
-                            >
-                              View Bonzah vehicle restrictions
-                            </a>
-                          </div>
-                        ) : (
-                          <>
                             {(() => {
                               const startStr = watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null;
                               const endStr = watchedEndDate ? watchedEndDate.toISOString().split('T')[0] : null;
@@ -3931,8 +3932,6 @@ const CreateRental = () => {
                                 </a>
                               </div>
                             )}
-                          </>
-                        )}
                       </div>
                     )}
                   </div>
