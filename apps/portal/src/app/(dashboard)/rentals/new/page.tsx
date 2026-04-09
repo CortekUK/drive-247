@@ -1107,20 +1107,6 @@ const CreateRental = () => {
         throw new Error("Monthly amount must be greater than 0");
       }
 
-      // Check for vehicle scheduling conflicts (overlapping rentals + blocked dates)
-      if (tenant?.id) {
-        const startStr = data.start_date.toISOString().split('T')[0];
-        const endStr = data.end_date.toISOString().split('T')[0];
-        const conflicts = await checkRentalConflicts(supabase, tenant.id, data.vehicle_id, startStr, endStr);
-        if (conflicts.hasConflicts) {
-          setConflictResult(conflicts);
-          setShowConflictDialog(true);
-          setLoading(false);
-          setCreationProgress(0);
-          return;
-        }
-      }
-
       // Check for blocked dates (global and vehicle-specific) — fallback for local blocked dates state
       const blockCheck = checkBlockedDatesOverlap(data.start_date, data.end_date, data.vehicle_id);
       if (blockCheck.blocked) {
