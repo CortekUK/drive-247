@@ -113,6 +113,20 @@ function LoginPageContent() {
     }
   }, [user, loading, router, from]);
 
+  // Cooldown timer for resend
+  useEffect(() => {
+    if (resetCooldown <= 0) return;
+    const timer = setTimeout(() => setResetCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resetCooldown]);
+
+  // Auto-focus first OTP input
+  useEffect(() => {
+    if (forgotStep === "otp") {
+      setTimeout(() => otpRefs.current[0]?.focus(), 100);
+    }
+  }, [forgotStep]);
+
   // Show loading screen while checking auth
   if (loading) {
     return (
@@ -251,20 +265,6 @@ function LoginPageContent() {
       setIsSubmitting(false);
     }
   };
-
-  // Cooldown timer for resend
-  useEffect(() => {
-    if (resetCooldown <= 0) return;
-    const timer = setTimeout(() => setResetCooldown((c) => c - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [resetCooldown]);
-
-  // Auto-focus first OTP input
-  useEffect(() => {
-    if (forgotStep === "otp") {
-      setTimeout(() => otpRefs.current[0]?.focus(), 100);
-    }
-  }, [forgotStep]);
 
   const handleForgotPassword = async () => {
     const email = form.getValues("email");
