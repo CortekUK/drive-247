@@ -70,7 +70,8 @@ const BookingVehiclesContent = () => {
       // Determine rental period type based on booking duration
       const days = calculateRentalDays();
 
-      // Fetch only vehicles with status "Available" (not rented, not in maintenance)
+      // Fetch vehicles that are Available or Rented (Rented vehicles may be available for non-overlapping dates)
+      // Excludes Maintenance, Disposed, Sold etc. The overlap check below handles date-based blocking.
       let query = supabase
         .from("vehicles")
         .select(`
@@ -80,7 +81,7 @@ const BookingVehiclesContent = () => {
             display_order
           )
         `)
-        .eq("status", "Available");
+        .in("status", ["Available", "Rented"]);
 
       // Filter by availability based on rental duration
       const mtd = tenant?.monthly_tier_days ?? 30;
@@ -100,7 +101,7 @@ const BookingVehiclesContent = () => {
 
       if (error) throw error;
 
-      console.log(`Loaded ${data?.length || 0} available (non-rented) vehicles`);
+      console.log(`Loaded ${data?.length || 0} available/rented vehicles (overlap check filters by dates)`);
       console.log('First vehicle data:', data?.[0]);
       console.log('Vehicle photos:', data?.[0]?.vehicle_photos);
 

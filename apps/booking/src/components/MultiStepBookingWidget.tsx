@@ -1056,7 +1056,8 @@ const MultiStepBookingWidget = () => {
     }
 
     // Build query for vehicles with tenant filtering
-    // Status can be "Available" or "available" depending on how it was saved
+    // Include both Available and Rented vehicles — Rented vehicles may be available for non-overlapping dates.
+    // The overlap check below handles date-based blocking.
     let vehiclesQuery = supabase
       .from("vehicles")
       .select(`
@@ -1067,7 +1068,7 @@ const MultiStepBookingWidget = () => {
         )
       `)
       .eq("tenant_id", tenant.id)
-      .or("status.ilike.Available,status.ilike.available")
+      .or("status.ilike.Available,status.ilike.available,status.ilike.Rented,status.ilike.rented")
       .order("reg");
 
     const { data: vehiclesData } = await vehiclesQuery;

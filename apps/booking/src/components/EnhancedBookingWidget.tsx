@@ -73,10 +73,12 @@ const EnhancedBookingWidget = () => {
 
   const loadData = async () => {
     // Build queries with tenant filtering
+    // Include both Available and Rented vehicles — Rented vehicles may be available for non-overlapping dates.
+    // The overlap check handles date-based blocking.
     let vehiclesQuery = supabase
       .from("vehicles")
       .select("*")
-      .eq("status", "Available")
+      .in("status", ["Available", "Rented"])
       .order("reg");
 
     if (tenant?.id) {
