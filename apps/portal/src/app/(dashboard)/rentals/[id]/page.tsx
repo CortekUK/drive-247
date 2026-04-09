@@ -412,7 +412,7 @@ const RentalDetail = () => {
         'Tax': invoiceBreakdown.taxAmount,
         'Insurance': insuranceCharge?.amount ?? invoiceBreakdown.insurancePremium ?? 0,
         'Service Fee': invoiceBreakdown.serviceFee,
-        'Security Deposit': invoiceBreakdown.securityDeposit,
+        'Security Deposit': rental?.deposit_hold_amount || invoiceBreakdown.securityDeposit,
         'Delivery Fee': rental?.delivery_fee || invoiceBreakdown.deliveryFee || 0,
         'Collection Fee': collectionCharge ? Number(collectionCharge.amount) : (rental?.collection_fee ?? 0),
         'Extras': invoiceBreakdown.extrasTotal ?? 0,
@@ -2043,8 +2043,13 @@ const RentalDetail = () => {
           { label: 'Tax', category: 'Tax', amount: invoiceBreakdown.taxAmount, detail: invoiceBreakdown.taxAmount > 0 && invoiceBreakdown.rentalFee > 0 ? `${((invoiceBreakdown.taxAmount / invoiceBreakdown.rentalFee) * 100).toFixed(1)}% rate` : 'Tax on rental', icon: Percent, color: 'text-blue-500', bg: 'bg-blue-500/10' },
           { label: 'Bonzah Insurance', category: 'Insurance', amount: insuranceAmount, detail: bonzahPolicy ? 'Bonzah Insurance' : 'Insurance coverage', icon: ShieldCheck, color: 'text-teal-500', bg: 'bg-teal-500/10' },
           { label: 'Service Fee', category: 'Service Fee', amount: invoiceBreakdown.serviceFee, detail: 'Platform fee', icon: Receipt, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-          { label: 'Pre-Authorization', category: 'Security Deposit', amount: invoiceBreakdown.securityDeposit, detail: (() => {
-            if (invoiceBreakdown.securityDeposit <= 0) return '';
+          { label: 'Pre-Authorization', category: 'Security Deposit', amount: rental.deposit_hold_amount || invoiceBreakdown.securityDeposit, detail: (() => {
+            const depositAmount = rental.deposit_hold_amount || invoiceBreakdown.securityDeposit;
+            if (depositAmount <= 0) return '';
+            if (rental.deposit_hold_status === 'held') return 'Hold Active';
+            if (rental.deposit_hold_status === 'captured') return 'Captured';
+            if (rental.deposit_hold_status === 'released') return 'Released';
+            if (rental.deposit_hold_status === 'expired') return 'Expired';
             const depositRefunded = refundBreakdown?.['Security Deposit'] ?? 0;
             const hasExcessMileage = (rentalCharges || []).some(c => c.category === 'Excess Mileage');
             if (depositRefunded > 0 && hasExcessMileage) return 'Applied to Excess Mileage';
