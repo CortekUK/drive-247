@@ -4113,17 +4113,25 @@ const RentalDetail = () => {
                 </Button>
               )}
               {!bonzahPolicy && isBonzahConnected && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={!isBonzahEligible ? "h-7 text-xs opacity-50" : "h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10 hover:text-[#CC004A]"}
-                  disabled={!isBonzahEligible || isBonzahEligibilityLoading}
-                  title={!isBonzahEligible ? "This vehicle is not eligible for Bonzah insurance" : undefined}
-                  onClick={() => setShowBuyInsurance(true)}
-                >
-                  <ShieldCheck className="h-3 w-3 mr-1" />
-                  {isBonzahEligibilityLoading ? 'Checking...' : !isBonzahEligible ? 'Not Eligible' : 'Get Insurance'}
-                </Button>
+                isBonzahEligible ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10 hover:text-[#CC004A]"
+                    disabled={isBonzahEligibilityLoading}
+                    onClick={() => setShowBuyInsurance(true)}
+                  >
+                    <img src="/bonzah-logo.svg" alt="" className="h-3 w-3 mr-1 dark:hidden" />
+                    <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-3 mr-1 hidden dark:inline" />
+                    {isBonzahEligibilityLoading ? 'Checking...' : 'Get Insurance'}
+                  </Button>
+                ) : !isBonzahEligibilityLoading ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" title={`${rental?.vehicles?.make} ${rental?.vehicles?.model} is not supported by Bonzah`}>
+                    <img src="/bonzah-logo.svg" alt="" className="h-3 w-3 opacity-40 dark:hidden" />
+                    <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-3 opacity-40 hidden dark:inline" />
+                    Not eligible for Bonzah
+                  </span>
+                ) : null
               )}
               <Button
                 variant="outline"
