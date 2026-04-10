@@ -306,65 +306,220 @@ export function TwilioSmsSettings() {
               )}
             </button>
             {showGuide && (
-              <div className="px-4 pb-4 pt-1 space-y-4 text-sm text-[#404040] border-t bg-white">
+              <div className="px-4 pb-4 pt-1 space-y-5 text-sm text-[#404040] border-t bg-white">
                 <Step
                   num={1}
-                  title="Create a Twilio account"
+                  title="Create your Twilio account (skip if you already have one)"
                   body={
-                    <>
-                      Sign up at{' '}
-                      <a
-                        href="https://www.twilio.com/try-twilio"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-indigo-600 hover:underline inline-flex items-center gap-0.5"
-                      >
-                        twilio.com <ExternalLink className="h-3 w-3" />
-                      </a>
-                      . Free trial credit is included. Verify your email and phone.
-                    </>
+                    <div className="space-y-2">
+                      <p>
+                        Open{' '}
+                        <a
+                          href="https://www.twilio.com/try-twilio"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-indigo-600 hover:underline inline-flex items-center gap-0.5 font-medium"
+                        >
+                          twilio.com/try-twilio <ExternalLink className="h-3 w-3" />
+                        </a>{' '}
+                        in a new tab.
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-[#404040] ml-1">
+                        <li>Sign up with your business email and a strong password.</li>
+                        <li>Twilio will email you a confirmation link — click it.</li>
+                        <li>Verify your mobile phone number when prompted (Twilio sends a one-time code).</li>
+                        <li>
+                          On the "Welcome to Twilio" walkthrough, the defaults are fine. You can
+                          skip the "What do you want to build?" questionnaire — it doesn't affect
+                          anything.
+                        </li>
+                        <li>
+                          You'll land on the <strong>Twilio Console</strong> dashboard. That's
+                          your home base.
+                        </li>
+                      </ul>
+                      <p className="text-xs text-[#737373] pt-1">
+                        💰 Free trial includes ~$15 of credit. No credit card required to start.
+                      </p>
+                    </div>
                   }
                 />
+
                 <Step
                   num={2}
                   title="Buy a phone number"
                   body={
-                    <>
-                      In the Twilio console, go to{' '}
-                      <span className="font-medium">Phone Numbers → Buy a number</span>. Pick a
-                      number in your area code that supports SMS. Costs around $1.15/month.
-                    </>
+                    <div className="space-y-2">
+                      <p>
+                        In the Twilio Console, open{' '}
+                        <a
+                          href="https://console.twilio.com/us1/develop/phone-numbers/manage/search"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-indigo-600 hover:underline inline-flex items-center gap-0.5 font-medium"
+                        >
+                          Phone Numbers → Manage → Buy a number{' '}
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                        .
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 ml-1">
+                        <li>
+                          <strong>Country</strong> — pick your region (UK, US, etc.).
+                        </li>
+                        <li>
+                          <strong>Capabilities</strong> — tick <strong>SMS</strong>. If you'll
+                          use voice calling later too, also tick <strong>Voice</strong>.
+                        </li>
+                        <li>
+                          Optionally type an <strong>area code</strong> if you want a specific
+                          one.
+                        </li>
+                        <li>
+                          Click <strong>Search</strong>.
+                        </li>
+                        <li>
+                          Pick any number from the list and click the blue <strong>Buy</strong>{' '}
+                          button next to it.
+                        </li>
+                        <li>
+                          Confirm the purchase in the popup. Cost is about $1.15/month for US
+                          numbers, £1/month for UK — comes out of your trial credit.
+                        </li>
+                      </ul>
+                      <p>
+                        Once bought, the number appears in{' '}
+                        <a
+                          href="https://console.twilio.com/us1/develop/phone-numbers/manage/incoming"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-indigo-600 hover:underline inline-flex items-center gap-0.5 font-medium"
+                        >
+                          Active Numbers <ExternalLink className="h-3 w-3" />
+                        </a>
+                        . Copy it down — you'll need it in the form below in E.164 format (e.g.{' '}
+                        <code className="px-1 py-0.5 bg-[#f1f5f9] rounded text-xs">
+                          +14155551234
+                        </code>
+                        , with the leading <strong>+</strong> and country code).
+                      </p>
+                      <p className="text-xs text-[#737373] pt-1">
+                        💡 Already have a number on your account? Skip the buy step — just go to
+                        Active Numbers and grab the one you want to use.
+                      </p>
+                    </div>
                   }
                 />
+
                 <Step
                   num={3}
                   title="Copy your Account SID and Auth Token"
                   body={
-                    <>
-                      On the Twilio console homepage, you'll see{' '}
-                      <span className="font-medium">Account SID</span> and{' '}
-                      <span className="font-medium">Auth Token</span> boxes. Copy both and paste
-                      them below.
-                    </>
+                    <div className="space-y-2">
+                      <p>
+                        Go back to the{' '}
+                        <a
+                          href="https://console.twilio.com"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-indigo-600 hover:underline inline-flex items-center gap-0.5 font-medium"
+                        >
+                          Twilio Console homepage <ExternalLink className="h-3 w-3" />
+                        </a>{' '}
+                        (or click the Twilio logo in the top-left).
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 ml-1">
+                        <li>
+                          Scroll down until you see a panel labeled{' '}
+                          <strong>Account Info</strong>.
+                        </li>
+                        <li>
+                          You'll see two values:
+                          <ul className="list-disc list-inside ml-5 mt-1 space-y-1">
+                            <li>
+                              <strong>Account SID</strong> — a long string starting with{' '}
+                              <code className="px-1 py-0.5 bg-[#f1f5f9] rounded text-xs">
+                                AC
+                              </code>{' '}
+                              (always visible). Click the copy icon next to it.
+                            </li>
+                            <li>
+                              <strong>Auth Token</strong> — hidden by default. Click the eye
+                              icon or "Show" link to reveal it, then click the copy icon.
+                            </li>
+                          </ul>
+                        </li>
+                        <li>Paste both into the form below.</li>
+                      </ul>
+                      <div className="flex items-start gap-2 p-2.5 rounded bg-amber-50 border border-amber-200">
+                        <AlertCircle className="h-3.5 w-3.5 text-amber-600 mt-0.5 shrink-0" />
+                        <p className="text-xs text-amber-900">
+                          <strong>Treat the Auth Token like a password.</strong> Anyone with it
+                          can send messages from your account and run up your bill. We store it
+                          encrypted and never expose it back to your browser.
+                        </p>
+                      </div>
+                    </div>
                   }
                 />
+
                 <Step
                   num={4}
-                  title="Connect — we handle the rest"
+                  title="Click Connect — we handle the rest"
                   body={
-                    <>
-                      When you click Connect, we verify your credentials, check your phone number,
-                      and automatically wire up inbound SMS webhooks on your number. No extra
-                      configuration needed.
-                    </>
+                    <div className="space-y-2">
+                      <p>
+                        Once all three fields below are filled, click{' '}
+                        <strong>Connect Twilio</strong>. We'll automatically:
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 ml-1">
+                        <li>Verify your credentials with Twilio</li>
+                        <li>Confirm the phone number exists on your account and supports SMS</li>
+                        <li>Wire up inbound SMS webhooks on your number (so customer replies land in the Messages page)</li>
+                        <li>Save everything securely</li>
+                      </ul>
+                      <p>
+                        Takes about 5 seconds. You'll see a "Twilio Connected" confirmation when
+                        it's done.
+                      </p>
+                    </div>
                   }
                 />
+
+                {/* Trial account caller verification — important gotcha */}
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-blue-600" />
+                    <p className="text-sm font-medium text-blue-900">
+                      Trial accounts: verify your test number first
+                    </p>
+                  </div>
+                  <p className="text-xs text-blue-900">
+                    Twilio trial accounts can only send SMS to <strong>verified caller IDs</strong>.
+                    Before you click "Send Test SMS" later, go to{' '}
+                    <a
+                      href="https://console.twilio.com/us1/develop/phone-numbers/manage/verified"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline inline-flex items-center gap-0.5"
+                    >
+                      Phone Numbers → Verified Caller IDs{' '}
+                      <ExternalLink className="h-2.5 w-2.5" />
+                    </a>{' '}
+                    and add your own mobile number. Paid (upgraded) accounts skip this entirely.
+                    This is a Twilio limitation, not a Drive247 one.
+                  </p>
+                </div>
+
+                {/* US/Canada 10DLC note */}
                 <div className="pt-2 border-t">
                   <p className="text-xs text-[#737373]">
-                    <strong className="text-[#404040]">US/Canada numbers only:</strong> Twilio
-                    requires 10DLC brand &amp; campaign registration for sending to US/CA
-                    recipients. You can complete this inside your own Twilio console after
-                    connecting — it's a one-time 15-minute process.
+                    <strong className="text-[#404040]">US / Canada numbers only:</strong> Twilio
+                    requires 10DLC brand &amp; campaign registration for sending SMS to US or
+                    Canadian recipients. SMS will work immediately for non-US/CA destinations,
+                    but for US/CA you'll need to complete the one-time registration in your
+                    Twilio console (under <em>Messaging → Regulatory Compliance</em>). It takes
+                    about 15 minutes plus 1–7 days of carrier review.
                   </p>
                 </div>
               </div>
