@@ -588,12 +588,12 @@ export function BonzahSettings() {
               <div className="flex items-center gap-2">
                 <Input
                   placeholder="https://example.com/bonzah-brochure.pdf"
-                  defaultValue={tenant?.bonzah_brochure_url || ''}
+                  defaultValue={tenantContext?.bonzah_brochure_url || ''}
                   onBlur={async (e) => {
                     const url = e.target.value.trim();
-                    if (!tenant?.id) return;
-                    if (url === (tenant?.bonzah_brochure_url || '')) return;
-                    const { error } = await supabase.from('tenants').update({ bonzah_brochure_url: url || null }).eq('id', tenant.id);
+                    if (!tenantContext?.id) return;
+                    if (url === (tenantContext?.bonzah_brochure_url || '')) return;
+                    const { error } = await supabase.from('tenants').update({ bonzah_brochure_url: url || null }).eq('id', tenantContext.id);
                     if (!error) {
                       toast({ title: 'Brochure URL saved' });
                       refetchTenant?.();
@@ -601,9 +601,9 @@ export function BonzahSettings() {
                   }}
                   className="flex-1"
                 />
-                {tenant?.bonzah_brochure_url && (
+                {tenantContext?.bonzah_brochure_url && (
                   <Button variant="outline" size="sm" asChild>
-                    <a href={tenant.bonzah_brochure_url} target="_blank" rel="noopener noreferrer">
+                    <a href={tenantContext.bonzah_brochure_url} target="_blank" rel="noopener noreferrer">
                       Preview
                     </a>
                   </Button>
