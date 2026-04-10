@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
         const { data: tenant } = await supabase
           .from('tenants')
           .select('id')
-          .eq('twilio_subaccount_sid', accountSid)
+          .eq('twilio_account_sid', accountSid)
           .single();
 
         if (tenant) {

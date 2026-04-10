@@ -7579,17 +7579,14 @@ export type Database = {
           tuesday_close: string | null
           tuesday_enabled: boolean | null
           tuesday_open: string | null
+          twilio_account_sid: string | null
           twilio_api_key_secret: string | null
           twilio_api_key_sid: string | null
-          twilio_brand_sid: string | null
-          twilio_brand_status: string | null
-          twilio_campaign_sid: string | null
-          twilio_campaign_status: string | null
+          twilio_auth_token: string | null
+          twilio_connection_verified_at: string | null
           twilio_messaging_service_sid: string | null
           twilio_phone_number: string | null
           twilio_phone_number_sid: string | null
-          twilio_subaccount_auth_token: string | null
-          twilio_subaccount_sid: string | null
           twilio_twiml_app_sid: string | null
           twilio_voice_enabled: boolean | null
           twilio_voice_webhook_configured: boolean | null
@@ -7761,17 +7758,14 @@ export type Database = {
           tuesday_close?: string | null
           tuesday_enabled?: boolean | null
           tuesday_open?: string | null
+          twilio_account_sid?: string | null
           twilio_api_key_secret?: string | null
           twilio_api_key_sid?: string | null
-          twilio_brand_sid?: string | null
-          twilio_brand_status?: string | null
-          twilio_campaign_sid?: string | null
-          twilio_campaign_status?: string | null
+          twilio_auth_token?: string | null
+          twilio_connection_verified_at?: string | null
           twilio_messaging_service_sid?: string | null
           twilio_phone_number?: string | null
           twilio_phone_number_sid?: string | null
-          twilio_subaccount_auth_token?: string | null
-          twilio_subaccount_sid?: string | null
           twilio_twiml_app_sid?: string | null
           twilio_voice_enabled?: boolean | null
           twilio_voice_webhook_configured?: boolean | null
@@ -7943,17 +7937,14 @@ export type Database = {
           tuesday_close?: string | null
           tuesday_enabled?: boolean | null
           tuesday_open?: string | null
+          twilio_account_sid?: string | null
           twilio_api_key_secret?: string | null
           twilio_api_key_sid?: string | null
-          twilio_brand_sid?: string | null
-          twilio_brand_status?: string | null
-          twilio_campaign_sid?: string | null
-          twilio_campaign_status?: string | null
+          twilio_auth_token?: string | null
+          twilio_connection_verified_at?: string | null
           twilio_messaging_service_sid?: string | null
           twilio_phone_number?: string | null
           twilio_phone_number_sid?: string | null
-          twilio_subaccount_auth_token?: string | null
-          twilio_subaccount_sid?: string | null
           twilio_twiml_app_sid?: string | null
           twilio_voice_enabled?: boolean | null
           twilio_voice_webhook_configured?: boolean | null

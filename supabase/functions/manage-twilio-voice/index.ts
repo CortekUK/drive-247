@@ -261,7 +261,7 @@ Deno.serve(async (req) => {
         // Fetch tenant voice config
         const { data: tenant, error: tenantError } = await supabase
           .from('tenants')
-          .select('twilio_subaccount_sid, twilio_subaccount_auth_token, twilio_twiml_app_sid, twilio_api_key_sid, twilio_api_key_secret, twilio_voice_enabled')
+          .select('twilio_account_sid, twilio_auth_token, twilio_twiml_app_sid, twilio_api_key_sid, twilio_api_key_secret, twilio_voice_enabled')
           .eq('id', tenantId)
           .single();
 
@@ -280,7 +280,7 @@ Deno.serve(async (req) => {
         const identity = `tenant_${appUser.id}`;
 
         const accessToken = await createAccessToken(
-          tenant.twilio_subaccount_sid,
+          tenant.twilio_account_sid,
           tenant.twilio_api_key_sid,
           tenant.twilio_api_key_secret,
           identity,

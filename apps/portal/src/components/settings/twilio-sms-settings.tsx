@@ -6,23 +6,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import {
   MessageSquare,
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Phone,
-  Search,
+  ExternalLink,
   Unplug,
   Send,
-  Plus,
-  Globe,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp,
   Shield,
-  Megaphone,
-  RefreshCw,
-  Clock,
-  XCircle,
-  ArrowRight,
   Webhook,
 } from 'lucide-react';
 import {
@@ -35,698 +32,439 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useTwilioSms } from '@/hooks/use-twilio-sms';
 
-const COUNTRY_OPTIONS = [
-  { code: 'US', label: 'United States (+1)', flag: '\u{1F1FA}\u{1F1F8}' },
-  { code: 'GB', label: 'United Kingdom (+44)', flag: '\u{1F1EC}\u{1F1E7}' },
-  { code: 'CA', label: 'Canada (+1)', flag: '\u{1F1E8}\u{1F1E6}' },
-  { code: 'AU', label: 'Australia (+61)', flag: '\u{1F1E6}\u{1F1FA}' },
-  { code: 'DE', label: 'Germany (+49)', flag: '\u{1F1E9}\u{1F1EA}' },
-  { code: 'FR', label: 'France (+33)', flag: '\u{1F1EB}\u{1F1F7}' },
-  { code: 'ES', label: 'Spain (+34)', flag: '\u{1F1EA}\u{1F1F8}' },
-  { code: 'IT', label: 'Italy (+39)', flag: '\u{1F1EE}\u{1F1F9}' },
-  { code: 'NL', label: 'Netherlands (+31)', flag: '\u{1F1F3}\u{1F1F1}' },
-  { code: 'IE', label: 'Ireland (+353)', flag: '\u{1F1EE}\u{1F1EA}' },
-  { code: 'SE', label: 'Sweden (+46)', flag: '\u{1F1F8}\u{1F1EA}' },
-  { code: 'NO', label: 'Norway (+47)', flag: '\u{1F1F3}\u{1F1F4}' },
-  { code: 'DK', label: 'Denmark (+45)', flag: '\u{1F1E9}\u{1F1F0}' },
-  { code: 'PL', label: 'Poland (+48)', flag: '\u{1F1F5}\u{1F1F1}' },
-  { code: 'BE', label: 'Belgium (+32)', flag: '\u{1F1E7}\u{1F1EA}' },
-  { code: 'AT', label: 'Austria (+43)', flag: '\u{1F1E6}\u{1F1F9}' },
-  { code: 'CH', label: 'Switzerland (+41)', flag: '\u{1F1E8}\u{1F1ED}' },
-  { code: 'PT', label: 'Portugal (+351)', flag: '\u{1F1F5}\u{1F1F9}' },
-  { code: 'NZ', label: 'New Zealand (+64)', flag: '\u{1F1F3}\u{1F1FF}' },
-  { code: 'ZA', label: 'South Africa (+27)', flag: '\u{1F1FF}\u{1F1E6}' },
-  { code: 'AE', label: 'UAE (+971)', flag: '\u{1F1E6}\u{1F1EA}' },
-  { code: 'IN', label: 'India (+91)', flag: '\u{1F1EE}\u{1F1F3}' },
-];
+// Supabase URL used to build the webhook URLs tenants see in the connected state.
+// Read from the same env var the rest of the app uses.
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const INBOUND_WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/twilio-inbound-sms`;
+const STATUS_WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/twilio-sms-status`;
 
-// Countries that require 10DLC registration (US A2P messaging)
-const TEN_DLC_COUNTRIES = ['US', 'CA'];
-
-const COUNTRY_CODE_TO_PREFIX: Record<string, string> = {
-  US: '+1', CA: '+1', GB: '+44', AU: '+61', DE: '+49', FR: '+33',
-  ES: '+34', IT: '+39', NL: '+31', IE: '+353', SE: '+46', NO: '+47',
-  DK: '+45', PL: '+48', BE: '+32', AT: '+43', CH: '+41', PT: '+351',
-  NZ: '+64', ZA: '+27', AE: '+971', IN: '+91',
-};
-
-/** Detect country code from E.164 phone number */
-function detectCountryFromPhone(phone: string | null): string | null {
-  if (!phone) return null;
-  const cleaned = phone.replace(/\s/g, '');
-  // Check longest prefixes first to avoid +1 matching before +44 etc.
-  const sorted = Object.entries(COUNTRY_CODE_TO_PREFIX).sort((a, b) => b[1].length - a[1].length);
-  for (const [code, prefix] of sorted) {
-    if (cleaned.startsWith(prefix)) {
-      // +1 is shared between US and CA — default to US
-      if (prefix === '+1') return 'US';
-      return code;
-    }
-  }
-  return null;
-}
-
-/** Check if a country requires 10DLC registration */
-function requires10DLC(countryCode: string | null): boolean {
-  if (!countryCode) return false;
-  return TEN_DLC_COUNTRIES.includes(countryCode);
-}
-
-function StatusBadge({ status }: { status: string | null }) {
-  if (!status) return <Badge variant="secondary">Not Started</Badge>;
-  switch (status) {
-    case 'approved':
-      return <Badge className="bg-green-600 hover:bg-green-700">Approved</Badge>;
-    case 'pending':
-      return <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200">Pending Review</Badge>;
-    case 'failed':
-      return <Badge variant="destructive">Failed</Badge>;
-    default:
-      return <Badge variant="secondary">{status}</Badge>;
-  }
-}
-
-function StepIndicator({ step, label, status, isActive }: { step: number; label: string; status: 'complete' | 'active' | 'pending' | 'failed'; isActive?: boolean }) {
+// Small inline copy-to-clipboard button
+function CopyButton({ value, label }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
   return (
-    <div className="flex items-center gap-3">
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium shrink-0 ${
-        status === 'complete' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-        status === 'active' ? 'bg-primary/10 text-primary ring-2 ring-primary/20' :
-        status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-        'bg-muted text-muted-foreground'
-      }`}>
-        {status === 'complete' ? <CheckCircle2 className="h-4 w-4" /> :
-         status === 'failed' ? <XCircle className="h-4 w-4" /> :
-         step}
-      </div>
-      <span className={`text-sm font-medium ${
-        status === 'complete' ? 'text-green-700 dark:text-green-400' :
-        status === 'active' ? 'text-foreground' :
-        status === 'failed' ? 'text-red-700 dark:text-red-400' :
-        'text-muted-foreground'
-      }`}>
-        {label}
-      </span>
-    </div>
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        navigator.clipboard.writeText(value);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      {label && <span className="ml-1.5">{label}</span>}
+    </Button>
   );
 }
 
 export function TwilioSmsSettings() {
-  const {
-    status,
-    isLoading,
-    createSubaccount,
-    searchNumbers,
-    purchaseNumber,
-    assignOwnNumber,
-    sendTestSms,
-    disconnect,
-    registerBrand,
-    createMessagingService,
-    registerCampaign,
-    refreshRegistrationStatus,
-    configureWebhooks,
-  } = useTwilioSms();
+  const { status, isLoading, connect, sendTestSms, disconnect } = useTwilioSms();
 
-  // UI state
-  const [showDisconnectWarning, setShowDisconnectWarning] = useState(false);
-  const [numberMode, setNumberMode] = useState<'search' | 'own' | null>(null);
-  const [countryCode, setCountryCode] = useState('GB');
-  const [searchContains, setSearchContains] = useState('');
-  const [availableNumbers, setAvailableNumbers] = useState<any[]>([]);
-  const [ownNumber, setOwnNumber] = useState('');
-  const [testPhoneNumber, setTestPhoneNumber] = useState('');
+  // Connect form state
+  const [accountSid, setAccountSid] = useState('');
+  const [authToken, setAuthToken] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [showGuide, setShowGuide] = useState(false);
+
+  // Connected-state test SMS form
+  const [testTo, setTestTo] = useState('');
   const [testMessage, setTestMessage] = useState('');
-  // Brand registration
-  const [brandName, setBrandName] = useState('');
-  const [taxId, setTaxId] = useState('');
-  const [website, setWebsite] = useState('');
 
-  const handleSearchNumbers = async () => {
-    const result = await searchNumbers.mutateAsync({
-      countryCode,
-      contains: searchContains || undefined,
-    });
-    setAvailableNumbers(result.numbers || []);
-  };
-
-  const handlePurchaseNumber = async (phoneNumber: string) => {
-    await purchaseNumber.mutateAsync(phoneNumber);
-    setAvailableNumbers([]);
-    setNumberMode(null);
-  };
-
-  const handleAssignOwn = async () => {
-    if (!ownNumber) return;
-    await assignOwnNumber.mutateAsync(ownNumber);
-    setOwnNumber('');
-    setNumberMode(null);
-  };
-
-  const handleSendTest = async () => {
-    if (!testPhoneNumber) return;
-    await sendTestSms.mutateAsync({ to: testPhoneNumber, message: testMessage || undefined });
-  };
-
-  const handleDisconnect = async () => {
-    await disconnect.mutateAsync();
-    setShowDisconnectWarning(false);
-    setNumberMode(null);
-    setAvailableNumbers([]);
-  };
-
-  const handleRegisterBrand = async () => {
-    if (!brandName) return;
-    await registerBrand.mutateAsync({ brandName, taxId, website });
-  };
-
-  const handleCreateMessagingService = async () => {
-    await createMessagingService.mutateAsync();
-  };
-
-  const handleRegisterCampaign = async () => {
-    await registerCampaign.mutateAsync();
-  };
+  // Disconnect confirmation
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
   if (isLoading) {
     return (
       <Card>
         <CardContent className="p-6 flex items-center gap-3">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Loading SMS status...</span>
+          <span>Loading SMS settings…</span>
         </CardContent>
       </Card>
     );
   }
 
-  const isConfigured = status?.isConfigured ?? false;
-  const hasSubaccount = status?.hasSubaccount ?? false;
-  const hasPhoneNumber = status?.hasPhoneNumber ?? false;
-  const hasBrand = !!status?.brandSid;
-  const brandApproved = status?.brandStatus === 'approved';
-  const hasCampaign = !!status?.campaignSid;
-  const campaignApproved = status?.campaignStatus === 'approved';
-  const hasMessagingService = !!status?.messagingServiceSid;
+  // --- CONNECTED STATE ---
+  if (status?.isConnected) {
+    return (
+      <div className="space-y-6">
+        {/* Status card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-indigo-600" />
+              Twilio SMS
+              <Badge className="bg-green-600 hover:bg-green-700 text-xs">Connected</Badge>
+            </CardTitle>
+            <CardDescription>
+              Your Twilio account is connected and ready to send SMS from the Messages page.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg border bg-[#f8fafc]">
+              <div>
+                <p className="text-xs text-[#737373] mb-1">Account SID</p>
+                <p className="text-sm font-mono text-[#080812]">{status.accountSidMasked || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-[#737373] mb-1">Phone Number</p>
+                <p className="text-sm font-mono text-[#080812]">{status.phoneNumber || '—'}</p>
+              </div>
+              {status.connectedAt && (
+                <div>
+                  <p className="text-xs text-[#737373] mb-1">Connected</p>
+                  <p className="text-sm text-[#080812]">
+                    {new Date(status.connectedAt).toLocaleDateString(undefined, {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </p>
+                </div>
+              )}
+              {status.capabilities && (
+                <div>
+                  <p className="text-xs text-[#737373] mb-1">Capabilities</p>
+                  <div className="flex gap-1.5">
+                    {status.capabilities.sms && (
+                      <Badge variant="secondary" className="text-xs">SMS</Badge>
+                    )}
+                    {status.capabilities.mms && (
+                      <Badge variant="secondary" className="text-xs">MMS</Badge>
+                    )}
+                    {status.capabilities.voice && (
+                      <Badge variant="secondary" className="text-xs">Voice</Badge>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-  // Detect country from the assigned phone number
-  // Before a number is assigned, we don't know the country yet — show minimal steps
-  const phoneCountry = detectCountryFromPhone(status?.phoneNumber ?? null);
-  const needs10DLC = hasPhoneNumber ? requires10DLC(phoneCountry) : false;
+        {/* Test SMS card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Send className="h-4 w-4 text-indigo-600" />
+              Send a test message
+            </CardTitle>
+            <CardDescription>
+              Verify your connection by sending a test SMS to your own phone.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <Label htmlFor="test-to" className="text-xs text-[#404040]">
+                  Recipient phone (E.164 format, e.g. +14155551234)
+                </Label>
+                <Input
+                  id="test-to"
+                  value={testTo}
+                  onChange={(e) => setTestTo(e.target.value)}
+                  placeholder="+14155551234"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="test-msg" className="text-xs text-[#404040]">
+                  Message (optional)
+                </Label>
+                <Textarea
+                  id="test-msg"
+                  value={testMessage}
+                  onChange={(e) => setTestMessage(e.target.value)}
+                  placeholder="Leave blank for a default test message"
+                  rows={2}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <Button
+              onClick={() => sendTestSms.mutate({ to: testTo, message: testMessage })}
+              disabled={!testTo || sendTestSms.isPending}
+              className="w-full sm:w-auto"
+            >
+              {sendTestSms.isPending ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending…</>
+              ) : (
+                <><Send className="mr-2 h-4 w-4" />Send Test SMS</>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
 
-  // Build dynamic steps based on country
-  const steps = [
-    { key: 'subaccount', label: 'Create Messaging Account' },
-    { key: 'phone', label: 'Add Phone Number' },
-    ...(needs10DLC ? [
-      { key: 'brand', label: 'Register Business (10DLC)' },
-      { key: 'campaign', label: 'Register Campaign' },
-    ] : []),
-    { key: 'test', label: 'Test & Go Live' },
-  ];
+        {/* Webhook URLs (in case tenant needs to re-apply manually) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Webhook className="h-4 w-4 text-indigo-600" />
+              Webhook URLs
+            </CardTitle>
+            <CardDescription>
+              We configured these automatically on your Twilio number when you connected.
+              If you ever need to re-apply them manually, here they are.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2">
+              <Label className="text-xs text-[#404040]">Inbound SMS (A MESSAGE COMES IN)</Label>
+              <div className="flex gap-2">
+                <Input value={INBOUND_WEBHOOK_URL} readOnly className="font-mono text-xs" />
+                <CopyButton value={INBOUND_WEBHOOK_URL} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-[#404040]">Status callback</Label>
+              <div className="flex gap-2">
+                <Input value={STATUS_WEBHOOK_URL} readOnly className="font-mono text-xs" />
+                <CopyButton value={STATUS_WEBHOOK_URL} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-  // Determine step status by key
-  const getStepStatusByKey = (key: string): 'complete' | 'active' | 'pending' | 'failed' => {
-    switch (key) {
-      case 'subaccount':
-        return hasSubaccount ? 'complete' : 'active';
-      case 'phone':
-        if (!hasSubaccount) return 'pending';
-        return hasPhoneNumber ? 'complete' : 'active';
-      case 'brand':
-        if (!hasPhoneNumber) return 'pending';
-        if (status?.brandStatus === 'failed') return 'failed';
-        return brandApproved ? 'complete' : 'active';
-      case 'campaign':
-        if (!brandApproved) return 'pending';
-        if (status?.campaignStatus === 'failed') return 'failed';
-        return campaignApproved ? 'complete' : 'active';
-      case 'test':
-        if (!hasPhoneNumber) return 'pending';
-        if (needs10DLC) return campaignApproved ? 'complete' : 'pending';
-        return isConfigured ? 'complete' : 'active';
-      default:
-        return 'pending';
-    }
-  };
+        {/* Disconnect */}
+        <Card>
+          <CardContent className="p-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowDisconnectConfirm(true)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 w-full sm:w-auto"
+            >
+              <Unplug className="mr-2 h-4 w-4" />
+              Disconnect Twilio
+            </Button>
+          </CardContent>
+        </Card>
 
-  // For non-10DLC countries, SMS is fully active once phone number is configured
-  const isFullyActive = needs10DLC ? (isConfigured && campaignApproved) : isConfigured;
-  const isRegistrationPending = needs10DLC && isConfigured && !campaignApproved;
+        <AlertDialog open={showDisconnectConfirm} onOpenChange={setShowDisconnectConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <Unplug className="h-5 w-5 text-red-600" />
+                Disconnect Twilio?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes your Twilio credentials from Drive247. Your Twilio account,
+                phone number, and messages stay exactly as they are — we just forget the
+                credentials. You can reconnect at any time.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  disconnect.mutate();
+                  setShowDisconnectConfirm(false);
+                }}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Yes, disconnect
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    );
+  }
 
+  // --- DISCONNECTED STATE (Connect wizard) ---
   return (
     <div className="space-y-6">
-      {/* Overview Card */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-primary" />
-            SMS & Messaging Setup
+            <MessageSquare className="h-5 w-5 text-indigo-600" />
+            Connect your Twilio account
           </CardTitle>
           <CardDescription>
-            Configure SMS messaging to communicate with your customers directly. Send booking confirmations, reminders, and support messages.
+            Drive247 uses your own Twilio account for SMS. This means you keep control
+            of your messaging, pay Twilio directly, and own your phone number.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {/* Setup Progress */}
-          <div className="space-y-3 mb-6">
-            {steps.map((s, i) => (
-              <StepIndicator key={s.key} step={i + 1} label={s.label} status={getStepStatusByKey(s.key)} />
-            ))}
+        <CardContent className="space-y-5">
+          {/* How it works — expandable guide */}
+          <div className="rounded-lg border bg-[#f8fafc] overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowGuide((s) => !s)}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-[#080812] hover:bg-[#f1f5f9] transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-indigo-600" />
+                How to set up your Twilio account
+              </span>
+              {showGuide ? (
+                <ChevronUp className="h-4 w-4 text-[#737373]" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-[#737373]" />
+              )}
+            </button>
+            {showGuide && (
+              <div className="px-4 pb-4 pt-1 space-y-4 text-sm text-[#404040] border-t bg-white">
+                <Step
+                  num={1}
+                  title="Create a Twilio account"
+                  body={
+                    <>
+                      Sign up at{' '}
+                      <a
+                        href="https://www.twilio.com/try-twilio"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-indigo-600 hover:underline inline-flex items-center gap-0.5"
+                      >
+                        twilio.com <ExternalLink className="h-3 w-3" />
+                      </a>
+                      . Free trial credit is included. Verify your email and phone.
+                    </>
+                  }
+                />
+                <Step
+                  num={2}
+                  title="Buy a phone number"
+                  body={
+                    <>
+                      In the Twilio console, go to{' '}
+                      <span className="font-medium">Phone Numbers → Buy a number</span>. Pick a
+                      number in your area code that supports SMS. Costs around $1.15/month.
+                    </>
+                  }
+                />
+                <Step
+                  num={3}
+                  title="Copy your Account SID and Auth Token"
+                  body={
+                    <>
+                      On the Twilio console homepage, you'll see{' '}
+                      <span className="font-medium">Account SID</span> and{' '}
+                      <span className="font-medium">Auth Token</span> boxes. Copy both and paste
+                      them below.
+                    </>
+                  }
+                />
+                <Step
+                  num={4}
+                  title="Connect — we handle the rest"
+                  body={
+                    <>
+                      When you click Connect, we verify your credentials, check your phone number,
+                      and automatically wire up inbound SMS webhooks on your number. No extra
+                      configuration needed.
+                    </>
+                  }
+                />
+                <div className="pt-2 border-t">
+                  <p className="text-xs text-[#737373]">
+                    <strong className="text-[#404040]">US/Canada numbers only:</strong> Twilio
+                    requires 10DLC brand &amp; campaign registration for sending to US/CA
+                    recipients. You can complete this inside your own Twilio console after
+                    connecting — it's a one-time 15-minute process.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Status Banner */}
-          <div className={`p-4 rounded-lg border ${
-            isFullyActive
-              ? 'bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-800'
-              : isRegistrationPending
-              ? 'bg-amber-50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800'
-              : 'bg-muted/50 border-border'
-          }`}>
-            <div className="flex items-start gap-3">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                isFullyActive
-                  ? 'bg-green-100 text-green-600 dark:bg-green-900/30'
-                  : isRegistrationPending
-                  ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30'
-                  : 'bg-muted text-muted-foreground'
-              }`}>
-                {isFullyActive ? (
-                  <CheckCircle2 className="h-5 w-5" />
-                ) : isRegistrationPending ? (
-                  <Clock className="h-5 w-5" />
-                ) : (
-                  <AlertCircle className="h-5 w-5" />
-                )}
-              </div>
-              <div>
-                <h4 className="font-medium">
-                  {isFullyActive
-                    ? 'SMS Fully Active'
-                    : isRegistrationPending
-                    ? 'SMS Active (Registration Pending)'
-                    : hasSubaccount
-                    ? 'Account Created — Continue Setup'
-                    : 'Not Connected'}
-                </h4>
-                <p className="text-sm mt-1 text-muted-foreground">
-                  {isFullyActive
-                    ? `Sending SMS from ${status?.phoneNumber}.${needs10DLC ? ' Full 10DLC compliance active.' : ''}`
-                    : isRegistrationPending
-                    ? `SMS is active from ${status?.phoneNumber}. Complete 10DLC registration for best deliverability.`
-                    : hasSubaccount
-                    ? 'Your messaging account is ready. Complete the remaining steps.'
-                    : 'Set up your SMS account to send messages to customers.'}
-                </p>
-              </div>
+          {/* Connect form */}
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="account-sid" className="text-sm">
+                Account SID
+              </Label>
+              <Input
+                id="account-sid"
+                value={accountSid}
+                onChange={(e) => setAccountSid(e.target.value.trim())}
+                placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                className="mt-1 font-mono"
+              />
+              <p className="text-xs text-[#737373] mt-1">
+                Starts with "AC". Found on your Twilio console homepage.
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="auth-token" className="text-sm">
+                Auth Token
+              </Label>
+              <Input
+                id="auth-token"
+                type="password"
+                value={authToken}
+                onChange={(e) => setAuthToken(e.target.value.trim())}
+                placeholder="Your Twilio Auth Token"
+                className="mt-1 font-mono"
+              />
+              <p className="text-xs text-[#737373] mt-1">
+                Stored securely. We use it to send SMS on your behalf.
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="phone-number" className="text-sm">
+                Phone Number
+              </Label>
+              <Input
+                id="phone-number"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value.trim())}
+                placeholder="+14155551234"
+                className="mt-1 font-mono"
+              />
+              <p className="text-xs text-[#737373] mt-1">
+                Must already exist on your Twilio account. Use E.164 format (+ country code).
+              </p>
             </div>
           </div>
+
+          <Button
+            onClick={() => connect.mutate({ accountSid, authToken, phoneNumber })}
+            disabled={!accountSid || !authToken || !phoneNumber || connect.isPending}
+            className="w-full"
+          >
+            {connect.isPending ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Verifying &amp; connecting…</>
+            ) : (
+              <><CheckCircle2 className="mr-2 h-4 w-4" />Connect Twilio</>
+            )}
+          </Button>
+
+          {connect.isError && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <p className="text-xs">{(connect.error as any)?.message || 'Connection failed'}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
 
-      {/* Step 1: Create Subaccount */}
-      {!hasSubaccount && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">1</div>
-              Create Messaging Account
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={() => createSubaccount.mutate()}
-              disabled={createSubaccount.isPending}
-              className="w-full"
-            >
-              {createSubaccount.isPending ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating Account...</>
-              ) : (
-                <><Plus className="mr-2 h-4 w-4" />Set Up SMS</>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 2: Add Phone Number */}
-      {hasSubaccount && !hasPhoneNumber && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">2</div>
-              Add Phone Number
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!numberMode && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Button variant="outline" onClick={() => setNumberMode('search')} className="h-auto py-4 flex flex-col items-center gap-2">
-                  <Search className="h-5 w-5" />
-                  <span className="font-medium">Get a Number</span>
-                  <span className="text-xs text-muted-foreground">Purchase a new phone number</span>
-                </Button>
-                <Button variant="outline" onClick={() => setNumberMode('own')} className="h-auto py-4 flex flex-col items-center gap-2">
-                  <Phone className="h-5 w-5" />
-                  <span className="font-medium">Use My Own Number</span>
-                  <span className="text-xs text-muted-foreground">Add an existing Twilio number</span>
-                </Button>
-              </div>
-            )}
-
-            {numberMode === 'search' && (
-              <div className="space-y-4 p-4 border rounded-lg">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium">Search Available Numbers</h4>
-                  <Button variant="ghost" size="sm" onClick={() => { setNumberMode(null); setAvailableNumbers([]); }}>Cancel</Button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="space-y-2">
-                    <Label>Country</Label>
-                    <Select value={countryCode} onValueChange={setCountryCode}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {COUNTRY_OPTIONS.map(c => (
-                          <SelectItem key={c.code} value={c.code}>{c.flag} {c.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Contains (optional)</Label>
-                    <Input placeholder="e.g. 555" value={searchContains} onChange={(e) => setSearchContains(e.target.value)} />
-                  </div>
-                  <div className="flex items-end">
-                    <Button onClick={handleSearchNumbers} disabled={searchNumbers.isPending} className="w-full">
-                      {searchNumbers.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-                      Search
-                    </Button>
-                  </div>
-                </div>
-                {availableNumbers.length > 0 && (
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {availableNumbers.map((num) => (
-                      <div key={num.phoneNumber} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">
-                        <div>
-                          <p className="font-mono font-medium">{num.phoneNumber}</p>
-                          <p className="text-xs text-muted-foreground">{[num.locality, num.region].filter(Boolean).join(', ')}</p>
-                        </div>
-                        <Button size="sm" onClick={() => handlePurchaseNumber(num.phoneNumber)} disabled={purchaseNumber.isPending}>
-                          {purchaseNumber.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Select'}
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {numberMode === 'own' && (
-              <div className="space-y-4 p-4 border rounded-lg">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium">Add Your Own Number</h4>
-                  <Button variant="ghost" size="sm" onClick={() => setNumberMode(null)}>Cancel</Button>
-                </div>
-                <div className="space-y-2">
-                  <Label>Phone Number (E.164 format)</Label>
-                  <Input placeholder="+44 7911 123456" value={ownNumber} onChange={(e) => setOwnNumber(e.target.value)} />
-                  <p className="text-xs text-muted-foreground">Enter your Twilio number with country code (e.g. +44 for UK, +1 for US).</p>
-                </div>
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/10 dark:border-amber-800">
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">Using a number from another Twilio account?</p>
-                  <p className="text-xs text-amber-700 dark:text-amber-300 mb-2">
-                    You must first transfer the number to our platform. Follow these steps in your Twilio Console:
-                  </p>
-                  <ol className="text-xs text-amber-700 dark:text-amber-300 list-decimal list-inside space-y-1">
-                    <li>Log into your Twilio account at <span className="font-medium">console.twilio.com</span></li>
-                    <li>Go to <span className="font-medium">Phone Numbers → Manage → Active Numbers</span></li>
-                    <li>Click on the number you want to transfer</li>
-                    <li>Look for <span className="font-medium">&quot;Transfer this number to another account&quot;</span></li>
-                    <li>Enter this Account SID: <code className="bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded font-mono text-xs select-all">{process.env.NEXT_PUBLIC_TWILIO_PLATFORM_ACCOUNT_SID || 'Contact support for Account SID'}</code></li>
-                    <li>Confirm the transfer, then come back here and assign the number</li>
-                  </ol>
-                </div>
-                <Button onClick={handleAssignOwn} disabled={!ownNumber || assignOwnNumber.isPending}>
-                  {assignOwnNumber.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Assigning...</> : <><Phone className="mr-2 h-4 w-4" />Assign Number</>}
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 3: Brand Registration (10DLC) — US/CA only */}
-      {hasPhoneNumber && needs10DLC && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                brandApproved ? 'bg-green-100 text-green-700' : 'bg-primary/10 text-primary'
-              }`}>
-                {brandApproved ? <CheckCircle2 className="h-4 w-4" /> : '3'}
-              </div>
-              Business Registration (10DLC)
-              <StatusBadge status={status?.brandStatus || null} />
-            </CardTitle>
-            <CardDescription>
-              US carriers require business verification to send SMS. This typically takes 1-7 business days.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!hasBrand && (
-              <div className="space-y-4 p-4 border rounded-lg">
-                <div className="space-y-2">
-                  <Label>Business Name *</Label>
-                  <Input placeholder="Your company name" value={brandName} onChange={(e) => setBrandName(e.target.value)} />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>EIN / Tax ID</Label>
-                    <Input placeholder="XX-XXXXXXX" value={taxId} onChange={(e) => setTaxId(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Website</Label>
-                    <Input placeholder="https://yourcompany.com" value={website} onChange={(e) => setWebsite(e.target.value)} />
-                  </div>
-                </div>
-                <Button onClick={handleRegisterBrand} disabled={!brandName || registerBrand.isPending}>
-                  {registerBrand.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting...</> : <><Shield className="mr-2 h-4 w-4" />Register Business</>}
-                </Button>
-              </div>
-            )}
-
-            {hasBrand && status?.brandStatus === 'pending' && (
-              <div className="flex items-center justify-between p-4 border rounded-lg bg-amber-50/50 dark:bg-amber-900/10">
-                <div className="flex items-center gap-3">
-                  <Clock className="h-5 w-5 text-amber-600" />
-                  <div>
-                    <p className="font-medium text-sm">Brand registration is under review</p>
-                    <p className="text-xs text-muted-foreground">This usually takes 1-7 business days.</p>
-                  </div>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => refreshRegistrationStatus.mutate()} disabled={refreshRegistrationStatus.isPending}>
-                  {refreshRegistrationStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                </Button>
-              </div>
-            )}
-
-            {hasBrand && status?.brandStatus === 'failed' && (
-              <div className="p-4 border border-red-200 rounded-lg bg-red-50/50 dark:bg-red-900/10">
-                <div className="flex items-center gap-2 text-red-700 mb-2">
-                  <XCircle className="h-5 w-5" />
-                  <p className="font-medium text-sm">Brand registration failed</p>
-                </div>
-                <p className="text-xs text-muted-foreground">Please check your business details and try again, or contact support.</p>
-              </div>
-            )}
-
-            {brandApproved && (
-              <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                <CheckCircle2 className="h-5 w-5" />
-                <span className="text-sm font-medium">Business verified</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 4: Campaign Registration — US/CA only */}
-      {brandApproved && needs10DLC && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                campaignApproved ? 'bg-green-100 text-green-700' : 'bg-primary/10 text-primary'
-              }`}>
-                {campaignApproved ? <CheckCircle2 className="h-4 w-4" /> : '4'}
-              </div>
-              Campaign Registration
-              <StatusBadge status={status?.campaignStatus || null} />
-            </CardTitle>
-            <CardDescription>
-              Register your messaging use case with carriers. We pre-fill this for car rental customer communications.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!hasMessagingService && (
-              <Button onClick={handleCreateMessagingService} disabled={createMessagingService.isPending}>
-                {createMessagingService.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating...</> : <><Megaphone className="mr-2 h-4 w-4" />Create Messaging Service</>}
-              </Button>
-            )}
-
-            {hasMessagingService && !hasCampaign && (
-              <Button onClick={handleRegisterCampaign} disabled={registerCampaign.isPending}>
-                {registerCampaign.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting...</> : <><Megaphone className="mr-2 h-4 w-4" />Register Campaign</>}
-              </Button>
-            )}
-
-            {hasCampaign && status?.campaignStatus === 'pending' && (
-              <div className="flex items-center justify-between p-4 border rounded-lg bg-amber-50/50 dark:bg-amber-900/10">
-                <div className="flex items-center gap-3">
-                  <Clock className="h-5 w-5 text-amber-600" />
-                  <div>
-                    <p className="font-medium text-sm">Campaign registration is under review</p>
-                    <p className="text-xs text-muted-foreground">Carrier review typically takes 1-5 business days.</p>
-                  </div>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => refreshRegistrationStatus.mutate()} disabled={refreshRegistrationStatus.isPending}>
-                  {refreshRegistrationStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                </Button>
-              </div>
-            )}
-
-            {campaignApproved && (
-              <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                <CheckCircle2 className="h-5 w-5" />
-                <span className="text-sm font-medium">Campaign approved — full SMS deliverability active</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 5: Configured — Test & Manage */}
-      {isConfigured && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-xs font-bold text-green-700 dark:text-green-400">
-                <CheckCircle2 className="h-4 w-4" />
-              </div>
-              SMS Active
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Phone number display + capabilities */}
-            <div className="p-4 rounded-lg border bg-muted/50 space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Phone className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">SMS Number</p>
-                  <p className="text-lg font-mono font-bold">{status?.phoneNumber}</p>
-                </div>
-              </div>
-
-              {/* Number capabilities */}
-              {status?.capabilities && (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {[
-                    { key: 'sms' as const, label: 'SMS', icon: <MessageSquare className="h-3 w-3" /> },
-                    { key: 'voice' as const, label: 'Voice', icon: <Phone className="h-3 w-3" /> },
-                    { key: 'mms' as const, label: 'MMS', icon: <MessageSquare className="h-3 w-3" /> },
-                    { key: 'fax' as const, label: 'Fax', icon: <MessageSquare className="h-3 w-3" /> },
-                  ].map(cap => (
-                    <span
-                      key={cap.key}
-                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium ${
-                        status.capabilities![cap.key]
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                          : 'bg-red-50 text-red-400 line-through dark:bg-red-900/10 dark:text-red-400/60'
-                      }`}
-                    >
-                      {cap.icon}
-                      {cap.label}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Test SMS */}
-            <div className="p-4 rounded-lg border space-y-3">
-              <h4 className="font-medium flex items-center gap-2">
-                <Send className="h-4 w-4" />
-                Send Test SMS
-              </h4>
-              <div className="space-y-2">
-                <Input
-                  placeholder="Enter phone number with country code"
-                  value={testPhoneNumber}
-                  onChange={(e) => setTestPhoneNumber(e.target.value)}
-                />
-                <textarea
-                  placeholder="Enter your message (optional — a default test message will be sent if left empty)"
-                  value={testMessage}
-                  onChange={(e) => setTestMessage(e.target.value)}
-                  rows={3}
-                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
-                />
-              </div>
-              <Button onClick={handleSendTest} disabled={!testPhoneNumber || sendTestSms.isPending} className="w-full">
-                {sendTestSms.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending...</> : <><Send className="mr-2 h-4 w-4" />Send Test SMS</>}
-              </Button>
-            </div>
-
-            {/* Configure Webhooks */}
-            <Button variant="outline" onClick={() => configureWebhooks.mutate()} disabled={configureWebhooks.isPending} className="w-full">
-              {configureWebhooks.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Webhook className="mr-2 h-4 w-4" />}
-              Reconfigure Webhooks
-            </Button>
-
-            {/* Disconnect */}
-            <Button
-              variant="outline"
-              className="text-red-600 hover:text-red-700 hover:bg-red-50 w-full"
-              onClick={() => setShowDisconnectWarning(true)}
-            >
-              <Unplug className="mr-2 h-4 w-4" />
-              Disconnect SMS
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Disconnect Warning */}
-      <AlertDialog open={showDisconnectWarning} onOpenChange={setShowDisconnectWarning}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Unplug className="h-5 w-5 text-red-600" />
-              Disconnect SMS?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This will release your phone number and disable all SMS messaging.
-              Customers will no longer receive SMS notifications, and you won't be able to send or receive SMS in the Messages page.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDisconnect} className="bg-red-600 hover:bg-red-700">
-              Yes, Disconnect
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+function Step({
+  num,
+  title,
+  body,
+}: {
+  num: number;
+  title: string;
+  body: React.ReactNode;
+}) {
+  return (
+    <div className="flex gap-3">
+      <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold shrink-0">
+        {num}
+      </div>
+      <div className="flex-1">
+        <p className="font-medium text-[#080812] text-sm">{title}</p>
+        <p className="text-sm text-[#404040] mt-0.5">{body}</p>
+      </div>
     </div>
   );
 }

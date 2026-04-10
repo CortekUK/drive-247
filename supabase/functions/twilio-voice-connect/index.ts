@@ -57,11 +57,11 @@ Deno.serve(async (req) => {
       return twimlError('Configuration error.');
     }
 
-    // Identify tenant by Twilio subaccount SID
+    // Identify tenant by Twilio Account SID (BYO)
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
       .select('id, twilio_phone_number')
-      .eq('twilio_subaccount_sid', accountSid)
+      .eq('twilio_account_sid', accountSid)
       .single();
 
     if (tenantError || !tenant) {

@@ -5,38 +5,34 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
 
-interface TwilioStatus {
-  hasSubaccount: boolean;
-  subaccountSid: string | null;
-  hasPhoneNumber: boolean;
-  phoneNumber: string | null;
-  phoneNumberSid: string | null;
+// Shape returned by the `get-status` action on manage-twilio-subaccount.
+// Under BYO, the edge function returns legacy field aliases (hasSubaccount, hasPhoneNumber)
+// for backwards compatibility with other UI that reads twilioStatus.
+export interface TwilioStatus {
+  isConnected: boolean;
   isConfigured: boolean;
-  capabilities: { sms: boolean; voice: boolean; mms: boolean; fax: boolean } | null;
-  // 10DLC registration
-  brandSid: string | null;
-  brandStatus: string | null;  // 'pending' | 'approved' | 'failed'
-  campaignSid: string | null;
-  campaignStatus: string | null;  // 'pending' | 'approved' | 'failed'
-  messagingServiceSid: string | null;
+  accountSidMasked: string | null;
+  phoneNumber: string | null;
+  connectedAt: string | null;
+  capabilities: { sms: boolean; voice: boolean; mms: boolean } | null;
+  // Legacy aliases kept for other components that still read these
+  hasSubaccount: boolean;
+  hasPhoneNumber: boolean;
 }
 
-interface AvailableNumber {
+export interface TwilioConnectInput {
+  accountSid: string;
+  authToken: string;
   phoneNumber: string;
-  friendlyName: string;
-  locality: string;
-  region: string;
-  capabilities: { sms: boolean; voice: boolean; mms: boolean };
 }
 
 async function invokeManageTwilio(action: string, params: Record<string, any> = {}) {
-  const { data, error } = await supabase.functions.invoke('manage-twilio-subaccount', {
+  const { data, error } = await supabase.functions.invoke('manage-twilio-connection', {
     body: { action, ...params },
   });
   if (error) {
     // supabase.functions.invoke wraps non-2xx into a generic error.
     // The actual error message is in the response body (JSON { error: "..." }).
-    // Try to extract it from the error context.
     if ('context' in error && (error as any).context?.body) {
       try {
         const body = await (error as any).context.body.getReader().read();
@@ -76,119 +72,54 @@ export function useTwilioSms() {
     refetchTenant();
   };
 
-  const createSubaccount = useMutation({
-    mutationFn: () => invoke('create-subaccount'),
-    onSuccess: () => {
+  /**
+   * Connect a tenant's own Twilio account (BYO).
+   * Validates credentials, verifies the phone number exists, auto-configures
+   * inbound/status webhooks, and saves everything to the DB.
+   */
+  const connect = useMutation({
+    mutationFn: (input: TwilioConnectInput) => invoke('connect', input),
+    onSuccess: (data: any) => {
       invalidateStatus();
-      toast({ title: 'Subaccount Created', description: 'Your Twilio subaccount has been created. Now add a phone number.' });
+      toast({
+        title: 'Twilio Connected',
+        description: `${data?.friendlyName || 'Your account'} is now sending SMS from ${data?.phoneNumber}.`,
+      });
     },
     onError: (err: any) => {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Connection Failed', description: err.message, variant: 'destructive' });
     },
   });
 
-  const searchNumbers = useMutation({
-    mutationFn: (params: { countryCode: string; contains?: string; areaCode?: string }) =>
-      invoke('search-numbers', params),
-    onError: (err: any) => {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    },
-  });
-
-  const purchaseNumber = useMutation({
-    mutationFn: (phoneNumber: string) =>
-      invoke('purchase-number', { phoneNumber }),
-    onSuccess: () => {
-      invalidateStatus();
-      toast({ title: 'Number Purchased', description: 'Phone number has been added to your account. SMS is now active!' });
-    },
-    onError: (err: any) => {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    },
-  });
-
-  const assignOwnNumber = useMutation({
-    mutationFn: (phoneNumber: string) =>
-      invoke('assign-own-number', { phoneNumber }),
-    onSuccess: () => {
-      invalidateStatus();
-      toast({ title: 'Number Assigned', description: 'Your phone number has been configured. SMS is now active!' });
-    },
-    onError: (err: any) => {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    },
-  });
-
+  /** Send a test SMS using the currently-connected credentials. */
   const sendTestSms = useMutation({
     mutationFn: ({ to, message }: { to: string; message?: string }) =>
-      invoke('send-test-sms', { to, message }),
-    onSuccess: () => {
-      toast({ title: 'Test SMS Sent', description: 'Check your phone for the test message.' });
+      invoke('test', { to, message }),
+    onSuccess: (data: any) => {
+      if (data?.success) {
+        toast({ title: 'Test SMS Sent', description: 'Check your phone for the test message.' });
+      } else {
+        toast({
+          title: 'Test Failed',
+          description: data?.error || 'Unknown error',
+          variant: 'destructive',
+        });
+      }
     },
     onError: (err: any) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     },
   });
 
+  /** Forget the tenant's Twilio credentials. Does not touch their Twilio account. */
   const disconnect = useMutation({
     mutationFn: () => invoke('disconnect'),
     onSuccess: () => {
       invalidateStatus();
-      toast({ title: 'Disconnected', description: 'Twilio SMS has been disconnected. SMS notifications are now disabled.' });
-    },
-    onError: (err: any) => {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    },
-  });
-
-  const registerBrand = useMutation({
-    mutationFn: (params: { brandName: string; companyType?: string; taxId?: string; taxIdCountry?: string; website?: string }) =>
-      invoke('register-brand', params),
-    onSuccess: () => {
-      invalidateStatus();
-      toast({ title: 'Brand Submitted', description: 'Your brand registration has been submitted for review.' });
-    },
-    onError: (err: any) => {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    },
-  });
-
-  const createMessagingService = useMutation({
-    mutationFn: () => invoke('create-messaging-service'),
-    onSuccess: () => {
-      invalidateStatus();
-      toast({ title: 'Messaging Service Created', description: 'Your messaging service has been set up.' });
-    },
-    onError: (err: any) => {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    },
-  });
-
-  const registerCampaign = useMutation({
-    mutationFn: () => invoke('register-campaign'),
-    onSuccess: () => {
-      invalidateStatus();
-      toast({ title: 'Campaign Submitted', description: 'Your campaign registration has been submitted for carrier review.' });
-    },
-    onError: (err: any) => {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    },
-  });
-
-  const refreshRegistrationStatus = useMutation({
-    mutationFn: () => invoke('get-registration-status'),
-    onSuccess: () => {
-      invalidateStatus();
-    },
-    onError: (err: any) => {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    },
-  });
-
-  const configureWebhooks = useMutation({
-    mutationFn: () => invoke('configure-webhooks'),
-    onSuccess: () => {
-      toast({ title: 'Webhooks Configured', description: 'SMS webhook URLs have been configured on your phone number.' });
+      toast({
+        title: 'Disconnected',
+        description: 'Your Twilio credentials have been removed. SMS is now disabled.',
+      });
     },
     onError: (err: any) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -198,16 +129,8 @@ export function useTwilioSms() {
   return {
     status: statusQuery.data ?? null,
     isLoading: statusQuery.isLoading,
-    createSubaccount,
-    searchNumbers,
-    purchaseNumber,
-    assignOwnNumber,
+    connect,
     sendTestSms,
     disconnect,
-    registerBrand,
-    createMessagingService,
-    registerCampaign,
-    refreshRegistrationStatus,
-    configureWebhooks,
   };
 }
