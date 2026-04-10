@@ -1963,7 +1963,7 @@ const CreateRental = () => {
       currentStep={creationProgress}
       steps={creationSteps}
     />
-    <div className="container mx-auto px-4 py-6 md:px-6 md:py-8">
+    <div className="container mx-auto px-4 py-6 md:px-6 md:py-8 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-4 mb-2">
         <Button
@@ -2018,8 +2018,8 @@ const CreateRental = () => {
         </Alert>
       )}
 
-      <div>
-        <div>
+      <div className="lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
+        <div className="lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
           {/* Submit Error Alert */}
           {submitError && (
             <Alert variant="destructive" className="mb-6">
@@ -2029,7 +2029,7 @@ const CreateRental = () => {
           )}
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+            <form className="lg:flex-1 lg:min-h-0 lg:flex lg:flex-col" onSubmit={form.handleSubmit(onSubmit, (errors) => {
               const fieldErrors = Object.entries(errors).map(([key, e]) => ({ key, message: e?.message })).filter(e => e.message);
               toast({
                 title: `${fieldErrors.length} missing field${fieldErrors.length > 1 ? 's' : ''}`,
@@ -2049,9 +2049,9 @@ const CreateRental = () => {
                 }
               }, 50);
             })}>
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:h-[calc(100vh-180px)]">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:flex-1 lg:min-h-0">
             {/* ── Left: Scrollable Form ─────────────────────── */}
-            <div className="lg:col-span-3 lg:overflow-y-auto lg:pr-2 space-y-6">
+            <div className="lg:col-span-3 lg:overflow-y-auto lg:pr-2 space-y-6 lg:flex lg:flex-col lg:min-h-0">
               {/* ── Section 1: Customer & Vehicle ──────────────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
                 <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
@@ -3367,7 +3367,7 @@ const CreateRental = () => {
                   }
                   const minDays = Math.min(minDaysWeekly, minDaysMonthly);
                   if (rentalDays < minDays) {
-                    reasons.push(`Minimum ${minDays} days required (this rental is ${rentalDays} days)`);
+                    reasons.push(`Minimum ${minDays} ${minDays === 1 ? 'day' : 'days'} required (this rental is ${rentalDays} ${rentalDays === 1 ? 'day' : 'days'})`);
                   }
                   if (reasons.length > 0) {
                     return (
@@ -4187,7 +4187,7 @@ const CreateRental = () => {
               />
 
               {/* ── Submit ─────────────────────────── */}
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex justify-end gap-3 pt-4 lg:!mt-auto lg:pt-2 border-t lg:border-t-0">
                 <Button
                   type="button"
                   variant="outline"
@@ -4208,7 +4208,7 @@ const CreateRental = () => {
             </div>
 
             {/* ── Right: Static Preview ─────────────────────── */}
-            <div className="hidden lg:block lg:col-span-2 lg:overflow-y-auto">
+            <div className="hidden lg:block lg:col-span-2 lg:overflow-y-auto lg:min-h-0">
               <div className="space-y-5">
                 <div className="rounded-xl border bg-card shadow-sm sticky top-0">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">

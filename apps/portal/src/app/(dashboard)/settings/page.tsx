@@ -3490,7 +3490,6 @@ const Settings = () => {
                       type="number"
                       min={1}
                       max={20}
-                      placeholder="Leave empty for free length"
                       value={rentalForm.lockbox_code_length ?? ''}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -3863,15 +3862,13 @@ const Settings = () => {
                 Create and manage agreement templates that will be used when sending rental contracts for electronic signing.
                 Each tenant can have their own customized template with variable placeholders for customer, vehicle, and rental information.
               </p>
-              <div className="flex justify-center">
-                <Button
-                  onClick={() => router.push('/settings/agreement-templates')}
-                  className="flex items-center gap-2 w-full sm:w-64"
-                >
-                  <FileText className="h-4 w-4" />
-                  Manage Agreement Templates
-                </Button>
-              </div>
+              <Button
+                onClick={() => router.push('/settings/agreement-templates')}
+                className="flex items-center gap-2"
+              >
+                <FileText className="h-4 w-4" />
+                Manage Agreement Templates
+              </Button>
             </CardContent>
           </Card>
 

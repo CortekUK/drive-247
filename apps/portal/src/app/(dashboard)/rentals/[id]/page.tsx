@@ -2237,7 +2237,7 @@ const RentalDetail = () => {
                             </div>
                           )}
                           <div>
-                            <p className="text-sm font-medium flex items-center gap-1">
+                            <div className="text-sm font-medium flex items-center gap-1">
                               {label}
                               {isPayg && paygCategories.includes(category) && applied && (
                                 <Badge variant="outline" className="text-indigo-600 border-indigo-300 bg-indigo-100 dark:text-indigo-400 dark:border-indigo-700 dark:bg-indigo-950/30 text-[10px] ml-1.5">
@@ -2260,7 +2260,7 @@ const RentalDetail = () => {
                                   <RefreshCw className={`h-3 w-3 text-muted-foreground ${teslaCharges.syncCharges.isPending ? 'animate-spin' : ''}`} />
                                 </button>
                               )}
-                            </p>
+                            </div>
                             <p className="text-xs text-muted-foreground">{applied ? detail : 'Not applied'}</p>
                           </div>
                         </div>
