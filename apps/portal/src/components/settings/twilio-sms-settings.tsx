@@ -21,6 +21,14 @@ import {
   ChevronUp,
   Shield,
   Webhook,
+  UserPlus,
+  Phone,
+  Key,
+  Zap,
+  Clock,
+  Sparkles,
+  Info,
+  Lightbulb,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -289,239 +297,247 @@ export function TwilioSmsSettings() {
         </CardHeader>
         <CardContent className="space-y-5">
           {/* How it works — expandable guide */}
-          <div className="rounded-lg border bg-[#f8fafc] overflow-hidden">
+          <div className="rounded-xl border border-border bg-gradient-to-br from-indigo-50/60 via-background to-purple-50/40 dark:from-indigo-950/30 dark:via-background dark:to-purple-950/20 overflow-hidden shadow-sm">
             <button
               type="button"
               onClick={() => setShowGuide((s) => !s)}
-              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-[#080812] hover:bg-[#f1f5f9] transition-colors"
+              className="w-full flex items-center justify-between px-4 py-3.5 text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             >
-              <span className="flex items-center gap-2">
-                <Shield className="h-4 w-4 text-indigo-600" />
-                How to set up your Twilio account
+              <span className="flex items-center gap-2.5">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-indigo-500/20 rounded-full blur-md" />
+                  <div className="relative w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                    <Sparkles className="h-3.5 w-3.5 text-white" />
+                  </div>
+                </div>
+                <span className="flex flex-col items-start">
+                  <span className="font-semibold">How to set up your Twilio account</span>
+                  <span className="text-xs font-normal text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    Takes about 10 minutes
+                  </span>
+                </span>
               </span>
               {showGuide ? (
-                <ChevronUp className="h-4 w-4 text-[#737373]" />
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
               ) : (
-                <ChevronDown className="h-4 w-4 text-[#737373]" />
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
               )}
             </button>
             {showGuide && (
-              <div className="px-4 pb-4 pt-1 space-y-5 text-sm text-[#404040] border-t bg-white">
+              <div className="px-4 pb-4 pt-3 space-y-3 text-sm border-t border-border bg-card/50 backdrop-blur-sm">
                 <Step
                   num={1}
-                  title="Create your Twilio account (skip if you already have one)"
+                  icon={<UserPlus className="h-4 w-4" />}
+                  accent="indigo"
+                  title="Create your Twilio account"
+                  subtitle="Skip if you already have one"
                   body={
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       <p>
                         Open{' '}
-                        <a
-                          href="https://www.twilio.com/try-twilio"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-indigo-600 hover:underline inline-flex items-center gap-0.5 font-medium"
-                        >
-                          twilio.com/try-twilio <ExternalLink className="h-3 w-3" />
-                        </a>{' '}
+                        <ExtLink href="https://www.twilio.com/try-twilio">
+                          twilio.com/try-twilio
+                        </ExtLink>{' '}
                         in a new tab.
                       </p>
-                      <ul className="list-disc list-inside space-y-1 text-[#404040] ml-1">
-                        <li>Sign up with your business email and a strong password.</li>
-                        <li>Twilio will email you a confirmation link — click it.</li>
-                        <li>Verify your mobile phone number when prompted (Twilio sends a one-time code).</li>
-                        <li>
+                      <ul className="space-y-1.5">
+                        <Bullet>Sign up with your business email and a strong password.</Bullet>
+                        <Bullet>Twilio will email you a confirmation link — click it.</Bullet>
+                        <Bullet>
+                          Verify your mobile phone number when prompted (Twilio sends a one-time
+                          code).
+                        </Bullet>
+                        <Bullet>
                           On the "Welcome to Twilio" walkthrough, the defaults are fine. You can
                           skip the "What do you want to build?" questionnaire — it doesn't affect
                           anything.
-                        </li>
-                        <li>
-                          You'll land on the <strong>Twilio Console</strong> dashboard. That's
+                        </Bullet>
+                        <Bullet>
+                          You'll land on the <Strong>Twilio Console</Strong> dashboard. That's
                           your home base.
-                        </li>
+                        </Bullet>
                       </ul>
-                      <p className="text-xs text-[#737373] pt-1">
-                        💰 Free trial includes ~$15 of credit. No credit card required to start.
-                      </p>
+                      <Tip icon="💰">
+                        Free trial includes ~$15 of credit. No credit card required to start.
+                      </Tip>
                     </div>
                   }
                 />
 
                 <Step
                   num={2}
+                  icon={<Phone className="h-4 w-4" />}
+                  accent="blue"
                   title="Buy a phone number"
+                  subtitle="~$1.15 / £1 per month"
                   body={
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       <p>
                         In the Twilio Console, open{' '}
-                        <a
-                          href="https://console.twilio.com/us1/develop/phone-numbers/manage/search"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-indigo-600 hover:underline inline-flex items-center gap-0.5 font-medium"
-                        >
-                          Phone Numbers → Manage → Buy a number{' '}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
+                        <ExtLink href="https://console.twilio.com/us1/develop/phone-numbers/manage/search">
+                          Phone Numbers → Manage → Buy a number
+                        </ExtLink>
                         .
                       </p>
-                      <ul className="list-disc list-inside space-y-1 ml-1">
-                        <li>
-                          <strong>Country</strong> — pick your region (UK, US, etc.).
-                        </li>
-                        <li>
-                          <strong>Capabilities</strong> — tick <strong>SMS</strong>. If you'll
-                          use voice calling later too, also tick <strong>Voice</strong>.
-                        </li>
-                        <li>
-                          Optionally type an <strong>area code</strong> if you want a specific
+                      <ul className="space-y-1.5">
+                        <Bullet>
+                          <Strong>Country</Strong> — pick your region (UK, US, etc.).
+                        </Bullet>
+                        <Bullet>
+                          <Strong>Capabilities</Strong> — tick <Strong>SMS</Strong>. If you'll
+                          use voice calling later too, also tick <Strong>Voice</Strong>.
+                        </Bullet>
+                        <Bullet>
+                          Optionally type an <Strong>area code</Strong> if you want a specific
                           one.
-                        </li>
-                        <li>
-                          Click <strong>Search</strong>.
-                        </li>
-                        <li>
-                          Pick any number from the list and click the blue <strong>Buy</strong>{' '}
-                          button next to it.
-                        </li>
-                        <li>
-                          Confirm the purchase in the popup. Cost is about $1.15/month for US
-                          numbers, £1/month for UK — comes out of your trial credit.
-                        </li>
+                        </Bullet>
+                        <Bullet>
+                          Click <Strong>Search</Strong>.
+                        </Bullet>
+                        <Bullet>
+                          Pick any number from the list and click the blue{' '}
+                          <Strong>Buy</Strong> button next to it.
+                        </Bullet>
+                        <Bullet>
+                          Confirm the purchase in the popup — comes out of your trial credit.
+                        </Bullet>
                       </ul>
                       <p>
                         Once bought, the number appears in{' '}
-                        <a
-                          href="https://console.twilio.com/us1/develop/phone-numbers/manage/incoming"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-indigo-600 hover:underline inline-flex items-center gap-0.5 font-medium"
-                        >
-                          Active Numbers <ExternalLink className="h-3 w-3" />
-                        </a>
+                        <ExtLink href="https://console.twilio.com/us1/develop/phone-numbers/manage/incoming">
+                          Active Numbers
+                        </ExtLink>
                         . Copy it down — you'll need it in the form below in E.164 format (e.g.{' '}
-                        <code className="px-1 py-0.5 bg-[#f1f5f9] rounded text-xs">
-                          +14155551234
-                        </code>
-                        , with the leading <strong>+</strong> and country code).
+                        <Code>+14155551234</Code>, with the leading <Strong>+</Strong> and
+                        country code).
                       </p>
-                      <p className="text-xs text-[#737373] pt-1">
-                        💡 Already have a number on your account? Skip the buy step — just go to
-                        Active Numbers and grab the one you want to use.
-                      </p>
+                      <Tip icon="💡">
+                        Already have a number on your account? Skip the buy step — just go to
+                        Active Numbers and grab the one you want.
+                      </Tip>
                     </div>
                   }
                 />
 
                 <Step
                   num={3}
+                  icon={<Key className="h-4 w-4" />}
+                  accent="purple"
                   title="Copy your Account SID and Auth Token"
+                  subtitle="Your Twilio credentials"
                   body={
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       <p>
                         Go back to the{' '}
-                        <a
-                          href="https://console.twilio.com"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-indigo-600 hover:underline inline-flex items-center gap-0.5 font-medium"
-                        >
-                          Twilio Console homepage <ExternalLink className="h-3 w-3" />
-                        </a>{' '}
+                        <ExtLink href="https://console.twilio.com">
+                          Twilio Console homepage
+                        </ExtLink>{' '}
                         (or click the Twilio logo in the top-left).
                       </p>
-                      <ul className="list-disc list-inside space-y-1 ml-1">
-                        <li>
+                      <ul className="space-y-1.5">
+                        <Bullet>
                           Scroll down until you see a panel labeled{' '}
-                          <strong>Account Info</strong>.
-                        </li>
-                        <li>
-                          You'll see two values:
-                          <ul className="list-disc list-inside ml-5 mt-1 space-y-1">
-                            <li>
-                              <strong>Account SID</strong> — a long string starting with{' '}
-                              <code className="px-1 py-0.5 bg-[#f1f5f9] rounded text-xs">
-                                AC
-                              </code>{' '}
-                              (always visible). Click the copy icon next to it.
-                            </li>
-                            <li>
-                              <strong>Auth Token</strong> — hidden by default. Click the eye
-                              icon or "Show" link to reveal it, then click the copy icon.
-                            </li>
-                          </ul>
-                        </li>
-                        <li>Paste both into the form below.</li>
+                          <Strong>Account Info</Strong>.
+                        </Bullet>
+                        <Bullet>You'll see two values:</Bullet>
                       </ul>
-                      <div className="flex items-start gap-2 p-2.5 rounded bg-amber-50 border border-amber-200">
-                        <AlertCircle className="h-3.5 w-3.5 text-amber-600 mt-0.5 shrink-0" />
-                        <p className="text-xs text-amber-900">
-                          <strong>Treat the Auth Token like a password.</strong> Anyone with it
-                          can send messages from your account and run up your bill. We store it
-                          encrypted and never expose it back to your browser.
-                        </p>
+                      <div className="ml-6 grid gap-2">
+                        <div className="rounded-lg border border-border bg-background/60 p-2.5">
+                          <p className="text-xs font-semibold text-foreground mb-0.5">
+                            Account SID
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            A long string starting with <Code>AC</Code> — always visible. Click
+                            the copy icon next to it.
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-border bg-background/60 p-2.5">
+                          <p className="text-xs font-semibold text-foreground mb-0.5">
+                            Auth Token
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Hidden by default. Click the <Strong>eye icon</Strong> or "Show" link
+                            to reveal it, then click the copy icon.
+                          </p>
+                        </div>
                       </div>
+                      <Callout
+                        tone="amber"
+                        icon={<Shield className="h-4 w-4" />}
+                        title="Treat the Auth Token like a password"
+                      >
+                        Anyone with it can send messages from your account and run up your bill.
+                        We store it encrypted and never expose it back to your browser.
+                      </Callout>
                     </div>
                   }
                 />
 
                 <Step
                   num={4}
+                  icon={<Zap className="h-4 w-4" />}
+                  accent="emerald"
                   title="Click Connect — we handle the rest"
+                  subtitle="~5 seconds"
                   body={
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       <p>
                         Once all three fields below are filled, click{' '}
-                        <strong>Connect Twilio</strong>. We'll automatically:
+                        <Strong>Connect Twilio</Strong>. We'll automatically:
                       </p>
-                      <ul className="list-disc list-inside space-y-1 ml-1">
-                        <li>Verify your credentials with Twilio</li>
-                        <li>Confirm the phone number exists on your account and supports SMS</li>
-                        <li>Wire up inbound SMS webhooks on your number (so customer replies land in the Messages page)</li>
-                        <li>Save everything securely</li>
+                      <ul className="space-y-1.5">
+                        <BulletCheck>Verify your credentials with Twilio</BulletCheck>
+                        <BulletCheck>
+                          Confirm the phone number exists on your account and supports SMS
+                        </BulletCheck>
+                        <BulletCheck>
+                          Wire up inbound SMS webhooks (so customer replies land in the Messages
+                          page)
+                        </BulletCheck>
+                        <BulletCheck>Save everything securely</BulletCheck>
                       </ul>
-                      <p>
-                        Takes about 5 seconds. You'll see a "Twilio Connected" confirmation when
-                        it's done.
+                      <p className="text-muted-foreground">
+                        You'll see a "Twilio Connected" confirmation when it's done. 🎉
                       </p>
                     </div>
                   }
                 />
 
                 {/* Trial account caller verification — important gotcha */}
-                <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-blue-600" />
-                    <p className="text-sm font-medium text-blue-900">
-                      Trial accounts: verify your test number first
-                    </p>
-                  </div>
-                  <p className="text-xs text-blue-900">
-                    Twilio trial accounts can only send SMS to <strong>verified caller IDs</strong>.
-                    Before you click "Send Test SMS" later, go to{' '}
-                    <a
-                      href="https://console.twilio.com/us1/develop/phone-numbers/manage/verified"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline inline-flex items-center gap-0.5"
-                    >
-                      Phone Numbers → Verified Caller IDs{' '}
-                      <ExternalLink className="h-2.5 w-2.5" />
-                    </a>{' '}
-                    and add your own mobile number. Paid (upgraded) accounts skip this entirely.
-                    This is a Twilio limitation, not a Drive247 one.
-                  </p>
-                </div>
+                <Callout
+                  tone="blue"
+                  icon={<Info className="h-4 w-4" />}
+                  title="Trial accounts: verify your test number first"
+                >
+                  Twilio trial accounts can only send SMS to{' '}
+                  <Strong>verified caller IDs</Strong>. Before you click "Send Test SMS" later,
+                  go to{' '}
+                  <a
+                    href="https://console.twilio.com/us1/develop/phone-numbers/manage/verified"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline inline-flex items-center gap-0.5 font-medium"
+                  >
+                    Phone Numbers → Verified Caller IDs
+                    <ExternalLink className="h-2.5 w-2.5" />
+                  </a>{' '}
+                  and add your own mobile number. Paid accounts skip this entirely. (Twilio
+                  limitation, not ours.)
+                </Callout>
 
                 {/* US/Canada 10DLC note */}
-                <div className="pt-2 border-t">
-                  <p className="text-xs text-[#737373]">
-                    <strong className="text-[#404040]">US / Canada numbers only:</strong> Twilio
-                    requires 10DLC brand &amp; campaign registration for sending SMS to US or
-                    Canadian recipients. SMS will work immediately for non-US/CA destinations,
-                    but for US/CA you'll need to complete the one-time registration in your
-                    Twilio console (under <em>Messaging → Regulatory Compliance</em>). It takes
-                    about 15 minutes plus 1–7 days of carrier review.
-                  </p>
-                </div>
+                <Callout
+                  tone="neutral"
+                  icon={<Lightbulb className="h-4 w-4" />}
+                  title="US / Canada numbers only"
+                >
+                  Twilio requires 10DLC brand &amp; campaign registration for sending SMS to US
+                  or Canadian recipients. SMS works immediately for everywhere else, but for
+                  US/CA you'll need to complete the one-time registration in your Twilio console
+                  (under <em>Messaging → Regulatory Compliance</em>). About 15 minutes of forms
+                  + 1–7 days of carrier review.
+                </Callout>
               </div>
             )}
           </div>
@@ -602,23 +618,202 @@ export function TwilioSmsSettings() {
   );
 }
 
+// ----- Setup-guide presentation helpers -----
+
+type Accent = 'indigo' | 'blue' | 'purple' | 'emerald';
+
+const accentMap: Record<
+  Accent,
+  { gradient: string; text: string; ring: string; iconBg: string; border: string }
+> = {
+  indigo: {
+    gradient: 'from-indigo-500 to-indigo-600',
+    text: 'text-indigo-600 dark:text-indigo-400',
+    ring: 'ring-indigo-500/20',
+    iconBg: 'bg-indigo-100 dark:bg-indigo-950/50',
+    border: 'border-l-indigo-500',
+  },
+  blue: {
+    gradient: 'from-sky-500 to-blue-600',
+    text: 'text-blue-600 dark:text-blue-400',
+    ring: 'ring-blue-500/20',
+    iconBg: 'bg-blue-100 dark:bg-blue-950/50',
+    border: 'border-l-blue-500',
+  },
+  purple: {
+    gradient: 'from-purple-500 to-fuchsia-600',
+    text: 'text-purple-600 dark:text-purple-400',
+    ring: 'ring-purple-500/20',
+    iconBg: 'bg-purple-100 dark:bg-purple-950/50',
+    border: 'border-l-purple-500',
+  },
+  emerald: {
+    gradient: 'from-emerald-500 to-teal-600',
+    text: 'text-emerald-600 dark:text-emerald-400',
+    ring: 'ring-emerald-500/20',
+    iconBg: 'bg-emerald-100 dark:bg-emerald-950/50',
+    border: 'border-l-emerald-500',
+  },
+};
+
 function Step({
   num,
+  icon,
+  accent,
   title,
+  subtitle,
   body,
 }: {
   num: number;
+  icon: React.ReactNode;
+  accent: Accent;
   title: string;
+  subtitle?: string;
   body: React.ReactNode;
 }) {
+  const a = accentMap[accent];
   return (
-    <div className="flex gap-3">
-      <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold shrink-0">
-        {num}
+    <div
+      className={`relative rounded-xl border border-border border-l-4 ${a.border} bg-background/70 backdrop-blur-sm p-4 shadow-sm hover:shadow-md transition-shadow`}
+    >
+      <div className="flex items-start gap-3">
+        {/* Step number badge with icon overlay */}
+        <div className="relative shrink-0">
+          <div
+            className={`w-10 h-10 rounded-xl bg-gradient-to-br ${a.gradient} flex items-center justify-center text-white shadow-lg ring-4 ${a.ring}`}
+          >
+            {icon}
+          </div>
+          <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-background border-2 border-border flex items-center justify-center text-[10px] font-bold text-foreground">
+            {num}
+          </div>
+        </div>
+
+        {/* Title + body */}
+        <div className="flex-1 min-w-0 pt-0.5">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <p className="font-semibold text-foreground text-[15px] leading-tight">
+              {title}
+            </p>
+            {subtitle && (
+              <span className={`text-xs font-medium ${a.text}`}>{subtitle}</span>
+            )}
+          </div>
+          <div className="text-sm text-foreground/80 mt-2 leading-relaxed">{body}</div>
+        </div>
       </div>
-      <div className="flex-1">
-        <p className="font-medium text-[#080812] text-sm">{title}</p>
-        <p className="text-sm text-[#404040] mt-0.5">{body}</p>
+    </div>
+  );
+}
+
+function ExtLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline inline-flex items-center gap-0.5 font-medium transition-colors"
+    >
+      {children}
+      <ExternalLink className="h-3 w-3" />
+    </a>
+  );
+}
+
+function Bullet({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="flex gap-2">
+      <span className="text-indigo-500 dark:text-indigo-400 mt-0.5 shrink-0">•</span>
+      <span className="text-foreground/80">{children}</span>
+    </li>
+  );
+}
+
+function BulletCheck({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="flex gap-2">
+      <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5" />
+      <span className="text-foreground/80">{children}</span>
+    </li>
+  );
+}
+
+function Code({ children }: { children: React.ReactNode }) {
+  return (
+    <code className="px-1.5 py-0.5 bg-muted text-foreground rounded text-xs font-mono border border-border">
+      {children}
+    </code>
+  );
+}
+
+function Strong({ children }: { children: React.ReactNode }) {
+  return <strong className="text-foreground font-semibold">{children}</strong>;
+}
+
+function Tip({ icon, children }: { icon: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-muted/60 border border-border/60">
+      <span className="text-base leading-none mt-0.5">{icon}</span>
+      <p className="text-xs text-muted-foreground">{children}</p>
+    </div>
+  );
+}
+
+type CalloutTone = 'amber' | 'blue' | 'neutral';
+
+const calloutToneMap: Record<
+  CalloutTone,
+  { bg: string; border: string; iconBg: string; iconText: string; titleText: string }
+> = {
+  amber: {
+    bg: 'bg-amber-50 dark:bg-amber-950/30',
+    border: 'border-amber-200 dark:border-amber-900/60',
+    iconBg: 'bg-amber-100 dark:bg-amber-900/50',
+    iconText: 'text-amber-700 dark:text-amber-400',
+    titleText: 'text-amber-900 dark:text-amber-200',
+  },
+  blue: {
+    bg: 'bg-blue-50 dark:bg-blue-950/30',
+    border: 'border-blue-200 dark:border-blue-900/60',
+    iconBg: 'bg-blue-100 dark:bg-blue-900/50',
+    iconText: 'text-blue-700 dark:text-blue-400',
+    titleText: 'text-blue-900 dark:text-blue-200',
+  },
+  neutral: {
+    bg: 'bg-muted/40 dark:bg-muted/20',
+    border: 'border-border',
+    iconBg: 'bg-muted dark:bg-muted/60',
+    iconText: 'text-muted-foreground',
+    titleText: 'text-foreground',
+  },
+};
+
+function Callout({
+  tone,
+  icon,
+  title,
+  children,
+}: {
+  tone: CalloutTone;
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  const t = calloutToneMap[tone];
+  return (
+    <div className={`rounded-xl border ${t.border} ${t.bg} p-3.5`}>
+      <div className="flex items-start gap-3">
+        <div
+          className={`w-8 h-8 rounded-lg ${t.iconBg} ${t.iconText} flex items-center justify-center shrink-0`}
+        >
+          {icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className={`text-sm font-semibold ${t.titleText}`}>{title}</p>
+          <p className={`text-xs mt-1 ${t.titleText} opacity-90 leading-relaxed`}>
+            {children}
+          </p>
+        </div>
       </div>
     </div>
   );
