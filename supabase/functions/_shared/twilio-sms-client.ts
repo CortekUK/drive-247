@@ -180,6 +180,8 @@ export async function configureNumberWebhooks(
 
 /**
  * Send SMS using the tenant's own Twilio credentials (BYO).
+ * Includes a StatusCallback so Twilio posts delivery status updates
+ * (sent, delivered, failed, undelivered) to our twilio-sms-status function.
  */
 export async function sendTenantSMS(
   credentials: TenantTwilioCredentials,
@@ -191,16 +193,23 @@ export async function sendTenantSMS(
   }
 
   try {
+    // Build the status callback URL from SUPABASE_URL (available in all edge functions)
+    const supabaseUrl = typeof Deno !== 'undefined' ? Deno.env.get('SUPABASE_URL') : '';
+    const messageParams: Record<string, string> = {
+      To: to,
+      From: credentials.phoneNumber,
+      Body: body,
+    };
+    if (supabaseUrl) {
+      messageParams.StatusCallback = `${supabaseUrl}/functions/v1/twilio-sms-status`;
+    }
+
     const data = await twilioFetch(
       `${TWILIO_API_BASE}/Accounts/${credentials.sid}/Messages.json`,
       credentials.sid,
       credentials.authToken,
       'POST',
-      {
-        To: to,
-        From: credentials.phoneNumber,
-        Body: body,
-      }
+      messageParams
     );
 
     return { success: true, messageId: data.sid };
