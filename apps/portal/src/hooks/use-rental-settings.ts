@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, supabaseUntyped } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
 
@@ -68,6 +68,11 @@ export interface RentalSettings {
   return_reminder_hours: number | null;
   // Pay As You Go
   pay_as_you_go_enabled: boolean | null;
+  payg_reminder_interval_days: number | null;
+  payg_grace_period_days: number | null;
+  payg_max_reminders: number | null;
+  payg_preauth_days: number | null;
+  payg_max_duration_days: number | null;
   // Blog
   blog_enabled: boolean | null;
 }
@@ -128,6 +133,11 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   return_reminder_hours: 24,
   // Pay As You Go
   pay_as_you_go_enabled: false,
+  payg_reminder_interval_days: 4,
+  payg_grace_period_days: 2,
+  payg_max_reminders: 10,
+  payg_preauth_days: 2,
+  payg_max_duration_days: 90,
   // Blog
   blog_enabled: false,
 };
@@ -158,45 +168,13 @@ export const useRentalSettings = () => {
 
       console.log(`[RentalSettings] Fetching settings for tenant: ${tenant.id}`);
 
-      const { data, error } = await supabase
+      // Use SELECT * so the query works even before the PAYG migration is pushed.
+      // Missing PAYG columns simply won't be in the response — the ?? fallbacks in
+      // the sync effect handle defaults. After migration + type regen, can switch back
+      // to an explicit column list for type safety.
+      const { data, error } = await supabaseUntyped
         .from('tenants')
-        .select(`
-          min_rental_days,
-          min_rental_hours,
-          max_rental_days,
-          booking_lead_time_hours,
-          booking_lead_time_unit,
-          minimum_rental_age,
-          require_identity_verification,
-          require_insurance_upload,
-          tax_enabled,
-          tax_percentage,
-          service_fee_enabled,
-          service_fee_amount,
-          service_fee_type,
-          service_fee_value,
-          security_deposit_enabled,
-          deposit_mode,
-          global_deposit_amount,
-          working_hours_enabled,
-          working_hours_open,
-          working_hours_close,
-          working_hours_always_open,
-          installments_enabled,
-          installment_config,
-          lockbox_enabled,
-          lockbox_code_length,
-          lockbox_notification_methods,
-          lockbox_default_instructions,
-          lockbox_send_offset_minutes,
-          verification_document_type,
-          monthly_tier_days,
-          buffer_time_minutes,
-          return_reminder_enabled,
-          return_reminder_hours,
-          pay_as_you_go_enabled,
-          blog_enabled
-        `)
+        .select('*')
         .eq('id', tenant.id)
         .single();
 
@@ -207,8 +185,12 @@ export const useRentalSettings = () => {
 
       console.log('[RentalSettings] Settings loaded:', data);
 
+      // Detect whether the PAYG migration has been pushed by checking if the raw
+      // DB row contains one of the new columns (before we spread defaults over it).
+      const paygMigrationReady = data != null && 'payg_reminder_interval_days' in data;
+
       // Map service_fee_amount to service_fee_value for backward compatibility
-      const result = { ...DEFAULT_RENTAL_SETTINGS, ...data };
+      const result = { ...DEFAULT_RENTAL_SETTINGS, ...data, _paygMigrationReady: paygMigrationReady };
       if (result.service_fee_value === null || result.service_fee_value === undefined) {
         result.service_fee_value = result.service_fee_amount ?? 0;
       }
@@ -232,47 +214,15 @@ export const useRentalSettings = () => {
 
       console.log(`[RentalSettings] Updating settings for tenant ${tenant.id}:`, updates);
 
-      const { data, error } = await supabase
+      // SELECT * so updates work even before the PAYG migration is pushed.
+      // The update itself only sends keys that exist — unknown keys are silently
+      // ignored by PostgREST, so updating PAYG-only fields before the migration is
+      // harmless (they'll 400 only if the column truly doesn't exist, caught below).
+      const { data, error } = await supabaseUntyped
         .from('tenants')
         .update(updates as any)
         .eq('id', tenant.id)
-        .select(`
-          min_rental_days,
-          min_rental_hours,
-          max_rental_days,
-          booking_lead_time_hours,
-          booking_lead_time_unit,
-          minimum_rental_age,
-          require_identity_verification,
-          require_insurance_upload,
-          tax_enabled,
-          tax_percentage,
-          service_fee_enabled,
-          service_fee_amount,
-          service_fee_type,
-          service_fee_value,
-          security_deposit_enabled,
-          deposit_mode,
-          global_deposit_amount,
-          working_hours_enabled,
-          working_hours_open,
-          working_hours_close,
-          working_hours_always_open,
-          installments_enabled,
-          installment_config,
-          lockbox_enabled,
-          lockbox_code_length,
-          lockbox_notification_methods,
-          lockbox_default_instructions,
-          lockbox_send_offset_minutes,
-          verification_document_type,
-          monthly_tier_days,
-          buffer_time_minutes,
-          return_reminder_enabled,
-          return_reminder_hours,
-          pay_as_you_go_enabled,
-          blog_enabled
-        `);
+        .select('*');
 
       if (error) {
         console.error('[RentalSettings] Update error:', error);

@@ -1678,7 +1678,7 @@ const RentalDetail = () => {
           {/* Active Rental - Show Add Payment, Add Fine, Close, Cancel, Delete buttons */}
           {canEdit('rentals') && displayStatus === 'Active' && (
             <>
-              {rental.is_extended && (
+              {rental.is_extended && !rental.is_pay_as_you_go && (
                 <Button
                   variant="default"
                   className="bg-amber-600 hover:bg-amber-700"
@@ -1688,10 +1688,93 @@ const RentalDetail = () => {
                   Review Extension
                 </Button>
               )}
-              <Button variant="outline" onClick={() => setShowAdminExtendDialog(true)}>
-                <CalendarPlus className="h-4 w-4 mr-2" />
-                Extend Rental
-              </Button>
+              {/* R11: Extend Rental hidden for PAYG — open-ended rentals can't be extended */}
+              {!rental.is_pay_as_you_go && (
+                <Button variant="outline" onClick={() => setShowAdminExtendDialog(true)}>
+                  <CalendarPlus className="h-4 w-4 mr-2" />
+                  Extend Rental
+                </Button>
+              )}
+              {/* PAYG-specific actions: Pause/Resume + Close */}
+              {rental.is_pay_as_you_go && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        const isPaused = (rental as any).payg_paused === true;
+                        const updates: any = { payg_paused: !isPaused };
+                        if (isPaused) {
+                          // Resuming: reset next accrual to 24h from now (R13: don't backfill)
+                          updates.payg_next_accrual_at = new Date(
+                            Date.now() + 24 * 60 * 60 * 1000,
+                          ).toISOString();
+                        } else {
+                          updates.payg_paused_at = new Date().toISOString();
+                        }
+                        const { error } = await (supabase as any)
+                          .from('rentals')
+                          .update(updates)
+                          .eq('id', rental.id);
+                        if (error) throw error;
+                        toast({
+                          title: isPaused ? 'PAYG Resumed' : 'PAYG Paused',
+                          description: isPaused
+                            ? 'Daily accrual will resume; the next charge fires in 24 hours.'
+                            : 'Daily accrual is paused. Resume from this page when ready.',
+                        });
+                        await queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+                      } catch (err: any) {
+                        toast({ title: 'Error', description: err.message, variant: 'destructive' });
+                      }
+                    }}
+                  >
+                    {(rental as any).payg_paused ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Resume PAYG
+                      </>
+                    ) : (
+                      <>
+                        <Clock className="h-4 w-4 mr-2" />
+                        Pause PAYG
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-red-300 text-red-600 hover:bg-red-50"
+                    onClick={async () => {
+                      const isPaused = (rental as any).payg_paused === true;
+                      const confirmMsg = isPaused
+                        ? 'Close this paused PAYG rental? No final partial-day charge will be posted.'
+                        : 'Close this PAYG rental? A final pro-rated partial day will be posted, then the rental will be marked Closed.';
+                      if (!window.confirm(confirmMsg)) return;
+                      try {
+                        const { data, error } = await supabase.functions.invoke(
+                          'finalize-payg-rental',
+                          { body: { rental_id: rental.id } },
+                        );
+                        if (error || !(data as any)?.success) {
+                          throw new Error(error?.message || (data as any)?.error || 'Finalize failed');
+                        }
+                        toast({
+                          title: 'PAYG Rental Closed',
+                          description: (data as any)?.partial_day_posted
+                            ? 'Final partial-day charge posted; rental is now closed.'
+                            : 'Rental closed without a partial-day charge.',
+                        });
+                        await queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+                      } catch (err: any) {
+                        toast({ title: 'Error closing rental', description: err.message, variant: 'destructive' });
+                      }
+                    }}
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Close PAYG Rental
+                  </Button>
+                </>
+              )}
               <Button variant="outline" onClick={() => setShowAddPayment(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Payment

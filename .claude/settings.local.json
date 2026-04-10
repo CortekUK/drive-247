@@ -48,7 +48,18 @@
       "Bash(npx supabase@latest db query --workdir /home/haseeb-raza/Desktop/drive-247 ':*)",
       "Bash(python3 -m json.tool)",
       "Bash(kill 4760)",
-      "Bash(kill -9 21883)"
+      "Bash(kill -9 21883)",
+      "Bash(npx supabase@latest --version)",
+      "Read(//home/haseeb-raza/.nvm/versions/node/**)",
+      "Read(//home/haseeb-raza/.local/bin/**)",
+      "Read(//usr/local/bin/**)",
+      "Bash(SUPABASE_ACCESS_TOKEN=sbp_6b139d9d0f78dd93e75f3683c8cfa4a5fc31f366 npx supabase@latest db push --linked)",
+      "Bash(SUPABASE_ACCESS_TOKEN=sbp_6b139d9d0f78dd93e75f3683c8cfa4a5fc31f366 npx supabase@latest link --project-ref hviqoaokxvlancmftwuo)",
+      "Bash(SUPABASE_ACCESS_TOKEN=sbp_6b139d9d0f78dd93e75f3683c8cfa4a5fc31f366 npx supabase@latest link --project-ref hviqoaokxvlancmftwuo --debug)",
+      "Bash(SUPABASE_ACCESS_TOKEN=sbp_6b139d9d0f78dd93e75f3683c8cfa4a5fc31f366 npx supabase@latest projects list)",
+      "Bash(psql --version)",
+      "Bash(dpkg -l)",
+      "Bash(apt list:*)"
     ],
     "deny": [],
     "ask": []

@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { addMonths, addDays, addWeeks, isAfter, isBefore, subYears, startOfDay, format, differenceInDays, parseISO } from "date-fns";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -68,29 +68,25 @@ import { useAuditLog } from "@/hooks/use-audit-log";
 import { RentalProgressOverlay } from "@/components/rentals/rental-progress-overlay";
 import { getTimezonesByRegion, findTimezone } from "@/lib/timezones";
 
+// Base schema: end_date and return_location are optional at the schema level
+// because PAYG rentals don't have a fixed end date or a return location.
+// Regular-mode rentals enforce these in the submit handler via the isPayAsYouGo flag.
 const rentalSchema = z.object({
   customer_id: z.string().min(1, "Customer is required"),
   vehicle_id: z.string().min(1, "Vehicle is required"),
   start_date: z.date({ required_error: "Start date is required", invalid_type_error: "Please select a valid start date" }),
-  end_date: z.date({ required_error: "End date is required", invalid_type_error: "Please select a valid end date" }),
+  end_date: z.date({ invalid_type_error: "Please select a valid end date" }).optional(),
   rental_period_type: z.enum(["Daily", "Weekly", "Monthly"], { required_error: "Rental period type is required" }),
   monthly_amount: z.coerce.number({ invalid_type_error: "Please enter a valid rental amount" }).min(0.01, "Rental amount is required"),
   // New booking-aligned fields
   pickup_location: z.string().min(1, "Pickup location is required"),
-  return_location: z.string().min(1, "Return location is required"),
+  return_location: z.string().optional(),
   pickup_time: z.string().regex(/^\d{2}:\d{2}$/, "Pickup time is required"),
-  return_time: z.string().regex(/^\d{2}:\d{2}$/, "Return time is required"),
+  return_time: z.string().regex(/^\d{2}:\d{2}$/, "Return time is required").optional(),
   driver_age: z.coerce.number({ invalid_type_error: "Please enter a valid driver age" }).min(1, "Driver age is required").max(200, "Driver age cannot exceed 200"),
   promo_code: z.string().optional(),
   insurance_status: z.enum(["pending", "uploaded", "verified", "bonzah", "not_required"]).optional(),
   notes: z.string().optional(),
-}).refine((data) => {
-  // End date must be at least 1 day after start date
-  const minEndDate = addDays(data.start_date, 1);
-  return isAfter(data.end_date, minEndDate) || data.end_date.getTime() === minEndDate.getTime();
-}, {
-  message: "End date must be at least 1 day after start date",
-  path: ["end_date"],
 });
 
 type RentalFormData = z.infer<typeof rentalSchema>;
@@ -165,6 +161,8 @@ const CreateRental = () => {
 
   // Pay As You Go state
   const [isPayAsYouGo, setIsPayAsYouGo] = useState(false);
+  // Per-rental reminder interval override. null = use tenant default.
+  const [paygReminderInterval, setPaygReminderInterval] = useState<number | null>(null);
 
   // Lockbox / delivery method state
   const [deliveryMethod, setDeliveryMethod] = useState<'in_person' | 'lockbox'>('in_person');
@@ -1166,8 +1164,31 @@ const CreateRental = () => {
         throw new Error("Monthly amount must be greater than 0");
       }
 
+      // PAYG vs regular mode validation
+      // Regular rentals require end_date + return_location + return_time; PAYG does not.
+      // PAYG requires pickup_time (anchor for the daily accrual window).
+      if (!isPayAsYouGo) {
+        if (!data.end_date) {
+          throw new Error("End date is required");
+        }
+        const minEndDate = addDays(data.start_date, 1);
+        if (!(isAfter(data.end_date, minEndDate) || data.end_date.getTime() === minEndDate.getTime())) {
+          throw new Error("End date must be at least 1 day after start date");
+        }
+        if (!sameAsPickup && (!data.return_location || data.return_location.trim() === '')) {
+          throw new Error("Return location is required");
+        }
+      } else {
+        // PAYG: pickup_time is the accrual anchor and must be present
+        if (!data.pickup_time || !/^\d{2}:\d{2}$/.test(data.pickup_time)) {
+          throw new Error("Pickup time is required for Pay-As-You-Go rentals");
+        }
+      }
+
       // Check for blocked dates (global and vehicle-specific) — fallback for local blocked dates state
-      const blockCheck = checkBlockedDatesOverlap(data.start_date, data.end_date, data.vehicle_id);
+      // Use start_date as both bounds for PAYG so we only block the start-day, not an open-ended range.
+      const blockCheckEnd = data.end_date ?? data.start_date;
+      const blockCheck = checkBlockedDatesOverlap(data.start_date, blockCheckEnd, data.vehicle_id);
       if (blockCheck.blocked) {
         const blockType = blockCheck.isGlobal ? "Global blocked period" : "Vehicle blocked";
         throw new Error(`Cannot create rental: ${blockType}. Reason: ${blockCheck.reason}`);
@@ -1182,43 +1203,80 @@ const CreateRental = () => {
 
       setCreationProgress(2); // Step 2: Creating rental record
 
+      // Compute PAYG accrual anchor: start_date + pickup_time, interpreted in tenant timezone.
+      // KNOWN LIMITATION (R3 in plan): currently uses browser-local time. If admin and tenant
+      // are in different timezones, the anchor is shifted by the difference. Future fix is a
+      // server-side recompute on first cron pickup using `tenants.timezone`.
+      //
+      // R1 design: payg_next_accrual_at is the START timestamp of the day-window currently due
+      // to be accrued (NOT start_ts + 24h). So day 1 accrues at start_ts itself (1pm 10 Apr →
+      // $30). The cron loops while next_accrual_at <= now() and advances by 24h after each post.
+      // This gates day 1 on the rental becoming Active (cron only picks status='Active' rows),
+      // and naturally handles backdated rentals via R2's catch-up loop.
+      let paygStartTs: string | null = null;
+      let paygNextAccrualAt: string | null = null;
+      if (isPayAsYouGo && data.pickup_time) {
+        const [hh, mm] = data.pickup_time.split(':').map(Number);
+        const anchor = new Date(data.start_date);
+        anchor.setHours(hh, mm, 0, 0);
+        paygStartTs = anchor.toISOString();
+        // Day 1 is due at the rental start time (not +24h).
+        paygNextAccrualAt = anchor.toISOString();
+      }
+
+      // For PAYG rentals we clear end_date + return fields and persist accrual metadata.
+      // Use supabaseUntyped because some PAYG columns are not yet in generated types.
+      const rentalInsertPayload: any = {
+        customer_id: data.customer_id,
+        vehicle_id: data.vehicle_id,
+        start_date: data.start_date.toISOString().split('T')[0],
+        // Regular: use form's end_date. PAYG: null (open-ended).
+        end_date: isPayAsYouGo ? null : (data.end_date ? data.end_date.toISOString().split('T')[0] : null),
+        rental_period_type: isPayAsYouGo ? "Daily" : data.rental_period_type,
+        monthly_amount: data.monthly_amount,
+        status: "Pending",
+        document_status: "pending",
+        source: "portal",
+        tenant_id: tenant?.id,
+        pickup_location: data.pickup_location || null,
+        return_location: isPayAsYouGo ? null : (sameAsPickup ? data.pickup_location : data.return_location || null),
+        pickup_location_id: pickupMethod === 'location' ? (pickupLocationId || null) : null,
+        return_location_id: isPayAsYouGo
+          ? null
+          : (!sameAsPickup && returnMethod === 'location' ? (returnLocationId || null) : (sameAsPickup && pickupMethod === 'location' ? (pickupLocationId || null) : null)),
+        pickup_time: data.pickup_time || null,
+        return_time: isPayAsYouGo ? null : (data.return_time || null),
+        driver_age_range: data.driver_age ? (data.driver_age < 25 ? 'under_25' : data.driver_age > 70 ? 'over_70' : '25_70') : null,
+        promo_code: promoDetails?.code || null,
+        discount_applied: discountAmount > 0 ? discountAmount : null,
+        // PAYG: Bonzah insurance is not offered per the product spec; force "pending" if PAYG.
+        insurance_status: isPayAsYouGo ? "pending" : (bonzahPremium > 0 ? "bonzah" : (data.insurance_status || "pending")),
+        insurance_premium: isPayAsYouGo ? null : (bonzahPremium > 0 ? bonzahPremium : null),
+        renewed_from_rental_id: renewFromId || null,
+        delivery_method: rentalSettings?.lockbox_enabled ? deliveryMethod : null,
+        delivery_fee: effectiveDeliveryFee > 0 ? effectiveDeliveryFee : null,
+        collection_fee: isPayAsYouGo ? null : (effectiveCollectionFee > 0 ? effectiveCollectionFee : null),
+        delivery_option: pickupMethod,
+        daily_mileage_override: dailyMileageOverride,
+        weekly_mileage_override: weeklyMileageOverride,
+        monthly_mileage_override: monthlyMileageOverride,
+        excess_mileage_rate_override: excessRateOverride,
+        has_installment_plan: !isPayAsYouGo && installmentPlanType !== 'full' && rentalSettings?.installments_enabled,
+        is_pay_as_you_go: isPayAsYouGo,
+        // PAYG accrual state (nullable — only set when PAYG)
+        payg_start_ts: paygStartTs,
+        payg_next_accrual_at: paygNextAccrualAt,
+        payg_accrual_day_count: 0,
+        payg_reminder_count: 0,
+        payg_paused: false,
+        // Per-rental reminder interval override (null = use tenant default)
+        payg_reminder_interval_days: isPayAsYouGo ? paygReminderInterval : null,
+      };
+
       // Create rental with Pending status (will become Active after DocuSign)
-      const { data: rental, error: rentalError } = await supabase
+      const { data: rental, error: rentalError } = await supabaseUntyped
         .from("rentals")
-        .insert({
-          customer_id: data.customer_id,
-          vehicle_id: data.vehicle_id,
-          start_date: data.start_date.toISOString().split('T')[0],
-          end_date: data.end_date.toISOString().split('T')[0],
-          rental_period_type: data.rental_period_type,
-          monthly_amount: data.monthly_amount,
-          status: "Pending",
-          document_status: "pending",
-          source: "portal",
-          tenant_id: tenant?.id,
-          pickup_location: data.pickup_location || null,
-          return_location: sameAsPickup ? data.pickup_location : data.return_location || null,
-          pickup_location_id: pickupMethod === 'location' ? (pickupLocationId || null) : null,
-          return_location_id: !sameAsPickup && returnMethod === 'location' ? (returnLocationId || null) : (sameAsPickup && pickupMethod === 'location' ? (pickupLocationId || null) : null),
-          pickup_time: data.pickup_time || null,
-          return_time: data.return_time || null,
-          driver_age_range: data.driver_age ? (data.driver_age < 25 ? 'under_25' : data.driver_age > 70 ? 'over_70' : '25_70') : null,
-          promo_code: promoDetails?.code || null,
-          discount_applied: discountAmount > 0 ? discountAmount : null,
-          insurance_status: bonzahPremium > 0 ? "bonzah" : (data.insurance_status || "pending"),
-          insurance_premium: bonzahPremium > 0 ? bonzahPremium : null,
-          renewed_from_rental_id: renewFromId || null,
-          delivery_method: rentalSettings?.lockbox_enabled ? deliveryMethod : null,
-          delivery_fee: effectiveDeliveryFee > 0 ? effectiveDeliveryFee : null,
-          collection_fee: effectiveCollectionFee > 0 ? effectiveCollectionFee : null,
-          delivery_option: pickupMethod,
-          daily_mileage_override: dailyMileageOverride,
-          weekly_mileage_override: weeklyMileageOverride,
-          monthly_mileage_override: monthlyMileageOverride,
-          excess_mileage_rate_override: excessRateOverride,
-          has_installment_plan: !isPayAsYouGo && installmentPlanType !== 'full' && rentalSettings?.installments_enabled,
-          is_pay_as_you_go: isPayAsYouGo,
-        } as any)
+        .insert(rentalInsertPayload)
         .select()
         .single();
 
@@ -2897,8 +2955,8 @@ const CreateRental = () => {
                         }}
                       />
 
-                      {/* Promo Code */}
-                      <FormField
+                      {/* Promo Code (hidden for PAYG — R6: open-ended rentals can't meaningfully apply discounts) */}
+                      {!isPayAsYouGo && <FormField
                         control={form.control}
                         name="promo_code"
                         render={({ field }) => (
@@ -2995,7 +3053,7 @@ const CreateRental = () => {
                             <FormMessage />
                           </FormItem>
                         )}
-                      />
+                      />}
 
                       {/* Fee breakdown */}
                       {hasFees && (
@@ -3184,6 +3242,10 @@ const CreateRental = () => {
                         if (val === 'payg') {
                           setInstallmentPlanType('full');
                           setInstallmentAmountOverride(null);
+                          // R6: clear any promo state — promo codes are not used for PAYG
+                          form.setValue('promo_code', '');
+                          setPromoDetails(null);
+                          setPromoError(null);
                         }
                       }}
                       className="space-y-2"
@@ -3203,6 +3265,33 @@ const CreateRental = () => {
                         </div>
                       </label>
                     </RadioGroup>
+
+                    {isPayAsYouGo && (
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Reminder Interval (days)</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={365}
+                          placeholder={`Default: ${(rentalSettings as any)?.payg_reminder_interval_days ?? 4}`}
+                          value={paygReminderInterval ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              setPaygReminderInterval(null);
+                            } else {
+                              const n = parseInt(val);
+                              setPaygReminderInterval(isNaN(n) ? null : Math.max(1, Math.min(365, n)));
+                            }
+                          }}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Leave empty to use the tenant default (
+                          {(rentalSettings as any)?.payg_reminder_interval_days ?? 4} days).
+                          Reminders fire after a {(rentalSettings as any)?.payg_grace_period_days ?? 2}-day grace period, then every N days while there is an outstanding balance.
+                        </p>
+                      </div>
+                    )}
 
                     {isPayAsYouGo && (() => {
                       const currency = tenant?.currency_code || 'USD';
@@ -3649,9 +3738,9 @@ const CreateRental = () => {
                     </div>
                   )}
 
-                  <div className="border-t" />
+                  {!isPayAsYouGo && <div className="border-t" />}
 
-                  <FormField control={form.control} name="return_location" render={({ field }) => (
+                  {!isPayAsYouGo && <FormField control={form.control} name="return_location" render={({ field }) => (
                     <FormItem>
                       <div className="flex items-center justify-between">
                         <FormLabel>Return Location <span className="text-red-500">*</span></FormLabel>
@@ -3684,9 +3773,9 @@ const CreateRental = () => {
                       )}
                       <FormMessage />
                     </FormItem>
-                  )} />
+                  )} />}
 
-                  {!sameAsPickup && (returnIsCustom || (returnMethod !== 'fixed' && (collectionFee > 0 || collectionFeeOverride !== null))) && (
+                  {!isPayAsYouGo && !sameAsPickup && (returnIsCustom || (returnMethod !== 'fixed' && (collectionFee > 0 || collectionFeeOverride !== null))) && (
                     <div className="flex items-center gap-3">
                       <Label className="text-sm text-muted-foreground whitespace-nowrap">Collection Fee</Label>
                       <CurrencyInput value={collectionFeeOverride !== null ? collectionFeeOverride : collectionFee} onChange={(val) => setCollectionFeeOverride(val)} currencySymbol={currencySymbol} className="w-32" />
@@ -3756,7 +3845,8 @@ const CreateRental = () => {
                 </div>
               </div>
 
-              {/* ── Section 4: Insurance ──────────────────────────── */}
+              {/* ── Section 4: Insurance (hidden for PAYG — Bonzah not offered on PAYG rentals) ─── */}
+              {!isPayAsYouGo && (
                 <div className="rounded-xl border bg-card shadow-sm">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
                     <span className="text-2xl font-extrabold text-primary">4.</span>
@@ -4036,6 +4126,7 @@ const CreateRental = () => {
                     )}
                   </div>
                 </div>
+              )}
 
               {/* ── Section 5: Optional Extras ────────────────────── */}
               {activeExtras.length > 0 && (
