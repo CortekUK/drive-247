@@ -193,6 +193,9 @@ const CreateRental = () => {
 
   // Verification state
   const [creatingVerification, setCreatingVerification] = useState(false);
+  const [cancelingVerification, setCancelingVerification] = useState(false);
+  const [showCancelVerificationDialog, setShowCancelVerificationDialog] = useState(false);
+  const [pendingVerificationAction, setPendingVerificationAction] = useState<"cancel" | "restart">("cancel");
   const [showQRModal, setShowQRModal] = useState(false);
   const [aiSessionData, setAiSessionData] = useState<{ sessionId: string; qrUrl: string; expiresAt: Date } | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -1006,6 +1009,62 @@ const CreateRental = () => {
       sonnerToast.error(error.message || "Failed to create verification session");
     } finally {
       setCreatingVerification(false);
+    }
+  };
+
+  // Cancel the current pending verification session.
+  // Marks the identity_verifications row as "canceled" so verificationPending becomes false,
+  // and clears any in-flight AI QR/polling state. Returns true on success.
+  const cancelVerificationSession = async (): Promise<boolean> => {
+    if (!customerVerification?.id) return true;
+    try {
+      const { error } = await (supabase as any)
+        .from("identity_verifications")
+        .update({
+          status: "canceled",
+          review_status: "canceled",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", customerVerification.id);
+      if (error) throw error;
+
+      // Stop any in-flight AI session UI
+      setIsPolling(false);
+      setShowQRModal(false);
+      setAiSessionData(null);
+
+      await refetchVerification();
+      return true;
+    } catch (error: any) {
+      console.error("Error canceling verification:", error);
+      sonnerToast.error(error.message || "Failed to cancel verification session");
+      return false;
+    }
+  };
+
+  // Handle Cancel button — confirms, then cancels the pending session
+  const handleCancelVerification = async () => {
+    setCancelingVerification(true);
+    try {
+      const ok = await cancelVerificationSession();
+      if (ok) sonnerToast.success("Verification session canceled");
+    } finally {
+      setCancelingVerification(false);
+      setShowCancelVerificationDialog(false);
+    }
+  };
+
+  // Handle Restart button — cancels the pending session, then creates a fresh one
+  const handleRestartVerification = async () => {
+    setCancelingVerification(true);
+    try {
+      const ok = await cancelVerificationSession();
+      if (!ok) return;
+      // Kick off a new session (handleCreateVerification manages its own loading state)
+      await handleCreateVerification();
+    } finally {
+      setCancelingVerification(false);
+      setShowCancelVerificationDialog(false);
     }
   };
 
@@ -2133,7 +2192,48 @@ const CreateRental = () => {
                         </div>
                       ) : verificationPending ? (
                         <div className="space-y-3">
-                          <Alert variant="default" className="border-blue-500 bg-blue-50"><Clock className="h-4 w-4 text-blue-600" /><AlertDescription className="text-blue-700">Verification session in progress.</AlertDescription></Alert>
+                          <Alert variant="default" className="border-blue-500 bg-blue-50">
+                            <Clock className="h-4 w-4 text-blue-600" />
+                            <AlertDescription className="text-blue-700">
+                              Verification session in progress. If the customer can&apos;t complete it, you can cancel or restart the session.
+                            </AlertDescription>
+                          </Alert>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              disabled={cancelingVerification || creatingVerification}
+                              onClick={() => {
+                                setPendingVerificationAction("cancel");
+                                setShowCancelVerificationDialog(true);
+                              }}
+                            >
+                              {cancelingVerification && pendingVerificationAction === "cancel" ? (
+                                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Canceling...</>
+                              ) : (
+                                <><XCircle className="h-4 w-4 mr-2" />Cancel Session</>
+                              )}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+                              disabled={cancelingVerification || creatingVerification}
+                              onClick={() => {
+                                setPendingVerificationAction("restart");
+                                setShowCancelVerificationDialog(true);
+                              }}
+                            >
+                              {(cancelingVerification && pendingVerificationAction === "restart") || creatingVerification ? (
+                                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Restarting...</>
+                              ) : (
+                                <><RefreshCw className="h-4 w-4 mr-2" />Restart Session</>
+                              )}
+                            </Button>
+                          </div>
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -4574,6 +4674,45 @@ const CreateRental = () => {
         }}
         isRetrying={loading}
       />
+
+      {/* Cancel/Restart verification confirmation */}
+      <AlertDialog open={showCancelVerificationDialog} onOpenChange={setShowCancelVerificationDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingVerificationAction === "restart" ? "Restart verification session?" : "Cancel verification session?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingVerificationAction === "restart"
+                ? "This will cancel the current in-progress session and immediately start a new one. The customer's previous QR code or link will no longer work."
+                : "This will mark the current session as canceled. The customer's QR code or verification link will no longer work. You can start a new session afterwards."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelingVerification || creatingVerification}>Keep Session</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cancelingVerification || creatingVerification}
+              onClick={(e) => {
+                e.preventDefault();
+                if (pendingVerificationAction === "restart") {
+                  handleRestartVerification();
+                } else {
+                  handleCancelVerification();
+                }
+              }}
+              className={pendingVerificationAction === "restart" ? "" : "bg-red-600 hover:bg-red-700"}
+            >
+              {cancelingVerification || creatingVerification ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Working...</>
+              ) : pendingVerificationAction === "restart" ? (
+                "Yes, Restart"
+              ) : (
+                "Yes, Cancel"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
     </>
   );

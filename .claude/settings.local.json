@@ -46,7 +46,9 @@
       "Bash(SUPABASE_ACCESS_TOKEN=sbp_6b139d9d0f78dd93e75f3683c8cfa4a5fc31f366 npx supabase@latest gen types typescript --project-id hviqoaokxvlancmftwuo)",
       "Bash(npx supabase@latest db execute --workdir /home/haseeb-raza/Desktop/drive-247 ':*)",
       "Bash(npx supabase@latest db query --workdir /home/haseeb-raza/Desktop/drive-247 ':*)",
-      "Bash(python3 -m json.tool)"
+      "Bash(python3 -m json.tool)",
+      "Bash(kill 4760)",
+      "Bash(kill -9 21883)"
     ],
     "deny": [],
     "ask": []
