@@ -4,6 +4,9 @@ import { useTenant } from '@/contexts/TenantContext';
 
 interface BonzahBalanceData {
   balance: string;
+  allocatedBalance?: string | null;
+  mode?: string;
+  rawData?: any;
 }
 
 export function getBonzahPortalUrl(mode: 'test' | 'live' | null | undefined): string {
@@ -73,11 +76,13 @@ export function useBonzahBalance() {
   });
 
   const balanceNumber = balanceData?.balance != null ? Number(balanceData.balance) : null;
+  const allocatedBalanceNumber = balanceData?.allocatedBalance != null ? Number(balanceData.allocatedBalance) : null;
   const testBalanceNumber = testBalanceData?.balance != null ? Number(testBalanceData.balance) : null;
   const portalUrl = getBonzahPortalUrl(bonzahMode);
 
   return {
     balanceNumber,
+    allocatedBalanceNumber,
     testBalanceNumber,
     isBonzahConnected,
     hasOwnCredentials,
@@ -85,5 +90,6 @@ export function useBonzahBalance() {
     isFetching,
     bonzahMode,
     portalUrl,
+    rawData: balanceData?.rawData,
   };
 }

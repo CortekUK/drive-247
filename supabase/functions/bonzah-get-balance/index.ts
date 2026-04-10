@@ -231,6 +231,8 @@ Deno.serve(async (req) => {
 
     const data = await resp.json()
 
+    console.log('[Bonzah Balance] Full API response:', JSON.stringify(data))
+
     if (data.status !== 0) {
       console.error('[Bonzah Balance] API error:', data.txt)
       return errorResponse(data.txt || 'Failed to fetch balance', 400)
@@ -238,13 +240,23 @@ Deno.serve(async (req) => {
 
     const balance = data.data?.amount ?? data.data?.balance ?? '0'
 
+    // Extract entity-level allocated balances if present
+    // The cdBalance API returns entities/channels with their allocated amounts
+    const entities = data.data?.entities || data.data?.channels || data.data?.list || []
+    let allocatedBalance: string | null = null
+    if (Array.isArray(entities) && entities.length > 0) {
+      // Sum all entity-level allocated amounts
+      const totalAllocated = entities.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
+      allocatedBalance = totalAllocated.toString()
+    }
+
     // Check threshold and create reminder/notifications if needed
     const balanceNum = Number(balance)
     if (!isNaN(balanceNum)) {
       await checkLowBalanceThreshold(supabase, body.tenant_id, balanceNum)
     }
 
-    return jsonResponse({ balance })
+    return jsonResponse({ balance, allocatedBalance, mode: effectiveMode, rawData: data.data })
   } catch (error) {
     console.error('[Bonzah Balance] Error:', error)
     return errorResponse(
