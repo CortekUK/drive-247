@@ -75,14 +75,20 @@ export function useBonzahBalance() {
     refetchInterval: 60_000,
   });
 
-  const balanceNumber = balanceData?.balance != null ? Number(balanceData.balance) : null;
+  const rawBalanceNumber = balanceData?.balance != null ? Number(balanceData.balance) : null;
   const allocatedBalanceNumber = balanceData?.allocatedBalance != null ? Number(balanceData.allocatedBalance) : null;
   const testBalanceNumber = testBalanceData?.balance != null ? Number(testBalanceData.balance) : null;
   const portalUrl = getBonzahPortalUrl(bonzahMode);
 
+  // In test mode, prefer allocated balance over available (unallocated) balance
+  const balanceNumber = (bonzahMode === 'test' && allocatedBalanceNumber != null)
+    ? allocatedBalanceNumber
+    : rawBalanceNumber;
+
   return {
     balanceNumber,
     allocatedBalanceNumber,
+    rawBalanceNumber,
     testBalanceNumber,
     isBonzahConnected,
     hasOwnCredentials,

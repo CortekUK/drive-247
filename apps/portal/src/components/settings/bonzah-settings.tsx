@@ -52,7 +52,7 @@ export function BonzahSettings() {
   const [showDisconnectWarning, setShowDisconnectWarning] = useState(false);
 
   // Shared balance hook
-  const { balanceNumber, allocatedBalanceNumber, refetch: refetchBalance, isFetching: isRefreshingBalance, portalUrl, bonzahMode: balanceMode } = useBonzahBalance();
+  const { balanceNumber, allocatedBalanceNumber, refetch: refetchBalance, isFetching: isRefreshingBalance, portalUrl } = useBonzahBalance();
 
   // Alert config hook
   const { config: alertConfig, updateConfig } = useBonzahAlertConfig();
@@ -451,10 +451,7 @@ export function BonzahSettings() {
           </div>
 
           {/* Balance Display */}
-          {isConnected && (() => {
-            const displayBalance = isTestMode && allocatedBalanceNumber != null ? allocatedBalanceNumber : balanceNumber;
-            const isAllocated = isTestMode && allocatedBalanceNumber != null;
-            return (
+          {isConnected && (
             <div className="p-4 rounded-lg border bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 dark:from-amber-950/30 dark:to-orange-950/30 dark:border-amber-800">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -463,11 +460,11 @@ export function BonzahSettings() {
                   </div>
                   <div>
                     <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
-                      {isAllocated ? 'Allocated Balance' : 'Bonzah Balance'}
+                      {isTestMode ? 'Allocated Balance' : 'Bonzah Balance'}
                     </p>
                     <p className="text-2xl font-bold text-amber-900 dark:text-amber-200">
-                      {displayBalance != null
-                        ? `$${displayBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      {balanceNumber != null
+                        ? `$${balanceNumber.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                         : '---'}
                     </p>
                   </div>
@@ -496,7 +493,7 @@ export function BonzahSettings() {
                 </div>
               </div>
               <p className="text-xs text-amber-600 dark:text-amber-500 mt-2">
-                {isAllocated
+                {isTestMode
                   ? 'This is the allocated balance from the shared Drive247 test account. Policies are issued from this allocated balance.'
                   : 'This is the broker-level Bonzah balance. Policies are issued from your allocated balance \u2014 allocate funds in the Bonzah portal to activate pending policies.'}
               </p>
@@ -548,8 +545,7 @@ export function BonzahSettings() {
                 </div>
               )}
             </div>
-            );
-          })()}
+          )}
 
           {/* Low Balance Alert Config */}
           {isConnected && (

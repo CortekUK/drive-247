@@ -194,7 +194,7 @@ export function usePlatformStatus(): PlatformStatus {
       mode: bonzahMode as "test" | "live",
       // Show balance for the current mode — always visible (test mode works for everyone)
       metric: {
-          label: bonzahMode === "live" ? "Live balance" : "Test balance",
+          label: bonzahMode === "live" ? "Live balance" : "Allocated balance",
           value: balanceNumber != null
             ? `$${balanceNumber.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             : "$0.00",

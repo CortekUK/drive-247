@@ -12,7 +12,7 @@ import { useBonzahRetryAll } from '@/hooks/use-bonzah-retry-all';
 export function BonzahPendingAlert() {
   const { tenant } = useTenant();
   const router = useRouter();
-  const { balanceNumber, portalUrl } = useBonzahBalance();
+  const { balanceNumber, bonzahMode, portalUrl } = useBonzahBalance();
   const { retryAll, progress } = useBonzahRetryAll();
 
   const { data: pendingPolicies } = useQuery({
@@ -48,7 +48,7 @@ export function BonzahPendingAlert() {
           <p className="text-sm text-muted-foreground mt-0.5">
             Total premium needed: <span className="font-semibold text-[#CC004A]">${totalPremium.toFixed(2)}</span>
             {balanceNumber != null && (
-              <> | Bonzah Balance: <span className="font-semibold">${balanceNumber.toFixed(2)}</span></>
+              <> | {bonzahMode === 'test' ? 'Allocated Balance' : 'Bonzah Balance'}: <span className="font-semibold">${balanceNumber.toFixed(2)}</span></>
             )}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
