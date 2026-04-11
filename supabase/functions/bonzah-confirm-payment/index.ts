@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import { bonzahFetchWithCredentials, getTenantBonzahCredentials, formatDateForBonzah, type TenantBonzahCredentials } from '../_shared/bonzah-client.ts'
+import { bonzahFetchWithCredentials, getTenantBonzahCredentials, getBonzahTokenForCredentials, getBonzahApiUrl, formatDateForBonzah, type TenantBonzahCredentials } from '../_shared/bonzah-client.ts'
 import { corsHeaders, handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { sendResendEmail, getTenantBranding, wrapWithBrandedTemplate } from '../_shared/resend-service.ts'
 
@@ -525,16 +525,39 @@ serve(async (req) => {
       return errorResponse('Failed to get Bonzah credentials', 500)
     }
 
-    // Check Bonzah balance once
+    // Check Bonzah balance — prefer allocated (sub-user) balance from /deposit endpoint
     try {
-      const balanceResponse = await bonzahFetchWithCredentials<{ status: number; data: { amount: string } }>(
+      const apiUrl = getBonzahApiUrl(bonzahMode)
+      const token = await getBonzahTokenForCredentials(credentials.username, credentials.password, apiUrl)
+
+      // Get broker-level balance
+      const balanceResponse = await bonzahFetchWithCredentials<{ status: number; data: Record<string, any> }>(
         '/Bonzah/cdBalance',
         {},
         credentials,
         'GET'
       )
-      cdBalance = balanceResponse?.data?.amount != null ? Number(balanceResponse.data.amount) : null
-      console.log('[Bonzah Payment] Bonzah Balance:', cdBalance)
+      const brokerBalance = balanceResponse?.data?.amount != null ? Number(balanceResponse.data.amount) : null
+
+      // Get allocated (sub-user) balance from /deposit endpoint
+      let allocatedBalance: number | null = null
+      try {
+        const depositResp = await fetch(`${apiUrl}/deposit`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json', 'in-auth-token': token },
+        })
+        const depositData = await depositResp.json()
+        if (depositData.status === 0 && depositData.data?.users?.length > 0) {
+          allocatedBalance = depositData.data.users.reduce(
+            (sum: number, u: any) => sum + (Number(u.amount) || 0), 0
+          )
+        }
+      } catch (depErr) {
+        console.log('[Bonzah Payment] /deposit endpoint failed:', depErr)
+      }
+
+      cdBalance = allocatedBalance ?? brokerBalance
+      console.log(`[Bonzah Payment] Balance: ${cdBalance} (mode: ${bonzahMode}, broker: ${brokerBalance}, allocated: ${allocatedBalance})`)
     } catch (balErr) {
       console.log('[Bonzah Payment] Could not check Bonzah balance:', balErr)
     }

@@ -605,45 +605,50 @@ export default function BookingCheckoutStep({
     setSendingDocuSign(true);
 
     try {
-      console.log('═════════════════════════════════════════════════════════');
-      console.log('📄 CREATING DOCUSIGN ENVELOPE (via API route)');
-      console.log('═════════════════════════════════════════════════════════');
-      console.log('Rental ID:', createdRentalData.rental.id);
-      console.log('Customer ID:', createdRentalData.customer.id);
-      console.log('Customer Email:', formData.customerEmail);
-      console.log('Customer Name:', formData.customerName);
+      // Skip agreement sending for enquiry-based tenants (agreement will be sent later by admin)
+      if (!isEnquiry) {
+        console.log('═════════════════════════════════════════════════════════');
+        console.log('📄 CREATING DOCUSIGN ENVELOPE (via API route)');
+        console.log('═════════════════════════════════════════════════════════');
+        console.log('Rental ID:', createdRentalData.rental.id);
+        console.log('Customer ID:', createdRentalData.customer.id);
+        console.log('Customer Email:', formData.customerEmail);
+        console.log('Customer Name:', formData.customerName);
 
-      // Send agreement for signing via BoldSign
-      const response = await fetch('/api/esign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rentalId: createdRentalData.rental.id,
-          customerEmail: formData.customerEmail,
-          customerName: formData.customerName,
-          tenantId: tenant?.id, // Pass tenant ID for template lookup
-          vehicleId: selectedVehicle.id, // Fallback for tenant lookup
-        }),
-      });
+        // Send agreement for signing via BoldSign
+        const response = await fetch('/api/esign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rentalId: createdRentalData.rental.id,
+            customerEmail: formData.customerEmail,
+            customerName: formData.customerName,
+            tenantId: tenant?.id, // Pass tenant ID for template lookup
+            vehicleId: selectedVehicle.id, // Fallback for tenant lookup
+          }),
+        });
 
-      const data = await response.json();
-      const error = response.ok ? null : data;
+        const data = await response.json();
+        const error = response.ok ? null : data;
 
-      console.log('═════════════════════════════════════════════════════════');
-      console.log('📨 DOCUSIGN RESPONSE');
-      console.log('═════════════════════════════════════════════════════════');
-      console.log('Error:', error);
-      console.log('Data:', JSON.stringify(data, null, 2));
+        console.log('═════════════════════════════════════════════════════════');
+        console.log('📨 DOCUSIGN RESPONSE');
+        console.log('═════════════════════════════════════════════════════════');
+        console.log('Error:', error);
+        console.log('Data:', JSON.stringify(data, null, 2));
 
-      if (error) {
-        console.error("eSign call failed:", error);
-        toast.error("Agreement signing unavailable. Agreement will be sent later.");
-      } else if (data?.ok) {
-        console.log('eSign document created!');
-        toast.success("Agreement sent to your email!", { duration: 4000 });
+        if (error) {
+          console.error("eSign call failed:", error);
+          toast.error("Agreement signing unavailable. Agreement will be sent later.");
+        } else if (data?.ok) {
+          console.log('eSign document created!');
+          toast.success("Agreement sent to your email!", { duration: 4000 });
+        } else {
+          console.warn("eSign returned error:", data);
+          toast.error(data?.error || "Agreement failed to send. Will be sent later.");
+        }
       } else {
-        console.warn("eSign returned error:", data);
-        toast.error(data?.error || "Agreement failed to send. Will be sent later.");
+        console.log('📋 Enquiry-based tenant — skipping agreement, will be sent by admin later');
       }
 
       // Proceed based on payable amount

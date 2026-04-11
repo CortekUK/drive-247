@@ -569,9 +569,9 @@ export const InvoiceDialog = ({
               }}
               className="gradient-accent w-full sm:w-auto"
             >
-              {isEnquiry && displayTotal === 0 ? (
+              {isEnquiry ? (
                 <>
-                  Continue to Submit Enquiry
+                  {displayTotal === 0 ? 'Continue to Submit Enquiry' : 'Continue to Payment'}
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </>
               ) : (

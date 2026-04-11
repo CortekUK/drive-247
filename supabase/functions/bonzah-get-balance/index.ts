@@ -221,6 +221,7 @@ Deno.serve(async (req) => {
     const apiUrl = getBonzahApiUrl(effectiveMode)
     const token = await getBonzahTokenForCredentials(effectiveCredentials.username, effectiveCredentials.password, apiUrl)
 
+    // Fetch broker-level balance
     const resp = await fetch(`${apiUrl}/Bonzah/cdBalance`, {
       method: 'GET',
       headers: {
@@ -231,24 +232,41 @@ Deno.serve(async (req) => {
 
     const data = await resp.json()
 
-    console.log('[Bonzah Balance] Full API response:', JSON.stringify(data))
+    console.log('[Bonzah Balance] cdBalance response:', JSON.stringify(data))
 
     if (data.status !== 0) {
       console.error('[Bonzah Balance] API error:', data.txt)
       return errorResponse(data.txt || 'Failed to fetch balance', 400)
     }
 
-    const balance = data.data?.amount ?? data.data?.balance ?? '0'
+    const brokerBalance = data.data?.amount ?? data.data?.balance ?? '0'
 
-    // Extract entity-level allocated balances if present
-    // The cdBalance API returns entities/channels with their allocated amounts
-    const entities = data.data?.entities || data.data?.channels || data.data?.list || []
+    // Fetch sub-user/entity balances from /deposit endpoint
     let allocatedBalance: string | null = null
-    if (Array.isArray(entities) && entities.length > 0) {
-      // Sum all entity-level allocated amounts
-      const totalAllocated = entities.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
-      allocatedBalance = totalAllocated.toString()
+    try {
+      const depositResp = await fetch(`${apiUrl}/deposit`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'in-auth-token': token,
+        },
+      })
+      const depositData = await depositResp.json()
+      console.log('[Bonzah Balance] /deposit response:', JSON.stringify(depositData))
+
+      if (depositData.status === 0 && depositData.data?.users?.length > 0) {
+        const totalAllocated = depositData.data.users.reduce(
+          (sum: number, u: any) => sum + (Number(u.amount) || 0), 0
+        )
+        allocatedBalance = totalAllocated.toString()
+        console.log(`[Bonzah Balance] Allocated balance: ${allocatedBalance} (from ${depositData.data.users.length} sub-users)`)
+      }
+    } catch (err) {
+      console.log('[Bonzah Balance] /deposit endpoint failed:', err)
     }
+
+    // Use allocated (sub-user) balance if found, otherwise fall back to broker balance
+    const balance = allocatedBalance ?? brokerBalance
 
     // Check threshold and create reminder/notifications if needed
     const balanceNum = Number(balance)

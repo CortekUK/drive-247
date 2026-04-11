@@ -30,6 +30,8 @@ interface InsuranceDoc {
   insurance_provider?: string | null;
   rental_id?: string | null;
   status?: string;
+  bonzah_policy_id?: string | null;
+  bonzah_pdf_ids?: Record<string, number> | null;
 }
 
 export default function InsurancesList() {
@@ -40,6 +42,7 @@ export default function InsurancesList() {
   const { tenant } = useTenant();
   const router = useRouter();
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
+  const [downloadingBonzahPdf, setDownloadingBonzahPdf] = useState<string | null>(null);
 
   // Fetch insurance documents from customer_documents table
   const { data: insuranceDocuments = [], isLoading: isLoadingDocs } = useQuery({
@@ -70,6 +73,7 @@ export default function InsurancesList() {
         .select(`
           id,
           policy_no,
+          policy_id,
           quote_no,
           status,
           coverage_types,
@@ -113,6 +117,8 @@ export default function InsurancesList() {
       file_url: null,
       isBonzah: true,
       rental_id: policy.rental_id,
+      bonzah_policy_id: policy.policy_id,
+      bonzah_pdf_ids: policy.coverage_types?.pdf_ids || null,
     })),
   ];
 
@@ -167,6 +173,44 @@ export default function InsurancesList() {
   const handleView = (fileUrl: string) => {
     const publicUrl = getPublicUrl(fileUrl);
     window.open(publicUrl, "_blank");
+  };
+
+  const handleBonzahDownload = async (doc: InsuranceDoc) => {
+    if (!tenant?.id || !doc.bonzah_policy_id || !doc.bonzah_pdf_ids) return;
+    const pdfEntries = Object.entries(doc.bonzah_pdf_ids);
+    if (pdfEntries.length === 0) return;
+
+    setDownloadingBonzahPdf(doc.id);
+    try {
+      // Download the first available PDF (usually CDW)
+      const [type, pdfId] = pdfEntries[0];
+      const { data, error } = await supabase.functions.invoke('bonzah-download-pdf', {
+        body: { tenant_id: tenant.id, pdf_id: String(pdfId), policy_id: doc.bonzah_policy_id },
+      });
+      if (error || !data?.documentBase64) {
+        toast.error('Failed to download policy PDF');
+        return;
+      }
+      const byteChars = atob(data.documentBase64);
+      const byteNumbers = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        byteNumbers[i] = byteChars.charCodeAt(i);
+      }
+      const blob = new Blob([new Uint8Array(byteNumbers)], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${doc.document_name.replace(/[^a-zA-Z0-9-_ #]/g, '')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('Policy PDF downloaded');
+    } catch {
+      toast.error('Failed to download policy PDF');
+    } finally {
+      setDownloadingBonzahPdf(null);
+    }
   };
 
   const generateInsurancePdf = (doc: InsuranceDoc, index: number): { blob: Blob; fileName: string } => {
@@ -539,16 +583,36 @@ export default function InsurancesList() {
                                 <ExternalLink className="h-4 w-4" />
                               </Button>
                             </>
-                          ) : doc.isBonzah && doc.rental_id ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => router.push(`/rentals/${doc.rental_id}`)}
-                              className="text-xs"
-                            >
-                              <ExternalLink className="h-4 w-4 mr-1" />
-                              View Rental
-                            </Button>
+                          ) : doc.isBonzah ? (
+                            <div className="flex items-center gap-2">
+                              {doc.bonzah_pdf_ids && Object.keys(doc.bonzah_pdf_ids).length > 0 && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleBonzahDownload(doc)}
+                                  disabled={downloadingBonzahPdf === doc.id}
+                                  className="text-xs"
+                                >
+                                  {downloadingBonzahPdf === doc.id ? (
+                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                  ) : (
+                                    <Download className="h-4 w-4 mr-1" />
+                                  )}
+                                  PDF
+                                </Button>
+                              )}
+                              {doc.rental_id && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => router.push(`/rentals/${doc.rental_id}`)}
+                                  className="text-xs"
+                                >
+                                  <ExternalLink className="h-4 w-4 mr-1" />
+                                  View Rental
+                                </Button>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-sm text-muted-foreground">—</span>
                           )}

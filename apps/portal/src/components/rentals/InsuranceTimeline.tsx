@@ -358,7 +358,7 @@ export function InsuranceTimeline({
               : 'bg-amber-500/5 border-amber-500/20'
           }`}>
             <span className="text-sm font-medium text-muted-foreground">
-              Bonzah Balance (Broker Total)
+              {bonzahMode === 'live' ? 'Bonzah Balance (Broker Total)' : 'Allocated Balance'}
               {bonzahMode !== 'live' && (
                 <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-amber-500">Test Mode</span>
               )}

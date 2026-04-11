@@ -526,7 +526,7 @@ export function BuyInsuranceDialog({
                       mode === 'live' && balanceSufficient ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400'
                     }`} />
                     <p className="text-sm text-muted-foreground">
-                      {bonzahCdBalance != null && <>Balance: <span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>. </>}
+                      {bonzahCdBalance != null && <>{mode === 'live' ? 'Balance' : 'Allocated Balance'}: <span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>. </>}
                       {mode === 'live' ? (
                         balanceSufficient
                           ? <>Your balance covers this premium. The policy will activate immediately.</>

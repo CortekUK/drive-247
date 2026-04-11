@@ -9,6 +9,7 @@ import {
   getDocumentStatus,
   CustomerDocument,
 } from '@/hooks/use-customer-documents';
+import { useCustomerInsurancePolicies, type CustomerBonzahPolicy } from '@/hooks/use-customer-insurance-policies';
 import { DocumentUploadDialog } from '@/components/customer-portal/DocumentUploadDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,8 +35,13 @@ import {
   CheckCircle,
   Clock,
   FileCheck,
+  Car,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useTenant } from '@/contexts/TenantContext';
+import { formatCurrency } from '@/lib/format-utils';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 function StatCard({
   title,
@@ -204,8 +210,187 @@ function DocumentCard({
   );
 }
 
+const COVERAGE_LABELS: Record<string, string> = {
+  cdw: 'CDW',
+  rcli: 'RCLI',
+  sli: 'SLI',
+  pai: 'PAI',
+};
+
+function getPolicyStatusBadge(status: string) {
+  switch (status) {
+    case 'active':
+      return (
+        <Badge variant="default" className="bg-green-500">
+          <CheckCircle className="h-3 w-3 mr-1" />
+          Active
+        </Badge>
+      );
+    case 'quoted':
+    case 'payment_pending':
+      return (
+        <Badge variant="secondary" className="bg-amber-500 text-white">
+          <Clock className="h-3 w-3 mr-1" />
+          Pending
+        </Badge>
+      );
+    case 'cancelled':
+      return (
+        <Badge variant="destructive">
+          <AlertTriangle className="h-3 w-3 mr-1" />
+          Cancelled
+        </Badge>
+      );
+    default:
+      return (
+        <Badge variant="outline">
+          <Clock className="h-3 w-3 mr-1" />
+          {status}
+        </Badge>
+      );
+  }
+}
+
+function InsurancePolicyCard({ policy, currencyCode, tenantId }: { policy: CustomerBonzahPolicy; currencyCode: string; tenantId: string | undefined }) {
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+  const coverageTypes = policy.coverage_types || {};
+  const activeCoverages = Object.entries(COVERAGE_LABELS).filter(
+    ([key]) => coverageTypes[key]
+  );
+  const pdfIds = (coverageTypes as any)?.pdf_ids as Record<string, number> | undefined;
+  const rental = policy.rentals;
+  const vehicle = rental?.vehicles;
+  const vehicleName = vehicle
+    ? [vehicle.make, vehicle.model].filter(Boolean).join(' ') || vehicle.reg
+    : null;
+  const isExtension = policy.policy_type === 'extension';
+
+  const handleDownloadPdf = async (type: string, pdfId: number) => {
+    if (!tenantId || !policy.policy_id) return;
+    setDownloadingPdf(type);
+    try {
+      const { data, error } = await supabase.functions.invoke('bonzah-download-pdf', {
+        body: { tenant_id: tenantId, pdf_id: String(pdfId), policy_id: policy.policy_id },
+      });
+      if (error || !data?.documentBase64) {
+        toast.error('Failed to download PDF');
+        return;
+      }
+      const byteChars = atob(data.documentBase64);
+      const byteNumbers = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        byteNumbers[i] = byteChars.charCodeAt(i);
+      }
+      const blob = new Blob([new Uint8Array(byteNumbers)], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${COVERAGE_LABELS[type] || type}-policy-${policy.policy_no || policy.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Failed to download PDF');
+    } finally {
+      setDownloadingPdf(null);
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0 w-12 h-12 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
+            <Shield className="h-6 w-6 text-green-600 dark:text-green-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="font-semibold">
+                  {isExtension ? 'Extension Insurance' : 'Bonzah Insurance'}
+                </h3>
+                {vehicleName && (
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Car className="h-3 w-3" />
+                    {vehicleName}
+                    {rental?.rental_number && ` · ${rental.rental_number}`}
+                  </p>
+                )}
+              </div>
+              {getPolicyStatusBadge(policy.status)}
+            </div>
+
+            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+              <div>
+                <span className="text-muted-foreground">Start:</span>{' '}
+                {format(new Date(policy.trip_start_date), 'MMM d, yyyy')}
+              </div>
+              <div>
+                <span className="text-muted-foreground">End:</span>{' '}
+                {format(new Date(policy.trip_end_date), 'MMM d, yyyy')}
+              </div>
+              <div>
+                <span className="text-muted-foreground">Premium:</span>{' '}
+                <span className="font-medium">{formatCurrency(policy.premium_amount, currencyCode)}</span>
+              </div>
+              {policy.policy_no && (
+                <div>
+                  <span className="text-muted-foreground">Policy #:</span>{' '}
+                  {policy.policy_no}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {activeCoverages.map(([key, label]) => (
+                  <Badge key={key} variant="secondary" className="text-xs">
+                    {label}
+                  </Badge>
+                ))}
+                {policy.policy_issued_at && (
+                  <span className="text-xs text-muted-foreground ml-1">
+                    Issued {format(new Date(policy.policy_issued_at), 'MMM d, yyyy')}
+                  </span>
+                )}
+              </div>
+
+              {/* PDF download buttons */}
+              {pdfIds && Object.keys(pdfIds).length > 0 && (
+                <div className="flex items-center gap-1">
+                  {Object.entries(pdfIds).map(([type, pdfId]) => (
+                    <Button
+                      key={type}
+                      variant="ghost"
+                      size="sm"
+                      disabled={downloadingPdf === type}
+                      onClick={() => handleDownloadPdf(type, pdfId)}
+                      title={`Download ${COVERAGE_LABELS[type] || type.toUpperCase()} policy PDF`}
+                    >
+                      {downloadingPdf === type ? (
+                        <Clock className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="h-4 w-4" />
+                      )}
+                      <span className="ml-1 text-xs">{COVERAGE_LABELS[type] || type.toUpperCase()} PDF</span>
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function DocumentsPage() {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'USD';
   const { data: documents, isLoading } = useCustomerDocuments();
+  const { data: insurancePolicies, isLoading: policiesLoading } = useCustomerInsurancePolicies();
   const { data: stats } = useCustomerDocumentStats();
   const deleteDocument = useDeleteCustomerDocument();
   const downloadDocument = useDownloadDocument();
@@ -249,27 +434,63 @@ export default function DocumentsPage() {
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard
-          title="Total Documents"
-          value={stats?.totalDocuments || 0}
+          title="Active Policies"
+          value={insurancePolicies?.filter(p => p.status === 'active').length || 0}
+          icon={Shield}
+          description="Bonzah insurance policies"
+        />
+        <StatCard
+          title="Total Policies"
+          value={insurancePolicies?.length || 0}
           icon={FileText}
         />
         <StatCard
-          title="Active Insurance"
-          value={stats?.activeInsurance || 0}
-          icon={Shield}
-          description="Valid insurance policies"
-        />
-        <StatCard
-          title="Expiring Soon"
-          value={stats?.expiringSoon || 0}
-          icon={AlertTriangle}
-          description="Expiring within 30 days"
+          title="Uploaded Documents"
+          value={stats?.totalDocuments || 0}
+          icon={FileCheck}
+          description="Insurance certificates"
         />
       </div>
 
+      {/* Bonzah Insurance Policies */}
+      {(policiesLoading || (insurancePolicies && insurancePolicies.length > 0)) && (
+        <div>
+          <h2 className="text-lg font-semibold mb-4">Insurance Policies</h2>
+          {policiesLoading ? (
+            <div className="space-y-4">
+              {[...Array(2)].map((_, i) => (
+                <Card key={i}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-4">
+                      <Skeleton className="w-12 h-12 rounded-lg" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-5 w-40" />
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-4 w-64" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {insurancePolicies!.map((policy) => (
+                <InsurancePolicyCard
+                  key={policy.id}
+                  policy={policy}
+                  currencyCode={currencyCode}
+                  tenantId={tenant?.id}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Documents List */}
       <div>
-        <h2 className="text-lg font-semibold mb-4">Insurance Documents</h2>
+        <h2 className="text-lg font-semibold mb-4">Uploaded Documents</h2>
 
         {isLoading ? (
           <div className="space-y-4">

@@ -80,8 +80,8 @@ export function useBonzahBalance() {
   const testBalanceNumber = testBalanceData?.balance != null ? Number(testBalanceData.balance) : null;
   const portalUrl = getBonzahPortalUrl(bonzahMode);
 
-  // In test mode, prefer allocated balance over available (unallocated) balance
-  const balanceNumber = (bonzahMode === 'test' && allocatedBalanceNumber != null)
+  // Prefer allocated balance (entity-level) over unallocated broker-level balance
+  const balanceNumber = allocatedBalanceNumber != null
     ? allocatedBalanceNumber
     : rawBalanceNumber;
 

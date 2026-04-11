@@ -46,6 +46,7 @@ export function useCustomerDocuments() {
           vehicles!customer_documents_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq('customer_id', customerUser.customer_id)
+        .eq('document_type', 'Insurance Certificate')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -160,7 +161,8 @@ export function useCustomerDocumentStats() {
       const { data, error } = await supabase
         .from('customer_documents')
         .select('id, document_type, end_date')
-        .eq('customer_id', customerUser.customer_id);
+        .eq('customer_id', customerUser.customer_id)
+        .eq('document_type', 'Insurance Certificate');
 
       if (error) {
         console.error('Error fetching document stats:', error);
@@ -168,9 +170,8 @@ export function useCustomerDocumentStats() {
       }
 
       const documents = data || [];
-      const insuranceDocuments = documents.filter((d) => d.document_type === 'Insurance Certificate');
 
-      const activeInsurance = insuranceDocuments.filter(
+      const activeInsurance = documents.filter(
         (d) => getDocumentStatus(d.end_date) === 'Active'
       );
 
