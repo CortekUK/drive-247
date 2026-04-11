@@ -2950,7 +2950,7 @@ const RentalDetail = () => {
               <CardTitle className="text-base font-medium">Payment Breakdown</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <Accordion type="single" defaultValue="original" collapsible className="w-full space-y-3 px-4 pb-4">
+              <Accordion type="single" defaultValue="original" className="w-full space-y-3 px-4 pb-4">
                 {/* Original Rental */}
                 <AccordionItem value="original" className="border rounded-lg overflow-hidden">
                   <AccordionTrigger className="px-4 py-3 hover:no-underline">
