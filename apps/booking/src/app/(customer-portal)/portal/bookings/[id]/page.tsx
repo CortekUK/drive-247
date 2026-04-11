@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -18,6 +18,7 @@ import {
   Clock,
   CheckCircle,
   Loader2,
+  AlertCircle,
 } from 'lucide-react';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -500,6 +501,35 @@ export default function BookingDetailPage() {
     [payments]
   );
 
+  // Outstanding balance from ledger remaining amounts (charges only)
+  const totalOutstanding = useMemo(
+    () =>
+      ledgerEntries
+        .filter((e) => e.type === 'Charge')
+        .reduce((sum, e) => sum + (e.remaining_amount || 0), 0),
+    [ledgerEntries]
+  );
+
+  // Extension charges with remaining balance (for pay buttons)
+  const extensionChargesOutstanding = useMemo(
+    () =>
+      ledgerEntries.filter(
+        (e) =>
+          e.type === 'Charge' &&
+          (e.remaining_amount || 0) > 0 &&
+          (e.category === 'Extension Rental' ||
+            e.category === 'Extension Tax' ||
+            e.category === 'Extension Service Fee' ||
+            e.category === 'Extension Insurance')
+      ),
+    [ledgerEntries]
+  );
+
+  const extensionOutstandingTotal = useMemo(
+    () => extensionChargesOutstanding.reduce((sum, e) => sum + (e.remaining_amount || 0), 0),
+    [extensionChargesOutstanding]
+  );
+
   const vehiclePhotoUrl =
     vehicle?.photo_url ||
     vehicle?.vehicle_photos?.[0]?.photo_url ||
@@ -518,6 +548,79 @@ export default function BookingDetailPage() {
         return vehicle.monthly_mileage || vehicle.weekly_mileage || vehicle.daily_mileage;
     }
   })();
+
+  // ---- Payment handlers ----
+
+  const [payingExtension, setPayingExtension] = useState(false);
+  const [payingBalance, setPayingBalance] = useState(false);
+
+  const handlePayExtension = async () => {
+    if (!rental || !tenant?.id) return;
+    setPayingExtension(true);
+    try {
+      const extAmount = rental.extension_amount;
+      if (!extAmount || extAmount <= 0) {
+        if (rental.extension_checkout_url) {
+          window.location.href = rental.extension_checkout_url;
+        }
+        return;
+      }
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: {
+          rentalId: rental.id,
+          totalAmount: extAmount,
+          tenantId: tenant.id,
+          customerEmail: customerUser?.customer?.email,
+          source: 'booking',
+          targetCategories: ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance'],
+          successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rental.id}&type=invoice`,
+          cancelUrl: `${window.location.origin}/portal/bookings/${rental.id}`,
+        },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+      } else if (rental.extension_checkout_url) {
+        window.location.href = rental.extension_checkout_url;
+      }
+    } catch {
+      if (rental.extension_checkout_url) {
+        window.location.href = rental.extension_checkout_url;
+      } else {
+        toast.error('Failed to create payment link');
+      }
+    } finally {
+      setPayingExtension(false);
+    }
+  };
+
+  const handlePayBalance = async () => {
+    if (!rental || !tenant?.id || totalOutstanding <= 0) return;
+    setPayingBalance(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: {
+          rentalId: rental.id,
+          totalAmount: totalOutstanding,
+          tenantId: tenant.id,
+          customerEmail: customerUser?.customer?.email,
+          source: 'booking',
+          successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rental.id}&type=invoice`,
+          cancelUrl: `${window.location.origin}/portal/bookings/${rental.id}`,
+        },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        toast.error('Failed to create payment link');
+      }
+    } catch {
+      toast.error('Failed to create payment link');
+    } finally {
+      setPayingBalance(false);
+    }
+  };
 
   // ---- Loading state ----
 
@@ -768,6 +871,42 @@ export default function BookingDetailPage() {
         </Card>
       ))}
 
+      {/* Extension Payment Banner — shown when extension has unpaid charges */}
+      {extensionOutstandingTotal > 0 && rental.status === 'Active' && (
+        <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="rounded-full bg-blue-100 dark:bg-blue-900/40 p-2">
+                  <CreditCard className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                    Extension Payment Due
+                  </p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400">
+                    {formatCurrency(extensionOutstandingTotal, currencyCode)} outstanding for extension charges
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={handlePayExtension}
+                disabled={payingExtension}
+              >
+                {payingExtension ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                )}
+                Pay Now
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* 3. Payments */}
       <Card>
         <CardHeader className="pb-3">
@@ -808,6 +947,62 @@ export default function BookingDetailPage() {
                 <span className="font-semibold text-base">
                   {formatCurrency(totalPaid, currencyCode)}
                 </span>
+              </div>
+
+              {/* Outstanding balance */}
+              {totalOutstanding > 0 && (
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-amber-500" />
+                    <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                      Balance Due
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-base text-amber-700 dark:text-amber-400">
+                      {formatCurrency(totalOutstanding, currencyCode)}
+                    </span>
+                    <Button
+                      size="sm"
+                      onClick={handlePayBalance}
+                      disabled={payingBalance}
+                    >
+                      {payingBalance ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                      ) : (
+                        <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                      )}
+                      Pay Now
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : totalOutstanding > 0 ? (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-500" />
+                <div>
+                  <p className="text-sm font-medium">Balance Due</p>
+                  <p className="text-xs text-muted-foreground">No payments recorded yet</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="font-semibold text-base text-amber-700 dark:text-amber-400">
+                  {formatCurrency(totalOutstanding, currencyCode)}
+                </span>
+                <Button
+                  size="sm"
+                  onClick={handlePayBalance}
+                  disabled={payingBalance}
+                >
+                  {payingBalance ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  ) : (
+                    <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  Pay Now
+                </Button>
               </div>
             </div>
           ) : (
