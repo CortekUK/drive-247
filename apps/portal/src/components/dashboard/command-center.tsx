@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ArrowRight,
   PartyPopper,
-  X,
   Rocket,
   Info,
   Coins,
@@ -257,8 +256,6 @@ interface CommandCenterProps {
   allComplete: boolean;
 }
 
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-
 export function CommandCenter({
   checklist,
   checklistProgress,
@@ -269,48 +266,16 @@ export function CommandCenter({
   const { submitRequest } = useGoLiveRequests();
   const { toast } = useToast();
   const collapseKey = `command-center-collapsed-${tenant?.id}`;
-  const dismissKey = `command-center-dismissed-${tenant?.id}`;
-  const completedAtKey = `command-center-completed-at-${tenant?.id}`;
-
-  useEffect(() => {
-    if (!tenant?.id) return;
-    if (allComplete && !localStorage.getItem(completedAtKey)) {
-      localStorage.setItem(completedAtKey, Date.now().toString());
-    }
-  }, [allComplete, tenant?.id, completedAtKey]);
-
-  const isHidden = (() => {
-    if (typeof window === "undefined") return false;
-    if (localStorage.getItem(dismissKey) === "true") return true;
-    const completedAt = localStorage.getItem(completedAtKey);
-    if (completedAt && Date.now() - Number(completedAt) > SEVEN_DAYS_MS)
-      return true;
-    return false;
-  })();
 
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
-    if (allComplete) return true;
     return localStorage.getItem(collapseKey) === "true";
   });
-
-  useEffect(() => {
-    if (allComplete) {
-      setCollapsed(true);
-      localStorage.setItem(collapseKey, "true");
-    }
-  }, [allComplete, collapseKey]);
-
-  if (isHidden) return null;
 
   const toggleCollapsed = () => {
     const next = !collapsed;
     setCollapsed(next);
     localStorage.setItem(collapseKey, String(next));
-  };
-
-  const handleDismiss = () => {
-    localStorage.setItem(dismissKey, "true");
   };
 
   const contentRef = useRef<HTMLDivElement>(null);
@@ -379,19 +344,6 @@ export function CommandCenter({
               />
             ))}
           </div>
-
-          {allComplete && (
-            <div
-              role="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDismiss();
-              }}
-              className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground ml-1"
-            >
-              <X className="h-3.5 w-3.5" />
-            </div>
-          )}
 
           <ChevronDown
             className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${
