@@ -393,10 +393,13 @@ const RentalDetail = () => {
   // Map of category → remaining unpaid amount (combines ledger charges + invoice fallback)
   const categoryRemainingAmounts = useMemo(() => {
     const amounts: Record<string, number> = {};
+    // Track which categories have ledger data (even if fully paid / remaining === 0)
+    const hasLedgerData = new Set<string>();
 
     // First, populate from ledger payment breakdown (most accurate)
     if (paymentBreakdown) {
       for (const [cat, data] of Object.entries(paymentBreakdown)) {
+        hasLedgerData.add(cat);
         if (data.remaining > 0) {
           amounts[cat] = data.remaining;
         }
@@ -419,7 +422,7 @@ const RentalDetail = () => {
       };
 
       for (const [cat, invoiceAmount] of Object.entries(invoiceCategoryMap)) {
-        if (amounts[cat] !== undefined) continue; // already have ledger data
+        if (amounts[cat] !== undefined || hasLedgerData.has(cat)) continue; // already have ledger data (paid or outstanding)
         if (invoiceAmount <= 0) continue;
         const refunded = refundBreakdown?.[cat] ?? 0;
         const remaining = invoiceAmount - refunded;
