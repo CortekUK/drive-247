@@ -21,6 +21,7 @@ export interface RentalFilters {
   bonzahStatus?: string;
   extensionRequested?: boolean;
   cancellationRequested?: boolean;
+  paymentType?: 'payg' | 'regular';
 }
 
 export interface EnhancedRental {
@@ -41,6 +42,7 @@ export interface EnhancedRental {
   payment_mode?: string;
   created_at?: string;
   is_extended?: boolean;
+  is_pay_as_you_go?: boolean;
   previous_end_date?: string | null;
   cancellation_requested?: boolean;
   bonzah_status?: string | null;
@@ -132,6 +134,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           payment_mode,
           created_at,
           is_extended,
+          is_pay_as_you_go,
           previous_end_date,
           cancellation_requested,
           customers!rentals_customer_id_fkey(id, name),
@@ -231,6 +234,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             created_at: rental.created_at,
             payment_mode: rental.payment_mode,
             is_extended: rental.is_extended,
+            is_pay_as_you_go: rental.is_pay_as_you_go,
             previous_end_date: rental.previous_end_date,
             cancellation_requested: rental.cancellation_requested,
             bonzah_status: bonzahPolicyMap.get(rental.id) || null,
@@ -248,6 +252,13 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           // Apply payment mode filter
           if (paymentMode !== "all") {
             if (rental.payment_mode !== paymentMode) return false;
+          }
+
+          // Apply payment type filter (PAYG vs Regular)
+          if (filters.paymentType === 'payg') {
+            if (!rental.is_pay_as_you_go) return false;
+          } else if (filters.paymentType === 'regular') {
+            if (rental.is_pay_as_you_go) return false;
           }
 
           // Apply search filter (client-side for related fields)

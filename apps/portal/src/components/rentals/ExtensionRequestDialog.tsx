@@ -139,7 +139,7 @@ export function ExtensionRequestDialog({
   const extensionTotalAmount = extensionCost + extensionTaxAmount + extensionServiceFee + insurancePremium;
 
   const extensionStartForInsurance = (() => {
-    const d = rental.end_date.split('T')[0];
+    const d = (rental.end_date || new Date().toISOString()).split('T')[0];
     const today = new Date().toISOString().split('T')[0];
     return d < today ? today : d;
   })();

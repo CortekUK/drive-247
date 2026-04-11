@@ -3015,12 +3015,19 @@ const Settings = () => {
                       type="number"
                       min={1}
                       max={365}
-                      value={rentalForm.payg_reminder_interval_days}
+                      value={rentalForm.payg_reminder_interval_days || ''}
                       onChange={(e) => {
+                        const raw = e.target.value;
+                        setRentalForm(prev => ({
+                          ...prev,
+                          payg_reminder_interval_days: raw === '' ? ('' as any) : parseInt(raw) || 0,
+                        }));
+                      }}
+                      onBlur={(e) => {
                         const val = parseInt(e.target.value);
                         setRentalForm(prev => ({
                           ...prev,
-                          payg_reminder_interval_days: isNaN(val) ? 1 : Math.max(1, Math.min(365, val)),
+                          payg_reminder_interval_days: isNaN(val) || val < 1 ? 4 : Math.min(365, val),
                         }));
                       }}
                     />
@@ -3035,12 +3042,19 @@ const Settings = () => {
                       type="number"
                       min={0}
                       max={365}
-                      value={rentalForm.payg_grace_period_days}
+                      value={rentalForm.payg_grace_period_days ?? ''}
                       onChange={(e) => {
+                        const raw = e.target.value;
+                        setRentalForm(prev => ({
+                          ...prev,
+                          payg_grace_period_days: raw === '' ? ('' as any) : parseInt(raw) || 0,
+                        }));
+                      }}
+                      onBlur={(e) => {
                         const val = parseInt(e.target.value);
                         setRentalForm(prev => ({
                           ...prev,
-                          payg_grace_period_days: isNaN(val) ? 0 : Math.max(0, Math.min(365, val)),
+                          payg_grace_period_days: isNaN(val) || val < 0 ? 2 : Math.min(365, val),
                         }));
                       }}
                     />
@@ -3055,12 +3069,19 @@ const Settings = () => {
                       type="number"
                       min={1}
                       max={1000}
-                      value={rentalForm.payg_max_reminders}
+                      value={rentalForm.payg_max_reminders || ''}
                       onChange={(e) => {
+                        const raw = e.target.value;
+                        setRentalForm(prev => ({
+                          ...prev,
+                          payg_max_reminders: raw === '' ? ('' as any) : parseInt(raw) || 0,
+                        }));
+                      }}
+                      onBlur={(e) => {
                         const val = parseInt(e.target.value);
                         setRentalForm(prev => ({
                           ...prev,
-                          payg_max_reminders: isNaN(val) ? 1 : Math.max(1, Math.min(1000, val)),
+                          payg_max_reminders: isNaN(val) || val < 1 ? 10 : Math.min(1000, val),
                         }));
                       }}
                     />
@@ -3075,12 +3096,19 @@ const Settings = () => {
                       type="number"
                       min={0}
                       max={30}
-                      value={rentalForm.payg_preauth_days}
+                      value={rentalForm.payg_preauth_days ?? ''}
                       onChange={(e) => {
+                        const raw = e.target.value;
+                        setRentalForm(prev => ({
+                          ...prev,
+                          payg_preauth_days: raw === '' ? ('' as any) : parseInt(raw) || 0,
+                        }));
+                      }}
+                      onBlur={(e) => {
                         const val = parseInt(e.target.value);
                         setRentalForm(prev => ({
                           ...prev,
-                          payg_preauth_days: isNaN(val) ? 0 : Math.max(0, Math.min(30, val)),
+                          payg_preauth_days: isNaN(val) || val < 0 ? 2 : Math.min(30, val),
                         }));
                       }}
                     />
@@ -3095,12 +3123,19 @@ const Settings = () => {
                       type="number"
                       min={1}
                       max={3650}
-                      value={rentalForm.payg_max_duration_days}
+                      value={rentalForm.payg_max_duration_days || ''}
                       onChange={(e) => {
+                        const raw = e.target.value;
+                        setRentalForm(prev => ({
+                          ...prev,
+                          payg_max_duration_days: raw === '' ? ('' as any) : parseInt(raw) || 0,
+                        }));
+                      }}
+                      onBlur={(e) => {
                         const val = parseInt(e.target.value);
                         setRentalForm(prev => ({
                           ...prev,
-                          payg_max_duration_days: isNaN(val) ? 1 : Math.max(1, Math.min(3650, val)),
+                          payg_max_duration_days: isNaN(val) || val < 1 ? 90 : Math.min(3650, val),
                         }));
                       }}
                     />

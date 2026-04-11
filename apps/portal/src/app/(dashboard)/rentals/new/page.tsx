@@ -82,7 +82,12 @@ const rentalSchema = z.object({
   pickup_location: z.string().min(1, "Pickup location is required"),
   return_location: z.string().optional(),
   pickup_time: z.string().regex(/^\d{2}:\d{2}$/, "Pickup time is required"),
-  return_time: z.string().regex(/^\d{2}:\d{2}$/, "Return time is required").optional(),
+  // return_time: optional for PAYG (open-ended). Accept empty string OR valid HH:MM.
+  // Regular mode enforces return_time in the submit handler.
+  return_time: z.union([
+    z.string().regex(/^\d{2}:\d{2}$/, "Return time is required"),
+    z.literal(''),
+  ]).optional(),
   driver_age: z.coerce.number({ invalid_type_error: "Please enter a valid driver age" }).min(1, "Driver age is required").max(200, "Driver age cannot exceed 200"),
   promo_code: z.string().optional(),
   insurance_status: z.enum(["pending", "uploaded", "verified", "bonzah", "not_required"]).optional(),
@@ -1175,6 +1180,9 @@ const CreateRental = () => {
         if (!(isAfter(data.end_date, minEndDate) || data.end_date.getTime() === minEndDate.getTime())) {
           throw new Error("End date must be at least 1 day after start date");
         }
+        if (!data.return_time || !/^\d{2}:\d{2}$/.test(data.return_time)) {
+          throw new Error("Return time is required");
+        }
         if (!sameAsPickup && (!data.return_location || data.return_location.trim() === '')) {
           throw new Error("Return location is required");
         }
@@ -1558,14 +1566,17 @@ const CreateRental = () => {
       } as any);
       invoiceCreated = true;
 
-      // Generate charges split by category (uses invoice breakdown created above)
-      const { error: chargeError } = await supabase.rpc("generate_first_charge_for_rental", {
-        rental_id_param: rental.id
-      });
+      // Generate charges split by category (uses invoice breakdown created above).
+      // Skip for PAYG — the accrual cron handles daily charge generation instead.
+      if (!isPayAsYouGo) {
+        const { error: chargeError } = await supabase.rpc("generate_first_charge_for_rental", {
+          rental_id_param: rental.id
+        });
 
-      if (chargeError) {
-        console.error("Error generating charges:", chargeError);
-        // Don't throw - rental is already created, charges can be created manually
+        if (chargeError) {
+          console.error("Error generating charges:", chargeError);
+          // Don't throw - rental is already created, charges can be created manually
+        }
       }
 
       // Create installment plan if selected
@@ -2535,6 +2546,160 @@ const CreateRental = () => {
                 </div>
               </div>
 
+              {/* ── Payment Mode: Regular vs Pay As You Go (positioned after Customer & Vehicle) ──────── */}
+              {rentalSettings?.pay_as_you_go_enabled && selectedVehicleId && (
+                <div className="rounded-xl border bg-card shadow-sm">
+                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
+                      <CreditCard className="h-4 w-4" />
+                    </div>
+                    <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Mode</h2>
+                  </div>
+                  <div className="p-5 space-y-4">
+                    <RadioGroup
+                      value={isPayAsYouGo ? 'payg' : 'regular'}
+                      onValueChange={(val) => {
+                        setIsPayAsYouGo(val === 'payg');
+                        if (val === 'payg') {
+                          setInstallmentPlanType('full');
+                          setInstallmentAmountOverride(null);
+                          // R6: clear any promo state — promo codes are not used for PAYG
+                          form.setValue('promo_code', '');
+                          setPromoDetails(null);
+                          setPromoError(null);
+                          // Clear end_date and return_time for PAYG (open-ended)
+                          form.setValue('end_date', undefined as any);
+                          form.setValue('return_time', undefined as any);
+                          form.setValue('return_location', '');
+                          form.setValue('rental_period_type', 'Daily');
+                          // Auto-fill monthly_amount with daily_rent from the selected vehicle
+                          const vehicle = vehicles?.find((v: any) => v.id === selectedVehicleId);
+                          if (vehicle) {
+                            form.setValue('monthly_amount', vehicle.daily_rent || 0, { shouldValidate: true });
+                          }
+                        }
+                      }}
+                      className="space-y-2"
+                    >
+                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", !isPayAsYouGo ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
+                        <RadioGroupItem value="regular" />
+                        <div>
+                          <span className="text-sm font-medium">Regular</span>
+                          <p className="text-xs text-muted-foreground">Standard payment — pay upfront or via installments</p>
+                        </div>
+                      </label>
+                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isPayAsYouGo ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
+                        <RadioGroupItem value="payg" />
+                        <div>
+                          <span className="text-sm font-medium">Pay As You Go</span>
+                          <p className="text-xs text-muted-foreground">Rental amount, tax, and percentage-based service fees are paid incrementally</p>
+                        </div>
+                      </label>
+                    </RadioGroup>
+
+                    {isPayAsYouGo && (
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Reminder Interval (days)</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={365}
+                          placeholder={`Default: ${(rentalSettings as any)?.payg_reminder_interval_days ?? 4}`}
+                          value={paygReminderInterval ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              setPaygReminderInterval(null);
+                            } else {
+                              const n = parseInt(val);
+                              setPaygReminderInterval(isNaN(n) ? null : Math.max(1, Math.min(365, n)));
+                            }
+                          }}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Leave empty to use the tenant default (
+                          {(rentalSettings as any)?.payg_reminder_interval_days ?? 4} days).
+                          Reminders fire after a {(rentalSettings as any)?.payg_grace_period_days ?? 2}-day grace period, then every N days while there is an outstanding balance.
+                        </p>
+                      </div>
+                    )}
+
+                    {isPayAsYouGo && (() => {
+                      const currency = tenant?.currency_code || 'USD';
+                      const rentalAmount = watchedMonthlyAmount || 0;
+                      const discountAmt = promoDetails ? calculateDiscount(rentalAmount) : 0;
+                      const discounted = rentalAmount - discountAmt;
+                      const tax = taxOverride !== null ? taxOverride : calculateTaxAmount(discounted);
+                      const serviceFee = serviceFeeOverride !== null ? serviceFeeOverride : calculateServiceFee(discounted);
+                      const deposit = depositOverride !== null ? depositOverride : calculateSecurityDeposit(form.getValues("vehicle_id"));
+                      const isServiceFeePercentage = rentalSettings?.service_fee_type === 'percentage';
+                      const isServiceFeeEnabled = rentalSettings?.service_fee_enabled && serviceFee > 0;
+
+                      const paygItems: { label: string; amount: number }[] = [
+                        { label: 'Rental Amount', amount: discounted },
+                      ];
+                      if (rentalSettings?.tax_enabled && tax > 0) {
+                        paygItems.push({ label: `Tax (${rentalSettings.tax_percentage}%)`, amount: tax });
+                      }
+                      if (isServiceFeeEnabled && isServiceFeePercentage) {
+                        paygItems.push({ label: `Service Fee (${rentalSettings?.service_fee_value}%)`, amount: serviceFee });
+                      }
+                      const paygTotal = paygItems.reduce((s, i) => s + i.amount, 0);
+
+                      const normalItems: { label: string; amount: number }[] = [];
+                      if (isServiceFeeEnabled && !isServiceFeePercentage) {
+                        normalItems.push({ label: 'Service Fee (fixed)', amount: serviceFee });
+                      }
+                      if (rentalSettings?.security_deposit_enabled && deposit > 0) {
+                        normalItems.push({ label: 'Pre-Authorization', amount: deposit });
+                      }
+
+                      return (
+                        <div className="mt-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 space-y-3">
+                          <div className="flex items-start gap-2">
+                            <Info className="h-4 w-4 text-indigo-600 dark:text-indigo-400 mt-0.5 flex-shrink-0" />
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">How Pay As You Go works</p>
+                              <p className="text-xs text-muted-foreground">
+                                The customer pays the rental charges incrementally over time instead of upfront. You record each payment as it comes in from the rental detail page.
+                              </p>
+                            </div>
+                          </div>
+
+                          {discounted > 0 && (
+                            <div className="space-y-2 pt-2 border-t border-indigo-200/60 dark:border-indigo-800/60">
+                              <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Paid Incrementally (PAYG)</p>
+                              {paygItems.map(item => (
+                                <div key={item.label} className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">{item.label}</span>
+                                  <span className="font-medium">{formatCurrency(item.amount, currency)}</span>
+                                </div>
+                              ))}
+                              <div className="flex justify-between text-sm font-semibold border-t border-indigo-200/60 dark:border-indigo-800/60 pt-1.5">
+                                <span className="text-indigo-700 dark:text-indigo-300">PAYG Total</span>
+                                <span className="text-indigo-700 dark:text-indigo-300">{formatCurrency(paygTotal, currency)}</span>
+                              </div>
+
+                              {normalItems.length > 0 && (
+                                <>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-2">Charged Separately</p>
+                                  {normalItems.map(item => (
+                                    <div key={item.label} className="flex justify-between text-sm">
+                                      <span className="text-muted-foreground">{item.label}</span>
+                                      <span className="font-medium">{formatCurrency(item.amount, currency)}</span>
+                                    </div>
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+
               {/* ── Section 2: Rental Period & Pricing ────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
                 <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
@@ -2588,7 +2753,7 @@ const CreateRental = () => {
                       )}
                     />
 
-                    <FormField
+                    {!isPayAsYouGo && <FormField
                       control={form.control}
                       name="end_date"
                       render={({ field }) => {
@@ -2638,7 +2803,7 @@ const CreateRental = () => {
                           </FormItem>
                         );
                       }}
-                    />
+                    />}
                   </div>
 
                   {/* Times */}
@@ -2647,7 +2812,7 @@ const CreateRental = () => {
                       control={form.control}
                       name="pickup_time"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className={isPayAsYouGo ? 'md:col-span-2' : ''}>
                           <FormLabel>Pickup Time <span className="text-red-500">*</span></FormLabel>
                           <FormControl>
                             <TimePicker
@@ -2661,7 +2826,7 @@ const CreateRental = () => {
                         </FormItem>
                       )}
                     />
-                    <FormField
+                    {!isPayAsYouGo && <FormField
                       control={form.control}
                       name="return_time"
                       render={({ field }) => (
@@ -2678,7 +2843,7 @@ const CreateRental = () => {
                           <FormMessage />
                         </FormItem>
                       )}
-                    />
+                    />}
                   </div>
 
                   {/* Rental Period Type — auto-determined, read-only display */}
@@ -3225,152 +3390,6 @@ const CreateRental = () => {
                 );
               })()}
 
-              {/* ── Payment Mode: Regular vs Pay As You Go ──────── */}
-              {rentalSettings?.pay_as_you_go_enabled && selectedVehicleId && (
-                <div className="rounded-xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
-                      <CreditCard className="h-4 w-4" />
-                    </div>
-                    <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Mode</h2>
-                  </div>
-                  <div className="p-5 space-y-4">
-                    <RadioGroup
-                      value={isPayAsYouGo ? 'payg' : 'regular'}
-                      onValueChange={(val) => {
-                        setIsPayAsYouGo(val === 'payg');
-                        if (val === 'payg') {
-                          setInstallmentPlanType('full');
-                          setInstallmentAmountOverride(null);
-                          // R6: clear any promo state — promo codes are not used for PAYG
-                          form.setValue('promo_code', '');
-                          setPromoDetails(null);
-                          setPromoError(null);
-                        }
-                      }}
-                      className="space-y-2"
-                    >
-                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", !isPayAsYouGo ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
-                        <RadioGroupItem value="regular" />
-                        <div>
-                          <span className="text-sm font-medium">Regular</span>
-                          <p className="text-xs text-muted-foreground">Standard payment — pay upfront or via installments</p>
-                        </div>
-                      </label>
-                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isPayAsYouGo ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
-                        <RadioGroupItem value="payg" />
-                        <div>
-                          <span className="text-sm font-medium">Pay As You Go</span>
-                          <p className="text-xs text-muted-foreground">Rental amount, tax, and percentage-based service fees are paid incrementally</p>
-                        </div>
-                      </label>
-                    </RadioGroup>
-
-                    {isPayAsYouGo && (
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Reminder Interval (days)</Label>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={365}
-                          placeholder={`Default: ${(rentalSettings as any)?.payg_reminder_interval_days ?? 4}`}
-                          value={paygReminderInterval ?? ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === '') {
-                              setPaygReminderInterval(null);
-                            } else {
-                              const n = parseInt(val);
-                              setPaygReminderInterval(isNaN(n) ? null : Math.max(1, Math.min(365, n)));
-                            }
-                          }}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Leave empty to use the tenant default (
-                          {(rentalSettings as any)?.payg_reminder_interval_days ?? 4} days).
-                          Reminders fire after a {(rentalSettings as any)?.payg_grace_period_days ?? 2}-day grace period, then every N days while there is an outstanding balance.
-                        </p>
-                      </div>
-                    )}
-
-                    {isPayAsYouGo && (() => {
-                      const currency = tenant?.currency_code || 'USD';
-                      const rentalAmount = watchedMonthlyAmount || 0;
-                      const discountAmt = promoDetails ? calculateDiscount(rentalAmount) : 0;
-                      const discounted = rentalAmount - discountAmt;
-                      const tax = taxOverride !== null ? taxOverride : calculateTaxAmount(discounted);
-                      const serviceFee = serviceFeeOverride !== null ? serviceFeeOverride : calculateServiceFee(discounted);
-                      const deposit = depositOverride !== null ? depositOverride : calculateSecurityDeposit(form.getValues("vehicle_id"));
-                      const isServiceFeePercentage = rentalSettings?.service_fee_type === 'percentage';
-                      const isServiceFeeEnabled = rentalSettings?.service_fee_enabled && serviceFee > 0;
-
-                      // PAYG items
-                      const paygItems: { label: string; amount: number }[] = [
-                        { label: 'Rental Amount', amount: discounted },
-                      ];
-                      if (rentalSettings?.tax_enabled && tax > 0) {
-                        paygItems.push({ label: `Tax (${rentalSettings.tax_percentage}%)`, amount: tax });
-                      }
-                      if (isServiceFeeEnabled && isServiceFeePercentage) {
-                        paygItems.push({ label: `Service Fee (${rentalSettings?.service_fee_value}%)`, amount: serviceFee });
-                      }
-                      const paygTotal = paygItems.reduce((s, i) => s + i.amount, 0);
-
-                      // Upfront / normal items
-                      const normalItems: { label: string; amount: number }[] = [];
-                      if (isServiceFeeEnabled && !isServiceFeePercentage) {
-                        normalItems.push({ label: 'Service Fee (fixed)', amount: serviceFee });
-                      }
-                      if (rentalSettings?.security_deposit_enabled && deposit > 0) {
-                        normalItems.push({ label: 'Pre-Authorization', amount: deposit });
-                      }
-
-                      return (
-                        <div className="mt-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 space-y-3">
-                          <div className="flex items-start gap-2">
-                            <Info className="h-4 w-4 text-indigo-600 dark:text-indigo-400 mt-0.5 flex-shrink-0" />
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">How Pay As You Go works</p>
-                              <p className="text-xs text-muted-foreground">
-                                The customer pays the rental charges incrementally over time instead of upfront. You record each payment as it comes in from the rental detail page.
-                              </p>
-                            </div>
-                          </div>
-
-                          {discounted > 0 && (
-                            <div className="space-y-2 pt-2 border-t border-indigo-200/60 dark:border-indigo-800/60">
-                              <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Paid Incrementally (PAYG)</p>
-                              {paygItems.map(item => (
-                                <div key={item.label} className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">{item.label}</span>
-                                  <span className="font-medium">{formatCurrency(item.amount, currency)}</span>
-                                </div>
-                              ))}
-                              <div className="flex justify-between text-sm font-semibold border-t border-indigo-200/60 dark:border-indigo-800/60 pt-1.5">
-                                <span className="text-indigo-700 dark:text-indigo-300">PAYG Total</span>
-                                <span className="text-indigo-700 dark:text-indigo-300">{formatCurrency(paygTotal, currency)}</span>
-                              </div>
-
-                              {normalItems.length > 0 && (
-                                <>
-                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-2">Charged Separately</p>
-                                  {normalItems.map(item => (
-                                    <div key={item.label} className="flex justify-between text-sm">
-                                      <span className="text-muted-foreground">{item.label}</span>
-                                      <span className="font-medium">{formatCurrency(item.amount, currency)}</span>
-                                    </div>
-                                  ))}
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-              )}
-
               {/* ── Installment Plan ──────────────────────────────── */}
               {!isPayAsYouGo && (() => {
                 const installmentConfig = rentalSettings?.installment_config;
@@ -3711,7 +3730,7 @@ const CreateRental = () => {
               <div className="rounded-xl border bg-card shadow-sm">
                 <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
                   <span className="text-2xl font-extrabold text-primary">3.</span>
-                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Pickup & Return</h2>
+                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">{isPayAsYouGo ? 'Pickup' : 'Pickup & Return'}</h2>
                 </div>
                 <div className="p-5 space-y-5">
                   <FormField control={form.control} name="pickup_location" render={({ field }) => (
@@ -4603,7 +4622,7 @@ const CreateRental = () => {
           }}
           rental={{
             start_date: createdRentalData.formData.start_date.toISOString(),
-            end_date: createdRentalData.formData.end_date.toISOString(),
+            end_date: createdRentalData.formData.end_date?.toISOString() || createdRentalData.formData.start_date.toISOString(),
             monthly_amount: createdRentalData.formData.monthly_amount,
           }}
           protectionPlan={bonzahPremium > 0 ? {

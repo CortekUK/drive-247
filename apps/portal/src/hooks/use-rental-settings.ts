@@ -236,7 +236,8 @@ export const useRentalSettings = () => {
       }
 
       console.log('[RentalSettings] Settings updated:', data[0]);
-      return { ...DEFAULT_RENTAL_SETTINGS, ...data[0] } as unknown as RentalSettings;
+      const paygMigrationReady = data[0] != null && 'payg_reminder_interval_days' in data[0];
+      return { ...DEFAULT_RENTAL_SETTINGS, ...data[0], _paygMigrationReady: paygMigrationReady } as unknown as RentalSettings;
     },
     onSuccess: (data) => {
       // Update the cache with new data

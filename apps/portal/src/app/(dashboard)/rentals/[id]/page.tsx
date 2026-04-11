@@ -24,6 +24,7 @@ import { useTenant } from "@/contexts/TenantContext";
 // integration_bonzah controls Bonzah-specific features only; insurance document upload is always available
 import { useRentalTotals, useRentalCharges } from "@/hooks/use-rental-ledger-data";
 import { useRentalInvoice, useRentalPaymentBreakdown, useRentalRefundBreakdown } from "@/hooks/use-rental-invoice";
+import { usePaygLedger } from "@/hooks/use-payg-ledger";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
 import { KeyHandoverActionBanner } from "@/components/rentals/key-handover-action-banner";
@@ -347,6 +348,9 @@ const RentalDetail = () => {
   const { data: refundData } = useRentalRefundBreakdown(id);
   const refundBreakdown = refundData?.categoryRefunds || null;
   const chargeRefunds = refundData?.chargeRefunds || {};
+
+  // PAYG daily ledger
+  const { ledger: paygLedger, isLoading: isPaygLedgerLoading } = usePaygLedger(id, rental?.is_pay_as_you_go === true);
 
   // Fetch fines linked to this rental
   const { data: rentalFines } = useQuery({
@@ -1556,6 +1560,25 @@ const RentalDetail = () => {
             </p>
             {/* Key Status Badges */}
             <div className="flex flex-wrap gap-2 mt-2">
+              {/* PAYG indicator */}
+              {rental.is_pay_as_you_go && (
+                <Badge
+                  variant="outline"
+                  className="bg-indigo-500/10 text-indigo-600 border-indigo-500/30 gap-1"
+                >
+                  <Clock className="h-3 w-3" />
+                  Pay As You Go
+                  {(rental as any).payg_paused && (
+                    <span className="ml-1 text-xs font-normal text-amber-500">· Paused</span>
+                  )}
+                  {(rental as any).payg_closed_at && (
+                    <span className="ml-1 text-xs font-normal text-green-500">· Closed</span>
+                  )}
+                  {!(rental as any).payg_paused && !(rental as any).payg_closed_at && (
+                    <span className="ml-1 text-xs font-normal">· Day {(rental as any).payg_accrual_day_count || 0}</span>
+                  )}
+                </Badge>
+              )}
               {/* Tesla Fleet indicator */}
               {rental.vehicles?.tesla_fleet_enabled && (
                 <Badge
@@ -2098,6 +2121,113 @@ const RentalDetail = () => {
           </div>
         );
       })()}
+
+      {/* PAYG Daily Ledger — only for Pay-As-You-Go rentals */}
+      {rental.is_pay_as_you_go && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-indigo-500" />
+                PAYG Daily Ledger
+              </CardTitle>
+              {paygLedger.totalOutstanding > 0 && (
+                <Badge variant="outline" className="text-red-600 border-red-300 bg-red-50 dark:text-red-400 dark:border-red-700 dark:bg-red-950/30">
+                  {formatCurrencyUtil(paygLedger.totalOutstanding, tenant?.currency_code || 'USD')} outstanding
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {isPaygLedgerLoading ? (
+              <div className="px-6 pb-6 text-sm text-muted-foreground">Loading ledger...</div>
+            ) : paygLedger.accruals.length === 0 ? (
+              <div className="px-6 pb-6">
+                <p className="text-sm text-muted-foreground">
+                  No charges accrued yet. The first day&apos;s charge will post when the rental becomes active.
+                </p>
+              </div>
+            ) : (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-indigo-50/60 dark:bg-indigo-950/20 hover:bg-indigo-50/60">
+                      <TableHead className="text-indigo-700 dark:text-indigo-300 text-xs font-semibold w-16">Day</TableHead>
+                      <TableHead className="text-indigo-700 dark:text-indigo-300 text-xs font-semibold">Date</TableHead>
+                      <TableHead className="text-indigo-700 dark:text-indigo-300 text-xs font-semibold text-right">Rental</TableHead>
+                      <TableHead className="text-indigo-700 dark:text-indigo-300 text-xs font-semibold text-right">Tax</TableHead>
+                      <TableHead className="text-indigo-700 dark:text-indigo-300 text-xs font-semibold text-right">Service Fee</TableHead>
+                      <TableHead className="text-indigo-700 dark:text-indigo-300 text-xs font-semibold text-right">Day Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paygLedger.accruals.map((accrual) => {
+                      const dayTotal = Number(accrual.daily_rate) + Number(accrual.tax_amount) + Number(accrual.service_fee_amount);
+                      const dateStr = accrual.accrual_window_start
+                        ? new Date(accrual.accrual_window_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                        : '—';
+                      return (
+                        <TableRow key={accrual.id} className={accrual.is_partial ? 'bg-amber-50/50 dark:bg-amber-950/10' : ''}>
+                          <TableCell className="font-medium text-sm">
+                            {accrual.accrual_day_index}
+                            {accrual.is_partial && (
+                              <Badge variant="outline" className="ml-1.5 text-[9px] text-amber-600 border-amber-300 bg-amber-100 dark:text-amber-400 dark:border-amber-700 dark:bg-amber-950/30 px-1 py-0">
+                                partial
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {dateStr}
+                            {accrual.is_partial && (
+                              <span className="text-xs text-amber-500 ml-1">({Number(accrual.hours_covered).toFixed(1)}h)</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-right">{formatCurrencyUtil(Number(accrual.daily_rate), tenant?.currency_code || 'USD')}</TableCell>
+                          <TableCell className="text-sm text-right text-muted-foreground">{Number(accrual.tax_amount) > 0 ? formatCurrencyUtil(Number(accrual.tax_amount), tenant?.currency_code || 'USD') : '—'}</TableCell>
+                          <TableCell className="text-sm text-right text-muted-foreground">{Number(accrual.service_fee_amount) > 0 ? formatCurrencyUtil(Number(accrual.service_fee_amount), tenant?.currency_code || 'USD') : '—'}</TableCell>
+                          <TableCell className="text-sm text-right font-medium">{formatCurrencyUtil(dayTotal, tenant?.currency_code || 'USD')}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {/* Totals row */}
+                    <TableRow className="bg-muted/30 border-t-2 font-semibold">
+                      <TableCell colSpan={2} className="text-sm">Total ({paygLedger.daysActive} day{paygLedger.daysActive !== 1 ? 's' : ''})</TableCell>
+                      <TableCell className="text-sm text-right">{formatCurrencyUtil(paygLedger.totalRental, tenant?.currency_code || 'USD')}</TableCell>
+                      <TableCell className="text-sm text-right">{paygLedger.totalTax > 0 ? formatCurrencyUtil(paygLedger.totalTax, tenant?.currency_code || 'USD') : '—'}</TableCell>
+                      <TableCell className="text-sm text-right">{paygLedger.totalServiceFee > 0 ? formatCurrencyUtil(paygLedger.totalServiceFee, tenant?.currency_code || 'USD') : '—'}</TableCell>
+                      <TableCell className="text-sm text-right">{formatCurrencyUtil(paygLedger.totalCharged, tenant?.currency_code || 'USD')}</TableCell>
+                    </TableRow>
+                    {/* Outstanding row */}
+                    {paygLedger.totalOutstanding > 0 && (
+                      <TableRow className="bg-red-50/50 dark:bg-red-950/10">
+                        <TableCell colSpan={5} className="text-sm font-semibold text-red-600 dark:text-red-400">Outstanding Balance</TableCell>
+                        <TableCell className="text-sm text-right font-bold text-red-600 dark:text-red-400">{formatCurrencyUtil(paygLedger.totalOutstanding, tenant?.currency_code || 'USD')}</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+                {/* Footer info */}
+                <div className="px-4 py-3 border-t bg-muted/20 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+                  {(rental as any).payg_next_accrual_at && !(rental as any).payg_closed_at && (
+                    <span>
+                      Next accrual: {new Date((rental as any).payg_next_accrual_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    </span>
+                  )}
+                  <span>
+                    Reminder interval: every {(rental as any).payg_reminder_interval_days || (rentalSettings as any)?.payg_reminder_interval_days || 4} days
+                  </span>
+                  {(rental as any).payg_paused && (
+                    <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-100 text-[10px]">Accrual Paused</Badge>
+                  )}
+                  {(rental as any).payg_closed_at && (
+                    <Badge variant="outline" className="text-green-600 border-green-300 bg-green-100 text-[10px]">Closed</Badge>
+                  )}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Payment Breakdown */}
       {invoiceBreakdown && (() => {
@@ -4939,8 +5069,8 @@ const RentalDetail = () => {
         />
       )}
 
-      {/* Extension Request Dialog */}
-      {rental && (
+      {/* Extension Request Dialog — not mounted for PAYG (open-ended, no end_date to extend) */}
+      {rental && !rental.is_pay_as_you_go && (
         <ExtensionRequestDialog
           open={showExtensionDialog}
           onOpenChange={setShowExtensionDialog}
@@ -4960,8 +5090,8 @@ const RentalDetail = () => {
         />
       )}
 
-      {/* Admin Extend Rental Dialog */}
-      {rental && (
+      {/* Admin Extend Rental Dialog — not mounted for PAYG */}
+      {rental && !rental.is_pay_as_you_go && (
         <AdminExtendRentalDialog
           open={showAdminExtendDialog}
           onOpenChange={setShowAdminExtendDialog}

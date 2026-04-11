@@ -59,7 +59,10 @@
       "Bash(SUPABASE_ACCESS_TOKEN=sbp_6b139d9d0f78dd93e75f3683c8cfa4a5fc31f366 npx supabase@latest projects list)",
       "Bash(psql --version)",
       "Bash(dpkg -l)",
-      "Bash(apt list:*)"
+      "Bash(apt list:*)",
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__execute_sql",
+      "Bash(fuser -k 3001/tcp)"
     ],
     "deny": [],
     "ask": []
