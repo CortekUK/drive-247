@@ -1127,15 +1127,26 @@ export async function POST(request: NextRequest) {
         }
 
         console.log('Sending document to BoldSign...');
-        const boldSignResponse = await fetch(`${BOLDSIGN_BASE_URL}/v1/document/send`, {
-            method: 'POST',
-            headers: { 'X-API-KEY': BOLDSIGN_API_KEY },
-            body: formData,
-        });
+        let boldSignResponse: Response | null = null;
+        const maxSendRetries = 3;
+        for (let sendAttempt = 1; sendAttempt <= maxSendRetries; sendAttempt++) {
+            boldSignResponse = await fetch(`${BOLDSIGN_BASE_URL}/v1/document/send`, {
+                method: 'POST',
+                headers: { 'X-API-KEY': BOLDSIGN_API_KEY },
+                body: formData,
+            });
+            if (boldSignResponse.status === 429 && sendAttempt < maxSendRetries) {
+                const waitSec = sendAttempt * 15; // 15s, 30s
+                console.warn(`BoldSign rate limited (429), retrying in ${waitSec}s (attempt ${sendAttempt}/${maxSendRetries})...`);
+                await new Promise(r => setTimeout(r, waitSec * 1000));
+                continue;
+            }
+            break;
+        }
 
-        if (!boldSignResponse.ok) {
-            const errorText = await boldSignResponse.text();
-            console.error('BoldSign error:', boldSignResponse.status, errorText);
+        if (!boldSignResponse!.ok) {
+            const errorText = await boldSignResponse!.text();
+            console.error('BoldSign error:', boldSignResponse!.status, errorText);
             // Refund credits since BoldSign failed
             if (body.tenantId && creditDeductionResult?.success) {
                 try {
@@ -1152,7 +1163,7 @@ export async function POST(request: NextRequest) {
                     console.error('Failed to refund credits:', refundErr);
                 }
             }
-            return NextResponse.json({ ok: false, error: 'Failed to create document', detail: errorText, boldsignStatus: boldSignResponse.status, boldsignMode, hasApiKey: !!BOLDSIGN_API_KEY, apiKeyPrefix: BOLDSIGN_API_KEY.substring(0, 8) + '...' }, { status: 500 });
+            return NextResponse.json({ ok: false, error: 'Failed to create document', detail: errorText, boldsignStatus: boldSignResponse!.status, boldsignMode, hasApiKey: !!BOLDSIGN_API_KEY, apiKeyPrefix: BOLDSIGN_API_KEY.substring(0, 8) + '...' }, { status: 500 });
         }
 
         const boldSignResult = await boldSignResponse.json();
@@ -1215,28 +1226,15 @@ export async function POST(request: NextRequest) {
             }).catch((e) => console.warn('Auto-refill trigger error:', e));
         }
 
-        // Fetch signing link from BoldSign — retry until ready (max 15s)
-        let signingLink = '';
-        for (let attempt = 1; attempt <= 6 && !signingLink; attempt++) {
-            await new Promise(r => setTimeout(r, attempt === 1 ? 3000 : 2000));
-            try {
-                const signLinkRes = await fetch(
-                    `${BOLDSIGN_BASE_URL}/v1/document/getEmbeddedSignLink?documentId=${documentId}&signerEmail=${encodeURIComponent(body.customerEmail)}`,
-                    { headers: { 'X-API-KEY': BOLDSIGN_API_KEY } }
-                );
-                if (signLinkRes.ok) {
-                    const signLinkData = await signLinkRes.json();
-                    signingLink = signLinkData.signLink || '';
-                    if (signingLink) console.log(`Signing link fetched on attempt ${attempt}`);
-                } else {
-                    console.warn(`Signing link attempt ${attempt}/6:`, signLinkRes.status);
-                }
-            } catch (e) {
-                console.warn(`Signing link attempt ${attempt}/6 error:`, e);
-            }
-        }
-        if (!signingLink) {
-            console.warn('Could not fetch signing link after 6 attempts');
+        // Build signing redirect URL — no BoldSign API calls needed at email time.
+        // When the customer clicks this link, the portal fetches the signing link
+        // from BoldSign (1 API call) and redirects them to the signing page.
+        const portalOrigin = request.headers.get('origin') || request.nextUrl.origin;
+        const signingLink = agreementId
+            ? `${portalOrigin}/api/esign/signing-redirect?id=${agreementId}`
+            : '';
+        if (signingLink) {
+            console.log('Using signing redirect URL:', signingLink);
         }
 
         // Send signing email (we handle emails ourselves since DisableEmails is true)
@@ -1262,6 +1260,8 @@ export async function POST(request: NextRequest) {
                     tenantId: body.tenantId,
                     boldsignMode: boldsignMode,
                     signingLink: signingLink || undefined,
+                    agreementId: agreementId || undefined,
+                    rentalId: body.rentalId,
                 }),
             });
             emailSent = signingEmailResponse.ok;

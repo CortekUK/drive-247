@@ -82,6 +82,7 @@ function AgreementCard({
   customerName,
   extensionNumber,
   hideStatusBadge,
+  isSuperseded,
   onViewAgreement,
 }: {
   agreement: RentalAgreement;
@@ -92,6 +93,7 @@ function AgreementCard({
   customerName?: string;
   extensionNumber?: number;
   hideStatusBadge?: boolean;
+  isSuperseded?: boolean;
   onViewAgreement: (agreementId: string, signedDocFileUrl?: string | null) => void;
 }) {
   const { toast } = useToast();
@@ -183,7 +185,11 @@ function AgreementCard({
   };
 
   return (
-    <div className="space-y-3">
+    <div className={`space-y-3 ${isSuperseded ? 'opacity-50' : ''}`}>
+      {/* Superseded label */}
+      {isSuperseded && (
+        <p className="text-xs text-muted-foreground italic">Replaced by newer agreement below</p>
+      )}
       {/* Status + badges row (hidden when parent accordion trigger already shows it) */}
       {!hideStatusBadge && (
         <div className="flex items-center gap-2 flex-wrap">
@@ -239,27 +245,29 @@ function AgreementCard({
         )}
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-2 pt-1">
-        {hasSentDoc && (
-          <Button variant="outline" size="sm" onClick={() => onViewAgreement(agreement.id, agreement.signed_document?.file_url)}>
-            <ExternalLink className="h-3.5 w-3.5 mr-1" />
-            {isSigned ? 'View Signed' : 'View'}
-          </Button>
-        )}
-        {hasSentDoc && !isSigned && (
-          <Button variant="ghost" size="sm" onClick={handleCheckStatus} disabled={checkingStatus || statusCooldown > 0}>
-            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${checkingStatus ? 'animate-spin' : ''}`} />
-            {checkingStatus ? 'Checking...' : statusCooldown > 0 ? `Wait ${statusCooldown}s` : 'Check Status'}
-          </Button>
-        )}
-        {canEdit && hasSentDoc && !isSigned && (
-          <Button variant="ghost" size="sm" onClick={handleResend} disabled={resending || resendCooldown > 0}>
-            <Send className="h-3.5 w-3.5 mr-1" />
-            {resending ? 'Sending...' : resendCooldown > 0 ? `Wait ${resendCooldown}s` : 'Resend'}
-          </Button>
-        )}
-      </div>
+      {/* Actions — hidden for superseded (replaced) agreements */}
+      {!isSuperseded && (
+        <div className="flex gap-2 pt-1">
+          {hasSentDoc && (
+            <Button variant="outline" size="sm" onClick={() => onViewAgreement(agreement.id, agreement.signed_document?.file_url)}>
+              <ExternalLink className="h-3.5 w-3.5 mr-1" />
+              {isSigned ? 'View Signed' : 'View'}
+            </Button>
+          )}
+          {hasSentDoc && !isSigned && (
+            <Button variant="ghost" size="sm" onClick={handleCheckStatus} disabled={checkingStatus || statusCooldown > 0}>
+              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${checkingStatus ? 'animate-spin' : ''}`} />
+              {checkingStatus ? 'Checking...' : statusCooldown > 0 ? `Wait ${statusCooldown}s` : 'Check Status'}
+            </Button>
+          )}
+          {canEdit && hasSentDoc && !isSigned && (
+            <Button variant="ghost" size="sm" onClick={handleResend} disabled={resending || resendCooldown > 0}>
+              <Send className="h-3.5 w-3.5 mr-1" />
+              {resending ? 'Sending...' : resendCooldown > 0 ? `Wait ${resendCooldown}s` : 'Resend'}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -283,13 +291,32 @@ export function AgreementTimeline({
   const extensionAgreements = agreements.filter((a) => a.agreement_type === 'extension');
   const hasOriginal = originalAgreements.length > 0;
 
-  // Map extension agreements by index (1-based)
+  // Map extension agreements to extension groups by matching period dates
   const extensionAgreementsByNum: Record<number, RentalAgreement[]> = {};
-  extensionAgreements.forEach((a, idx) => {
-    const num = idx + 1;
-    if (!extensionAgreementsByNum[num]) extensionAgreementsByNum[num] = [];
-    extensionAgreementsByNum[num].push(a);
+  extensionAgreements.forEach((a) => {
+    // Find the extension group whose dates match this agreement's period
+    const matchedGroup = extensionGroups.find(
+      (g) => g.previousEndDate && g.newEndDate &&
+        a.period_start_date?.startsWith(g.previousEndDate.slice(0, 10)) &&
+        a.period_end_date?.startsWith(g.newEndDate.slice(0, 10))
+    );
+    const num = matchedGroup?.extensionNumber ?? 0;
+    if (num > 0) {
+      if (!extensionAgreementsByNum[num]) extensionAgreementsByNum[num] = [];
+      extensionAgreementsByNum[num].push(a);
+    }
   });
+  // Fallback: if no agreements matched by dates (e.g. legacy data), assign unmatched ones by index
+  const unmatchedAgreements = extensionAgreements.filter((a) =>
+    !Object.values(extensionAgreementsByNum).flat().includes(a)
+  );
+  if (unmatchedAgreements.length > 0 && Object.keys(extensionAgreementsByNum).length === 0) {
+    unmatchedAgreements.forEach((a, idx) => {
+      const num = idx + 1;
+      if (!extensionAgreementsByNum[num]) extensionAgreementsByNum[num] = [];
+      extensionAgreementsByNum[num].push(a);
+    });
+  }
 
   // Extensions that are missing agreements
   const extensionAgreementNumbers = new Set(Object.keys(extensionAgreementsByNum).map(Number));
@@ -351,6 +378,15 @@ export function AgreementTimeline({
     } finally {
       setSendingAgreement(null);
     }
+  };
+
+  // An unsigned agreement is "superseded" if a newer unsigned agreement exists in the same group
+  const isSuperseded = (agreement: RentalAgreement, groupAgreements: RentalAgreement[]) => {
+    const isSigned = agreement.document_status === 'signed' || agreement.document_status === 'completed' || !!agreement.signed_document_id;
+    if (isSigned) return false; // signed agreements are never superseded
+    // If this is not the last agreement in the group and is unsigned, it's superseded
+    const idx = groupAgreements.indexOf(agreement);
+    return idx < groupAgreements.length - 1;
   };
 
   // Get overall status badge for accordion trigger
@@ -419,6 +455,7 @@ export function AgreementTimeline({
                   key={a.id} agreement={a} canEdit={canEdit} tenantId={tenantId}
                   rentalId={rentalId} customerEmail={rental.customers?.email}
                   customerName={rental.customers?.name} onViewAgreement={onViewAgreement}
+                  isSuperseded={isSuperseded(a, originalAgreements)}
                 />
               ))
             ) : (
@@ -450,6 +487,7 @@ export function AgreementTimeline({
                       rentalId={rentalId} customerEmail={rental.customers?.email}
                       customerName={rental.customers?.name} onViewAgreement={onViewAgreement}
                       hideStatusBadge={originalAgreements.length === 1}
+                      isSuperseded={isSuperseded(a, originalAgreements)}
                     />
                   ))
                 ) : (
@@ -502,6 +540,7 @@ export function AgreementTimeline({
                           extensionNumber={extGroup.extensionNumber}
                           onViewAgreement={onViewAgreement}
                           hideStatusBadge={extAgreements.length === 1}
+                          isSuperseded={isSuperseded(a, extAgreements)}
                         />
                       ))
                     ) : (
