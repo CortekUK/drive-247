@@ -194,6 +194,34 @@ function getPeriodLabel(type: string | null): string {
 }
 
 // ---------------------------------------------------------------------------
+// Brand icons
+// ---------------------------------------------------------------------------
+
+function BoldSignIcon({ className }: { className?: string }) {
+  return (
+    <img src="/boldsign-logo.svg" alt="BoldSign" className={`dark:hidden ${className || 'h-4 w-4'}`} />
+  );
+}
+
+function BoldSignIconDark({ className }: { className?: string }) {
+  return (
+    <img src="/boldsign-logo-dark.svg" alt="BoldSign" className={`hidden dark:block ${className || 'h-4 w-4'}`} />
+  );
+}
+
+function BonzahIcon({ className }: { className?: string }) {
+  return (
+    <img src="/bonzah-logo.svg" alt="Bonzah" className={`dark:hidden ${className || 'h-4'}`} />
+  );
+}
+
+function BonzahIconDark({ className }: { className?: string }) {
+  return (
+    <img src="/bonzah-logo-dark.svg" alt="Bonzah" className={`hidden dark:block ${className || 'h-4'}`} />
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
@@ -237,7 +265,10 @@ function AgreementSection({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <FileSignature className="h-4 w-4 text-muted-foreground" />
+        <div className="relative h-4 w-4 flex-shrink-0">
+          <BoldSignIcon className="h-4 w-4" />
+          <BoldSignIconDark className="h-4 w-4" />
+        </div>
         <span className="text-sm font-medium">Agreement</span>
         {hasDocument && (
           <Badge className={getAgreementStatusColor(agreement.document_status)}>
@@ -341,7 +372,10 @@ function InsuranceSection({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <Shield className="h-4 w-4 text-muted-foreground" />
+        <div className="relative h-4 flex-shrink-0">
+          <BonzahIcon className="h-4" />
+          <BonzahIconDark className="h-4" />
+        </div>
         <span className="text-sm font-medium">Insurance</span>
         <Badge className={getInsuranceStatusColor(policy.status)}>
           {policy.status}
@@ -372,6 +406,76 @@ function InsuranceSection({
             </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PaymentSubSection({
+  sectionPayments,
+  outstanding,
+  currencyCode,
+  onPay,
+  paying,
+}: {
+  sectionPayments: any[];
+  outstanding: number;
+  currencyCode: string;
+  onPay?: () => void;
+  paying?: boolean;
+}) {
+  const sectionTotal = sectionPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+
+  if (sectionPayments.length === 0 && outstanding <= 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <CreditCard className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm font-medium">Payments</span>
+      </div>
+      <div className="ml-6 space-y-1.5">
+        {sectionPayments.map((payment: any) => (
+          <div key={payment.id} className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+              <span>{formatCurrency(payment.amount || 0, currencyCode)}</span>
+              <span className="text-xs text-muted-foreground">
+                {formatDate(payment.payment_date)}
+                {payment.method && ` · ${payment.method}`}
+              </span>
+            </div>
+            <Badge className={`text-[10px] ${getPaymentStatusColor(payment.status || '')}`}>
+              {payment.status}
+            </Badge>
+          </div>
+        ))}
+        {sectionPayments.length > 0 && (
+          <div className="flex items-center justify-between text-sm pt-1 border-t">
+            <span className="text-muted-foreground">Paid</span>
+            <span className="font-medium">{formatCurrency(sectionTotal, currencyCode)}</span>
+          </div>
+        )}
+        {outstanding > 0 && (
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center gap-1.5">
+              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+              <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                Balance Due: {formatCurrency(outstanding, currencyCode)}
+              </span>
+            </div>
+            {onPay && (
+              <Button size="sm" variant="default" onClick={onPay} disabled={paying}>
+                {paying ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                ) : (
+                  <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                )}
+                Pay Now
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -501,33 +605,23 @@ export default function BookingDetailPage() {
     [payments]
   );
 
-  // Outstanding balance from ledger remaining amounts (charges only)
-  const totalOutstanding = useMemo(
+  // Per-section outstanding: original charges vs extension charges
+  const extensionCategories = ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance', 'Extension'];
+
+  const originalOutstanding = useMemo(
     () =>
       ledgerEntries
-        .filter((e) => e.type === 'Charge')
+        .filter((e) => e.type === 'Charge' && !extensionCategories.includes(e.category))
         .reduce((sum, e) => sum + (e.remaining_amount || 0), 0),
     [ledgerEntries]
   );
 
-  // Extension charges with remaining balance (for pay buttons)
-  const extensionChargesOutstanding = useMemo(
-    () =>
-      ledgerEntries.filter(
-        (e) =>
-          e.type === 'Charge' &&
-          (e.remaining_amount || 0) > 0 &&
-          (e.category === 'Extension Rental' ||
-            e.category === 'Extension Tax' ||
-            e.category === 'Extension Service Fee' ||
-            e.category === 'Extension Insurance')
-      ),
-    [ledgerEntries]
-  );
-
   const extensionOutstandingTotal = useMemo(
-    () => extensionChargesOutstanding.reduce((sum, e) => sum + (e.remaining_amount || 0), 0),
-    [extensionChargesOutstanding]
+    () =>
+      ledgerEntries
+        .filter((e) => e.type === 'Charge' && extensionCategories.includes(e.category))
+        .reduce((sum, e) => sum + (e.remaining_amount || 0), 0),
+    [ledgerEntries]
   );
 
   const vehiclePhotoUrl =
@@ -595,13 +689,13 @@ export default function BookingDetailPage() {
   };
 
   const handlePayBalance = async () => {
-    if (!rental || !tenant?.id || totalOutstanding <= 0) return;
+    if (!rental || !tenant?.id || originalOutstanding <= 0) return;
     setPayingBalance(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: {
           rentalId: rental.id,
-          totalAmount: totalOutstanding,
+          totalAmount: originalOutstanding,
           tenantId: tenant.id,
           customerEmail: customerUser?.customer?.email,
           source: 'booking',
@@ -802,7 +896,7 @@ export default function BookingDetailPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
-            <FileSignature className="h-5 w-5" />
+            <Car className="h-5 w-5" />
             Original Rental
           </CardTitle>
         </CardHeader>
@@ -822,10 +916,20 @@ export default function BookingDetailPage() {
               <InsuranceSection policy={originalInsurance} currencyCode={currencyCode} />
             </>
           )}
+
+          {/* Original rental payments */}
+          <Separator />
+          <PaymentSubSection
+            sectionPayments={payments}
+            outstanding={originalOutstanding}
+            currencyCode={currencyCode}
+            onPay={originalOutstanding > 0 ? handlePayBalance : undefined}
+            paying={payingBalance}
+          />
         </CardContent>
       </Card>
 
-      {/* 2. Extension Sections */}
+      {/* 2. Extension Sections — each with its own agreement, insurance, and payments */}
       {extensionSections.map((ext) => (
         <Card key={ext.agreement.id}>
           <CardHeader className="pb-3">
@@ -867,149 +971,32 @@ export default function BookingDetailPage() {
                 </div>
               </>
             )}
+
+            {/* Extension payment — show outstanding if any */}
+            {extensionOutstandingTotal > 0 && (
+              <>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+                    <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                      Balance Due: {formatCurrency(extensionOutstandingTotal, currencyCode)}
+                    </span>
+                  </div>
+                  <Button size="sm" onClick={handlePayExtension} disabled={payingExtension}>
+                    {payingExtension ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                    ) : (
+                      <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                    )}
+                    Pay Now
+                  </Button>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       ))}
-
-      {/* Extension Payment Banner — shown when extension has unpaid charges */}
-      {extensionOutstandingTotal > 0 && rental.status === 'Active' && (
-        <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
-          <CardContent className="py-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="rounded-full bg-blue-100 dark:bg-blue-900/40 p-2">
-                  <CreditCard className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
-                    Extension Payment Due
-                  </p>
-                  <p className="text-xs text-blue-600 dark:text-blue-400">
-                    {formatCurrency(extensionOutstandingTotal, currencyCode)} outstanding for extension charges
-                  </p>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                className="bg-blue-600 hover:bg-blue-700"
-                onClick={handlePayExtension}
-                disabled={payingExtension}
-              >
-                {payingExtension ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : (
-                  <ExternalLink className="h-4 w-4 mr-1" />
-                )}
-                Pay Now
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 3. Payments */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
-            Payments
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {payments.length > 0 ? (
-            <div className="space-y-3">
-              {payments.map((payment) => (
-                <div
-                  key={payment.id}
-                  className="flex items-center justify-between text-sm py-2 border-b last:border-b-0"
-                >
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium">
-                        {formatCurrency(payment.amount || 0, currencyCode)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(payment.payment_date)}
-                        {payment.method && ` \u00b7 ${payment.method}`}
-                      </p>
-                    </div>
-                  </div>
-                  <Badge className={getPaymentStatusColor(payment.status || '')}>
-                    {payment.status}
-                  </Badge>
-                </div>
-              ))}
-
-              <Separator />
-              <div className="flex items-center justify-between text-sm pt-1">
-                <span className="font-medium">Total Paid</span>
-                <span className="font-semibold text-base">
-                  {formatCurrency(totalPaid, currencyCode)}
-                </span>
-              </div>
-
-              {/* Outstanding balance */}
-              {totalOutstanding > 0 && (
-                <div className="flex items-center justify-between pt-2 border-t">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-amber-500" />
-                    <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                      Balance Due
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-semibold text-base text-amber-700 dark:text-amber-400">
-                      {formatCurrency(totalOutstanding, currencyCode)}
-                    </span>
-                    <Button
-                      size="sm"
-                      onClick={handlePayBalance}
-                      disabled={payingBalance}
-                    >
-                      {payingBalance ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                      ) : (
-                        <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                      )}
-                      Pay Now
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : totalOutstanding > 0 ? (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-amber-500" />
-                <div>
-                  <p className="text-sm font-medium">Balance Due</p>
-                  <p className="text-xs text-muted-foreground">No payments recorded yet</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="font-semibold text-base text-amber-700 dark:text-amber-400">
-                  {formatCurrency(totalOutstanding, currencyCode)}
-                </span>
-                <Button
-                  size="sm"
-                  onClick={handlePayBalance}
-                  disabled={payingBalance}
-                >
-                  {payingBalance ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                  ) : (
-                    <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                  )}
-                  Pay Now
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
-          )}
-        </CardContent>
-      </Card>
 
       {/* 4. Installment Plan */}
       {installmentPlan && (
