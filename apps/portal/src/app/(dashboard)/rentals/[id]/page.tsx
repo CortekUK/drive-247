@@ -1254,12 +1254,13 @@ const RentalDetail = () => {
       }));
   })();
 
-  // Outstanding balance: ledger charges already include extension charges via remaining_amount
-  // Only add extension insurance that has NO ledger entry (not tracked in ledger)
+  // Outstanding balance: use categoryRemainingAmounts which correctly combines
+  // ledger data with invoice fallback for items not yet in the ledger
   const outstandingBalance = useMemo(() => {
-    const ledgerOutstanding = rentalTotals?.outstanding || 0;
-    const finesInLedger = paymentBreakdown?.['Fine'] !== undefined;
-    const finesOutstanding = finesInLedger ? 0 : rentalFinesOpenAmount;
+    // Sum all remaining amounts from categories (handles both ledger and invoice-only items)
+    const categoryTotal = Object.values(categoryRemainingAmounts).reduce((sum, amt) => sum + amt, 0);
+
+    // Add extension insurance that has NO ledger entry and isn't in categoryRemainingAmounts
     let extInsuranceOutstanding = 0;
     for (const group of extensionGroups) {
       if (group.insurancePolicy) {
@@ -1272,8 +1273,8 @@ const RentalDetail = () => {
         }
       }
     }
-    return ledgerOutstanding + finesOutstanding + extInsuranceOutstanding;
-  }, [rentalTotals, paymentBreakdown, rentalFinesOpenAmount, extensionGroups, rentalCharges]);
+    return categoryTotal + extInsuranceOutstanding;
+  }, [categoryRemainingAmounts, extensionGroups, rentalCharges]);
 
   if (isLoading) {
     return <div>Loading rental details...</div>;
