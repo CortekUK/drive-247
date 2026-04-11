@@ -5009,15 +5009,24 @@ const RentalDetail = () => {
                 e.preventDefault();
                 setIsApproving(true);
                 try {
-                  // For manual mode with pending payment, capture first
-                  if (rental?.payment_mode === 'manual' && rental?.payment_status === 'pending' && payment?.capture_status === 'requires_capture') {
-                    const { error: captureError } = await supabase.functions.invoke('capture-booking-payment', {
-                      body: {
-                        paymentId: payment.id,
-                        rentalId: id,
+                  // For manual mode with pending payment, capture first — only if a Stripe payment intent actually exists
+                  const hasStripePayment = payment?.stripe_payment_intent_id || payment?.stripe_checkout_session_id;
+                  if (rental?.payment_mode === 'manual' && rental?.payment_status === 'pending' && payment?.capture_status === 'requires_capture' && hasStripePayment) {
+                    try {
+                      const { data: captureData, error: captureError } = await supabase.functions.invoke('capture-booking-payment', {
+                        body: {
+                          paymentId: payment.id,
+                          rentalId: id,
+                        }
+                      });
+                      if (captureError) {
+                        console.warn('Payment capture failed, proceeding with approval:', captureError);
+                      } else if (captureData && !captureData.success) {
+                        console.warn('Payment capture returned error, proceeding with approval:', captureData.error);
                       }
-                    });
-                    if (captureError) throw captureError;
+                    } catch (captureErr) {
+                      console.warn('Payment capture exception, proceeding with approval:', captureErr);
+                    }
                   }
 
                   // Query DB directly for key handover status (don't rely on React Query cache)
