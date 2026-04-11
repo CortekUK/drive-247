@@ -19,6 +19,7 @@ import {
   CheckCircle,
   Loader2,
   AlertCircle,
+  CalendarPlus,
 } from 'lucide-react';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -40,6 +41,8 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import { ExtendRentalDialog } from '@/components/customer-portal/ExtendRentalDialog';
+import type { CustomerRental } from '@/hooks/use-customer-rentals';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -647,6 +650,10 @@ export default function BookingDetailPage() {
 
   const [payingExtension, setPayingExtension] = useState(false);
   const [payingBalance, setPayingBalance] = useState(false);
+  const [extendDialogOpen, setExtendDialogOpen] = useState(false);
+
+  const canExtend = rental?.status === 'Active' && !rental?.is_extended;
+  const hasExtensionPending = rental?.is_extended === true;
 
   const handlePayExtension = async () => {
     if (!rental || !tenant?.id) return;
@@ -785,11 +792,20 @@ export default function BookingDetailPage() {
             <Badge className={getRentalStatusColor(rental.status)}>
               {rental.status?.replace(/_/g, ' ')}
             </Badge>
+            {hasExtensionPending && (
+              <Badge className="bg-amber-100 text-amber-800">Extension Pending</Badge>
+            )}
           </div>
           {vehicle?.reg && (
             <p className="text-sm text-muted-foreground">{vehicle.reg}</p>
           )}
         </div>
+        {canExtend && (
+          <Button onClick={() => setExtendDialogOpen(true)}>
+            <CalendarPlus className="h-4 w-4 mr-2" />
+            Request Extension
+          </Button>
+        )}
       </div>
 
       {/* Vehicle photo + quick info */}
@@ -1126,6 +1142,15 @@ export default function BookingDetailPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Extend Rental Dialog */}
+      {rental && (
+        <ExtendRentalDialog
+          open={extendDialogOpen}
+          onOpenChange={setExtendDialogOpen}
+          rental={rental as unknown as CustomerRental}
+        />
       )}
     </div>
   );
