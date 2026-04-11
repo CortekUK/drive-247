@@ -24,7 +24,7 @@ import { useTenant } from "@/contexts/TenantContext";
 // integration_bonzah controls Bonzah-specific features only; insurance document upload is always available
 import { useRentalTotals, useRentalCharges } from "@/hooks/use-rental-ledger-data";
 import { useRentalInvoice, useRentalPaymentBreakdown, useRentalRefundBreakdown } from "@/hooks/use-rental-invoice";
-import { RentalLedger } from "@/components/rentals/rental-ledger";
+
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
 import { KeyHandoverActionBanner } from "@/components/rentals/key-handover-action-banner";
 import { MileageSummaryCard } from "@/components/rentals/mileage-summary-card";
@@ -4490,10 +4490,7 @@ const RentalDetail = () => {
         />
       )}
 
-      {/* Enhanced Ledger */}
-      <div id="ledger">
-        {id && <RentalLedger rentalId={id} />}
-      </div>
+      {/* Ledger removed — charges visible in Payment Breakdown */}
 
       {/* Add Payment Dialog */}
       {rental && (
