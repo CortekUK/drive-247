@@ -59,3 +59,6 @@ verify_jwt = false
 
 [functions.twilio-voicemail-handler]
 verify_jwt = false
+
+[functions.process-call-recording]
+verify_jwt = false

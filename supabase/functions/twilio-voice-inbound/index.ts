@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
 
     const { data: directMatch } = await supabase
       .from('tenants')
-      .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number')
+      .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled')
       .eq('twilio_phone_number', to)
       .eq('twilio_voice_enabled', true)
       .single();
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
       const altTo = to.startsWith('+') ? to.substring(1) : `+${to}`;
       const { data: altMatch } = await supabase
         .from('tenants')
-        .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number')
+        .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled')
         .eq('twilio_phone_number', altTo)
         .eq('twilio_voice_enabled', true)
         .single();
@@ -220,24 +220,37 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Build the fallback action — voicemail or sorry message
+    // Build the TwiML
     const statusCallbackUrl = `${supabaseUrl}/functions/v1/twilio-voice-status`;
+    const recordingCallbackUrl = `${supabaseUrl}/functions/v1/process-call-recording`;
+
+    // Recording attributes for <Dial> if call recording is enabled
+    const recordAttrs = tenant.call_recording_enabled
+      ? ` record="record-from-answer" recordingStatusCallback="${recordingCallbackUrl}" recordingStatusCallbackMethod="POST"`
+      : '';
+
+    // Consent announcement before connecting (only if recording enabled)
+    const consentSay = tenant.call_recording_enabled
+      ? '<Say>This call may be recorded for quality and training purposes.</Say>'
+      : '';
+
     let fallbackTwiml: string;
 
     if (tenant.voicemail_enabled) {
-      // If Dial times out (no answer), redirect to voicemail handler
       const voicemailAction = `${supabaseUrl}/functions/v1/twilio-voicemail-handler?tenantId=${tenant.id}&amp;callSid=${callSid}&amp;from=${encodeURIComponent(normalizedFrom)}&amp;to=${encodeURIComponent(to)}&amp;customerId=${customerId || ''}&amp;channelId=${channelId || ''}`;
 
       fallbackTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial timeout="30" action="${voicemailAction}">
+  ${consentSay}
+  <Dial timeout="30" action="${voicemailAction}"${recordAttrs}>
 ${clientElements}${numberElements}
   </Dial>
 </Response>`;
     } else {
       fallbackTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial timeout="30" action="${statusCallbackUrl}">
+  ${consentSay}
+  <Dial timeout="30" action="${statusCallbackUrl}"${recordAttrs}>
 ${clientElements}${numberElements}
   </Dial>
   <Say>Sorry, no one is available to take your call right now. Please try again later.</Say>

@@ -15,6 +15,8 @@ import {
   Loader2,
   CheckCircle2,
   User,
+  Sparkles,
+  Mic,
 } from 'lucide-react';
 import { useTwilioVoice, type ForwardingUser } from '@/hooks/use-twilio-voice';
 
@@ -244,6 +246,52 @@ export function CallForwardingSettings() {
             <p className="text-xs text-muted-foreground">
               Voicemails are limited to 2 minutes. They'll appear as messages in the customer's chat thread with an audio player.
             </p>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Call Recording + AI Transcript Card */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Mic className="h-5 w-5 text-indigo-600" />
+              <CardTitle className="text-base">Call Recording & AI Transcript</CardTitle>
+              {status.callRecordingEnabled && (
+                <Badge className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white text-xs border-0">
+                  <Sparkles className="h-3 w-3 mr-1" />
+                  Active
+                </Badge>
+              )}
+            </div>
+            <Switch
+              checked={status.callRecordingEnabled}
+              onCheckedChange={(enabled) => updateForwarding.mutate({ callRecordingEnabled: enabled })}
+              disabled={updateForwarding.isPending}
+            />
+          </div>
+          <CardDescription>
+            Record calls and automatically generate AI-powered transcripts, summaries, and action items. A consent notice plays before each call.
+          </CardDescription>
+        </CardHeader>
+        {status.callRecordingEnabled && (
+          <CardContent className="space-y-3 pt-0">
+            <div className="p-4 rounded-lg border bg-gradient-to-r from-indigo-500/5 via-violet-500/5 to-fuchsia-500/5 border-indigo-500/20">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shrink-0">
+                  <Sparkles className="h-4 w-4 text-white" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">How it works</p>
+                  <ul className="text-xs text-muted-foreground space-y-1">
+                    <li>"This call may be recorded" plays before connecting</li>
+                    <li>Both sides of the call are recorded</li>
+                    <li>AI transcribes and generates a summary with action items</li>
+                    <li>Results appear in the customer's conversation thread</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </CardContent>
         )}
       </Card>

@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     // Identify tenant by Twilio Account SID (BYO)
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
-      .select('id, twilio_phone_number')
+      .select('id, twilio_phone_number, call_recording_enabled')
       .eq('twilio_account_sid', accountSid)
       .single();
 
@@ -148,10 +148,20 @@ Deno.serve(async (req) => {
       // Don't fail the call — just log the error
     }
 
+    // Recording attributes if call recording is enabled
+    const recordingCallbackUrl = `${supabaseUrl}/functions/v1/process-call-recording`;
+    const recordAttrs = tenant.call_recording_enabled
+      ? ` record="record-from-answer" recordingStatusCallback="${recordingCallbackUrl}" recordingStatusCallbackMethod="POST"`
+      : '';
+    const consentSay = tenant.call_recording_enabled
+      ? '<Say>This call may be recorded for quality and training purposes.</Say>'
+      : '';
+
     // Return TwiML to dial the customer
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial callerId="${callerNumber}">
+  ${consentSay}
+  <Dial callerId="${callerNumber}"${recordAttrs}>
     <Number>${normalizedTo}</Number>
   </Dial>
 </Response>`;

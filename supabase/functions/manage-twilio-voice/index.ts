@@ -306,7 +306,7 @@ Deno.serve(async (req) => {
       case 'get-status': {
         const { data: tenant, error: tenantError } = await supabase
           .from('tenants')
-          .select('twilio_twiml_app_sid, twilio_api_key_sid, twilio_voice_enabled, twilio_voice_webhook_configured, twilio_phone_number, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number')
+          .select('twilio_twiml_app_sid, twilio_api_key_sid, twilio_voice_enabled, twilio_voice_webhook_configured, twilio_phone_number, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled')
           .eq('id', tenantId)
           .single();
 
@@ -332,6 +332,7 @@ Deno.serve(async (req) => {
           voicemailEnabled: tenant.voicemail_enabled || false,
           voicemailGreetingUrl: tenant.voicemail_greeting_url || null,
           forwardingNumber: tenant.forwarding_number || null,
+          callRecordingEnabled: tenant.call_recording_enabled || false,
           forwardingUsers: (usersWithForwarding || []).map((u: any) => ({
             id: u.id,
             name: u.full_name,
@@ -431,6 +432,9 @@ Deno.serve(async (req) => {
         }
         if (typeof params.voicemailEnabled === 'boolean') {
           updateFields.voicemail_enabled = params.voicemailEnabled;
+        }
+        if (typeof params.callRecordingEnabled === 'boolean') {
+          updateFields.call_recording_enabled = params.callRecordingEnabled;
         }
         if (params.voicemailGreetingUrl !== undefined) {
           updateFields.voicemail_greeting_url = params.voicemailGreetingUrl || null;

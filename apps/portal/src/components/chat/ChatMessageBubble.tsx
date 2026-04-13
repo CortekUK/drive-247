@@ -2,12 +2,14 @@
 
 import { cn } from '@/lib/utils';
 import { format, isToday, isYesterday } from 'date-fns';
-import { Check, CheckCheck, MessageSquare, Mail, AlertCircle, Phone as PhoneIcon } from 'lucide-react';
+import { Check, CheckCheck, MessageSquare, Mail, AlertCircle, Phone as PhoneIcon, PhoneIncoming, PhoneOutgoing, Voicemail, Play, Pause, Sparkles } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { ChatMessage, MessageChannel } from '@/hooks/use-chat-messages';
 import { BookingReferenceCard } from './BookingReferenceCard';
 import type { BookingReference } from './BookingPicker';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useState, useRef } from 'react';
+import { CallTranscriptDialog } from './call-transcript-dialog';
 
 /* Brand icons for channel indicators */
 function TwilioIconSmall({ className }: { className?: string }) {
@@ -53,13 +55,30 @@ export function ChatMessageBubble({
     .toUpperCase()
     .slice(0, 2) || '?';
 
-  // Check for booking reference in metadata
-  const metadata = message.metadata as { type?: string; booking?: BookingReference } | undefined;
+  // Check for special message types in metadata
+  const metadata = message.metadata as {
+    type?: string;
+    booking?: BookingReference;
+    recording_url?: string;
+    duration_seconds?: number;
+    recording_sid?: string;
+    call_sid?: string;
+    direction?: string;
+    has_transcript?: boolean;
+    from_number?: string;
+    to_number?: string;
+  } | undefined;
   const hasBookingReference = metadata?.type === 'booking_reference' && metadata?.booking;
+  const isVoicemail = metadata?.type === 'voicemail' && metadata?.recording_url;
+  const isVoiceCall = metadata?.type === 'voice_call';
 
-  // Hide "Shared a booking" placeholder text when booking reference is present
+  // Hide placeholder text for special message types
   const displayContent =
-    hasBookingReference && message.content === 'Shared a booking' ? '' : message.content;
+    (hasBookingReference && message.content === 'Shared a booking') ||
+    isVoicemail ||
+    isVoiceCall
+      ? ''
+      : message.content;
 
   return (
     <div
@@ -117,6 +136,24 @@ export function ChatMessageBubble({
           {/* Booking reference card */}
           {hasBookingReference && metadata?.booking && (
             <BookingReferenceCard booking={metadata.booking} isOwnMessage={isOwnMessage} />
+          )}
+
+          {/* Voicemail audio player */}
+          {isVoicemail && metadata?.recording_url && (
+            <VoicemailPlayer
+              recordingUrl={metadata.recording_url}
+              durationSeconds={metadata.duration_seconds || 0}
+            />
+          )}
+
+          {/* Voice call card */}
+          {isVoiceCall && (
+            <VoiceCallCard
+              direction={metadata?.direction || 'outbound'}
+              durationSeconds={metadata?.duration_seconds || 0}
+              hasTranscript={metadata?.has_transcript || false}
+              callSid={metadata?.call_sid || ''}
+            />
           )}
 
           {/* Message content */}
@@ -237,6 +274,136 @@ function SmsDeliveryStatus({ status, isOwnMessage }: { status?: string | null; i
     default:
       return <Check className={cn('h-4 w-4', dimClass)} />;
   }
+}
+
+// Voicemail audio player component
+function VoicemailPlayer({ recordingUrl, durationSeconds }: { recordingUrl: string; durationSeconds: number }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const progress = durationSeconds > 0 ? (currentTime / durationSeconds) * 100 : 0;
+
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <audio
+        ref={audioRef}
+        src={recordingUrl}
+        onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
+        onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
+        preload="none"
+      />
+      <button
+        onClick={togglePlay}
+        className="w-9 h-9 rounded-full bg-purple-600 hover:bg-purple-700 flex items-center justify-center shrink-0 transition-colors"
+      >
+        {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white ml-0.5" />}
+      </button>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <Voicemail className="h-3.5 w-3.5 text-purple-500" />
+          <span className="text-xs font-medium text-purple-600 dark:text-purple-400">Voicemail</span>
+        </div>
+        <div className="w-full h-1.5 bg-purple-200 dark:bg-purple-900/50 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-purple-500 rounded-full transition-all duration-200"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+      <span className="text-xs text-muted-foreground font-mono tabular-nums shrink-0">
+        {isPlaying ? formatTime(currentTime) : formatTime(durationSeconds)}
+      </span>
+    </div>
+  );
+}
+
+// Voice call card component — flashy neon style for calls with AI transcript
+function VoiceCallCard({
+  direction,
+  durationSeconds,
+  hasTranscript,
+  callSid,
+}: {
+  direction: string;
+  durationSeconds: number;
+  hasTranscript: boolean;
+  callSid: string;
+}) {
+  const [showTranscript, setShowTranscript] = useState(false);
+  const isInbound = direction === 'inbound';
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}m ${s}s`;
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => hasTranscript && setShowTranscript(true)}
+        className={cn(
+          'w-full text-left rounded-lg p-3 transition-all',
+          hasTranscript
+            ? 'bg-gradient-to-r from-indigo-500/10 via-violet-500/10 to-fuchsia-500/10 border border-indigo-500/30 hover:border-indigo-400/50 hover:shadow-[0_0_15px_rgba(99,102,241,0.15)] cursor-pointer'
+            : 'bg-amber-500/10 border border-amber-500/20'
+        )}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className={cn(
+              'w-8 h-8 rounded-full flex items-center justify-center',
+              hasTranscript
+                ? 'bg-gradient-to-br from-indigo-500 to-violet-600'
+                : 'bg-amber-500/20'
+            )}>
+              {isInbound ? (
+                <PhoneIncoming className={cn('h-4 w-4', hasTranscript ? 'text-white' : 'text-amber-600')} />
+              ) : (
+                <PhoneOutgoing className={cn('h-4 w-4', hasTranscript ? 'text-white' : 'text-amber-600')} />
+              )}
+            </div>
+            <div>
+              <p className="text-sm font-medium">
+                {isInbound ? 'Inbound' : 'Outbound'} call
+              </p>
+              <p className="text-xs text-muted-foreground">{formatTime(durationSeconds)}</p>
+            </div>
+          </div>
+          {hasTranscript && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white text-[11px] font-semibold shadow-lg shadow-indigo-500/25">
+              <Sparkles className="h-3 w-3" />
+              AI Summary
+            </div>
+          )}
+        </div>
+      </button>
+
+      {showTranscript && (
+        <CallTranscriptDialog
+          callSid={callSid}
+          open={showTranscript}
+          onOpenChange={setShowTranscript}
+        />
+      )}
+    </>
+  );
 }
 
 // Date separator component
