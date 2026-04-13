@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/stores/auth-store";
+import { useTenant } from "@/contexts/TenantContext";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -64,12 +65,14 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { user, appUser, loading } = useAuth();
+  const { tenant } = useTenant();
   const { isSubscribed, isLoading: subscriptionLoading } = useTenantSubscription();
   const { isManager, canAccessRoute, isLoading: permissionsLoading } = useManagerPermissions();
   const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
   const isSubscriptionPage = pathname === "/subscription" || pathname === "/credits" || pathname?.startsWith("/settings");
   const hasActivePlans = !!plans && plans.length > 0;
-  const showSetupGate = !subscriptionLoading && !plansLoading && !isSubscribed && hasActivePlans && !isSubscriptionPage;
+  const isExemptTenant = tenant?.slug === "amgroadside";
+  const showSetupGate = !subscriptionLoading && !plansLoading && !isSubscribed && hasActivePlans && !isSubscriptionPage && !isExemptTenant;
 
   useEffect(() => {
     if (!loading) {
