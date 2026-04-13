@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { TwilioSmsSettings } from './twilio-sms-settings';
 import { TwilioWhatsAppSettings } from './twilio-whatsapp-settings';
+import { CallForwardingSettings } from './call-forwarding-settings';
 import { useTwilioSms } from '@/hooks/use-twilio-sms';
 import { useTwilioVoice } from '@/hooks/use-twilio-voice';
 import { useTenant } from '@/contexts/TenantContext';
@@ -309,6 +310,9 @@ export function CommunicationSettings({ onBack }: CommunicationSettingsProps = {
               </CardContent>
             </Card>
           )}
+
+          {/* Call Forwarding & Voicemail (shown when voice is enabled) */}
+          <CallForwardingSettings />
 
           {/* Disable Voice Warning Dialog */}
           <AlertDialog open={showDisableVoiceWarning} onOpenChange={setShowDisableVoiceWarning}>

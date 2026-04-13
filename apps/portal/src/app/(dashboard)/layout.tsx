@@ -23,6 +23,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { TraxAIDialog } from "@/components/chat";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
+import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
 
 function LoadingSkeleton() {
   return (
@@ -131,6 +132,9 @@ export default function DashboardLayout({
             {children}
           </main>
         </SidebarInset>
+
+        {/* Global voice call — always listening for inbound calls */}
+        <GlobalVoiceCallProvider />
 
         {/* Hard gate — blocks access until billing setup is complete */}
         {showSetupGate && <SubscriptionGateDialog />}

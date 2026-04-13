@@ -118,6 +118,7 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           email: string
+          forwarding_number: string | null
           id: string
           is_active: boolean
           is_primary_super_admin: boolean | null
@@ -133,6 +134,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           email: string
+          forwarding_number?: string | null
           id?: string
           is_active?: boolean
           is_primary_super_admin?: boolean | null
@@ -148,6 +150,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           email?: string
+          forwarding_number?: string | null
           id?: string
           is_active?: boolean
           is_primary_super_admin?: boolean | null
@@ -4351,6 +4354,160 @@ export type Database = {
           },
         ]
       }
+      payg_accruals: {
+        Row: {
+          accrual_day_index: number
+          accrual_window_end: string
+          accrual_window_start: string
+          created_at: string
+          daily_rate: number
+          hours_covered: number
+          id: string
+          is_partial: boolean
+          ledger_entry_ids: string[]
+          rental_id: string
+          service_fee_amount: number
+          tax_amount: number
+          tenant_id: string
+        }
+        Insert: {
+          accrual_day_index: number
+          accrual_window_end: string
+          accrual_window_start: string
+          created_at?: string
+          daily_rate: number
+          hours_covered?: number
+          id?: string
+          is_partial?: boolean
+          ledger_entry_ids?: string[]
+          rental_id: string
+          service_fee_amount?: number
+          tax_amount?: number
+          tenant_id: string
+        }
+        Update: {
+          accrual_day_index?: number
+          accrual_window_end?: string
+          accrual_window_start?: string
+          created_at?: string
+          daily_rate?: number
+          hours_covered?: number
+          id?: string
+          is_partial?: boolean
+          ledger_entry_ids?: string[]
+          rental_id?: string
+          service_fee_amount?: number
+          tax_amount?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payg_accruals_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payg_accruals_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "payg_accruals_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "payg_accruals_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payg_reminder_log: {
+        Row: {
+          channel: string
+          created_at: string
+          days_active: number
+          days_overdue: number
+          error_message: string | null
+          id: string
+          outstanding_amount: number
+          recipient: string
+          reminder_number: number
+          rental_id: string
+          sent_at: string
+          success: boolean
+          tenant_id: string
+        }
+        Insert: {
+          channel?: string
+          created_at?: string
+          days_active?: number
+          days_overdue?: number
+          error_message?: string | null
+          id?: string
+          outstanding_amount: number
+          recipient?: string
+          reminder_number: number
+          rental_id: string
+          sent_at?: string
+          success?: boolean
+          tenant_id: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          days_active?: number
+          days_overdue?: number
+          error_message?: string | null
+          id?: string
+          outstanding_amount?: number
+          recipient?: string
+          reminder_number?: number
+          rental_id?: string
+          sent_at?: string
+          success?: boolean
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payg_reminder_log_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payg_reminder_log_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "payg_reminder_log_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "payg_reminder_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_applications: {
         Row: {
           amount_applied: number
@@ -6299,6 +6456,17 @@ export type Database = {
           monthly_amount: number
           monthly_mileage_override: number | null
           original_end_date: string | null
+          payg_accrual_day_count: number
+          payg_closed_at: string | null
+          payg_last_accrual_at: string | null
+          payg_last_reminder_sent_at: string | null
+          payg_max_duration_alerted: boolean
+          payg_next_accrual_at: string | null
+          payg_paused: boolean
+          payg_paused_at: string | null
+          payg_reminder_count: number
+          payg_reminder_interval_days: number | null
+          payg_start_ts: string | null
           payment_mode: string | null
           payment_status: string | null
           pickup_location: string | null
@@ -6372,6 +6540,17 @@ export type Database = {
           monthly_amount: number
           monthly_mileage_override?: number | null
           original_end_date?: string | null
+          payg_accrual_day_count?: number
+          payg_closed_at?: string | null
+          payg_last_accrual_at?: string | null
+          payg_last_reminder_sent_at?: string | null
+          payg_max_duration_alerted?: boolean
+          payg_next_accrual_at?: string | null
+          payg_paused?: boolean
+          payg_paused_at?: string | null
+          payg_reminder_count?: number
+          payg_reminder_interval_days?: number | null
+          payg_start_ts?: string | null
           payment_mode?: string | null
           payment_status?: string | null
           pickup_location?: string | null
@@ -6445,6 +6624,17 @@ export type Database = {
           monthly_amount?: number
           monthly_mileage_override?: number | null
           original_end_date?: string | null
+          payg_accrual_day_count?: number
+          payg_closed_at?: string | null
+          payg_last_accrual_at?: string | null
+          payg_last_reminder_sent_at?: string | null
+          payg_max_duration_alerted?: boolean
+          payg_next_accrual_at?: string | null
+          payg_paused?: boolean
+          payg_paused_at?: string | null
+          payg_reminder_count?: number
+          payg_reminder_interval_days?: number | null
+          payg_start_ts?: string | null
           payment_mode?: string | null
           payment_status?: string | null
           pickup_location?: string | null
@@ -7450,6 +7640,7 @@ export type Database = {
           booking_lead_time_unit: string | null
           buffer_time_minutes: number
           business_hours: string | null
+          call_forwarding_enabled: boolean | null
           collection_enabled: boolean | null
           company_name: string
           contact_email: string | null
@@ -7473,6 +7664,7 @@ export type Database = {
           fixed_address_enabled: boolean | null
           fixed_pickup_address: string | null
           fixed_return_address: string | null
+          forwarding_number: string | null
           friday_close: string | null
           friday_enabled: boolean | null
           friday_open: string | null
@@ -7522,6 +7714,11 @@ export type Database = {
           multiple_locations_enabled: boolean | null
           og_image_url: string | null
           pay_as_you_go_enabled: boolean
+          payg_grace_period_days: number
+          payg_max_duration_days: number
+          payg_max_reminders: number
+          payg_preauth_days: number
+          payg_reminder_interval_days: number
           payment_mode: string | null
           phone: string | null
           pickup_area_enabled: boolean | null
@@ -7595,6 +7792,8 @@ export type Database = {
           twitter_url: string | null
           updated_at: string | null
           verification_document_type: string
+          voicemail_enabled: boolean | null
+          voicemail_greeting_url: string | null
           wednesday_close: string | null
           wednesday_enabled: boolean | null
           wednesday_open: string | null
@@ -7629,6 +7828,7 @@ export type Database = {
           booking_lead_time_unit?: string | null
           buffer_time_minutes?: number
           business_hours?: string | null
+          call_forwarding_enabled?: boolean | null
           collection_enabled?: boolean | null
           company_name: string
           contact_email?: string | null
@@ -7652,6 +7852,7 @@ export type Database = {
           fixed_address_enabled?: boolean | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
+          forwarding_number?: string | null
           friday_close?: string | null
           friday_enabled?: boolean | null
           friday_open?: string | null
@@ -7701,6 +7902,11 @@ export type Database = {
           multiple_locations_enabled?: boolean | null
           og_image_url?: string | null
           pay_as_you_go_enabled?: boolean
+          payg_grace_period_days?: number
+          payg_max_duration_days?: number
+          payg_max_reminders?: number
+          payg_preauth_days?: number
+          payg_reminder_interval_days?: number
           payment_mode?: string | null
           phone?: string | null
           pickup_area_enabled?: boolean | null
@@ -7774,6 +7980,8 @@ export type Database = {
           twitter_url?: string | null
           updated_at?: string | null
           verification_document_type?: string
+          voicemail_enabled?: boolean | null
+          voicemail_greeting_url?: string | null
           wednesday_close?: string | null
           wednesday_enabled?: boolean | null
           wednesday_open?: string | null
@@ -7808,6 +8016,7 @@ export type Database = {
           booking_lead_time_unit?: string | null
           buffer_time_minutes?: number
           business_hours?: string | null
+          call_forwarding_enabled?: boolean | null
           collection_enabled?: boolean | null
           company_name?: string
           contact_email?: string | null
@@ -7831,6 +8040,7 @@ export type Database = {
           fixed_address_enabled?: boolean | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
+          forwarding_number?: string | null
           friday_close?: string | null
           friday_enabled?: boolean | null
           friday_open?: string | null
@@ -7880,6 +8090,11 @@ export type Database = {
           multiple_locations_enabled?: boolean | null
           og_image_url?: string | null
           pay_as_you_go_enabled?: boolean
+          payg_grace_period_days?: number
+          payg_max_duration_days?: number
+          payg_max_reminders?: number
+          payg_preauth_days?: number
+          payg_reminder_interval_days?: number
           payment_mode?: string | null
           phone?: string | null
           pickup_area_enabled?: boolean | null
@@ -7953,6 +8168,8 @@ export type Database = {
           twitter_url?: string | null
           updated_at?: string | null
           verification_document_type?: string
+          voicemail_enabled?: boolean | null
+          voicemail_greeting_url?: string | null
           wednesday_close?: string | null
           wednesday_enabled?: boolean | null
           wednesday_open?: string | null
@@ -8716,6 +8933,123 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "verification_otps_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      voicemail_recordings: {
+        Row: {
+          call_log_id: string | null
+          channel_id: string | null
+          created_at: string | null
+          customer_id: string | null
+          duration_seconds: number | null
+          from_number: string | null
+          id: string
+          is_listened: boolean | null
+          listened_at: string | null
+          listened_by: string | null
+          recording_url: string
+          storage_path: string | null
+          tenant_id: string
+          to_number: string | null
+          twilio_call_sid: string | null
+          twilio_recording_sid: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          call_log_id?: string | null
+          channel_id?: string | null
+          created_at?: string | null
+          customer_id?: string | null
+          duration_seconds?: number | null
+          from_number?: string | null
+          id?: string
+          is_listened?: boolean | null
+          listened_at?: string | null
+          listened_by?: string | null
+          recording_url: string
+          storage_path?: string | null
+          tenant_id: string
+          to_number?: string | null
+          twilio_call_sid?: string | null
+          twilio_recording_sid?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          call_log_id?: string | null
+          channel_id?: string | null
+          created_at?: string | null
+          customer_id?: string | null
+          duration_seconds?: number | null
+          from_number?: string | null
+          id?: string
+          is_listened?: boolean | null
+          listened_at?: string | null
+          listened_by?: string | null
+          recording_url?: string
+          storage_path?: string | null
+          tenant_id?: string
+          to_number?: string | null
+          twilio_call_sid?: string | null
+          twilio_recording_sid?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voicemail_recordings_call_log_id_fkey"
+            columns: ["call_log_id"]
+            isOneToOne: false
+            referencedRelation: "call_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voicemail_recordings_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voicemail_recordings_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voicemail_recordings_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "voicemail_recordings_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "voicemail_recordings_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "voicemail_recordings_listened_by_fkey"
+            columns: ["listened_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voicemail_recordings_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -10074,3 +10408,4 @@ export const Constants = {
     },
   },
 } as const
+

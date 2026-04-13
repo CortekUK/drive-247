@@ -6,7 +6,12 @@ import { handleCors } from '../_shared/cors.ts';
  *
  * Called by Twilio when a customer calls the tenant's phone number.
  * Matches the tenant by the called number (To), matches the customer by caller number (From),
- * and returns TwiML to ring all online tenant users via browser client.
+ * and returns TwiML to ring all online tenant users via browser client AND their forwarding numbers.
+ *
+ * If call_forwarding_enabled is true, <Number> elements are added alongside <Client> elements
+ * so calls ring on both the browser and the user's personal phone simultaneously.
+ *
+ * If nobody answers within 30s and voicemail is enabled, the caller is prompted to leave a voicemail.
  */
 
 function twimlResponse(twiml: string): Response {
@@ -51,7 +56,7 @@ Deno.serve(async (req) => {
 
     const { data: directMatch } = await supabase
       .from('tenants')
-      .select('id, name')
+      .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number')
       .eq('twilio_phone_number', to)
       .eq('twilio_voice_enabled', true)
       .single();
@@ -63,7 +68,7 @@ Deno.serve(async (req) => {
       const altTo = to.startsWith('+') ? to.substring(1) : `+${to}`;
       const { data: altMatch } = await supabase
         .from('tenants')
-        .select('id, name')
+        .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number')
         .eq('twilio_phone_number', altTo)
         .eq('twilio_voice_enabled', true)
         .single();
@@ -123,16 +128,31 @@ Deno.serve(async (req) => {
       channelId = channel?.id || null;
     }
 
-    // Step 3: Get all active tenant users to ring via browser client
-    const { data: appUsers, error: usersError } = await supabase
+    // Step 3: Get all active tenant users to ring (with forwarding numbers)
+    // Include both tenant users AND super admins (who have tenant_id = NULL but can access any tenant)
+    const { data: tenantUsers } = await supabase
       .from('app_users')
-      .select('id, role')
+      .select('id, role, forwarding_number')
       .eq('tenant_id', tenant.id)
       .in('role', ['head_admin', 'admin', 'manager', 'ops'])
       .eq('is_active', true);
 
-    if (usersError || !appUsers?.length) {
-      console.error(`[twilio-voice-inbound] No active users for tenant ${tenant.id}:`, usersError);
+    const { data: superAdmins } = await supabase
+      .from('app_users')
+      .select('id, role, forwarding_number')
+      .eq('is_super_admin', true)
+      .eq('is_active', true);
+
+    const appUsers = [...(tenantUsers || []), ...(superAdmins || [])];
+
+    if (!appUsers.length) {
+      console.error(`[twilio-voice-inbound] No active users for tenant ${tenant.id}`);
+
+      // If voicemail is enabled, go straight to voicemail
+      if (tenant.voicemail_enabled) {
+        return twimlResponse(buildVoicemailTwiml(supabaseUrl, tenant, callSid));
+      }
+
       return twimlResponse(
         '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, no one is available to take your call right now. Please try again later.</Say></Response>'
       );
@@ -159,22 +179,77 @@ Deno.serve(async (req) => {
       console.error('[twilio-voice-inbound] Failed to log call:', logError);
     }
 
-    // Step 5: Build TwiML to ring all tenant users' browser clients simultaneously
-    // Twilio will ring all <Client> elements in a <Dial> and connect to whichever answers first
+    // Step 5: Build TwiML to ring all tenant users
+    // Browser clients via <Client> elements
     const clientElements = appUsers
       .map((u: any) => `    <Client>tenant_${u.id}</Client>`)
       .join('\n');
 
-    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+    // Phone forwarding via <Number> elements (if enabled)
+    let numberElements = '';
+    if (tenant.call_forwarding_enabled) {
+      const allNumbers: string[] = [];
+      // Normalize the Twilio number for comparison to prevent call loops
+      const twilioDigits = to.replace(/[^+\d]/g, '');
+
+      const isSameAsTwilio = (num: string) => {
+        const digits = num.replace(/[^+\d]/g, '');
+        return digits === twilioDigits || digits.endsWith(twilioDigits.replace('+', '')) || twilioDigits.endsWith(digits.replace('+', ''));
+      };
+
+      // Tenant-level forwarding number (main business phone / solo operator)
+      if (tenant.forwarding_number && !isSameAsTwilio(tenant.forwarding_number)) {
+        allNumbers.push(tenant.forwarding_number);
+      }
+
+      // Per-user forwarding numbers
+      appUsers
+        .filter((u: any) => u.forwarding_number && !isSameAsTwilio(u.forwarding_number))
+        .forEach((u: any) => {
+          // Avoid duplicates if tenant number matches a user's number
+          if (!allNumbers.includes(u.forwarding_number)) {
+            allNumbers.push(u.forwarding_number);
+          }
+        });
+
+      if (allNumbers.length > 0) {
+        numberElements = '\n' + allNumbers
+          .map((num) => `    <Number statusCallback="${supabaseUrl}/functions/v1/twilio-voice-status">${num}</Number>`)
+          .join('\n');
+        console.log(`[twilio-voice-inbound] Forwarding to ${allNumbers.length} phone numbers`);
+      }
+    }
+
+    // Build the fallback action — voicemail or sorry message
+    const statusCallbackUrl = `${supabaseUrl}/functions/v1/twilio-voice-status`;
+    let fallbackTwiml: string;
+
+    if (tenant.voicemail_enabled) {
+      // If Dial times out (no answer), redirect to voicemail handler
+      const voicemailAction = `${supabaseUrl}/functions/v1/twilio-voicemail-handler?tenantId=${tenant.id}&amp;callSid=${callSid}&amp;from=${encodeURIComponent(normalizedFrom)}&amp;to=${encodeURIComponent(to)}&amp;customerId=${customerId || ''}&amp;channelId=${channelId || ''}`;
+
+      fallbackTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial timeout="30" action="${supabaseUrl}/functions/v1/twilio-voice-status">
-${clientElements}
+  <Dial timeout="30" action="${voicemailAction}">
+${clientElements}${numberElements}
+  </Dial>
+</Response>`;
+    } else {
+      fallbackTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial timeout="30" action="${statusCallbackUrl}">
+${clientElements}${numberElements}
   </Dial>
   <Say>Sorry, no one is available to take your call right now. Please try again later.</Say>
 </Response>`;
+    }
 
-    console.log(`[twilio-voice-inbound] Ringing ${appUsers.length} tenant users for ${tenant.name}`);
-    return twimlResponse(twiml);
+    const forwardCount = tenant.call_forwarding_enabled
+      ? appUsers.filter((u: any) => u.forwarding_number).length
+      : 0;
+    console.log(`[twilio-voice-inbound] Ringing ${appUsers.length} browser clients + ${forwardCount} phones for ${tenant.company_name} (voicemail: ${tenant.voicemail_enabled ? 'on' : 'off'})`);
+
+    return twimlResponse(fallbackTwiml);
   } catch (err: any) {
     console.error('[twilio-voice-inbound] Error:', err);
     return twimlResponse(
@@ -182,3 +257,21 @@ ${clientElements}
     );
   }
 });
+
+/**
+ * Build TwiML for voicemail-only scenario (no users available)
+ */
+function buildVoicemailTwiml(supabaseUrl: string, tenant: any, callSid: string): string {
+  const greeting = tenant.voicemail_greeting_url
+    ? `<Play>${tenant.voicemail_greeting_url}</Play>`
+    : `<Say>You've reached ${tenant.company_name || 'us'}. No one is available right now. Please leave a message after the beep.</Say>`;
+
+  const recordAction = `${supabaseUrl}/functions/v1/twilio-voicemail-handler?tenantId=${tenant.id}&amp;callSid=${callSid}&amp;action=save`;
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  ${greeting}
+  <Record maxLength="120" action="${recordAction}" playBeep="true" />
+  <Say>We did not receive your message. Goodbye.</Say>
+</Response>`;
+}

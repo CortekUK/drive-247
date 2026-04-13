@@ -219,14 +219,22 @@ Deno.serve(async (req) => {
         const twimlAppSid = twimlApp.sid;
 
         // Step 3: Configure phone number for inbound voice
-        console.log(`[manage-twilio-voice] Configuring phone number ${creds.phoneNumberSid} for voice`);
+        // IMPORTANT: Set VoiceUrl directly to the inbound handler, NOT VoiceApplicationSid.
+        // VoiceApplicationSid would route ALL calls (including inbound from real phones)
+        // through the TwiML App's VoiceUrl (twilio-voice-connect), which is the outbound handler.
+        // The TwiML App is only needed for browser-originated outbound calls via the Device SDK.
+        console.log(`[manage-twilio-voice] Configuring phone number ${creds.phoneNumberSid} for inbound voice`);
         await twilioFetch(
           `${TWILIO_API_BASE}/Accounts/${creds.sid}/IncomingPhoneNumbers/${creds.phoneNumberSid}.json`,
           creds.sid,
           creds.authToken,
           'POST',
           {
-            VoiceApplicationSid: twimlAppSid,
+            VoiceUrl: `${functionsBaseUrl}/twilio-voice-inbound`,
+            VoiceMethod: 'POST',
+            VoiceApplicationSid: '',
+            StatusCallback: `${functionsBaseUrl}/twilio-voice-status`,
+            StatusCallbackMethod: 'POST',
           }
         );
 
@@ -298,7 +306,7 @@ Deno.serve(async (req) => {
       case 'get-status': {
         const { data: tenant, error: tenantError } = await supabase
           .from('tenants')
-          .select('twilio_twiml_app_sid, twilio_api_key_sid, twilio_voice_enabled, twilio_voice_webhook_configured, twilio_phone_number')
+          .select('twilio_twiml_app_sid, twilio_api_key_sid, twilio_voice_enabled, twilio_voice_webhook_configured, twilio_phone_number, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number')
           .eq('id', tenantId)
           .single();
 
@@ -306,12 +314,30 @@ Deno.serve(async (req) => {
           return errorResponse('Failed to fetch tenant config', 500);
         }
 
+        // Get forwarding numbers for all active users
+        const { data: usersWithForwarding } = await supabase
+          .from('app_users')
+          .select('id, full_name, role, forwarding_number')
+          .eq('tenant_id', tenantId)
+          .in('role', ['head_admin', 'admin', 'manager', 'ops'])
+          .eq('is_active', true);
+
         return jsonResponse({
           voiceEnabled: tenant.twilio_voice_enabled || false,
           twimlAppSid: tenant.twilio_twiml_app_sid || null,
           apiKeyConfigured: !!tenant.twilio_api_key_sid,
           webhookConfigured: tenant.twilio_voice_webhook_configured || false,
           phoneNumber: tenant.twilio_phone_number || null,
+          callForwardingEnabled: tenant.call_forwarding_enabled || false,
+          voicemailEnabled: tenant.voicemail_enabled || false,
+          voicemailGreetingUrl: tenant.voicemail_greeting_url || null,
+          forwardingNumber: tenant.forwarding_number || null,
+          forwardingUsers: (usersWithForwarding || []).map((u: any) => ({
+            id: u.id,
+            name: u.full_name,
+            role: u.role,
+            forwardingNumber: u.forwarding_number || null,
+          })),
         });
       }
 
@@ -396,8 +422,104 @@ Deno.serve(async (req) => {
         return jsonResponse({ success: true, voiceEnabled: false });
       }
 
+      case 'update-forwarding': {
+        // Toggle call forwarding and/or voicemail at tenant level
+        const updateFields: Record<string, any> = {};
+
+        if (typeof params.callForwardingEnabled === 'boolean') {
+          updateFields.call_forwarding_enabled = params.callForwardingEnabled;
+        }
+        if (typeof params.voicemailEnabled === 'boolean') {
+          updateFields.voicemail_enabled = params.voicemailEnabled;
+        }
+        if (params.voicemailGreetingUrl !== undefined) {
+          updateFields.voicemail_greeting_url = params.voicemailGreetingUrl || null;
+        }
+        if (params.forwardingNumber !== undefined) {
+          // Validate: forwarding number must not be the same as the Twilio number
+          if (params.forwardingNumber) {
+            const { data: tenantCheck } = await supabase
+              .from('tenants')
+              .select('twilio_phone_number')
+              .eq('id', tenantId)
+              .single();
+
+            const fwdDigits = params.forwardingNumber.replace(/[^+\d]/g, '');
+            const twilioDigits = (tenantCheck?.twilio_phone_number || '').replace(/[^+\d]/g, '');
+            if (fwdDigits && twilioDigits && (fwdDigits === twilioDigits || fwdDigits.endsWith(twilioDigits.replace('+', '')) || twilioDigits.endsWith(fwdDigits.replace('+', '')))) {
+              return errorResponse('Forwarding number cannot be the same as your Twilio phone number — this would create a call loop.', 400);
+            }
+          }
+          updateFields.forwarding_number = params.forwardingNumber || null;
+        }
+
+        if (Object.keys(updateFields).length === 0) {
+          return errorResponse('No fields to update', 400);
+        }
+
+        const { error: fwdError } = await supabase
+          .from('tenants')
+          .update(updateFields)
+          .eq('id', tenantId);
+
+        if (fwdError) {
+          return errorResponse(`Failed to update forwarding settings: ${fwdError.message}`, 500);
+        }
+
+        console.log(`[manage-twilio-voice] Updated forwarding settings for tenant ${tenantId}:`, updateFields);
+        return jsonResponse({ success: true, ...updateFields });
+      }
+
+      case 'set-forwarding-number': {
+        // Set a forwarding number for a specific app_user
+        const { userId, forwardingNumber } = params;
+        if (!userId) return errorResponse('userId is required', 400);
+
+        // Validate: forwarding number must not be the same as the Twilio number
+        if (forwardingNumber) {
+          const { data: tenantCheck } = await supabase
+            .from('tenants')
+            .select('twilio_phone_number')
+            .eq('id', tenantId)
+            .single();
+
+          const fwdDigits = forwardingNumber.replace(/[^+\d]/g, '');
+          const twilioDigits = (tenantCheck?.twilio_phone_number || '').replace(/[^+\d]/g, '');
+          if (fwdDigits && twilioDigits && (fwdDigits === twilioDigits || fwdDigits.endsWith(twilioDigits.replace('+', '')) || twilioDigits.endsWith(fwdDigits.replace('+', '')))) {
+            return errorResponse('Forwarding number cannot be the same as your Twilio phone number — this would create a call loop.', 400);
+          }
+        }
+
+        // Verify the user belongs to this tenant
+        const { data: targetUser, error: targetError } = await supabase
+          .from('app_users')
+          .select('id, tenant_id')
+          .eq('id', userId)
+          .single();
+
+        if (targetError || !targetUser) {
+          return errorResponse('User not found', 404);
+        }
+
+        if (targetUser.tenant_id !== tenantId && !appUser?.is_super_admin) {
+          return errorResponse('Cannot set forwarding number for users in other tenants', 403);
+        }
+
+        const { error: numError } = await supabase
+          .from('app_users')
+          .update({ forwarding_number: forwardingNumber || null })
+          .eq('id', userId);
+
+        if (numError) {
+          return errorResponse(`Failed to set forwarding number: ${numError.message}`, 500);
+        }
+
+        console.log(`[manage-twilio-voice] Set forwarding number for user ${userId}: ${forwardingNumber || '(cleared)'}`);
+        return jsonResponse({ success: true, userId, forwardingNumber: forwardingNumber || null });
+      }
+
       default:
-        return errorResponse(`Unknown action: ${action}. Valid actions: setup, get-token, get-status, disable`, 400);
+        return errorResponse(`Unknown action: ${action}. Valid actions: setup, get-token, get-status, disable, update-forwarding, set-forwarding-number`, 400);
     }
   } catch (err: any) {
     console.error('[manage-twilio-voice] Error:', err);

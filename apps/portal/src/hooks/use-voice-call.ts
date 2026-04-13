@@ -304,6 +304,24 @@ export function useVoiceCall() {
     }));
   }, [callState.incomingCall]);
 
+  // Auto-initialize device when voice is enabled so we can receive inbound calls
+  const deviceInitializedRef = useRef(false);
+
+  useEffect(() => {
+    if (voiceStatus?.isEnabled && !deviceRef.current && !deviceInitializedRef.current) {
+      deviceInitializedRef.current = true;
+      console.log('[VoiceCall] Auto-initializing device for inbound calls');
+      initializeDevice().then((device) => {
+        if (device) {
+          console.log('[VoiceCall] Device registered and ready for inbound calls');
+        } else {
+          // Reset so it can retry
+          deviceInitializedRef.current = false;
+        }
+      });
+    }
+  }, [voiceStatus?.isEnabled, initializeDevice]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {

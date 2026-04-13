@@ -5,12 +5,24 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
 
+export interface ForwardingUser {
+  id: string;
+  name: string | null;
+  role: string;
+  forwardingNumber: string | null;
+}
+
 export interface VoiceStatus {
   isEnabled: boolean;
   hasTwimlApp: boolean;
   twimlAppSid: string | null;
   hasApiKey: boolean;
   webhookConfigured: boolean;
+  callForwardingEnabled: boolean;
+  voicemailEnabled: boolean;
+  voicemailGreetingUrl: string | null;
+  forwardingNumber: string | null;
+  forwardingUsers: ForwardingUser[];
 }
 
 async function invokeManageVoice(action: string, params: Record<string, any> = {}) {
@@ -57,6 +69,11 @@ export function useTwilioVoice() {
         twimlAppSid: data.twimlAppSid ?? null,
         hasApiKey: data.apiKeyConfigured ?? false,
         webhookConfigured: data.webhookConfigured ?? false,
+        callForwardingEnabled: data.callForwardingEnabled ?? false,
+        voicemailEnabled: data.voicemailEnabled ?? false,
+        voicemailGreetingUrl: data.voicemailGreetingUrl ?? null,
+        forwardingNumber: data.forwardingNumber ?? null,
+        forwardingUsers: data.forwardingUsers ?? [],
       } as VoiceStatus;
     },
     enabled: !!tenant?.id,
@@ -98,6 +115,52 @@ export function useTwilioVoice() {
     },
   });
 
+  const updateForwarding = useMutation({
+    mutationFn: (params: {
+      callForwardingEnabled?: boolean;
+      voicemailEnabled?: boolean;
+      voicemailGreetingUrl?: string | null;
+      forwardingNumber?: string | null;
+    }) => invoke('update-forwarding', params),
+    onSuccess: (_data, variables) => {
+      invalidateStatus();
+      if (typeof variables.callForwardingEnabled === 'boolean') {
+        toast({
+          title: variables.callForwardingEnabled ? 'Call Forwarding Enabled' : 'Call Forwarding Disabled',
+          description: variables.callForwardingEnabled
+            ? 'Inbound calls will now ring on team members\' phones too.'
+            : 'Inbound calls will only ring in the browser.',
+        });
+      }
+      if (typeof variables.voicemailEnabled === 'boolean') {
+        toast({
+          title: variables.voicemailEnabled ? 'Voicemail Enabled' : 'Voicemail Disabled',
+          description: variables.voicemailEnabled
+            ? 'Callers can leave a voicemail when no one answers.'
+            : 'Voicemail has been turned off.',
+        });
+      }
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const setForwardingNumber = useMutation({
+    mutationFn: (params: { userId: string; forwardingNumber: string | null }) =>
+      invoke('set-forwarding-number', params),
+    onSuccess: () => {
+      invalidateStatus();
+      toast({
+        title: 'Forwarding Number Updated',
+        description: 'The phone number has been saved.',
+      });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
   return {
     status: statusQuery.data ?? null,
     isLoading: statusQuery.isLoading,
@@ -105,6 +168,8 @@ export function useTwilioVoice() {
     setup,
     disable,
     getToken,
+    updateForwarding,
+    setForwardingNumber,
     invalidateStatus,
   };
 }
