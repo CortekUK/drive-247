@@ -127,10 +127,7 @@ Deno.serve(async (req) => {
       console.log(`Created Stripe customer ${customer.id} for tenant ${tenantId} (mode: ${mode})`);
     }
 
-    // Always enforce a minimum 2-day (48h) trial so the card is captured
-    // but no charge happens until 48 hours after setup, as promised in the UI.
-    // If the plan has a longer trial configured, use that instead.
-    const trialDays = Math.max(2, plan.trial_days || 0);
+    const trialDays = plan.trial_days || 0;
 
     // Build line items: fixed plan price + optional metered e-sign price + $1 card verification
     const lineItems: Array<any> = [
