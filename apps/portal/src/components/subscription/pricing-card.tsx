@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, Sparkles, Zap } from "lucide-react";
+import { Loader2, Sparkles, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface PricingCardProps {
@@ -84,25 +84,6 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan }: Pri
               </p>
             )}
           </div>
-
-          {/* Features */}
-          {plan.features.length > 0 && (
-            <div className="mb-8">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                What's included
-              </p>
-              <ul className="space-y-2.5">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2.5">
-                    <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                      <Check className="h-2.5 w-2.5 text-primary" strokeWidth={3} />
-                    </div>
-                    <span className="text-sm leading-snug">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
 
           {/* CTA */}
           {isCurrentPlan ? (
