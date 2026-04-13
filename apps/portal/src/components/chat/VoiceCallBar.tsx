@@ -141,7 +141,7 @@ export function VoiceCallBar({
               className="flex flex-col items-center gap-1.5 group"
             >
               <div className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center transition-colors shadow-lg group-active:scale-95">
-                <PhoneOff className="h-6 w-6 text-white" />
+                <Phone className="h-6 w-6 text-white rotate-[135deg]" />
               </div>
               <span className="text-xs text-muted-foreground font-medium">Decline</span>
             </button>
@@ -192,7 +192,7 @@ export function VoiceCallBar({
           <div className="px-6 pb-6 flex justify-center">
             <button onClick={onEndCall} className="flex flex-col items-center gap-1.5 group">
               <div className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center transition-colors shadow-lg group-active:scale-95">
-                <PhoneOff className="h-6 w-6 text-white" />
+                <Phone className="h-6 w-6 text-white rotate-[135deg]" />
               </div>
               <span className="text-xs text-muted-foreground font-medium">End</span>
             </button>
@@ -241,7 +241,7 @@ export function VoiceCallBar({
 
             <button onClick={onEndCall} className="flex flex-col items-center gap-1.5 group">
               <div className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center transition-colors shadow-lg group-active:scale-95">
-                <PhoneOff className="h-6 w-6 text-white" />
+                <Phone className="h-6 w-6 text-white rotate-[135deg]" />
               </div>
               <span className="text-[11px] text-muted-foreground">End</span>
             </button>
