@@ -33,6 +33,7 @@ export async function captureLeadAction(
     });
 
   if (error) {
+    // Log server-side only in development
     if (process.env.NODE_ENV === "development") console.error("Lead capture error:", error);
     return { success: false, message: "Something went wrong. Please try again." };
   }

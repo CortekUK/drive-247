@@ -7,7 +7,6 @@ import {
   Eye,
   CreditCard,
   Smartphone,
-  type LucideIcon,
 } from "lucide-react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 
@@ -43,7 +42,7 @@ const RIGHT_FEATURES = [
     icon: CreditCard,
     title: "Payment history",
     description:
-      "Full transaction visibility — pre-authorizations, balances, and receipts.",
+      "Full transaction visibility — deposits, balances, and receipts.",
   },
   {
     icon: Smartphone,
@@ -59,7 +58,7 @@ function FeatureItem({
   description,
   align,
 }: {
-  icon: LucideIcon;
+  icon: React.ComponentType<{ className?: string }>;
   title: string;
   description: string;
   align: "left" | "right";

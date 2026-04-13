@@ -11,7 +11,7 @@ export const SITE_META = {
 export const NAV_LINKS = [
   { label: "Features", href: "#features" },
   { label: "How it works", href: "#timeline" },
-  { label: "Pricing", href: "#pricing" },
+  { label: "Platform", href: "#pricing" },
   { label: "FAQ", href: "#faq" },
 ];
 
@@ -84,7 +84,7 @@ export const DASHBOARD_SLIDES = [
     title: "Payments & Documents",
     description: "Centralised payment processing and document management.",
     bullets: [
-      "Collect pre-authorizations and rental payments",
+      "Collect deposits and rental payments",
       "Track payment status and transaction history",
       "Upload and verify renter documents",
       "Store agreements and booking files securely",
@@ -192,59 +192,21 @@ export const FAQ_ITEMS = [
   {
     question: "How much does Drive247 cost?",
     answer:
-      "Plans start at $200/mo for small fleets and scale with your vehicle count. Every plan includes a one-time $2,500 onboarding fee. See the pricing section above for a full breakdown — no hidden fees, no long-term contracts.",
+      "Pricing is tailored to your fleet size and needs. Every plan is a flat monthly fee — no commissions, no per-booking charges, no hidden costs. Book a strategy call and we'll walk you through the right plan for your operation.",
   },
 ];
 
-export const PRICING_TIERS = [
-  {
-    name: "Pilot",
-    price: 200,
-    setupFee: 2500,
-    vehicleLimit: "Up to 10 vehicles",
-    popular: false,
-    features: [
-      "Full fleet management & tracking",
-      "Online booking & payments",
-      "Customer management & verification",
-      "Automated invoicing & reminders",
-      "Real-time customer chat",
-      "Reports & P&L dashboard",
-      "Stripe payment processing",
-      "Insurance integrations (Bonzah)",
-    ],
-  },
-  {
-    name: "Growth",
-    price: 350,
-    setupFee: 2500,
-    vehicleLimit: "Up to 40 vehicles",
-    popular: true,
-    features: [
-      "Everything in Pilot",
-      "Multi-user access with roles",
-      "Dedicated onboarding & growth strategy session",
-      "Fully custom branding",
-      "Fleet & content setup support",
-      "Website & content management",
-      "Ongoing growth strategy & optimisation",
-      "Optional Meta ads management & optimisation",
-      "Verification Partner Access (Paid)",
-    ],
-  },
-  {
-    name: "Enterprise",
-    price: 650,
-    setupFee: 2500,
-    vehicleLimit: "Unlimited vehicles",
-    popular: false,
-    features: [
-      "Everything in Growth",
-      "Unlimited vehicles",
-      "Priority support",
-      "Dedicated account manager",
-      "Custom feature requests",
-      "Tailored infrastructure & scaling support",
-    ],
-  },
+export const PLATFORM_FEATURES = [
+  "Branded booking website on your domain",
+  "Full fleet management & tracking",
+  "Online booking & payments via Stripe",
+  "Customer management & verification",
+  "Automated invoicing & reminders",
+  "Real-time customer chat",
+  "Reports & P&L dashboard",
+  "Dedicated onboarding & setup",
+  "Fully custom branding",
+  "Multi-user access with roles",
+  "Growth strategy & optimisation",
+  "Insurance integrations (Bonzah)",
 ];
