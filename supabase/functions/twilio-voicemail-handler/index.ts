@@ -93,6 +93,36 @@ Deno.serve(async (req) => {
       console.log(`[twilio-voicemail-handler] Saving voicemail: ${recordingSid} (${recordingDuration}s)`);
 
       const durationSec = recordingDuration ? parseInt(recordingDuration, 10) : 0;
+      const twilioMp3Url = `${recordingUrl}.mp3`;
+
+      // Download and upload to Supabase Storage (so browser can access without Twilio auth)
+      let finalRecordingUrl = twilioMp3Url;
+      try {
+        const { data: tenantCreds } = await supabase.from('tenants')
+          .select('twilio_account_sid, twilio_auth_token').eq('id', tenantId).single();
+
+        const authHeader = tenantCreds?.twilio_account_sid && tenantCreds?.twilio_auth_token
+          ? `Basic ${btoa(`${tenantCreds.twilio_account_sid}:${tenantCreds.twilio_auth_token}`)}`
+          : undefined;
+
+        const audioResponse = await fetch(twilioMp3Url, {
+          headers: authHeader ? { 'Authorization': authHeader } : {},
+        });
+
+        if (audioResponse.ok) {
+          const audioBlob = await audioResponse.blob();
+          const storagePath = `${tenantId}/vm-${recordingSid || Date.now()}.mp3`;
+          const { error: uploadErr } = await supabase.storage
+            .from('voicemails').upload(storagePath, audioBlob, { contentType: 'audio/mpeg', upsert: true });
+
+          if (!uploadErr) {
+            const { data: urlData } = supabase.storage.from('voicemails').getPublicUrl(storagePath);
+            if (urlData?.publicUrl) finalRecordingUrl = urlData.publicUrl;
+          }
+        }
+      } catch (err: any) {
+        console.warn('[twilio-voicemail-handler] Storage upload failed, using Twilio URL:', err.message);
+      }
 
       // Save voicemail recording to DB
       const { error: vmError } = await supabase
@@ -103,7 +133,7 @@ Deno.serve(async (req) => {
           channel_id: channelId || null,
           twilio_call_sid: callSid,
           twilio_recording_sid: recordingSid,
-          recording_url: `${recordingUrl}.mp3`,
+          recording_url: finalRecordingUrl,
           duration_seconds: durationSec,
           from_number: from || null,
           to_number: to || null,
@@ -142,7 +172,7 @@ Deno.serve(async (req) => {
             channel: 'voice',
             metadata: {
               type: 'voicemail',
-              recording_url: `${recordingUrl}.mp3`,
+              recording_url: finalRecordingUrl,
               recording_sid: recordingSid,
               duration_seconds: durationSec,
               call_sid: callSid,

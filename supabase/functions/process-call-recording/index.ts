@@ -61,26 +61,23 @@ Deno.serve(async (req) => {
 
     const mp3Url = `${recordingUrl}.mp3`;
 
-    // Save recording URL immediately
-    await supabase
-      .from('call_logs')
-      .update({
-        recording_url: mp3Url,
-        recording_sid: recordingSid,
-      })
-      .eq('id', callLog.id);
+    // Get tenant's Twilio credentials for authenticated download
+    const { data: tenantCreds } = await supabase
+      .from('tenants')
+      .select('twilio_account_sid, twilio_auth_token')
+      .eq('id', callLog.tenant_id)
+      .single();
 
-    console.log(`[process-call-recording] Saved recording URL for call ${callLog.id}`);
-
-    // Step 2: Download the recording
-    if (!OPENAI_API_KEY) {
-      console.error('[process-call-recording] OPENAI_API_KEY not set, skipping transcription');
-      return new Response('OK', { status: 200 });
-    }
-
+    // Step 2: Download the recording (with Twilio auth)
     let audioBlob: Blob;
     try {
-      const audioResponse = await fetch(mp3Url);
+      const authHeader = tenantCreds?.twilio_account_sid && tenantCreds?.twilio_auth_token
+        ? `Basic ${btoa(`${tenantCreds.twilio_account_sid}:${tenantCreds.twilio_auth_token}`)}`
+        : undefined;
+
+      const audioResponse = await fetch(mp3Url, {
+        headers: authHeader ? { 'Authorization': authHeader } : {},
+      });
       if (!audioResponse.ok) {
         throw new Error(`Failed to download recording: ${audioResponse.status}`);
       }
@@ -88,6 +85,42 @@ Deno.serve(async (req) => {
       console.log(`[process-call-recording] Downloaded recording: ${(audioBlob.size / 1024).toFixed(1)}KB`);
     } catch (err: any) {
       console.error(`[process-call-recording] Failed to download recording:`, err.message);
+      // Still save the Twilio URL as fallback
+      await supabase.from('call_logs').update({ recording_url: mp3Url, recording_sid: recordingSid }).eq('id', callLog.id);
+      return new Response('OK', { status: 200 });
+    }
+
+    // Upload to Supabase Storage so the browser can access without Twilio auth
+    let publicRecordingUrl = mp3Url;
+    try {
+      const storagePath = `${callLog.tenant_id}/${callSid}.mp3`;
+      const { error: uploadError } = await supabase.storage
+        .from('voicemails')
+        .upload(storagePath, audioBlob, { contentType: 'audio/mpeg', upsert: true });
+
+      if (!uploadError) {
+        const { data: urlData } = supabase.storage.from('voicemails').getPublicUrl(storagePath);
+        if (urlData?.publicUrl) {
+          publicRecordingUrl = urlData.publicUrl;
+          console.log(`[process-call-recording] Uploaded to storage: ${storagePath}`);
+        }
+      } else {
+        console.warn(`[process-call-recording] Storage upload failed:`, uploadError.message);
+      }
+    } catch (err: any) {
+      console.warn(`[process-call-recording] Storage upload error:`, err.message);
+    }
+
+    // Save recording URL
+    await supabase.from('call_logs').update({
+      recording_url: publicRecordingUrl,
+      recording_sid: recordingSid,
+    }).eq('id', callLog.id);
+
+    console.log(`[process-call-recording] Saved recording URL for call ${callLog.id}`);
+
+    if (!OPENAI_API_KEY) {
+      console.error('[process-call-recording] OPENAI_API_KEY not set, skipping transcription');
       return new Response('OK', { status: 200 });
     }
 
