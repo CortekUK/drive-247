@@ -178,27 +178,7 @@ export function CallForwardingSettings() {
               </div>
             </div>
 
-            {/* Team forwarding numbers */}
-            {status.forwardingUsers.length > 0 && (
-              <div className="space-y-3 pt-2 border-t">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Team Forwarding Numbers</Label>
-                  <span className="text-xs text-muted-foreground">
-                    {usersWithNumbers.length} of {status.forwardingUsers.length} configured
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {status.forwardingUsers.map((user) => (
-                    <ForwardingNumberRow
-                      key={user.id}
-                      user={user}
-                      onSave={handleSaveNumber}
-                      isSaving={setForwardingNumber.isPending}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Team forwarding numbers removed — use main forwarding number only */}
 
             <p className="text-xs text-muted-foreground">
               When a customer calls, their call will ring on both the browser and all configured phone numbers at the same time. The first person to answer gets connected.
