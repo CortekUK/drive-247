@@ -242,7 +242,7 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
     }
     // Unwrap block-level elements that ended up inside <p> tags from variable substitution
     // e.g. <p><h2>...</h2><table>...</table></p> → <h2>...</h2><table>...</table>
-    result = result.replace(/<p>\s*(<(?:h[1-6]|table|div|ul|ol|hr)[^>]*>[\s\S]*?)\s*<\/p>/gi, '$1');
+    result = result.replace(/<p>(\s*<(?:h[1-6]|table|div|ul|ol|hr)[\s\S]*?)<\/p>/gi, (_, inner) => inner.trim());
     return result;
 }
 
