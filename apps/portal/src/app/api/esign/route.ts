@@ -466,7 +466,9 @@ function pickFont(ctx: PdfCtx, bold: boolean, italic: boolean): PDFFont {
 }
 
 /** Draw text, rendering e-sign tags in white (invisible but BoldSign-detectable) */
-function drawText(ctx: PdfCtx, text: string, x: number, fontSize: number, useFont: PDFFont, underline: boolean = false) {
+function drawText(ctx: PdfCtx, rawText: string, x: number, fontSize: number, useFont: PDFFont, underline: boolean = false) {
+    // Strip null bytes and other control characters that WinAnsi cannot encode
+    const text = rawText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
     if (ESIGN_TAG_TEST_RE.test(text)) {
         const segments = text.split(ESIGN_TAG_SPLIT_RE);
         let xPos = x;
@@ -628,7 +630,7 @@ function renderBlocksToPdf(ctx: PdfCtx, blocks: PdfBlock[]) {
                         });
 
                         if (cellText) {
-                            let display = cellText;
+                            let display = cellText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
                             const maxTextW = colW - cellPad * 2;
                             while (cellFont.widthOfTextAtSize(display, S.body) > maxTextW && display.length > 1) {
                                 display = display.slice(0, -1);
