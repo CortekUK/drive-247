@@ -271,7 +271,7 @@ function decodeEntities(str: string): string {
 }
 
 function stripTags(html: string): string {
-    return decodeEntities(html.replace(/<[^>]+>/g, '')).trim();
+    return sanitizePdfText(decodeEntities(html.replace(/<[^>]+>/g, '')).trim());
 }
 
 function parseInlineRuns(html: string, parentBold = false, parentItalic = false, parentUnderline = false): TextRun[] {
@@ -433,6 +433,11 @@ function parseHtmlToBlocks(html: string): PdfBlock[] {
 // STRUCTURED PDF RENDERER
 // ============================================================================
 
+/** Strip null bytes and control characters that WinAnsi/pdf-lib cannot encode */
+function sanitizePdfText(s: string): string {
+    return s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+}
+
 const PAGE_W = 595;  // A4
 const PAGE_H = 842;
 const MARGIN = 50;
@@ -468,8 +473,7 @@ function pickFont(ctx: PdfCtx, bold: boolean, italic: boolean): PDFFont {
 
 /** Draw text, rendering e-sign tags in white (invisible but BoldSign-detectable) */
 function drawText(ctx: PdfCtx, rawText: string, x: number, fontSize: number, useFont: PDFFont, underline: boolean = false) {
-    // Strip null bytes and other control characters that WinAnsi cannot encode
-    const text = rawText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+    const text = sanitizePdfText(rawText);
     if (ESIGN_TAG_TEST_RE.test(text)) {
         const segments = text.split(ESIGN_TAG_SPLIT_RE);
         let xPos = x;
@@ -631,7 +635,7 @@ function renderBlocksToPdf(ctx: PdfCtx, blocks: PdfBlock[]) {
                         });
 
                         if (cellText) {
-                            let display = cellText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+                            let display = sanitizePdfText(cellText);
                             const maxTextW = colW - cellPad * 2;
                             while (cellFont.widthOfTextAtSize(display, S.body) > maxTextW && display.length > 1) {
                                 display = display.slice(0, -1);
