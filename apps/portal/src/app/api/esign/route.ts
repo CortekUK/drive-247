@@ -180,13 +180,18 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
             }
             return '';
         })(),
-        monthly_amount: formatCurrency(rental?.monthly_amount, currencyCode),
-        rental_amount: formatCurrency(rental?.monthly_amount, currencyCode),
+        monthly_amount: formatCurrency(rental?.discount_applied ? (rental.monthly_amount - rental.discount_applied) : rental?.monthly_amount, currencyCode),
+        rental_amount: formatCurrency(rental?.discount_applied ? (rental.monthly_amount - rental.discount_applied) : rental?.monthly_amount, currencyCode),
         rental_price: (() => {
             const type = rental?.rental_period_type || 'Monthly';
             const rate = type === 'Daily' ? vehicle?.daily_rent : type === 'Weekly' ? vehicle?.weekly_rent : vehicle?.monthly_rent;
+            // Apply discount if present
+            if (rental?.discount_applied && rate) {
+                return formatCurrency(rate - rental.discount_applied, currencyCode);
+            }
             return formatCurrency(rate, currencyCode);
         })(),
+        discount_amount: rental?.discount_applied ? formatCurrency(rental.discount_applied, currencyCode) : '',
         rental_period_type: rental?.rental_period_type || 'Monthly',
         rental_status: rental?.status || '',
         pickup_location: rental?.pickup_location || '',
@@ -908,6 +913,28 @@ export async function POST(request: NextRequest) {
             tenant = tenantData;
         }
 
+        // Fetch installment plan if rental has one
+        let installment: InstallmentData | null = null;
+        if (body.rentalId) {
+            const { data: plan } = await supabase
+                .from('installment_plans')
+                .select('plan_type, total_installable_amount, number_of_installments, installment_amount, upfront_amount, status')
+                .eq('rental_id', body.rentalId)
+                .in('status', ['active', 'pending'])
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            if (plan) {
+                const { data: scheduled } = await supabase
+                    .from('scheduled_installments')
+                    .select('installment_number, amount, due_date, status')
+                    .eq('rental_id', body.rentalId)
+                    .order('installment_number', { ascending: true });
+                installment = { ...plan, scheduled_installments: scheduled || [] } as InstallmentData;
+                console.log(`Installment plan found: ${plan.plan_type}, ${plan.number_of_installments} payments`);
+            }
+        }
+
         // ── Generate PDF ──
         const currencyCode = tenant?.currency_code || 'USD';
         const pdfDoc = await PDFDocument.create();
@@ -977,7 +1004,7 @@ export async function POST(request: NextRequest) {
                 console.log('Using admin template (structured HTML → PDF)');
                 hasCustomTemplate = true;
                 processedHtml = removeEmptyFields(
-                    processTemplate(templateData.template_content, rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber } : undefined)
+                    processTemplate(templateData.template_content, rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber } : undefined, installment)
                 );
 
                 // Ensure a signature tag exists

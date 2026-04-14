@@ -242,13 +242,17 @@ function processTemplate(
       }
       return '';
     })(),
-    monthly_amount: formatCurrency(rental?.monthly_amount as number),
-    rental_amount: formatCurrency(rental?.monthly_amount as number),
+    monthly_amount: formatCurrency(rental?.discount_applied ? ((rental.monthly_amount as number) - (rental.discount_applied as number)) : rental?.monthly_amount as number),
+    rental_amount: formatCurrency(rental?.discount_applied ? ((rental.monthly_amount as number) - (rental.discount_applied as number)) : rental?.monthly_amount as number),
     rental_price: (() => {
       const type = (rental?.rental_period_type as string) || 'Monthly';
       const rate = type === 'Daily' ? vehicle?.daily_rent as number : type === 'Weekly' ? vehicle?.weekly_rent as number : vehicle?.monthly_rent as number;
+      if (rental?.discount_applied && rate) {
+        return formatCurrency(rate - (rental.discount_applied as number));
+      }
       return formatCurrency(rate);
     })(),
+    discount_amount: rental?.discount_applied ? formatCurrency(rental.discount_applied as number) : '',
     rental_period_type: (rental?.rental_period_type as string) || 'Monthly',
     rental_status: (rental?.status as string) || '',
     pickup_location: (rental?.pickup_location as string) || '',
