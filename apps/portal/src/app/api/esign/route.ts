@@ -417,8 +417,9 @@ function parseHtmlToBlocks(html: string): PdfBlock[] {
                     break;
             }
         } else {
-            // Raw text outside any block tag
-            const text = stripTags(part);
+            // Raw text outside any block tag — skip internal markers and strip control chars
+            if (/\x00/.test(part)) continue;
+            const text = stripTags(part).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
             if (text) {
                 blocks.push({ type: 'paragraph', runs: [{ text, bold: false, italic: false, underline: false }] });
             }
