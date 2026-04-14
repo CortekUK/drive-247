@@ -450,14 +450,16 @@ export function AgreementTimeline({
               )}
             </div>
             {originalAgreements.length > 0 ? (
-              originalAgreements.map((a) => (
-                <AgreementCard
-                  key={a.id} agreement={a} canEdit={canEdit} tenantId={tenantId}
-                  rentalId={rentalId} customerEmail={rental.customers?.email}
-                  customerName={rental.customers?.name} onViewAgreement={onViewAgreement}
-                  isSuperseded={isSuperseded(a, originalAgreements)}
-                />
-              ))
+              (() => {
+                const latest = originalAgreements[originalAgreements.length - 1];
+                return (
+                  <AgreementCard
+                    key={latest.id} agreement={latest} canEdit={canEdit} tenantId={tenantId}
+                    rentalId={rentalId} customerEmail={rental.customers?.email}
+                    customerName={rental.customers?.name} onViewAgreement={onViewAgreement}
+                  />
+                );
+              })()
             ) : (
               <p className="text-sm text-muted-foreground">No agreement sent yet.</p>
             )}
@@ -481,15 +483,18 @@ export function AgreementTimeline({
               </AccordionTrigger>
               <AccordionContent className="px-4 pb-4">
                 {originalAgreements.length > 0 ? (
-                  originalAgreements.map((a) => (
-                    <AgreementCard
-                      key={a.id} agreement={a} canEdit={canEdit} tenantId={tenantId}
-                      rentalId={rentalId} customerEmail={rental.customers?.email}
-                      customerName={rental.customers?.name} onViewAgreement={onViewAgreement}
-                      hideStatusBadge={originalAgreements.length === 1}
-                      isSuperseded={isSuperseded(a, originalAgreements)}
-                    />
-                  ))
+                  (() => {
+                    const latest = originalAgreements[originalAgreements.length - 1];
+                    return (
+                      <AgreementCard
+                        key={latest.id} agreement={latest} canEdit={canEdit} tenantId={tenantId}
+                        rentalId={rentalId} customerEmail={rental.customers?.email}
+                        customerName={rental.customers?.name} onViewAgreement={onViewAgreement}
+                        hideStatusBadge
+                      />
+                    );
+                  })()
+                )
                 ) : (
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">No agreement sent yet.</p>
@@ -527,17 +532,19 @@ export function AgreementTimeline({
                   </AccordionTrigger>
                   <AccordionContent className="px-4 pb-4">
                     {extAgreements.length > 0 ? (
-                      extAgreements.map((a) => (
-                        <AgreementCard
-                          key={a.id} agreement={a} canEdit={canEdit} tenantId={tenantId}
-                          rentalId={rentalId} customerEmail={rental.customers?.email}
-                          customerName={rental.customers?.name}
-                          extensionNumber={extGroup.extensionNumber}
-                          onViewAgreement={onViewAgreement}
-                          hideStatusBadge={extAgreements.length === 1}
-                          isSuperseded={isSuperseded(a, extAgreements)}
-                        />
-                      ))
+                      (() => {
+                        const latest = extAgreements[extAgreements.length - 1];
+                        return (
+                          <AgreementCard
+                            key={latest.id} agreement={latest} canEdit={canEdit} tenantId={tenantId}
+                            rentalId={rentalId} customerEmail={rental.customers?.email}
+                            customerName={rental.customers?.name}
+                            extensionNumber={extGroup.extensionNumber}
+                            onViewAgreement={onViewAgreement}
+                            hideStatusBadge
+                          />
+                        );
+                      })()
                     ) : (
                       <div className="flex items-center justify-between">
                         <p className="text-sm text-muted-foreground">No agreement sent for this extension yet.</p>
