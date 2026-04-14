@@ -2986,9 +2986,6 @@ const RentalDetail = () => {
                           </div>
                           <div className="text-left">
                             <span className="text-sm font-medium">Extension #{group.extensionNumber}</span>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(group.entryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </p>
                           </div>
                           <Badge variant="outline" className="text-[10px] ml-1">
                             {formatCurrencyUtil(extTotalWithInsurance, tenant?.currency_code || 'USD')}

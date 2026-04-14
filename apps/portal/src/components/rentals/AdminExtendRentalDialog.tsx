@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
@@ -66,8 +66,19 @@ export function AdminExtendRentalDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionStep, setSubmissionStep] = useState('');
   const [step, setStep] = useState<1 | 2>(1);
-  // Capture the current end date at dialog open so it doesn't change during submission
-  const [snapshotEndDate] = useState(rental.end_date);
+  // Capture the current end date when the dialog opens so it doesn't change during submission
+  const [snapshotEndDate, setSnapshotEndDate] = useState(rental.end_date);
+
+  // Re-sync snapshot whenever the dialog opens (handles back-to-back extensions
+  // where the component stays mounted but rental.end_date has changed)
+  const prevOpenRef = useRef(false);
+  if (open && !prevOpenRef.current) {
+    // Dialog just opened — capture the latest end_date
+    if (snapshotEndDate !== rental.end_date) {
+      setSnapshotEndDate(rental.end_date);
+    }
+  }
+  prevOpenRef.current = open;
   const [extensionInsuranceType, setExtensionInsuranceType] = useState<'bonzah' | 'own'>(
     rental.bonzah_policy_id ? 'bonzah' : 'own'
   );

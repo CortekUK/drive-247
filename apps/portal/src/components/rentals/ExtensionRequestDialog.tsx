@@ -605,7 +605,7 @@ export function ExtensionRequestDialog({
           </div>
 
           {/* Extension Duration */}
-          {requestedEndDate && (
+          {requestedEndDate && extensionDays > 0 && (
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
