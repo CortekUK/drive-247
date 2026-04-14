@@ -8,7 +8,7 @@ export interface TemplateVariable {
   label: string;
   description: string;
   sample: string;
-  category: 'customer' | 'vehicle' | 'rental' | 'company';
+  category: 'customer' | 'vehicle' | 'rental' | 'company' | 'payment';
 }
 
 export const TEMPLATE_VARIABLES: TemplateVariable[] = [
@@ -291,6 +291,50 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
     description: 'Date the agreement is created',
     sample: 'January 10, 2025',
     category: 'rental',
+  },
+
+  // Payment / Installment variables
+  {
+    key: 'installment_schedule',
+    label: 'Payment Schedule (Full Table)',
+    description: 'Auto-generated table showing all installment payments with amounts and due dates. Only appears when rental has an installment plan.',
+    sample: 'Payment 1: $450.00 — Due: Feb 1, 2025 | Payment 2: $450.00 — Due: Feb 8, 2025 ...',
+    category: 'payment',
+  },
+  {
+    key: 'installment_plan_type',
+    label: 'Installment Plan Type',
+    description: 'Type of installment plan (Weekly/Monthly). Empty if no installment plan.',
+    sample: 'Weekly',
+    category: 'payment',
+  },
+  {
+    key: 'installment_total_amount',
+    label: 'Total Installable Amount',
+    description: 'Total rental amount being split into installments',
+    sample: '$2,400.00',
+    category: 'payment',
+  },
+  {
+    key: 'installment_upfront_amount',
+    label: 'Upfront Amount',
+    description: 'Amount charged upfront before installments begin',
+    sample: '$600.00',
+    category: 'payment',
+  },
+  {
+    key: 'installment_count',
+    label: 'Number of Installments',
+    description: 'Total number of scheduled installment payments',
+    sample: '4',
+    category: 'payment',
+  },
+  {
+    key: 'installment_per_payment',
+    label: 'Per Installment Amount',
+    description: 'Amount charged per installment payment',
+    sample: '$450.00',
+    category: 'payment',
   },
 ];
 

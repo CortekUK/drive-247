@@ -64,13 +64,73 @@ function formatCurrency(amount: number | null): string {
   return sharedFormatCurrency(amount, _currencyCode);
 }
 
+interface InstallmentData {
+  plan_type: string;
+  total_installable_amount: number;
+  number_of_installments: number;
+  installment_amount: number;
+  upfront_amount: number;
+  status: string;
+  scheduled_installments: Array<{
+    installment_number: number;
+    amount: number;
+    due_date: string;
+    status: string;
+  }>;
+}
+
+function buildInstallmentScheduleHtml(installment: InstallmentData): string {
+  const rows = installment.scheduled_installments
+    .sort((a, b) => a.installment_number - b.installment_number)
+    .map(si => `<tr><td>Payment ${si.installment_number}</td><td>${formatCurrency(si.amount)}</td><td>${formatDate(si.due_date)}</td></tr>`)
+    .join('');
+
+  return `<h2>Payment Schedule</h2>
+<p>This rental is set up with an installment payment plan. <strong>You will NOT be charged the full amount upfront.</strong></p>
+<table>
+<tr><td><strong>Plan Type</strong></td><td>${installment.plan_type.charAt(0).toUpperCase() + installment.plan_type.slice(1)}</td></tr>
+<tr><td><strong>Total Rental Amount</strong></td><td>${formatCurrency(installment.total_installable_amount)}</td></tr>
+<tr><td><strong>Upfront Amount</strong></td><td>${formatCurrency(installment.upfront_amount)}</td></tr>
+<tr><td><strong>Number of Installments</strong></td><td>${installment.number_of_installments}</td></tr>
+<tr><td><strong>Per Installment</strong></td><td>${formatCurrency(installment.installment_amount)}</td></tr>
+</table>
+<h3>Scheduled Payments</h3>
+<table>
+<tr><th>Payment</th><th>Amount</th><th>Due Date</th></tr>
+${rows}
+</table>`;
+}
+
+function buildInstallmentScheduleText(installment: InstallmentData): string {
+  const lines = installment.scheduled_installments
+    .sort((a, b) => a.installment_number - b.installment_number)
+    .map(si => `  Payment ${si.installment_number}:  ${formatCurrency(si.amount)}  |  Due: ${formatDate(si.due_date)}`)
+    .join('\n');
+
+  return `${'─'.repeat(70)}
+PAYMENT SCHEDULE
+${'─'.repeat(70)}
+This rental is set up with an installment payment plan.
+You will NOT be charged the full amount upfront.
+
+Plan Type:           ${installment.plan_type.charAt(0).toUpperCase() + installment.plan_type.slice(1)}
+Total Rental Amount: ${formatCurrency(installment.total_installable_amount)}
+Upfront Amount:      ${formatCurrency(installment.upfront_amount)}
+Installments:        ${installment.number_of_installments} x ${formatCurrency(installment.installment_amount)}
+
+Scheduled Payments:
+${lines}
+`;
+}
+
 function processTemplate(
   template: string,
   rental: Record<string, unknown>,
   customer: Record<string, unknown>,
   vehicle: Record<string, unknown>,
   tenant: Record<string, unknown>,
-  verification?: Record<string, unknown> | null
+  verification?: Record<string, unknown> | null,
+  installment?: InstallmentData | null
 ): string {
   // Compose full address from separate fields
   const customerAddress = [
@@ -207,6 +267,15 @@ function processTemplate(
     agreement_date: formatDate(new Date()),
     today_date: formatDate(new Date()),
     current_date: formatDate(new Date()),
+
+    // Installment payment schedule
+    installment_schedule: installment ? buildInstallmentScheduleHtml(installment) : '',
+    has_installments: installment ? 'true' : 'false',
+    installment_plan_type: installment ? installment.plan_type.charAt(0).toUpperCase() + installment.plan_type.slice(1) : '',
+    installment_total_amount: installment ? formatCurrency(installment.total_installable_amount) : '',
+    installment_upfront_amount: installment ? formatCurrency(installment.upfront_amount) : '',
+    installment_count: installment ? installment.number_of_installments.toString() : '',
+    installment_per_payment: installment ? formatCurrency(installment.installment_amount) : '',
   };
 
   let result = template;
@@ -243,7 +312,8 @@ function generateDefaultTemplate(
   rental: Record<string, unknown>,
   customer: Record<string, unknown>,
   vehicle: Record<string, unknown>,
-  tenant: Record<string, unknown> | null
+  tenant: Record<string, unknown> | null,
+  installment?: InstallmentData | null
 ): string {
   return `${'='.repeat(70)}
                          RENTAL AGREEMENT
@@ -276,7 +346,7 @@ Start Date:    ${formatDate(rental?.start_date as string)}
 End Date:      ${rental?.end_date ? formatDate(rental.end_date as string) : 'Ongoing'}
 Rental Price:  ${(() => { const t = (rental?.rental_period_type as string) || 'Monthly'; const r = t === 'Daily' ? vehicle?.daily_rent as number : t === 'Weekly' ? vehicle?.weekly_rent as number : vehicle?.monthly_rent as number; return formatCurrency(r); })()} (${(rental?.rental_period_type as string) || 'Monthly'})
 
-${'='.repeat(70)}
+${installment ? buildInstallmentScheduleText(installment) : ''}${'='.repeat(70)}
                       TERMS & CONDITIONS
 ${'='.repeat(70)}
 
@@ -301,6 +371,38 @@ For ${(tenant?.company_name as string) || 'Drive 247'}
 `;
 }
 
+async function fetchInstallmentData(
+  supabase: ReturnType<typeof createClient>,
+  rentalId: string
+): Promise<InstallmentData | null> {
+  try {
+    const { data: plan, error } = await supabase
+      .from('installment_plans')
+      .select('plan_type, total_installable_amount, number_of_installments, installment_amount, upfront_amount, status')
+      .eq('rental_id', rentalId)
+      .in('status', ['active', 'pending'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !plan) return null;
+
+    const { data: scheduled } = await supabase
+      .from('scheduled_installments')
+      .select('installment_number, amount, due_date, status')
+      .eq('rental_id', rentalId)
+      .order('installment_number', { ascending: true });
+
+    return {
+      ...plan,
+      scheduled_installments: scheduled || [],
+    } as InstallmentData;
+  } catch (err) {
+    console.error('Error fetching installment data:', err);
+    return null;
+  }
+}
+
 async function generateDocument(
   supabase: ReturnType<typeof createClient>,
   rental: Record<string, unknown>,
@@ -315,17 +417,24 @@ async function generateDocument(
     .eq('id', tenantId)
     .single();
 
+  // Fetch installment plan if rental has one
+  const rentalId = rental?.id as string;
+  const installment = rentalId ? await fetchInstallmentData(supabase, rentalId) : null;
+  if (installment) {
+    console.log(`Installment plan found: ${installment.plan_type}, ${installment.number_of_installments} payments of ${installment.installment_amount}`);
+  }
+
   const templateCategory = (rental as Record<string, unknown>)?.is_pay_as_you_go ? 'payg' : 'standard';
   const template = await getActiveTemplate(supabase, tenantId, templateCategory);
 
   if (template) {
     console.log('Using custom template from portal');
-    const processedContent = processTemplate(template, rental, customer, vehicle, tenant || {}, verification);
+    const processedContent = processTemplate(template, rental, customer, vehicle, tenant || {}, verification, installment);
     return htmlToText(processedContent);
   }
 
   console.log('Using default template');
-  return generateDefaultTemplate(rental, customer, vehicle, tenant);
+  return generateDefaultTemplate(rental, customer, vehicle, tenant, installment);
 }
 
 // ============================================================================

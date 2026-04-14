@@ -30,6 +30,8 @@ export const DEFAULT_AGREEMENT_TEMPLATE = `<h1>RENTAL AGREEMENT</h1>
 <tr><td><strong>Rental Price</strong></td><td>{{rental_price}} ({{rental_period_type}})</td></tr>
 </table>
 
+{{installment_schedule}}
+
 <hr>
 
 <h2>Terms & Conditions</h2>

@@ -52,7 +52,44 @@ function formatCurrency(amount: number | null, currencyCode: string = 'USD'): st
 // TEMPLATE PROCESSING
 // ============================================================================
 
-function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number }): string {
+interface InstallmentData {
+    plan_type: string;
+    total_installable_amount: number;
+    number_of_installments: number;
+    installment_amount: number;
+    upfront_amount: number;
+    status: string;
+    scheduled_installments: Array<{
+        installment_number: number;
+        amount: number;
+        due_date: string;
+        status: string;
+    }>;
+}
+
+function buildInstallmentScheduleHtml(installment: InstallmentData, currencyCode: string): string {
+    const rows = installment.scheduled_installments
+        .sort((a, b) => a.installment_number - b.installment_number)
+        .map(si => `<tr><td>Payment ${si.installment_number}</td><td>${formatCurrency(si.amount, currencyCode)}</td><td>${formatDate(si.due_date)}</td></tr>`)
+        .join('');
+
+    return `<h2>Payment Schedule</h2>
+<p>This rental is set up with an installment payment plan. <strong>You will NOT be charged the full amount upfront.</strong></p>
+<table>
+<tr><td><strong>Plan Type</strong></td><td>${installment.plan_type.charAt(0).toUpperCase() + installment.plan_type.slice(1)}</td></tr>
+<tr><td><strong>Total Rental Amount</strong></td><td>${formatCurrency(installment.total_installable_amount, currencyCode)}</td></tr>
+<tr><td><strong>Upfront Amount</strong></td><td>${formatCurrency(installment.upfront_amount, currencyCode)}</td></tr>
+<tr><td><strong>Number of Installments</strong></td><td>${installment.number_of_installments}</td></tr>
+<tr><td><strong>Per Installment</strong></td><td>${formatCurrency(installment.installment_amount, currencyCode)}</td></tr>
+</table>
+<h3>Scheduled Payments</h3>
+<table>
+<tr><th>Payment</th><th>Amount</th><th>Due Date</th></tr>
+${rows}
+</table>`;
+}
+
+function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number }, installment?: InstallmentData | null): string {
     // Compose full address from separate fields (DB stores street/city/state/zip separately)
     const customerAddress = [
         customer?.address_street,
@@ -183,6 +220,15 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
             return '';
         })(),
         extension_number: extensionData?.extensionNumber ? extensionData.extensionNumber.toString() : '',
+
+        // Installment payment schedule
+        installment_schedule: installment ? buildInstallmentScheduleHtml(installment, currencyCode) : '',
+        has_installments: installment ? 'true' : 'false',
+        installment_plan_type: installment ? installment.plan_type.charAt(0).toUpperCase() + installment.plan_type.slice(1) : '',
+        installment_total_amount: installment ? formatCurrency(installment.total_installable_amount, currencyCode) : '',
+        installment_upfront_amount: installment ? formatCurrency(installment.upfront_amount, currencyCode) : '',
+        installment_count: installment ? installment.number_of_installments.toString() : '',
+        installment_per_payment: installment ? formatCurrency(installment.installment_amount, currencyCode) : '',
     };
 
     let result = template;
