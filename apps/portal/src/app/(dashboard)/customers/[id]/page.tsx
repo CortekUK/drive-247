@@ -120,6 +120,17 @@ const CustomerDetail = () => {
   const { data: latestVerification } = useQuery({
     queryKey: ["customer-verification", id],
     queryFn: async () => {
+      // Prefer completed verifications over init/pending ones
+      const { data: completedData } = await (supabase as any)
+        .from("identity_verifications")
+        .select("date_of_birth, document_expiry_date, face_image_url, selfie_image_url, document_front_url, document_back_url, status, provider, verification_completed_at")
+        .eq("customer_id", id)
+        .eq("status", "completed")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (completedData) return completedData;
+      // Fallback to latest record if no completed verification exists
       const { data, error } = await (supabase as any)
         .from("identity_verifications")
         .select("date_of_birth, document_expiry_date, face_image_url, selfie_image_url, document_front_url, document_back_url, status, provider, verification_completed_at")

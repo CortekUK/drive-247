@@ -265,8 +265,8 @@ Deno.serve(async (req) => {
       console.log('[Bonzah Balance] /deposit endpoint failed:', err)
     }
 
-    // Use allocated (sub-user) balance if found, otherwise fall back to broker balance
-    const balance = allocatedBalance ?? brokerBalance
+    // Use allocated (sub-user) balance if found and non-zero, otherwise fall back to broker balance
+    const balance = allocatedBalance && Number(allocatedBalance) > 0 ? allocatedBalance : brokerBalance
 
     // Check threshold and create reminder/notifications if needed
     const balanceNum = Number(balance)
