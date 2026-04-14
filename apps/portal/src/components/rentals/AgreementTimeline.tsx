@@ -293,6 +293,7 @@ export function AgreementTimeline({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [sendingAgreement, setSendingAgreement] = useState<string | null>(null);
+  const [openAccordion, setOpenAccordion] = useState<string>('original');
 
   const originalAgreements = agreements.filter((a) => a.agreement_type === 'original');
   const extensionAgreements = agreements.filter((a) => a.agreement_type === 'extension');
@@ -474,7 +475,7 @@ export function AgreementTimeline({
           </div>
         ) : (
           /* Has extensions — use accordion */
-          <Accordion type="single" defaultValue="original" collapsible className="w-full space-y-3 px-4 pb-4">
+          <Accordion type="single" defaultValue="original" collapsible className="w-full space-y-3 px-4 pb-4" value={openAccordion} onValueChange={(val) => setOpenAccordion(val)}>
             {/* Original Rental section */}
             <AccordionItem value="original" className="border rounded-lg overflow-hidden">
               <AccordionTrigger className="px-4 py-3 hover:no-underline">
@@ -483,7 +484,7 @@ export function AgreementTimeline({
                     <Car className="h-3 w-3 text-green-500" />
                   </div>
                   <span className="text-sm font-medium">Original Agreement</span>
-                  {originalAgreements.length > 0 && getGroupStatusBadge(originalAgreements)}
+                  {openAccordion !== 'original' && originalAgreements.length > 0 && getGroupStatusBadge(originalAgreements)}
                   {!hasOriginal && canEdit && displayStatus !== 'Completed' && (
                     <Badge variant="outline" className="text-muted-foreground text-[10px]">Not Sent</Badge>
                   )}
@@ -498,7 +499,6 @@ export function AgreementTimeline({
                         key={latest.id} agreement={latest} canEdit={canEdit} tenantId={tenantId}
                         rentalId={rentalId} customerEmail={rental.customers?.email}
                         customerName={rental.customers?.name} onViewAgreement={onViewAgreement}
-                        hideStatusBadge
                         totalVersions={originalAgreements.length}
                       />
                     );
@@ -532,7 +532,7 @@ export function AgreementTimeline({
                       <div className="text-left">
                         <span className="text-sm font-medium">Extension #{extGroup.extensionNumber}</span>
                       </div>
-                      {extAgreements.length > 0 && getGroupStatusBadge(extAgreements)}
+                      {openAccordion !== `extension-${extGroup.extensionNumber}` && extAgreements.length > 0 && getGroupStatusBadge(extAgreements)}
                       {isMissing && (
                         <Badge variant="outline" className="text-muted-foreground text-[10px]">Not Sent</Badge>
                       )}
@@ -549,7 +549,6 @@ export function AgreementTimeline({
                             customerName={rental.customers?.name}
                             extensionNumber={extGroup.extensionNumber}
                             onViewAgreement={onViewAgreement}
-                            hideStatusBadge
                             totalVersions={extAgreements.length}
                           />
                         );
