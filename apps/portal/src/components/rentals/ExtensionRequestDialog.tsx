@@ -115,10 +115,14 @@ export function ExtensionRequestDialog({
     ? new Date(rental.previous_end_date)
     : null;
 
+  // Detect stale request: the requested date is on or before the current end date
+  // (happens when admin extended the rental via "Extend Rental" after customer requested)
+  const isStaleRequest = requestedEndDate != null && requestedEndDate <= currentEndDate;
+
   const { extensionCost, extensionDays, dailyRate, dayBreakdown, hasSurcharges, isLoading: loadingRate } = useExtensionPricing({
     vehicleId: rental.vehicle_id || rental.vehicles?.id,
     currentEndDate: rental.end_date,
-    newEndDate: rental.previous_end_date || undefined,
+    newEndDate: isStaleRequest ? undefined : (rental.previous_end_date || undefined),
     rentalPeriodType: rental.rental_period_type,
   });
 
@@ -202,7 +206,7 @@ export function ExtensionRequestDialog({
   });
 
   const handleApprove = async () => {
-    if (!requestedEndDate || !tenant?.id) return;
+    if (!requestedEndDate || !tenant?.id || isStaleRequest) return;
 
     setIsApproving(true);
     try {
@@ -604,8 +608,18 @@ export function ExtensionRequestDialog({
             </div>
           </div>
 
+          {/* Stale Request Warning */}
+          {isStaleRequest && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                This request is outdated — the rental has already been extended past the requested date ({requestedEndDate ? format(requestedEndDate, 'MMM dd, yyyy') : ''}). Please reject this request.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Extension Duration */}
-          {requestedEndDate && extensionDays > 0 && (
+          {requestedEndDate && extensionDays > 0 && !isStaleRequest && (
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
@@ -891,7 +905,7 @@ export function ExtensionRequestDialog({
           </Button>
           <Button
             onClick={handleApprove}
-            disabled={isProcessing || !requestedEndDate || hasConflicts}
+            disabled={isProcessing || !requestedEndDate || hasConflicts || isStaleRequest}
             className="flex-1 sm:flex-none"
           >
             {isApproving ? (
