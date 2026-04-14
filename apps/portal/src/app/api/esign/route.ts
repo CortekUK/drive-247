@@ -73,20 +73,9 @@ function buildInstallmentScheduleHtml(installment: InstallmentData, currencyCode
         .map(si => `<tr><td>Payment ${si.installment_number}</td><td>${formatCurrency(si.amount, currencyCode)}</td><td>${formatDate(si.due_date)}</td></tr>`)
         .join('');
 
-    return `<h2>Payment Schedule</h2>
-<p>This rental is set up with an installment payment plan. <strong>You will NOT be charged the full amount upfront.</strong></p>
-<table>
-<tr><td><strong>Plan Type</strong></td><td>${installment.plan_type.charAt(0).toUpperCase() + installment.plan_type.slice(1)}</td></tr>
-<tr><td><strong>Total Rental Amount</strong></td><td>${formatCurrency(installment.total_installable_amount, currencyCode)}</td></tr>
-<tr><td><strong>Upfront Amount</strong></td><td>${formatCurrency(installment.upfront_amount, currencyCode)}</td></tr>
-<tr><td><strong>Number of Installments</strong></td><td>${installment.number_of_installments}</td></tr>
-<tr><td><strong>Per Installment</strong></td><td>${formatCurrency(installment.installment_amount, currencyCode)}</td></tr>
-</table>
-<h3>Scheduled Payments</h3>
-<table>
-<tr><th>Payment</th><th>Amount</th><th>Due Date</th></tr>
-${rows}
-</table>`;
+    // Use inline formatting only (no block-level h2/h3) to avoid breaking PDF parser
+    // when the variable is injected inside a <p> tag from the TipTap editor
+    return `</p><p><strong>PAYMENT SCHEDULE</strong></p><p>This rental is set up with an installment payment plan. <strong>You will NOT be charged the full amount upfront.</strong></p><table><tr><td><strong>Plan Type</strong></td><td>${installment.plan_type.charAt(0).toUpperCase() + installment.plan_type.slice(1)}</td></tr><tr><td><strong>Total Rental Amount</strong></td><td>${formatCurrency(installment.total_installable_amount, currencyCode)}</td></tr><tr><td><strong>Upfront Amount</strong></td><td>${formatCurrency(installment.upfront_amount, currencyCode)}</td></tr><tr><td><strong>Number of Installments</strong></td><td>${installment.number_of_installments}</td></tr><tr><td><strong>Per Installment</strong></td><td>${formatCurrency(installment.installment_amount, currencyCode)}</td></tr></table><p><strong>Scheduled Payments</strong></p><table><tr><th>Payment</th><th>Amount</th><th>Due Date</th></tr>${rows}</table><p`;
 }
 
 function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number }, installment?: InstallmentData | null): string {
