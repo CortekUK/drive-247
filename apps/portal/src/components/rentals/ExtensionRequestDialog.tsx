@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
@@ -110,9 +110,19 @@ export function ExtensionRequestDialog({
   const hasBonzahCoverage = extensionInsuranceType === 'bonzah' && (extensionCoverage.cdw || extensionCoverage.rcli || extensionCoverage.sli || extensionCoverage.pai);
   const insurancePremium = extensionInsuranceType === 'bonzah' ? bonzahPremiumAmount : 0;
 
-  const currentEndDate = new Date(rental.end_date);
-  const requestedEndDate = rental.previous_end_date
-    ? new Date(rental.previous_end_date)
+  // Snapshot dates when dialog opens so they don't flip mid-approval when React Query refetches
+  const [snapshotEndDate, setSnapshotEndDate] = useState(rental.end_date);
+  const [snapshotRequestedDate, setSnapshotRequestedDate] = useState(rental.previous_end_date);
+  const prevOpenRef = useRef(false);
+  if (open && !prevOpenRef.current) {
+    if (snapshotEndDate !== rental.end_date) setSnapshotEndDate(rental.end_date);
+    if (snapshotRequestedDate !== rental.previous_end_date) setSnapshotRequestedDate(rental.previous_end_date);
+  }
+  prevOpenRef.current = open;
+
+  const currentEndDate = new Date(snapshotEndDate);
+  const requestedEndDate = snapshotRequestedDate
+    ? new Date(snapshotRequestedDate)
     : null;
 
   // Detect stale request: the requested date is on or before the current end date
@@ -121,8 +131,8 @@ export function ExtensionRequestDialog({
 
   const { extensionCost, extensionDays, dailyRate, dayBreakdown, hasSurcharges, isLoading: loadingRate } = useExtensionPricing({
     vehicleId: rental.vehicle_id || rental.vehicles?.id,
-    currentEndDate: rental.end_date,
-    newEndDate: isStaleRequest ? undefined : (rental.previous_end_date || undefined),
+    currentEndDate: snapshotEndDate,
+    newEndDate: isStaleRequest ? undefined : (snapshotRequestedDate || undefined),
     rentalPeriodType: rental.rental_period_type,
   });
 
@@ -143,7 +153,7 @@ export function ExtensionRequestDialog({
   const extensionTotalAmount = extensionCost + extensionTaxAmount + extensionServiceFee + insurancePremium;
 
   const extensionStartForInsurance = (() => {
-    const d = rental.end_date.split('T')[0];
+    const d = snapshotEndDate.split('T')[0];
     const today = new Date().toISOString().split('T')[0];
     return d < today ? today : d;
   })();
