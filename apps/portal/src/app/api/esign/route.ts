@@ -240,6 +240,9 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
     for (const [key, value] of Object.entries(variables)) {
         result = result.replace(new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi'), value);
     }
+    // Unwrap block-level elements that ended up inside <p> tags from variable substitution
+    // e.g. <p><h2>...</h2><table>...</table></p> → <h2>...</h2><table>...</table>
+    result = result.replace(/<p>\s*(<(?:h[1-6]|table|div|ul|ol|hr)[^>]*>[\s\S]*?)\s*<\/p>/gi, '$1');
     return result;
 }
 
