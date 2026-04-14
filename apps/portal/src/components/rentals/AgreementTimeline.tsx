@@ -518,11 +518,6 @@ export function AgreementTimeline({
                       </div>
                       <div className="text-left">
                         <span className="text-sm font-medium">Extension #{extGroup.extensionNumber}</span>
-                        {extGroup.entryDate && (
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(extGroup.entryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </p>
-                        )}
                       </div>
                       {extAgreements.length > 0 && getGroupStatusBadge(extAgreements)}
                       {isMissing && (
