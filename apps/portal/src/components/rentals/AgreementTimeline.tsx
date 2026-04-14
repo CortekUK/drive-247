@@ -494,7 +494,6 @@ export function AgreementTimeline({
                       />
                     );
                   })()
-                )
                 ) : (
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">No agreement sent yet.</p>
