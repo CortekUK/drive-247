@@ -83,6 +83,7 @@ function AgreementCard({
   extensionNumber,
   hideStatusBadge,
   isSuperseded,
+  totalVersions,
   onViewAgreement,
 }: {
   agreement: RentalAgreement;
@@ -94,6 +95,7 @@ function AgreementCard({
   extensionNumber?: number;
   hideStatusBadge?: boolean;
   isSuperseded?: boolean;
+  totalVersions?: number;
   onViewAgreement: (agreementId: string, signedDocFileUrl?: string | null) => void;
 }) {
   const { toast } = useToast();
@@ -204,6 +206,11 @@ function AgreementCard({
             <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 dark:bg-blue-400/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 ring-1 ring-inset ring-blue-500/20 dark:ring-blue-400/20">
               <span className="h-1.5 w-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
               Test
+            </span>
+          )}
+          {totalVersions && totalVersions > 1 && (
+            <span className="text-[10px] text-muted-foreground">
+              v{totalVersions} (resent {totalVersions - 1}x)
             </span>
           )}
         </div>
@@ -457,6 +464,7 @@ export function AgreementTimeline({
                     key={latest.id} agreement={latest} canEdit={canEdit} tenantId={tenantId}
                     rentalId={rentalId} customerEmail={rental.customers?.email}
                     customerName={rental.customers?.name} onViewAgreement={onViewAgreement}
+                    totalVersions={originalAgreements.length}
                   />
                 );
               })()
@@ -491,6 +499,7 @@ export function AgreementTimeline({
                         rentalId={rentalId} customerEmail={rental.customers?.email}
                         customerName={rental.customers?.name} onViewAgreement={onViewAgreement}
                         hideStatusBadge
+                        totalVersions={originalAgreements.length}
                       />
                     );
                   })()
@@ -541,6 +550,7 @@ export function AgreementTimeline({
                             extensionNumber={extGroup.extensionNumber}
                             onViewAgreement={onViewAgreement}
                             hideStatusBadge
+                            totalVersions={extAgreements.length}
                           />
                         );
                       })()
