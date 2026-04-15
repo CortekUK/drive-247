@@ -34,7 +34,7 @@ import { checkRentalConflicts, type ConflictResult } from "@/hooks/use-rental-co
 import { VehicleConflictDialog } from "@/components/rentals/VehicleConflictDialog";
 import { PAYMENT_TYPES } from "@/constants";
 import { DatePickerInput } from "@/components/shared/forms/date-picker-input";
-import { RentalDatePicker } from "@/components/shared/forms/rental-date-picker";
+import { RentalDateRangePicker } from "@/components/shared/forms/rental-date-picker";
 import { CurrencyInput } from "@/components/shared/forms/currency-input";
 import { InvoiceDialog } from "@/components/shared/dialogs/invoice-dialog";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
@@ -2745,94 +2745,60 @@ const CreateRental = () => {
                 </div>
                 <div className="p-5 space-y-5">
                   {/* Dates first — period type is auto-determined from date range */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="start_date"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Start Date <span className="text-red-500">*</span></FormLabel>
-                          <FormControl>
-                            <RentalDatePicker
-                              date={field.value}
-                              onSelect={(date) => {
-                                field.onChange(date);
-                                // If end date is now before or equal to new start date, reset it
-                                const currentEnd = form.getValues("end_date");
-                                if (date && currentEnd && !isAfter(currentEnd, addDays(date, 1)) && currentEnd.getTime() !== addDays(date, 1).getTime()) {
-                                  form.setValue("end_date", addDays(date, 1));
-                                }
-                              }}
-                              placeholder="Select start date"
-                              disabled={(date) => {
-                                if (isBefore(date, yearAgo)) return true;
-                                return false;
-                              }}
-                              occupancyMap={occupancyMap}
-                              error={!!form.formState.errors.start_date}
-                              className="w-full"
-                            />
-                          </FormControl>
-                          {isPastStartDate && (
-                            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
-                              Start date is in the past
-                            </p>
-                          )}
-                          {leadTimeWarning && (
-                            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
-                              {leadTimeWarning}. Admin override allowed.
-                            </p>
-                          )}
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {!isPayAsYouGo && <FormField
-                      control={form.control}
-                      name="end_date"
-                      render={({ field }) => {
-                        const getMinEndDate = (startDate: Date) => addDays(startDate, 1);
-
-                        return (
-                          <FormItem>
-                            <FormLabel>End Date <span className="text-red-500">*</span></FormLabel>
-                            <FormControl>
-                              <RentalDatePicker
-                                date={field.value}
-                                onSelect={field.onChange}
-                                placeholder="Select end date"
-                                disabled={(date) => {
-                                  if (watchedStartDate && isBefore(date, getMinEndDate(watchedStartDate))) {
-                                    return true;
-                                  }
-                                  return false;
-                                }}
-                                occupancyMap={occupancyMap}
-                                error={!!form.formState.errors.end_date}
-                                className="w-full"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                            {watchedStartDate && watchedEndDate && (
-                              <FormDescription>
-                                {Math.max(1, differenceInDays(watchedEndDate, watchedStartDate))} days
-                              </FormDescription>
-                            )}
-                            {minDurationWarning && (
-                              <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
-                                {minDurationWarning}. Admin override allowed.
-                              </p>
-                            )}
-                            {maxDurationWarning && (
-                              <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
-                                {maxDurationWarning}. Admin override allowed.
-                              </p>
-                            )}
-                          </FormItem>
-                        );
+                  <div className="space-y-2">
+                    <FormLabel>Rental Dates <span className="text-red-500">*</span></FormLabel>
+                    <RentalDateRangePicker
+                      startDate={watchedStartDate}
+                      endDate={watchedEndDate}
+                      onStartDateChange={(date) => {
+                        form.setValue("start_date", date as Date, { shouldValidate: true });
+                        // If end date is now before or equal to new start date, reset it
+                        const currentEnd = form.getValues("end_date");
+                        if (date && currentEnd && !isAfter(currentEnd, addDays(date, 1)) && currentEnd.getTime() !== addDays(date, 1).getTime()) {
+                          form.setValue("end_date", addDays(date, 1), { shouldValidate: true });
+                        }
                       }}
-                    />}
+                      onEndDateChange={(date) => {
+                        form.setValue("end_date", date as Date, { shouldValidate: true });
+                      }}
+                      disableDate={(date) => {
+                        if (isBefore(date, yearAgo)) return true;
+                        return false;
+                      }}
+                      occupancyMap={occupancyMap}
+                      error={!!form.formState.errors.start_date || !!form.formState.errors.end_date}
+                    />
+                    {isPastStartDate && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
+                        Start date is in the past
+                      </p>
+                    )}
+                    {leadTimeWarning && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
+                        {leadTimeWarning}. Admin override allowed.
+                      </p>
+                    )}
+                    {watchedStartDate && watchedEndDate && (
+                      <p className="text-xs text-muted-foreground">
+                        {Math.max(1, differenceInDays(watchedEndDate, watchedStartDate))} days
+                      </p>
+                    )}
+                    {minDurationWarning && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
+                        {minDurationWarning}. Admin override allowed.
+                      </p>
+                    )}
+                    {maxDurationWarning && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
+                        {maxDurationWarning}. Admin override allowed.
+                      </p>
+                    )}
+                    {form.formState.errors.start_date && (
+                      <p className="text-sm text-destructive">{form.formState.errors.start_date.message}</p>
+                    )}
+                    {form.formState.errors.end_date && (
+                      <p className="text-sm text-destructive">{form.formState.errors.end_date.message}</p>
+                    )}
                   </div>
 
                   {/* Times */}
