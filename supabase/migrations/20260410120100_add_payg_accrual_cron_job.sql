@@ -3,6 +3,7 @@
 -- The edge function itself uses a unique constraint on (rental_id, accrual_day_index)
 -- so concurrent or re-triggered runs cannot double-post ledger entries.
 -- The function has verify_jwt = false in config.toml so no auth header needed.
+-- NOTE: Uses current_setting('app.settings.supabase_url') which resolves to the project URL at runtime.
 
 CREATE EXTENSION IF NOT EXISTS "pg_net" WITH SCHEMA "extensions";
 
@@ -20,7 +21,7 @@ SELECT cron.schedule(
   '*/15 * * * *',
   $$
   SELECT net.http_post(
-    url := 'https://hviqoaokxvlancmftwuo.supabase.co/functions/v1/accrue-payg-charges',
+    url := current_setting('app.settings.supabase_url') || '/functions/v1/accrue-payg-charges',
     headers := '{"Content-Type": "application/json"}'::jsonb,
     body := '{}'::jsonb
   );

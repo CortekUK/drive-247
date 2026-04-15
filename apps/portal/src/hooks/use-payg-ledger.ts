@@ -85,7 +85,7 @@ export const usePaygLedger = (rentalId: string | undefined, isPayg: boolean) => 
         totalServiceFee: Math.round(totalServiceFee * 100) / 100,
         totalCharged: Math.round(totalCharged * 100) / 100,
         totalOutstanding: Math.round(totalOutstanding * 100) / 100,
-        daysActive: rows.length,
+        daysActive: rows.length > 0 ? Math.max(...rows.map(r => r.accrual_day_index)) : 0,
       };
     },
     enabled: !!rentalId && !!tenant?.id && isPayg,

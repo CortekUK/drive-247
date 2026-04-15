@@ -3,6 +3,7 @@
 -- (based on grace period and per-rental interval) so any tenant timezone is supported.
 -- Idempotent — safe to re-run.
 -- The function has verify_jwt = false in config.toml so no auth header needed.
+-- NOTE: Uses current_setting('app.settings.supabase_url') which resolves to the project URL at runtime.
 
 CREATE EXTENSION IF NOT EXISTS "pg_net" WITH SCHEMA "extensions";
 
@@ -20,7 +21,7 @@ SELECT cron.schedule(
   '0 * * * *',
   $$
   SELECT net.http_post(
-    url := 'https://hviqoaokxvlancmftwuo.supabase.co/functions/v1/send-payg-reminders',
+    url := current_setting('app.settings.supabase_url') || '/functions/v1/send-payg-reminders',
     headers := '{"Content-Type": "application/json"}'::jsonb,
     body := '{}'::jsonb
   );

@@ -318,11 +318,13 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Fetch unpaid ledger entries for this rental
+        // Fetch unpaid ledger entries for this rental (tenant_id for defense-in-depth
+        // since service_role bypasses RLS)
         const { data: ledgerData, error: ledgerErr } = await supabase
           .from("ledger_entries")
           .select("id, entry_date, category, amount, remaining_amount, due_date")
           .eq("rental_id", r.id)
+          .eq("tenant_id", r.tenant_id)
           .eq("type", "Charge")
           .gt("remaining_amount", 0)
           .order("entry_date", { ascending: true });
@@ -414,14 +416,24 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // 5. Stamp the rental with the new last_reminder_sent_at + bump count
-        await supabase
-          .from("rentals")
-          .update({
-            payg_last_reminder_sent_at: now.toISOString(),
-            payg_reminder_count: reminderNumber,
-          })
-          .eq("id", r.id);
+        // 5. Stamp the rental with the new last_reminder_sent_at + atomically bump count
+        //    Uses RPC-style raw SQL increment to avoid read-then-write race condition
+        //    when multiple cron workers process the same rental concurrently.
+        await supabase.rpc("increment_payg_reminder_count", {
+          p_rental_id: r.id,
+          p_last_sent_at: now.toISOString(),
+        }).then(async ({ error: rpcErr }) => {
+          // Fallback to direct update if RPC doesn't exist (pre-migration)
+          if (rpcErr) {
+            await supabase
+              .from("rentals")
+              .update({
+                payg_last_reminder_sent_at: now.toISOString(),
+                payg_reminder_count: reminderNumber,
+              })
+              .eq("id", r.id);
+          }
+        });
 
         sent++;
         console.log(

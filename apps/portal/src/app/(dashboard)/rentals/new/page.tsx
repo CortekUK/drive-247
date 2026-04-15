@@ -1233,11 +1233,7 @@ const CreateRental = () => {
 
       setCreationProgress(2); // Step 2: Creating rental record
 
-      // Compute PAYG accrual anchor: start_date + pickup_time, interpreted in tenant timezone.
-      // KNOWN LIMITATION (R3 in plan): currently uses browser-local time. If admin and tenant
-      // are in different timezones, the anchor is shifted by the difference. Future fix is a
-      // server-side recompute on first cron pickup using `tenants.timezone`.
-      //
+      // Compute PAYG accrual anchor: start_date + pickup_time in the tenant's timezone.
       // R1 design: payg_next_accrual_at is the START timestamp of the day-window currently due
       // to be accrued (NOT start_ts + 24h). So day 1 accrues at start_ts itself (1pm 10 Apr →
       // $30). The cron loops while next_accrual_at <= now() and advances by 24h after each post.
@@ -1247,8 +1243,20 @@ const CreateRental = () => {
       let paygNextAccrualAt: string | null = null;
       if (isPayAsYouGo && data.pickup_time) {
         const [hh, mm] = data.pickup_time.split(':').map(Number);
-        const anchor = new Date(data.start_date);
-        anchor.setHours(hh, mm, 0, 0);
+        const tz = tenant?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        // Build a date string in the tenant's timezone and convert to UTC
+        const dateStr = data.start_date instanceof Date
+          ? data.start_date.toISOString().split('T')[0]
+          : String(data.start_date).split('T')[0];
+        const localStr = `${dateStr}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`;
+        // Use Intl to compute the UTC offset for the tenant's timezone at this date/time
+        const tentative = new Date(localStr + 'Z'); // treat as UTC first
+        const utcFmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const parts = utcFmt.formatToParts(tentative);
+        const p = (type: string) => parts.find(p => p.type === type)?.value || '00';
+        const tzLocal = new Date(`${p('year')}-${p('month')}-${p('day')}T${p('hour')}:${p('minute')}:${p('second')}Z`);
+        const offsetMs = tzLocal.getTime() - tentative.getTime();
+        const anchor = new Date(tentative.getTime() - offsetMs);
         paygStartTs = anchor.toISOString();
         // Day 1 is due at the rental start time (not +24h).
         paygNextAccrualAt = anchor.toISOString();
