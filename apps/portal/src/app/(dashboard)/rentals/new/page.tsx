@@ -34,6 +34,7 @@ import { checkRentalConflicts, type ConflictResult } from "@/hooks/use-rental-co
 import { VehicleConflictDialog } from "@/components/rentals/VehicleConflictDialog";
 import { PAYMENT_TYPES } from "@/constants";
 import { DatePickerInput } from "@/components/shared/forms/date-picker-input";
+import { RentalDatePicker } from "@/components/shared/forms/rental-date-picker";
 import { CurrencyInput } from "@/components/shared/forms/currency-input";
 import { InvoiceDialog } from "@/components/shared/dialogs/invoice-dialog";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
@@ -451,7 +452,7 @@ const CreateRental = () => {
   const watchedPromoCode = form.watch("promo_code");
 
   // Fetch booked dates for the selected vehicle (Pending/Active rentals + 1 buffer day)
-  const { bookedDatesArray: vehicleBookedDatesArray, bookedRentals: vehicleBookedRentals } = useVehicleBookedDates(selectedVehicleId || undefined);
+  const { bookedDatesArray: vehicleBookedDatesArray, bookedRentals: vehicleBookedRentals, occupancyMap } = useVehicleBookedDates(selectedVehicleId || undefined);
 
   // Check if a date range would span across a booked rental period
   const wouldSpanBookedPeriod = (startDate: Date, endDate: Date): boolean => {
@@ -2525,7 +2526,7 @@ const CreateRental = () => {
                                           <div className="flex flex-col gap-0.5 flex-1">
                                             <div className="flex items-center gap-2">
                                               <span className="font-medium">{vehicle.reg}</span>
-                                              {vehicle.status && vehicle.status !== "Available" && (
+                                              {vehicle.status && vehicle.status !== "Available" && vehicle.status !== "Rented" && (
                                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium">{vehicle.status}</span>
                                               )}
                                               {vehicle._inBuffer && (
@@ -2752,7 +2753,7 @@ const CreateRental = () => {
                         <FormItem>
                           <FormLabel>Start Date <span className="text-red-500">*</span></FormLabel>
                           <FormControl>
-                            <DatePickerInput
+                            <RentalDatePicker
                               date={field.value}
                               onSelect={(date) => {
                                 field.onChange(date);
@@ -2765,14 +2766,9 @@ const CreateRental = () => {
                               placeholder="Select start date"
                               disabled={(date) => {
                                 if (isBefore(date, yearAgo)) return true;
-                                if (globalBlockedDatesArray.some(
-                                  blockedDate => blockedDate.toDateString() === date.toDateString()
-                                )) return true;
-                                if (vehicleBookedDatesArray.some(
-                                  bookedDate => bookedDate.toDateString() === date.toDateString()
-                                )) return true;
                                 return false;
                               }}
+                              occupancyMap={occupancyMap}
                               error={!!form.formState.errors.start_date}
                               className="w-full"
                             />
@@ -2802,7 +2798,7 @@ const CreateRental = () => {
                           <FormItem>
                             <FormLabel>End Date <span className="text-red-500">*</span></FormLabel>
                             <FormControl>
-                              <DatePickerInput
+                              <RentalDatePicker
                                 date={field.value}
                                 onSelect={field.onChange}
                                 placeholder="Select end date"
@@ -2810,19 +2806,9 @@ const CreateRental = () => {
                                   if (watchedStartDate && isBefore(date, getMinEndDate(watchedStartDate))) {
                                     return true;
                                   }
-                                  if (globalBlockedDatesArray.some(
-                                    blockedDate => blockedDate.toDateString() === date.toDateString()
-                                  )) return true;
-                                  if (vehicleBookedDatesArray.some(
-                                    bookedDate => bookedDate.toDateString() === date.toDateString()
-                                  )) return true;
-                                  if (watchedStartDate && wouldSpanBookedPeriod(watchedStartDate, date)) return true;
-                                  if (watchedStartDate) {
-                                    const blockCheck = checkBlockedDatesOverlap(watchedStartDate, date, selectedVehicleId);
-                                    if (blockCheck.blocked) return true;
-                                  }
                                   return false;
                                 }}
+                                occupancyMap={occupancyMap}
                                 error={!!form.formState.errors.end_date}
                                 className="w-full"
                               />
