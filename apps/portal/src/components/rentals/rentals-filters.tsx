@@ -47,6 +47,7 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
     filters.bonzahStatus ||
     filters.extensionRequested ||
     filters.cancellationRequested ||
+    filters.paymentType ||
     filters.startDateFrom ||
     filters.startDateTo ||
     filters.search;
@@ -169,7 +170,7 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
           </Popover>
         </div>
 
-        {/* Requests + Ins. Quoted pushed right */}
+        {/* Payment type + Requests + Ins. Quoted pushed right */}
         <div className="flex flex-wrap gap-3 items-center sm:ml-auto">
 
         {/* Requests group */}

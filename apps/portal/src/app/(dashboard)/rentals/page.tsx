@@ -383,30 +383,41 @@ const RentalsList = () => {
                         <TableCell>
                           {rental.end_date
                             ? new Date(rental.end_date).toLocaleDateString('en-US')
+                            : rental.is_pay_as_you_go
+                            ? <span className="text-indigo-500 text-xs font-medium">Ongoing</span>
                             : "—"}
                         </TableCell>
                         <TableCell>
-                          {formatRentalDuration(rental.start_date, rental.end_date)}
+                          {rental.is_pay_as_you_go && !rental.end_date
+                            ? <span className="text-xs text-muted-foreground">PAYG</span>
+                            : formatRentalDuration(rental.start_date, rental.end_date)}
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant={
-                              rental.computed_status === "Completed"
-                                ? "secondary"
-                                : rental.computed_status === "Cancelled" || rental.computed_status === "Rejected"
-                                ? "destructive"
-                                : "outline"
-                            }
-                            className={
-                              rental.computed_status === "Active"
-                                ? "bg-green-600 text-white"
-                                : rental.computed_status === "Pending"
-                                ? "bg-amber-500/20 text-amber-600 border-amber-500"
-                                : ""
-                            }
-                          >
-                            {rental.computed_status}
-                          </Badge>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Badge
+                              variant={
+                                rental.computed_status === "Completed"
+                                  ? "secondary"
+                                  : rental.computed_status === "Cancelled" || rental.computed_status === "Rejected"
+                                  ? "destructive"
+                                  : "outline"
+                              }
+                              className={
+                                rental.computed_status === "Active"
+                                  ? "bg-green-600 text-white"
+                                  : rental.computed_status === "Pending"
+                                  ? "bg-amber-500/20 text-amber-600 border-amber-500"
+                                  : ""
+                              }
+                            >
+                              {rental.computed_status}
+                            </Badge>
+                            {rental.is_pay_as_you_go && (
+                              <Badge variant="outline" className="text-indigo-600 border-indigo-300 bg-indigo-100 dark:text-indigo-400 dark:border-indigo-700 dark:bg-indigo-950/30 text-[10px]">
+                                PAYG
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <ReviewStatusBadge

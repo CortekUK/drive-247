@@ -598,7 +598,7 @@ export default function VerificationPage() {
                     <div className="flex items-center gap-3">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
                       <div>
-                        <p className="text-sm text-muted-foreground">Document Expiry</p>
+                        <p className="text-sm text-muted-foreground">Expiration</p>
                         <div className="flex items-center gap-2">
                           <p className="font-medium">
                             {format(new Date(currentVerification.document_expiry_date), 'PPP')}
@@ -966,7 +966,7 @@ export default function VerificationPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-doc-expiry">Document Expiry</Label>
+                  <Label htmlFor="edit-doc-expiry">Expiration</Label>
                   <Input
                     id="edit-doc-expiry"
                     type="date"

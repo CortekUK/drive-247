@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { addMonths, addDays, addWeeks, isAfter, isBefore, subYears, startOfDay, format, differenceInDays, parseISO } from "date-fns";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -69,29 +69,30 @@ import { useVehicleBookedDates } from "@/hooks/use-vehicle-booked-dates";
 import { RentalProgressOverlay } from "@/components/rentals/rental-progress-overlay";
 import { getTimezonesByRegion, findTimezone } from "@/lib/timezones";
 
+// Base schema: end_date and return_location are optional at the schema level
+// because PAYG rentals don't have a fixed end date or a return location.
+// Regular-mode rentals enforce these in the submit handler via the isPayAsYouGo flag.
 const rentalSchema = z.object({
   customer_id: z.string().min(1, "Customer is required"),
   vehicle_id: z.string().min(1, "Vehicle is required"),
   start_date: z.date({ required_error: "Start date is required", invalid_type_error: "Please select a valid start date" }),
-  end_date: z.date({ required_error: "End date is required", invalid_type_error: "Please select a valid end date" }),
+  end_date: z.date({ invalid_type_error: "Please select a valid end date" }).optional(),
   rental_period_type: z.enum(["Daily", "Weekly", "Monthly"], { required_error: "Rental period type is required" }),
   monthly_amount: z.coerce.number({ invalid_type_error: "Please enter a valid rental amount" }).min(0.01, "Rental amount is required"),
   // New booking-aligned fields
   pickup_location: z.string().min(1, "Pickup location is required"),
-  return_location: z.string().min(1, "Return location is required"),
+  return_location: z.string().optional(),
   pickup_time: z.string().regex(/^\d{2}:\d{2}$/, "Pickup time is required"),
-  return_time: z.string().regex(/^\d{2}:\d{2}$/, "Return time is required"),
+  // return_time: optional for PAYG (open-ended). Accept empty string OR valid HH:MM.
+  // Regular mode enforces return_time in the submit handler.
+  return_time: z.union([
+    z.string().regex(/^\d{2}:\d{2}$/, "Return time is required"),
+    z.literal(''),
+  ]).optional(),
   driver_age: z.coerce.number({ invalid_type_error: "Please enter a valid driver age" }).min(1, "Driver age is required").max(200, "Driver age cannot exceed 200"),
   promo_code: z.string().optional(),
   insurance_status: z.enum(["pending", "uploaded", "verified", "bonzah", "not_required"]).optional(),
   notes: z.string().optional(),
-}).refine((data) => {
-  // End date must be at least 1 day after start date
-  const minEndDate = addDays(data.start_date, 1);
-  return isAfter(data.end_date, minEndDate) || data.end_date.getTime() === minEndDate.getTime();
-}, {
-  message: "End date must be at least 1 day after start date",
-  path: ["end_date"],
 });
 
 type RentalFormData = z.infer<typeof rentalSchema>;
@@ -166,6 +167,8 @@ const CreateRental = () => {
 
   // Pay As You Go state
   const [isPayAsYouGo, setIsPayAsYouGo] = useState(false);
+  // Per-rental reminder interval override. null = use tenant default.
+  const [paygReminderInterval, setPaygReminderInterval] = useState<number | null>(null);
 
   // Lockbox / delivery method state
   const [deliveryMethod, setDeliveryMethod] = useState<'in_person' | 'lockbox'>('in_person');
@@ -194,6 +197,9 @@ const CreateRental = () => {
 
   // Verification state
   const [creatingVerification, setCreatingVerification] = useState(false);
+  const [cancelingVerification, setCancelingVerification] = useState(false);
+  const [showCancelVerificationDialog, setShowCancelVerificationDialog] = useState(false);
+  const [pendingVerificationAction, setPendingVerificationAction] = useState<"cancel" | "restart">("cancel");
   const [showQRModal, setShowQRModal] = useState(false);
   const [aiSessionData, setAiSessionData] = useState<{ sessionId: string; qrUrl: string; expiresAt: Date } | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -1031,6 +1037,62 @@ const CreateRental = () => {
     }
   };
 
+  // Cancel the current pending verification session.
+  // Marks the identity_verifications row as "canceled" so verificationPending becomes false,
+  // and clears any in-flight AI QR/polling state. Returns true on success.
+  const cancelVerificationSession = async (): Promise<boolean> => {
+    if (!customerVerification?.id) return true;
+    try {
+      const { error } = await (supabase as any)
+        .from("identity_verifications")
+        .update({
+          status: "canceled",
+          review_status: "canceled",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", customerVerification.id);
+      if (error) throw error;
+
+      // Stop any in-flight AI session UI
+      setIsPolling(false);
+      setShowQRModal(false);
+      setAiSessionData(null);
+
+      await refetchVerification();
+      return true;
+    } catch (error: any) {
+      console.error("Error canceling verification:", error);
+      sonnerToast.error(error.message || "Failed to cancel verification session");
+      return false;
+    }
+  };
+
+  // Handle Cancel button — confirms, then cancels the pending session
+  const handleCancelVerification = async () => {
+    setCancelingVerification(true);
+    try {
+      const ok = await cancelVerificationSession();
+      if (ok) sonnerToast.success("Verification session canceled");
+    } finally {
+      setCancelingVerification(false);
+      setShowCancelVerificationDialog(false);
+    }
+  };
+
+  // Handle Restart button — cancels the pending session, then creates a fresh one
+  const handleRestartVerification = async () => {
+    setCancelingVerification(true);
+    try {
+      const ok = await cancelVerificationSession();
+      if (!ok) return;
+      // Kick off a new session (handleCreateVerification manages its own loading state)
+      await handleCreateVerification();
+    } finally {
+      setCancelingVerification(false);
+      setShowCancelVerificationDialog(false);
+    }
+  };
+
   // Timer for QR expiry countdown
   useEffect(() => {
     if (!showQRModal || !aiSessionData) return;
@@ -1129,8 +1191,34 @@ const CreateRental = () => {
         throw new Error("Monthly amount must be greater than 0");
       }
 
+      // PAYG vs regular mode validation
+      // Regular rentals require end_date + return_location + return_time; PAYG does not.
+      // PAYG requires pickup_time (anchor for the daily accrual window).
+      if (!isPayAsYouGo) {
+        if (!data.end_date) {
+          throw new Error("End date is required");
+        }
+        const minEndDate = addDays(data.start_date, 1);
+        if (!(isAfter(data.end_date, minEndDate) || data.end_date.getTime() === minEndDate.getTime())) {
+          throw new Error("End date must be at least 1 day after start date");
+        }
+        if (!data.return_time || !/^\d{2}:\d{2}$/.test(data.return_time)) {
+          throw new Error("Return time is required");
+        }
+        if (!sameAsPickup && (!data.return_location || data.return_location.trim() === '')) {
+          throw new Error("Return location is required");
+        }
+      } else {
+        // PAYG: pickup_time is the accrual anchor and must be present
+        if (!data.pickup_time || !/^\d{2}:\d{2}$/.test(data.pickup_time)) {
+          throw new Error("Pickup time is required for Pay-As-You-Go rentals");
+        }
+      }
+
       // Check for blocked dates (global and vehicle-specific) — fallback for local blocked dates state
-      const blockCheck = checkBlockedDatesOverlap(data.start_date, data.end_date, data.vehicle_id);
+      // Use start_date as both bounds for PAYG so we only block the start-day, not an open-ended range.
+      const blockCheckEnd = data.end_date ?? data.start_date;
+      const blockCheck = checkBlockedDatesOverlap(data.start_date, blockCheckEnd, data.vehicle_id);
       if (blockCheck.blocked) {
         const blockType = blockCheck.isGlobal ? "Global blocked period" : "Vehicle blocked";
         throw new Error(`Cannot create rental: ${blockType}. Reason: ${blockCheck.reason}`);
@@ -1145,43 +1233,80 @@ const CreateRental = () => {
 
       setCreationProgress(2); // Step 2: Creating rental record
 
+      // Compute PAYG accrual anchor: start_date + pickup_time, interpreted in tenant timezone.
+      // KNOWN LIMITATION (R3 in plan): currently uses browser-local time. If admin and tenant
+      // are in different timezones, the anchor is shifted by the difference. Future fix is a
+      // server-side recompute on first cron pickup using `tenants.timezone`.
+      //
+      // R1 design: payg_next_accrual_at is the START timestamp of the day-window currently due
+      // to be accrued (NOT start_ts + 24h). So day 1 accrues at start_ts itself (1pm 10 Apr →
+      // $30). The cron loops while next_accrual_at <= now() and advances by 24h after each post.
+      // This gates day 1 on the rental becoming Active (cron only picks status='Active' rows),
+      // and naturally handles backdated rentals via R2's catch-up loop.
+      let paygStartTs: string | null = null;
+      let paygNextAccrualAt: string | null = null;
+      if (isPayAsYouGo && data.pickup_time) {
+        const [hh, mm] = data.pickup_time.split(':').map(Number);
+        const anchor = new Date(data.start_date);
+        anchor.setHours(hh, mm, 0, 0);
+        paygStartTs = anchor.toISOString();
+        // Day 1 is due at the rental start time (not +24h).
+        paygNextAccrualAt = anchor.toISOString();
+      }
+
+      // For PAYG rentals we clear end_date + return fields and persist accrual metadata.
+      // Use supabaseUntyped because some PAYG columns are not yet in generated types.
+      const rentalInsertPayload: any = {
+        customer_id: data.customer_id,
+        vehicle_id: data.vehicle_id,
+        start_date: data.start_date.toISOString().split('T')[0],
+        // Regular: use form's end_date. PAYG: null (open-ended).
+        end_date: isPayAsYouGo ? null : (data.end_date ? data.end_date.toISOString().split('T')[0] : null),
+        rental_period_type: isPayAsYouGo ? "Daily" : data.rental_period_type,
+        monthly_amount: data.monthly_amount,
+        status: "Pending",
+        document_status: "pending",
+        source: "portal",
+        tenant_id: tenant?.id,
+        pickup_location: data.pickup_location || null,
+        return_location: isPayAsYouGo ? null : (sameAsPickup ? data.pickup_location : data.return_location || null),
+        pickup_location_id: pickupMethod === 'location' ? (pickupLocationId || null) : null,
+        return_location_id: isPayAsYouGo
+          ? null
+          : (!sameAsPickup && returnMethod === 'location' ? (returnLocationId || null) : (sameAsPickup && pickupMethod === 'location' ? (pickupLocationId || null) : null)),
+        pickup_time: data.pickup_time || null,
+        return_time: isPayAsYouGo ? null : (data.return_time || null),
+        driver_age_range: data.driver_age ? (data.driver_age < 25 ? 'under_25' : data.driver_age > 70 ? 'over_70' : '25_70') : null,
+        promo_code: promoDetails?.code || null,
+        discount_applied: discountAmount > 0 ? discountAmount : null,
+        // PAYG: Bonzah insurance is not offered per the product spec; force "pending" if PAYG.
+        insurance_status: isPayAsYouGo ? "pending" : (bonzahPremium > 0 ? "bonzah" : (data.insurance_status || "pending")),
+        insurance_premium: isPayAsYouGo ? null : (bonzahPremium > 0 ? bonzahPremium : null),
+        renewed_from_rental_id: renewFromId || null,
+        delivery_method: rentalSettings?.lockbox_enabled ? deliveryMethod : null,
+        delivery_fee: effectiveDeliveryFee > 0 ? effectiveDeliveryFee : null,
+        collection_fee: isPayAsYouGo ? null : (effectiveCollectionFee > 0 ? effectiveCollectionFee : null),
+        delivery_option: pickupMethod,
+        daily_mileage_override: dailyMileageOverride,
+        weekly_mileage_override: weeklyMileageOverride,
+        monthly_mileage_override: monthlyMileageOverride,
+        excess_mileage_rate_override: excessRateOverride,
+        has_installment_plan: !isPayAsYouGo && installmentPlanType !== 'full' && rentalSettings?.installments_enabled,
+        is_pay_as_you_go: isPayAsYouGo,
+        // PAYG accrual state (nullable — only set when PAYG)
+        payg_start_ts: paygStartTs,
+        payg_next_accrual_at: paygNextAccrualAt,
+        payg_accrual_day_count: 0,
+        payg_reminder_count: 0,
+        payg_paused: false,
+        // Per-rental reminder interval override (null = use tenant default)
+        payg_reminder_interval_days: isPayAsYouGo ? paygReminderInterval : null,
+      };
+
       // Create rental with Pending status (will become Active after DocuSign)
-      const { data: rental, error: rentalError } = await supabase
+      const { data: rental, error: rentalError } = await supabaseUntyped
         .from("rentals")
-        .insert({
-          customer_id: data.customer_id,
-          vehicle_id: data.vehicle_id,
-          start_date: data.start_date.toISOString().split('T')[0],
-          end_date: data.end_date.toISOString().split('T')[0],
-          rental_period_type: data.rental_period_type,
-          monthly_amount: data.monthly_amount,
-          status: "Pending",
-          document_status: "pending",
-          source: "portal",
-          tenant_id: tenant?.id,
-          pickup_location: data.pickup_location || null,
-          return_location: sameAsPickup ? data.pickup_location : data.return_location || null,
-          pickup_location_id: pickupMethod === 'location' ? (pickupLocationId || null) : null,
-          return_location_id: !sameAsPickup && returnMethod === 'location' ? (returnLocationId || null) : (sameAsPickup && pickupMethod === 'location' ? (pickupLocationId || null) : null),
-          pickup_time: data.pickup_time || null,
-          return_time: data.return_time || null,
-          driver_age_range: data.driver_age ? (data.driver_age < 25 ? 'under_25' : data.driver_age > 70 ? 'over_70' : '25_70') : null,
-          promo_code: promoDetails?.code || null,
-          discount_applied: discountAmount > 0 ? discountAmount : null,
-          insurance_status: bonzahPremium > 0 ? "bonzah" : (data.insurance_status || "pending"),
-          insurance_premium: bonzahPremium > 0 ? bonzahPremium : null,
-          renewed_from_rental_id: renewFromId || null,
-          delivery_method: rentalSettings?.lockbox_enabled ? deliveryMethod : null,
-          delivery_fee: effectiveDeliveryFee > 0 ? effectiveDeliveryFee : null,
-          collection_fee: effectiveCollectionFee > 0 ? effectiveCollectionFee : null,
-          delivery_option: pickupMethod,
-          daily_mileage_override: dailyMileageOverride,
-          weekly_mileage_override: weeklyMileageOverride,
-          monthly_mileage_override: monthlyMileageOverride,
-          excess_mileage_rate_override: excessRateOverride,
-          has_installment_plan: !isPayAsYouGo && installmentPlanType !== 'full' && rentalSettings?.installments_enabled,
-          is_pay_as_you_go: isPayAsYouGo,
-        } as any)
+        .insert(rentalInsertPayload)
         .select()
         .single();
 
@@ -1463,14 +1588,17 @@ const CreateRental = () => {
       } as any);
       invoiceCreated = true;
 
-      // Generate charges split by category (uses invoice breakdown created above)
-      const { error: chargeError } = await supabase.rpc("generate_first_charge_for_rental", {
-        rental_id_param: rental.id
-      });
+      // Generate charges split by category (uses invoice breakdown created above).
+      // Skip for PAYG — the accrual cron handles daily charge generation instead.
+      if (!isPayAsYouGo) {
+        const { error: chargeError } = await supabase.rpc("generate_first_charge_for_rental", {
+          rental_id_param: rental.id
+        });
 
-      if (chargeError) {
-        console.error("Error generating charges:", chargeError);
-        // Don't throw - rental is already created, charges can be created manually
+        if (chargeError) {
+          console.error("Error generating charges:", chargeError);
+          // Don't throw - rental is already created, charges can be created manually
+        }
       }
 
       // Create installment plan if selected
@@ -1926,7 +2054,7 @@ const CreateRental = () => {
       currentStep={creationProgress}
       steps={creationSteps}
     />
-    <div className="container mx-auto px-4 py-6 md:px-6 md:py-8">
+    <div className="container mx-auto px-4 py-6 md:px-6 md:py-8 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-4 mb-2">
         <Button
@@ -1981,8 +2109,8 @@ const CreateRental = () => {
         </Alert>
       )}
 
-      <div>
-        <div>
+      <div className="lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
+        <div className="lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
           {/* Submit Error Alert */}
           {submitError && (
             <Alert variant="destructive" className="mb-6">
@@ -1992,7 +2120,7 @@ const CreateRental = () => {
           )}
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+            <form className="lg:flex-1 lg:min-h-0 lg:flex lg:flex-col" onSubmit={form.handleSubmit(onSubmit, (errors) => {
               const fieldErrors = Object.entries(errors).map(([key, e]) => ({ key, message: e?.message })).filter(e => e.message);
               toast({
                 title: `${fieldErrors.length} missing field${fieldErrors.length > 1 ? 's' : ''}`,
@@ -2012,9 +2140,9 @@ const CreateRental = () => {
                 }
               }, 50);
             })}>
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:h-[calc(100vh-180px)]">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:flex-1 lg:min-h-0">
             {/* ── Left: Scrollable Form ─────────────────────── */}
-            <div className="lg:col-span-3 lg:overflow-y-auto lg:pr-2 space-y-6">
+            <div className="lg:col-span-3 lg:overflow-y-auto lg:pr-2 space-y-6 lg:flex lg:flex-col lg:min-h-0">
               {/* ── Section 1: Customer & Vehicle ──────────────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
                 <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
@@ -2155,7 +2283,48 @@ const CreateRental = () => {
                         </div>
                       ) : verificationPending ? (
                         <div className="space-y-3">
-                          <Alert variant="default" className="border-blue-500 bg-blue-50"><Clock className="h-4 w-4 text-blue-600" /><AlertDescription className="text-blue-700">Verification session in progress.</AlertDescription></Alert>
+                          <Alert variant="default" className="border-blue-500 bg-blue-50">
+                            <Clock className="h-4 w-4 text-blue-600" />
+                            <AlertDescription className="text-blue-700">
+                              Verification session in progress. If the customer can&apos;t complete it, you can cancel or restart the session.
+                            </AlertDescription>
+                          </Alert>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              disabled={cancelingVerification || creatingVerification}
+                              onClick={() => {
+                                setPendingVerificationAction("cancel");
+                                setShowCancelVerificationDialog(true);
+                              }}
+                            >
+                              {cancelingVerification && pendingVerificationAction === "cancel" ? (
+                                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Canceling...</>
+                              ) : (
+                                <><XCircle className="h-4 w-4 mr-2" />Cancel Session</>
+                              )}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+                              disabled={cancelingVerification || creatingVerification}
+                              onClick={() => {
+                                setPendingVerificationAction("restart");
+                                setShowCancelVerificationDialog(true);
+                              }}
+                            >
+                              {(cancelingVerification && pendingVerificationAction === "restart") || creatingVerification ? (
+                                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Restarting...</>
+                              ) : (
+                                <><RefreshCw className="h-4 w-4 mr-2" />Restart Session</>
+                              )}
+                            </Button>
+                          </div>
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -2405,6 +2574,160 @@ const CreateRental = () => {
                 </div>
               </div>
 
+              {/* ── Payment Mode: Regular vs Pay As You Go (positioned after Customer & Vehicle) ──────── */}
+              {rentalSettings?.pay_as_you_go_enabled && selectedVehicleId && (
+                <div className="rounded-xl border bg-card shadow-sm">
+                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
+                      <CreditCard className="h-4 w-4" />
+                    </div>
+                    <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Mode</h2>
+                  </div>
+                  <div className="p-5 space-y-4">
+                    <RadioGroup
+                      value={isPayAsYouGo ? 'payg' : 'regular'}
+                      onValueChange={(val) => {
+                        setIsPayAsYouGo(val === 'payg');
+                        if (val === 'payg') {
+                          setInstallmentPlanType('full');
+                          setInstallmentAmountOverride(null);
+                          // R6: clear any promo state — promo codes are not used for PAYG
+                          form.setValue('promo_code', '');
+                          setPromoDetails(null);
+                          setPromoError(null);
+                          // Clear end_date and return_time for PAYG (open-ended)
+                          form.setValue('end_date', undefined as any);
+                          form.setValue('return_time', undefined as any);
+                          form.setValue('return_location', '');
+                          form.setValue('rental_period_type', 'Daily');
+                          // Auto-fill monthly_amount with daily_rent from the selected vehicle
+                          const vehicle = vehicles?.find((v: any) => v.id === selectedVehicleId);
+                          if (vehicle) {
+                            form.setValue('monthly_amount', vehicle.daily_rent || 0, { shouldValidate: true });
+                          }
+                        }
+                      }}
+                      className="space-y-2"
+                    >
+                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", !isPayAsYouGo ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
+                        <RadioGroupItem value="regular" />
+                        <div>
+                          <span className="text-sm font-medium">Regular</span>
+                          <p className="text-xs text-muted-foreground">Standard payment — pay upfront or via installments</p>
+                        </div>
+                      </label>
+                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isPayAsYouGo ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
+                        <RadioGroupItem value="payg" />
+                        <div>
+                          <span className="text-sm font-medium">Pay As You Go</span>
+                          <p className="text-xs text-muted-foreground">Rental amount, tax, and percentage-based service fees are paid incrementally</p>
+                        </div>
+                      </label>
+                    </RadioGroup>
+
+                    {isPayAsYouGo && (
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Reminder Interval (days)</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={365}
+                          placeholder={`Default: ${(rentalSettings as any)?.payg_reminder_interval_days ?? 4}`}
+                          value={paygReminderInterval ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              setPaygReminderInterval(null);
+                            } else {
+                              const n = parseInt(val);
+                              setPaygReminderInterval(isNaN(n) ? null : Math.max(1, Math.min(365, n)));
+                            }
+                          }}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Leave empty to use the tenant default (
+                          {(rentalSettings as any)?.payg_reminder_interval_days ?? 4} days).
+                          Reminders fire after a {(rentalSettings as any)?.payg_grace_period_days ?? 2}-day grace period, then every N days while there is an outstanding balance.
+                        </p>
+                      </div>
+                    )}
+
+                    {isPayAsYouGo && (() => {
+                      const currency = tenant?.currency_code || 'USD';
+                      const rentalAmount = watchedMonthlyAmount || 0;
+                      const discountAmt = promoDetails ? calculateDiscount(rentalAmount) : 0;
+                      const discounted = rentalAmount - discountAmt;
+                      const tax = taxOverride !== null ? taxOverride : calculateTaxAmount(discounted);
+                      const serviceFee = serviceFeeOverride !== null ? serviceFeeOverride : calculateServiceFee(discounted);
+                      const deposit = depositOverride !== null ? depositOverride : calculateSecurityDeposit(form.getValues("vehicle_id"));
+                      const isServiceFeePercentage = rentalSettings?.service_fee_type === 'percentage';
+                      const isServiceFeeEnabled = rentalSettings?.service_fee_enabled && serviceFee > 0;
+
+                      const paygItems: { label: string; amount: number }[] = [
+                        { label: 'Rental Amount', amount: discounted },
+                      ];
+                      if (rentalSettings?.tax_enabled && tax > 0) {
+                        paygItems.push({ label: `Tax (${rentalSettings.tax_percentage}%)`, amount: tax });
+                      }
+                      if (isServiceFeeEnabled && isServiceFeePercentage) {
+                        paygItems.push({ label: `Service Fee (${rentalSettings?.service_fee_value}%)`, amount: serviceFee });
+                      }
+                      const paygTotal = paygItems.reduce((s, i) => s + i.amount, 0);
+
+                      const normalItems: { label: string; amount: number }[] = [];
+                      if (isServiceFeeEnabled && !isServiceFeePercentage) {
+                        normalItems.push({ label: 'Service Fee (fixed)', amount: serviceFee });
+                      }
+                      if (rentalSettings?.security_deposit_enabled && deposit > 0) {
+                        normalItems.push({ label: 'Pre-Authorization', amount: deposit });
+                      }
+
+                      return (
+                        <div className="mt-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 space-y-3">
+                          <div className="flex items-start gap-2">
+                            <Info className="h-4 w-4 text-indigo-600 dark:text-indigo-400 mt-0.5 flex-shrink-0" />
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">How Pay As You Go works</p>
+                              <p className="text-xs text-muted-foreground">
+                                The customer pays the rental charges incrementally over time instead of upfront. You record each payment as it comes in from the rental detail page.
+                              </p>
+                            </div>
+                          </div>
+
+                          {discounted > 0 && (
+                            <div className="space-y-2 pt-2 border-t border-indigo-200/60 dark:border-indigo-800/60">
+                              <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Paid Incrementally (PAYG)</p>
+                              {paygItems.map(item => (
+                                <div key={item.label} className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">{item.label}</span>
+                                  <span className="font-medium">{formatCurrency(item.amount, currency)}</span>
+                                </div>
+                              ))}
+                              <div className="flex justify-between text-sm font-semibold border-t border-indigo-200/60 dark:border-indigo-800/60 pt-1.5">
+                                <span className="text-indigo-700 dark:text-indigo-300">PAYG Total</span>
+                                <span className="text-indigo-700 dark:text-indigo-300">{formatCurrency(paygTotal, currency)}</span>
+                              </div>
+
+                              {normalItems.length > 0 && (
+                                <>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-2">Charged Separately</p>
+                                  {normalItems.map(item => (
+                                    <div key={item.label} className="flex justify-between text-sm">
+                                      <span className="text-muted-foreground">{item.label}</span>
+                                      <span className="font-medium">{formatCurrency(item.amount, currency)}</span>
+                                    </div>
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+
               {/* ── Section 2: Rental Period & Pricing ────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
                 <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
@@ -2461,7 +2784,7 @@ const CreateRental = () => {
                       )}
                     />
 
-                    <FormField
+                    {!isPayAsYouGo && <FormField
                       control={form.control}
                       name="end_date"
                       render={({ field }) => {
@@ -2515,7 +2838,7 @@ const CreateRental = () => {
                           </FormItem>
                         );
                       }}
-                    />
+                    />}
                   </div>
 
                   {/* Times */}
@@ -2524,7 +2847,7 @@ const CreateRental = () => {
                       control={form.control}
                       name="pickup_time"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className={isPayAsYouGo ? 'md:col-span-2' : ''}>
                           <FormLabel>Pickup Time <span className="text-red-500">*</span></FormLabel>
                           <FormControl>
                             <TimePicker
@@ -2538,7 +2861,7 @@ const CreateRental = () => {
                         </FormItem>
                       )}
                     />
-                    <FormField
+                    {!isPayAsYouGo && <FormField
                       control={form.control}
                       name="return_time"
                       render={({ field }) => (
@@ -2555,7 +2878,7 @@ const CreateRental = () => {
                           <FormMessage />
                         </FormItem>
                       )}
-                    />
+                    />}
                   </div>
 
                   {/* Rental Period Type — auto-determined, read-only display */}
@@ -2832,8 +3155,8 @@ const CreateRental = () => {
                         }}
                       />
 
-                      {/* Promo Code */}
-                      <FormField
+                      {/* Promo Code (hidden for PAYG — R6: open-ended rentals can't meaningfully apply discounts) */}
+                      {!isPayAsYouGo && <FormField
                         control={form.control}
                         name="promo_code"
                         render={({ field }) => (
@@ -2930,7 +3253,7 @@ const CreateRental = () => {
                             <FormMessage />
                           </FormItem>
                         )}
-                      />
+                      />}
 
                       {/* Fee breakdown */}
                       {hasFees && (
@@ -3102,121 +3425,6 @@ const CreateRental = () => {
                 );
               })()}
 
-              {/* ── Payment Mode: Regular vs Pay As You Go ──────── */}
-              {rentalSettings?.pay_as_you_go_enabled && selectedVehicleId && (
-                <div className="rounded-xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
-                      <CreditCard className="h-4 w-4" />
-                    </div>
-                    <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Mode</h2>
-                  </div>
-                  <div className="p-5 space-y-4">
-                    <RadioGroup
-                      value={isPayAsYouGo ? 'payg' : 'regular'}
-                      onValueChange={(val) => {
-                        setIsPayAsYouGo(val === 'payg');
-                        if (val === 'payg') {
-                          setInstallmentPlanType('full');
-                          setInstallmentAmountOverride(null);
-                        }
-                      }}
-                      className="space-y-2"
-                    >
-                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", !isPayAsYouGo ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
-                        <RadioGroupItem value="regular" />
-                        <div>
-                          <span className="text-sm font-medium">Regular</span>
-                          <p className="text-xs text-muted-foreground">Standard payment — pay upfront or via installments</p>
-                        </div>
-                      </label>
-                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isPayAsYouGo ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
-                        <RadioGroupItem value="payg" />
-                        <div>
-                          <span className="text-sm font-medium">Pay As You Go</span>
-                          <p className="text-xs text-muted-foreground">Rental amount, tax, and percentage-based service fees are paid incrementally</p>
-                        </div>
-                      </label>
-                    </RadioGroup>
-
-                    {isPayAsYouGo && (() => {
-                      const currency = tenant?.currency_code || 'USD';
-                      const rentalAmount = watchedMonthlyAmount || 0;
-                      const discountAmt = promoDetails ? calculateDiscount(rentalAmount) : 0;
-                      const discounted = rentalAmount - discountAmt;
-                      const tax = taxOverride !== null ? taxOverride : calculateTaxAmount(discounted);
-                      const serviceFee = serviceFeeOverride !== null ? serviceFeeOverride : calculateServiceFee(discounted);
-                      const deposit = depositOverride !== null ? depositOverride : calculateSecurityDeposit(form.getValues("vehicle_id"));
-                      const isServiceFeePercentage = rentalSettings?.service_fee_type === 'percentage';
-                      const isServiceFeeEnabled = rentalSettings?.service_fee_enabled && serviceFee > 0;
-
-                      // PAYG items
-                      const paygItems: { label: string; amount: number }[] = [
-                        { label: 'Rental Amount', amount: discounted },
-                      ];
-                      if (rentalSettings?.tax_enabled && tax > 0) {
-                        paygItems.push({ label: `Tax (${rentalSettings.tax_percentage}%)`, amount: tax });
-                      }
-                      if (isServiceFeeEnabled && isServiceFeePercentage) {
-                        paygItems.push({ label: `Service Fee (${rentalSettings?.service_fee_value}%)`, amount: serviceFee });
-                      }
-                      const paygTotal = paygItems.reduce((s, i) => s + i.amount, 0);
-
-                      // Upfront / normal items
-                      const normalItems: { label: string; amount: number }[] = [];
-                      if (isServiceFeeEnabled && !isServiceFeePercentage) {
-                        normalItems.push({ label: 'Service Fee (fixed)', amount: serviceFee });
-                      }
-                      if (rentalSettings?.security_deposit_enabled && deposit > 0) {
-                        normalItems.push({ label: 'Pre-Authorization', amount: deposit });
-                      }
-
-                      return (
-                        <div className="mt-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 space-y-3">
-                          <div className="flex items-start gap-2">
-                            <Info className="h-4 w-4 text-indigo-600 dark:text-indigo-400 mt-0.5 flex-shrink-0" />
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">How Pay As You Go works</p>
-                              <p className="text-xs text-muted-foreground">
-                                The customer pays the rental charges incrementally over time instead of upfront. You record each payment as it comes in from the rental detail page.
-                              </p>
-                            </div>
-                          </div>
-
-                          {discounted > 0 && (
-                            <div className="space-y-2 pt-2 border-t border-indigo-200/60 dark:border-indigo-800/60">
-                              <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Paid Incrementally (PAYG)</p>
-                              {paygItems.map(item => (
-                                <div key={item.label} className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">{item.label}</span>
-                                  <span className="font-medium">{formatCurrency(item.amount, currency)}</span>
-                                </div>
-                              ))}
-                              <div className="flex justify-between text-sm font-semibold border-t border-indigo-200/60 dark:border-indigo-800/60 pt-1.5">
-                                <span className="text-indigo-700 dark:text-indigo-300">PAYG Total</span>
-                                <span className="text-indigo-700 dark:text-indigo-300">{formatCurrency(paygTotal, currency)}</span>
-                              </div>
-
-                              {normalItems.length > 0 && (
-                                <>
-                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-2">Charged Separately</p>
-                                  {normalItems.map(item => (
-                                    <div key={item.label} className="flex justify-between text-sm">
-                                      <span className="text-muted-foreground">{item.label}</span>
-                                      <span className="font-medium">{formatCurrency(item.amount, currency)}</span>
-                                    </div>
-                                  ))}
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-              )}
-
               {/* ── Installment Plan ──────────────────────────────── */}
               {!isPayAsYouGo && (() => {
                 const installmentConfig = rentalSettings?.installment_config;
@@ -3302,7 +3510,7 @@ const CreateRental = () => {
                   }
                   const minDays = Math.min(minDaysWeekly, minDaysMonthly);
                   if (rentalDays < minDays) {
-                    reasons.push(`Minimum ${minDays} days required (this rental is ${rentalDays} days)`);
+                    reasons.push(`Minimum ${minDays} ${minDays === 1 ? 'day' : 'days'} required (this rental is ${rentalDays} ${rentalDays === 1 ? 'day' : 'days'})`);
                   }
                   if (reasons.length > 0) {
                     return (
@@ -3557,7 +3765,7 @@ const CreateRental = () => {
               <div className="rounded-xl border bg-card shadow-sm">
                 <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
                   <span className="text-2xl font-extrabold text-primary">3.</span>
-                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Pickup & Return</h2>
+                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">{isPayAsYouGo ? 'Pickup' : 'Pickup & Return'}</h2>
                 </div>
                 <div className="p-5 space-y-5">
                   <FormField control={form.control} name="pickup_location" render={({ field }) => (
@@ -3584,9 +3792,9 @@ const CreateRental = () => {
                     </div>
                   )}
 
-                  <div className="border-t" />
+                  {!isPayAsYouGo && <div className="border-t" />}
 
-                  <FormField control={form.control} name="return_location" render={({ field }) => (
+                  {!isPayAsYouGo && <FormField control={form.control} name="return_location" render={({ field }) => (
                     <FormItem>
                       <div className="flex items-center justify-between">
                         <FormLabel>Return Location <span className="text-red-500">*</span></FormLabel>
@@ -3619,9 +3827,9 @@ const CreateRental = () => {
                       )}
                       <FormMessage />
                     </FormItem>
-                  )} />
+                  )} />}
 
-                  {!sameAsPickup && (returnIsCustom || (returnMethod !== 'fixed' && (collectionFee > 0 || collectionFeeOverride !== null))) && (
+                  {!isPayAsYouGo && !sameAsPickup && (returnIsCustom || (returnMethod !== 'fixed' && (collectionFee > 0 || collectionFeeOverride !== null))) && (
                     <div className="flex items-center gap-3">
                       <Label className="text-sm text-muted-foreground whitespace-nowrap">Collection Fee</Label>
                       <CurrencyInput value={collectionFeeOverride !== null ? collectionFeeOverride : collectionFee} onChange={(val) => setCollectionFeeOverride(val)} currencySymbol={currencySymbol} className="w-32" />
@@ -3691,7 +3899,8 @@ const CreateRental = () => {
                 </div>
               </div>
 
-              {/* ── Section 4: Insurance ──────────────────────────── */}
+              {/* ── Section 4: Insurance (hidden for PAYG — Bonzah not offered on PAYG rentals) ─── */}
+              {!isPayAsYouGo && (
                 <div className="rounded-xl border bg-card shadow-sm">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
                     <span className="text-2xl font-extrabold text-primary">4.</span>
@@ -3971,6 +4180,7 @@ const CreateRental = () => {
                     )}
                   </div>
                 </div>
+              )}
 
               {/* ── Section 5: Optional Extras ────────────────────── */}
               {activeExtras.length > 0 && (
@@ -4122,7 +4332,7 @@ const CreateRental = () => {
               />
 
               {/* ── Submit ─────────────────────────── */}
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex justify-end gap-3 pt-4 lg:!mt-auto lg:pt-2 border-t lg:border-t-0">
                 <Button
                   type="button"
                   variant="outline"
@@ -4143,7 +4353,7 @@ const CreateRental = () => {
             </div>
 
             {/* ── Right: Static Preview ─────────────────────── */}
-            <div className="hidden lg:block lg:col-span-2 lg:overflow-y-auto">
+            <div className="hidden lg:block lg:col-span-2 lg:overflow-y-auto lg:min-h-0">
               <div className="space-y-5">
                 <div className="rounded-xl border bg-card shadow-sm sticky top-0">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
@@ -4447,7 +4657,7 @@ const CreateRental = () => {
           }}
           rental={{
             start_date: createdRentalData.formData.start_date.toISOString(),
-            end_date: createdRentalData.formData.end_date.toISOString(),
+            end_date: createdRentalData.formData.end_date?.toISOString() || createdRentalData.formData.start_date.toISOString(),
             monthly_amount: createdRentalData.formData.monthly_amount,
           }}
           protectionPlan={bonzahPremium > 0 ? {
@@ -4609,6 +4819,45 @@ const CreateRental = () => {
         }}
         isRetrying={loading}
       />
+
+      {/* Cancel/Restart verification confirmation */}
+      <AlertDialog open={showCancelVerificationDialog} onOpenChange={setShowCancelVerificationDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingVerificationAction === "restart" ? "Restart verification session?" : "Cancel verification session?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingVerificationAction === "restart"
+                ? "This will cancel the current in-progress session and immediately start a new one. The customer's previous QR code or link will no longer work."
+                : "This will mark the current session as canceled. The customer's QR code or verification link will no longer work. You can start a new session afterwards."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelingVerification || creatingVerification}>Keep Session</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cancelingVerification || creatingVerification}
+              onClick={(e) => {
+                e.preventDefault();
+                if (pendingVerificationAction === "restart") {
+                  handleRestartVerification();
+                } else {
+                  handleCancelVerification();
+                }
+              }}
+              className={pendingVerificationAction === "restart" ? "" : "bg-red-600 hover:bg-red-700"}
+            >
+              {cancelingVerification || creatingVerification ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Working...</>
+              ) : pendingVerificationAction === "restart" ? (
+                "Yes, Restart"
+              ) : (
+                "Yes, Cancel"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
     </>
   );
