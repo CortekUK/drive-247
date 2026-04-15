@@ -65,6 +65,7 @@ import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
 import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
 import { useVehiclePricingOverrides } from "@/hooks/use-vehicle-pricing-overrides";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useVehicleBookedDates } from "@/hooks/use-vehicle-booked-dates";
 import { RentalProgressOverlay } from "@/components/rentals/rental-progress-overlay";
 import { getTimezonesByRegion, findTimezone } from "@/lib/timezones";
 
@@ -443,6 +444,28 @@ const CreateRental = () => {
   const watchedPickupLocation = form.watch("pickup_location");
   const watchedPromoCode = form.watch("promo_code");
 
+  // Fetch booked dates for the selected vehicle (Pending/Active rentals + 1 buffer day)
+  const { bookedDatesArray: vehicleBookedDatesArray, bookedRentals: vehicleBookedRentals } = useVehicleBookedDates(selectedVehicleId || undefined);
+
+  // Check if a date range would span across a booked rental period
+  const wouldSpanBookedPeriod = (startDate: Date, endDate: Date): boolean => {
+    if (!vehicleBookedRentals.length) return false;
+    const normStart = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const normEnd = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    for (const rental of vehicleBookedRentals) {
+      const [sy, sm, sd] = rental.start_date.split("-").map(Number);
+      const rStart = new Date(sy, sm - 1, sd);
+      if (!rental.end_date) continue;
+      const [ey, em, ed] = rental.end_date.split("-").map(Number);
+      const rEnd = new Date(ey, em - 1, ed);
+      // If a booked rental falls entirely within the proposed range, it spans across
+      if (rStart > normStart && rEnd < normEnd) return true;
+      // If the proposed range overlaps with a booked rental
+      if (normStart <= rEnd && normEnd >= rStart) return true;
+    }
+    return false;
+  };
+
   // Buffer time: check if selected vehicle has a recently completed rental still in cooldown
   const bufferMinutes = tenant?.buffer_time_minutes || 0;
   const { data: bufferWarning } = useQuery({
@@ -774,8 +797,7 @@ const CreateRental = () => {
     queryFn: async () => {
       let query = (supabase as any)
         .from("vehicles")
-        .select("id, reg, make, model, daily_rent, weekly_rent, monthly_rent, security_deposit, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, current_mileage, lockbox_code")
-        .eq("status", "Available");
+        .select("id, reg, make, model, status, daily_rent, weekly_rent, monthly_rent, security_deposit, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, current_mileage, lockbox_code");
 
       if (tenant?.id) {
         query = query.eq("tenant_id", tenant.id);
@@ -2312,6 +2334,9 @@ const CreateRental = () => {
                                             setMonthlyMileageOverride(null);
                                             setExcessRateOverride(null);
                                             setLockboxCodeInput(vehicle.lockbox_code || '');
+                                            // Reset dates when vehicle changes so user picks dates valid for this vehicle
+                                            form.setValue("start_date", undefined as any);
+                                            form.setValue("end_date", undefined as any);
                                           }}
                                         >
                                           <Check
@@ -2323,6 +2348,9 @@ const CreateRental = () => {
                                           <div className="flex flex-col gap-0.5 flex-1">
                                             <div className="flex items-center gap-2">
                                               <span className="font-medium">{vehicle.reg}</span>
+                                              {vehicle.status && vehicle.status !== "Available" && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium">{vehicle.status}</span>
+                                              )}
                                               {vehicle._inBuffer && (
                                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">Buffer</span>
                                               )}
@@ -2338,7 +2366,7 @@ const CreateRental = () => {
                             </Popover>
                             <FormMessage />
                             <FormDescription className="flex items-center gap-2">
-                              Only available vehicles are shown
+                              Booked dates will be disabled in the calendar
                             </FormDescription>
                             {bufferWarning?.inBuffer && field.value && (
                               <Alert variant="default" className="mt-2 border-amber-300 bg-amber-50 dark:bg-amber-950/20">
@@ -2409,6 +2437,9 @@ const CreateRental = () => {
                                 if (globalBlockedDatesArray.some(
                                   blockedDate => blockedDate.toDateString() === date.toDateString()
                                 )) return true;
+                                if (vehicleBookedDatesArray.some(
+                                  bookedDate => bookedDate.toDateString() === date.toDateString()
+                                )) return true;
                                 return false;
                               }}
                               error={!!form.formState.errors.start_date}
@@ -2451,6 +2482,10 @@ const CreateRental = () => {
                                   if (globalBlockedDatesArray.some(
                                     blockedDate => blockedDate.toDateString() === date.toDateString()
                                   )) return true;
+                                  if (vehicleBookedDatesArray.some(
+                                    bookedDate => bookedDate.toDateString() === date.toDateString()
+                                  )) return true;
+                                  if (watchedStartDate && wouldSpanBookedPeriod(watchedStartDate, date)) return true;
                                   if (watchedStartDate) {
                                     const blockCheck = checkBlockedDatesOverlap(watchedStartDate, date, selectedVehicleId);
                                     if (blockCheck.blocked) return true;
