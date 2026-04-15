@@ -1,0 +1,16 @@
+{
+  "name": "drive247-v2",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "pnpm --filter @drive247/web dev",
+    "dev:backend": "pnpm --filter backend start:dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test:unit": "turbo run test:unit",
+    "test:integration": "turbo run test:integration"
+  },
+  "devDependencies": {
+    "turbo": "^2"
+  }
+}
