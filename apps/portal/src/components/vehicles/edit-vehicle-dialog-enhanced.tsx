@@ -69,6 +69,11 @@ interface Vehicle {
   available_daily?: boolean;
   available_weekly?: boolean;
   available_monthly?: boolean;
+  external_ical_enabled?: boolean;
+  external_ical_source?: string | null;
+  external_ical_url?: string | null;
+  external_ical_last_synced_at?: string | null;
+  external_ical_last_error?: string | null;
 }
 
 interface EditVehicleDialogProps {
@@ -140,6 +145,9 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
       available_daily: vehicle.available_daily ?? true,
       available_weekly: vehicle.available_weekly ?? true,
       available_monthly: vehicle.available_monthly ?? true,
+      external_ical_enabled: vehicle.external_ical_enabled ?? false,
+      external_ical_source: vehicle.external_ical_source ?? "turo",
+      external_ical_url: vehicle.external_ical_url ?? "",
     },
   });
 
@@ -198,6 +206,9 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
         available_daily: data.available_daily,
         available_weekly: data.available_weekly,
         available_monthly: data.available_monthly,
+        external_ical_enabled: data.external_ical_enabled,
+        external_ical_source: data.external_ical_enabled ? (data.external_ical_source || "turo") : null,
+        external_ical_url: data.external_ical_enabled ? (data.external_ical_url || null) : null,
       };
 
       // Add type-specific fields
@@ -1155,6 +1166,90 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
               </div>
             </div>
 
+
+            {/* External Calendar Sync (Turo / Airbnb iCal) */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">External Calendar Sync</h3>
+              <p className="text-sm text-muted-foreground">
+                Import bookings from Turo, Airbnb, Vrbo, or any platform that exposes an iCal URL. Prevents double-bookings when this vehicle is listed elsewhere.
+              </p>
+
+              <div className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                <div className="space-y-0.5">
+                  <label className="text-sm font-medium">Enable iCal Sync</label>
+                  <div className="text-sm text-muted-foreground">
+                    Pull booked dates from an external calendar every 15 minutes
+                  </div>
+                </div>
+                <Switch
+                  checked={form.watch("external_ical_enabled")}
+                  onCheckedChange={(checked) => form.setValue("external_ical_enabled", checked)}
+                />
+              </div>
+
+              {form.watch("external_ical_enabled") && (
+                <div className="space-y-3 rounded-lg border p-3">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Source</label>
+                    <Select
+                      value={form.watch("external_ical_source") || "turo"}
+                      onValueChange={(value) => form.setValue("external_ical_source", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="turo">Turo</SelectItem>
+                        <SelectItem value="airbnb">Airbnb</SelectItem>
+                        <SelectItem value="vrbo">Vrbo</SelectItem>
+                        <SelectItem value="booking">Booking.com</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="external_ical_url"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>iCal URL</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="https://turo.com/calendars/abc123.ics"
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <div className="text-xs text-muted-foreground">
+                          In Turo: Vehicle → Availability → Export Calendar → copy URL
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {vehicle.external_ical_last_synced_at && (
+                    <div className="text-xs text-muted-foreground">
+                      Last synced {new Date(vehicle.external_ical_last_synced_at).toLocaleString()}
+                      {vehicle.external_ical_last_error && (
+                        <span className="text-red-600"> · Error: {vehicle.external_ical_last_error}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="rounded-lg border p-3 bg-slate-50 space-y-1">
+                <div className="text-sm font-medium">Drive247 export URL (for Turo import)</div>
+                <div className="text-xs text-muted-foreground">
+                  Paste this into Turo's calendar import so Drive247 bookings block the vehicle on Turo too.
+                </div>
+                <code className="text-xs break-all block mt-1 bg-white rounded px-2 py-1 border">
+                  {`${process.env.NEXT_PUBLIC_SUPABASE_URL || ""}/functions/v1/vehicle-ical-export?vehicle_id=${vehicle.id}&token=${vehicle.id}`}
+                </code>
+              </div>
+            </div>
 
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>

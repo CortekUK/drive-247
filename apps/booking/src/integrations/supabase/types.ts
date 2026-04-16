@@ -1684,6 +1684,7 @@ export type Database = {
           document_name: string
           document_type: string
           end_date: string | null
+          extension_id: string | null
           file_name: string | null
           file_size: number | null
           file_url: string | null
@@ -1715,6 +1716,7 @@ export type Database = {
           document_name: string
           document_type: string
           end_date?: string | null
+          extension_id?: string | null
           file_name?: string | null
           file_size?: number | null
           file_url?: string | null
@@ -1746,6 +1748,7 @@ export type Database = {
           document_name?: string
           document_type?: string
           end_date?: string | null
+          extension_id?: string | null
           file_name?: string | null
           file_size?: number | null
           file_url?: string | null
@@ -1794,6 +1797,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_fines_export"
             referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "customer_documents_extension_id_fkey"
+            columns: ["extension_id"]
+            isOneToOne: false
+            referencedRelation: "rental_extension_totals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_documents_extension_id_fkey"
+            columns: ["extension_id"]
+            isOneToOne: false
+            referencedRelation: "rental_extensions"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "customer_documents_rental_id_fkey"
@@ -2523,6 +2540,84 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_bookings: {
+        Row: {
+          created_at: string
+          end_date: string
+          external_uid: string
+          id: string
+          raw: Json | null
+          source: string
+          start_date: string
+          summary: string | null
+          synced_at: string
+          tenant_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          external_uid: string
+          id?: string
+          raw?: Json | null
+          source?: string
+          start_date: string
+          summary?: string | null
+          synced_at?: string
+          tenant_id: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          external_uid?: string
+          id?: string
+          raw?: Json | null
+          source?: string
+          start_date?: string
+          summary?: string | null
+          synced_at?: string
+          tenant_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_bookings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_bookings_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "external_bookings_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_bookings_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "external_bookings_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
           },
         ]
       }
@@ -8925,6 +9020,11 @@ export type Database = {
           disposal_date: string | null
           disposal_notes: string | null
           excess_mileage_rate: number | null
+          external_ical_enabled: boolean
+          external_ical_last_error: string | null
+          external_ical_last_synced_at: string | null
+          external_ical_source: string | null
+          external_ical_url: string | null
           finance_start_date: string | null
           fuel_type: string | null
           has_logbook: boolean
@@ -8985,6 +9085,11 @@ export type Database = {
           disposal_date?: string | null
           disposal_notes?: string | null
           excess_mileage_rate?: number | null
+          external_ical_enabled?: boolean
+          external_ical_last_error?: string | null
+          external_ical_last_synced_at?: string | null
+          external_ical_source?: string | null
+          external_ical_url?: string | null
           finance_start_date?: string | null
           fuel_type?: string | null
           has_logbook?: boolean
@@ -9045,6 +9150,11 @@ export type Database = {
           disposal_date?: string | null
           disposal_notes?: string | null
           excess_mileage_rate?: number | null
+          external_ical_enabled?: boolean
+          external_ical_last_error?: string | null
+          external_ical_last_synced_at?: string | null
+          external_ical_source?: string | null
+          external_ical_url?: string | null
           finance_start_date?: string | null
           fuel_type?: string | null
           has_logbook?: boolean

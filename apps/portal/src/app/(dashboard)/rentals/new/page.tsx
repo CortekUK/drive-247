@@ -4773,6 +4773,7 @@ const CreateRental = () => {
         open={showConflictDialog}
         onOpenChange={setShowConflictDialog}
         rentalConflicts={conflictResult?.rentalConflicts || []}
+        externalConflicts={conflictResult?.externalConflicts || []}
         onRetry={() => {
           setShowConflictDialog(false);
           setConflictResult(null);

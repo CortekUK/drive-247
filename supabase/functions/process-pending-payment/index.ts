@@ -122,6 +122,7 @@ Deno.serve(async (req) => {
     // The RPC updates rental_extensions.status, extends rentals.end_date
     // (guarded so we never shrink), clears the legacy pending-extension flags,
     // and back-stamps payments.extension_id if missing. Idempotent.
+    // Bonzah is confirmed at approval time (matches original-rental flow).
     if (payment.extension_id) {
       const { data: finalizeResult, error: finalizeError } = await supabase.rpc('finalize_rental_extension', {
         p_extension_id: payment.extension_id,
@@ -131,45 +132,6 @@ Deno.serve(async (req) => {
         console.error("[PROCESS-PENDING] finalize_rental_extension error:", finalizeError);
       } else {
         console.log("[PROCESS-PENDING] Extension finalized:", finalizeResult);
-      }
-
-      // Phase 4: confirm the Bonzah policy NOW (not at approval time). This
-      // avoids deducting the tenant's Bonzah balance before Stripe has
-      // actually charged the customer.
-      const { data: extRow } = await supabase
-        .from('rental_extensions')
-        .select('bonzah_policy_id, bonzah_confirmed_at')
-        .eq('id', payment.extension_id)
-        .maybeSingle();
-
-      if (extRow?.bonzah_policy_id && !extRow.bonzah_confirmed_at) {
-        const { data: policy } = await supabase
-          .from('bonzah_insurance_policies')
-          .select('status')
-          .eq('id', extRow.bonzah_policy_id)
-          .maybeSingle();
-
-        // Only confirm if the quote hasn't already been issued
-        if (policy && ['quoted', 'payment_pending', 'failed'].includes(policy.status)) {
-          console.log("[PROCESS-PENDING] Confirming Bonzah policy after Stripe success:", extRow.bonzah_policy_id);
-          const { data: bonzahResult, error: bonzahError } = await supabase.functions.invoke('bonzah-confirm-payment', {
-            body: {
-              policy_record_id: extRow.bonzah_policy_id,
-              stripe_payment_intent_id: paymentIntentId,
-            },
-          });
-          if (bonzahError) {
-            console.error("[PROCESS-PENDING] bonzah-confirm-payment error:", bonzahError);
-          } else {
-            console.log("[PROCESS-PENDING] Bonzah confirmed:", bonzahResult);
-            await supabase
-              .from('rental_extensions')
-              .update({ bonzah_confirmed_at: new Date().toISOString() })
-              .eq('id', payment.extension_id);
-          }
-        } else if (policy) {
-          console.log("[PROCESS-PENDING] Bonzah policy already in status:", policy.status, "— skipping confirm");
-        }
       }
     }
 

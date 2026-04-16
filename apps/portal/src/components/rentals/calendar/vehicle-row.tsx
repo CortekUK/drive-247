@@ -13,21 +13,31 @@ const BAR_HEIGHT = 28;
 const BAR_GAP = 4;
 const ROW_PADDING = 8;
 
+interface ExternalBooking {
+  id: string;
+  vehicle_id: string;
+  source: string;
+  summary: string | null;
+  start_date: string;
+  end_date: string;
+}
+
 interface VehicleRowProps {
   data: VehicleTimelineData;
   rangeStart: Date;
   rangeEnd: Date;
   index: number;
+  externalBookings?: ExternalBooking[];
 }
 
-export function VehicleRow({ data, rangeStart, rangeEnd, index }: VehicleRowProps) {
+export function VehicleRow({ data, rangeStart, rangeEnd, index, externalBookings = [] }: VehicleRowProps) {
   const router = useRouter();
   const { tenant } = useTenant();
   const { vehicle, rentals } = data;
   const bufferMinutes = (tenant as any)?.buffer_time_minutes || 0;
 
-  // Calculate row height based on number of rentals (stacked)
-  const barCount = Math.max(1, rentals.length);
+  // Calculate row height based on rentals + external bookings (stacked)
+  const barCount = Math.max(1, rentals.length + externalBookings.length);
   const contentHeight = barCount * BAR_HEIGHT + (barCount - 1) * BAR_GAP + ROW_PADDING * 2;
   const rowHeight = Math.max(80, contentHeight);
 
@@ -115,6 +125,42 @@ export function VehicleRow({ data, rangeStart, rangeEnd, index }: VehicleRowProp
                 </Tooltip>
               )}
             </div>
+          );
+        })}
+
+        {/* External bookings (Turo / Airbnb / etc) — read-only striped blocks */}
+        {externalBookings.map((booking, i) => {
+          const position = calculateBarPosition(
+            booking.start_date,
+            booking.end_date,
+            rangeStart,
+            rangeEnd,
+          );
+          const topOffset = ROW_PADDING + (rentals.length + i) * (BAR_HEIGHT + BAR_GAP);
+          const sourceLabel = booking.source.charAt(0).toUpperCase() + booking.source.slice(1);
+          return (
+            <Tooltip key={booking.id}>
+              <TooltipTrigger asChild>
+                <div
+                  className="absolute rounded-sm border border-slate-400/60 bg-slate-200/80 dark:bg-slate-700/40 cursor-default overflow-hidden"
+                  style={{
+                    left: position.left,
+                    width: position.width,
+                    top: `${topOffset}px`,
+                    height: `${BAR_HEIGHT}px`,
+                    backgroundImage:
+                      "repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.06) 4px, rgba(0,0,0,0.06) 8px)",
+                  }}
+                >
+                  <span className="text-[10px] text-slate-700 dark:text-slate-300 px-1.5 leading-[28px] truncate block font-medium">
+                    {sourceLabel}{booking.summary ? ` · ${booking.summary}` : ""}
+                  </span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                Synced from {sourceLabel} · {booking.start_date} → {booking.end_date}
+              </TooltipContent>
+            </Tooltip>
           );
         })}
       </div>

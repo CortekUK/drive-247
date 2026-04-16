@@ -37,6 +37,8 @@ interface BuyInsuranceDialogProps {
   mode?: 'original' | 'extension';
   /** The extension period dates — required when mode is 'extension' */
   extensionDates?: { start: string; end: string };
+  /** When set, stamps extension_id on the created bonzah policy + ledger entry (Phase 5 per-extension isolation). */
+  extensionId?: string | null;
 }
 
 const DEFAULT_COVERAGE: CoverageOptions = {
@@ -53,6 +55,7 @@ export function BuyInsuranceDialog({
   onPurchaseComplete,
   mode = 'original',
   extensionDates,
+  extensionId,
 }: BuyInsuranceDialogProps) {
   const isExtension = mode === 'extension';
   const { tenant } = useTenant();
@@ -192,6 +195,7 @@ export function BuyInsuranceDialog({
           tenant_id: tenant.id,
           trip_dates: tripDates,
           ...(isExtension && { policy_type: 'extension' }),
+          ...(isExtension && extensionId ? { extension_id: extensionId } : {}),
           pickup_state: pickupState,
           coverage,
           renter: {
@@ -223,6 +227,15 @@ export function BuyInsuranceDialog({
       // 5. Confirm payment with Bonzah to issue the policy
       const policyRecordId = quoteResult?.policy_record_id;
       let policyActive = false;
+
+      // Phase 5: stamp extension_id onto the bonzah policy so it's linked
+      // to the specific rental_extensions row.
+      if (policyRecordId && isExtension && extensionId) {
+        await supabase
+          .from('bonzah_insurance_policies')
+          .update({ extension_id: extensionId })
+          .eq('id', policyRecordId);
+      }
 
       if (policyRecordId) {
         const { data: confirmResult, error: confirmError } = await supabase.functions.invoke('bonzah-confirm-payment', {
@@ -284,6 +297,7 @@ export function BuyInsuranceDialog({
           remaining_amount: actualPremium,
           reference: `BONZAH-${quoteResult?.policy_record_id || 'POLICY'}`,
           rental_id: rental.id,
+          ...(isExtension && extensionId ? { extension_id: extensionId } : {}),
           customer_id: rental.customers.id,
           vehicle_id: rental.vehicles?.id,
           tenant_id: tenant.id,
@@ -489,7 +503,7 @@ export function BuyInsuranceDialog({
                         {isClamped && (
                           <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
                             <AlertTriangle className="h-3 w-3" />
-                            Rental started {new Date(rentalStart + 'T00:00:00').toLocaleDateString('en-US')} — coverage begins today
+                            Rental started {new Date(rawStart + 'T00:00:00').toLocaleDateString('en-US')} — coverage begins today
                           </p>
                         )}
                         {isChained && (

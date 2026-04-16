@@ -36,8 +36,18 @@ interface InsuranceTimelineProps {
   isBonzahConnected: boolean;
   bonzahCdBalance: number | null;
   onBuyInsurance: () => void;
-  onBuyExtensionInsurance?: () => void;
-  onUploadExtensionInsurance?: () => void;
+  // Per-individual-extension actions (Phase 5 polish)
+  extensions?: Array<{
+    id: string;
+    sequence_number: number;
+    previous_end_date: string | null;
+    new_end_date: string | null;
+    status: string;
+    display_status: string;
+  }>;
+  extensionDocs?: Array<{ id: string; extension_id: string | null; document_name?: string | null; file_name?: string | null; file_url?: string | null; uploaded_at?: string | null; status?: string | null }>;
+  onBuyExtensionInsuranceFor?: (extensionId: string) => void;
+  onUploadExtensionInsuranceFor?: (extensionId: string) => void;
 }
 
 const COVERAGE_SHORT_LABELS: Record<string, string> = {
@@ -314,8 +324,10 @@ export function InsuranceTimeline({
   isBonzahConnected,
   bonzahCdBalance,
   onBuyInsurance,
-  onBuyExtensionInsurance,
-  onUploadExtensionInsurance,
+  extensions,
+  extensionDocs,
+  onBuyExtensionInsuranceFor,
+  onUploadExtensionInsuranceFor,
 }: InsuranceTimelineProps) {
   const bonzahMode = (rental as any)?.tenants?.bonzah_mode || 'test';
   const portalUrl = bonzahMode === 'live' ? 'https://bonzah.insillion.com/bb1/' : 'https://bonzah.sb.insillion.com/bb1/';
@@ -328,7 +340,6 @@ export function InsuranceTimeline({
   const extensionPolicies = policies.filter((p) => p.policy_type === 'extension');
 
   const originalTotal = originalPolicies.reduce((sum, p) => sum + (p.premium_amount || 0), 0);
-  const extensionTotal = extensionPolicies.reduce((sum, p) => sum + (p.premium_amount || 0), 0);
 
   return (
     <Card>
@@ -464,67 +475,98 @@ export function InsuranceTimeline({
               </div>
             )}
 
-            {/* Extension Policies Section */}
-            {(extensionPolicies.length > 0 || isExtended) && (
-              <div className="border border-amber-200 dark:border-amber-800/50 bg-amber-50/40 dark:bg-amber-950/10 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/50">
-                      <ShieldPlus className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            {/* Extensions — per-individual-extension cards with isolated Buy/Upload */}
+            {extensions && extensions.length > 0 ? (
+              extensions
+                .filter((re) => re.display_status !== 'cancelled' && re.display_status !== 'refunded')
+                .map((ext) => {
+                  const extPolicies = policies.filter((p) => (p as any).extension_id === ext.id);
+                  const extDocs = (extensionDocs || []).filter((d) => d.extension_id === ext.id);
+                  const hasActivePolicy = extPolicies.some((p) => p.status === 'active' || p.status === 'payment_pending' || p.status === 'quoted');
+                  const hasDoc = extDocs.length > 0;
+                  const hasCoverage = hasActivePolicy || hasDoc;
+                  const extTotal = extPolicies.reduce((sum, p) => sum + (p.premium_amount || 0), 0);
+
+                  return (
+                    <div key={ext.id} className="border border-amber-200 dark:border-amber-800/50 bg-amber-50/40 dark:bg-amber-950/10 p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/50">
+                            <ShieldPlus className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                              Extension #{ext.sequence_number}
+                            </h4>
+                            <span className="text-xs text-amber-600 dark:text-amber-400">
+                              {ext.previous_end_date ? new Date(ext.previous_end_date + 'T00:00:00').toLocaleDateString('en-US') : ''} → {ext.new_end_date ? new Date(ext.new_end_date + 'T00:00:00').toLocaleDateString('en-US') : ''}
+                            </span>
+                          </div>
+                        </div>
+                        {extTotal > 0 && (
+                          <span className="text-sm font-bold tabular-nums text-amber-700 dark:text-amber-300">
+                            {formatCurrency(extTotal, 'USD')}
+                          </span>
+                        )}
+                      </div>
+                      {extPolicies.length > 0 && (
+                        <div className="space-y-2.5">
+                          {extPolicies.map((policy, idx) => (
+                            <InsuranceTimelineItem
+                              key={policy.id}
+                              policy={policy}
+                              isLast={false}
+                              canEdit={canEdit}
+                              tenantId={tenantId}
+                              rentalId={rentalId}
+                              bonzahMode={bonzahMode}
+                              extensionIndex={idx + 1}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {extDocs.length > 0 && (
+                        <div className={`${extPolicies.length > 0 ? 'mt-3 pt-3 border-t border-amber-200 dark:border-amber-800/50' : ''} space-y-2`}>
+                          {extDocs.map((doc) => (
+                            <div key={doc.id} className="flex items-center justify-between text-xs rounded-md bg-background/50 border border-amber-200/60 dark:border-amber-800/40 px-3 py-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Shield className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                                <span className="truncate font-medium">{doc.document_name || doc.file_name || 'Uploaded policy'}</span>
+                                {doc.status && (
+                                  <Badge variant="outline" className="ml-1 text-[10px]">
+                                    {doc.status}
+                                  </Badge>
+                                )}
+                              </div>
+                              <span className="text-muted-foreground flex-shrink-0 ml-2">
+                                {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString('en-US') : ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* Buy / Upload buttons — hide once this extension has any coverage */}
+                      {canEdit && !hasCoverage && (
+                        <div className={`flex items-center gap-2 ${extPolicies.length > 0 || extDocs.length > 0 ? 'mt-3 pt-3 border-t border-amber-200 dark:border-amber-800/50' : ''}`}>
+                          {isBonzahConnected && onBuyExtensionInsuranceFor && (
+                            <Button variant="outline" size="sm" onClick={() => onBuyExtensionInsuranceFor(ext.id)} className="border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30">
+                              <img src="/bonzah-logo.svg" alt="" className="h-3 w-auto mr-1.5 dark:hidden" />
+                              <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-auto mr-1.5 hidden dark:block" />
+                              Buy Bonzah
+                            </Button>
+                          )}
+                          {onUploadExtensionInsuranceFor && (
+                            <Button variant="outline" size="sm" onClick={() => onUploadExtensionInsuranceFor(ext.id)} className="border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30">
+                              <Upload className="h-3.5 w-3.5 mr-1.5" />
+                              Upload Own Policy
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-200">Extension Coverage</h4>
-                      <span className="text-xs text-amber-600 dark:text-amber-400">
-                        {extensionPolicies.length === 0
-                          ? `No insurance for extension period (${rental.previous_end_date ? new Date(rental.previous_end_date + 'T00:00:00').toLocaleDateString('en-US') : ''} → ${rental.end_date ? new Date(rental.end_date.split('T')[0] + 'T00:00:00').toLocaleDateString('en-US') : ''})`
-                          : extensionPolicies.length === 1
-                            ? 'Rental extended once'
-                            : `Rental extended ${extensionPolicies.length} times`}
-                      </span>
-                    </div>
-                  </div>
-                  {extensionPolicies.length > 0 ? (
-                    <span className="text-sm font-bold tabular-nums text-amber-700 dark:text-amber-300">
-                      {formatCurrency(extensionTotal, 'USD')}
-                    </span>
-                  ) : null}
-                </div>
-                {extensionPolicies.length > 0 && (
-                  <div className="space-y-2.5">
-                    {extensionPolicies.map((policy, index) => (
-                      <InsuranceTimelineItem
-                        key={policy.id}
-                        policy={policy}
-                        isLast={false}
-                        canEdit={canEdit}
-                        tenantId={tenantId}
-                        rentalId={rentalId}
-                        bonzahMode={bonzahMode}
-                        extensionIndex={index + 1}
-                      />
-                    ))}
-                  </div>
-                )}
-                {/* Add extension insurance buttons */}
-                {canEdit && (
-                  <div className={`flex items-center gap-2 ${extensionPolicies.length > 0 ? 'mt-3 pt-3 border-t border-amber-200 dark:border-amber-800/50' : ''}`}>
-                    {isBonzahConnected && onBuyExtensionInsurance && (
-                      <Button variant="outline" size="sm" onClick={onBuyExtensionInsurance} className="border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30">
-                        <img src="/bonzah-logo.svg" alt="" className="h-3 w-auto mr-1.5 dark:hidden" />
-                        <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-auto mr-1.5 hidden dark:block" />
-                        Buy Bonzah
-                      </Button>
-                    )}
-                    {onUploadExtensionInsurance && (
-                      <Button variant="outline" size="sm" onClick={onUploadExtensionInsurance} className="border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30">
-                        <Upload className="h-3.5 w-3.5 mr-1.5" />
-                        Upload Own Policy
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+                  );
+                })
+            ) : null}
           </div>
         )}
 

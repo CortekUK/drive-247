@@ -442,23 +442,37 @@ export function AdminExtendRentalDialog({
               coverage: extensionCoverage,
               renter: originalPolicy.renter_details,
               policy_type: 'extension',
+              extension_id: createdExtensionId ?? undefined,
             },
           });
 
-          // Phase 4: DO NOT confirm the Bonzah policy here. Confirmation
-          // (which deducts the tenant's Bonzah balance) is deferred to
-          // process-pending-payment after Stripe has actually charged the
-          // customer. We just stamp the quote id on rental_extensions so
-          // the edge function can find it.
-          if (quoteResult?.policy_record_id && createdExtensionId) {
-            await supabase
-              .from('rental_extensions')
-              .update({ bonzah_policy_id: quoteResult.policy_record_id })
-              .eq('id', createdExtensionId);
+          // Confirm payment (deduct from Bonzah balance) immediately so the
+          // policy issues right away, matching the original-rental flow.
+          // Use the actual premium returned by the quote API — UI state
+          // (`insurancePremium`) can be 0 if the user submits before the
+          // selector finishes calculating.
+          const actualPremium = Number(quoteResult?.total_premium ?? insurancePremium ?? 0);
+          if (quoteResult?.policy_record_id) {
+            await supabase.functions.invoke('bonzah-confirm-payment', {
+              body: {
+                policy_record_id: quoteResult.policy_record_id,
+                stripe_payment_intent_id: `portal-extension-${rental.id}`,
+              },
+            });
+            if (createdExtensionId) {
+              await supabase
+                .from('rental_extensions')
+                .update({
+                  bonzah_policy_id: quoteResult.policy_record_id,
+                  bonzah_confirmed_at: new Date().toISOString(),
+                  insurance_amount: actualPremium,
+                })
+                .eq('id', createdExtensionId);
+            }
           }
 
           // Create Extension Insurance ledger charge so payments can be allocated to it
-          if (insurancePremium > 0) {
+          if (actualPremium > 0) {
             await supabase.from('ledger_entries').insert({
               customer_id: rental.customer_id || rental.customers?.id,
               rental_id: rental.id,
@@ -466,11 +480,12 @@ export function AdminExtendRentalDialog({
               entry_date: newEndDate.split('T')[0],
               type: 'Charge',
               category: 'Extension Insurance',
-              amount: insurancePremium,
-              remaining_amount: insurancePremium,
+              amount: actualPremium,
+              remaining_amount: actualPremium,
               due_date: newEndDate.split('T')[0],
               tenant_id: tenant.id,
               reference: `Extension #${(existingExtensionCount || 0) + 1}: Insurance`,
+              ...(createdExtensionId ? { extension_id: createdExtensionId } : {}),
             });
           }
 
@@ -499,6 +514,9 @@ export function AdminExtendRentalDialog({
       queryClient.invalidateQueries({ queryKey: ['extension-count', rental.id] });
       queryClient.invalidateQueries({ queryKey: ['rental-agreements', rental.id] });
       queryClient.invalidateQueries({ queryKey: ['rental-insurance-policies', rental.id] });
+      queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-insurance-docs', rental.id] });
+      queryClient.invalidateQueries({ queryKey: ['bonzah-balance'] });
 
       // 9. Upload customer's own insurance document if provided
       if (extensionInsuranceType === 'own' && ownInsuranceFile && tenant?.id) {

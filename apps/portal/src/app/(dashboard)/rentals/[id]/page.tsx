@@ -278,6 +278,7 @@ const RentalDetail = () => {
   // Buy Insurance dialog state
   const [showBuyInsurance, setShowBuyInsurance] = useState(false);
   const [buyInsuranceMode, setBuyInsuranceMode] = useState<'original' | 'extension'>('original');
+  const [buyInsuranceExtensionId, setBuyInsuranceExtensionId] = useState<string | null>(null);
   const [insurancePaymentMode, setInsurancePaymentMode] = useState(false);
   const [insurancePaymentAmount, setInsurancePaymentAmount] = useState<number | undefined>();
   const [insurancePaymentCategories, setInsurancePaymentCategories] = useState<string[]>(['Insurance']);
@@ -1238,33 +1239,76 @@ const RentalDetail = () => {
     },
   });
 
-  // Group extension charges by extension number for display
+  // Group extension charges by extension for display.
+  //
+  // Source of truth is `rental_extension_totals` — every approved extension row
+  // renders, regardless of whether ledger rows or Bonzah policies have landed
+  // yet. Ledger rows attach by `extension_id` (authoritative) with a
+  // reference-text fallback for legacy rows that don't have it stamped.
+  // Insurance policies attach by `extension_id` only — index-based matching
+  // was ambiguous when some extensions had no policy.
   const extensionGroups = (() => {
     const allExtCharges = (rentalCharges || []).filter(c =>
-      c.category === 'Extension' || c.category === 'Extension Rental' || c.category === 'Extension Tax' || c.category === 'Extension Service Fee'
+      c.category === 'Extension' ||
+      c.category === 'Extension Rental' ||
+      c.category === 'Extension Tax' ||
+      c.category === 'Extension Service Fee' ||
+      c.category === 'Extension Insurance'
     );
-    const groups: Record<number, typeof allExtCharges> = {};
-    let nextLegacyNum = 1;
-    allExtCharges.forEach(charge => {
-      const numMatch = charge.reference?.match(/Extension #(\d+)/);
-      const extNum = numMatch ? parseInt(numMatch[1], 10) : nextLegacyNum++;
-      if (!groups[extNum]) groups[extNum] = [];
-      groups[extNum].push(charge);
-    });
-    const extInsurancePolicies = (insurancePolicies || [])
-      .filter(p => p.policy_type === 'extension')
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    return Object.entries(groups)
-      .sort(([a], [b]) => parseInt(a) - parseInt(b))
-      .map(([num, charges], idx) => ({
-        extensionNumber: parseInt(num),
-        charges,
-        totalAmount: charges.reduce((sum, c) => sum + c.amount, 0),
-        totalRemaining: charges.reduce((sum, c) => sum + c.remaining_amount, 0),
-        entryDate: charges[0]?.entry_date || '',
-        rentalCharge: charges.find(c => c.category === 'Extension Rental' || c.category === 'Extension'),
-        insurancePolicy: extInsurancePolicies[idx] || null,
-      }));
+
+    const extPoliciesByExtensionId = new Map<string, any>();
+    for (const p of (insurancePolicies || [])) {
+      if (p.policy_type === 'extension' && (p as any).extension_id) {
+        extPoliciesByExtensionId.set((p as any).extension_id, p);
+      }
+    }
+
+    // Reference-text fallback grouping (for ledger rows with null extension_id)
+    const chargesByRef: Record<number, typeof allExtCharges> = {};
+    for (const charge of allExtCharges) {
+      const m = charge.reference?.match(/Extension #(\d+)/);
+      if (!m) continue;
+      const n = parseInt(m[1], 10);
+      if (!chargesByRef[n]) chargesByRef[n] = [];
+      chargesByRef[n].push(charge);
+    }
+
+    // If there are no rental_extensions rows yet (legacy), fall back to the old
+    // ledger-only grouping so nothing regresses.
+    if (!extensionTotals || extensionTotals.length === 0) {
+      return Object.entries(chargesByRef)
+        .sort(([a], [b]) => parseInt(a) - parseInt(b))
+        .map(([num, charges]) => ({
+          extensionNumber: parseInt(num),
+          charges,
+          totalAmount: charges.reduce((sum, c) => sum + c.amount, 0),
+          totalRemaining: charges.reduce((sum, c) => sum + c.remaining_amount, 0),
+          entryDate: charges[0]?.entry_date || '',
+          rentalCharge: charges.find(c => c.category === 'Extension Rental' || c.category === 'Extension'),
+          insurancePolicy: null as any,
+        }));
+    }
+
+    return (extensionTotals || [])
+      .slice()
+      .sort((a: any, b: any) => Number(a.sequence_number) - Number(b.sequence_number))
+      .map((ext: any) => {
+        const seq = Number(ext.sequence_number);
+        // Primary: ledger rows tagged with this extension_id.
+        const byId = allExtCharges.filter((c: any) => c.extension_id === ext.id);
+        // Fallback: reference-text match for legacy rows with null extension_id.
+        const byRef = (chargesByRef[seq] || []).filter(c => !byId.some(b => b.id === c.id));
+        const charges = [...byId, ...byRef];
+        return {
+          extensionNumber: seq,
+          charges,
+          totalAmount: charges.reduce((sum, c) => sum + c.amount, 0),
+          totalRemaining: charges.reduce((sum, c) => sum + c.remaining_amount, 0),
+          entryDate: charges[0]?.entry_date || '',
+          rentalCharge: charges.find(c => c.category === 'Extension Rental' || c.category === 'Extension'),
+          insurancePolicy: extPoliciesByExtensionId.get(ext.id) || null,
+        };
+      });
   })();
 
   // Outstanding balance: originals come from ledger-backed categoryRemainingAmounts.
@@ -1292,6 +1336,61 @@ const RentalDetail = () => {
   if (!rental) {
     return <div>Rental not found</div>;
   }
+
+  // Scope-split insurance docs (Phase 5 polish): original vs per-extension.
+  const originalInsuranceDocs = (insuranceDocuments || []).filter((d: any) => !d.extension_id);
+  const extensionInsuranceDocs = (insuranceDocuments || []).filter((d: any) => !!d.extension_id);
+
+  // Does the ORIGINAL scope already have insurance? (active Bonzah OR uploaded doc)
+  const originalBonzahActive = (insurancePolicies || []).some(
+    (p: any) => p.policy_type !== 'extension' && (p.status === 'active' || p.status === 'payment_pending' || p.status === 'quoted')
+  );
+  const originalHasCoverage = originalBonzahActive || originalInsuranceDocs.length > 0;
+
+  // Inline upload helper — used by both scopes. Stamps extension_id when provided.
+  const uploadInsuranceDoc = (scope: { extensionId: string | null }) => {
+    if (!rental) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,.pdf';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        toast({ title: 'Uploading...', description: 'Uploading insurance document' });
+        const fileName = `${rental.customer_id}/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('customer-documents')
+          .upload(fileName, file);
+        if (uploadError) throw uploadError;
+        const { data: docData, error: docError } = await supabase
+          .from('customer_documents')
+          .insert({
+            customer_id: rental.customer_id,
+            rental_id: id,
+            extension_id: scope.extensionId,
+            document_type: 'Insurance Certificate',
+            document_name: file.name,
+            file_name: file.name,
+            file_url: fileName,
+            status: 'Pending',
+            ai_scan_status: 'pending',
+            tenant_id: tenant?.id,
+          })
+          .select()
+          .single();
+        if (docError) throw docError;
+        supabase.functions.invoke('scan-insurance-document', {
+          body: { documentId: docData.id, fileUrl: fileName },
+        });
+        toast({ title: 'Success', description: 'Insurance document uploaded' });
+        queryClient.invalidateQueries({ queryKey: ['rental-insurance-docs', id] });
+      } catch (error: any) {
+        toast({ title: 'Upload Failed', description: error.message || 'Failed to upload document', variant: 'destructive' });
+      }
+    };
+    input.click();
+  };
 
   // Check if any insurance document has been rejected or has low validation score
   const hasInvalidInsuranceDoc = insuranceDocuments?.some((doc: any) => {
@@ -3211,7 +3310,11 @@ const RentalDetail = () => {
 
                 {/* Extension sections */}
                 {extensionGroups.map((group) => {
-                  const extInsuranceAmt = group.insurancePolicy?.premium_amount ?? 0;
+                  // Insurance is now included in group.charges (and therefore
+                  // group.totalAmount) when it has a ledger entry. Only add the
+                  // policy premium on top if no Extension Insurance charge exists.
+                  const hasInsuranceCharge = group.charges.some(c => c.category === 'Extension Insurance');
+                  const extInsuranceAmt = hasInsuranceCharge ? 0 : (group.insurancePolicy?.premium_amount ?? 0);
                   const extTotalWithInsurance = group.totalAmount + extInsuranceAmt;
 
                   return (
@@ -3550,7 +3653,7 @@ const RentalDetail = () => {
                       <span className="text-muted-foreground">Extension #{group.extensionNumber}:</span>
                       <span className="font-medium">{dateRange || `${group.charges.length} charges`}</span>
                       <span className="text-muted-foreground">·</span>
-                      <span className="text-sm">{formatCurrencyUtil(group.totalAmount + (group.insurancePolicy?.premium_amount || 0), tenant?.currency_code || 'USD')}</span>
+                      <span className="text-sm">{formatCurrencyUtil(group.totalAmount + (group.charges.some(c => c.category === 'Extension Insurance') ? 0 : (group.insurancePolicy?.premium_amount || 0)), tenant?.currency_code || 'USD')}</span>
                     </div>
                   );
                 })}
@@ -3722,23 +3825,29 @@ const RentalDetail = () => {
         tenantId={tenant?.id}
         displayStatus={displayStatus}
         extensionGroups={extensionGroups.map((g) => {
-          // Extract dates from rental charge reference e.g. "Extension #1: 5 days (Jul 19 → Jul 24, 2026)"
+          // Prefer authoritative dates from rental_extension_totals; fall back
+          // to the insurance policy or the rental charge reference for legacy
+          // rentals that don't have a rental_extensions row.
+          const extRow = (extensionTotals || []).find((e: any) => Number(e.sequence_number) === g.extensionNumber);
           const ref = g.rentalCharge?.reference || '';
           const dateMatch = ref.match(/\((.+?) → (.+?)\)/);
-          // Convert display dates to ISO — append current year if missing
           const parseRefDate = (d: string | undefined) => {
             if (!d) return undefined;
-            const parsed = new Date(d);
+            // Try as-is first (may be partial like "Sep 12" → NaN in modern engines)
+            let parsed = new Date(d);
+            if (isNaN(parsed.getTime())) {
+              // Append current year for partial dates like "Sep 12"
+              parsed = new Date(`${d}, ${new Date().getFullYear()}`);
+            }
             if (!isNaN(parsed.getTime())) return parsed.toISOString().split('T')[0];
             return undefined;
           };
-          // Also check extension insurance policy for more reliable dates
           const extInsurance = g.insurancePolicy;
           return {
             extensionNumber: g.extensionNumber,
             entryDate: g.entryDate,
-            previousEndDate: extInsurance?.trip_start_date || parseRefDate(dateMatch?.[1]) || undefined,
-            newEndDate: extInsurance?.trip_end_date || parseRefDate(dateMatch?.[2]) || undefined,
+            previousEndDate: extRow?.previous_end_date || extInsurance?.trip_start_date || parseRefDate(dateMatch?.[1]) || undefined,
+            newEndDate: extRow?.new_end_date || extInsurance?.trip_end_date || parseRefDate(dateMatch?.[2]) || undefined,
           };
         })}
         onViewAgreement={handleViewAgreementById}
@@ -3756,12 +3865,14 @@ const RentalDetail = () => {
           isBonzahConnected={isBonzahConnected}
           bonzahCdBalance={bonzahCdBalance}
           onBuyInsurance={() => { setBuyInsuranceMode('original'); setShowBuyInsurance(true); }}
-          onBuyExtensionInsurance={() => { setBuyInsuranceMode('extension'); setShowBuyInsurance(true); }}
-          onUploadExtensionInsurance={() => {
-            // Trigger the existing upload flow — scroll to insurance section
-            const el = document.getElementById('insurance-section');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          extensions={extensionTotals}
+          extensionDocs={extensionInsuranceDocs}
+          onBuyExtensionInsuranceFor={(extId) => {
+            setBuyInsuranceMode('extension');
+            setBuyInsuranceExtensionId(extId);
+            setShowBuyInsurance(true);
           }}
+          onUploadExtensionInsuranceFor={(extId) => uploadInsuranceDoc({ extensionId: extId })}
         />
       )}
 
@@ -4291,118 +4402,61 @@ const RentalDetail = () => {
         </CardContent>
         </Card>
       ) : (
-        /* Compact empty state — single-row card */
-        <Card id="insurance-section" className="px-5 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Shield className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Insurance Verification</span>
-              <span className="text-xs text-muted-foreground">No documents uploaded</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {tenant?.bonzah_brochure_url && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs"
-                  asChild
-                >
-                  <a href={tenant.bonzah_brochure_url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-3 w-3 mr-1" />
-                    Coverage Brochure
-                  </a>
-                </Button>
-              )}
-              {canEdit('rentals') && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs"
-                  onClick={() => notifyInsuranceReuploadMutation.mutate()}
-                  disabled={notifyInsuranceReuploadMutation.isPending}
-                  title="Send notification to customer requesting insurance upload"
-                >
-                  {notifyInsuranceReuploadMutation.isPending ? (
-                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                  ) : (
-                    <Send className="h-3 w-3 mr-1" />
-                  )}
-                  Request Insurance
-                </Button>
-              )}
-              {!bonzahPolicy && isBonzahConnected && (
-                isBonzahEligible ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10 hover:text-[#CC004A]"
-                    disabled={isBonzahEligibilityLoading}
-                    onClick={() => { setBuyInsuranceMode('original'); setShowBuyInsurance(true); }}
-                  >
-                    <img src="/bonzah-logo.svg" alt="" className="h-3 w-3 mr-1 dark:hidden" />
-                    <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-3 mr-1 hidden dark:inline" />
-                    {isBonzahEligibilityLoading ? 'Checking...' : 'Get Insurance'}
+        /* Compact empty state — ORIGINAL rental scope only. Hidden entirely
+           when original already has coverage (Bonzah active OR doc uploaded). */
+        !originalHasCoverage && (
+          <Card id="insurance-section" className="px-5 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Shield className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Insurance (Original Rental)</span>
+                <span className="text-xs text-muted-foreground">No coverage yet</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {tenant?.bonzah_brochure_url && (
+                  <Button size="sm" variant="outline" className="h-7 text-xs" asChild>
+                    <a href={tenant.bonzah_brochure_url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-3 w-3 mr-1" />
+                      Coverage Brochure
+                    </a>
                   </Button>
-                ) : !isBonzahEligibilityLoading ? (
-                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" title={`${rental?.vehicles?.make} ${rental?.vehicles?.model} is not supported by Bonzah`}>
-                    <img src="/bonzah-logo.svg" alt="" className="h-3 w-3 opacity-40 dark:hidden" />
-                    <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-3 opacity-40 hidden dark:inline" />
-                    Not eligible for Bonzah
-                  </span>
-                ) : null
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'image/*,.pdf';
-                  input.onchange = async (e) => {
-                    const file = (e.target as HTMLInputElement).files?.[0];
-                    if (!file) return;
-                    try {
-                      toast({ title: "Uploading...", description: "Uploading insurance document" });
-                      const fileName = `${rental.customer_id}/${Date.now()}_${file.name}`;
-                      const { error: uploadError } = await supabase.storage
-                        .from('customer-documents')
-                        .upload(fileName, file);
-                      if (uploadError) throw uploadError;
-                      const { data: docData, error: docError } = await supabase
-                        .from('customer_documents')
-                        .insert({
-                          customer_id: rental.customer_id,
-                          rental_id: id,
-                          document_type: 'Insurance Certificate',
-                          document_name: file.name,
-                          file_name: file.name,
-                          file_url: fileName,
-                          status: 'Pending',
-                          ai_scan_status: 'pending',
-                          tenant_id: tenant?.id,
-                        })
-                        .select()
-                        .single();
-                      if (docError) throw docError;
-                      supabase.functions.invoke('scan-insurance-document', {
-                        body: { documentId: docData.id, fileUrl: fileName }
-                      });
-                      toast({ title: "Success", description: "Insurance document uploaded and AI scan initiated" });
-                      queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
-                    } catch (error: any) {
-                      toast({ title: "Upload Failed", description: error.message || "Failed to upload document", variant: "destructive" });
-                    }
-                  };
-                  input.click();
-                }}
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Upload
-              </Button>
+                )}
+                {isBonzahConnected && (
+                  isBonzahEligible ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10 hover:text-[#CC004A]"
+                      disabled={isBonzahEligibilityLoading}
+                      onClick={() => { setBuyInsuranceMode('original'); setBuyInsuranceExtensionId(null); setShowBuyInsurance(true); }}
+                    >
+                      <img src="/bonzah-logo.svg" alt="" className="h-3 w-3 mr-1 dark:hidden" />
+                      <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-3 mr-1 hidden dark:inline" />
+                      {isBonzahEligibilityLoading ? 'Checking...' : 'Buy Bonzah'}
+                    </Button>
+                  ) : !isBonzahEligibilityLoading ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" title={`${rental?.vehicles?.make} ${rental?.vehicles?.model} is not supported by Bonzah`}>
+                      <img src="/bonzah-logo.svg" alt="" className="h-3 w-3 opacity-40 dark:hidden" />
+                      <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-3 opacity-40 hidden dark:inline" />
+                      Not eligible for Bonzah
+                    </span>
+                  ) : null
+                )}
+                {canEdit('rentals') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => uploadInsuranceDoc({ extensionId: null })}
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Upload
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        )
       )}
 
       {/* Identity Verification Section - Always show */}
@@ -4826,13 +4880,28 @@ const RentalDetail = () => {
       {rental && (
         <BuyInsuranceDialog
           open={showBuyInsurance}
-          onOpenChange={(v) => { setShowBuyInsurance(v); if (!v) setBuyInsuranceMode('original'); }}
+          onOpenChange={(v) => {
+            setShowBuyInsurance(v);
+            if (!v) { setBuyInsuranceMode('original'); setBuyInsuranceExtensionId(null); }
+          }}
           rental={rental}
           mode={buyInsuranceMode}
-          extensionDates={buyInsuranceMode === 'extension' && rental.previous_end_date ? {
-            start: rental.previous_end_date,
-            end: rental.end_date,
-          } : undefined}
+          extensionId={buyInsuranceExtensionId}
+          extensionDates={(() => {
+            if (buyInsuranceMode !== 'extension') return undefined;
+            // Prefer the specific extension's dates when one is selected; fall
+            // back to the legacy rental-level pending extension dates.
+            if (buyInsuranceExtensionId) {
+              const ext = extensionTotals.find(e => e.id === buyInsuranceExtensionId);
+              if (ext?.previous_end_date && ext?.new_end_date) {
+                return { start: ext.previous_end_date, end: ext.new_end_date };
+              }
+            }
+            if (rental.previous_end_date) {
+              return { start: rental.previous_end_date, end: rental.end_date };
+            }
+            return undefined;
+          })()}
           onPurchaseComplete={(premium) => {
             setInsurancePaymentAmount(premium);
             setInsurancePaymentCategories(buyInsuranceMode === 'extension' ? ['Extension Insurance'] : ['Insurance']);

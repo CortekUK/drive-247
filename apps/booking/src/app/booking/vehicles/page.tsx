@@ -150,6 +150,19 @@ const BookingVehiclesContent = () => {
           const overlappingIds = new Set(overlappingRentals.map(r => r.vehicle_id).filter(Boolean));
           filteredData = filteredData.filter(v => !overlappingIds.has(v.id));
         }
+
+        // Also exclude vehicles with overlapping external bookings (Turo/Airbnb iCal sync)
+        const { data: externalBookings } = await supabase
+          .from("external_bookings")
+          .select("vehicle_id")
+          .eq("tenant_id", tenant.id)
+          .lte("start_date", returnDate)
+          .gte("end_date", pickupDate);
+
+        if (externalBookings && externalBookings.length > 0) {
+          const externalIds = new Set(externalBookings.map((r: any) => r.vehicle_id).filter(Boolean));
+          filteredData = filteredData.filter(v => !externalIds.has(v.id));
+        }
       }
 
       if (filteredData.length === 0) {

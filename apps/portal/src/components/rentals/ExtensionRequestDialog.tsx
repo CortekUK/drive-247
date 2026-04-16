@@ -433,16 +433,25 @@ export function ExtensionRequestDialog({
             },
           });
 
-          // Phase 4: DO NOT confirm the Bonzah policy here. The tenant's Bonzah
-          // balance should only be deducted after Stripe has actually charged
-          // the customer. process-pending-payment will call bonzah-confirm-payment
-          // on the Stripe success path. We just stamp the quote id on the
-          // rental_extensions row so the edge function can find it.
-          if (quoteResult?.policy_record_id && createdExtensionId) {
-            await supabase
-              .from('rental_extensions')
-              .update({ bonzah_policy_id: quoteResult.policy_record_id })
-              .eq('id', createdExtensionId);
+          // Confirm the Bonzah policy now so it issues immediately, matching
+          // the original-rental flow (admin buys from tenant balance at
+          // approval). Stamp the id onto rental_extensions for cross-ref.
+          if (quoteResult?.policy_record_id) {
+            await supabase.functions.invoke('bonzah-confirm-payment', {
+              body: {
+                policy_record_id: quoteResult.policy_record_id,
+                stripe_payment_intent_id: `portal-extension-${rental.id}`,
+              },
+            });
+            if (createdExtensionId) {
+              await supabase
+                .from('rental_extensions')
+                .update({
+                  bonzah_policy_id: quoteResult.policy_record_id,
+                  bonzah_confirmed_at: new Date().toISOString(),
+                })
+                .eq('id', createdExtensionId);
+            }
           }
 
           // Create Extension Insurance ledger charge

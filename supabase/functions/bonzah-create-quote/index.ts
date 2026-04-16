@@ -91,6 +91,7 @@ interface CreateQuoteRequest {
   coverage: CoverageTypes
   renter: RenterDetails
   policy_type?: 'original' | 'extension'
+  extension_id?: string
 }
 
 // Response from /Bonzah/quote endpoint with finalize=1
@@ -378,6 +379,7 @@ serve(async (req) => {
           status: 'quoted',
           policy_type: policyType,
           chain_id: chainId,
+          extension_id: policyType === 'extension' ? (body.extension_id ?? null) : null,
         })
         .select('id')
         .single()

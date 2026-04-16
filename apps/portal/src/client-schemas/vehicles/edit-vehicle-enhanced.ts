@@ -51,6 +51,10 @@ export const editVehicleEnhancedSchema = z.object({
   available_daily: z.boolean().default(true),
   available_weekly: z.boolean().default(true),
   available_monthly: z.boolean().default(true),
+  // External calendar sync (Turo / Airbnb iCal)
+  external_ical_enabled: z.boolean().default(false),
+  external_ical_source: z.string().optional(),
+  external_ical_url: z.string().url("Must be a valid URL").optional().or(z.literal("")),
   // Description
   description: z.string().optional(),
 }).superRefine((data, ctx) => {

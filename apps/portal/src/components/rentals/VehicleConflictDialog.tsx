@@ -12,12 +12,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import type { RentalConflict } from '@/hooks/use-rental-conflicts';
+import type { RentalConflict, ExternalConflict } from '@/hooks/use-rental-conflicts';
 
 interface VehicleConflictDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   rentalConflicts: RentalConflict[];
+  externalConflicts?: ExternalConflict[];
   onRetry: () => void;
   isRetrying?: boolean;
 }
@@ -26,6 +27,7 @@ export function VehicleConflictDialog({
   open,
   onOpenChange,
   rentalConflicts,
+  externalConflicts = [],
   onRetry,
   isRetrying,
 }: VehicleConflictDialogProps) {
@@ -96,6 +98,38 @@ export function VehicleConflictDialog({
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {externalConflicts.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-[#737373]">
+                External Bookings (Synced from Turo / Airbnb)
+              </p>
+              {externalConflicts.map((conflict) => {
+                const sourceLabel = conflict.source.charAt(0).toUpperCase() + conflict.source.slice(1);
+                return (
+                  <div
+                    key={conflict.id}
+                    className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-[#080812] truncate">
+                        {sourceLabel}{conflict.summary ? ` · ${conflict.summary}` : ''}
+                      </p>
+                      <p className="text-xs text-[#737373]">
+                        {formatDate(conflict.start_date)} — {formatDate(conflict.end_date)}
+                      </p>
+                    </div>
+                    <Badge className="bg-slate-200 text-slate-700 border-slate-300">
+                      {sourceLabel}
+                    </Badge>
+                  </div>
+                );
+              })}
+              <p className="text-xs text-[#737373]">
+                This vehicle is already booked on the external platform. Cancel on that platform first to proceed.
+              </p>
             </div>
           )}
 

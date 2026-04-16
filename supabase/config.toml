@@ -71,3 +71,9 @@ verify_jwt = false
 
 [functions.finalize-payg-rental]
 verify_jwt = true
+
+[functions.sync-external-calendars]
+verify_jwt = false
+
+[functions.vehicle-ical-export]
+verify_jwt = false
