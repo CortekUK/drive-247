@@ -42,7 +42,15 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ExtendRentalDialog } from '@/components/customer-portal/ExtendRentalDialog';
+import PaymentBreakdown from '@/components/customer-portal/PaymentBreakdown';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 
 // ---------------------------------------------------------------------------
@@ -415,76 +423,6 @@ function InsuranceSection({
   );
 }
 
-function PaymentSubSection({
-  sectionPayments,
-  outstanding,
-  currencyCode,
-  onPay,
-  paying,
-}: {
-  sectionPayments: any[];
-  outstanding: number;
-  currencyCode: string;
-  onPay?: () => void;
-  paying?: boolean;
-}) {
-  const sectionTotal = sectionPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-
-  if (sectionPayments.length === 0 && outstanding <= 0) return null;
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <CreditCard className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium">Payments</span>
-      </div>
-      <div className="ml-6 space-y-1.5">
-        {sectionPayments.map((payment: any) => (
-          <div key={payment.id} className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-3.5 w-3.5 text-green-600" />
-              <span>{formatCurrency(payment.amount || 0, currencyCode)}</span>
-              <span className="text-xs text-muted-foreground">
-                {formatDate(payment.payment_date)}
-                {payment.method && ` · ${payment.method}`}
-              </span>
-            </div>
-            <Badge className={`text-[10px] ${getPaymentStatusColor(payment.status || '')}`}>
-              {payment.status}
-            </Badge>
-          </div>
-        ))}
-        {sectionPayments.length > 0 && (
-          <div className="flex items-center justify-between text-sm pt-1 border-t">
-            <span className="text-muted-foreground">Paid</span>
-            <span className="font-medium">{formatCurrency(sectionTotal, currencyCode)}</span>
-          </div>
-        )}
-        {outstanding > 0 && (
-          <div className="flex items-center justify-between pt-1">
-            <div className="flex items-center gap-1.5">
-              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
-              <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                Balance Due: {formatCurrency(outstanding, currencyCode)}
-              </span>
-            </div>
-            {onPay && (
-              <Button size="sm" variant="default" onClick={onPay} disabled={paying}>
-                {paying ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                ) : (
-                  <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                )}
-                Pay Now
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
@@ -649,82 +587,10 @@ export default function BookingDetailPage() {
     }
   })();
 
-  // ---- Payment handlers ----
-
-  const [payingExtension, setPayingExtension] = useState(false);
-  const [payingBalance, setPayingBalance] = useState(false);
   const [extendDialogOpen, setExtendDialogOpen] = useState(false);
 
   const canExtend = rental?.status === 'Active' && !rental?.is_extended;
   const hasExtensionPending = rental?.is_extended === true;
-
-  const handlePayExtension = async () => {
-    if (!rental || !tenant?.id) return;
-    setPayingExtension(true);
-    try {
-      const extAmount = rental.extension_amount;
-      if (!extAmount || extAmount <= 0) {
-        if (rental.extension_checkout_url) {
-          window.location.href = rental.extension_checkout_url;
-        }
-        return;
-      }
-      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: {
-          rentalId: rental.id,
-          totalAmount: extAmount,
-          tenantId: tenant.id,
-          customerEmail: customerUser?.customer?.email,
-          source: 'booking',
-          targetCategories: ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance'],
-          successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rental.id}&type=invoice`,
-          cancelUrl: `${window.location.origin}/portal/bookings/${rental.id}`,
-        },
-      });
-      if (error) throw error;
-      if (data?.url) {
-        window.location.href = data.url;
-      } else if (rental.extension_checkout_url) {
-        window.location.href = rental.extension_checkout_url;
-      }
-    } catch {
-      if (rental.extension_checkout_url) {
-        window.location.href = rental.extension_checkout_url;
-      } else {
-        toast.error('Failed to create payment link');
-      }
-    } finally {
-      setPayingExtension(false);
-    }
-  };
-
-  const handlePayBalance = async () => {
-    if (!rental || !tenant?.id || originalOutstanding <= 0) return;
-    setPayingBalance(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: {
-          rentalId: rental.id,
-          totalAmount: originalOutstanding,
-          tenantId: tenant.id,
-          customerEmail: customerUser?.customer?.email,
-          source: 'booking',
-          successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rental.id}&type=invoice`,
-          cancelUrl: `${window.location.origin}/portal/bookings/${rental.id}`,
-        },
-      });
-      if (error) throw error;
-      if (data?.url) {
-        window.location.href = data.url;
-      } else {
-        toast.error('Failed to create payment link');
-      }
-    } catch {
-      toast.error('Failed to create payment link');
-    } finally {
-      setPayingBalance(false);
-    }
-  };
 
   // ---- Loading state ----
 
@@ -911,111 +777,164 @@ export default function BookingDetailPage() {
         </div>
       )}
 
-      {/* 1. Original Rental */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Car className="h-5 w-5" />
-            Original Rental
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {originalAgreement ? (
-            <AgreementSection agreement={originalAgreement} currencyCode={currencyCode} />
-          ) : (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <FileSignature className="h-4 w-4" />
-              <span>No agreement created yet</span>
+      {/* Balance summary */}
+      {(originalOutstanding + extensionOutstandingTotal) > 0 && (
+        <Card className="border-amber-200 dark:border-amber-900">
+          <CardContent className="pt-4 pb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                  Outstanding Balance
+                </p>
+                <p className="text-lg font-semibold text-amber-700 dark:text-amber-400">
+                  {formatCurrency(
+                    originalOutstanding + extensionOutstandingTotal,
+                    currencyCode
+                  )}
+                </p>
+              </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tabs: Payments / Agreements / Insurance */}
+      <Tabs defaultValue="payments" className="w-full">
+        <TabsList className="grid grid-cols-3 w-full max-w-md">
+          <TabsTrigger value="payments">Payments</TabsTrigger>
+          <TabsTrigger value="agreements">Agreements</TabsTrigger>
+          <TabsTrigger value="insurance">Insurance</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="payments" className="mt-4">
+          <PaymentBreakdown
+            rental={rental as any}
+            customerEmail={customerUser?.customer?.email}
+          />
+        </TabsContent>
+
+        <TabsContent value="agreements" className="mt-4 space-y-4">
+          {/* Original */}
+          <div className="rounded-lg border overflow-hidden">
+            <div className="flex items-center gap-3 px-4 py-3 bg-green-500/5 border-b">
+              <div className="h-8 w-8 rounded-full bg-green-500/15 flex items-center justify-center">
+                <Car className="h-4 w-4 text-green-600" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold">Original Rental</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatDate(rental.start_date)} &mdash; {formatDate(rental.end_date)}
+                </p>
+              </div>
+              {originalAgreement && (
+                <Badge className={getAgreementStatusColor(originalAgreement.document_status)}>
+                  {getAgreementStatusLabel(originalAgreement.document_status)}
+                </Badge>
+              )}
+            </div>
+            <div className="p-4">
+              {originalAgreement ? (
+                <AgreementSection agreement={originalAgreement} currencyCode={currencyCode} />
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <FileSignature className="h-4 w-4" />
+                  <span>No agreement created yet</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Extensions */}
+          {extensionSections.map((ext) => (
+            <div key={`agr-${ext.index}`} className="rounded-lg border overflow-hidden">
+              <div className="flex items-center gap-3 px-4 py-3 bg-blue-500/5 border-b">
+                <div className="h-8 w-8 rounded-full bg-blue-500/15 flex items-center justify-center">
+                  <CalendarPlus className="h-4 w-4 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold">Extension #{ext.index}</p>
+                  {ext.agreement.period_start_date && (
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(ext.agreement.period_start_date)} &mdash;{' '}
+                      {formatDate(ext.agreement.period_end_date)}
+                    </p>
+                  )}
+                </div>
+                <Badge className={getAgreementStatusColor(ext.agreement.document_status)}>
+                  {getAgreementStatusLabel(ext.agreement.document_status)}
+                </Badge>
+              </div>
+              <div className="p-4">
+                <AgreementSection agreement={ext.agreement} currencyCode={currencyCode} />
+              </div>
+            </div>
+          ))}
+        </TabsContent>
+
+        <TabsContent value="insurance" className="mt-4 space-y-4">
+          {!originalInsurance && !extensionSections.some((e) => e.insurance) && (
+            <Card className="p-8 text-center">
+              <Shield className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground">No insurance policies yet</p>
+            </Card>
           )}
 
           {originalInsurance && (
-            <>
-              <Separator />
-              <InsuranceSection policy={originalInsurance} currencyCode={currencyCode} />
-            </>
+            <div className="rounded-lg border overflow-hidden">
+              <div className="flex items-center gap-3 px-4 py-3 bg-green-500/5 border-b">
+                <div className="h-8 w-8 rounded-full bg-green-500/15 flex items-center justify-center">
+                  <Car className="h-4 w-4 text-green-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold">Original Rental</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(originalInsurance.trip_start_date)} &mdash;{' '}
+                    {formatDate(originalInsurance.trip_end_date)}
+                  </p>
+                </div>
+                <Badge className={getInsuranceStatusColor(originalInsurance.status)}>
+                  {originalInsurance.status}
+                </Badge>
+              </div>
+              <div className="p-4">
+                <InsuranceSection policy={originalInsurance} currencyCode={currencyCode} />
+              </div>
+            </div>
           )}
 
-          {/* Original rental payments */}
-          <Separator />
-          <PaymentSubSection
-            sectionPayments={payments}
-            outstanding={originalOutstanding}
-            currencyCode={currencyCode}
-            onPay={originalOutstanding > 0 ? handlePayBalance : undefined}
-            paying={payingBalance}
-          />
-        </CardContent>
-      </Card>
-
-      {/* 2. Extension Sections — each with its own agreement, insurance, and payments */}
-      {extensionSections.map((ext) => (
-        <Card key={ext.agreement.id}>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Extension #{ext.index}
-              {ext.agreement.period_start_date && ext.agreement.period_end_date && (
-                <span className="text-sm font-normal text-muted-foreground ml-2">
-                  {formatDate(ext.agreement.period_start_date)} &mdash;{' '}
-                  {formatDate(ext.agreement.period_end_date)}
-                </span>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <AgreementSection agreement={ext.agreement} currencyCode={currencyCode} />
-
-            {ext.insurance && (
-              <>
-                <Separator />
-                <InsuranceSection policy={ext.insurance} currencyCode={currencyCode} />
-              </>
-            )}
-
-            {ext.ledgerEntry && (
-              <>
-                <Separator />
-                <div className="flex items-center gap-2 text-sm">
-                  <CreditCard className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Extension Fee:</span>
-                  <span className="font-medium">
-                    {formatCurrency(Math.abs(ext.ledgerEntry.amount || 0), currencyCode)}
-                  </span>
-                  {ext.ledgerEntry.reference && (
-                    <span className="text-muted-foreground text-xs">
-                      &mdash; {ext.ledgerEntry.reference}
-                    </span>
+          {extensionSections
+            .filter((e) => e.insurance)
+            .map((ext) => (
+              <div key={`ins-${ext.index}`} className="rounded-lg border overflow-hidden">
+                <div className="flex items-center gap-3 px-4 py-3 bg-blue-500/5 border-b">
+                  <div className="h-8 w-8 rounded-full bg-blue-500/15 flex items-center justify-center">
+                    <CalendarPlus className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold">Extension #{ext.index}</p>
+                    {ext.insurance && (
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(ext.insurance.trip_start_date)} &mdash;{' '}
+                        {formatDate(ext.insurance.trip_end_date)}
+                      </p>
+                    )}
+                  </div>
+                  {ext.insurance && (
+                    <Badge className={getInsuranceStatusColor(ext.insurance.status)}>
+                      {ext.insurance.status}
+                    </Badge>
                   )}
                 </div>
-              </>
-            )}
-
-            {/* Extension payment — show outstanding if any */}
-            {extensionOutstandingTotal > 0 && (
-              <>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
-                    <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                      Balance Due: {formatCurrency(extensionOutstandingTotal, currencyCode)}
-                    </span>
-                  </div>
-                  <Button size="sm" onClick={handlePayExtension} disabled={payingExtension}>
-                    {payingExtension ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                    ) : (
-                      <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                    )}
-                    Pay Now
-                  </Button>
+                <div className="p-4">
+                  {ext.insurance && (
+                    <InsuranceSection policy={ext.insurance} currencyCode={currencyCode} />
+                  )}
                 </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      ))}
+              </div>
+            ))}
+        </TabsContent>
+      </Tabs>
 
       {/* 4. Installment Plan */}
       {installmentPlan && (
