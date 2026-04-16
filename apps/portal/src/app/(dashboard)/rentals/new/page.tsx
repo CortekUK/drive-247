@@ -156,6 +156,9 @@ const CreateRental = () => {
     id: string;
   } | null>(null);
 
+  // Per-period rate state — admin edits rate, total is derived
+  const [perPeriodRate, setPerPeriodRate] = useState<number | null>(null);
+
   // Fee override state — admin can override per-rental
   const [taxOverride, setTaxOverride] = useState<number | null>(null);
   const [showPricingBreakdown, setShowPricingBreakdown] = useState(false);
@@ -886,7 +889,7 @@ const CreateRental = () => {
     }
   }, [isBonzahEligible, isBonzahEligibilityLoading]);
 
-  // Auto-populate rental amount based on selected vehicle, dates, and auto-determined period type
+  // Auto-populate per-period rate from selected vehicle when vehicle/dates change
   useEffect(() => {
     if (selectedVehicleId && vehicles && watchedStartDate && watchedEndDate) {
       const vehicle = vehicles.find(v => v.id === selectedVehicleId);
@@ -896,82 +899,62 @@ const CreateRental = () => {
       const dailyRent = vehicle.daily_rent || 0;
       const weeklyRent = vehicle.weekly_rent || 0;
       const monthlyRent = vehicle.monthly_rent || 0;
-      let amount: number | undefined;
 
+      // Determine tier and set the per-period rate from vehicle
+      let rate: number | undefined;
       if (days >= mtd && monthlyRent > 0) {
-        // Monthly tier: pro-rata
-        amount = Math.round(((days / mtd) * monthlyRent) * 100) / 100;
+        rate = monthlyRent;
       } else if (days >= 7 && days < mtd && weeklyRent > 0) {
-        // Weekly tier: pro-rata
-        amount = Math.round(((days / 7) * weeklyRent) * 100) / 100;
+        rate = weeklyRent;
       } else if (dailyRent > 0) {
-        // Daily tier: apply dynamic pricing (weekend/holiday surcharges)
-        const weekendConfig = weekendPricingSettings.weekend_surcharge_percent > 0
-          ? weekendPricingSettings : null;
-        let total = 0;
-
-        for (let i = 0; i < days; i++) {
-          const currentDate = addDays(watchedStartDate, i);
-          const dayOfWeek = currentDate.getDay();
-          let dayRate = dailyRent;
-
-          // 1. Check holiday match (priority over weekend)
-          const holiday = tenantHolidays.find(h => {
-            const dateStr = format(currentDate, 'yyyy-MM-dd');
-            if (h.excluded_vehicle_ids?.includes(selectedVehicleId)) return false;
-            if (h.recurs_annually) {
-              const hStart = new Date(h.start_date + 'T00:00:00');
-              const hEnd = new Date(h.end_date + 'T00:00:00');
-              const m = currentDate.getMonth(), d = currentDate.getDate();
-              return (m === hStart.getMonth() && d >= hStart.getDate() && (hStart.getMonth() === hEnd.getMonth() ? d <= hEnd.getDate() : true))
-                || (m === hEnd.getMonth() && d <= hEnd.getDate() && hStart.getMonth() !== hEnd.getMonth())
-                || (m > hStart.getMonth() && m < hEnd.getMonth());
-            }
-            return dateStr >= h.start_date && dateStr <= h.end_date;
-          });
-
-          if (holiday) {
-            const override = vehiclePricingOverrides.find(
-              o => o.rule_type === 'holiday' && o.holiday_id === holiday.id
-            );
-            if (override?.override_type === 'excluded') {
-              dayRate = dailyRent;
-            } else if (override?.override_type === 'fixed_price' && override.fixed_price != null) {
-              dayRate = override.fixed_price;
-            } else if (override?.override_type === 'custom_percent' && override.custom_percent != null) {
-              dayRate = dailyRent * (1 + override.custom_percent / 100);
-            } else {
-              dayRate = dailyRent * (1 + holiday.surcharge_percent / 100);
-            }
-          } else if (weekendConfig && weekendConfig.weekend_days?.includes(dayOfWeek)) {
-            // 2. Weekend match
-            const override = vehiclePricingOverrides.find(o => o.rule_type === 'weekend');
-            if (override?.override_type === 'excluded') {
-              dayRate = dailyRent;
-            } else if (override?.override_type === 'fixed_price' && override.fixed_price != null) {
-              dayRate = override.fixed_price;
-            } else if (override?.override_type === 'custom_percent' && override.custom_percent != null) {
-              dayRate = dailyRent * (1 + override.custom_percent / 100);
-            } else {
-              dayRate = dailyRent * (1 + weekendConfig.weekend_surcharge_percent / 100);
-            }
-          }
-
-          total += dayRate;
-        }
-        amount = Math.round(total * 100) / 100;
+        rate = dailyRent;
       } else if (weeklyRent > 0) {
-        amount = Math.round(((days / 7) * weeklyRent) * 100) / 100;
+        rate = weeklyRent;
       } else if (monthlyRent > 0) {
-        amount = Math.round(((days / mtd) * monthlyRent) * 100) / 100;
+        rate = monthlyRent;
       }
 
-      if (amount !== undefined && amount !== watchedMonthlyAmount) {
-        form.setValue("monthly_amount", amount, { shouldValidate: true });
+      if (rate !== undefined) {
+        setPerPeriodRate(rate);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedVehicleId, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles, weekendPricingSettings.weekend_surcharge_percent, tenantHolidays.length, vehiclePricingOverrides.length]);
+  }, [selectedVehicleId, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles]);
+
+  // Compute total from per-period rate × duration (including dynamic pricing for daily tier)
+  useEffect(() => {
+    if (perPeriodRate === null || !selectedVehicleId || !vehicles || !watchedStartDate || !watchedEndDate) return;
+
+    const vehicle = vehicles.find(v => v.id === selectedVehicleId);
+    if (!vehicle) return;
+
+    const days = Math.max(1, differenceInDays(watchedEndDate, watchedStartDate));
+    const dailyRent = vehicle.daily_rent || 0;
+    const weeklyRent = vehicle.weekly_rent || 0;
+    const monthlyRent = vehicle.monthly_rent || 0;
+
+    // Determine tier
+    const tier = days >= mtd && monthlyRent > 0 ? 'monthly'
+      : days >= 7 && days < mtd && weeklyRent > 0 ? 'weekly'
+      : dailyRent > 0 ? 'daily'
+      : weeklyRent > 0 ? 'weekly' : 'monthly';
+
+    let amount: number;
+
+    if (tier === 'monthly') {
+      amount = Math.round(((days / mtd) * perPeriodRate) * 100) / 100;
+    } else if (tier === 'weekly') {
+      amount = Math.round(((days / 7) * perPeriodRate) * 100) / 100;
+    } else {
+      // Daily tier: use flat rate per day (surcharges not applied when rate is manually set)
+      amount = Math.round((days * perPeriodRate) * 100) / 100;
+    }
+
+    if (amount !== watchedMonthlyAmount) {
+      form.setValue("monthly_amount", amount, { shouldValidate: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perPeriodRate, selectedVehicleId, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles]);
 
   // Note: End date is no longer auto-calculated from period type since period type
   // is now auto-determined from the date range. The admin picks both start and end dates manually.
@@ -2014,9 +1997,9 @@ const CreateRental = () => {
     form.setValue("promo_code", "OFF20", { shouldValidate: true });
     validatePromoCode("OFF20");
 
-    // Set monthly_amount after a tick so the vehicle auto-calc effect doesn't overwrite it
+    // Set per-period rate after a tick so the vehicle auto-calc effect doesn't overwrite it
     setTimeout(() => {
-      form.setValue("monthly_amount", 100, { shouldValidate: true });
+      setPerPeriodRate(100);
     }, 300);
 
     toast({ title: "Form auto-filled", description: `${customer.name} → ${vehicle.make} ${vehicle.model} (${vehicle.reg})` });
@@ -2031,6 +2014,7 @@ const CreateRental = () => {
     setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
     setBonzahPremium(0);
     setBonzahKey(k => k + 1);
+    setPerPeriodRate(null);
     setPromoDetails(null);
     setPromoError(null);
     setTaxOverride(null);
@@ -2609,10 +2593,10 @@ const CreateRental = () => {
                           form.setValue('return_time', undefined as any);
                           form.setValue('return_location', '');
                           form.setValue('rental_period_type', 'Daily');
-                          // Auto-fill monthly_amount with daily_rent from the selected vehicle
+                          // Auto-fill per-period rate with daily_rent from the selected vehicle
                           const vehicle = vehicles?.find((v: any) => v.id === selectedVehicleId);
                           if (vehicle) {
-                            form.setValue('monthly_amount', vehicle.daily_rent || 0, { shouldValidate: true });
+                            setPerPeriodRate(vehicle.daily_rent || 0);
                           }
                         }
                       }}
@@ -2911,8 +2895,8 @@ const CreateRental = () => {
                 const hasOverrides = taxOverride !== null || serviceFeeOverride !== null || depositOverride !== null || deliveryFeeOverride !== null || collectionFeeOverride !== null;
 
                 const periodType = watchedRentalPeriodType || "Monthly";
-                const amountLabel = periodType === "Daily" ? "Total Amount" :
-                  periodType === "Weekly" ? "Total Amount" : "Monthly Amount";
+                const rateLabel = periodType === "Daily" ? "Daily Rate" :
+                  periodType === "Weekly" ? "Weekly Rate" : "Monthly Rate";
 
                 return (
                   <div className="rounded-xl border bg-card shadow-sm">
@@ -2923,7 +2907,7 @@ const CreateRental = () => {
                       <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Pricing & Fees</h2>
                     </div>
                     <div className="p-5 space-y-5">
-                      {/* Rental Amount Input */}
+                      {/* Rate + Total side by side */}
                       <FormField
                         control={form.control}
                         name="monthly_amount"
@@ -2934,35 +2918,54 @@ const CreateRental = () => {
                             : 0;
 
                           return (
-                          <FormItem>
-                            <FormLabel>{amountLabel} <span className="text-red-500">*</span></FormLabel>
-                            <FormControl>
-                              <CurrencyInput
-                                value={field.value}
-                                onChange={field.onChange}
-                                placeholder="Rental amount"
-                                min={0.01}
-                                step={0.01}
-                                error={!!form.formState.errors.monthly_amount}
-                                currencySymbol={currencySymbol}
-                                disabled={false}
-                              />
-                            </FormControl>
-                            <div className="flex items-center justify-between">
+                          <FormItem className="space-y-3">
+                          <div className="grid grid-cols-2 gap-4">
+                            <FormItem>
+                              <FormLabel>{rateLabel} <span className="text-red-500">*</span></FormLabel>
+                              <FormControl>
+                                <CurrencyInput
+                                  value={perPeriodRate ?? 0}
+                                  onChange={(val: number) => setPerPeriodRate(val)}
+                                  placeholder="Rate per period"
+                                  min={0.01}
+                                  step={0.01}
+                                  error={!!form.formState.errors.monthly_amount}
+                                  currencySymbol={currencySymbol}
+                                  disabled={false}
+                                />
+                              </FormControl>
                               <FormDescription>
-                                Auto-calculated from vehicle rates. You can adjust if needed.
+                                Auto-filled from vehicle rates.
                               </FormDescription>
-                              {vehicle && days > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => setShowPricingBreakdown(!showPricingBreakdown)}
-                                  className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 transition-colors"
-                                >
-                                  <Info className="h-3 w-3" />
-                                  {showPricingBreakdown ? 'Hide' : 'How is this calculated?'}
-                                </button>
-                              )}
+                            </FormItem>
+                            <div>
+                              <label className="text-sm font-medium leading-none">
+                                Total Amount
+                              </label>
+                              <div className="mt-2">
+                                <CurrencyInput
+                                  value={watchedMonthlyAmount || 0}
+                                  onChange={() => {}}
+                                  placeholder="Total amount"
+                                  currencySymbol={currencySymbol}
+                                  disabled={true}
+                                />
+                              </div>
+                              <p className="text-[0.8rem] text-muted-foreground mt-1.5">
+                                {rateLabel.toLowerCase()} &times; duration
+                              </p>
                             </div>
+                          </div>
+                          {vehicle && days > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setShowPricingBreakdown(!showPricingBreakdown)}
+                              className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 transition-colors"
+                            >
+                              <Info className="h-3 w-3" />
+                              {showPricingBreakdown ? 'Hide' : 'How is this calculated?'}
+                            </button>
+                          )}
                             {showPricingBreakdown && vehicle && days > 0 && (() => {
                               const dailyRent = vehicle.daily_rent || 0;
                               const weeklyRent = vehicle.weekly_rent || 0;
