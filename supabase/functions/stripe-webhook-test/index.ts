@@ -445,12 +445,16 @@ serve(async (req) => {
         if (isExtension) {
           console.log("Extension checkout completed for rental:", rentalId);
 
-          // Find payment by stripe_checkout_session_id and update status
+          // Find payment by stripe_checkout_session_id and update status.
+          // Use .maybeSingle() + deterministic ordering: duplicates exist in legacy
+          // data and webhook retries can race. Prefer the most recent row.
           const { data: extensionPayment, error: extPaymentError } = await supabase
             .from("payments")
             .select("id")
             .eq("stripe_checkout_session_id", session.id)
-            .single();
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
           if (extensionPayment) {
             await supabase

@@ -17,6 +17,7 @@ import {
   RefreshCw,
   ExternalLink,
   Link2,
+  Upload,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -35,6 +36,8 @@ interface InsuranceTimelineProps {
   isBonzahConnected: boolean;
   bonzahCdBalance: number | null;
   onBuyInsurance: () => void;
+  onBuyExtensionInsurance?: () => void;
+  onUploadExtensionInsurance?: () => void;
 }
 
 const COVERAGE_SHORT_LABELS: Record<string, string> = {
@@ -311,11 +314,14 @@ export function InsuranceTimeline({
   isBonzahConnected,
   bonzahCdBalance,
   onBuyInsurance,
+  onBuyExtensionInsurance,
+  onUploadExtensionInsurance,
 }: InsuranceTimelineProps) {
   const bonzahMode = (rental as any)?.tenants?.bonzah_mode || 'test';
   const portalUrl = bonzahMode === 'live' ? 'https://bonzah.insillion.com/bb1/' : 'https://bonzah.sb.insillion.com/bb1/';
   const hasOriginal = policies.some((p) => p.policy_type === 'original');
   const hasInsufficientBalance = policies.some((p) => p.status === 'insufficient_balance');
+  const isExtended = !!(rental?.original_end_date || rental?.previous_end_date);
 
   // Split policies into original and extension groups
   const originalPolicies = policies.filter((p) => p.policy_type !== 'extension');
@@ -447,7 +453,7 @@ export function InsuranceTimeline({
             )}
 
             {/* Connector between sections */}
-            {originalPolicies.length > 0 && extensionPolicies.length > 0 && (
+            {originalPolicies.length > 0 && (extensionPolicies.length > 0 || isExtended) && (
               <div className="flex items-center gap-2 -my-2">
                 <div className="h-px flex-1 bg-border" />
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-muted/80 border">
@@ -459,7 +465,7 @@ export function InsuranceTimeline({
             )}
 
             {/* Extension Policies Section */}
-            {extensionPolicies.length > 0 && (
+            {(extensionPolicies.length > 0 || isExtended) && (
               <div className="border border-amber-200 dark:border-amber-800/50 bg-amber-50/40 dark:bg-amber-950/10 p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2.5">
@@ -469,30 +475,54 @@ export function InsuranceTimeline({
                     <div>
                       <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-200">Extension Coverage</h4>
                       <span className="text-xs text-amber-600 dark:text-amber-400">
-                        {extensionPolicies.length === 1
-                          ? 'Rental extended once'
-                          : `Rental extended ${extensionPolicies.length} times`}
+                        {extensionPolicies.length === 0
+                          ? `No insurance for extension period (${rental.previous_end_date ? new Date(rental.previous_end_date + 'T00:00:00').toLocaleDateString('en-US') : ''} → ${rental.end_date ? new Date(rental.end_date.split('T')[0] + 'T00:00:00').toLocaleDateString('en-US') : ''})`
+                          : extensionPolicies.length === 1
+                            ? 'Rental extended once'
+                            : `Rental extended ${extensionPolicies.length} times`}
                       </span>
                     </div>
                   </div>
-                  <span className="text-sm font-bold tabular-nums text-amber-700 dark:text-amber-300">
-                    {formatCurrency(extensionTotal, 'USD')}
-                  </span>
+                  {extensionPolicies.length > 0 ? (
+                    <span className="text-sm font-bold tabular-nums text-amber-700 dark:text-amber-300">
+                      {formatCurrency(extensionTotal, 'USD')}
+                    </span>
+                  ) : null}
                 </div>
-                <div className="space-y-2.5">
-                  {extensionPolicies.map((policy, index) => (
-                    <InsuranceTimelineItem
-                      key={policy.id}
-                      policy={policy}
-                      isLast={false}
-                      canEdit={canEdit}
-                      tenantId={tenantId}
-                      rentalId={rentalId}
-                      bonzahMode={bonzahMode}
-                      extensionIndex={index + 1}
-                    />
-                  ))}
-                </div>
+                {extensionPolicies.length > 0 && (
+                  <div className="space-y-2.5">
+                    {extensionPolicies.map((policy, index) => (
+                      <InsuranceTimelineItem
+                        key={policy.id}
+                        policy={policy}
+                        isLast={false}
+                        canEdit={canEdit}
+                        tenantId={tenantId}
+                        rentalId={rentalId}
+                        bonzahMode={bonzahMode}
+                        extensionIndex={index + 1}
+                      />
+                    ))}
+                  </div>
+                )}
+                {/* Add extension insurance buttons */}
+                {canEdit && (
+                  <div className={`flex items-center gap-2 ${extensionPolicies.length > 0 ? 'mt-3 pt-3 border-t border-amber-200 dark:border-amber-800/50' : ''}`}>
+                    {isBonzahConnected && onBuyExtensionInsurance && (
+                      <Button variant="outline" size="sm" onClick={onBuyExtensionInsurance} className="border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30">
+                        <img src="/bonzah-logo.svg" alt="" className="h-3 w-auto mr-1.5 dark:hidden" />
+                        <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-auto mr-1.5 hidden dark:block" />
+                        Buy Bonzah
+                      </Button>
+                    )}
+                    {onUploadExtensionInsurance && (
+                      <Button variant="outline" size="sm" onClick={onUploadExtensionInsurance} className="border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30">
+                        <Upload className="h-3.5 w-3.5 mr-1.5" />
+                        Upload Own Policy
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

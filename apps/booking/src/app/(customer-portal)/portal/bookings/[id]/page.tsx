@@ -27,6 +27,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { useRentalAgreements, type RentalAgreement } from '@/hooks/use-rental-agreements';
 import { useRentalInsurancePolicies, type CustomerInsurancePolicy } from '@/hooks/use-rental-insurance-policies';
+import { useRentalExtensionTotals, sumExtensionOutstanding } from '@/hooks/use-rental-extension-totals';
 import {
   useSignAgreement,
   useViewAgreement,
@@ -619,12 +620,14 @@ export default function BookingDetailPage() {
     [ledgerEntries]
   );
 
+  // Phase 5: authoritative extension outstanding from the unified view.
+  // Replaces the old ledger-sum which drifted when extension insurance was
+  // added before its ledger entry landed, and which double-counted during
+  // partial refunds.
+  const { data: extensionTotals } = useRentalExtensionTotals(id || undefined);
   const extensionOutstandingTotal = useMemo(
-    () =>
-      ledgerEntries
-        .filter((e) => e.type === 'Charge' && extensionCategories.includes(e.category))
-        .reduce((sum, e) => sum + (e.remaining_amount || 0), 0),
-    [ledgerEntries]
+    () => sumExtensionOutstanding(extensionTotals),
+    [extensionTotals]
   );
 
   const vehiclePhotoUrl =

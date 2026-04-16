@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     // Find the payment by checkout session ID
     const { data: payment, error: findError } = await supabase
       .from('payments')
-      .select('id, status, rental_id, tenant_id, amount, target_categories')
+      .select('id, status, rental_id, tenant_id, amount, target_categories, extension_id')
       .eq('stripe_checkout_session_id', checkoutSessionId)
       .maybeSingle();
 
@@ -118,20 +118,79 @@ Deno.serve(async (req) => {
       console.log("[PROCESS-PENDING] apply-payment result:", applyResult?.status, "allocated:", applyResult?.allocated);
     }
 
+    // Phase 3: if this payment funded a rental extension, finalize it atomically.
+    // The RPC updates rental_extensions.status, extends rentals.end_date
+    // (guarded so we never shrink), clears the legacy pending-extension flags,
+    // and back-stamps payments.extension_id if missing. Idempotent.
+    if (payment.extension_id) {
+      const { data: finalizeResult, error: finalizeError } = await supabase.rpc('finalize_rental_extension', {
+        p_extension_id: payment.extension_id,
+        p_payment_id: payment.id,
+      });
+      if (finalizeError) {
+        console.error("[PROCESS-PENDING] finalize_rental_extension error:", finalizeError);
+      } else {
+        console.log("[PROCESS-PENDING] Extension finalized:", finalizeResult);
+      }
+
+      // Phase 4: confirm the Bonzah policy NOW (not at approval time). This
+      // avoids deducting the tenant's Bonzah balance before Stripe has
+      // actually charged the customer.
+      const { data: extRow } = await supabase
+        .from('rental_extensions')
+        .select('bonzah_policy_id, bonzah_confirmed_at')
+        .eq('id', payment.extension_id)
+        .maybeSingle();
+
+      if (extRow?.bonzah_policy_id && !extRow.bonzah_confirmed_at) {
+        const { data: policy } = await supabase
+          .from('bonzah_insurance_policies')
+          .select('status')
+          .eq('id', extRow.bonzah_policy_id)
+          .maybeSingle();
+
+        // Only confirm if the quote hasn't already been issued
+        if (policy && ['quoted', 'payment_pending', 'failed'].includes(policy.status)) {
+          console.log("[PROCESS-PENDING] Confirming Bonzah policy after Stripe success:", extRow.bonzah_policy_id);
+          const { data: bonzahResult, error: bonzahError } = await supabase.functions.invoke('bonzah-confirm-payment', {
+            body: {
+              policy_record_id: extRow.bonzah_policy_id,
+              stripe_payment_intent_id: paymentIntentId,
+            },
+          });
+          if (bonzahError) {
+            console.error("[PROCESS-PENDING] bonzah-confirm-payment error:", bonzahError);
+          } else {
+            console.log("[PROCESS-PENDING] Bonzah confirmed:", bonzahResult);
+            await supabase
+              .from('rental_extensions')
+              .update({ bonzah_confirmed_at: new Date().toISOString() })
+              .eq('id', payment.extension_id);
+          }
+        } else if (policy) {
+          console.log("[PROCESS-PENDING] Bonzah policy already in status:", policy.status, "— skipping confirm");
+        }
+      }
+    }
+
     // Update invoice status
     if (payment.rental_id) {
       await supabase.from('invoices').update({ status: 'paid' }).eq('rental_id', payment.rental_id);
 
-      // Clear extension checkout fields after successful payment (allows requesting another extension)
-      const hasExtensionTargets = payment.target_categories &&
-        Array.isArray(payment.target_categories) &&
-        payment.target_categories.some((c: string) => c.startsWith('Extension'));
-      if (hasExtensionTargets) {
-        await supabase.from('rentals').update({
-          extension_checkout_url: null,
-          extension_amount: null
-        }).eq('id', payment.rental_id);
-        console.log("[PROCESS-PENDING] Cleared extension checkout fields for rental:", payment.rental_id);
+      // Legacy fallback: if extension_id wasn't stamped (pre-Phase-3 payments),
+      // still clear the extension scratch fields based on target_categories.
+      // Phase 3+ payments are handled by the RPC above.
+      if (!payment.extension_id) {
+        const hasExtensionTargets = payment.target_categories &&
+          Array.isArray(payment.target_categories) &&
+          payment.target_categories.some((c: string) => c.startsWith('Extension'));
+        if (hasExtensionTargets) {
+          await supabase.from('rentals').update({
+            extension_checkout_url: null,
+            extension_amount: null
+          }).eq('id', payment.rental_id);
+          console.log("[PROCESS-PENDING] Legacy: cleared extension checkout fields for rental:", payment.rental_id);
+        }
       }
     }
 

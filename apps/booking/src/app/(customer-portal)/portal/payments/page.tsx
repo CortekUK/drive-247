@@ -94,19 +94,21 @@ const mockInstallmentPlans = [
   {
     id: 'demo-2',
     vehicleName: '2023 Mercedes-AMG GT',
-    planType: 'Bi-Weekly',
+    planType: 'Twice Weekly',
     totalAmount: 6000,
     paidAmount: 2000,
     remainingAmount: 4000,
     status: 'active',
     startDate: '2024-01-01',
     installments: [
-      { number: 1, amount: 1000, dueDate: '2024-01-15', status: 'paid', paidAt: '2024-01-15' },
-      { number: 2, amount: 1000, dueDate: '2024-01-29', status: 'paid', paidAt: '2024-01-29' },
-      { number: 3, amount: 1000, dueDate: '2024-02-12', status: 'overdue', paidAt: null },
-      { number: 4, amount: 1000, dueDate: '2024-02-26', status: 'scheduled', paidAt: null },
-      { number: 5, amount: 1000, dueDate: '2024-03-11', status: 'scheduled', paidAt: null },
-      { number: 6, amount: 1000, dueDate: '2024-03-25', status: 'scheduled', paidAt: null },
+      { number: 1, amount: 750, dueDate: '2024-01-01', status: 'paid', paidAt: '2024-01-01' },
+      { number: 2, amount: 750, dueDate: '2024-01-04', status: 'paid', paidAt: '2024-01-04' },
+      { number: 3, amount: 750, dueDate: '2024-01-08', status: 'overdue', paidAt: null },
+      { number: 4, amount: 750, dueDate: '2024-01-11', status: 'scheduled', paidAt: null },
+      { number: 5, amount: 750, dueDate: '2024-01-15', status: 'scheduled', paidAt: null },
+      { number: 6, amount: 750, dueDate: '2024-01-18', status: 'scheduled', paidAt: null },
+      { number: 7, amount: 750, dueDate: '2024-01-22', status: 'scheduled', paidAt: null },
+      { number: 8, amount: 750, dueDate: '2024-01-25', status: 'scheduled', paidAt: null },
     ],
   },
   {
@@ -365,7 +367,7 @@ function InstallmentPlanCard({
               </Badge>
             </div>
             <CardDescription>
-              {plan.plan_type.charAt(0).toUpperCase() + plan.plan_type.slice(1)} Plan
+              {plan.plan_type === 'semiweekly' ? 'Twice Weekly' : plan.plan_type.charAt(0).toUpperCase() + plan.plan_type.slice(1)} Plan
               {plan.rentals?.rental_number && ` • ${plan.rentals.rental_number}`}
             </CardDescription>
           </div>

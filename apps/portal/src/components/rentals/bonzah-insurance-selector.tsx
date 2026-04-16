@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Check, Shield, ShieldCheck, Car, Users, AlertCircle, Loader2, X, ChevronDown, ChevronUp, XCircle, UserCheck, MapPin, Save } from 'lucide-react';
+import { Check, Shield, ShieldCheck, Car, Users, AlertCircle, Loader2, X, ChevronDown, ChevronUp, XCircle, UserCheck, MapPin, Save, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   useBonzahPremium,
@@ -56,6 +56,14 @@ const DEFAULT_COVERAGE: CoverageOptions = {
   rcli: false,
   sli: false,
   pai: false,
+};
+
+// Brochure PDFs (stored in Supabase storage, same for all tenants)
+const BROCHURE_URLS: Record<keyof CoverageOptions, string> = {
+  cdw: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bonzah-brochures/cdw-brochure.pdf`,
+  rcli: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bonzah-brochures/rcli-brochure.pdf`,
+  sli: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bonzah-brochures/sli-brochure.pdf`,
+  pai: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bonzah-brochures/pai-brochure.pdf`,
 };
 
 const CoverageIcon = ({ type, className }: { type: keyof CoverageOptions; className?: string }) => {
@@ -552,6 +560,17 @@ export default function BonzahInsuranceSelector({
                           ))}
                         </div>
                       </div>
+
+                      {/* Brochure link */}
+                      <a
+                        href={BROCHURE_URLS[type]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 flex items-center gap-2 rounded-md border border-border/50 px-3 py-2 text-[11px] text-muted-foreground hover:text-foreground hover:border-[#CC004A]/40 transition-colors"
+                      >
+                        <FileText className="w-3.5 h-3.5 flex-shrink-0 text-[#CC004A]" />
+                        <span>View {info.shortName} Coverage Brochure</span>
+                      </a>
                     </div>
                   </CollapsibleContent>
                 </div>

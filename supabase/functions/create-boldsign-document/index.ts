@@ -578,6 +578,28 @@ Deno.serve(async (req) => {
       return errorResponse('rentalId is required', 400);
     }
 
+    // Dedup guard: if this rental already has an active, non-terminal agreement, skip creating another.
+    // Prevents double-clicks and duplicate API calls from burning sandbox quota.
+    {
+      const { data: existingRental } = await supabase
+        .from('rentals')
+        .select('docusign_envelope_id, document_status')
+        .eq('id', rentalId)
+        .single();
+      const existingStatus = (existingRental?.document_status || '').toLowerCase();
+      const isActiveNonTerminal = existingRental?.docusign_envelope_id &&
+        !['declined', 'voided', 'expired'].includes(existingStatus);
+      if (isActiveNonTerminal) {
+        console.log('Rental already has an active BoldSign document, skipping create:', existingRental.docusign_envelope_id, 'status:', existingStatus);
+        return jsonResponse({
+          ok: true,
+          documentId: existingRental.docusign_envelope_id,
+          emailSent: false,
+          deduped: true,
+        });
+      }
+    }
+
     // Fetch rental with customer and vehicle data
     const { data: rental, error: rentalError } = await supabase
       .from('rentals')

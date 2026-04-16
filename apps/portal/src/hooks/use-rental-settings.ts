@@ -8,10 +8,13 @@ export type WhatGetsSplit = 'rental_only' | 'rental_tax' | 'rental_tax_extras';
 export interface InstallmentConfig {
   minimum_days_weekly: number;
   minimum_days_monthly: number;
+  minimum_days_semiweekly: number;
   weekly_installments_limit: number;
   monthly_installments_limit: number;
+  semiweekly_installments_limit: number;
   limiting_amount_per_day_weekly: number;
   limiting_amount_per_day_monthly: number;
+  limiting_amount_per_day_semiweekly: number;
   charge_first_upfront: boolean;
   what_gets_split: WhatGetsSplit;
   grace_period_days: number;
@@ -104,10 +107,13 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   installment_config: {
     minimum_days_weekly: 7,
     minimum_days_monthly: 30,
+    minimum_days_semiweekly: 7,
     weekly_installments_limit: 4,
     monthly_installments_limit: 6,
+    semiweekly_installments_limit: 8,
     limiting_amount_per_day_weekly: 0,
     limiting_amount_per_day_monthly: 0,
+    limiting_amount_per_day_semiweekly: 0,
     charge_first_upfront: true,
     what_gets_split: 'rental_only',
     grace_period_days: 3,

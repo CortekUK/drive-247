@@ -75,6 +75,45 @@ Deno.serve(async (req) => {
   const nowIso = now.toISOString();
 
   try {
+    // ── Tenant authorization ──
+    // Extract the caller's JWT and resolve their tenant_id from app_users.
+    // service_role bypasses RLS, so we must manually verify that the caller
+    // belongs to the same tenant as the rental they're trying to close.
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    if (!token) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing authorization token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Create a user-scoped client to extract the authenticated user
+    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: { user }, error: authErr } = await userClient.auth.getUser();
+    if (authErr || !user) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid or expired token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Resolve the caller's tenant_id + super_admin status from app_users
+    const { data: appUser, error: appUserErr } = await supabase
+      .from("app_users")
+      .select("tenant_id, is_super_admin")
+      .eq("auth_user_id", user.id)
+      .single();
+
+    if (appUserErr || !appUser) {
+      return new Response(
+        JSON.stringify({ success: false, error: "User not found in app_users" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // Parse body
     const body = await req.json().catch(() => ({}));
     const rentalId = body?.rental_id;
@@ -103,6 +142,17 @@ Deno.serve(async (req) => {
     }
 
     const rental = rentalData as Rental;
+
+    // Tenant ownership check: caller must belong to the same tenant, or be a super admin
+    if (!appUser.is_super_admin && appUser.tenant_id !== rental.tenant_id) {
+      console.warn(
+        `[FinalizePayg] Tenant mismatch: user tenant=${appUser.tenant_id}, rental tenant=${rental.tenant_id}`,
+      );
+      return new Response(
+        JSON.stringify({ success: false, error: "Not authorized for this rental" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     if (!rental.is_pay_as_you_go) {
       return new Response(
@@ -161,46 +211,96 @@ Deno.serve(async (req) => {
         const proRatedRate = round2((dailyRate / 24) * hoursElapsed);
         const taxPct = tenant.tax_enabled ? Number(tenant.tax_percentage) || 0 : 0;
         const taxAmt = round2(proRatedRate * (taxPct / 100));
-        const isServiceFeePct = tenant.service_fee_type === "percentage";
-        const sfPct = tenant.service_fee_enabled && isServiceFeePct
-          ? Number(tenant.service_fee_value) || 0
-          : 0;
-        const sfAmt = round2(proRatedRate * (sfPct / 100));
-
-        const partialDayIndex = (rental.payg_accrual_day_count || 0) + 1;
-
-        // Claim the partial accrual via the unique constraint (idempotent re-runs OK)
-        const { data: accrualRow, error: accrualErr } = await supabase
-          .from("payg_accruals")
-          .insert({
-            rental_id: rental.id,
-            tenant_id: rental.tenant_id,
-            accrual_day_index: partialDayIndex,
-            accrual_window_start: partialStart.toISOString(),
-            accrual_window_end: partialEnd.toISOString(),
-            daily_rate: proRatedRate,
-            tax_amount: taxAmt,
-            service_fee_amount: sfAmt,
-            is_partial: true,
-            hours_covered: round2(hoursElapsed),
-            ledger_entry_ids: [],
-          })
-          .select()
-          .single();
-
-        // 23505 = unique violation. Either the cron beat us or this is a re-run; harmless.
-        if (accrualErr) {
-          if (
-            (accrualErr as any).code === "23505" ||
-            /duplicate key/i.test((accrualErr as any).message ?? "")
-          ) {
-            console.log(
-              `[FinalizePayg] Day ${partialDayIndex} already exists for rental ${rental.id}, skipping partial insert`,
-            );
-          } else {
-            throw accrualErr;
+        let sfAmt = 0;
+        if (tenant.service_fee_enabled) {
+          if (tenant.service_fee_type === "percentage") {
+            sfAmt = round2(proRatedRate * ((Number(tenant.service_fee_value) || 0) / 100));
+          } else if (tenant.service_fee_type === "fixed_amount") {
+            // For partial days, pro-rate the fixed fee by hours covered
+            sfAmt = round2((Number(tenant.service_fee_value) || 0) * (hoursElapsed / 24));
           }
-        } else {
+        }
+
+        let partialDayIndex = (rental.payg_accrual_day_count || 0) + 1;
+
+        // Claim the partial accrual via the unique constraint (idempotent re-runs OK).
+        // If the cron just posted a full day at this index (race), re-fetch the current
+        // count and retry once with the correct next index so the partial day isn't lost.
+        let accrualRow: any = null;
+        let accrualInsertOk = false;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const { data: insertedRow, error: accrualErr } = await supabase
+            .from("payg_accruals")
+            .insert({
+              rental_id: rental.id,
+              tenant_id: rental.tenant_id,
+              accrual_day_index: partialDayIndex,
+              accrual_window_start: partialStart.toISOString(),
+              accrual_window_end: partialEnd.toISOString(),
+              daily_rate: proRatedRate,
+              tax_amount: taxAmt,
+              service_fee_amount: sfAmt,
+              is_partial: true,
+              hours_covered: round2(hoursElapsed),
+              ledger_entry_ids: [],
+            })
+            .select()
+            .single();
+
+          if (!accrualErr) {
+            accrualRow = insertedRow;
+            accrualInsertOk = true;
+            break;
+          }
+
+          // 23505 = unique violation — cron beat us to this day index
+          const isDuplicate =
+            (accrualErr as any).code === "23505" ||
+            /duplicate key/i.test((accrualErr as any).message ?? "");
+
+          if (!isDuplicate) throw accrualErr;
+
+          if (attempt === 0) {
+            // Re-fetch the current accrual_day_count and retry with the next index
+            console.log(
+              `[FinalizePayg] Day ${partialDayIndex} already claimed for rental ${rental.id}, re-fetching count for retry`,
+            );
+            const { data: freshRental } = await supabase
+              .from("rentals")
+              .select("payg_accrual_day_count")
+              .eq("id", rental.id)
+              .single();
+            partialDayIndex = ((freshRental as any)?.payg_accrual_day_count || partialDayIndex) + 1;
+
+            // Also recompute the partial window start from the new accrual boundary
+            const latestAccrual = await supabase
+              .from("payg_accruals")
+              .select("accrual_window_end")
+              .eq("rental_id", rental.id)
+              .order("accrual_day_index", { ascending: false })
+              .limit(1)
+              .single();
+            if (latestAccrual.data) {
+              const newPartialStart = new Date(latestAccrual.data.accrual_window_end as string);
+              const newPartialEndMs = Math.min(
+                now.getTime(),
+                newPartialStart.getTime() + 24 * 60 * 60 * 1000,
+              );
+              const newHours = (newPartialEndMs - newPartialStart.getTime()) / (60 * 60 * 1000);
+              if (newHours <= 0) {
+                console.log(`[FinalizePayg] No partial time remaining after cron posted day — skipping`);
+                break;
+              }
+              // Update the partial window for retry (note: rates stay the same — same daily rate)
+            }
+          } else {
+            console.log(
+              `[FinalizePayg] Day ${partialDayIndex} still conflicted on retry for rental ${rental.id}, skipping partial`,
+            );
+          }
+        }
+
+        if (accrualInsertOk && accrualRow) {
           // Insert ledger entries for the partial day
           const entryDate = partialStart.toISOString().split("T")[0];
           const refBase = `payg-${rental.id}-day-${partialDayIndex}-partial`;

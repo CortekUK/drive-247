@@ -96,10 +96,13 @@ export function InstallmentConfigDialog({
       const weeklyEligible =
         s.days >= form.minimum_days_weekly &&
         (form.limiting_amount_per_day_weekly <= 0 || s.dailyRate >= form.limiting_amount_per_day_weekly);
+      const semiweeklyEligible =
+        s.days >= (form.minimum_days_semiweekly ?? 7) &&
+        ((form.limiting_amount_per_day_semiweekly ?? 0) <= 0 || s.dailyRate >= (form.limiting_amount_per_day_semiweekly ?? 0));
       const monthlyEligible =
         s.days >= form.minimum_days_monthly &&
         (form.limiting_amount_per_day_monthly <= 0 || s.dailyRate >= form.limiting_amount_per_day_monthly);
-      return { ...s, weeklyEligible, monthlyEligible };
+      return { ...s, weeklyEligible, semiweeklyEligible, monthlyEligible };
     });
   }, [form]);
 
@@ -110,6 +113,8 @@ export function InstallmentConfigDialog({
     const perDay = total / days;
     const weeklyOk = days >= form.minimum_days_weekly &&
       (form.limiting_amount_per_day_weekly <= 0 || perDay >= form.limiting_amount_per_day_weekly);
+    const semiweeklyOk = days >= (form.minimum_days_semiweekly ?? 7) &&
+      ((form.limiting_amount_per_day_semiweekly ?? 0) <= 0 || perDay >= (form.limiting_amount_per_day_semiweekly ?? 0));
     const monthlyOk = days >= form.minimum_days_monthly &&
       (form.limiting_amount_per_day_monthly <= 0 || perDay >= form.limiting_amount_per_day_monthly);
 
@@ -117,6 +122,10 @@ export function InstallmentConfigDialog({
     if (weeklyOk && form.weekly_installments_limit >= 2) {
       const amt = Math.floor((total / form.weekly_installments_limit) * 100) / 100;
       options.push({ type: 'Weekly', payments: form.weekly_installments_limit, amount: amt });
+    }
+    if (semiweeklyOk && (form.semiweekly_installments_limit ?? 8) >= 2) {
+      const amt = Math.floor((total / (form.semiweekly_installments_limit ?? 8)) * 100) / 100;
+      options.push({ type: 'Twice Weekly', payments: form.semiweekly_installments_limit ?? 8, amount: amt });
     }
     if (monthlyOk && form.monthly_installments_limit >= 2) {
       const amt = Math.floor((total / form.monthly_installments_limit) * 100) / 100;
@@ -175,6 +184,51 @@ export function InstallmentConfigDialog({
                   value={getDraft('limiting_amount_per_day_weekly')}
                   onChange={e => handleNumberChange('limiting_amount_per_day_weekly', e.target.value, { min: 0 })}
                   onBlur={() => handleNumberBlur('limiting_amount_per_day_weekly', 0, { min: 0 })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave at 0 if you don't want to set a minimum daily rate.
+                </p>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Twice Weekly Installments */}
+            <div className="space-y-4">
+              <h3 className="font-medium text-sm text-foreground">Twice Weekly Payment Plan</h3>
+              <p className="text-xs text-muted-foreground -mt-2">2 payments per week (every 3-4 days)</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Rental must be at least this many days</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={getDraft('minimum_days_semiweekly')}
+                    onChange={e => handleNumberChange('minimum_days_semiweekly', e.target.value, { min: 1 })}
+                    onBlur={() => handleNumberBlur('minimum_days_semiweekly', 7, { min: 1 })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Split into how many payments?</Label>
+                  <Input
+                    type="number"
+                    min="2"
+                    max="20"
+                    value={getDraft('semiweekly_installments_limit')}
+                    onChange={e => handleNumberChange('semiweekly_installments_limit', e.target.value, { min: 2, max: 20 })}
+                    onBlur={() => handleNumberBlur('semiweekly_installments_limit', 8, { min: 2, max: 20 })}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">{`Only allow if daily rate is at least (${getCurrencySymbol(tenant?.currency_code || 'USD')})`}</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={getDraft('limiting_amount_per_day_semiweekly')}
+                  onChange={e => handleNumberChange('limiting_amount_per_day_semiweekly', e.target.value, { min: 0 })}
+                  onBlur={() => handleNumberBlur('limiting_amount_per_day_semiweekly', 0, { min: 0 })}
                 />
                 <p className="text-xs text-muted-foreground">
                   Leave at 0 if you don't want to set a minimum daily rate.
@@ -287,7 +341,7 @@ export function InstallmentConfigDialog({
                       <span className="text-sm font-medium text-foreground">{s.days}-day rental</span>
                       <span className="text-xs text-muted-foreground">{sym}{s.dailyRate}/day · {sym}{s.total}</span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       {s.weeklyEligible ? (
                         <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-[#f0fdf4] text-[#16a34a]">
                           <CheckCircle2 className="w-3 h-3" /> Weekly
@@ -295,6 +349,15 @@ export function InstallmentConfigDialog({
                       ) : (
                         <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-red-50 text-[#dc2626]">
                           <XCircle className="w-3 h-3" /> Weekly
+                        </span>
+                      )}
+                      {s.semiweeklyEligible ? (
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-[#f0fdf4] text-[#16a34a]">
+                          <CheckCircle2 className="w-3 h-3" /> 2x/wk
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-red-50 text-[#dc2626]">
+                          <XCircle className="w-3 h-3" /> 2x/wk
                         </span>
                       )}
                       {s.monthlyEligible ? (
@@ -368,7 +431,11 @@ export function InstallmentConfigDialog({
                     {Array.from({ length: Math.min(form.charge_first_upfront ? previewData.options[0].payments - 1 : previewData.options[0].payments, 3) }).map((_, i) => (
                       <div key={i} className="flex justify-between text-xs px-2 py-1">
                         <span className="text-muted-foreground">
-                          {previewData.options[0].type === 'Weekly' ? `Week ${form.charge_first_upfront ? i + 2 : i + 1}` : `Month ${form.charge_first_upfront ? i + 2 : i + 1}`}
+                          {previewData.options[0].type === 'Weekly'
+                            ? `Week ${form.charge_first_upfront ? i + 2 : i + 1}`
+                            : previewData.options[0].type === 'Twice Weekly'
+                            ? `Day ${(() => { let d = 0; for (let j = 0; j <= (form.charge_first_upfront ? i : i - 1); j++) d += j % 2 === 0 ? 3 : 4; return d; })()}`
+                            : `Month ${form.charge_first_upfront ? i + 2 : i + 1}`}
                         </span>
                         <span className="text-[#404040]">{sym}{previewData.options[0].amount.toFixed(2)}</span>
                       </div>

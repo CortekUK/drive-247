@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Check, Shield, ShieldCheck, Car, Users, AlertCircle, Loader2, X, ChevronDown, ChevronUp, XCircle } from 'lucide-react';
+import { Check, Shield, ShieldCheck, Car, Users, AlertCircle, Loader2, X, ChevronDown, ChevronUp, XCircle, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format-utils';
 import { useTenant } from '@/contexts/TenantContext';
@@ -48,6 +48,14 @@ const CoverageIcon = ({ type, className, style }: { type: keyof CoverageOptions;
     case 'pai':
       return <Users className={className} style={style} />;
   }
+};
+
+// Brochure PDFs (stored in Supabase storage, same for all tenants)
+const BROCHURE_URLS: Record<keyof CoverageOptions, string> = {
+  cdw: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bonzah-brochures/cdw-brochure.pdf`,
+  rcli: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bonzah-brochures/rcli-brochure.pdf`,
+  sli: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bonzah-brochures/sli-brochure.pdf`,
+  pai: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bonzah-brochures/pai-brochure.pdf`,
 };
 
 // Coverage colors
@@ -320,6 +328,17 @@ export default function BonzahInsuranceSelector({
                       <span className="text-xs text-muted-foreground">Maximum Coverage</span>
                       <span className="text-xs font-semibold">{info.maxCoverage}</span>
                     </div>
+
+                    {/* Brochure link */}
+                    <a
+                      href={BROCHURE_URLS[type]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 flex items-center gap-2 rounded-md border border-border/50 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+                    >
+                      <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{ color }} />
+                      <span>View {info.shortName} Coverage Brochure</span>
+                    </a>
                   </CollapsibleContent>
 
                   <CollapsibleTrigger asChild>

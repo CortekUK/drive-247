@@ -452,7 +452,7 @@ const CreateRental = () => {
   const watchedPromoCode = form.watch("promo_code");
 
   // Fetch booked dates for the selected vehicle (Pending/Active rentals + 1 buffer day)
-  const { bookedDatesArray: vehicleBookedDatesArray, bookedRentals: vehicleBookedRentals, occupancyMap } = useVehicleBookedDates(selectedVehicleId || undefined);
+  const { bookedDatesArray: vehicleBookedDatesArray, bookedRentals: vehicleBookedRentals, occupancyMap, occupancyModifiers } = useVehicleBookedDates(selectedVehicleId || undefined);
 
   // Check if a date range would span across a booked rental period
   const wouldSpanBookedPeriod = (startDate: Date, endDate: Date): boolean => {
@@ -2766,6 +2766,7 @@ const CreateRental = () => {
                         return false;
                       }}
                       occupancyMap={occupancyMap}
+                      occupancyModifiers={occupancyModifiers}
                       error={!!form.formState.errors.start_date || !!form.formState.errors.end_date}
                     />
                     {isPastStartDate && (

@@ -292,6 +292,7 @@ export function ExtensionRequestDialog({
 
       // Create Stripe checkout for extension payment
       let checkoutUrl: string | undefined;
+      let createdExtensionId: string | undefined;
       if (extensionTotalAmount > 0) {
         try {
           const { data: session } = await supabase.auth.getSession();
@@ -320,6 +321,7 @@ export function ExtensionRequestDialog({
           if (res.ok) {
             const result = await res.json();
             checkoutUrl = result.checkoutUrl;
+            createdExtensionId = result.extensionId;
 
             // Save checkout URL to rental for customer portal visibility
             if (checkoutUrl) {
@@ -431,13 +433,16 @@ export function ExtensionRequestDialog({
             },
           });
 
-          if (quoteResult?.policy_record_id) {
-            await supabase.functions.invoke('bonzah-confirm-payment', {
-              body: {
-                policy_record_id: quoteResult.policy_record_id,
-                stripe_payment_intent_id: `portal-extension-${rental.id}`,
-              },
-            });
+          // Phase 4: DO NOT confirm the Bonzah policy here. The tenant's Bonzah
+          // balance should only be deducted after Stripe has actually charged
+          // the customer. process-pending-payment will call bonzah-confirm-payment
+          // on the Stripe success path. We just stamp the quote id on the
+          // rental_extensions row so the edge function can find it.
+          if (quoteResult?.policy_record_id && createdExtensionId) {
+            await supabase
+              .from('rental_extensions')
+              .update({ bonzah_policy_id: quoteResult.policy_record_id })
+              .eq('id', createdExtensionId);
           }
 
           // Create Extension Insurance ledger charge

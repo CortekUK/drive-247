@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { DayPicker, DayContentProps } from "react-day-picker";
@@ -20,7 +20,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { DateOccupancy } from "@/hooks/use-vehicle-booked-dates";
+import type {
+  DateOccupancy,
+  DateOccupancyType,
+} from "@/hooks/use-vehicle-booked-dates";
 
 interface RentalDateRangePickerProps {
   startDate?: Date;
@@ -28,89 +31,48 @@ interface RentalDateRangePickerProps {
   onStartDateChange: (date: Date | undefined) => void;
   onEndDateChange: (date: Date | undefined) => void;
   occupancyMap: Map<string, DateOccupancy[]>;
+  occupancyModifiers: Record<DateOccupancyType, Date[]>;
   disableDate?: (date: Date) => boolean;
   className?: string;
   error?: boolean;
 }
 
-const OCCUPANCY_COLORS = {
-  active: {
-    bg: "bg-emerald-100 dark:bg-emerald-900/40",
-    text: "text-emerald-800 dark:text-emerald-300",
-    dot: "bg-emerald-500",
-    border: "ring-1 ring-emerald-300 dark:ring-emerald-700",
-  },
-  pending: {
-    bg: "bg-amber-100 dark:bg-amber-900/40",
-    text: "text-amber-800 dark:text-amber-300",
-    dot: "bg-amber-500",
-    border: "ring-1 ring-amber-300 dark:ring-amber-700",
-  },
-  upcoming: {
-    bg: "bg-purple-100 dark:bg-purple-900/40",
-    text: "text-purple-800 dark:text-purple-300",
-    dot: "bg-purple-500",
-    border: "ring-1 ring-purple-300 dark:ring-purple-700",
-  },
-  blocked: {
-    bg: "bg-red-100 dark:bg-red-900/40",
-    text: "text-red-800 dark:text-red-300",
-    dot: "bg-red-500",
-    border: "ring-1 ring-red-300 dark:ring-red-700",
-  },
+/**
+ * Modifier class names applied directly to the day <button> element
+ * by react-day-picker's modifiers system. These use !important to
+ * ensure they override the ghost button variant's hover states.
+ */
+const MODIFIER_CLASSES: Record<DateOccupancyType, string> = {
+  active:
+    "!bg-emerald-100 !text-emerald-800 dark:!bg-emerald-900/40 dark:!text-emerald-300 ring-1 ring-inset ring-emerald-300 dark:ring-emerald-700",
+  pending:
+    "!bg-amber-100 !text-amber-800 dark:!bg-amber-900/40 dark:!text-amber-300 ring-1 ring-inset ring-amber-300 dark:ring-amber-700",
+  upcoming:
+    "!bg-purple-100 !text-purple-800 dark:!bg-purple-900/40 dark:!text-purple-300 ring-1 ring-inset ring-purple-300 dark:ring-purple-700",
+  blocked:
+    "!bg-red-100 !text-red-800 dark:!bg-red-900/40 dark:!text-red-300 ring-1 ring-inset ring-red-300 dark:ring-red-700",
 };
 
-const TYPE_PRIORITY: Record<string, number> = {
-  blocked: 4,
-  active: 3,
-  pending: 2,
-  upcoming: 1,
-};
-
-function DayWithOccupancy({
+/**
+ * DayContent override — only adds tooltip for occupied dates.
+ * Background colors are handled by modifiers on the button itself.
+ */
+function DayWithTooltip({
   date,
   displayMonth,
   occupancyMap,
-  startDate,
-  endDate,
 }: DayContentProps & {
   occupancyMap: Map<string, DateOccupancy[]>;
-  startDate?: Date;
-  endDate?: Date;
 }) {
   const key = date.toDateString();
   const occupancies = occupancyMap.get(key);
   const isOutside = date.getMonth() !== displayMonth.getMonth();
-
-  // Check if this date is in the selected range
-  const isStart = startDate && date.toDateString() === startDate.toDateString();
-  const isEnd = endDate && date.toDateString() === endDate.toDateString();
-  const isInRange =
-    startDate &&
-    endDate &&
-    date > startDate &&
-    date < endDate;
+  const dayNum = date.getDate();
 
   if (!occupancies || occupancies.length === 0 || isOutside) {
-    return (
-      <span
-        className={cn(
-          "relative flex items-center justify-center w-full h-full rounded-md",
-          isStart && "bg-primary text-primary-foreground font-semibold",
-          isEnd && "bg-primary text-primary-foreground font-semibold",
-          isInRange && "bg-primary/15 text-foreground"
-        )}
-      >
-        {date.getDate()}
-      </span>
-    );
+    return <span>{dayNum}</span>;
   }
 
-  const primaryType = occupancies.reduce((best, occ) =>
-    (TYPE_PRIORITY[occ.type] || 0) > (TYPE_PRIORITY[best.type] || 0) ? occ : best
-  ).type;
-
-  const colors = OCCUPANCY_COLORS[primaryType];
   const uniqueLabels = [...new Set(occupancies.map((o) => o.label))];
   const tooltipText = uniqueLabels.join("\n");
 
@@ -118,18 +80,10 @@ function DayWithOccupancy({
     <TooltipProvider delayDuration={200}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span
-            className={cn(
-              "relative flex items-center justify-center w-full h-full rounded-md",
-              isStart || isEnd
-                ? "bg-primary text-primary-foreground font-semibold ring-2 ring-primary"
-                : cn(colors.bg, colors.text, colors.border),
-              isInRange && !isStart && !isEnd && "ring-2 ring-primary/30"
-            )}
-          >
-            {date.getDate()}
+          <span className="relative">
+            {dayNum}
             {occupancies.length > 1 && (
-              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-foreground/40" />
+              <span className="absolute -top-1 -right-2 w-1.5 h-1.5 rounded-full bg-foreground/50" />
             )}
           </span>
         </TooltipTrigger>
@@ -150,6 +104,7 @@ export const RentalDateRangePicker = ({
   onStartDateChange,
   onEndDateChange,
   occupancyMap,
+  occupancyModifiers,
   disableDate,
   className,
   error,
@@ -179,11 +134,49 @@ export const RentalDateRangePicker = ({
         } else {
           onEndDateChange(day);
           setSelecting("start");
-          // Don't close — user might want to adjust
         }
       }
     },
     [selecting, startDate, endDate, onStartDateChange, onEndDateChange]
+  );
+
+  // Build range highlight modifiers for start/end/in-range
+  const rangeModifiers = useMemo(() => {
+    const mods: Record<string, Date[]> = {};
+    if (startDate) mods.rangeStart = [startDate];
+    if (endDate) mods.rangeEnd = [endDate];
+    if (startDate && endDate) {
+      const inRange: Date[] = [];
+      const current = new Date(startDate);
+      current.setDate(current.getDate() + 1);
+      while (current < endDate) {
+        inRange.push(new Date(current));
+        current.setDate(current.getDate() + 1);
+      }
+      mods.rangeMiddle = inRange;
+    }
+    return mods;
+  }, [startDate, endDate]);
+
+  // Merge occupancy + range modifiers
+  const allModifiers = useMemo(
+    () => ({
+      ...occupancyModifiers,
+      ...rangeModifiers,
+    }),
+    [occupancyModifiers, rangeModifiers]
+  );
+
+  const allModifiersClassNames = useMemo(
+    () => ({
+      ...MODIFIER_CLASSES,
+      rangeStart:
+        "!bg-primary !text-primary-foreground font-semibold ring-2 ring-primary",
+      rangeEnd:
+        "!bg-primary !text-primary-foreground font-semibold ring-2 ring-primary",
+      rangeMiddle: "!bg-primary/15 !text-foreground",
+    }),
+    []
   );
 
   const displayText = () => {
@@ -197,7 +190,13 @@ export const RentalDateRangePicker = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (v) setSelecting(startDate ? "end" : "start"); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (v) setSelecting(startDate ? "end" : "start");
+      }}
+    >
       <DialogTrigger asChild>
         <Button
           variant="outline"
@@ -214,7 +213,9 @@ export const RentalDateRangePicker = ({
       </DialogTrigger>
       <DialogContent className="sm:max-w-[720px] p-0 gap-0">
         <DialogHeader className="px-6 pt-5 pb-3">
-          <DialogTitle className="text-lg font-semibold">Select Rental Dates</DialogTitle>
+          <DialogTitle className="text-lg font-semibold">
+            Select Rental Dates
+          </DialogTitle>
           <div className="flex items-center gap-4 mt-2">
             <button
               type="button"
@@ -226,15 +227,21 @@ export const RentalDateRangePicker = ({
                   : "border-muted hover:border-muted-foreground/30"
               )}
             >
-              <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Start Date</div>
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+                Start Date
+              </div>
               <div className="text-sm font-medium mt-0.5">
-                {startDate ? format(startDate, "EEEE, MMM d, yyyy") : "Click a date below"}
+                {startDate
+                  ? format(startDate, "EEEE, MMM d, yyyy")
+                  : "Click a date below"}
               </div>
             </button>
             <div className="text-muted-foreground text-sm">→</div>
             <button
               type="button"
-              onClick={() => { if (startDate) setSelecting("end"); }}
+              onClick={() => {
+                if (startDate) setSelecting("end");
+              }}
               className={cn(
                 "flex-1 text-left px-3 py-2 rounded-lg border-2 transition-colors",
                 selecting === "end"
@@ -243,9 +250,15 @@ export const RentalDateRangePicker = ({
                 !startDate && "opacity-50 cursor-not-allowed"
               )}
             >
-              <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">End Date</div>
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+                End Date
+              </div>
               <div className="text-sm font-medium mt-0.5">
-                {endDate ? format(endDate, "EEEE, MMM d, yyyy") : startDate ? "Click a date below" : "—"}
+                {endDate
+                  ? format(endDate, "EEEE, MMM d, yyyy")
+                  : startDate
+                    ? "Click a date below"
+                    : "—"}
               </div>
             </button>
           </div>
@@ -261,6 +274,8 @@ export const RentalDateRangePicker = ({
             showOutsideDays={true}
             fixedWeeks={true}
             defaultMonth={startDate || new Date()}
+            modifiers={allModifiers}
+            modifiersClassNames={allModifiersClassNames}
             className="pointer-events-auto"
             classNames={{
               months: "flex gap-6",
@@ -285,8 +300,7 @@ export const RentalDateRangePicker = ({
                 "h-10 w-10 p-0 font-normal aria-selected:opacity-100"
               ),
               day_range_end: "day-range-end",
-              day_selected:
-                "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+              day_selected: "",
               day_today: "border-2 border-primary text-foreground",
               day_outside:
                 "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
@@ -301,12 +315,7 @@ export const RentalDateRangePicker = ({
                 <ChevronRight className="h-4 w-4" />
               ),
               DayContent: (props) => (
-                <DayWithOccupancy
-                  {...props}
-                  occupancyMap={occupancyMap}
-                  startDate={startDate}
-                  endDate={endDate}
-                />
+                <DayWithTooltip {...props} occupancyMap={occupancyMap} />
               ),
             }}
           />
@@ -337,7 +346,11 @@ export const RentalDateRangePicker = ({
             onClick={() => setOpen(false)}
             disabled={!startDate}
           >
-            {startDate && endDate ? "Done" : startDate ? "Select end date" : "Select dates"}
+            {startDate && endDate
+              ? "Done"
+              : startDate
+                ? "Select end date"
+                : "Select dates"}
           </Button>
         </div>
       </DialogContent>

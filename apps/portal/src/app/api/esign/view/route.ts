@@ -135,19 +135,42 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: false, error: 'BoldSign not configured' }, { status: 500 });
         }
 
-        // Try to get document properties for status (non-blocking)
+        // Try to read status from DB first (our webhook keeps it in sync).
+        // Only fall back to BoldSign if DB has no status — saves an API call on every view.
         let documentStatus = 'unknown';
         try {
-            const statusResponse = await fetch(
-                `${BOLDSIGN_BASE_URL}/v1/document/properties?documentId=${documentId}`,
-                { headers: { 'X-API-KEY': BOLDSIGN_API_KEY } }
-            );
-            if (statusResponse.ok) {
-                const propsData = await statusResponse.json();
-                documentStatus = propsData.status || 'unknown';
+            if (agreementId) {
+                const { data: a } = await supabase
+                    .from('rental_agreements')
+                    .select('document_status')
+                    .eq('id', agreementId)
+                    .single();
+                if (a?.document_status) documentStatus = a.document_status;
+            } else if (rentalId) {
+                const { data: r } = await supabase
+                    .from('rentals')
+                    .select('document_status')
+                    .eq('id', rentalId)
+                    .single();
+                if (r?.document_status) documentStatus = r.document_status;
             }
         } catch (e) {
-            console.warn('Could not fetch document properties:', e);
+            console.warn('DB status lookup failed:', e);
+        }
+
+        if (documentStatus === 'unknown') {
+            try {
+                const statusResponse = await fetch(
+                    `${BOLDSIGN_BASE_URL}/v1/document/properties?documentId=${documentId}`,
+                    { headers: { 'X-API-KEY': BOLDSIGN_API_KEY } }
+                );
+                if (statusResponse.ok) {
+                    const propsData = await statusResponse.json();
+                    documentStatus = propsData.status || 'unknown';
+                }
+            } catch (e) {
+                console.warn('Could not fetch document properties:', e);
+            }
         }
 
         // Download the document PDF

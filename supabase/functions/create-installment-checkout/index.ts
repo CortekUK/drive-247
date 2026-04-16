@@ -26,7 +26,7 @@ interface InstallmentCheckoutRequest {
   installableAmount: number       // Total rental costs to be split
   installmentAmount: number       // Amount per scheduled installment
   // Installment configuration
-  planType: 'weekly' | 'monthly'
+  planType: 'weekly' | 'semiweekly' | 'monthly'
   numberOfInstallments: number    // Total number of installments
   scheduledInstallments: number   // Number of installments to schedule
   // Dates
@@ -81,8 +81,8 @@ serve(async (req) => {
     if (body.upfrontAmount <= 0 || body.installableAmount <= 0) {
       throw new Error('Invalid payment amounts')
     }
-    if (body.numberOfInstallments < 2 || body.numberOfInstallments > 12) {
-      throw new Error('Invalid number of installments (must be 2-12)')
+    if (body.numberOfInstallments < 2 || body.numberOfInstallments > 20) {
+      throw new Error('Invalid number of installments (must be 2-20)')
     }
 
     // Check for existing active/pending installment plan for this rental
@@ -298,6 +298,9 @@ serve(async (req) => {
     const nextDueDate = new Date(body.startDate)
     if (body.planType === 'weekly') {
       nextDueDate.setDate(nextDueDate.getDate() + 7)
+    } else if (body.planType === 'semiweekly') {
+      // Twice weekly: alternating 3/4 day intervals (2 payments per week)
+      nextDueDate.setDate(nextDueDate.getDate() + 3)
     } else {
       nextDueDate.setMonth(nextDueDate.getMonth() + 1)
     }
@@ -385,6 +388,10 @@ serve(async (req) => {
       // Move to next due date for subsequent installments
       if (body.planType === 'weekly') {
         dueDate.setDate(dueDate.getDate() + 7)
+      } else if (body.planType === 'semiweekly') {
+        // Alternate 3 and 4 day gaps for exactly 2 payments per week
+        // Odd installments get +3, even get +4: Day 0, 3, 7, 10, 14, 17, 21...
+        dueDate.setDate(dueDate.getDate() + (i % 2 === 1 ? 3 : 4))
       } else {
         dueDate.setMonth(dueDate.getMonth() + 1)
       }

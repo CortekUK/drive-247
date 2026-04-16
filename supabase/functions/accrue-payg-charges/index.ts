@@ -203,11 +203,14 @@ Deno.serve(async (req) => {
           const dailyRate = round2(computeDailyRate(r));
           const taxPct = tenant.tax_enabled ? (Number(tenant.tax_percentage) || 0) : 0;
           const taxAmt = round2(dailyRate * (taxPct / 100));
-          const isServiceFeePct = tenant.service_fee_type === "percentage";
-          const sfPct = tenant.service_fee_enabled && isServiceFeePct
-            ? (Number(tenant.service_fee_value) || 0)
-            : 0;
-          const sfAmt = round2(dailyRate * (sfPct / 100));
+          let sfAmt = 0;
+          if (tenant.service_fee_enabled) {
+            if (tenant.service_fee_type === "percentage") {
+              sfAmt = round2(dailyRate * ((Number(tenant.service_fee_value) || 0) / 100));
+            } else if (tenant.service_fee_type === "fixed_amount") {
+              sfAmt = round2(Number(tenant.service_fee_value) || 0);
+            }
+          }
 
           // Claim this accrual day via unique constraint
           const { data: accrualRow, error: accrualErr } = await supabase

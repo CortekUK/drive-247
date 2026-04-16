@@ -33,6 +33,10 @@ interface BuyInsuranceDialogProps {
     vehicles: { id: string; reg: string; make: string; model: string };
   };
   onPurchaseComplete: (premium: number) => void;
+  /** When set to 'extension', uses extensionDates for trip period and creates Extension Insurance ledger entries */
+  mode?: 'original' | 'extension';
+  /** The extension period dates — required when mode is 'extension' */
+  extensionDates?: { start: string; end: string };
 }
 
 const DEFAULT_COVERAGE: CoverageOptions = {
@@ -47,7 +51,10 @@ export function BuyInsuranceDialog({
   onOpenChange,
   rental,
   onPurchaseComplete,
+  mode = 'original',
+  extensionDates,
 }: BuyInsuranceDialogProps) {
+  const isExtension = mode === 'extension';
   const { tenant } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -86,6 +93,18 @@ export function BuyInsuranceDialog({
         if (data?.address_state) setCustomerState(data.address_state);
       });
   }, [open, rental.customers?.id]);
+
+  // Compute trip dates once — used by both the selector and the purchase handler
+  const tripDates = (() => {
+    const now = new Date();
+    const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    if (isExtension && extensionDates) {
+      const extStart = extensionDates.start.split('T')[0];
+      return { start: extStart < todayLocal ? todayLocal : extStart, end: extensionDates.end.split('T')[0] };
+    }
+    const rentalStart = rental.start_date.split('T')[0];
+    return { start: rentalStart < todayLocal ? todayLocal : rentalStart, end: rental.end_date.split('T')[0] };
+  })();
 
   const hasCoverage = coverage.cdw || coverage.rcli || coverage.sli || coverage.pai;
 
@@ -171,15 +190,8 @@ export function BuyInsuranceDialog({
           rental_id: rental.id,
           customer_id: rental.customers.id,
           tenant_id: tenant.id,
-          trip_dates: {
-            start: (() => {
-              const rentalStart = rental.start_date.split('T')[0];
-              const now = new Date();
-              const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-              return rentalStart < todayLocal ? todayLocal : rentalStart;
-            })(),
-            end: rental.end_date.split('T')[0],
-          },
+          trip_dates: tripDates,
+          ...(isExtension && { policy_type: 'extension' }),
           pickup_state: pickupState,
           coverage,
           renter: {
@@ -267,7 +279,7 @@ export function BuyInsuranceDialog({
         .from('ledger_entries')
         .insert({
           type: 'Charge',
-          category: 'Insurance',
+          category: isExtension ? 'Extension Insurance' : 'Insurance',
           amount: actualPremium,
           remaining_amount: actualPremium,
           reference: `BONZAH-${quoteResult?.policy_record_id || 'POLICY'}`,
@@ -276,7 +288,7 @@ export function BuyInsuranceDialog({
           vehicle_id: rental.vehicles?.id,
           tenant_id: tenant.id,
           entry_date: new Date().toISOString().split('T')[0],
-          due_date: new Date().toISOString().split('T')[0],
+          due_date: isExtension && extensionDates ? extensionDates.end.split('T')[0] : new Date().toISOString().split('T')[0],
         });
 
       if (ledgerError) {
@@ -341,12 +353,18 @@ export function BuyInsuranceDialog({
           <DialogTitle className="flex items-center gap-2">
             <img src="/bonzah-logo.svg" alt="Bonzah" className="h-6 w-auto dark:hidden" />
             <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-6 w-auto hidden dark:block" />
-            {step === 1 ? 'Select Insurance Coverage' : 'Confirm Insurance Purchase'}
+            {step === 1
+              ? (isExtension ? 'Select Extension Insurance Coverage' : 'Select Insurance Coverage')
+              : (isExtension ? 'Confirm Extension Insurance Purchase' : 'Confirm Insurance Purchase')}
           </DialogTitle>
           <DialogDescription>
             {step === 1
-              ? 'Choose Bonzah insurance coverage for this rental.'
-              : 'Review and confirm the insurance purchase.'}
+              ? (isExtension
+                ? `Choose Bonzah insurance coverage for the extension period.`
+                : 'Choose Bonzah insurance coverage for this rental.')
+              : (isExtension
+                ? 'Review and confirm the extension insurance purchase.'
+                : 'Review and confirm the insurance purchase.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -409,14 +427,8 @@ export function BuyInsuranceDialog({
                 </div>
 
                 <BonzahInsuranceSelector
-                  tripStartDate={(() => {
-                    const rentalStart = rental.start_date.split('T')[0];
-                    // Use local date (not UTC) to match what the user sees
-                    const now = new Date();
-                    const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-                    return rentalStart < todayLocal ? todayLocal : rental.start_date;
-                  })()}
-                  tripEndDate={rental.end_date}
+                  tripStartDate={tripDates.start}
+                  tripEndDate={tripDates.end}
                   pickupState={customerState}
                   onCoverageChange={handleCoverageChange}
                   onSkipInsurance={handleSkipInsurance}
@@ -459,13 +471,12 @@ export function BuyInsuranceDialog({
                   <p className="font-medium">{rental.vehicles?.make} {rental.vehicles?.model} ({rental.vehicles?.reg})</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Coverage Period</p>
+                  <p className="text-muted-foreground">Coverage Period{isExtension ? ' (Extension)' : ''}</p>
                   {(() => {
-                    const rentalStart = rental.start_date.split('T')[0];
-                    const rentalEnd = rental.end_date.split('T')[0];
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    const effectiveStart = rentalStart < todayStr ? todayStr : rentalStart;
-                    const isClamped = rentalStart < todayStr;
+                    const effectiveStart = tripDates.start;
+                    const rentalEnd = tripDates.end;
+                    const rawStart = isExtension && extensionDates ? extensionDates.start.split('T')[0] : rental.start_date.split('T')[0];
+                    const isClamped = rawStart < effectiveStart;
                     // Bonzah max 30 days per policy — auto-chains multiple policies
                     const totalDays = Math.ceil((new Date(rentalEnd + 'T00:00:00').getTime() - new Date(effectiveStart + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24));
                     const policyCount = Math.ceil(totalDays / 30);

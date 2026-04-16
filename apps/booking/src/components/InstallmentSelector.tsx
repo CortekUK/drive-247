@@ -21,10 +21,13 @@ export type WhatGetsSplit = 'rental_only' | 'rental_tax' | 'rental_tax_extras';
 export interface InstallmentConfig {
   minimum_days_weekly: number;
   minimum_days_monthly: number;
+  minimum_days_semiweekly: number;
   weekly_installments_limit: number;
   monthly_installments_limit: number;
+  semiweekly_installments_limit: number;
   limiting_amount_per_day_weekly: number;
   limiting_amount_per_day_monthly: number;
+  limiting_amount_per_day_semiweekly: number;
   charge_first_upfront?: boolean;
   what_gets_split?: WhatGetsSplit;
   grace_period_days?: number;
@@ -38,7 +41,7 @@ export interface InstallmentConfig {
 }
 
 export interface InstallmentOption {
-  type: 'full' | 'weekly' | 'monthly';
+  type: 'full' | 'weekly' | 'semiweekly' | 'monthly';
   numberOfInstallments: number;
   scheduledInstallments: number;
   installmentAmount: number;
@@ -66,10 +69,13 @@ function resolveConfig(config: InstallmentConfig) {
   return {
     minimumDaysWeekly: config.minimum_days_weekly ?? config.min_days_for_weekly ?? 7,
     minimumDaysMonthly: config.minimum_days_monthly ?? config.min_days_for_monthly ?? 30,
+    minimumDaysSemiweekly: config.minimum_days_semiweekly ?? 7,
     weeklyInstallmentsLimit: config.weekly_installments_limit ?? config.max_installments_weekly ?? 4,
     monthlyInstallmentsLimit: config.monthly_installments_limit ?? config.max_installments_monthly ?? 6,
+    semiweeklyInstallmentsLimit: config.semiweekly_installments_limit ?? 8,
     limitingAmountPerDayWeekly: config.limiting_amount_per_day_weekly ?? 0,
     limitingAmountPerDayMonthly: config.limiting_amount_per_day_monthly ?? 0,
+    limitingAmountPerDaySemiweekly: config.limiting_amount_per_day_semiweekly ?? 0,
   };
 }
 
@@ -145,6 +151,36 @@ export default function InstallmentSelector({
       }
     }
 
+    // Twice-weekly eligibility: dual-gate check
+    const semiweeklyDaysOk = rentalDays >= resolved.minimumDaysSemiweekly;
+    const semiweeklyAmountOk = resolved.limitingAmountPerDaySemiweekly <= 0 || perDayRate >= resolved.limitingAmountPerDaySemiweekly;
+
+    if (semiweeklyDaysOk && semiweeklyAmountOk) {
+      const count = resolved.semiweeklyInstallmentsLimit;
+      if (count >= 2) {
+        const { baseAmount } = calculateInstallments(installableAmount, count);
+        const firstInstallment = chargeFirstUpfront ? baseAmount : 0;
+        const scheduledCount = chargeFirstUpfront ? count - 1 : count;
+        const upfrontTotal = upfrontAmount + firstInstallment;
+
+        const description = chargeFirstUpfront
+          ? `Pay ${formatCurrency(upfrontTotal)} today, then ${formatCurrency(baseAmount)} twice/week × ${scheduledCount}`
+          : `Pay ${formatCurrency(upfrontAmount)} today, then ${formatCurrency(baseAmount)} twice/week × ${scheduledCount}`;
+
+        options.push({
+          type: 'semiweekly',
+          numberOfInstallments: count,
+          scheduledInstallments: scheduledCount,
+          installmentAmount: baseAmount,
+          firstInstallmentAmount: firstInstallment,
+          totalAmount: installableAmount,
+          upfrontTotal,
+          label: `Twice Weekly (${count} payments)`,
+          description,
+        });
+      }
+    }
+
     // Monthly eligibility: dual-gate check
     const monthlyDaysOk = rentalDays >= resolved.minimumDaysMonthly;
     const monthlyAmountOk = resolved.limitingAmountPerDayMonthly <= 0 || perDayRate >= resolved.limitingAmountPerDayMonthly;
@@ -192,9 +228,10 @@ export default function InstallmentSelector({
     const perDayRate = rentalDays > 0 ? totalBill / rentalDays : 0;
     const minPerDay = Math.min(
       resolved.limitingAmountPerDayWeekly > 0 ? resolved.limitingAmountPerDayWeekly : Infinity,
+      resolved.limitingAmountPerDaySemiweekly > 0 ? resolved.limitingAmountPerDaySemiweekly : Infinity,
       resolved.limitingAmountPerDayMonthly > 0 ? resolved.limitingAmountPerDayMonthly : Infinity
     );
-    const minDays = Math.min(resolved.minimumDaysWeekly, resolved.minimumDaysMonthly);
+    const minDays = Math.min(resolved.minimumDaysWeekly, resolved.minimumDaysSemiweekly, resolved.minimumDaysMonthly);
     const reasons: string[] = [];
     if (minPerDay !== Infinity && perDayRate < minPerDay) {
       reasons.push(`minimum rate of ${formatCurrency(minPerDay)}/day required (this rental is ${formatCurrency(Math.round(perDayRate * 100) / 100)}/day)`);
@@ -347,6 +384,8 @@ export default function InstallmentSelector({
                             <span className="text-muted-foreground">
                               {option.type === 'weekly'
                                 ? `Week ${chargeFirstUpfront ? i + 2 : i + 1}`
+                                : option.type === 'semiweekly'
+                                ? `Day ${(() => { let d = 0; for (let j = 0; j <= (chargeFirstUpfront ? i : i - 1); j++) d += j % 2 === 0 ? 3 : 4; return d; })()}`
                                 : `Month ${chargeFirstUpfront ? i + 2 : i + 1}`}
                             </span>
                             <span className="font-medium">{formatCurrency(option.installmentAmount)}</span>

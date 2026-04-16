@@ -53,7 +53,9 @@ import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-
 import { useRentalAgreements } from "@/hooks/use-rental-agreements";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
+import { PaygTestPanel } from "@/components/rentals/payg-test-panel";
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
+import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 import { InsuranceTimeline } from "@/components/rentals/InsuranceTimeline";
 import { AddReminderDialog } from "@/components/reminders/add-reminder-dialog";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
@@ -235,6 +237,8 @@ const RentalDetail = () => {
   const { balanceNumber: bonzahCdBalance, isBonzahConnected, portalUrl: bonzahPortalUrl } = useBonzahBalance();
   const { data: rentalAgreements = [], isLoading: loadingAgreements } = useRentalAgreements(id);
   const { data: insurancePolicies = [], isLoading: isLoadingInsurancePolicies } = useRentalInsurancePolicies(id);
+  // Phase 5: authoritative per-extension totals from the rental_extension_totals view.
+  const { data: extensionTotals = [] } = useRentalExtensionTotals(id);
   // skipInsurance removed — insurance doc upload is always visible; only Bonzah selector is gated on integration_bonzah
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
@@ -273,8 +277,10 @@ const RentalDetail = () => {
 
   // Buy Insurance dialog state
   const [showBuyInsurance, setShowBuyInsurance] = useState(false);
+  const [buyInsuranceMode, setBuyInsuranceMode] = useState<'original' | 'extension'>('original');
   const [insurancePaymentMode, setInsurancePaymentMode] = useState(false);
   const [insurancePaymentAmount, setInsurancePaymentAmount] = useState<number | undefined>();
+  const [insurancePaymentCategories, setInsurancePaymentCategories] = useState<string[]>(['Insurance']);
 
   // Targeted payment selection state
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
@@ -1261,27 +1267,23 @@ const RentalDetail = () => {
       }));
   })();
 
-  // Outstanding balance: use categoryRemainingAmounts which correctly combines
-  // ledger data with invoice fallback for items not yet in the ledger
+  // Outstanding balance: originals come from ledger-backed categoryRemainingAmounts.
+  // Extensions come from the authoritative rental_extension_totals view so we
+  // don't double-count or miss ext-insurance whose ledger entry hasn't landed.
+  // Pending-approval extensions are excluded (customer can't pay those yet).
   const outstandingBalance = useMemo(() => {
-    // Sum all remaining amounts from categories (handles both ledger and invoice-only items)
-    const categoryTotal = Object.values(categoryRemainingAmounts).reduce((sum, amt) => sum + amt, 0);
+    const originalCategories = categoryRemainingAmounts
+      ? Object.entries(categoryRemainingAmounts)
+          .filter(([cat]) => !cat.startsWith('Extension'))
+          .reduce((sum, [, amt]) => sum + amt, 0)
+      : 0;
 
-    // Add extension insurance that has NO ledger entry and isn't in categoryRemainingAmounts
-    let extInsuranceOutstanding = 0;
-    for (const group of extensionGroups) {
-      if (group.insurancePolicy) {
-        const extInsLedger = (rentalCharges || []).find(c =>
-          (c.category === 'Insurance' && c.reference?.includes(`Extension #${group.extensionNumber}`)) ||
-          c.category === 'Extension Insurance'
-        );
-        if (!extInsLedger) {
-          extInsuranceOutstanding += group.insurancePolicy.premium_amount || 0;
-        }
-      }
-    }
-    return categoryTotal + extInsuranceOutstanding;
-  }, [categoryRemainingAmounts, extensionGroups, rentalCharges]);
+    const extensionOutstanding = (extensionTotals || [])
+      .filter(re => re.display_status !== 'pending_approval' && re.display_status !== 'cancelled' && re.display_status !== 'refunded')
+      .reduce((sum, re) => sum + Number(re.outstanding_amount || 0), 0);
+
+    return originalCategories + extensionOutstanding;
+  }, [categoryRemainingAmounts, extensionTotals]);
 
   if (isLoading) {
     return <div>Loading rental details...</div>;
@@ -1723,19 +1725,23 @@ const RentalDetail = () => {
                 </Button>
               )}
               {/* PAYG-specific actions: Pause/Resume + Close */}
-              {rental.is_pay_as_you_go && (
+              {rental.is_pay_as_you_go && !(rental as any).payg_closed_at && (
                 <>
                   <Button
                     variant="outline"
                     onClick={async () => {
                       try {
                         const isPaused = (rental as any).payg_paused === true;
+                        if (!isPaused) {
+                          if (!window.confirm('Pause PAYG billing for this rental? Daily accrual will stop until you resume.')) return;
+                        }
                         const updates: any = { payg_paused: !isPaused };
                         if (isPaused) {
                           // Resuming: reset next accrual to 24h from now (R13: don't backfill)
                           updates.payg_next_accrual_at = new Date(
                             Date.now() + 24 * 60 * 60 * 1000,
                           ).toISOString();
+                          updates.payg_paused_at = null; // Clear stale pause timestamp
                         } else {
                           updates.payg_paused_at = new Date().toISOString();
                         }
@@ -2231,6 +2237,24 @@ const RentalDetail = () => {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* PAYG Test Panel — only on localhost/dev */}
+      {rental.is_pay_as_you_go && typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+        <PaygTestPanel
+          rentalId={rental.id}
+          currencyCode={tenant?.currency_code || 'USD'}
+          currentDay={(rental as any).payg_accrual_day_count || 0}
+          isPaused={(rental as any).payg_paused === true}
+          isClosed={!!(rental as any).payg_closed_at}
+          status={rental.status}
+          onRefresh={() => {
+            queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+            queryClient.invalidateQueries({ queryKey: ['payg-ledger'] });
+            queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
+            queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+          }}
+        />
       )}
 
       {/* Payment Breakdown */}
@@ -3721,7 +3745,7 @@ const RentalDetail = () => {
       />
 
       {/* Insurance Policies Timeline */}
-      {(insurancePolicies.length > 0 || isLoadingInsurancePolicies) && (
+      {(insurancePolicies.length > 0 || isLoadingInsurancePolicies || rental?.original_end_date || rental?.previous_end_date) && (
         <InsuranceTimeline
           rentalId={id}
           rental={rental}
@@ -3731,7 +3755,13 @@ const RentalDetail = () => {
           tenantId={tenant?.id}
           isBonzahConnected={isBonzahConnected}
           bonzahCdBalance={bonzahCdBalance}
-          onBuyInsurance={() => setShowBuyInsurance(true)}
+          onBuyInsurance={() => { setBuyInsuranceMode('original'); setShowBuyInsurance(true); }}
+          onBuyExtensionInsurance={() => { setBuyInsuranceMode('extension'); setShowBuyInsurance(true); }}
+          onUploadExtensionInsurance={() => {
+            // Trigger the existing upload flow — scroll to insurance section
+            const el = document.getElementById('insurance-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }}
         />
       )}
 
@@ -3749,7 +3779,7 @@ const RentalDetail = () => {
           {canEdit('rentals') && !bonzahPolicy && (
             <div
               className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${isBonzahConnected && isBonzahEligible ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
-              onClick={() => { if (isBonzahConnected && isBonzahEligible) setShowBuyInsurance(true); }}
+              onClick={() => { if (isBonzahConnected && isBonzahEligible) { setBuyInsuranceMode('original'); setShowBuyInsurance(true); } }}
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -3783,6 +3813,7 @@ const RentalDetail = () => {
                     title={!isBonzahEligible ? "This vehicle is not eligible for Bonzah insurance" : undefined}
                     onClick={(e) => {
                       e.stopPropagation();
+                      setBuyInsuranceMode('original');
                       setShowBuyInsurance(true);
                     }}
                   >
@@ -4306,7 +4337,7 @@ const RentalDetail = () => {
                     variant="outline"
                     className="h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10 hover:text-[#CC004A]"
                     disabled={isBonzahEligibilityLoading}
-                    onClick={() => setShowBuyInsurance(true)}
+                    onClick={() => { setBuyInsuranceMode('original'); setShowBuyInsurance(true); }}
                   >
                     <img src="/bonzah-logo.svg" alt="" className="h-3 w-3 mr-1 dark:hidden" />
                     <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-3 mr-1 hidden dark:inline" />
@@ -4795,10 +4826,16 @@ const RentalDetail = () => {
       {rental && (
         <BuyInsuranceDialog
           open={showBuyInsurance}
-          onOpenChange={setShowBuyInsurance}
+          onOpenChange={(v) => { setShowBuyInsurance(v); if (!v) setBuyInsuranceMode('original'); }}
           rental={rental}
+          mode={buyInsuranceMode}
+          extensionDates={buyInsuranceMode === 'extension' && rental.previous_end_date ? {
+            start: rental.previous_end_date,
+            end: rental.end_date,
+          } : undefined}
           onPurchaseComplete={(premium) => {
             setInsurancePaymentAmount(premium);
+            setInsurancePaymentCategories(buyInsuranceMode === 'extension' ? ['Extension Insurance'] : ['Insurance']);
             setInsurancePaymentMode(true);
           }}
         />
@@ -4813,7 +4850,7 @@ const RentalDetail = () => {
           vehicle_id={rental.vehicles?.id}
           rental_id={rental.id}
           defaultAmount={insurancePaymentAmount}
-          targetCategories={["Insurance"]}
+          targetCategories={insurancePaymentCategories}
           insuranceChargeMode
         />
       )}

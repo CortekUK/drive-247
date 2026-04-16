@@ -41,6 +41,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import {
   ArrowLeft,
   Save,
   Loader2,
@@ -51,7 +57,9 @@ import {
   Eye,
   Lock,
   AlertTriangle,
+  CalendarIcon,
 } from "lucide-react";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import type { BlogPost, CreateBlogPostInput } from "@/types/blog";
 
@@ -98,6 +106,7 @@ export default function BlogPostEditorPage() {
   const [canonicalUrl, setCanonicalUrl] = useState("");
   const [noindex, setNoindex] = useState(false);
 
+  const [publishDate, setPublishDate] = useState<Date>(new Date());
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showUnpublishConfirm, setShowUnpublishConfirm] = useState(false);
@@ -125,6 +134,11 @@ export default function BlogPostEditorPage() {
       setMetaKeywords(existingPost.meta_keywords || "");
       setCanonicalUrl(existingPost.canonical_url || "");
       setNoindex(existingPost.noindex || false);
+      setPublishDate(
+        existingPost.published_at
+          ? new Date(existingPost.published_at)
+          : new Date()
+      );
       setSlugManuallyEdited(true);
       // Store snapshot for dirty checking
       lastSavedRef.current = JSON.stringify({
@@ -141,6 +155,7 @@ export default function BlogPostEditorPage() {
         meta_keywords: existingPost.meta_keywords,
         canonical_url: existingPost.canonical_url,
         noindex: existingPost.noindex,
+        published_at: existingPost.published_at,
       });
       setIsDirty(false);
     }
@@ -169,11 +184,12 @@ export default function BlogPostEditorPage() {
       meta_keywords: metaKeywords,
       canonical_url: canonicalUrl,
       noindex,
+      published_at: publishDate.toISOString(),
     });
     setIsDirty(current !== lastSavedRef.current);
   }, [
     title, slug, excerpt, content, featuredImage, categoryId, isFeatured,
-    authorName, metaTitle, metaDescription, metaKeywords, canonicalUrl, noindex, isNew,
+    authorName, metaTitle, metaDescription, metaKeywords, canonicalUrl, noindex, publishDate, isNew,
   ]);
 
   // Browser beforeunload warning for unsaved changes
@@ -231,6 +247,7 @@ export default function BlogPostEditorPage() {
           meta_keywords: metaKeywords || undefined,
           canonical_url: canonicalUrl || undefined,
           noindex,
+          published_at: publishDate.toISOString(),
         });
         setSavedPostId(post.id);
         // Update saved snapshot
@@ -240,6 +257,7 @@ export default function BlogPostEditorPage() {
           is_featured: isFeatured, author_name: authorName,
           meta_title: metaTitle, meta_description: metaDescription,
           meta_keywords: metaKeywords, canonical_url: canonicalUrl, noindex,
+          published_at: publishDate.toISOString(),
         });
         setIsDirty(false);
         router.replace(`/cms/blog/${post.id}`);
@@ -261,6 +279,7 @@ export default function BlogPostEditorPage() {
           meta_keywords: metaKeywords || undefined,
           canonical_url: canonicalUrl || undefined,
           noindex,
+          published_at: publishDate.toISOString(),
         });
         // Update saved snapshot
         lastSavedRef.current = JSON.stringify({
@@ -269,6 +288,7 @@ export default function BlogPostEditorPage() {
           is_featured: isFeatured, author_name: authorName,
           meta_title: metaTitle, meta_description: metaDescription,
           meta_keywords: metaKeywords, canonical_url: canonicalUrl, noindex,
+          published_at: publishDate.toISOString(),
         });
         setIsDirty(false);
         toast.success("Post saved");
@@ -279,7 +299,7 @@ export default function BlogPostEditorPage() {
   }, [
     isNew, savedPostId, postId, title, slug, excerpt, content,
     featuredImage, categoryId, isFeatured, authorName,
-    metaTitle, metaDescription, metaKeywords, canonicalUrl, noindex,
+    metaTitle, metaDescription, metaKeywords, canonicalUrl, noindex, publishDate,
     createPost, updatePost, router,
   ]);
 
@@ -548,17 +568,39 @@ export default function BlogPostEditorPage() {
                     />
                   </div>
 
+                  {/* Publish Date */}
+                  <div>
+                    <Label>Publish Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start text-left font-normal mt-1"
+                          disabled={fieldsDisabled}
+                        >
+                          <CalendarIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                          {format(publishDate, "MMM d, yyyy")}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={publishDate}
+                          onSelect={(date) => date && setPublishDate(date)}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Date shown on the published post
+                    </p>
+                  </div>
+
                   <div className="pt-2 border-t text-xs text-muted-foreground space-y-1">
                     <p>{wordCount.toLocaleString()} words</p>
                     <p>{readingTime} min read</p>
                     {post?.created_at && (
                       <p>Created {new Date(post.created_at).toLocaleDateString()}</p>
-                    )}
-                    {post?.published_at && (
-                      <p>
-                        Published{" "}
-                        {new Date(post.published_at).toLocaleDateString()}
-                      </p>
                     )}
                   </div>
                 </CardContent>

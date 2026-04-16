@@ -68,6 +68,7 @@ export const usePaygLedger = (rentalId: string | undefined, isPayg: boolean) => 
         .from('ledger_entries')
         .select('remaining_amount')
         .eq('rental_id', rentalId)
+        .eq('tenant_id', tenant.id)
         .eq('type', 'Charge')
         .gt('remaining_amount', 0);
 

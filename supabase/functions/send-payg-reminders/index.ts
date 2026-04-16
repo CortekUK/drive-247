@@ -360,9 +360,16 @@ Deno.serve(async (req) => {
         }
 
         const daysActive = Math.max(0, daysBetween(now, startTs));
-        const daysOverdue = r.payg_last_reminder_sent_at
-          ? Math.max(0, daysBetween(now, new Date(r.payg_last_reminder_sent_at)))
-          : Math.max(0, daysActive - graceDays);
+        // Compute daysOverdue from the earliest unpaid ledger entry date
+        const earliestUnpaidDate = ledgerRows.length > 0
+          ? ledgerRows.reduce((earliest, row) => {
+              const d = row.entry_date || "";
+              return d < earliest ? d : earliest;
+            }, ledgerRows[0].entry_date || "")
+          : null;
+        const daysOverdue = earliestUnpaidDate
+          ? Math.max(0, daysBetween(now, new Date(earliestUnpaidDate)))
+          : 0;
 
         const html = buildEmailHtml({
           customerName: customer.name || "Customer",

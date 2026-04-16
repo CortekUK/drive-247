@@ -44,6 +44,32 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
       console.log(`Read targetCategories from payment record: ${targetCategories.join(', ')}`);
     }
 
+    // ISOLATION GUARD (Phase 2): if this payment is stamped to a rental extension,
+    // force allocation to Extension-only categories. Prevents an extension payment
+    // from being swallowed by original-rental FIFO when metadata is missing or wrong.
+    if (payment.extension_id) {
+      const extOnly = ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance'];
+      if (!targetCategories || targetCategories.length === 0) {
+        targetCategories = extOnly;
+        console.log(`Extension payment with no targets — forcing extension-only categories`);
+      } else {
+        // Strip any non-Extension categories that might have leaked in
+        const filtered = targetCategories.filter((c: string) => c.startsWith('Extension'));
+        if (filtered.length !== targetCategories.length) {
+          console.warn(`Stripped non-Extension categories from extension payment. Before: ${targetCategories.join(',')} After: ${filtered.join(',')}`);
+          targetCategories = filtered.length > 0 ? filtered : extOnly;
+        }
+      }
+    } else if (targetCategories && targetCategories.some((c: string) => c.startsWith('Extension'))) {
+      // ISOLATION GUARD: if any targetCategory is Extension*, the whole payment must be
+      // extension-scoped. Refuse to mix with original-rental categories.
+      const beforeLen = targetCategories.length;
+      targetCategories = targetCategories.filter((c: string) => c.startsWith('Extension'));
+      if (targetCategories.length !== beforeLen) {
+        console.warn(`Mixed extension+original targets detected; restricted to extension-only.`);
+      }
+    }
+
     // Get tenant currency code
     let currencyCode = 'USD';
     if (payment.tenant_id) {

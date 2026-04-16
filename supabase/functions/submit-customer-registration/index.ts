@@ -169,10 +169,34 @@ Deno.serve(async (req) => {
       // Check if the linked verification's document number is in blocked_identities
       const { data: verification } = await supabase
         .from('identity_verifications')
-        .select('document_number')
+        .select('document_number, review_result, status, date_of_birth')
         .eq('session_id', verificationSessionId)
         .eq('tenant_id', tenantId)
         .maybeSingle();
+
+      // Sync the completed verification result to the new customer record.
+      // Booking-flow verifications complete before the customer exists, so
+      // process-ai-verification skips the customers update — do it here.
+      if (verification) {
+        let verificationStatus: string | null = null;
+        if (verification.review_result === 'GREEN') verificationStatus = 'verified';
+        else if (verification.review_result === 'RED') verificationStatus = 'rejected';
+        else if (verification.status === 'pending' || verification.status === 'init') verificationStatus = 'pending';
+
+        if (verificationStatus) {
+          const customerSync: Record<string, unknown> = {
+            identity_verification_status: verificationStatus,
+          };
+          if (verification.document_number) customerSync.license_number = verification.document_number;
+          if (verification.date_of_birth) customerSync.date_of_birth = verification.date_of_birth;
+
+          const { error: syncError } = await supabase
+            .from('customers')
+            .update(customerSync)
+            .eq('id', newCustomer.id);
+          if (syncError) console.error('Error syncing verification status to customer:', syncError);
+        }
+      }
 
       if (verification?.document_number) {
         const { data: blockedIdentity } = await supabase

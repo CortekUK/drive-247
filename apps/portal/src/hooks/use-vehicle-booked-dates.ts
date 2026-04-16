@@ -151,6 +151,44 @@ export const useVehicleBookedDates = (vehicleId: string | undefined) => {
     return map;
   };
 
+  // Build modifier arrays: type -> Date[] for react-day-picker modifiers
+  const getOccupancyModifiers = (): Record<DateOccupancyType, Date[]> => {
+    const mods: Record<DateOccupancyType, Date[]> = {
+      active: [],
+      pending: [],
+      upcoming: [],
+      blocked: [],
+    };
+
+    for (const rental of bookedRentals) {
+      if (!rental.end_date) continue;
+      const type = getOccupancyType(rental.status);
+      const [sy, sm, sd] = rental.start_date.split("-").map(Number);
+      const start = new Date(sy, sm - 1, sd);
+      const [ey, em, ed] = rental.end_date.split("-").map(Number);
+      const end = new Date(ey, em - 1, ed);
+      const current = new Date(start);
+      while (current <= end) {
+        mods[type].push(new Date(current));
+        current.setDate(current.getDate() + 1);
+      }
+    }
+
+    for (const block of blockedDates) {
+      const [sy, sm, sd] = block.start_date.split("-").map(Number);
+      const start = new Date(sy, sm - 1, sd);
+      const [ey, em, ed] = block.end_date.split("-").map(Number);
+      const end = new Date(ey, em - 1, ed);
+      const current = new Date(start);
+      while (current <= end) {
+        mods.blocked.push(new Date(current));
+        current.setDate(current.getDate() + 1);
+      }
+    }
+
+    return mods;
+  };
+
   // Legacy: flat array of all booked dates for disabling
   const getBookedDatesArray = (): Date[] => {
     if (!bookedRentals.length) return [];
@@ -175,6 +213,7 @@ export const useVehicleBookedDates = (vehicleId: string | undefined) => {
     blockedDates,
     bookedDatesArray: getBookedDatesArray(),
     occupancyMap: getOccupancyMap(),
+    occupancyModifiers: getOccupancyModifiers(),
     isLoading: rentalsLoading || blockedLoading,
   };
 };

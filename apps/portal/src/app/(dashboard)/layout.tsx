@@ -14,6 +14,7 @@ import { UserMenu } from "@/components/shared/layout/user-menu";
 import { AppSidebar } from "@/components/shared/layout/app-sidebar";
 import { NotificationBell } from "@/components/shared/layout/notification-bell";
 import { CreditBalance } from "@/components/shared/layout/credit-balance";
+import { BonzahBalance } from "@/components/shared/layout/bonzah-balance";
 import { DynamicThemeProvider } from "@/components/shared/layout/dynamic-theme-provider";
 import {
   SidebarProvider,
@@ -120,6 +121,7 @@ export default function DashboardLayout({
             </div>
             <TraxAIDialog />
             <div className="ml-auto flex items-center gap-1 sm:gap-2 flex-shrink-0">
+              <BonzahBalance />
               <CreditBalance />
               <NotificationBell />
               <ThemeToggle />

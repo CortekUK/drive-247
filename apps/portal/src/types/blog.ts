@@ -75,6 +75,7 @@ export interface CreateBlogPostInput {
   meta_keywords?: string;
   canonical_url?: string;
   noindex?: boolean;
+  published_at?: string | null;
 }
 
 export interface UpdateBlogPostInput extends Partial<CreateBlogPostInput> {

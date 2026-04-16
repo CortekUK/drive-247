@@ -151,6 +151,7 @@ export function useBlogPosts(filters?: BlogPostFilters) {
           meta_keywords: input.meta_keywords || null,
           canonical_url: input.canonical_url || null,
           noindex: input.noindex ?? false,
+          published_at: input.published_at || null,
           reading_time_minutes: readingTime,
           status: "draft",
         })
@@ -208,6 +209,7 @@ export function useBlogPosts(filters?: BlogPostFilters) {
       if (input.meta_keywords !== undefined) updates.meta_keywords = input.meta_keywords;
       if (input.canonical_url !== undefined) updates.canonical_url = input.canonical_url;
       if (input.noindex !== undefined) updates.noindex = input.noindex;
+      if (input.published_at !== undefined) updates.published_at = input.published_at;
 
       const { data, error } = await (supabase as any)
         .from("blog_posts")

@@ -112,7 +112,7 @@ export default function InstallmentPlanCard({ rentalId, formatCurrency }: Instal
           {getStatusBadge(plan.status)}
         </div>
         <CardDescription>
-          {plan.plan_type === 'weekly' ? 'Weekly' : 'Monthly'} payment plan ({plan.number_of_installments} payments)
+          {plan.plan_type === 'weekly' ? 'Weekly' : plan.plan_type === 'semiweekly' ? 'Twice Weekly' : 'Monthly'} payment plan ({plan.number_of_installments} payments)
         </CardDescription>
       </CardHeader>
 
