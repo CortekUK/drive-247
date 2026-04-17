@@ -262,6 +262,7 @@ const RentalDetail = () => {
   const [refundCategory, setRefundCategory] = useState<string>("");
   const [refundTotalAmount, setRefundTotalAmount] = useState(0);
   const [refundPaidAmount, setRefundPaidAmount] = useState(0);
+  const [refundExtensionId, setRefundExtensionId] = useState<string | undefined>();
 
   // Extension dialog state
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
@@ -2834,6 +2835,7 @@ const RentalDetail = () => {
                                   setRefundCategory('Fine');
                                   setRefundTotalAmount(rentalFinesPaidAmount);
                                   setRefundPaidAmount(Math.max(0, rentalFinesPaidAmount - fineRefunded));
+                                  setRefundExtensionId(undefined);
                                   setShowRefundDialog(true);
                                 }}
                               >
@@ -2874,6 +2876,7 @@ const RentalDetail = () => {
                               setRefundTotalAmount(amount);
                               const alreadyRefunded = refundBreakdown?.[category] ?? 0;
                               setRefundPaidAmount(Math.max(0, amount - alreadyRefunded));
+                              setRefundExtensionId(undefined);
                               setShowRefundDialog(true);
                             }}
                           >
@@ -3210,8 +3213,11 @@ const RentalDetail = () => {
                             onClick={() => {
                               setRefundCategory(category);
                               setRefundTotalAmount(amount);
-                              const alreadyRefunded = refundBreakdown?.[category] ?? 0;
-                              setRefundPaidAmount(Math.max(0, amount - alreadyRefunded));
+                              // Scope refund to THIS extension's charge so process-refund
+                              // narrows validation, payment lookup, and ledger entry.
+                              const extId = (thisCharge as any)?.extension_id as string | undefined;
+                              setRefundExtensionId(extId);
+                              setRefundPaidAmount(Math.max(0, amount - refunded));
                               setShowRefundDialog(true);
                             }}
                           >
@@ -4950,6 +4956,7 @@ const RentalDetail = () => {
           category={refundCategory}
           totalAmount={refundTotalAmount}
           paidAmount={refundPaidAmount}
+          extensionId={refundExtensionId}
           onSuccess={async (refundedAmount: number) => {
             if (refundCategory === 'Fine' && rentalFines) {
               // Query total Fine refunds for this rental from ledger

@@ -36,13 +36,14 @@ serve(async (req) => {
     const {
       rentalId,
       paymentId,
+      extensionId,
       refundType,
       refundAmount,
       category,
       reason,
       processedBy,
       tenantId: requestTenantId
-    }: RefundRequest = await req.json();
+    }: RefundRequest & { extensionId?: string } = await req.json();
 
     if (!rentalId || !reason || !refundAmount || refundAmount <= 0) {
       return new Response(
@@ -69,21 +70,27 @@ serve(async (req) => {
       }
     }
 
-    // VALIDATION: Check if there's actually paid amount for this category
-    // Get ledger entries to calculate what was actually paid vs charged
-    const { data: ledgerCharges } = await supabase
+    // VALIDATION: Check if there's actually paid amount for this category.
+    // When extensionId is supplied, restrict to that extension's charges/refunds
+    // so per-extension refund validation is accurate even if other extensions
+    // on the same rental are unpaid or already refunded.
+    let chargesQuery = supabase
       .from("ledger_entries")
       .select("amount, remaining_amount")
       .eq("rental_id", rentalId)
       .eq("type", "Charge")
       .eq("category", category);
+    if (extensionId) chargesQuery = chargesQuery.eq("extension_id", extensionId);
+    const { data: ledgerCharges } = await chargesQuery;
 
-    const { data: ledgerRefunds } = await supabase
+    let refundsQuery = supabase
       .from("ledger_entries")
       .select("amount")
       .eq("rental_id", rentalId)
       .eq("type", "Refund")
       .eq("category", category);
+    if (extensionId) refundsQuery = refundsQuery.eq("extension_id", extensionId);
+    const { data: ledgerRefunds } = await refundsQuery;
 
     // Calculate total charged, paid, and already refunded for this category
     const totalCharged = ledgerCharges?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
@@ -170,14 +177,19 @@ serve(async (req) => {
         .single();
       payment = paymentData;
     } else {
-      // For extension categories, find the payment that was actually allocated to this charge
+      // For extension categories, find the payment that was actually allocated to this charge.
+      // Scope to the specific extension when extensionId is provided so we don't
+      // pull in a Stripe payment from an unrelated extension (which would then
+      // fail the Stripe refund call).
       if (category.startsWith('Extension')) {
-        const { data: extCharges } = await supabase
+        let extChargesQuery = supabase
           .from("ledger_entries")
           .select("id")
           .eq("rental_id", rentalId)
           .eq("type", "Charge")
           .eq("category", category);
+        if (extensionId) extChargesQuery = extChargesQuery.eq("extension_id", extensionId);
+        const { data: extCharges } = await extChargesQuery;
 
         if (extCharges && extCharges.length > 0) {
           const chargeIds = extCharges.map(c => c.id);
@@ -334,7 +346,7 @@ serve(async (req) => {
     console.log("Should create ledger entry:", shouldCreateLedger, "refundResult:", JSON.stringify(refundResult));
 
     if (shouldCreateLedger) {
-      const ledgerEntry = {
+      const ledgerEntry: Record<string, any> = {
         rental_id: rentalId,
         customer_id: rental.customer_id,
         vehicle_id: rental.vehicle_id,
@@ -343,10 +355,11 @@ serve(async (req) => {
         due_date: new Date().toISOString().split('T')[0],
         type: 'Refund',
         category: category,
-        amount: -Math.abs(refundAmount), // Negative amount for refund
+        amount: -Math.abs(refundAmount),
         remaining_amount: 0,
         reference: `Refund: ${reason}${stripeRefundId ? ` (Stripe: ${stripeRefundId})` : ''}`,
       };
+      if (extensionId) ledgerEntry.extension_id = extensionId;
 
       console.log("Creating ledger entry:", JSON.stringify(ledgerEntry));
 

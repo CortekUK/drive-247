@@ -42,6 +42,7 @@ interface RefundDialogProps {
   onOpenChange: (open: boolean) => void;
   rentalId: string;
   paymentId?: string;
+  extensionId?: string;
   category: string; // Tax, Service Fee, Pre-Authorization, Rental
   totalAmount: number;
   paidAmount: number;
@@ -53,6 +54,7 @@ export const RefundDialog = ({
   onOpenChange,
   rentalId,
   paymentId,
+  extensionId,
   category,
   totalAmount,
   paidAmount,
@@ -183,6 +185,7 @@ export const RefundDialog = ({
           body: {
             rentalId,
             paymentId,
+            extensionId,
             refundType: data.refundType,
             refundAmount: finalRefundAmount,
             category,
