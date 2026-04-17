@@ -358,6 +358,7 @@ const RentalDetail = () => {
   const { data: refundData } = useRentalRefundBreakdown(id);
   const refundBreakdown = refundData?.categoryRefunds || null;
   const chargeRefunds = refundData?.chargeRefunds || {};
+  const extensionCategoryRefunds = refundData?.extensionCategoryRefunds || {};
 
   // PAYG daily ledger
   const { ledger: paygLedger, isLoading: isPaygLedgerLoading } = usePaygLedger(id, rental?.is_pay_as_you_go === true);
@@ -3121,7 +3122,12 @@ const RentalDetail = () => {
                   const applied = amount > 0;
                   // For extensions, scope refunds to THIS extension's specific charge
                   const thisCharge = group.charges.find(c => c.category === category);
-                  const refunded = thisCharge ? (chargeRefunds[thisCharge.id] ?? 0) : 0;
+                  // Primary lookup: (extension_id, category) map — immune to
+                  // charge-id drift, reference format, and amount collisions.
+                  // Fallback to the legacy charge-id map for rows where the
+                  // refund didn't carry extension_id (pre-fix data).
+                  const refunded = (group.extensionId && extensionCategoryRefunds[`${group.extensionId}|${category}`])
+                    ?? (thisCharge ? (chargeRefunds[thisCharge.id] ?? 0) : 0);
                   const fullyRefunded = applied && refunded > 0 && refunded >= amount;
                   const isInsuranceRow = category === 'Extension Insurance';
                   const isPaid = applied && remaining_amount === 0;

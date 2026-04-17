@@ -152,8 +152,13 @@ export const useRentalRefundBreakdown = (rentalId: string | undefined) => {
       // Group refunds by category (amounts are negative, so we use Math.abs)
       // For extension categories, also track which charge was refunded via payment_applications
       const categoryRefunds: Record<string, number> = {};
-      // Also build a per-charge refund map (charge_entry_id → refund amount)
+      // Per-charge refund map (charge_entry_id → refund amount)
       const chargeRefunds: Record<string, number> = {};
+      // Per-extension+category refund map (`${extension_id}|${category}` → amount).
+      // The UI can consult this directly without needing the charge row id —
+      // immune to id mismatches, reference format drift, and closest-amount
+      // collisions when multiple extensions share the same charge amount.
+      const extensionCategoryRefunds: Record<string, number> = {};
 
       refunds?.forEach((refund) => {
         const category = refund.category || "Other";
@@ -161,6 +166,11 @@ export const useRentalRefundBreakdown = (rentalId: string | undefined) => {
           categoryRefunds[category] = 0;
         }
         categoryRefunds[category] += Math.abs(refund.amount);
+
+        if ((refund as any).extension_id && category.startsWith('Extension')) {
+          const key = `${(refund as any).extension_id}|${category}`;
+          extensionCategoryRefunds[key] = (extensionCategoryRefunds[key] || 0) + Math.abs(refund.amount);
+        }
       });
 
       // For extension refunds, map each refund back to its specific charge.
@@ -210,7 +220,7 @@ export const useRentalRefundBreakdown = (rentalId: string | undefined) => {
         }
       }
 
-      return { categoryRefunds, chargeRefunds };
+      return { categoryRefunds, chargeRefunds, extensionCategoryRefunds };
     },
     enabled: !!tenant && !!rentalId,
     staleTime: 0, // Always refetch
