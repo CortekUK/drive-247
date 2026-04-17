@@ -412,25 +412,25 @@ export default function VehiclesListEnhanced() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Fleet Management</h1>
-          <p className="text-muted-foreground">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold">Fleet Management</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">
             Manage your vehicle fleet and track performance
           </p>
         </div>
         <div className="flex items-center gap-2">
           {vehicles.length > 0 && (
-            <Link href="/vehicles/analytics">
+            <Link href="/vehicles/analytics" className="shrink-0">
               <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
                 <BarChart3 className="h-4 w-4" />
               </Button>
             </Link>
           )}
           {canEdit('vehicles') && (
-            <div data-add-vehicle-trigger>
+            <div data-add-vehicle-trigger className="flex-1 sm:flex-none [&>button]:w-full sm:[&>button]:w-auto">
               <AddVehicleDialog />
             </div>
           )}
@@ -460,8 +460,8 @@ export default function VehiclesListEnhanced() {
         const hasAnyFilter = filters.search || filters.status !== 'all' || filters.make !== 'all' || filters.year !== 'all' || filters.performance !== 'all';
 
         return (
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="relative flex-1 min-w-[200px]">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:items-center">
+            <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
                 placeholder="Search vehicles..."
@@ -472,7 +472,7 @@ export default function VehiclesListEnhanced() {
             </div>
 
             {/* Status + Make + Year + Performance grouped */}
-            <div className="flex items-center">
+            <div className="grid grid-cols-4 w-full sm:w-auto sm:flex sm:items-center">
               <VehicleFilterPopover
                 label="Status"
                 active={filters.status !== 'all'}
@@ -480,7 +480,7 @@ export default function VehiclesListEnhanced() {
                 options={statusOptions}
                 value={filters.status}
                 onChange={(v) => updateFilters({ status: v })}
-                className="rounded-r-none border-r-0"
+                className="rounded-r-none border-r-0 w-full sm:w-auto"
               />
               <VehicleFilterPopover
                 label="Make"
@@ -489,7 +489,7 @@ export default function VehiclesListEnhanced() {
                 options={[{ value: 'all', label: 'All Makes' }, ...uniqueMakes.map(m => ({ value: m, label: m }))]}
                 value={filters.make}
                 onChange={(v) => updateFilters({ make: v })}
-                className="rounded-none border-r-0"
+                className="rounded-none border-r-0 w-full sm:w-auto"
               />
               <VehicleFilterPopover
                 label="Year"
@@ -498,7 +498,7 @@ export default function VehiclesListEnhanced() {
                 options={[{ value: 'all', label: 'All Years' }, ...uniqueYears.map(y => ({ value: y.toString(), label: y.toString() }))]}
                 value={filters.year}
                 onChange={(v) => updateFilters({ year: v })}
-                className="rounded-none border-r-0"
+                className="rounded-none border-r-0 w-full sm:w-auto"
               />
               <VehicleFilterPopover
                 label="P&L"
@@ -507,7 +507,7 @@ export default function VehiclesListEnhanced() {
                 options={performanceOptions}
                 value={filters.performance}
                 onChange={(v) => updateFilters({ performance: v as PerformanceFilter })}
-                className="rounded-l-none"
+                className="rounded-l-none w-full sm:w-auto"
               />
             </div>
 
@@ -516,7 +516,7 @@ export default function VehiclesListEnhanced() {
                 variant="ghost"
                 size="sm"
                 onClick={() => updateFilters({ search: '', status: 'all', make: 'all', year: 'all', performance: 'all' })}
-                className="h-8 gap-1 text-muted-foreground hover:text-foreground"
+                className="h-8 gap-1 text-muted-foreground hover:text-foreground self-start"
               >
                 <X className="h-3.5 w-3.5" />
                 Clear

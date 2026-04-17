@@ -437,28 +437,33 @@ export function WorkingHoursCard() {
 
             <div className="border rounded-lg divide-y">
               {DAYS_OF_WEEK.map(({ key, label }) => (
-                <div key={key} className="flex items-center gap-4 p-4">
+                <div key={key} className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 sm:p-4">
                   {/* Day Toggle */}
-                  <div className="flex items-center gap-3 min-w-[140px]">
-                    <Switch
-                      checked={form.schedule[key].enabled}
-                      onCheckedChange={(checked) => updateDaySchedule(key, 'enabled', checked)}
-                      disabled={!canEdit('availability')}
-                    />
-                    <span className={`font-medium ${!form.schedule[key].enabled ? 'text-muted-foreground' : ''}`}>
-                      {label}
-                    </span>
+                  <div className="flex items-center justify-between sm:justify-start gap-3 sm:min-w-[140px]">
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        checked={form.schedule[key].enabled}
+                        onCheckedChange={(checked) => updateDaySchedule(key, 'enabled', checked)}
+                        disabled={!canEdit('availability')}
+                      />
+                      <span className={`font-medium ${!form.schedule[key].enabled ? 'text-muted-foreground' : ''}`}>
+                        {label}
+                      </span>
+                    </div>
+                    {!form.schedule[key].enabled && (
+                      <span className="text-sm text-muted-foreground sm:hidden">Closed</span>
+                    )}
                   </div>
 
                   {/* Time Inputs */}
                   {form.schedule[key].enabled ? (
-                    <div className="flex items-center gap-2 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 flex-1">
                       <TimeSelect
                         value={form.schedule[key].open}
                         onChange={(v) => updateDaySchedule(key, 'open', v)}
                         disabled={!canEdit('availability')}
                       />
-                      <span className="text-muted-foreground">to</span>
+                      <span className="text-muted-foreground text-sm">to</span>
                       <TimeSelect
                         value={form.schedule[key].close}
                         onChange={(v) => updateDaySchedule(key, 'close', v)}
@@ -470,16 +475,17 @@ export function WorkingHoursCard() {
                           variant="ghost"
                           size="sm"
                           onClick={() => copyToAllDays(key)}
-                          className="ml-2 text-xs"
+                          className="text-xs sm:ml-2"
                           title="Copy to all days"
                         >
                           <Copy className="h-3 w-3 mr-1" />
-                          Copy to all
+                          <span className="hidden sm:inline">Copy to all</span>
+                          <span className="sm:hidden">Copy</span>
                         </Button>
                       )}
                     </div>
                   ) : (
-                    <span className="text-sm text-muted-foreground">Closed</span>
+                    <span className="hidden sm:inline text-sm text-muted-foreground">Closed</span>
                   )}
                 </div>
               ))}

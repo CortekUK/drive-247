@@ -48,32 +48,32 @@ export const PaymentSummaryCards = () => {
   });
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
       <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Today's Payments</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
+          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Today's Payments</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{formatCurrency(summaryData?.todaysTotal || 0, currencyCode)}</div>
+        <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+          <div className="text-lg sm:text-2xl font-bold break-all">{formatCurrency(summaryData?.todaysTotal || 0, currencyCode)}</div>
         </CardContent>
       </Card>
 
       <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">This Month</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
+          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">This Month</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{formatCurrency(summaryData?.monthsTotal || 0, currencyCode)}</div>
+        <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+          <div className="text-lg sm:text-2xl font-bold break-all">{formatCurrency(summaryData?.monthsTotal || 0, currencyCode)}</div>
         </CardContent>
       </Card>
 
-      <Card className="bg-card hover:bg-accent/50 border shadow-sm transition-all duration-200 cursor-pointer hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Payment Count</CardTitle>
+      <Card className="bg-card hover:bg-accent/50 border shadow-sm transition-all duration-200 cursor-pointer hover:shadow-md col-span-2 md:col-span-1">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
+          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Payment Count</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{summaryData?.paymentCount || 0}</div>
-          <p className="text-xs text-muted-foreground">This Month</p>
+        <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+          <div className="text-xl sm:text-2xl font-bold">{summaryData?.paymentCount || 0}</div>
+          <p className="text-[11px] sm:text-xs text-muted-foreground">This Month</p>
         </CardContent>
       </Card>
     </div>

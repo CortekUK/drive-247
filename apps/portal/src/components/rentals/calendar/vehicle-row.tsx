@@ -51,7 +51,7 @@ export function VehicleRow({ data, rangeStart, rangeEnd, index, externalBookings
     >
       {/* Vehicle info — sticky left */}
       <div
-        className="sticky left-0 z-10 w-[240px] min-w-[240px] border-r bg-inherit px-3 py-2 flex items-center gap-3 cursor-pointer hover:bg-accent/50 transition-colors"
+        className="sticky left-0 z-10 w-[160px] min-w-[160px] sm:w-[240px] sm:min-w-[240px] border-r bg-inherit px-2 sm:px-3 py-2 flex items-center gap-2 sm:gap-3 cursor-pointer hover:bg-accent/50 transition-colors"
         onClick={() => router.push(`/vehicles/${vehicle.id}`)}
       >
         <VehiclePhotoThumbnail

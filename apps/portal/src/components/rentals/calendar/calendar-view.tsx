@@ -106,8 +106,8 @@ export function CalendarView({ filters }: CalendarViewProps) {
         )}
 
         {/* Status filter buttons */}
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground font-medium mr-1">Status:</span>
+        <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 pb-1 scrollbar-thin">
+          <span className="text-[11px] text-muted-foreground font-medium mr-1 shrink-0">Status:</span>
           {[
             { label: "Active", bg: "bg-emerald-500", border: "border-emerald-300 dark:border-emerald-500/40", text: "text-emerald-700 dark:text-emerald-400", activeBg: "bg-emerald-100 dark:bg-emerald-500/30" },
             { label: "Upcoming", bg: "bg-cyan-500", border: "border-cyan-300 dark:border-cyan-500/30", text: "text-cyan-700 dark:text-cyan-400", activeBg: "bg-cyan-100 dark:bg-cyan-500/25" },
@@ -121,7 +121,7 @@ export function CalendarView({ filters }: CalendarViewProps) {
                 key={s.label}
                 onClick={() => toggleStatus(s.label)}
                 className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-medium transition-all",
+                  "flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-medium transition-all shrink-0",
                   isActive
                     ? cn(s.activeBg, s.border, s.text)
                     : "border-muted bg-muted/30 text-muted-foreground/50 opacity-50"
@@ -155,10 +155,12 @@ export function CalendarView({ filters }: CalendarViewProps) {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div
+              className="overflow-x-auto [--vehicle-col:160px] sm:[--vehicle-col:240px]"
+            >
               {/* Date header row */}
               <div className="flex border-b sticky top-0 z-20 bg-background">
-                <div className="sticky left-0 z-30 w-[240px] min-w-[240px] border-r bg-background px-3 py-2">
+                <div className="sticky left-0 z-30 w-[160px] min-w-[160px] sm:w-[240px] sm:min-w-[240px] border-r bg-background px-3 py-2">
                   <span className="text-xs font-medium text-muted-foreground">
                     Vehicle
                   </span>
@@ -203,7 +205,7 @@ export function CalendarView({ filters }: CalendarViewProps) {
                     <div
                       className="absolute top-0 bottom-0 w-px bg-primary z-10 pointer-events-none"
                       style={{
-                        left: `calc(240px + ${((todayIndex + 0.5) / totalDays) * 100}% * (100% - 240px) / 100%)`,
+                        left: `calc(var(--vehicle-col) + ${((todayIndex + 0.5) / totalDays) * 100}% * (100% - var(--vehicle-col)) / 100%)`,
                       }}
                     />
                   )}

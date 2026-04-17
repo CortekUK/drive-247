@@ -193,16 +193,39 @@ const RentalsList = () => {
   return (
     <div className={currentView === "calendar" ? "p-4 md:p-6 space-y-6" : "container mx-auto p-4 md:p-6 space-y-6"}>
       {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Rentals</h1>
-          <p className="text-muted-foreground">
-            Manage rental agreements and contracts
-          </p>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+        <div className="min-w-0 flex items-start justify-between gap-3 sm:block">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold">Rentals</h1>
+            <p className="text-muted-foreground text-sm sm:text-base">
+              Manage rental agreements and contracts
+            </p>
+          </div>
+          {/* Mobile-only icon cluster next to title */}
+          <div className="flex items-center gap-2 shrink-0 sm:hidden">
+            <div className="flex rounded-md border overflow-hidden">
+              <Button
+                variant={currentView === "list" ? "default" : "ghost"}
+                size="sm"
+                className="rounded-none h-8 px-2.5"
+                onClick={() => handleViewChange("list")}
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={currentView === "calendar" ? "default" : "ghost"}
+                size="sm"
+                className="rounded-none h-8 px-2.5 border-l"
+                onClick={() => handleViewChange("calendar")}
+              >
+                <CalendarDays className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* View Toggle */}
-          <div className="flex rounded-md border overflow-hidden">
+          {/* View Toggle — sm+ only (mobile shows it next to title) */}
+          <div className="hidden sm:flex rounded-md border overflow-hidden">
             <Button
               variant={currentView === "list" ? "default" : "ghost"}
               size="sm"
@@ -220,7 +243,7 @@ const RentalsList = () => {
               <CalendarDays className="h-4 w-4" />
             </Button>
           </div>
-          <Link href="/rentals/analytics">
+          <Link href="/rentals/analytics" className="shrink-0">
             <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
               <BarChart3 className="h-4 w-4" />
             </Button>
@@ -230,14 +253,14 @@ const RentalsList = () => {
             size="icon"
             onClick={handleExportCSV}
             disabled={!rentals.length}
-            className="border-primary/20 hover:border-primary/40 hover:bg-primary/5"
+            className="border-primary/20 hover:border-primary/40 hover:bg-primary/5 shrink-0"
           >
             <Download className="h-4 w-4" />
           </Button>
           {canEdit('rentals') && (
             <Button
               onClick={() => router.push("/rentals/new")}
-              className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg"
+              className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg flex-1 sm:flex-none"
             >
               <Plus className="h-4 w-4 mr-2" />
               New Rental
@@ -248,35 +271,35 @@ const RentalsList = () => {
 
       {/* Quick Stats — list view only */}
       {currentView !== "calendar" && stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold">{stats.total}</div>
-              <p className="text-sm text-muted-foreground">Total Rentals</p>
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold">{stats.total}</div>
+              <p className="text-xs sm:text-sm text-muted-foreground">Total Rentals</p>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-success">
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-success">
                 {stats.active}
               </div>
-              <p className="text-sm text-muted-foreground">Active</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Active</p>
             </CardContent>
           </Card>
           <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-muted-foreground">
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-muted-foreground">
                 {stats.closed}
               </div>
-              <p className="text-sm text-muted-foreground">Completed</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Completed</p>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-amber-500/20 hover:border-amber-500/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-amber-500">
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-amber-500">
                 {stats.pending}
               </div>
-              <p className="text-sm text-muted-foreground">Pending</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Pending</p>
             </CardContent>
           </Card>
         </div>

@@ -166,14 +166,23 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <div />
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-3">
+        <div className="min-w-0">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Ban className="h-4 w-4 text-primary" />
+            Blocked Dates
+          </CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            Prevent bookings on specific dates
+          </CardDescription>
+        </div>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           {canEdit('availability') && (
             <DialogTrigger asChild>
-              <Button size="sm" className="flex items-center gap-2">
+              <Button size="sm" className="flex items-center gap-2 shrink-0">
                 <Plus className="h-4 w-4" />
-                Block Dates
+                <span className="hidden sm:inline">Block Dates</span>
+                <span className="sm:hidden">Block</span>
               </Button>
             </DialogTrigger>
           )}

@@ -277,22 +277,22 @@ const PaymentsList = () => {
   const totalPages = paymentsData?.totalPages || 1;
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Payments</h1>
-          <p className="text-muted-foreground">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold">Payments</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">
             Record and manage customer payments
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/payments/analytics">
+          <Link href="/payments/analytics" className="shrink-0">
             <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
               <BarChart3 className="h-4 w-4" />
             </Button>
           </Link>
-          <Button variant="outline" size="icon" onClick={handleExportCSV}>
+          <Button variant="outline" size="icon" onClick={handleExportCSV} className="shrink-0">
             <Download className="h-4 w-4" />
           </Button>
           <AddPaymentDialog
@@ -300,7 +300,7 @@ const PaymentsList = () => {
             onOpenChange={setShowAddDialog}
           />
           {canEdit('payments') && (
-            <Button onClick={() => setShowAddDialog(true)} className="bg-gradient-primary">
+            <Button onClick={() => setShowAddDialog(true)} className="bg-gradient-primary flex-1 sm:flex-none">
               <Plus className="h-4 w-4 mr-2" />
               Record Payment
             </Button>

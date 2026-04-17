@@ -30,7 +30,7 @@ export function CalendarHeader({
 }: CalendarHeaderProps) {
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
         <Button variant="outline" size="icon" onClick={onPrev}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
@@ -40,7 +40,7 @@ export function CalendarHeader({
         <Button variant="outline" size="icon" onClick={onNext}>
           <ChevronRight className="h-4 w-4" />
         </Button>
-        <span className="text-sm font-medium ml-2">
+        <span className="text-xs sm:text-sm font-medium sm:ml-2">
           {formatDateRange(rangeStart, rangeEnd)}
         </span>
       </div>

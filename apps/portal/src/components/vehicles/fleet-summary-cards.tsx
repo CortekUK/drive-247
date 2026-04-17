@@ -67,20 +67,20 @@ export const FleetSummaryCards = ({ vehicles }: FleetSummaryCardsProps) => {
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
       {cards.map((card) => {
         return (
           <Card key={card.title} className={`relative overflow-hidden transition-all duration-300 border-2 ${card.className}`}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <CardTitle className="text-sm font-medium text-foreground/80">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 sm:pb-3 p-3 sm:p-6">
+              <CardTitle className="text-xs sm:text-sm font-medium text-foreground/80 leading-tight">
                 {card.title}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className={`text-3xl font-bold mb-1 ${card.valueClassName || 'text-foreground'}`}>
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <div className={`text-2xl sm:text-3xl font-bold mb-1 ${card.valueClassName || 'text-foreground'}`}>
                 {card.value}
               </div>
-              <p className="text-xs text-muted-foreground font-medium">
+              <p className="text-[11px] sm:text-xs text-muted-foreground font-medium leading-tight">
                 {card.description}
               </p>
             </CardContent>

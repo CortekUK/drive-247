@@ -616,28 +616,28 @@ const CustomersList = () => {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Customers</h1>
-          <p className="text-muted-foreground">Manage customers and account balances</p>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold">Customers</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Manage customers and account balances</p>
         </div>
         <div className="flex items-center gap-2">
           {customers && customers.length > 0 && (
-            <Link href="/customers/analytics">
+            <Link href="/customers/analytics" className="shrink-0">
               <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
                 <BarChart3 className="h-4 w-4" />
               </Button>
             </Link>
           )}
           {canEdit('customers') && (
-            <Button variant="outline" size="icon" onClick={() => setInviteDialogOpen(true)}>
+            <Button variant="outline" size="icon" onClick={() => setInviteDialogOpen(true)} className="shrink-0">
               <Link2 className="h-4 w-4" />
             </Button>
           )}
           {canEdit('customers') && (
-            <Button className="bg-gradient-primary" onClick={handleAddCustomer}>
+            <Button className="bg-gradient-primary flex-1 sm:flex-none" onClick={handleAddCustomer}>
               <Plus className="h-4 w-4 mr-2" />
               Add Customer
             </Button>
@@ -649,8 +649,8 @@ const CustomersList = () => {
       {customers && <CustomerSummaryCards customers={customers} />}
 
       {/* Search and Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:items-center">
+        <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             placeholder="Search customers..."
@@ -661,7 +661,7 @@ const CustomersList = () => {
         </div>
 
         {/* Status + Type grouped */}
-        <div className="flex items-center">
+        <div className="grid grid-cols-2 w-full sm:w-auto sm:flex sm:items-center">
           <CustomerFilterPopover
             label="Status"
             active={statusFilter !== 'all'}
@@ -674,7 +674,7 @@ const CustomersList = () => {
             ]}
             value={statusFilter}
             onChange={setStatusFilter}
-            className="rounded-r-none border-r-0"
+            className="rounded-r-none border-r-0 w-full sm:w-auto"
           />
           <CustomerFilterPopover
             label="User Type"
@@ -687,12 +687,12 @@ const CustomersList = () => {
             ]}
             value={userTypeFilter}
             onChange={setUserTypeFilter}
-            className="rounded-l-none"
+            className="rounded-l-none w-full sm:w-auto"
           />
         </div>
 
         {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 gap-1 text-muted-foreground hover:text-foreground">
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 gap-1 text-muted-foreground hover:text-foreground self-start">
             <X className="h-3.5 w-3.5" />
             Clear
           </Button>

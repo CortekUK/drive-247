@@ -133,9 +133,13 @@ export const NotificationBell = () => {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="end">
+      <PopoverContent
+        className="w-[calc(100vw-16px)] sm:w-80 max-w-[calc(100vw-16px)] p-0"
+        align="end"
+        collisionPadding={8}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-3 border-b">
           <h3 className="font-semibold">Notifications</h3>
           <div className="flex items-center gap-1">
             {activeNotifications.filter((n) => !n.is_read).length > 0 && (
@@ -210,7 +214,7 @@ export const NotificationBell = () => {
             text={activeTab === "messages" ? "No messages" : "No notifications"}
           />
         ) : (
-          <ScrollArea className="h-[360px]">
+          <ScrollArea className="h-[min(60vh,360px)]">
             {activeNotifications.map((notification) => (
               <NotificationItem
                 key={notification.id}

@@ -208,8 +208,12 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
                 <Calendar className="h-3.5 w-3.5" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-3" align="start">
-              <div className="flex gap-4">
+            <PopoverContent
+              className="w-auto max-w-[95vw] p-3"
+              align="start"
+              collisionPadding={8}
+            >
+              <div className="flex flex-col sm:flex-row gap-4">
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-muted-foreground">From</p>
                   <CalendarComponent
@@ -219,7 +223,7 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
                     className="p-0 pointer-events-auto"
                   />
                 </div>
-                <div className="space-y-1 border-l pl-4">
+                <div className="space-y-1 sm:border-l sm:pl-4 pt-3 border-t sm:pt-0 sm:border-t-0">
                   <p className="text-xs font-medium text-muted-foreground">To</p>
                   <CalendarComponent
                     mode="single"
@@ -262,8 +266,12 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
                 <Calendar className="h-3.5 w-3.5" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-3" align="end">
-              <div className="flex gap-4">
+            <PopoverContent
+              className="w-auto max-w-[95vw] p-3"
+              align="end"
+              collisionPadding={8}
+            >
+              <div className="flex flex-col sm:flex-row gap-4">
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-muted-foreground">From</p>
                   <CalendarComponent
@@ -273,7 +281,7 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
                     className="p-0 pointer-events-auto"
                   />
                 </div>
-                <div className="space-y-1 border-l pl-4">
+                <div className="space-y-1 sm:border-l sm:pl-4 pt-3 border-t sm:pt-0 sm:border-t-0">
                   <p className="text-xs font-medium text-muted-foreground">To</p>
                   <CalendarComponent
                     mode="single"

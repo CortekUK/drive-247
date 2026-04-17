@@ -58,16 +58,16 @@ export function ChannelList({ selectedChannelId, onSelectChannel, onBulkMessage 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="p-5 border-b border-border/50">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-primary/10">
-              <MessageCircle className="h-5 w-5 text-primary" />
+      <div className="p-3 sm:p-5 border-b border-border/50">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="p-1.5 sm:p-2 rounded-xl bg-primary/10 shrink-0">
+              <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             </div>
-            <div>
-              <h2 className="font-semibold text-lg">Messages</h2>
+            <div className="min-w-0">
+              <h2 className="font-semibold text-base sm:text-lg">Messages</h2>
               {totalUnread > 0 && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[11px] sm:text-xs text-muted-foreground">
                   {totalUnread} unread message{totalUnread !== 1 ? 's' : ''}
                 </p>
               )}
@@ -167,10 +167,10 @@ export function ChannelList({ selectedChannelId, onSelectChannel, onBulkMessage 
 
       {/* Bulk message button */}
       {onBulkMessage && (
-        <div className="p-4 border-t border-border/50">
+        <div className="p-3 sm:p-4 border-t border-border/50">
           <Button
             variant="outline"
-            className="w-full gap-2 h-11 bg-background/50 hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-all duration-200"
+            className="w-full gap-2 h-10 sm:h-11 bg-background/50 hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-all duration-200"
             onClick={onBulkMessage}
           >
             <Sparkles className="h-4 w-4" />
@@ -255,7 +255,7 @@ function ChannelItem({ channel, isSelected, onClick, searchQuery }: ChannelItemP
     <button
       onClick={onClick}
       className={cn(
-        'w-full flex items-start gap-3 p-3 rounded-xl text-left transition-all duration-200',
+        'w-full flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl text-left transition-all duration-200',
         'hover:bg-accent/50',
         isSelected && 'bg-primary/10 hover:bg-primary/15',
         hasUnread && !isSelected && 'bg-accent/30'
@@ -264,7 +264,7 @@ function ChannelItem({ channel, isSelected, onClick, searchQuery }: ChannelItemP
       {/* Avatar with online indicator */}
       <div className="relative">
         <Avatar className={cn(
-          'h-12 w-12 shrink-0 ring-2 ring-transparent transition-all',
+          'h-10 w-10 sm:h-12 sm:w-12 shrink-0 ring-2 ring-transparent transition-all',
           isSelected && 'ring-primary/20'
         )}>
           <AvatarImage src={channel.customer?.profile_photo_url || undefined} alt={customerName} />
