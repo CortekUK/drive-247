@@ -285,42 +285,50 @@ export function BuyInsuranceDialog({
         }
       }
 
-      // 6. Insert ledger entry for insurance charge — use actual quote premium from Bonzah, not the client estimate
+      // 6. Insert ledger entry ONLY when the policy was actually issued.
+      // If Bonzah confirm fails (e.g. insufficient balance), we must not
+      // charge the customer — otherwise the ledger carries a charge with no
+      // active policy, and retrying from the UI hits the unique index on
+      // the orphan charge and silently fails.
       const actualPremium = quoteResult?.total_premium ?? premium;
 
-      const { error: ledgerError } = await supabase
-        .from('ledger_entries')
-        .insert({
-          type: 'Charge',
-          category: isExtension ? 'Extension Insurance' : 'Insurance',
-          amount: actualPremium,
-          remaining_amount: actualPremium,
-          reference: `BONZAH-${quoteResult?.policy_record_id || 'POLICY'}`,
-          rental_id: rental.id,
-          ...(isExtension && extensionId ? { extension_id: extensionId } : {}),
-          customer_id: rental.customers.id,
-          vehicle_id: rental.vehicles?.id,
-          tenant_id: tenant.id,
-          entry_date: new Date().toISOString().split('T')[0],
-          due_date: isExtension && extensionDates ? extensionDates.end.split('T')[0] : new Date().toISOString().split('T')[0],
-        });
+      if (policyActive) {
+        const { error: ledgerError } = await supabase
+          .from('ledger_entries')
+          .insert({
+            type: 'Charge',
+            category: isExtension ? 'Extension Insurance' : 'Insurance',
+            amount: actualPremium,
+            remaining_amount: actualPremium,
+            reference: `BONZAH-${quoteResult?.policy_record_id || 'POLICY'}`,
+            rental_id: rental.id,
+            ...(isExtension && extensionId ? { extension_id: extensionId } : {}),
+            customer_id: rental.customers.id,
+            vehicle_id: rental.vehicles?.id,
+            tenant_id: tenant.id,
+            entry_date: new Date().toISOString().split('T')[0],
+            due_date: isExtension && extensionDates ? extensionDates.end.split('T')[0] : new Date().toISOString().split('T')[0],
+          });
 
-      if (ledgerError) {
-        console.error('Ledger entry error:', ledgerError);
-        toast({
-          title: 'Warning',
-          description: 'Insurance purchased but failed to create charge entry. Add it manually.',
-          variant: 'destructive',
-        });
+        if (ledgerError) {
+          console.error('Ledger entry error:', ledgerError);
+          toast({
+            title: 'Warning',
+            description: 'Insurance purchased but failed to create charge entry. Add it manually.',
+            variant: 'destructive',
+          });
+        }
       }
 
       // 7. Invalidate queries
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['rental-bonzah-policy', rental.id] }),
-        queryClient.invalidateQueries({ queryKey: ['rental-insurance-policies', rental.id] }),
-        queryClient.invalidateQueries({ queryKey: ['rental-charges', rental.id] }),
-        queryClient.invalidateQueries({ queryKey: ['rental-totals', rental.id] }),
-        queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown', rental.id] }),
+        queryClient.invalidateQueries({ queryKey: ['rental-insurance-policies'] }),
+        queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
+        queryClient.invalidateQueries({ queryKey: ['rental-totals'] }),
+        queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] }),
+        queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'] }),
+        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] }),
         queryClient.invalidateQueries({ queryKey: ['rental', rental.id] }),
         queryClient.invalidateQueries({ queryKey: ['ledger-entries'] }),
         queryClient.invalidateQueries({ queryKey: ['bonzah-balance'] }),
@@ -342,9 +350,14 @@ export function BuyInsuranceDialog({
       }
       // If insufficient_balance or other confirm error, toast was already shown above
 
-      // 8. Close dialog and trigger payment flow
+      // 8. Close dialog. Only trigger the payment flow when the policy is
+      // actually active — if Bonzah confirm failed (insufficient balance etc)
+      // there's no charge on the ledger to collect against, so opening the
+      // payment dialog would create an orphan payment with nothing to apply.
       handleClose();
-      onPurchaseComplete(actualPremium);
+      if (policyActive) {
+        onPurchaseComplete(actualPremium);
+      }
     } catch (error: any) {
       console.error('Buy insurance error:', error);
       // Clean up error message — strip "Bonzah API error:" prefix for user-friendly display
