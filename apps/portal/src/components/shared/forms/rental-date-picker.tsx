@@ -25,11 +25,9 @@ import type {
   DateOccupancyType,
 } from "@/hooks/use-vehicle-booked-dates";
 
-interface RentalDateRangePickerProps {
+interface BaseProps {
   startDate?: Date;
   endDate?: Date;
-  onStartDateChange: (date: Date | undefined) => void;
-  onEndDateChange: (date: Date | undefined) => void;
   occupancyMap: Map<string, DateOccupancy[]>;
   occupancyModifiers: Record<DateOccupancyType, Date[]>;
   disableDate?: (date: Date) => boolean;
@@ -37,10 +35,27 @@ interface RentalDateRangePickerProps {
   error?: boolean;
 }
 
+interface RangeMode extends BaseProps {
+  /** Both start and end dates are selectable (default for new rentals) */
+  mode?: "range";
+  onStartDateChange: (date: Date | undefined) => void;
+  onEndDateChange: (date: Date | undefined) => void;
+  title?: string;
+}
+
+interface EndOnlyMode extends BaseProps {
+  /** Only end date is selectable (for extensions — start date is read-only) */
+  mode: "end-only";
+  onStartDateChange?: never;
+  onEndDateChange: (date: Date | undefined) => void;
+  title?: string;
+}
+
+export type RentalDateRangePickerProps = RangeMode | EndOnlyMode;
+
 /**
  * Modifier class names applied directly to the day <button> element
- * by react-day-picker's modifiers system. These use !important to
- * ensure they override the ghost button variant's hover states.
+ * by react-day-picker's modifiers system.
  */
 const MODIFIER_CLASSES: Record<DateOccupancyType, string> = {
   active:
@@ -98,37 +113,94 @@ function DayWithTooltip({
   );
 }
 
-export const RentalDateRangePicker = ({
-  startDate,
-  endDate,
-  onStartDateChange,
-  onEndDateChange,
-  occupancyMap,
-  occupancyModifiers,
-  disableDate,
-  className,
-  error,
-}: RentalDateRangePickerProps) => {
+/** Shared calendar classNames */
+const CALENDAR_CLASS_NAMES = {
+  months: "flex gap-6",
+  month: "space-y-3",
+  caption: "flex justify-center pt-1 relative items-center",
+  caption_label: "text-sm font-semibold",
+  nav: "space-x-1 flex items-center",
+  nav_button_previous: "absolute left-1",
+  nav_button_next: "absolute right-1",
+  table: "w-full border-collapse",
+  head_row: "flex",
+  head_cell:
+    "text-muted-foreground rounded-md w-10 font-normal text-[0.8rem]",
+  row: "flex w-full mt-1",
+  cell: "h-10 w-10 text-center text-sm p-0 relative focus-within:relative focus-within:z-20",
+  day_range_end: "day-range-end",
+  day_selected: "",
+  day_today: "border-2 border-primary text-foreground",
+  day_outside:
+    "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
+  day_disabled: "text-muted-foreground opacity-50",
+  day_hidden: "invisible",
+};
+
+/** Legend bar shown at the bottom of the calendar */
+function OccupancyLegend() {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1">
+      <div className="flex items-center gap-1.5">
+        <span className="w-3 h-3 rounded-sm bg-emerald-100 dark:bg-emerald-900/40 ring-1 ring-emerald-300" />
+        <span className="text-xs text-muted-foreground">Active</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="w-3 h-3 rounded-sm bg-amber-100 dark:bg-amber-900/40 ring-1 ring-amber-300" />
+        <span className="text-xs text-muted-foreground">Pending</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="w-3 h-3 rounded-sm bg-purple-100 dark:bg-purple-900/40 ring-1 ring-purple-300" />
+        <span className="text-xs text-muted-foreground">Upcoming</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="w-3 h-3 rounded-sm bg-red-100 dark:bg-red-900/40 ring-1 ring-red-300" />
+        <span className="text-xs text-muted-foreground">Blocked</span>
+      </div>
+    </div>
+  );
+}
+
+export const RentalDateRangePicker = (props: RentalDateRangePickerProps) => {
+  const {
+    startDate,
+    endDate,
+    onEndDateChange,
+    occupancyMap,
+    occupancyModifiers,
+    disableDate,
+    className,
+    error,
+    title,
+  } = props;
+
+  const isEndOnly = props.mode === "end-only";
+  const onStartDateChange = isEndOnly ? undefined : props.onStartDateChange;
+
   const [open, setOpen] = useState(false);
-  // "start" = selecting start date, "end" = selecting end date
-  const [selecting, setSelecting] = useState<"start" | "end">("start");
+  const [selecting, setSelecting] = useState<"start" | "end">(
+    isEndOnly ? "end" : "start"
+  );
 
   const handleDayClick = useCallback(
     (day: Date | undefined) => {
       if (!day) return;
 
+      if (isEndOnly) {
+        // End-only mode: always set end date
+        onEndDateChange(day);
+        return;
+      }
+
       if (selecting === "start") {
-        onStartDateChange(day);
-        // If end date is before new start, clear it
+        onStartDateChange?.(day);
         if (endDate && day >= endDate) {
           onEndDateChange(undefined);
         }
         setSelecting("end");
       } else {
-        // Selecting end date
         if (startDate && day <= startDate) {
-          // If clicked before start, treat as new start
-          onStartDateChange(day);
+          onStartDateChange?.(day);
           onEndDateChange(undefined);
           setSelecting("end");
         } else {
@@ -137,7 +209,14 @@ export const RentalDateRangePicker = ({
         }
       }
     },
-    [selecting, startDate, endDate, onStartDateChange, onEndDateChange]
+    [
+      isEndOnly,
+      selecting,
+      startDate,
+      endDate,
+      onStartDateChange,
+      onEndDateChange,
+    ]
   );
 
   // Build range highlight modifiers for start/end/in-range
@@ -158,7 +237,6 @@ export const RentalDateRangePicker = ({
     return mods;
   }, [startDate, endDate]);
 
-  // Merge occupancy + range modifiers
   const allModifiers = useMemo(
     () => ({
       ...occupancyModifiers,
@@ -180,6 +258,11 @@ export const RentalDateRangePicker = ({
   );
 
   const displayText = () => {
+    if (isEndOnly) {
+      return endDate
+        ? format(endDate, "MMM d, yyyy")
+        : "Select new end date";
+    }
     if (startDate && endDate) {
       return `${format(startDate, "MMM d, yyyy")} — ${format(endDate, "MMM d, yyyy")}`;
     }
@@ -189,12 +272,22 @@ export const RentalDateRangePicker = ({
     return "Select rental dates";
   };
 
+  const navButtonClass = cn(
+    buttonVariants({ variant: "outline" }),
+    "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
+  );
+
+  const dayClass = cn(
+    buttonVariants({ variant: "ghost" }),
+    "h-10 w-10 p-0 font-normal aria-selected:opacity-100"
+  );
+
   return (
     <Dialog
       open={open}
       onOpenChange={(v) => {
         setOpen(v);
-        if (v) setSelecting(startDate ? "end" : "start");
+        if (v) setSelecting(isEndOnly ? "end" : startDate ? "end" : "start");
       }}
     >
       <DialogTrigger asChild>
@@ -202,7 +295,7 @@ export const RentalDateRangePicker = ({
           variant="outline"
           className={cn(
             "justify-start text-left font-normal w-full",
-            !startDate && "text-muted-foreground",
+            !startDate && !endDate && "text-muted-foreground",
             error && "border-destructive",
             className
           )}
@@ -214,49 +307,59 @@ export const RentalDateRangePicker = ({
       <DialogContent className="sm:max-w-[720px] p-0 gap-0">
         <DialogHeader className="px-6 pt-5 pb-3">
           <DialogTitle className="text-lg font-semibold">
-            Select Rental Dates
+            {title || (isEndOnly ? "Select New End Date" : "Select Rental Dates")}
           </DialogTitle>
+
+          {/* Date selector pills */}
           <div className="flex items-center gap-4 mt-2">
+            {/* Start date */}
             <button
               type="button"
-              onClick={() => setSelecting("start")}
+              onClick={() => {
+                if (!isEndOnly) setSelecting("start");
+              }}
               className={cn(
                 "flex-1 text-left px-3 py-2 rounded-lg border-2 transition-colors",
-                selecting === "start"
-                  ? "border-primary bg-primary/5"
-                  : "border-muted hover:border-muted-foreground/30"
+                isEndOnly
+                  ? "border-muted bg-muted/30 cursor-default"
+                  : selecting === "start"
+                    ? "border-primary bg-primary/5"
+                    : "border-muted hover:border-muted-foreground/30"
               )}
             >
               <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
-                Start Date
+                {isEndOnly ? "Current End Date" : "Start Date"}
               </div>
               <div className="text-sm font-medium mt-0.5">
                 {startDate
                   ? format(startDate, "EEEE, MMM d, yyyy")
-                  : "Click a date below"}
+                  : isEndOnly
+                    ? "—"
+                    : "Click a date below"}
               </div>
             </button>
             <div className="text-muted-foreground text-sm">→</div>
+            {/* End date */}
             <button
               type="button"
               onClick={() => {
-                if (startDate) setSelecting("end");
+                if (isEndOnly || startDate) setSelecting("end");
               }}
               className={cn(
                 "flex-1 text-left px-3 py-2 rounded-lg border-2 transition-colors",
                 selecting === "end"
                   ? "border-primary bg-primary/5"
                   : "border-muted hover:border-muted-foreground/30",
-                !startDate && "opacity-50 cursor-not-allowed"
+                !isEndOnly && !startDate && "opacity-50 cursor-not-allowed"
               )}
             >
               <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
-                End Date
+                {isEndOnly ? "New End Date" : "End Date"}
               </div>
               <div className="text-sm font-medium mt-0.5">
                 {endDate
                   ? format(endDate, "EEEE, MMM d, yyyy")
-                  : startDate
+                  : isEndOnly || startDate
                     ? "Click a date below"
                     : "—"}
               </div>
@@ -273,39 +376,18 @@ export const RentalDateRangePicker = ({
             disabled={disableDate}
             showOutsideDays={true}
             fixedWeeks={true}
-            defaultMonth={startDate || new Date()}
+            defaultMonth={
+              isEndOnly
+                ? startDate || new Date()
+                : startDate || new Date()
+            }
             modifiers={allModifiers}
             modifiersClassNames={allModifiersClassNames}
             className="pointer-events-auto"
             classNames={{
-              months: "flex gap-6",
-              month: "space-y-3",
-              caption: "flex justify-center pt-1 relative items-center",
-              caption_label: "text-sm font-semibold",
-              nav: "space-x-1 flex items-center",
-              nav_button: cn(
-                buttonVariants({ variant: "outline" }),
-                "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-              ),
-              nav_button_previous: "absolute left-1",
-              nav_button_next: "absolute right-1",
-              table: "w-full border-collapse",
-              head_row: "flex",
-              head_cell:
-                "text-muted-foreground rounded-md w-10 font-normal text-[0.8rem]",
-              row: "flex w-full mt-1",
-              cell: "h-10 w-10 text-center text-sm p-0 relative focus-within:relative focus-within:z-20",
-              day: cn(
-                buttonVariants({ variant: "ghost" }),
-                "h-10 w-10 p-0 font-normal aria-selected:opacity-100"
-              ),
-              day_range_end: "day-range-end",
-              day_selected: "",
-              day_today: "border-2 border-primary text-foreground",
-              day_outside:
-                "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
-              day_disabled: "text-muted-foreground opacity-50",
-              day_hidden: "invisible",
+              ...CALENDAR_CLASS_NAMES,
+              nav_button: navButtonClass,
+              day: dayClass,
             }}
             components={{
               IconLeft: ({ ..._props }) => (
@@ -314,8 +396,8 @@ export const RentalDateRangePicker = ({
               IconRight: ({ ..._props }) => (
                 <ChevronRight className="h-4 w-4" />
               ),
-              DayContent: (props) => (
-                <DayWithTooltip {...props} occupancyMap={occupancyMap} />
+              DayContent: (dayProps) => (
+                <DayWithTooltip {...dayProps} occupancyMap={occupancyMap} />
               ),
             }}
           />
@@ -323,34 +405,21 @@ export const RentalDateRangePicker = ({
 
         {/* Legend + Done */}
         <div className="px-6 pb-4 pt-2 border-t flex items-center justify-between">
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-emerald-100 dark:bg-emerald-900/40 ring-1 ring-emerald-300" />
-              <span className="text-xs text-muted-foreground">Active</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-amber-100 dark:bg-amber-900/40 ring-1 ring-amber-300" />
-              <span className="text-xs text-muted-foreground">Pending</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-purple-100 dark:bg-purple-900/40 ring-1 ring-purple-300" />
-              <span className="text-xs text-muted-foreground">Upcoming</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-red-100 dark:bg-red-900/40 ring-1 ring-red-300" />
-              <span className="text-xs text-muted-foreground">Blocked</span>
-            </div>
-          </div>
+          <OccupancyLegend />
           <Button
             size="sm"
             onClick={() => setOpen(false)}
-            disabled={!startDate}
+            disabled={isEndOnly ? !endDate : !startDate}
           >
-            {startDate && endDate
-              ? "Done"
-              : startDate
-                ? "Select end date"
-                : "Select dates"}
+            {isEndOnly
+              ? endDate
+                ? "Done"
+                : "Select a date"
+              : startDate && endDate
+                ? "Done"
+                : startDate
+                  ? "Select end date"
+                  : "Select dates"}
           </Button>
         </div>
       </DialogContent>

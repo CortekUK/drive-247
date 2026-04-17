@@ -23,6 +23,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { useExtensionConflicts } from '@/hooks/use-extension-conflicts';
 import { useExtensionPricing } from '@/hooks/use-extension-pricing';
+import { useVehicleBookedDates } from '@/hooks/use-vehicle-booked-dates';
+import { RentalDateRangePicker } from '@/components/shared/forms/rental-date-picker';
 import { format } from 'date-fns';
 import { getCurrencySymbol } from '@/lib/format-utils';
 import { useQuery } from '@tanstack/react-query';
@@ -209,6 +211,9 @@ export function AdminExtendRentalDialog({
   })();
   const extensionTotalAmount = extensionCost + extensionTaxAmount + extensionServiceFee + insurancePremium;
 
+  // Fetch vehicle occupancy for the color-coded date picker (exclude current rental)
+  const { occupancyMap, occupancyModifiers } = useVehicleBookedDates(vehicleId, rental.id);
+
   const { rentalConflicts, bufferConflicts, hasConflicts, isChecking: isCheckingConflicts } = useExtensionConflicts({
     vehicleId: rental.vehicles?.id,
     currentEndDate: snapshotEndDate,
@@ -249,41 +254,13 @@ export function AdminExtendRentalDialog({
         throw new Error(`Failed to extend rental: ${updateError.message}`);
       }
 
-      // 2. Insert ledger charges for extension breakdown
-      const extNum = (existingExtensionCount || 0) + 1;
-      const extRef = `Extension #${extNum}: ${extensionDays} day${extensionDays !== 1 ? 's' : ''} (${format(currentEndDate, 'MMM dd')} → ${format(new Date(newEndDate), 'MMM dd, yyyy')})`;
-      const today = new Date().toISOString().split('T')[0];
-      const baseLedger = {
-        rental_id: rental.id,
-        customer_id: rental.customer_id || rental.customers?.id,
-        vehicle_id: rental.vehicle_id || rental.vehicles?.id,
-        tenant_id: tenant.id,
-        type: 'Charge' as const,
-        entry_date: today,
-        due_date: newEndDate.split('T')[0],
-      };
-
-      if (extensionCost > 0) {
-        // Extension Rental Fee
-        const ledgerEntries: any[] = [
-          { ...baseLedger, category: 'Extension Rental', reference: extRef, amount: extensionCost, remaining_amount: extensionCost },
-        ];
-        // Extension Tax
-        if (extensionTaxAmount > 0) {
-          ledgerEntries.push({ ...baseLedger, category: 'Extension Tax', reference: `Extension #${extNum}: Tax`, amount: extensionTaxAmount, remaining_amount: extensionTaxAmount });
-        }
-        // Extension Service Fee
-        if (extensionServiceFee > 0) {
-          ledgerEntries.push({ ...baseLedger, category: 'Extension Service Fee', reference: `Extension #${extNum}: Service Fee`, amount: extensionServiceFee, remaining_amount: extensionServiceFee });
-        }
-        const { error: ledgerError } = await supabase.from('ledger_entries').insert(ledgerEntries);
-        if (ledgerError) console.error('Failed to create ledger entries:', ledgerError);
-      }
-
       setSubmissionStep('Creating payment link...');
-      // 3. Create Stripe checkout for extension payment (total includes tax + service fee)
+      // 2. Create Stripe checkout for extension payment (total includes tax + service fee).
+      //    This also creates the rental_extensions row and returns its id +
+      //    sequence_number — the authoritative "#N" we stamp on ledger rows.
       let checkoutUrl: string | undefined;
       let createdExtensionId: string | undefined;
+      let createdSequenceNumber: number | undefined;
       if (extensionTotalAmount > 0) {
         try {
           const { data: session } = await supabase.auth.getSession();
@@ -313,6 +290,7 @@ export function AdminExtendRentalDialog({
             const result = await res.json();
             checkoutUrl = result.checkoutUrl;
             createdExtensionId = result.extensionId;
+            createdSequenceNumber = result.sequenceNumber;
             console.log('Extension checkout created:', result.sessionId);
 
             // Save checkout URL to rental for customer portal visibility
@@ -328,6 +306,37 @@ export function AdminExtendRentalDialog({
         } catch (err) {
           console.error('Error creating extension checkout:', err);
         }
+      }
+
+      // 3. Insert ledger charges for extension breakdown. Runs AFTER checkout
+      //    so we have the authoritative sequence_number + extension_id to
+      //    stamp on every row — keeping numbering and grouping in sync.
+      const extNum = createdSequenceNumber ?? ((existingExtensionCount || 0) + 1);
+      const extRef = `Extension #${extNum}: ${extensionDays} day${extensionDays !== 1 ? 's' : ''} (${format(currentEndDate, 'MMM dd')} → ${format(new Date(newEndDate), 'MMM dd, yyyy')})`;
+      const today = new Date().toISOString().split('T')[0];
+      const baseLedger = {
+        rental_id: rental.id,
+        customer_id: rental.customer_id || rental.customers?.id,
+        vehicle_id: rental.vehicle_id || rental.vehicles?.id,
+        tenant_id: tenant.id,
+        type: 'Charge' as const,
+        entry_date: today,
+        due_date: newEndDate.split('T')[0],
+        ...(createdExtensionId ? { extension_id: createdExtensionId } : {}),
+      };
+
+      if (extensionCost > 0) {
+        const ledgerEntries: any[] = [
+          { ...baseLedger, category: 'Extension Rental', reference: extRef, amount: extensionCost, remaining_amount: extensionCost },
+        ];
+        if (extensionTaxAmount > 0) {
+          ledgerEntries.push({ ...baseLedger, category: 'Extension Tax', reference: `Extension #${extNum}: Tax`, amount: extensionTaxAmount, remaining_amount: extensionTaxAmount });
+        }
+        if (extensionServiceFee > 0) {
+          ledgerEntries.push({ ...baseLedger, category: 'Extension Service Fee', reference: `Extension #${extNum}: Service Fee`, amount: extensionServiceFee, remaining_amount: extensionServiceFee });
+        }
+        const { error: ledgerError } = await supabase.from('ledger_entries').insert(ledgerEntries);
+        if (ledgerError) console.error('Failed to create ledger entries:', ledgerError);
       }
 
       setSubmissionStep('Sending notifications...');
@@ -408,7 +417,7 @@ export function AdminExtendRentalDialog({
             agreementType: 'extension',
             extensionPreviousEndDate: rental.end_date,
             extensionNewEndDate: newEndDate,
-            extensionNumber: (existingExtensionCount || 0) + 1,
+            extensionNumber: extNum,
           }),
         });
         const esignData = await esignResponse.json();
@@ -484,7 +493,7 @@ export function AdminExtendRentalDialog({
               remaining_amount: actualPremium,
               due_date: newEndDate.split('T')[0],
               tenant_id: tenant.id,
-              reference: `Extension #${(existingExtensionCount || 0) + 1}: Insurance`,
+              reference: `Extension #${extNum}: Insurance`,
               ...(createdExtensionId ? { extension_id: createdExtensionId } : {}),
             });
           }
@@ -617,13 +626,24 @@ export function AdminExtendRentalDialog({
 
               {/* New End Date Picker */}
               <div className="space-y-2">
-                <Label htmlFor="new-end-date">New End Date</Label>
-                <Input
-                  id="new-end-date"
-                  type="date"
-                  min={minDate}
-                  value={newEndDate}
-                  onChange={(e) => setNewEndDate(e.target.value)}
+                <Label>New End Date</Label>
+                <RentalDateRangePicker
+                  mode="end-only"
+                  startDate={currentEndDate}
+                  endDate={newEndDate ? new Date(newEndDate + 'T00:00:00') : undefined}
+                  onEndDateChange={(date) => {
+                    setNewEndDate(date ? format(date, 'yyyy-MM-dd') : '');
+                  }}
+                  disableDate={(date) => {
+                    // Disable dates on or before the current end date
+                    const minD = new Date(currentEndDate);
+                    minD.setHours(0, 0, 0, 0);
+                    date.setHours(0, 0, 0, 0);
+                    return date <= minD;
+                  }}
+                  occupancyMap={occupancyMap}
+                  occupancyModifiers={occupancyModifiers}
+                  title="Select New End Date"
                 />
               </div>
 

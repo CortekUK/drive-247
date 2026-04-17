@@ -29,11 +29,11 @@ export interface DateOccupancy {
  * Fetches booked date ranges for a specific vehicle (Pending/Active/Upcoming rentals + blocked dates)
  * Returns typed occupancy data for calendar highlighting.
  */
-export const useVehicleBookedDates = (vehicleId: string | undefined) => {
+export const useVehicleBookedDates = (vehicleId: string | undefined, excludeRentalId?: string) => {
   const { tenant } = useTenant();
 
   const { data: bookedRentals = [], isLoading: rentalsLoading } = useQuery({
-    queryKey: ["vehicle-booked-dates", tenant?.id, vehicleId],
+    queryKey: ["vehicle-booked-dates", tenant?.id, vehicleId, excludeRentalId],
     queryFn: async () => {
       if (!tenant?.id || !vehicleId) return [];
 
@@ -46,7 +46,11 @@ export const useVehicleBookedDates = (vehicleId: string | undefined) => {
         .not("end_date", "is", null);
 
       if (error) throw error;
-      return (data || []) as BookedRental[];
+      let results = (data || []) as BookedRental[];
+      if (excludeRentalId) {
+        results = results.filter((r) => r.id !== excludeRentalId);
+      }
+      return results;
     },
     enabled: !!tenant?.id && !!vehicleId,
   });

@@ -252,6 +252,7 @@ Deno.serve(async (req) => {
       sessionId: session.id,
       paymentId: payment?.id,
       extensionId: extRow.id,
+      sequenceNumber: extRow.sequence_number,
     });
   } catch (error) {
     console.error('Error creating extension checkout:', error);
