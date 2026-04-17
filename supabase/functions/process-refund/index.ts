@@ -378,9 +378,16 @@ serve(async (req) => {
 
       if (ledgerError) {
         console.error("Failed to create ledger entry:", JSON.stringify(ledgerError));
-      } else {
-        console.log("Ledger entry created for refund:", JSON.stringify(ledgerData));
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Failed to record refund ledger entry: ${ledgerError.message}`,
+            refund: refundResult,
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
+      console.log("Ledger entry created for refund:", JSON.stringify(ledgerData));
     }
 
     // Get customer and vehicle details for response
