@@ -323,43 +323,91 @@ serve(async (req) => {
       };
     }
 
-    // Update payment record if exists and refund was successful
-    if (payment && refundResult?.status !== "error") {
-      const currentRefundAmount = payment.refund_amount || 0;
-      const newTotalRefund = currentRefundAmount + refundAmount;
+    // Update ALL payments that applied to this category's charges — not just the
+    // Stripe-backed one used for the Stripe refund call. Manual payments and
+    // Stripe payments both need their status flipped when the charge they paid
+    // for is refunded, otherwise the UI keeps showing "Paid". The refund amount
+    // is distributed across the matching payments in proportion to what each
+    // actually paid toward these charges (payment_applications.amount_applied).
+    if (refundResult?.type !== "error") {
+      let chargeLookup = supabase
+        .from("ledger_entries")
+        .select("id")
+        .eq("rental_id", rentalId)
+        .eq("type", "Charge")
+        .eq("category", category);
+      if (extensionId) chargeLookup = chargeLookup.eq("extension_id", extensionId);
+      const { data: relatedCharges } = await chargeLookup;
 
-      const paymentUpdate: Record<string, any> = {
-        updated_at: new Date().toISOString(),
-        refund_amount: newTotalRefund,
-        refund_reason: payment.refund_reason
-          ? `${payment.refund_reason}; ${category}: ${reason}`
-          : `${category}: ${reason}`,
-      };
+      if (relatedCharges && relatedCharges.length > 0) {
+        const relatedChargeIds = relatedCharges.map(c => c.id);
+        const { data: relatedApps } = await supabase
+          .from("payment_applications")
+          .select("payment_id, amount_applied")
+          .in("charge_entry_id", relatedChargeIds);
 
-      // Update status based on total refunded
-      if (newTotalRefund >= payment.amount) {
-        paymentUpdate.status = "Refunded";
-        paymentUpdate.capture_status = "refunded";
+        // Aggregate how much each payment contributed to these charges
+        const contributed = new Map<string, number>();
+        for (const pa of (relatedApps || [])) {
+          const prev = contributed.get(pa.payment_id) || 0;
+          contributed.set(pa.payment_id, prev + Number(pa.amount_applied || 0));
+        }
+
+        // Allocate the refund amount across payments in most-applied-first order
+        const sorted = Array.from(contributed.entries()).sort((a, b) => b[1] - a[1]);
+        let remainingToAllocate = refundAmount;
+        for (const [pid, contribution] of sorted) {
+          if (remainingToAllocate <= 0.0001) break;
+          const allocateToThisPayment = Math.min(remainingToAllocate, contribution);
+          remainingToAllocate -= allocateToThisPayment;
+
+          const { data: pRec } = await supabase
+            .from("payments")
+            .select("amount, refund_amount, refund_reason, stripe_refund_id")
+            .eq("id", pid)
+            .single();
+          if (!pRec) continue;
+
+          const newTotalRefund = Number(pRec.refund_amount || 0) + allocateToThisPayment;
+          const paymentUpdate: Record<string, any> = {
+            updated_at: new Date().toISOString(),
+            refund_amount: newTotalRefund,
+            refund_processed_at: new Date().toISOString(),
+            refund_reason: pRec.refund_reason
+              ? `${pRec.refund_reason}; ${category}: ${reason}`
+              : `${category}: ${reason}`,
+          };
+
+          // NOTE: do not touch capture_status — its check constraint only
+          // allows requires_capture/captured/cancelled/expired/NULL. Refund
+          // state lives on `status` + `refund_amount` + `refund_processed_at`.
+          if (newTotalRefund + 0.0001 >= Number(pRec.amount)) {
+            paymentUpdate.status = "Refunded";
+          } else {
+            paymentUpdate.status = "Partial Refund";
+          }
+
+          // Only stamp the Stripe refund id on the payment that owned it
+          if (stripeRefundId && payment && pid === payment.id) {
+            paymentUpdate.stripe_refund_id = pRec.stripe_refund_id
+              ? `${pRec.stripe_refund_id},${stripeRefundId}`
+              : stripeRefundId;
+          }
+
+          const { error: paymentUpdateError } = await supabase
+            .from("payments")
+            .update(paymentUpdate)
+            .eq("id", pid);
+
+          if (paymentUpdateError) {
+            console.error("Payment update failed:", pid, paymentUpdateError);
+          } else {
+            console.log("Payment updated:", pid, "allocated:", allocateToThisPayment, "newTotalRefund:", newTotalRefund);
+          }
+        }
       } else {
-        paymentUpdate.status = "Partial Refund";
-        paymentUpdate.capture_status = "partial_refund";
+        console.log("No related charges found for payment-status update");
       }
-
-      if (stripeRefundId) {
-        // Append to existing refund IDs if any
-        paymentUpdate.stripe_refund_id = payment.stripe_refund_id
-          ? `${payment.stripe_refund_id},${stripeRefundId}`
-          : stripeRefundId;
-      }
-
-      paymentUpdate.refund_processed_at = new Date().toISOString();
-
-      await supabase
-        .from("payments")
-        .update(paymentUpdate)
-        .eq("id", payment.id);
-
-      console.log("Payment record updated with refund info");
     }
 
     // Create a ledger entry for the refund (negative charge to reduce balance)
