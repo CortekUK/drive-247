@@ -3012,10 +3012,15 @@ const RentalDetail = () => {
           const extInsurance = group.insurancePolicy;
           const insuranceAmount = extInsurance?.premium_amount ?? 0;
           const insuranceActive = extInsurance?.status === 'active' || extInsurance?.status === 'policy_issued';
-          // Insurance ledger entry (for payment tracking)
-          const insuranceLedgerCharge = (rentalCharges || []).find(c =>
-            (c.category === 'Insurance' && c.reference?.includes(`Extension #${group.extensionNumber}`)) ||
-            c.category === 'Extension Insurance'
+          // Insurance ledger entry (for payment tracking) — MUST be scoped to
+          // THIS extension's charges, not a global find across the rental.
+          // Global find returns the first Extension Insurance charge encountered
+          // (DESC-ordered by due_date), so creating a new extension made older
+          // extensions pick up the newer extension's unpaid remaining_amount
+          // and flip their Bonzah Insurance row to "Not Paid" incorrectly.
+          const insuranceLedgerCharge = group.charges.find(c =>
+            c.category === 'Extension Insurance' ||
+            (c.category === 'Insurance' && c.reference?.includes(`Extension #${group.extensionNumber}`))
           );
 
           // Build rows — 1:1 with original table's applicable categories
