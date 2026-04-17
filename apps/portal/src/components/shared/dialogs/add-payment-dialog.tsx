@@ -249,6 +249,8 @@ export const AddPaymentDialog = ({
       queryClient.invalidateQueries({ queryKey: ["rental-payments"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["rental-payment-breakdown"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["rental-refund-breakdown"], ...invalidateOptions }),
+      queryClient.invalidateQueries({ queryKey: ["rental-extension-totals"], ...invalidateOptions }),
+      queryClient.invalidateQueries({ queryKey: ["rental-insurance-policies"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["rental-invoice"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["ledger-entries"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["payment-applications"], ...invalidateOptions }),
