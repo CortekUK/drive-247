@@ -52,7 +52,21 @@ serve(async (req) => {
       );
     }
 
-    console.log("Processing refund:", { rentalId, refundType, refundAmount, category, reason });
+    // Safeguard: Extension-category refunds MUST be scoped to a specific
+    // rental_extension. Without extensionId we can't identify which extension's
+    // charge/payment to touch, which causes orphaned ledger rows and an
+    // un-updated payment status. A stale client (cached bundle) is the usual
+    // cause — fail loudly so the user knows to refresh.
+    if (category?.startsWith("Extension") && !extensionId) {
+      return new Response(
+        JSON.stringify({
+          error: `Refund for ${category} requires an extensionId. Your page may be running a stale version — please hard-refresh (Cmd+Shift+R) and try again.`,
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log("Processing refund:", { rentalId, refundType, refundAmount, category, reason, extensionId });
 
     // Get tenant ID for queries
     let tenantId = requestTenantId;
