@@ -377,6 +377,7 @@ export const AddPaymentDialog = ({
           cancelUrl: rentalId ? `${portalOrigin}/rentals/${rentalId}?payment=cancelled` : portalOrigin,
           source: 'portal',
           ...(targetCategories && targetCategories.length > 0 ? { targetCategories } : {}),
+          ...(extensionId ? { extensionId } : {}),
         },
       });
 
@@ -426,6 +427,7 @@ export const AddPaymentDialog = ({
           cancelUrl: `https://${tenant?.slug || 'app'}.drive-247.com/portal/payments`,
           source: 'portal',
           ...(targetCategories && targetCategories.length > 0 ? { targetCategories } : {}),
+          ...(extensionId ? { extensionId } : {}),
         },
       });
 

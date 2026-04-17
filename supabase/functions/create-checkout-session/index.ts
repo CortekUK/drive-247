@@ -16,7 +16,7 @@ serve(async (req) => {
   }
 
   try {
-    const { bookingId, rentalId, customerEmail, customerName, customerId, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId, successUrl, cancelUrl, targetCategories, source } = await req.json()
+    const { bookingId, rentalId, customerEmail, customerName, customerId, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId, successUrl, cancelUrl, targetCategories, extensionId, source } = await req.json()
 
     // Get tenant slug from header or body
     const slug = tenantSlug || req.headers.get('x-tenant-slug')
@@ -195,6 +195,7 @@ serve(async (req) => {
         ...(bonzahPolicyId ? { bonzah_policy_id: bonzahPolicyId } : {}),
         ...(source ? { source } : {}),
         ...(targetCategories && targetCategories.length > 0 ? { target_categories: JSON.stringify(targetCategories) } : {}),
+        ...(extensionId ? { extension_id: extensionId } : {}),
       },
     }
 
@@ -219,6 +220,9 @@ serve(async (req) => {
       // Persist targetCategories on the payment record for reliable retrieval by webhook/fallback
       if (targetCategories && targetCategories.length > 0) {
         updateData.target_categories = targetCategories
+      }
+      if (extensionId) {
+        updateData.extension_id = extensionId
       }
       const { data: updatedPayment, error: updateError } = await supabaseClient
         .from('payments')
@@ -267,6 +271,9 @@ serve(async (req) => {
           }
           if (targetCategories && targetCategories.length > 0) {
             insertData.target_categories = targetCategories
+          }
+          if (extensionId) {
+            insertData.extension_id = extensionId
           }
           const { data: createdPayment, error: createError } = await supabaseClient
             .from('payments')
