@@ -1303,6 +1303,7 @@ const RentalDetail = () => {
         const byRef = (chargesByRef[seq] || []).filter(c => !byId.some(b => b.id === c.id));
         const charges = [...byId, ...byRef];
         return {
+          extensionId: ext.id as string,
           extensionNumber: seq,
           charges,
           totalAmount: charges.reduce((sum, c) => sum + c.amount, 0),
@@ -3203,8 +3204,10 @@ const RentalDetail = () => {
                             onClick={() => {
                               setExtensionPaymentAmount(remaining_amount > 0 ? remaining_amount : amount);
                               setExtensionPaymentCategories([category]);
-                              // Scope to THIS extension so apply-payment filters ledger rows by extension_id
-                              setExtensionPaymentExtensionId((thisCharge as any)?.extension_id || undefined);
+                              // Authoritative extensionId from rental_extension_totals.id —
+                              // don't trust (thisCharge.extension_id) because legacy rows
+                              // may have it null even when they belong to this extension.
+                              setExtensionPaymentExtensionId(group.extensionId || (thisCharge as any)?.extension_id || undefined);
                               setShowExtensionPayment(true);
                             }}
                           >
@@ -3216,10 +3219,10 @@ const RentalDetail = () => {
                             onClick={() => {
                               setRefundCategory(category);
                               setRefundTotalAmount(amount);
-                              // Scope refund to THIS extension's charge so process-refund
-                              // narrows validation, payment lookup, and ledger entry.
-                              const extId = (thisCharge as any)?.extension_id as string | undefined;
-                              setRefundExtensionId(extId);
+                              // Authoritative extensionId from rental_extension_totals.id.
+                              // Falls back to the charge's stamped extension_id only if the
+                              // group lookup is missing (legacy data with no totals row).
+                              setRefundExtensionId(group.extensionId || (thisCharge as any)?.extension_id || undefined);
                               setRefundPaidAmount(Math.max(0, amount - refunded));
                               setShowRefundDialog(true);
                             }}
