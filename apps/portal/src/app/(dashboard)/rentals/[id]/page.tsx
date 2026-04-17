@@ -272,6 +272,7 @@ const RentalDetail = () => {
   const [showExtensionPayment, setShowExtensionPayment] = useState(false);
   const [extensionPaymentAmount, setExtensionPaymentAmount] = useState<number | undefined>();
   const [extensionPaymentCategories, setExtensionPaymentCategories] = useState<string[]>([]);
+  const [extensionPaymentExtensionId, setExtensionPaymentExtensionId] = useState<string | undefined>();
 
   // Review dialog state
   const [showReviewDialog, setShowReviewDialog] = useState(false);
@@ -3202,6 +3203,8 @@ const RentalDetail = () => {
                             onClick={() => {
                               setExtensionPaymentAmount(remaining_amount > 0 ? remaining_amount : amount);
                               setExtensionPaymentCategories([category]);
+                              // Scope to THIS extension so apply-payment filters ledger rows by extension_id
+                              setExtensionPaymentExtensionId((thisCharge as any)?.extension_id || undefined);
                               setShowExtensionPayment(true);
                             }}
                           >
@@ -4873,13 +4876,14 @@ const RentalDetail = () => {
           open={showExtensionPayment}
           onOpenChange={(open) => {
             setShowExtensionPayment(open);
-            if (!open) setExtensionPaymentCategories([]);
+            if (!open) { setExtensionPaymentCategories([]); setExtensionPaymentExtensionId(undefined); }
           }}
           customer_id={rental.customers?.id}
           vehicle_id={rental.vehicles?.id}
           rental_id={rental.id}
           defaultAmount={extensionPaymentAmount}
           targetCategories={extensionPaymentCategories.length > 0 ? extensionPaymentCategories : undefined}
+          extensionId={extensionPaymentExtensionId}
         />
       )}
 
