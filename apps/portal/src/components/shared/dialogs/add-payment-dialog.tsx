@@ -52,6 +52,7 @@ interface AddPaymentDialogProps {
   defaultAmount?: number;
   insuranceChargeMode?: boolean;
   targetCategories?: string[];
+  extensionId?: string;
   onPaymentSuccess?: () => void;
   breakdownItems?: BreakdownItem[];
 }
@@ -74,6 +75,7 @@ export const AddPaymentDialog = ({
   defaultAmount,
   insuranceChargeMode,
   targetCategories,
+  extensionId,
   onPaymentSuccess,
   breakdownItems
 }: AddPaymentDialogProps) => {
@@ -310,6 +312,7 @@ export const AddPaymentDialog = ({
           tenant_id: tenant?.id,
           verification_status: 'approved',
           ...(targetCategories && targetCategories.length > 0 ? { target_categories: targetCategories } : {}),
+          ...(extensionId ? { extension_id: extensionId } : {}),
         })
         .select()
         .single();
@@ -319,6 +322,9 @@ export const AddPaymentDialog = ({
       const applyBody: any = { paymentId: payment.id };
       if (targetCategories && targetCategories.length > 0) {
         applyBody.targetCategories = targetCategories;
+      }
+      if (extensionId) {
+        applyBody.extensionId = extensionId;
       }
       const { data: applyResult, error: applyError } = await supabase.functions.invoke('apply-payment', { body: applyBody });
 

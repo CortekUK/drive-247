@@ -413,6 +413,15 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           console.log(`Filtering to rental ${payment.rental_id}`);
         }
 
+        // EXTENSION ISOLATION (Phase 6): if the payment is stamped to a
+        // specific rental_extension, restrict allocation to charges tagged
+        // with that extension_id so the payment lands on the right
+        // extension instead of the oldest unpaid one in the same category.
+        if (payment.extension_id && category.startsWith('Extension')) {
+          query = query.eq('extension_id', payment.extension_id);
+          console.log(`Filtering to extension ${payment.extension_id}`);
+        }
+
         let { data: outstandingCharges, error: chargesError } = await query
           .order('due_date', { ascending: true })
           .order('entry_date', { ascending: true })

@@ -282,6 +282,7 @@ const RentalDetail = () => {
   const [insurancePaymentMode, setInsurancePaymentMode] = useState(false);
   const [insurancePaymentAmount, setInsurancePaymentAmount] = useState<number | undefined>();
   const [insurancePaymentCategories, setInsurancePaymentCategories] = useState<string[]>(['Insurance']);
+  const [insurancePaymentExtensionId, setInsurancePaymentExtensionId] = useState<string | undefined>();
 
   // Targeted payment selection state
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
@@ -4905,6 +4906,7 @@ const RentalDetail = () => {
           onPurchaseComplete={(premium) => {
             setInsurancePaymentAmount(premium);
             setInsurancePaymentCategories(buyInsuranceMode === 'extension' ? ['Extension Insurance'] : ['Insurance']);
+            setInsurancePaymentExtensionId(buyInsuranceMode === 'extension' ? (buyInsuranceExtensionId || undefined) : undefined);
             setInsurancePaymentMode(true);
           }}
         />
@@ -4920,6 +4922,7 @@ const RentalDetail = () => {
           rental_id={rental.id}
           defaultAmount={insurancePaymentAmount}
           targetCategories={insurancePaymentCategories}
+          extensionId={insurancePaymentExtensionId}
           insuranceChargeMode
         />
       )}
