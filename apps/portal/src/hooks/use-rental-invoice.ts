@@ -136,10 +136,11 @@ export const useRentalRefundBreakdown = (rentalId: string | undefined) => {
 
       console.log("[REFUND-BREAKDOWN] Fetching refunds for rental:", rentalId, "tenant:", tenant?.id);
 
-      // Get all refund entries for this rental — include reference to scope per-extension
+      // Get all refund entries for this rental — include extension_id for
+      // deterministic per-extension matching, reference/due_date as fallbacks.
       const { data: refunds, error: refundsError } = await supabase
         .from("ledger_entries")
-        .select("id, category, amount, tenant_id, type, reference, due_date")
+        .select("id, category, amount, tenant_id, type, reference, due_date, extension_id")
         .eq("rental_id", rentalId)
         .eq("type", "Refund");
 
@@ -162,36 +163,49 @@ export const useRentalRefundBreakdown = (rentalId: string | undefined) => {
         categoryRefunds[category] += Math.abs(refund.amount);
       });
 
-      // For extension refunds, try to find which specific charge was refunded
-      // by checking payment_applications linked to refund payments
+      // For extension refunds, map each refund back to its specific charge.
+      // Primary match: (extension_id, category) — deterministic and correct even
+      // when multiple extensions share the same amount. Fallback: closest amount
+      // for legacy refunds whose extension_id is null.
       if (refunds && refunds.length > 0) {
         const extensionRefunds = refunds.filter(r => r.category?.startsWith('Extension'));
         if (extensionRefunds.length > 0) {
-          // Get all charge entries for this rental to match refunds to specific charges
           const { data: charges } = await supabase
             .from("ledger_entries")
-            .select("id, category, reference, due_date, amount")
+            .select("id, category, reference, due_date, amount, extension_id")
             .eq("rental_id", rentalId)
             .eq("type", "Charge")
             .in("category", [...new Set(extensionRefunds.map(r => r.category!))]);
 
-          // Match each refund to the most likely charge by category + closest amount
           extensionRefunds.forEach(refund => {
             const matchingCharges = charges?.filter(c => c.category === refund.category) || [];
-            if (matchingCharges.length > 0) {
-              // If only one charge with this category, assign refund to it
-              if (matchingCharges.length === 1) {
-                const chargeId = matchingCharges[0].id;
-                chargeRefunds[chargeId] = (chargeRefunds[chargeId] || 0) + Math.abs(refund.amount);
-              } else {
-                // Multiple charges — match by closest amount
-                const refundAmt = Math.abs(refund.amount);
-                const best = matchingCharges.reduce((prev, curr) =>
-                  Math.abs(curr.amount - refundAmt) < Math.abs(prev.amount - refundAmt) ? curr : prev
-                );
-                chargeRefunds[best.id] = (chargeRefunds[best.id] || 0) + Math.abs(refund.amount);
+            if (matchingCharges.length === 0) return;
+
+            // Primary: same extension_id + same category
+            if ((refund as any).extension_id) {
+              const byExt = matchingCharges.find(c => (c as any).extension_id === (refund as any).extension_id);
+              if (byExt) {
+                chargeRefunds[byExt.id] = (chargeRefunds[byExt.id] || 0) + Math.abs(refund.amount);
+                return;
               }
             }
+
+            // Fallback: single candidate
+            if (matchingCharges.length === 1) {
+              const chargeId = matchingCharges[0].id;
+              chargeRefunds[chargeId] = (chargeRefunds[chargeId] || 0) + Math.abs(refund.amount);
+              return;
+            }
+
+            // Final fallback: closest amount among charges that haven't already
+            // been fully attributed (legacy data with null extension_id).
+            const refundAmt = Math.abs(refund.amount);
+            const unclaimed = matchingCharges.filter(c => (chargeRefunds[c.id] || 0) < (c.amount || 0));
+            const pool = unclaimed.length > 0 ? unclaimed : matchingCharges;
+            const best = pool.reduce((prev, curr) =>
+              Math.abs(curr.amount - refundAmt) < Math.abs(prev.amount - refundAmt) ? curr : prev
+            );
+            chargeRefunds[best.id] = (chargeRefunds[best.id] || 0) + refundAmt;
           });
         }
       }
