@@ -3048,7 +3048,11 @@ const RentalDetail = () => {
             {
               label: extInsurance ? 'Bonzah Insurance' : 'Insurance',
               category: 'Extension Insurance',
-              amount: insuranceAmount,
+              // Ledger charge is source of truth for what's owed — the policy
+              // record can disagree if a top-up or duplicate policy was added
+              // and the charge got summed. Falling back to the policy premium
+              // only when no ledger charge exists yet (preview state).
+              amount: insuranceLedgerCharge ? Number(insuranceLedgerCharge.amount) : insuranceAmount,
               remaining_amount: insuranceLedgerCharge ? Number(insuranceLedgerCharge.remaining_amount) : insuranceAmount,
               detail: extInsurance
                 ? `${extInsurance.coverage_types ? Object.entries(extInsurance.coverage_types).filter(([, v]) => v).map(([k]) => k.toUpperCase()).join(', ') : 'Bonzah Insurance'}`
