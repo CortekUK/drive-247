@@ -182,32 +182,40 @@ serve(async (req) => {
       // pull in a Stripe payment from an unrelated extension (which would then
       // fail the Stripe refund call).
       if (category.startsWith('Extension')) {
-        let extChargesQuery = supabase
-          .from("ledger_entries")
-          .select("id")
-          .eq("rental_id", rentalId)
-          .eq("type", "Charge")
-          .eq("category", category);
-        if (extensionId) extChargesQuery = extChargesQuery.eq("extension_id", extensionId);
-        const { data: extCharges } = await extChargesQuery;
+        // Safety: without an explicit extensionId we refuse to grab a Stripe
+        // payment for this category on the rental — it would almost certainly
+        // be from a different extension and the Stripe refund call would fail.
+        // Manual refund (ledger-only) is the safe fallback in that case.
+        if (!extensionId) {
+          console.log(`Extension refund without extensionId — skipping Stripe payment lookup, manual refund only`);
+        } else {
+          const { data: extCharges } = await supabase
+            .from("ledger_entries")
+            .select("id")
+            .eq("rental_id", rentalId)
+            .eq("type", "Charge")
+            .eq("category", category)
+            .eq("extension_id", extensionId);
 
-        if (extCharges && extCharges.length > 0) {
-          const chargeIds = extCharges.map(c => c.id);
-          const { data: apps } = await supabase
-            .from("payment_applications")
-            .select("payment_id")
-            .in("charge_entry_id", chargeIds);
+          if (extCharges && extCharges.length > 0) {
+            const chargeIds = extCharges.map(c => c.id);
+            const { data: apps } = await supabase
+              .from("payment_applications")
+              .select("payment_id")
+              .in("charge_entry_id", chargeIds);
 
-          if (apps && apps.length > 0) {
-            const { data: paymentData } = await supabase
-              .from("payments")
-              .select("*")
-              .in("id", apps.map(a => a.payment_id))
-              .not("stripe_payment_intent_id", "is", null)
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            payment = paymentData;
+            if (apps && apps.length > 0) {
+              const { data: paymentData } = await supabase
+                .from("payments")
+                .select("*")
+                .in("id", apps.map(a => a.payment_id))
+                .eq("extension_id", extensionId)
+                .not("stripe_payment_intent_id", "is", null)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              payment = paymentData;
+            }
           }
         }
         console.log(`Extension refund: found ${payment ? 'Stripe' : 'no Stripe'} payment for ${category}`);
