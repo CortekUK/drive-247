@@ -121,24 +121,37 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
       );
     return Object.entries(groups)
       .sort(([a], [b]) => parseInt(a) - parseInt(b))
-      .map(([num, charges], idx) => ({
-        extensionNumber: parseInt(num),
-        charges,
-        totalAmount: charges.reduce((s, c) => s + c.amount, 0),
-        totalRemaining: charges.reduce((s, c) => s + c.remaining_amount, 0),
-        rentalCharge: charges.find(
-          (c) => c.category === 'Extension Rental' || c.category === 'Extension'
-        ),
-        insurancePolicy: extPolicies[idx] || null,
-      }));
+      .map(([num, charges], idx) => {
+        // Any charge in the group whose extension_id is stamped is authoritative.
+        // All charges that share a group should resolve to the same extension_id.
+        const stampedCharge = charges.find((c) => c.extension_id);
+        return {
+          extensionNumber: parseInt(num),
+          extensionId: stampedCharge?.extension_id ?? null,
+          charges,
+          totalAmount: charges.reduce((s, c) => s + c.amount, 0),
+          totalRemaining: charges.reduce((s, c) => s + c.remaining_amount, 0),
+          rentalCharge: charges.find(
+            (c) => c.category === 'Extension Rental' || c.category === 'Extension'
+          ),
+          insurancePolicy: extPolicies[idx] || null,
+        };
+      });
   }, [rentalCharges, insurancePolicies]);
 
   const originalBonzah = (insurancePolicies || []).find(
     (p: any) => p.policy_type !== 'extension'
   );
 
-  // Invoke checkout for a set of categories and a total
-  const payCategories = async (totalAmount: number, targetCategories: string[]) => {
+  // Invoke checkout for a set of categories and a total.
+  // `extensionId` scopes the payment to a specific rental_extension so the
+  // server can apply it to THAT extension's charges instead of FIFO-draining
+  // the customer's entire outstanding balance.
+  const payCategories = async (
+    totalAmount: number,
+    targetCategories: string[],
+    extensionId?: string | null
+  ) => {
     if (!tenant?.id || totalAmount <= 0) return;
     setIsProcessing(true);
     try {
@@ -150,6 +163,7 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
           customerEmail,
           source: 'booking',
           targetCategories,
+          ...(extensionId ? { extensionId } : {}),
           successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rental.id}&type=invoice`,
           cancelUrl: `${window.location.origin}/portal/bookings/${rental.id}`,
         },
@@ -283,7 +297,8 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
   const renderTable = (
     rows: Row[],
     selected: Set<string>,
-    setSelected: (s: Set<string>) => void
+    setSelected: (s: Set<string>) => void,
+    extensionId?: string | null
   ) => {
     const selectable = rows
       .filter((r) => r.amount > 0 && (categoryRemainingAmounts[r.category] ?? 0) > 0)
@@ -427,7 +442,7 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
                       <button
                         className="text-xs font-medium text-blue-500 hover:text-blue-400 hover:underline disabled:opacity-50"
                         disabled={isProcessing}
-                        onClick={() => payCategories(remaining, [category])}
+                        onClick={() => payCategories(remaining, [category], extensionId)}
                       >
                         Pay
                       </button>
@@ -453,7 +468,11 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
               size="sm"
               disabled={isProcessing}
               onClick={() =>
-                payCategories(selectedTotal, Array.from(selected).filter((c) => selectable.includes(c)))
+                payCategories(
+                  selectedTotal,
+                  Array.from(selected).filter((c) => selectable.includes(c)),
+                  extensionId
+                )
               }
             >
               {isProcessing ? (
@@ -536,7 +555,7 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
     const setSelected = (s: Set<string>) =>
       setSelectedExt((prev) => ({ ...prev, [group.extensionNumber]: s }));
 
-    return renderTable(extRows, selected, setSelected);
+    return renderTable(extRows, selected, setSelected, group.extensionId);
   };
 
   const hasExtensions = extensionGroups.length > 0;
