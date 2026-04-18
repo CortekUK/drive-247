@@ -186,6 +186,17 @@ async function createSingleQuote(
     throw new Error(`Failed to create Bonzah quote for ${chunk.start}-${chunk.end}: ${response.txt || 'Unknown error'}`)
   }
 
+  // With finalize=1, Bonzah must return a payment_id too. If we only got a
+  // quote_id back, Bonzah accepted the request but refused to finalize —
+  // usually an underwriting reject (invalid zip, driver eligibility, etc).
+  // Surface the raw message so the caller sees the real reason instead of
+  // letting confirm-payment half-fail on an empty payment_id later.
+  if (!response.data?.payment_id) {
+    throw new Error(
+      `Bonzah did not finalize the quote for ${chunk.start}-${chunk.end}: ${response.txt || response.data?.msg || 'no payment_id returned'}`
+    )
+  }
+
   const pdfIds: Record<string, string> = {}
   if (response.data.cdw_pdf_id) pdfIds.cdw = response.data.cdw_pdf_id
   if (response.data.rcli_pdf_id) pdfIds.rcli = response.data.rcli_pdf_id
