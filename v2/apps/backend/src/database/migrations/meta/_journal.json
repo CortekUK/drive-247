@@ -15,6 +15,48 @@
       "when": 1776330710946,
       "tag": "0001_steep_edwin_jarvis",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776427282724,
+      "tag": "0002_soft_supernaut",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1776451669067,
+      "tag": "0003_bizarre_snowbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776453778945,
+      "tag": "0004_boring_the_fallen",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1776460242915,
+      "tag": "0005_icy_annihilus",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1776547464229,
+      "tag": "0006_gifted_vapor",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1776559278205,
+      "tag": "0007_romantic_unicorn",
+      "breakpoints": true
     }
   ]
 }

@@ -22,7 +22,16 @@ import { cn } from '@drive247/ui';
 
 const navItems = [
   { href: '/', label: 'Dashboard' },
+  { href: '/vehicles', label: 'Vehicles' },
+  { href: '/customers', label: 'Customers' },
+  { href: '/rentals', label: 'Rentals' },
+  { href: '/invoices', label: 'Invoices' },
+  { href: '/verifications', label: 'ID Verifications' },
   { href: '/users', label: 'Users' },
+  { href: '/settings/tax', label: 'Tax Settings' },
+  { href: '/settings/bonzah', label: 'Bonzah' },
+  { href: '/settings/id-verification', label: 'ID Verification Settings' },
+  { href: '/settings/blocked-identities', label: 'Blocked Identities' },
   { href: '/change-password', label: 'Change Password' },
 ];
 

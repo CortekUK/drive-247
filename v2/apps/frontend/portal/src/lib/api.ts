@@ -1,4 +1,16 @@
-import { createApiClient, createAuthApi, createUsersApi } from '@drive247/api-client';
+import {
+  createApiClient,
+  createAuthApi,
+  createUsersApi,
+  createVehiclesApi,
+  createCustomersApi,
+  createRentalsApi,
+  createInvoicesApi,
+  createPaymentsApi,
+  createBonzahApi,
+  createRemindersApi,
+  createIdVerificationApi,
+} from '@drive247/api-client';
 import { usePortalAuthStore } from '@/stores/portal-auth-store';
 
 function getTenantSlug(): string | null {
@@ -28,4 +40,12 @@ const api = createApiClient({
 
 export const authApi = createAuthApi(api);
 export const usersApi = createUsersApi(api);
+export const vehiclesApi = createVehiclesApi(api);
+export const customersApi = createCustomersApi(api);
+export const rentalsApi = createRentalsApi(api);
+export const invoicesApi = createInvoicesApi(api);
+export const paymentsApi = createPaymentsApi(api);
+export const bonzahApi = createBonzahApi(api);
+export const remindersApi = createRemindersApi(api);
+export const idVerificationApi = createIdVerificationApi(api);
 export default api;

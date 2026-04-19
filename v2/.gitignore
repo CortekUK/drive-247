@@ -6,3 +6,7 @@ dist
 .env.*.local
 *.tsbuildinfo
 cookies.txt
+
+# macOS junk metadata (created when zips are extracted on macOS)
+__MACOSX/
+.DS_Store

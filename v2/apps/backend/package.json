@@ -15,6 +15,9 @@
     "db:seed": "tsx src/database/seeds/index.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.1032.0",
+    "@aws-sdk/client-s3": "^3.1032.0",
+    "@aws-sdk/s3-request-presigner": "^3.1032.0",
     "@drive247/database": "workspace:*",
     "@drive247/shared-types": "workspace:*",
     "@drive247/validators": "workspace:*",
@@ -44,6 +47,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
     "@types/node": "^20.19.37",
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.20.0",

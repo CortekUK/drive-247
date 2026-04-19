@@ -21,6 +21,18 @@ export type UpdateTenantPayload = {
   status?: 'active' | 'inactive' | 'suspended';
 };
 
+export type UpdateTenantTaxPayload = {
+  taxRate?: number;
+  taxLabel?: string;
+  taxInclusive?: boolean;
+};
+
+export type TenantTaxSettings = {
+  taxRate: string;
+  taxLabel: string;
+  taxInclusive: boolean;
+};
+
 // --- Response shapes ---
 
 export type TenantListItem = {

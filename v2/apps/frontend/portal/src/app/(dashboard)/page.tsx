@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { usePortalAuthStore } from '@/stores/portal-auth-store';
 import {
   Card,
@@ -9,13 +10,29 @@ import {
   Badge,
   Separator,
 } from '@drive247/ui';
+import { bonzahApi } from '@/lib/api';
+import { DashboardBalanceWidget } from '@/components/bonzah/dashboard-balance-widget';
 
 export default function DashboardPage() {
   const { user } = usePortalAuthStore();
+  const [bonzahConnected, setBonzahConnected] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: res } = await bonzahApi.getConnection();
+        if (res.success) setBonzahConnected(res.data.connected);
+      } catch {
+        // widget stays hidden on error
+      }
+    })();
+  }, []);
 
   return (
     <div className="max-w-3xl space-y-6">
       <h2 className="text-[30px] font-medium text-[#080812]">Dashboard</h2>
+
+      <DashboardBalanceWidget connected={bonzahConnected} />
 
       <Card>
         <CardHeader>
