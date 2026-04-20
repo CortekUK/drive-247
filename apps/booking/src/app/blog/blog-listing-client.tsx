@@ -72,32 +72,32 @@ export default function BlogListingClient() {
       />
 
       {/* Hero */}
-      <section className="pt-32 pb-20">
+      <section className="pt-20 sm:pt-24 md:pt-32 pb-10 sm:pb-14 md:pb-20">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center animate-fade-in">
             <Link href="/">
-              <Button variant="ghost" size="sm" className="mb-8 text-muted-foreground hover:text-foreground">
+              <Button variant="ghost" size="sm" className="mb-4 sm:mb-6 md:mb-8 text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Home
               </Button>
             </Link>
 
-            <div className="flex justify-center mb-6">
-              <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
+            <div className="flex justify-center mb-4 sm:mb-6">
+              <div className="h-[1px] w-20 sm:w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
             </div>
 
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-bold text-gradient-metal mb-6">
+            <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-display font-bold text-gradient-metal mb-3 sm:mb-4 md:mb-6 break-words">
               {heroContent.title || "Blog"}
             </h1>
 
             {heroContent.subtitle && (
-              <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+              <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
                 {heroContent.subtitle}
               </p>
             )}
 
-            <div className="flex justify-center mt-6">
-              <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
+            <div className="flex justify-center mt-4 sm:mt-6">
+              <div className="h-[1px] w-20 sm:w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
             </div>
           </div>
         </div>

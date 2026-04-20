@@ -188,26 +188,26 @@ const About = () => {
         <Navigation />
 
         {/* Hero Section */}
-        <section className="pt-32 pb-24">
+        <section className="pt-20 sm:pt-24 md:pt-32 pb-12 sm:pb-16 md:pb-24">
           <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto text-center mb-20 animate-fade-in">
-              <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-bold mb-6 text-gradient-metal leading-tight pb-2">
+            <div className="max-w-4xl mx-auto text-center mb-10 sm:mb-14 md:mb-20 animate-fade-in">
+              <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-display font-bold mb-4 sm:mb-6 text-gradient-metal leading-tight pb-2">
                 {content.hero?.title ? replaceCompanyName(content.hero.title) : `About ${appName}`}
               </h1>
-              <div className="flex items-center justify-center mb-8">
-                <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
+              <div className="flex items-center justify-center mb-4 sm:mb-6 md:mb-8">
+                <div className="h-[1px] w-20 sm:w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
               </div>
-              <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+              <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
                 {content.hero?.subtitle || "Setting the standard for premium luxury vehicle rentals across the United States."}
               </p>
             </div>
 
             {/* Excellence in Every Rental */}
-            <Card className="p-8 md:p-12 shadow-metal bg-card/50 backdrop-blur mb-12 animate-fade-in animation-delay-200">
-              <h2 className="text-3xl md:text-4xl font-display font-bold mb-8 text-gradient-silver">
+            <Card className="p-5 sm:p-8 md:p-12 shadow-metal bg-card/50 backdrop-blur mb-8 sm:mb-10 md:mb-12 animate-fade-in animation-delay-200">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold mb-4 sm:mb-6 md:mb-8 text-gradient-silver">
                 {content.about_story?.title || "Excellence in Every Rental"}
               </h2>
-              <div className="space-y-6 text-base md:text-lg text-muted-foreground leading-relaxed">
+              <div className="space-y-4 sm:space-y-6 text-sm sm:text-base md:text-lg text-muted-foreground leading-relaxed">
                 <p>Founded in {content.about_story?.founded_year || "2010"}</p>
                 {content.about_story?.content ? (
                   <div
@@ -235,7 +235,7 @@ const About = () => {
             </Card>
 
             {/* Stats Section */}
-            <div ref={statsRef} className="grid md:grid-cols-4 gap-8 mb-12 animate-fade-in animation-delay-400">
+            <div ref={statsRef} className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 md:gap-8 mb-8 sm:mb-10 md:mb-12 animate-fade-in animation-delay-400">
               {(content.stats?.items && content.stats.items.length > 0 ? content.stats.items : [
                 { icon: "clock", label: "YEARS EXPERIENCE", value: "0", suffix: "+", use_dynamic: false, dynamic_source: "years_experience" },
                 { icon: "car", label: "RENTALS COMPLETED", value: "0", suffix: "+", use_dynamic: false, dynamic_source: "total_rentals" },
@@ -262,16 +262,16 @@ const About = () => {
                 };
 
                 return (
-                  <Card key={index} className="p-8 shadow-metal bg-gradient-to-br from-card via-card to-secondary/20 backdrop-blur text-center group hover:shadow-glow transition-all duration-300">
-                    <div className="flex justify-center mb-4">
-                      <div className="p-4 rounded-full bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors">
-                        <IconComponent className="w-8 h-8 text-accent" />
+                  <Card key={index} className="p-4 sm:p-6 md:p-8 shadow-metal bg-gradient-to-br from-card via-card to-secondary/20 backdrop-blur text-center group hover:shadow-glow transition-all duration-300">
+                    <div className="flex justify-center mb-2 sm:mb-3 md:mb-4">
+                      <div className="p-2.5 sm:p-3 md:p-4 rounded-full bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors">
+                        <IconComponent className="w-5 h-5 sm:w-7 sm:h-7 md:w-8 md:h-8 text-accent" />
                       </div>
                     </div>
-                    <div className="text-5xl font-display font-bold bg-gradient-to-br from-accent to-accent/70 bg-clip-text text-transparent mb-3 pb-1">
+                    <div className="text-3xl sm:text-4xl md:text-5xl font-display font-bold bg-gradient-to-br from-accent to-accent/70 bg-clip-text text-transparent mb-1.5 sm:mb-2 md:mb-3 pb-1">
                       {getDynamicValue()}{item.suffix || ""}
                     </div>
-                    <div className="text-sm uppercase tracking-wider text-muted-foreground">
+                    <div className="text-[10px] sm:text-xs md:text-sm uppercase tracking-wider text-muted-foreground leading-tight">
                       {item.label}
                     </div>
                   </Card>
@@ -280,15 +280,15 @@ const About = () => {
             </div>
 
             {/* Why Choose Us */}
-            <Card className="p-8 md:p-12 shadow-metal bg-card/50 backdrop-blur animate-fade-in animation-delay-600">
-              <div className="mb-8">
-                <h2 className="text-3xl md:text-4xl font-display font-bold text-gradient-silver mb-4">
+            <Card className="p-5 sm:p-8 md:p-12 shadow-metal bg-card/50 backdrop-blur animate-fade-in animation-delay-600">
+              <div className="mb-6 sm:mb-8">
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold text-gradient-silver mb-3 sm:mb-4">
                   {content.why_choose_us?.title || "Why Choose Us"}
                 </h2>
-                <div className="h-[1px] w-24 bg-gradient-to-r from-accent to-transparent" />
+                <div className="h-[1px] w-20 sm:w-24 bg-gradient-to-r from-accent to-transparent" />
               </div>
 
-              <div className="space-y-8">
+              <div className="space-y-5 sm:space-y-8">
                 {(content.why_choose_us?.items && content.why_choose_us.items.length > 0 ? content.why_choose_us.items : [
                   { icon: "lock", title: "Privacy & Discretion", description: "Your rental details remain completely private. We maintain strict confidentiality for all our distinguished clients." },
                   { icon: "crown", title: "Premium Fleet", description: "From the Rolls-Royce Phantom to the Range Rover Autobiography, every vehicle represents automotive excellence and comfort." },
@@ -298,20 +298,20 @@ const About = () => {
                   const IconComponent = getIcon(item.icon);
                   return (
                     <div key={index}>
-                      <div className="flex items-start gap-4">
-                        <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 flex-shrink-0">
-                          <IconComponent className="w-6 h-6 text-accent" />
+                      <div className="flex items-start gap-3 sm:gap-4">
+                        <div className="p-2.5 sm:p-3 rounded-lg bg-accent/10 border border-accent/20 flex-shrink-0">
+                          <IconComponent className="w-5 h-5 sm:w-6 sm:h-6 text-accent" />
                         </div>
-                        <div>
-                          <h4 className="text-xl font-display font-semibold text-foreground mb-3">
+                        <div className="min-w-0">
+                          <h4 className="text-base sm:text-xl font-display font-semibold text-foreground mb-1.5 sm:mb-3">
                             {item.title}
                           </h4>
-                          <p className="text-muted-foreground leading-relaxed">
+                          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
                             {item.description}
                           </p>
                         </div>
                       </div>
-                      {index < arr.length - 1 && <Separator className="bg-accent/20 mt-8" />}
+                      {index < arr.length - 1 && <Separator className="bg-accent/20 mt-5 sm:mt-8" />}
                     </div>
                   );
                 })}

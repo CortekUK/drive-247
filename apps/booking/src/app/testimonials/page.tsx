@@ -89,16 +89,16 @@ const Testimonials = () => {
       <Navigation />
       
       {/* Hero Section */}
-      <section className="pt-32 pb-24">
+      <section className="pt-20 sm:pt-24 md:pt-32 pb-12 sm:pb-16 md:pb-24">
         <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto text-center mb-20 animate-fade-in">
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-bold mb-6 text-gradient-metal leading-tight">
+          <div className="max-w-4xl mx-auto text-center mb-10 sm:mb-14 md:mb-20 animate-fade-in">
+            <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-display font-bold mb-4 sm:mb-6 text-gradient-metal leading-tight break-words">
               {content.hero?.title || "Customer Reviews"}
             </h1>
-            <div className="flex items-center justify-center mb-8">
-              <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
+            <div className="flex items-center justify-center mb-4 sm:mb-6 md:mb-8">
+              <div className="h-[1px] w-20 sm:w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
             </div>
-            <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+            <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
               {content.hero?.subtitle || "What our customers say about their vehicle rental experience."}
             </p>
           </div>
@@ -107,19 +107,19 @@ const Testimonials = () => {
           <div className="max-w-5xl mx-auto">
             {testimonials.length > 0 ? (
               <>
-                <div className="space-y-8 animate-fade-in animation-delay-200">
+                <div className="space-y-4 sm:space-y-6 md:space-y-8 animate-fade-in animation-delay-200">
                   {testimonials.map((testimonial, index) => (
                     <Card
                       key={testimonial.id}
-                      className="group p-8 md:p-10 shadow-metal bg-gradient-to-br from-card via-card to-secondary/20 backdrop-blur transition-all duration-500 hover:-translate-y-2 border-accent/10 hover:shadow-glow"
+                      className="group p-5 sm:p-8 md:p-10 shadow-metal bg-gradient-to-br from-card via-card to-secondary/20 backdrop-blur transition-all duration-500 hover:-translate-y-2 border-accent/10 hover:shadow-glow"
                       style={{ animationDelay: `${index * 100}ms` }}
                     >
                       {/* Star Rating */}
-                      <div className="flex justify-center mb-6 gap-1">
+                      <div className="flex justify-center mb-3 sm:mb-5 md:mb-6 gap-1">
                         {[...Array(5)].map((_, i) => (
                           <Star
                             key={i}
-                            className={`w-6 h-6 transition-all duration-300 ${
+                            className={`w-5 h-5 sm:w-6 sm:h-6 transition-all duration-300 ${
                               i < testimonial.stars
                                 ? "fill-primary text-primary drop-shadow-glow"
                                 : "text-muted-foreground/30"
@@ -129,30 +129,30 @@ const Testimonials = () => {
                       </div>
 
                       {/* Quote Icon */}
-                      <div className="flex justify-center mb-6">
-                        <MessageSquareQuote className="w-8 h-8 text-accent/40" />
+                      <div className="flex justify-center mb-3 sm:mb-5 md:mb-6">
+                        <MessageSquareQuote className="w-6 h-6 sm:w-8 sm:h-8 text-accent/40" />
                       </div>
 
                       {/* Testimonial Content */}
-                      <blockquote className="text-lg md:text-xl text-muted-foreground mb-8 italic text-center leading-relaxed max-w-3xl mx-auto">
+                      <blockquote className="text-base sm:text-lg md:text-xl text-muted-foreground mb-5 sm:mb-6 md:mb-8 italic text-center leading-relaxed max-w-3xl mx-auto break-words">
                         "{testimonial.review}"
                       </blockquote>
 
                       {/* Customer Details */}
-                      <div className="text-center space-y-1">
-                        <p className="text-xl font-display font-semibold text-gradient-silver">
+                      <div className="text-center space-y-0.5 sm:space-y-1">
+                        <p className="text-base sm:text-xl font-display font-semibold text-gradient-silver">
                           {getDisplayName(testimonial)}
                         </p>
                         {testimonial.company_name && (
-                          <p className="text-sm uppercase tracking-wider text-accent/80">
+                          <p className="text-[11px] sm:text-sm uppercase tracking-wider text-accent/80">
                             {testimonial.company_name}
                           </p>
                         )}
                       </div>
 
                       {/* Decorative Line */}
-                      <div className="flex items-center justify-center mt-6">
-                        <div className="h-[1px] w-16 bg-gradient-to-r from-transparent via-accent/30 to-transparent" />
+                      <div className="flex items-center justify-center mt-4 sm:mt-6">
+                        <div className="h-[1px] w-12 sm:w-16 bg-gradient-to-r from-transparent via-accent/30 to-transparent" />
                       </div>
                     </Card>
                   ))}
@@ -225,21 +225,21 @@ const Testimonials = () => {
       </section>
 
       {/* Footer CTA Section */}
-      <section className="py-20 bg-muted/30">
+      <section className="py-10 sm:py-14 md:py-20 bg-muted/30">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto">
-            <Card className="p-10 md:p-12 text-center shadow-metal bg-gradient-to-br from-card via-secondary/20 to-card backdrop-blur border-accent/20">
-              <MessageSquareQuote className="w-12 h-12 text-accent mx-auto mb-6" />
-              <h2 className="text-3xl md:text-4xl font-display font-bold mb-4 text-gradient-silver">
+            <Card className="p-5 sm:p-8 md:p-12 text-center shadow-metal bg-gradient-to-br from-card via-secondary/20 to-card backdrop-blur border-accent/20">
+              <MessageSquareQuote className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-accent mx-auto mb-4 sm:mb-6" />
+              <h2 className="text-xl sm:text-3xl md:text-4xl font-display font-bold mb-3 sm:mb-4 text-gradient-silver break-words">
                 {content.feedback_cta?.title || "Would you like to share your experience?"}
               </h2>
-              <p className="text-lg text-muted-foreground mb-8 max-w-xl mx-auto leading-relaxed">
+              <p className="text-sm sm:text-base md:text-lg text-muted-foreground mb-5 sm:mb-8 max-w-xl mx-auto leading-relaxed">
                 {content.feedback_cta?.description || "We value your feedback and would love to hear about your rental experience."}
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button 
-                  size="lg" 
-                  className="shadow-glow hover:shadow-glow transition-all text-base px-10 py-6"
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
+                <Button
+                  size="lg"
+                  className="shadow-glow hover:shadow-glow transition-all text-sm sm:text-base px-6 sm:px-10 py-5 sm:py-6 w-full sm:w-auto"
                   onClick={() => setFeedbackModalOpen(true)}
                 >
                   {content.feedback_cta?.button_text || "Submit Feedback"}

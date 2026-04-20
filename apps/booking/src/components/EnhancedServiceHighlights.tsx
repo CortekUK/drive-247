@@ -47,26 +47,26 @@ const EnhancedServiceHighlights = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 max-w-7xl mx-auto">
           {services.map((service, index) => {
             const Icon = getIconComponent(service.icon);
             return (
               <Card
                 key={index}
-                className="relative overflow-hidden p-8 lg:p-10 bg-card border border-border hover:border-primary/30 transition-all duration-500 hover:-translate-y-2 shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:shadow-glow animate-fade-in-up group rounded-2xl"
+                className="relative overflow-hidden p-5 sm:p-8 lg:p-10 bg-card border border-border hover:border-primary/30 transition-all duration-500 hover:-translate-y-2 shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:shadow-glow animate-fade-in-up group rounded-2xl"
                 style={{ animationDelay: `${index * 0.1}s` }}
               >
-                <div className="relative space-y-5 flex flex-col">
+                <div className="relative space-y-4 sm:space-y-5 flex flex-col">
                   {/* Circular icon with dynamic accent color */}
-                  <div className="relative w-16 h-16 rounded-full bg-primary flex items-center justify-center shadow-glow group-hover:shadow-glow transition-all duration-500">
-                    <Icon className="w-8 h-8 text-primary-foreground" strokeWidth={2} aria-hidden="true" />
+                  <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-primary flex items-center justify-center shadow-glow group-hover:shadow-glow transition-all duration-500">
+                    <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-primary-foreground" strokeWidth={2} aria-hidden="true" />
                   </div>
 
-                  <div className="space-y-3">
-                    <h3 className="text-2xl font-display font-bold text-foreground leading-tight">
+                  <div className="space-y-2 sm:space-y-3">
+                    <h3 className="text-lg sm:text-2xl font-display font-bold text-foreground leading-tight">
                       {service.title}
                     </h3>
-                    <p className="text-foreground/70 leading-relaxed text-[15px]">
+                    <p className="text-foreground/70 leading-relaxed text-sm sm:text-[15px]">
                       {service.description}
                     </p>
                   </div>

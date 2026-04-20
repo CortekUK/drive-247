@@ -213,10 +213,10 @@ const Promotions = () => {
           </section>
 
           {/* Promotions Grid */}
-          <section className="py-16">
+          <section className="py-8 sm:py-12 md:py-16">
             <div className="container mx-auto px-4">
               {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8 max-w-7xl mx-auto">
                   {[...Array(6)].map((_, i) => (
                     <div key={i} className="space-y-4">
                       <Skeleton className="h-64 w-full rounded-lg" />
@@ -241,7 +241,7 @@ const Promotions = () => {
                   </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8 max-w-7xl mx-auto">
                   {filteredPromotions.map((promo) => {
                     const status = getPromotionStatus(promo);
                     const isActive = status === "active";
@@ -283,16 +283,16 @@ const Promotions = () => {
                           </div>
                         </div>
 
-                        <CardContent className="p-6">
-                          <h3 className="font-serif text-2xl font-bold mb-3">{promo.title}</h3>
-                          
-                          <p className="text-muted-foreground mb-4 line-clamp-2">
+                        <CardContent className="p-4 sm:p-5 md:p-6">
+                          <h3 className="font-serif text-lg sm:text-xl md:text-2xl font-bold mb-2 sm:mb-3 break-words">{promo.title}</h3>
+
+                          <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 line-clamp-2">
                             {promo.description}
                           </p>
 
                           {/* Date Range */}
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                            <Calendar className="w-4 h-4" />
+                          <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
+                            <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                             <span>
                               Valid: {format(new Date(promo.start_date), "MMM dd")} – {format(new Date(promo.end_date), "MMM dd, yyyy")}
                             </span>
@@ -300,16 +300,16 @@ const Promotions = () => {
 
                           {/* Promo Code */}
                           {promo.promo_code && (
-                            <div className="flex items-center gap-2 text-sm mb-4">
-                              <Tag className="w-4 h-4 text-accent" />
-                              <code className="px-2 py-1 rounded bg-accent/10 text-accent font-mono font-semibold">
+                            <div className="flex items-center gap-2 text-sm mb-3 sm:mb-4">
+                              <Tag className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent shrink-0" />
+                              <code className="px-2 py-1 rounded bg-accent/10 text-accent font-mono font-semibold text-xs sm:text-sm break-all">
                                 {promo.promo_code}
                               </code>
                             </div>
                           )}
 
                           {/* CTAs */}
-                          <div className="flex gap-3 mt-6">
+                          <div className="flex gap-2 sm:gap-3 mt-4 sm:mt-6">
                             <Button
                               onClick={() => handleApplyBooking(promo)}
                               disabled={!isActive}
@@ -339,18 +339,18 @@ const Promotions = () => {
           </section>
 
           {/* How Promotions Work */}
-          <section className="py-20 bg-accent/5">
+          <section className="py-10 sm:py-14 md:py-20 bg-accent/5">
             <div className="container mx-auto px-4">
-              <div className="max-w-4xl mx-auto text-center mb-12">
-                <h2 className="font-serif text-4xl font-bold mb-4">
+              <div className="max-w-4xl mx-auto text-center mb-8 sm:mb-10 md:mb-12">
+                <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">
                   {content.how_it_works?.title || "How Promotions Work"}
                 </h2>
-                <p className="text-muted-foreground">
+                <p className="text-sm sm:text-base text-muted-foreground">
                   {content.how_it_works?.subtitle || "Simple steps to save on your luxury car rental"}
                 </p>
               </div>
 
-              <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 md:gap-8 max-w-5xl mx-auto">
                 {(content.how_it_works?.steps && content.how_it_works.steps.length > 0
                   ? content.how_it_works.steps
                   : [
@@ -359,12 +359,12 @@ const Promotions = () => {
                       { number: "3", title: "Apply at Checkout", description: "Discount automatically applied with promo code" },
                     ]
                 ).map((step, index) => (
-                  <Card key={index} className="text-center p-8">
-                    <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
-                      <span className="text-3xl font-bold text-accent">{step.number}</span>
+                  <Card key={index} className="text-center p-5 sm:p-6 md:p-8">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                      <span className="text-2xl sm:text-3xl font-bold text-accent">{step.number}</span>
                     </div>
-                    <h3 className="font-bold text-xl mb-2">{step.title}</h3>
-                    <p className="text-muted-foreground">{step.description}</p>
+                    <h3 className="font-bold text-base sm:text-lg md:text-xl mb-1.5 sm:mb-2">{step.title}</h3>
+                    <p className="text-sm sm:text-base text-muted-foreground">{step.description}</p>
                   </Card>
                 ))}
               </div>
@@ -372,10 +372,10 @@ const Promotions = () => {
           </section>
 
           {/* Fine Print */}
-          <section className="py-16">
+          <section className="py-8 sm:py-12 md:py-16">
             <div className="container mx-auto px-4">
               <div className="max-w-3xl mx-auto">
-                <Card className="p-8 border-accent/20">
+                <Card className="p-5 sm:p-6 md:p-8 border-accent/20">
                   <h3 className="font-bold text-xl mb-4">
                     {content.terms?.title || "Terms & Conditions"}
                   </h3>
