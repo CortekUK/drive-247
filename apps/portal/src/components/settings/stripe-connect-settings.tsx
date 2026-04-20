@@ -133,17 +133,17 @@ export function StripeConnectSettings() {
       <CardContent className="space-y-6">
         {/* Stripe Mode Display */}
         <div className="p-4 rounded-lg border bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 dark:from-blue-950/30 dark:to-purple-950/30 dark:border-blue-800">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <h4 className="font-medium flex items-center gap-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <h4 className="font-medium flex flex-wrap items-center gap-2">
                 {tenantStatus?.stripe_mode === 'live' ? (
                   <>
-                    <Zap className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    <Zap className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
                     <span className="dark:text-white">Live Mode</span>
                   </>
                 ) : (
                   <>
-                    <TestTube2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <TestTube2 className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
                     <span className="dark:text-white">Test Mode (Setup Phase)</span>
                   </>
                 )}
@@ -153,9 +153,9 @@ export function StripeConnectSettings() {
               </p>
             </div>
             {tenantStatus?.stripe_mode === 'live' ? (
-              <Badge className="bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 shrink-0">LIVE</Badge>
+              <Badge className="bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 shrink-0 mt-0.5">LIVE</Badge>
             ) : (
-              <Badge className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 shrink-0">TEST</Badge>
+              <Badge className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 shrink-0 mt-0.5">TEST</Badge>
             )}
           </div>
         </div>
@@ -186,8 +186,8 @@ export function StripeConnectSettings() {
                 <AlertCircle className="h-5 w-5" />
               )}
             </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
                 <h4 className={`font-medium ${
                   isConnected
                     ? 'text-green-800 dark:text-green-300'
@@ -206,7 +206,7 @@ export function StripeConnectSettings() {
                     : 'Not Connected'
                   }
                 </h4>
-                <Badge variant={isConnected ? 'default' : isPending ? 'secondary' : 'destructive'}>
+                <Badge variant={isConnected ? 'default' : isPending ? 'secondary' : 'destructive'} className="shrink-0">
                   {tenantStatus?.stripe_account_status?.toUpperCase() || 'NOT SET UP'}
                 </Badge>
               </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, ShieldX, Bolt } from "lucide-react";
@@ -128,9 +128,15 @@ const settingsTabGroups = [
 ];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  // Close the mobile sheet immediately on nav tap — gives instant perceived
+  // feedback while the destination page/tab is still rendering.
+  const closeMobileOnNav = useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+  }, [isMobile, setOpenMobile]);
   const { data: reminderStats } = useReminderStats();
   const { settings } = useOrgSettings();
   const { branding } = useTenantBranding();
@@ -248,7 +254,7 @@ export function AppSidebar() {
           tooltip={collapsed ? item.name : undefined}
           className="h-8 pl-9 transition-all duration-200 ease-in-out"
         >
-          <Link href={item.href} className="flex items-center justify-between w-full">
+          <Link href={item.href} onClick={closeMobileOnNav} className="flex items-center justify-between w-full">
             <div className="flex items-center gap-2 min-w-0">
               <item.icon className="h-3.5 w-3.5 shrink-0" />
               <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
@@ -331,6 +337,10 @@ export function AppSidebar() {
                           <Link
                             key={item.value}
                             href={`/settings?tab=${item.value}`}
+                            replace
+                            scroll={false}
+                            prefetch={false}
+                            onClick={closeMobileOnNav}
                             className={`flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors hover:bg-accent ${
                               activeSettingsTab === item.value ? "bg-accent text-accent-foreground font-medium" : "text-foreground"
                             }`}
@@ -356,7 +366,14 @@ export function AppSidebar() {
                             isActive={activeSettingsTab === item.value}
                             className="h-8 transition-all duration-200 ease-in-out"
                           >
-                            <Link href={`/settings?tab=${item.value}`} className="flex items-center gap-2.5">
+                            <Link
+                              href={`/settings?tab=${item.value}`}
+                              replace
+                              scroll={false}
+                              prefetch={false}
+                              onClick={closeMobileOnNav}
+                              className="flex items-center gap-2.5"
+                            >
                               <item.icon className="h-4 w-4 shrink-0" />
                               <span className="text-[13px]">{item.label}</span>
                             </Link>

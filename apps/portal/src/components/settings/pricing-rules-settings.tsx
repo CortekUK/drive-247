@@ -238,17 +238,17 @@ export function PricingRulesSettings({ onDirtyChange }: PricingRulesSettingsProp
       {/* Holiday Pricing Card */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="min-w-0">
               <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
+                <Calendar className="h-5 w-5 shrink-0" />
                 Holiday Pricing
               </CardTitle>
               <CardDescription>
                 Define holiday periods with custom surcharges. Holidays take priority over weekend pricing.
               </CardDescription>
             </div>
-            <Button onClick={openAddHoliday} size="sm">
+            <Button onClick={openAddHoliday} size="sm" className="w-full sm:w-auto shrink-0">
               <Plus className="h-4 w-4 mr-1.5" />
               Add Holiday
             </Button>
