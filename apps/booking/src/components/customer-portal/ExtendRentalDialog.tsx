@@ -10,7 +10,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Calendar, AlertCircle, AlertTriangle, CreditCard, Ban } from 'lucide-react';
@@ -19,8 +18,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { useExtensionConflicts } from '@/hooks/use-extension-conflicts';
 import { useExtensionPricing } from '@/hooks/use-extension-pricing';
+import { useVehicleBookedDates } from '@/hooks/use-vehicle-booked-dates';
+import { CustomerExtensionCalendar } from '@/components/customer-portal/CustomerExtensionCalendar';
 import { formatCurrency } from '@/lib/format-utils';
-import { format, addDays, parseISO } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 
 interface ExtendRentalDialogProps {
@@ -40,7 +41,6 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
 
   // Calculate minimum date (must be after current end date)
   const currentEndDate = parseISO(rental.end_date);
-  const minDate = format(addDays(currentEndDate, 1), 'yyyy-MM-dd');
 
   const selectedDate = newEndDate ? parseISO(newEndDate) : null;
 
@@ -72,6 +72,11 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
     newEndDate: newEndDate || undefined,
     excludeRentalId: rental.id,
   });
+
+  const { occupancyMap, occupancyModifiers } = useVehicleBookedDates(
+    rental.vehicles?.id,
+    rental.id,
+  );
 
   const handleRequestClick = () => {
     if (!newEndDate) {
@@ -172,16 +177,25 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
                 </div>
               </div>
 
-              {/* New End Date Input */}
+              {/* New End Date Picker */}
               <div className="space-y-2">
                 <Label htmlFor="new-end-date">New End Date</Label>
-                <Input
-                  id="new-end-date"
-                  type="date"
-                  value={newEndDate}
-                  onChange={(e) => setNewEndDate(e.target.value)}
-                  min={minDate}
-                  className="w-full"
+                <CustomerExtensionCalendar
+                  currentEndDate={currentEndDate}
+                  newEndDate={newEndDate ? parseISO(newEndDate) : undefined}
+                  onNewEndDateChange={(date) => {
+                    setNewEndDate(date ? format(date, 'yyyy-MM-dd') : '');
+                  }}
+                  occupancyMap={occupancyMap}
+                  occupancyModifiers={occupancyModifiers}
+                  disableDate={(date) => {
+                    // Block anything on or before the current end date
+                    const min = new Date(currentEndDate);
+                    min.setHours(0, 0, 0, 0);
+                    const d = new Date(date);
+                    d.setHours(0, 0, 0, 0);
+                    return d <= min;
+                  }}
                 />
                 <p className="text-xs text-muted-foreground">
                   Select a date after {format(currentEndDate, 'MMM dd, yyyy')}

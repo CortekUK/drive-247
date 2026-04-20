@@ -255,6 +255,9 @@ serve(async (req) => {
           cancel_url: `${bookingDomain}/portal/payments`,
           payment_intent_data: {
             receipt_email: toEmail,
+            // Save the card so create-deposit-hold can preauth the Security Deposit
+            // on the same payment method after the invoice is paid.
+            setup_future_usage: 'off_session',
           },
           metadata: {
             invoice_id: invoiceId,

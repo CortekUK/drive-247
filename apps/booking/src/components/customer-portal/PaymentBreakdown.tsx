@@ -20,7 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
 import { useRentalCharges, type RentalCharge } from '@/hooks/use-rental-ledger-data';
-import { useRentalInvoice, useRentalPaymentBreakdown } from '@/hooks/use-rental-invoice';
+import { useRentalInvoice, useRentalPaymentBreakdown, useRentalRefundBreakdown } from '@/hooks/use-rental-invoice';
 import { useRentalInsurancePolicies } from '@/hooks/use-rental-insurance-policies';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -84,6 +84,7 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
   const { data: invoice } = useRentalInvoice(rental.id);
   const { data: rentalCharges } = useRentalCharges(rental.id);
   const { data: paymentBreakdown } = useRentalPaymentBreakdown(rental.id);
+  const { data: refundBreakdown } = useRentalRefundBreakdown(rental.id);
   const { data: insurancePolicies } = useRentalInsurancePolicies(rental.id);
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -236,7 +237,7 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
       bg: 'bg-purple-500/10',
     },
     {
-      label: 'Security Deposit',
+      label: 'Pre-Auth Hold',
       category: 'Security Deposit',
       amount: rental.deposit_hold_amount || invoice.securityDeposit,
       detail:
@@ -300,9 +301,40 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
     setSelected: (s: Set<string>) => void,
     extensionId?: string | null
   ) => {
+    // A row is selectable (= customer can pay for it) when it has an amount
+    // and is not already fully paid. "Fully paid" means a ledger charge
+    // exists AND its remaining is 0. When no charge exists yet (fresh rental,
+    // ledger not primed), the category is NOT paid and is selectable —
+    // apply-payment creates the ledger charge on the fly.
+    const chargesForRow = (category: string) => {
+      const isExt = category.startsWith('Extension');
+      return (rentalCharges || []).filter((c) => {
+        if (c.category !== category) return false;
+        if (isExt && extensionId) return c.extension_id === extensionId;
+        return true;
+      });
+    };
+
     const selectable = rows
-      .filter((r) => r.amount > 0 && (categoryRemainingAmounts[r.category] ?? 0) > 0)
+      .filter((r) => {
+        if (r.amount <= 0) return false;
+        if (r.category === 'Security Deposit') return false; // handled via Pre-Auth Hold, not this pay flow
+        const charges = chargesForRow(r.category);
+        const total = charges.reduce((s, c) => s + Number(c.amount), 0);
+        const remaining = charges.reduce((s, c) => s + Number(c.remaining_amount), 0);
+        const fullyPaid = charges.length > 0 && total > 0 && remaining <= 0;
+        return !fullyPaid;
+      })
       .map((r) => r.category);
+
+    // Amount-to-pay per selectable category: outstanding ledger balance when
+    // charges exist; otherwise the row's own amount (invoice value) since
+    // we'll create the charge on pay.
+    const amountToPay = (category: string, rowAmount: number): number => {
+      const charges = chargesForRow(category);
+      if (charges.length === 0) return rowAmount;
+      return charges.reduce((s, c) => s + Number(c.remaining_amount), 0);
+    };
 
     const allSelected =
       selectable.length > 0 && selectable.every((c) => selected.has(c));
@@ -310,9 +342,9 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
 
     const selectedTotal =
       Math.round(
-        selectable
-          .filter((c) => selected.has(c))
-          .reduce((sum, c) => sum + (categoryRemainingAmounts[c] ?? 0), 0) * 100
+        rows
+          .filter((r) => selected.has(r.category))
+          .reduce((sum, r) => sum + amountToPay(r.category, r.amount), 0) * 100
       ) / 100;
 
     const toggle = (category: string) => {
@@ -344,16 +376,40 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
               <TableHead className={selectable.length > 0 ? '' : 'pl-6'}>Category</TableHead>
               <TableHead className="text-center w-[110px]">Status</TableHead>
               <TableHead className="text-right w-[110px]">Amount</TableHead>
+              <TableHead className="text-right w-[110px]">Refunded</TableHead>
               <TableHead className="text-right pr-6 w-[120px]">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map(({ label, category, amount, detail, icon: Icon, color, bg }) => {
               const applied = amount > 0;
-              const remaining = categoryRemainingAmounts[category] ?? 0;
-              const isPaid = applied && remaining === 0;
-              const isPartial = applied && remaining > 0 && remaining < amount;
-              const hasUnpaid = applied && !isPaid;
+              // Scope by extension_id when rendering an extension table so two
+              // extensions with the same "Extension Rental" category don't
+              // collide. For original rows, extensionId is undefined and all
+                    // charges with that category are in scope.
+              const isExtensionCategory = category.startsWith('Extension');
+              const catCharges = (rentalCharges || []).filter((c) => {
+                if (c.category !== category) return false;
+                if (isExtensionCategory && extensionId) return c.extension_id === extensionId;
+                return true;
+              });
+              const catChargeTotal = catCharges.reduce((s, c) => s + Number(c.amount), 0);
+              const catChargeRemaining = catCharges.reduce((s, c) => s + Number(c.remaining_amount), 0);
+              const catAllocated = catCharges.reduce(
+                (s, c) => s + c.allocations.reduce((ss, a) => ss + Number(a.amount_applied), 0),
+                0
+              );
+              const isSecurityDeposit = category === 'Security Deposit';
+              const holdStatus = rental.deposit_hold_status as string | null | undefined;
+              const refunded = isExtensionCategory && extensionId
+                ? (refundBreakdown?.extensionCategoryRefunds?.[`${extensionId}|${category}`] ?? 0)
+                : (refundBreakdown?.categoryRefunds?.[category] ?? 0);
+              const fullyRefunded = !isSecurityDeposit && applied && refunded > 0 && refunded >= amount;
+              const hasPartialRefund = !isSecurityDeposit && refunded > 0 && !fullyRefunded;
+              const isPaid = !isSecurityDeposit && !fullyRefunded && !hasPartialRefund && catCharges.length > 0 && catChargeTotal > 0 && catChargeRemaining <= 0;
+              const isPartial = !isSecurityDeposit && !fullyRefunded && !hasPartialRefund && catAllocated > 0 && catChargeRemaining > 0;
+              const hasUnpaid = applied && !isSecurityDeposit && !fullyRefunded && !isPaid;
+              const remaining = catChargeRemaining;
               const isSelectable = selectable.includes(category);
               const isSelected = selected.has(category);
 
@@ -388,42 +444,34 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
-                    {!applied ? (
-                      <Badge
-                        variant="outline"
-                        className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]"
-                      >
-                        Not Applied
-                      </Badge>
-                    ) : isPaid ? (
-                      <Badge
-                        variant="outline"
-                        className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]"
-                      >
-                        Paid
-                      </Badge>
-                    ) : isPartial ? (
-                      <Badge
-                        variant="outline"
-                        className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]"
-                      >
-                        Partially Paid
-                      </Badge>
-                    ) : isCancelledOrRejected ? (
-                      <Badge
-                        variant="outline"
-                        className="text-muted-foreground border-muted-foreground/30 text-[11px]"
-                      >
-                        Cancelled
-                      </Badge>
-                    ) : (
-                      <Badge
-                        variant="outline"
-                        className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]"
-                      >
-                        Not Paid
-                      </Badge>
-                    )}
+                    {(() => {
+                      // Security Deposit = Pre-Auth Hold — show hold-specific
+                      // statuses based on deposit_hold_status, never "Paid".
+                      if (isSecurityDeposit) {
+                        if (holdStatus === 'held')
+                          return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Held</Badge>;
+                        if (holdStatus === 'captured')
+                          return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Charged</Badge>;
+                        if (holdStatus === 'released')
+                          return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Released</Badge>;
+                        if (holdStatus === 'expired')
+                          return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Expired</Badge>;
+                        return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">No Hold</Badge>;
+                      }
+                      if (!applied)
+                        return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">Not Applied</Badge>;
+                      if (fullyRefunded)
+                        return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Refunded</Badge>;
+                      if (hasPartialRefund)
+                        return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>;
+                      if (isPaid)
+                        return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
+                      if (isPartial)
+                        return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
+                      if (isCancelledOrRejected)
+                        return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Cancelled</Badge>;
+                      return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
+                    })()}
                   </TableCell>
                   <TableCell className="text-right">
                     <span
@@ -437,12 +485,21 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
                       </p>
                     )}
                   </TableCell>
+                  <TableCell className="text-right">
+                    {refunded > 0 ? (
+                      <span className="text-sm text-amber-500 font-medium">
+                        {formatCurrency(refunded, currencyCode)}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-muted-foreground/40">-</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right pr-6">
                     {hasUnpaid && !isCancelledOrRejected ? (
                       <button
                         className="text-xs font-medium text-blue-500 hover:text-blue-400 hover:underline disabled:opacity-50"
                         disabled={isProcessing}
-                        onClick={() => payCategories(remaining, [category], extensionId)}
+                        onClick={() => payCategories(amountToPay(category, amount), [category], extensionId)}
                       >
                         Pay
                       </button>

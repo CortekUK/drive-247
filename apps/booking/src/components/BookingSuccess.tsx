@@ -110,6 +110,24 @@ const BookingSuccess = () => {
                   } catch (applyErr) {
                     console.error("❌ Error applying payment:", applyErr);
                   }
+
+                  // Place Stripe deposit hold on the saved card (non-blocking).
+                  try {
+                    const rentalIdForHold = (paymentRecord as any)?.rental_id;
+                    if (rentalIdForHold) {
+                      console.log('🔒 Placing deposit hold...');
+                      const { data: holdData, error: holdError } = await supabase.functions.invoke('place-deposit-hold', {
+                        body: { rentalId: rentalIdForHold },
+                      });
+                      if (holdError) {
+                        console.warn('⚠️ Deposit hold failed:', holdError);
+                      } else {
+                        console.log('✅ Deposit hold placed:', holdData);
+                      }
+                    }
+                  } catch (holdErr) {
+                    console.warn('⚠️ Deposit hold error (non-blocking):', holdErr);
+                  }
                 }
 
                 // Clear localStorage after processing

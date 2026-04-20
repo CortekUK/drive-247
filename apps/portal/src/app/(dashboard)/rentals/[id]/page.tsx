@@ -19,6 +19,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Progress } from "@/components/ui/progress";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
+import { ChargeDepositDialog } from "@/components/shared/dialogs/charge-deposit-dialog";
+import { AddHoldDialog } from "@/components/shared/dialogs/add-hold-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 // integration_bonzah controls Bonzah-specific features only; insurance document upload is always available
@@ -425,12 +427,15 @@ const RentalDetail = () => {
     if (invoiceBreakdown) {
       const insuranceCharge = (rentalCharges || []).find((c: any) => c.category === 'Insurance');
       const collectionCharge = (rentalCharges || []).find((c: any) => c.category === 'Collection Fee');
+      // Security Deposit is intentionally omitted — it's never an outstanding
+      // charge. Deposits live on rentals.deposit_hold_* and are Stripe preauth
+      // holds, not amounts owed by the customer. Including it would inflate
+      // Balance Due by the tenant's deposit amount.
       const invoiceCategoryMap: Record<string, number> = {
         'Rental': invoiceBreakdown.rentalFee,
         'Tax': invoiceBreakdown.taxAmount,
         'Insurance': insuranceCharge?.amount ?? invoiceBreakdown.insurancePremium ?? 0,
         'Service Fee': invoiceBreakdown.serviceFee,
-        'Security Deposit': rental?.deposit_hold_amount || invoiceBreakdown.securityDeposit,
         'Delivery Fee': rental?.delivery_fee || invoiceBreakdown.deliveryFee || 0,
         'Collection Fee': collectionCharge ? Number(collectionCharge.amount) : (rental?.collection_fee ?? 0),
         'Extras': invoiceBreakdown.extrasTotal ?? 0,
@@ -464,10 +469,56 @@ const RentalDetail = () => {
         queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
         queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'] });
         queryClient.invalidateQueries({ queryKey: ['rental-invoice'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
+        queryClient.invalidateQueries({ queryKey: ['rental', id] });
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [id, queryClient]);
+
+  // Realtime invalidation — when the customer pays from the booking portal,
+  // ledger_entries / payments / payment_applications change. Listen for those
+  // changes on this rental and invalidate the cached payment queries so the
+  // admin tab reflects the new state without needing a manual refresh.
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`rental-payments-${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ledger_entries', filter: `rental_id=eq.${id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-invoice'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: `rental_id=eq.${id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-payments'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_applications' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rental_extensions', filter: `rental_id=eq.${id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['rental', id] });
+        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rentals', filter: `id=eq.${id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['rental', id] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [id, queryClient]);
 
   // Handle ?payment=success|cancelled — ensure Stripe payment is allocated after checkout
@@ -575,6 +626,26 @@ const RentalDetail = () => {
           });
         }
 
+        // Charge-via-Stripe path: we just collected the customer's card, so
+        // auto-place the deposit hold now. Record Payment (manual) still
+        // leaves the hold off — admin uses the Add Hold button for that case.
+        // Skipped when the rental already has an active hold or the tenant
+        // doesn't have security deposits enabled.
+        if (rental?.deposit_hold_status !== 'held') {
+          try {
+            const { data: holdData, error: holdError } = await supabase.functions.invoke('place-deposit-hold', {
+              body: { rentalId: id, tenantId: tenant.id },
+            });
+            if (holdError) {
+              console.warn('[DEPOSIT-HOLD] Failed:', holdError);
+            } else {
+              console.log('[DEPOSIT-HOLD] Placed:', holdData);
+            }
+          } catch (holdErr) {
+            console.warn('[DEPOSIT-HOLD] Non-blocking error:', holdErr);
+          }
+        }
+
         // Refresh all payment-related queries and wait for them to settle
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['rental-totals'] }),
@@ -582,6 +653,9 @@ const RentalDetail = () => {
           queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
           queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'] }),
           queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
+          queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] }),
+          queryClient.invalidateQueries({ queryKey: ['rental', id] }),
+          queryClient.invalidateQueries({ queryKey: ['rental-payments'] }),
           queryClient.invalidateQueries({ queryKey: ['excess-mileage-charge'] }),
           queryClient.invalidateQueries({ queryKey: ['key-handovers-mileage'] }),
         ]);
@@ -598,6 +672,37 @@ const RentalDetail = () => {
 
     processStripePayment();
   }, [searchParams, id, tenant?.id, paymentProcessed, queryClient, toast, router]);
+
+  // Handle ?hold=placed&session_id=... returned by the Add Hold → Place via Stripe
+  // flow. Calls sync-deposit-hold to record the authorised PaymentIntent onto
+  // the rental. Idempotent.
+  const [holdSynced, setHoldSynced] = useState(false);
+  useEffect(() => {
+    const holdParam = searchParams?.get('hold');
+    const sessionId = searchParams?.get('session_id');
+    if (!id || !tenant?.id || holdSynced) return;
+    if (holdParam !== 'placed' || !sessionId) return;
+
+    setHoldSynced(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('sync-deposit-hold', {
+          body: { sessionId, rentalId: id },
+        });
+        if (error) throw new Error(error.message || 'Failed to sync hold');
+        queryClient.invalidateQueries({ queryKey: ['rental', id] });
+        if (data?.skipped) {
+          toast({ title: 'Hold already recorded', description: 'No changes made.' });
+        } else {
+          toast({ title: 'Hold placed', description: `$${data?.amount ?? ''} held on the customer's card.` });
+        }
+      } catch (err: any) {
+        toast({ title: 'Hold sync failed', description: err.message || 'Could not record the hold. Try again or contact support.', variant: 'destructive' });
+      } finally {
+        router.replace(`/rentals/${id}`);
+      }
+    })();
+  }, [searchParams, id, tenant?.id, holdSynced, queryClient, toast, router]);
 
   // Poll for pending email payment completion (when admin sent Stripe link via email)
   useEffect(() => {
@@ -633,6 +738,8 @@ const RentalDetail = () => {
           queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] }),
           queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
           queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
+          queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] }),
+          queryClient.invalidateQueries({ queryKey: ['rental', id] }),
         ]);
         setPaymentResult({ status: 'success', message: 'Customer has completed the payment.' });
         return;
@@ -651,6 +758,8 @@ const RentalDetail = () => {
             queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] }),
             queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
             queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental', id] }),
           ]);
           setPaymentResult({ status: 'success', message: 'Customer has completed the payment.' });
         }
@@ -676,6 +785,8 @@ const RentalDetail = () => {
   });
   const extrasTotal = (extrasDetails || []).reduce((sum: number, s: any) => sum + (s.quantity * s.price_at_booking), 0);
   const [showExtrasDialog, setShowExtrasDialog] = useState(false);
+  const [showChargeDepositDialog, setShowChargeDepositDialog] = useState(false);
+  const [showAddHoldDialog, setShowAddHoldDialog] = useState(false);
 
   // Fetch renewal chain info: any rental that was renewed from this one
   const { data: renewedAsRental } = useQuery({
@@ -1664,8 +1775,37 @@ const RentalDetail = () => {
             </Tooltip>
           </TooltipProvider>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Rental Agreement</h1>
-            <p className="text-muted-foreground">
+            {(() => {
+              const ref = rental.rental_number || rental.id?.slice(0, 8).toUpperCase();
+              return (
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl sm:text-3xl font-bold font-mono tabular-nums tracking-tight">
+                    #{ref || '—'}
+                  </h1>
+                  {ref && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(String(ref));
+                          toast({ title: 'Reference copied', description: ref });
+                        } catch {
+                          toast({ title: 'Copy failed', variant: 'destructive' });
+                        }
+                      }}
+                      className="h-8 w-8"
+                      title="Copy reference"
+                      aria-label="Copy reference number"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })()}
+            <p className="text-muted-foreground mt-1">
               {rental.customers?.name} • {rental.vehicles?.reg}
             </p>
             {/* Key Status Badges */}
@@ -2388,8 +2528,22 @@ const RentalDetail = () => {
           { label: 'Tax', category: 'Tax', amount: invoiceBreakdown.taxAmount, detail: invoiceBreakdown.taxAmount > 0 && invoiceBreakdown.rentalFee > 0 ? `${((invoiceBreakdown.taxAmount / invoiceBreakdown.rentalFee) * 100).toFixed(1)}% rate` : 'Tax on rental', icon: Percent, color: 'text-blue-500', bg: 'bg-blue-500/10' },
           { label: 'Bonzah Insurance', category: 'Insurance', amount: insuranceAmount, detail: bonzahPolicy ? 'Bonzah Insurance' : 'Insurance coverage', icon: ShieldCheck, color: 'text-teal-500', bg: 'bg-teal-500/10' },
           { label: 'Service Fee', category: 'Service Fee', amount: invoiceBreakdown.serviceFee, detail: 'Platform fee', icon: Receipt, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-          { label: 'Security Deposit', category: 'Security Deposit', amount: rental.deposit_hold_amount || invoiceBreakdown.securityDeposit, depositHoldStatus: rental.deposit_hold_status || null, detail: (() => {
-            const depositAmount = rental.deposit_hold_amount || invoiceBreakdown.securityDeposit;
+          { label: 'Pre-Auth Hold', category: 'Security Deposit', amount: (() => {
+            // Deposits are never charged upfront — they live on rental.deposit_hold_*.
+            // When the hold has been captured or released, show the remaining
+            // deposit_hold_amount directly (0 for fully-captured/released).
+            // Otherwise fall back to tenant config so the row still displays
+            // the configured figure when no hold has been placed yet.
+            const holdStatus = rental.deposit_hold_status;
+            if (holdStatus === 'captured' || holdStatus === 'released' || holdStatus === 'expired') {
+              return Number(rental.deposit_hold_amount) || 0;
+            }
+            const depositFromHold = Number(rental.deposit_hold_amount) || 0;
+            const depositFromTenant = tenant?.security_deposit_enabled ? Number(tenant?.global_deposit_amount) || 0 : 0;
+            const depositFromInvoice = Number(invoiceBreakdown.securityDeposit) || 0;
+            return depositFromHold || depositFromTenant || depositFromInvoice;
+          })(), depositHoldStatus: rental.deposit_hold_status || null, detail: (() => {
+            const depositAmount = Number(rental.deposit_hold_amount) || (tenant?.security_deposit_enabled ? Number(tenant?.global_deposit_amount) || 0 : 0) || Number(invoiceBreakdown.securityDeposit) || 0;
             if (depositAmount <= 0) return '';
             if (rental.deposit_hold_status === 'held') return 'On hold';
             if (rental.deposit_hold_status === 'captured') return 'Charged';
@@ -2400,7 +2554,7 @@ const RentalDetail = () => {
             if (depositRefunded > 0 && hasExcessMileage) return 'Applied to Excess Mileage';
             if (depositRefunded > 0) return 'Refunded to customer';
             if (rental.status === 'Closed') return 'Eligible for refund';
-            return 'Refundable deposit';
+            return 'No hold placed';
           })(), icon: Shield, color: 'text-amber-500', bg: 'bg-amber-500/10', isDepositDeducted: (() => {
             const depositRefunded = refundBreakdown?.['Security Deposit'] ?? 0;
             const hasExcessMileage = (rentalCharges || []).some(c => c.category === 'Excess Mileage');
@@ -2558,12 +2712,14 @@ const RentalDetail = () => {
                   return (
                     <TableRow key={category} className={`${!applied || isDepositDeducted ? 'opacity-40' : ''} ${onClick ? 'cursor-pointer hover:bg-muted/30' : ''} ${isPayg && paygCategories.includes(category) && applied ? 'bg-indigo-50 dark:bg-indigo-950/20' : ''}`} onClick={onClick}>
                       <TableCell className="pl-6 w-10">
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => toggleCategory(category)}
-                          onClick={(e) => e.stopPropagation()}
-                          aria-label={`Select ${label}`}
-                        />
+                        {isSelectable ? (
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleCategory(category)}
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Select ${label}`}
+                          />
+                        ) : null}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -2618,6 +2774,11 @@ const RentalDetail = () => {
                             if (depositHoldStatus === 'captured') return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Charged</Badge>;
                             if (depositHoldStatus === 'released') return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Released</Badge>;
                             if (depositHoldStatus === 'expired') return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Expired</Badge>;
+                          }
+                          // Security Deposit without a hold (manual/cash payments, or Stripe hold
+                          // hasn't fired) — never show "Not Paid"; the deposit isn't a charge.
+                          if (category === 'Security Deposit') {
+                            return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">No Hold</Badge>;
                           }
                           if (isDepositDeducted) {
                             return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Deducted</Badge>;
@@ -2753,29 +2914,24 @@ const RentalDetail = () => {
                               className="text-xs font-medium text-red-500 hover:text-red-400 hover:underline"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const captureAmount = prompt(`Enter amount to capture (max $${rental.deposit_hold_amount}):`);
-                                if (!captureAmount) return;
-                                const amt = parseFloat(captureAmount);
-                                if (isNaN(amt) || amt <= 0 || amt > (rental.deposit_hold_amount || 0)) {
-                                  toast({ title: 'Invalid Amount', description: `Amount must be between $0.01 and $${rental.deposit_hold_amount}`, variant: 'destructive' });
-                                  return;
-                                }
-                                const reason = prompt('Reason for capture (e.g., damages, fines):') || 'Deposit captured';
-                                supabase.functions.invoke('capture-deposit-hold', {
-                                  body: { rentalId: rental.id, tenantId: tenant?.id, amount: amt, reason },
-                                }).then(() => {
-                                  queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
-                                  queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
-                                  queryClient.invalidateQueries({ queryKey: ['payments-data'] });
-                                  toast({ title: 'Deposit Captured', description: `$${amt} captured from deposit hold.` });
-                                }).catch((err: any) => {
-                                  toast({ title: 'Error', description: err.message, variant: 'destructive' });
-                                });
+                                setShowChargeDepositDialog(true);
                               }}
                             >
                               Charge
                             </button>
                           </div>
+                        ) : category === 'Security Deposit' && !rental.deposit_hold_status ? (
+                          // No hold placed yet — open the Add Hold dialog which offers
+                          // "Place via Stripe" (new tab) and "Send email link" options.
+                          <button
+                            className="text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowAddHoldDialog(true);
+                            }}
+                          >
+                            Add Hold
+                          </button>
                         ) : isExcessMileageUnpaid && excessMileageCharge ? (
                           <div className="flex items-center gap-2 justify-end">
                             {(() => {
@@ -3282,6 +3438,12 @@ const RentalDetail = () => {
                     const cats = Array.from(selectedExtCategories);
                     setExtensionPaymentCategories(cats);
                     setExtensionPaymentAmount(extSelectedTotal);
+                    // CRITICAL: stamp the specific extension's id so
+                    // apply-payment's EXTENSION ISOLATION scopes allocation
+                    // to THIS extension's charges. Without this, the FIFO
+                    // allocator picks the oldest unpaid Extension* charge
+                    // (usually the first extension) and drains there first.
+                    setExtensionPaymentExtensionId(group.extensionId || undefined);
                     setShowExtensionPayment(true);
                   }}
                 >
@@ -4841,7 +5003,8 @@ const RentalDetail = () => {
             // If charging from supercharger dialog, use individual charge amount
             if (superchargerPaymentCharge) return Number(superchargerPaymentCharge.amount);
             if (selectedCategories.size === 0) return undefined;
-            return Array.from(selectedCategories).reduce((sum, c) => sum + (categoryRemainingAmounts[c] ?? 0), 0);
+            const raw = Array.from(selectedCategories).reduce((sum, c) => sum + (categoryRemainingAmounts[c] ?? 0), 0);
+            return Math.round(raw * 100) / 100;
           })()}
           targetCategories={Array.from(selectedCategories)}
           onPaymentSuccess={async () => {
@@ -5095,6 +5258,26 @@ const RentalDetail = () => {
           </AlertDialog>
         );
       })()}
+
+      {/* Charge Deposit Dialog */}
+      {rental && (
+        <ChargeDepositDialog
+          open={showChargeDepositDialog}
+          onOpenChange={setShowChargeDepositDialog}
+          rentalId={rental.id}
+          holdAmount={Number(rental.deposit_hold_amount) || 0}
+        />
+      )}
+
+      {/* Add Hold Dialog */}
+      {rental && (
+        <AddHoldDialog
+          open={showAddHoldDialog}
+          onOpenChange={setShowAddHoldDialog}
+          rentalId={rental.id}
+          customerEmail={(rental as any).customers?.email || null}
+        />
+      )}
 
       {/* Extras Breakdown Dialog */}
       <Dialog open={showExtrasDialog} onOpenChange={setShowExtrasDialog}>

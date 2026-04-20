@@ -1271,6 +1271,60 @@ export async function POST(request: NextRequest) {
         }
         const agreementId = agreementRow?.id || null;
 
+        // ── Revoke prior non-terminal agreements for this rental/type/period ──
+        // Prevents the customer from signing a stale link after a resend, and
+        // clears BoldSign slots so the sender's document list stays clean.
+        try {
+            let priorQuery = supabase
+                .from('rental_agreements')
+                .select('id, document_id, boldsign_mode')
+                .eq('rental_id', body.rentalId)
+                .eq('agreement_type', agreementType)
+                .not('document_id', 'is', null)
+                .in('document_status', ['sent', 'delivered', 'pending']);
+
+            if (agreementId) priorQuery = priorQuery.neq('id', agreementId);
+
+            if (agreementType === 'extension' && body.extensionPreviousEndDate && body.extensionNewEndDate) {
+                priorQuery = priorQuery
+                    .eq('period_start_date', body.extensionPreviousEndDate)
+                    .eq('period_end_date', body.extensionNewEndDate);
+            }
+
+            const { data: priorAgreements } = await priorQuery;
+
+            if (priorAgreements && priorAgreements.length > 0) {
+                console.log(`Revoking ${priorAgreements.length} prior non-terminal agreement(s) for ${agreementType}`);
+                await Promise.all(priorAgreements.map(async (prior: any) => {
+                    try {
+                        const priorMode: 'test' | 'live' = (prior.boldsign_mode as 'test' | 'live') || boldsignMode;
+                        const priorApiKey = getBoldSignApiKey(priorMode);
+                        if (priorApiKey && prior.document_id) {
+                            const revokeRes = await fetch(
+                                `${BOLDSIGN_BASE_URL}/v1/document/revoke?documentId=${encodeURIComponent(prior.document_id)}`,
+                                {
+                                    method: 'POST',
+                                    headers: { 'X-API-KEY': priorApiKey, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ revokeMessage: 'Superseded by a newer agreement' }),
+                                }
+                            );
+                            if (!revokeRes.ok) {
+                                console.warn(`BoldSign revoke failed for ${prior.document_id}: ${revokeRes.status} ${await revokeRes.text()}`);
+                            }
+                        }
+                        await supabase
+                            .from('rental_agreements')
+                            .update({ document_status: 'voided' })
+                            .eq('id', prior.id);
+                    } catch (e) {
+                        console.warn('Error revoking prior agreement', prior.id, e);
+                    }
+                }));
+            }
+        } catch (e) {
+            console.warn('Error looking up prior agreements for revocation:', e);
+        }
+
         // For original agreements: also update rentals fields (backward compat)
         if (agreementType === 'original') {
             console.log('Updating rental with document info (original agreement)...');

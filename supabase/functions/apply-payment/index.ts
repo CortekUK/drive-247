@@ -197,9 +197,10 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           console.log(`Skipping fee charges — ${!invoice ? 'no invoice' : `Rental (${rentalChargeAmt}) > subtotal (${invoiceSubtotal})`}`);
         }
 
+        // Security Deposit intentionally excluded — deposits are now held on the
+        // card via place-deposit-hold, never charged/allocated here.
         const feeCategories = skipFeeCharges ? [] : [
           { category: 'Service Fee', invoiceField: 'service_fee' },
-          { category: 'Security Deposit', invoiceField: 'security_deposit' },
           { category: 'Tax', invoiceField: 'tax_amount' },
           { category: 'Delivery Fee', invoiceField: 'delivery_fee' },
         ];
@@ -359,7 +360,6 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           { category: 'Rental', description: 'rental charges' },
           { category: 'Tax', description: 'tax charges' },
           { category: 'Service Fee', description: 'service fee charges' },
-          { category: 'Security Deposit', description: 'security deposit charges' },
           { category: 'Delivery Fee', description: 'delivery fee charges' },
           { category: 'Collection Fee', description: 'collection fee charges' },
           { category: 'Insurance', description: 'insurance charges' },
@@ -378,7 +378,6 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           { category: 'Rental', description: 'rental charges' },
           { category: 'Tax', description: 'tax charges' },
           { category: 'Service Fee', description: 'service fee charges' },
-          { category: 'Security Deposit', description: 'security deposit charges' },
           { category: 'Delivery Fee', description: 'delivery fee charges' },
           { category: 'Collection Fee', description: 'collection fee charges' },
           { category: 'Insurance', description: 'insurance charges' },
@@ -429,11 +428,12 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
 
         // Auto-create ledger charge from invoice if category has no existing charge
         if ((!outstandingCharges || outstandingCharges.length === 0) && payment.rental_id) {
+          // Security Deposit is intentionally omitted — deposits are held via
+          // place-deposit-hold, never auto-created as a ledger charge here.
           const invoiceCategoryMap: Record<string, string> = {
             'Rental': 'rental_fee',
             'Insurance': 'insurance_premium',
             'Service Fee': 'service_fee',
-            'Security Deposit': 'security_deposit',
             'Delivery Fee': 'delivery_fee',
             'Tax': 'tax_amount',
             'Extras': 'extras_total',
@@ -478,41 +478,67 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
               }
             }
           } else if (invoiceField) {
-            const { data: invoice } = await supabase
-              .from('invoices')
-              .select('*')
+            // Duplicate guard: if a charge for this rental+category already exists
+            // (even one with remaining_amount=0 that the outstanding query skipped),
+            // do NOT auto-create from the invoice — that's how duplicate Insurance
+            // charges have been appearing after Bonzah fully pays down its own row.
+            const { data: existingAnyCharge } = await supabase
+              .from('ledger_entries')
+              .select('id')
               .eq('rental_id', payment.rental_id)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
+              .eq('type', 'Charge')
+              .eq('category', category)
+              .limit(1);
 
-            const invoiceAmount = invoice?.[invoiceField] || 0;
-            if (invoiceAmount > 0) {
-              console.log(`Auto-creating ${category} ledger charge from invoice: ${formatCurrency(invoiceAmount, currencyCode)}`);
-              const chargeData: any = {
-                customer_id: payment.customer_id,
-                rental_id: payment.rental_id,
-                vehicle_id: payment.vehicle_id,
-                entry_date: invoice?.invoice_date || entryDate,
-                type: 'Charge',
-                category: category,
-                amount: invoiceAmount,
-                remaining_amount: invoiceAmount,
-                due_date: invoice?.invoice_date || entryDate,
-              };
-              if (payment.tenant_id) chargeData.tenant_id = payment.tenant_id;
+            if (existingAnyCharge && existingAnyCharge.length > 0) {
+              console.log(`Skipping auto-create for ${category}: rental ${payment.rental_id} already has a charge in this category`);
+            } else {
+              const { data: invoice } = await supabase
+                .from('invoices')
+                .select('*')
+                .eq('rental_id', payment.rental_id)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
 
-              const { data: newCharge, error: chargeCreateError } = await supabase
-                .from('ledger_entries')
-                .insert(chargeData)
-                .select()
+              // Use rental.start_date (matches generate_first_charge_for_rental) so
+              // the unique index (rental_id, due_date, type, category, extension_id)
+              // catches any duplicate regardless of which allocator ran first.
+              const { data: rentalForDate } = await supabase
+                .from('rentals')
+                .select('start_date')
+                .eq('id', payment.rental_id)
                 .single();
+              const chargeDate = rentalForDate?.start_date || invoice?.invoice_date || entryDate;
 
-              if (chargeCreateError) {
-                console.error(`Failed to create ${category} ledger charge:`, chargeCreateError);
-              } else {
-                console.log(`Created ${category} charge: ${newCharge.id}`);
-                outstandingCharges = [newCharge];
+              const invoiceAmount = invoice?.[invoiceField] || 0;
+              if (invoiceAmount > 0) {
+                console.log(`Auto-creating ${category} ledger charge from invoice: ${formatCurrency(invoiceAmount, currencyCode)} at ${chargeDate}`);
+                const chargeData: any = {
+                  customer_id: payment.customer_id,
+                  rental_id: payment.rental_id,
+                  vehicle_id: payment.vehicle_id,
+                  entry_date: chargeDate,
+                  type: 'Charge',
+                  category: category,
+                  amount: invoiceAmount,
+                  remaining_amount: invoiceAmount,
+                  due_date: chargeDate,
+                };
+                if (payment.tenant_id) chargeData.tenant_id = payment.tenant_id;
+
+                const { data: newCharge, error: chargeCreateError } = await supabase
+                  .from('ledger_entries')
+                  .insert(chargeData)
+                  .select()
+                  .single();
+
+                if (chargeCreateError) {
+                  console.error(`Failed to create ${category} ledger charge:`, chargeCreateError);
+                } else {
+                  console.log(`Created ${category} charge: ${newCharge.id}`);
+                  outstandingCharges = [newCharge];
+                }
               }
             }
           }

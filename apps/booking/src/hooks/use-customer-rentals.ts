@@ -79,6 +79,7 @@ export function useCustomerRentals(filter: 'all' | 'active' | 'current' | 'past'
         .from('rentals')
         .select(`
           id,
+          rental_number,
           start_date,
           end_date,
           status,

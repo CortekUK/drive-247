@@ -235,67 +235,114 @@ serve(async (req) => {
         console.log(`Extension refund: found ${payment ? 'Stripe' : 'no Stripe'} payment for ${category}`);
       }
 
-      // Fallback for non-extension categories: find the most recent Stripe payment for this rental
+      // Fallback for non-extension categories: find the Stripe payment that
+      // was actually applied to this category's charges (not just the most
+      // recent Stripe payment on the rental — that could be a deposit-capture
+      // charge unrelated to the category being refunded).
       if (!payment && !category.startsWith('Extension')) {
-        const { data: paymentData } = await supabase
-          .from("payments")
-          .select("*")
+        const { data: catCharges } = await supabase
+          .from("ledger_entries")
+          .select("id")
           .eq("rental_id", rentalId)
-          .not("stripe_payment_intent_id", "is", null)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        payment = paymentData;
+          .eq("type", "Charge")
+          .eq("category", category);
+
+        if (catCharges && catCharges.length > 0) {
+          const chargeIds = catCharges.map(c => c.id);
+          const { data: apps } = await supabase
+            .from("payment_applications")
+            .select("payment_id, amount_applied")
+            .in("charge_entry_id", chargeIds);
+
+          if (apps && apps.length > 0) {
+            const paymentIds = [...new Set(apps.map(a => a.payment_id))];
+            const { data: eligible } = await supabase
+              .from("payments")
+              .select("*")
+              .in("id", paymentIds)
+              .not("stripe_payment_intent_id", "is", null)
+              .order("amount", { ascending: false });
+
+            if (eligible && eligible.length > 0) {
+              // Prefer a payment whose REMAINING unrefunded Stripe amount is
+              // enough to cover this refund. Otherwise fall back to the one
+              // with the most unrefunded left (admin can retry a smaller amt).
+              const withRemaining = eligible.map((p: any) => ({
+                ...p,
+                _unrefunded: Number(p.amount) - Number(p.refund_amount || 0),
+              }));
+              payment =
+                withRemaining.find((p: any) => p._unrefunded >= refundAmount) ||
+                withRemaining.sort((a: any, b: any) => b._unrefunded - a._unrefunded)[0];
+            }
+          }
+        }
+        console.log(`Non-extension refund: found ${payment ? 'Stripe' : 'no Stripe'} payment for ${category} (via applications, unrefunded=${(payment as any)?._unrefunded ?? 'n/a'})`);
       }
     }
 
     let refundResult = null;
     let stripeRefundId = null;
 
-    // Process Stripe refund if applicable
+    let ledgerOnlyFallbackReason: string | null = null;
+
+    // Process Stripe refund if applicable. Stripe is the source of truth for
+    // how much is still refundable on a PaymentIntent — our local
+    // payment.refund_amount can drift when manual refunds, mixed payments, or
+    // earlier failures leave it stale. So we query Stripe first, and decide
+    // based on paymentIntent.amount vs amount_refunded what to actually do.
     if (payment?.stripe_payment_intent_id) {
       try {
         const paymentIntentId = payment.stripe_payment_intent_id;
-
-        // Get the payment intent to check its status (with Connect account if applicable)
         const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, stripeOptions);
-        console.log("Payment intent status:", paymentIntent.status, stripeAccountId ? `(Connect: ${stripeAccountId})` : '');
+        console.log("Payment intent status:", paymentIntent.status, "amount:", paymentIntent.amount, "amount_refunded:", (paymentIntent as any).amount_refunded);
 
         if (paymentIntent.status === "requires_capture") {
-          // Pre-auth: For partial refund on pre-auth, we can't do partial release
-          // We would need to capture first, then refund
-          console.log("Payment is pre-auth, cannot process partial refund directly");
           refundResult = {
             type: "error",
             message: "Cannot process refund on pre-authorized payment. Please capture first."
           };
         } else if (paymentIntent.status === "succeeded") {
-          // Captured payment: Process refund
-          // For direct charges on Connect accounts, refund is created on the connected account
-          const refundParams: Stripe.RefundCreateParams = {
-            payment_intent: paymentIntentId,
-            amount: Math.round(refundAmount * 100), // Convert to cents
-            reason: "requested_by_customer",
-            metadata: {
-              category: category,
-              rental_id: rentalId,
-              refund_reason: reason,
-            }
-          };
+          const stripeAmount = paymentIntent.amount / 100;
+          const stripeRefunded = ((paymentIntent as any).amount_refunded || 0) / 100;
+          const stripeUnrefunded = stripeAmount - stripeRefunded;
 
-          console.log("Processing Stripe refund:", refundParams, stripeAccountId ? `on Connect account ${stripeAccountId}` : '');
-          const refund = await stripe.refunds.create(refundParams, stripeOptions);
-          stripeRefundId = refund.id;
-          refundResult = {
-            type: refundType,
-            refundId: refund.id,
-            amount: refund.amount / 100,
-            status: refund.status,
-            stripeAccount: stripeAccountId || 'platform',
-          };
-          console.log("Stripe refund successful:", refundResult);
+          if (stripeUnrefunded <= 0.005) {
+            // Stripe has nothing left to refund — record ledger-only.
+            ledgerOnlyFallbackReason = `Stripe payment ${paymentIntentId} is fully refunded (${formatCurrency(stripeRefunded, currencyCode)} of ${formatCurrency(stripeAmount, currencyCode)}). Recorded as manual refund — reconcile with Stripe separately if needed.`;
+            console.log(ledgerOnlyFallbackReason);
+            payment = null;
+          } else {
+            // Stripe has room. If admin wants more than what's left, refund
+            // only what Stripe allows and mark the rest as manual.
+            const stripeRefundAmount = Math.min(refundAmount, stripeUnrefunded);
+            const manualRemainder = refundAmount - stripeRefundAmount;
+
+            const refundParams: Stripe.RefundCreateParams = {
+              payment_intent: paymentIntentId,
+              amount: Math.round(stripeRefundAmount * 100),
+              reason: "requested_by_customer",
+              metadata: { category, rental_id: rentalId, refund_reason: reason },
+            };
+            console.log("Processing Stripe refund:", refundParams, stripeAccountId ? `on Connect account ${stripeAccountId}` : '');
+            const refund = await stripe.refunds.create(refundParams, stripeOptions);
+            stripeRefundId = refund.id;
+            refundResult = {
+              type: refundType,
+              refundId: refund.id,
+              amount: refund.amount / 100,
+              status: refund.status,
+              stripeAccount: stripeAccountId || 'platform',
+            };
+            if (manualRemainder > 0.005) {
+              ledgerOnlyFallbackReason = `Stripe refunded ${formatCurrency(stripeRefundAmount, currencyCode)} (its remaining balance on this payment). The additional ${formatCurrency(manualRemainder, currencyCode)} is recorded as manual — reconcile with Stripe separately if needed.`;
+            }
+            // Sync our local refund_amount with Stripe's authoritative value
+            // so future refunds on this payment don't see a stale value.
+            const newRefundAmount = Number(payment.refund_amount || 0) + stripeRefundAmount;
+            await supabase.from('payments').update({ refund_amount: newRefundAmount }).eq('id', payment.id);
+          }
         } else {
-          console.log("Payment intent not in refundable state:", paymentIntent.status);
           refundResult = { type: "skipped", message: `Payment not in refundable state: ${paymentIntent.status}` };
         }
       } catch (stripeError: any) {
@@ -313,13 +360,13 @@ serve(async (req) => {
         );
       }
     } else {
-      // No Stripe payment - record as manual refund
+      // No Stripe payment (or Stripe PI was exhausted) — record as manual refund.
       console.log("No Stripe payment found, recording as manual refund");
       refundResult = {
         type: refundType,
         amount: refundAmount,
         status: "manual",
-        message: "Refund recorded (no Stripe payment to process)"
+        message: ledgerOnlyFallbackReason || "Refund recorded (no Stripe payment to process)",
       };
     }
 
@@ -416,30 +463,62 @@ serve(async (req) => {
     console.log("Should create ledger entry:", shouldCreateLedger, "refundResult:", JSON.stringify(refundResult));
 
     if (shouldCreateLedger) {
-      const ledgerEntry: Record<string, any> = {
-        rental_id: rentalId,
-        customer_id: rental.customer_id,
-        vehicle_id: rental.vehicle_id,
-        tenant_id: tenantId,
-        entry_date: new Date().toISOString().split('T')[0],
-        due_date: new Date().toISOString().split('T')[0],
-        type: 'Refund',
-        category: category,
-        amount: -Math.abs(refundAmount),
-        remaining_amount: 0,
-        reference: `Refund: ${reason}${stripeRefundId ? ` (Stripe: ${stripeRefundId})` : ''}`,
-      };
-      if (extensionId) ledgerEntry.extension_id = extensionId;
+      const today = new Date().toISOString().split('T')[0];
+      const refundReference = `Refund: ${reason}${stripeRefundId ? ` (Stripe: ${stripeRefundId})` : ''}`;
 
-      console.log("Creating ledger entry:", JSON.stringify(ledgerEntry));
-
-      const { data: ledgerData, error: ledgerError } = await supabase
+      // The unique index (rental_id, due_date, type, category, extension_id)
+      // means two refunds on the same category on the same day collide. Merge
+      // into the existing refund row by adding to its amount, instead of
+      // trying to INSERT a duplicate.
+      let existingQuery = supabase
         .from("ledger_entries")
-        .insert(ledgerEntry)
-        .select();
+        .select("id, amount, reference")
+        .eq("rental_id", rentalId)
+        .eq("type", "Refund")
+        .eq("category", category)
+        .eq("due_date", today);
+      if (extensionId) {
+        existingQuery = existingQuery.eq("extension_id", extensionId);
+      } else {
+        existingQuery = existingQuery.is("extension_id", null);
+      }
+      const { data: existingRefund } = await existingQuery.maybeSingle();
+
+      let ledgerError: any = null;
+      if (existingRefund) {
+        const mergedAmount = Number(existingRefund.amount) + (-Math.abs(refundAmount));
+        const mergedRef = existingRefund.reference
+          ? `${existingRefund.reference}; ${refundReference}`
+          : refundReference;
+        const { error } = await supabase
+          .from("ledger_entries")
+          .update({ amount: mergedAmount, reference: mergedRef })
+          .eq("id", existingRefund.id);
+        ledgerError = error;
+        console.log("Merged refund into existing ledger entry:", existingRefund.id, "newAmount:", mergedAmount);
+      } else {
+        const ledgerEntry: Record<string, any> = {
+          rental_id: rentalId,
+          customer_id: rental.customer_id,
+          vehicle_id: rental.vehicle_id,
+          tenant_id: tenantId,
+          entry_date: today,
+          due_date: today,
+          type: 'Refund',
+          category: category,
+          amount: -Math.abs(refundAmount),
+          remaining_amount: 0,
+          reference: refundReference,
+        };
+        if (extensionId) ledgerEntry.extension_id = extensionId;
+
+        console.log("Creating ledger entry:", JSON.stringify(ledgerEntry));
+        const { error } = await supabase.from("ledger_entries").insert(ledgerEntry);
+        ledgerError = error;
+      }
 
       if (ledgerError) {
-        console.error("Failed to create ledger entry:", JSON.stringify(ledgerError));
+        console.error("Failed to create/update ledger entry:", JSON.stringify(ledgerError));
         return new Response(
           JSON.stringify({
             success: false,
@@ -449,7 +528,6 @@ serve(async (req) => {
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      console.log("Ledger entry created for refund:", JSON.stringify(ledgerData));
     }
 
     // Get customer and vehicle details for response

@@ -20,16 +20,44 @@ const InvoicePaymentSuccess = () => {
   const { tenant } = useTenant();
   const [processing, setProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isHoldFlow, setIsHoldFlow] = useState(false);
 
   useEffect(() => {
     confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
 
-    // Process the payment — find the most recent Pending Stripe payment and apply it
-    const processPayment = async () => {
+    const run = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const flowType = params.get('type');
+      const sessionParam = params.get('session_id');
+      const rentalIdParam = params.get('rental_id');
+
+      // Hold-only flow: customer just authorised a deposit hold, nothing was charged.
+      if (flowType === 'hold') {
+        setIsHoldFlow(true);
+        try {
+          if (!sessionParam || !rentalIdParam) {
+            throw new Error('Missing session or rental reference');
+          }
+          const { data, error: syncError } = await supabase.functions.invoke('sync-deposit-hold', {
+            body: { sessionId: sessionParam, rentalId: rentalIdParam },
+          });
+          if (syncError) throw syncError;
+          console.log('[HOLD-SUCCESS] Result:', data);
+        } catch (err: any) {
+          console.error('[HOLD-SUCCESS] Error:', err);
+          setError(err.message || 'Could not record the hold');
+        } finally {
+          setProcessing(false);
+        }
+        return;
+      }
+
+      // Existing invoice-payment flow.
+      await processPayment(sessionParam);
+    };
+
+    const processPayment = async (sessionParam: string | null) => {
       try {
-        // Get the checkout session ID from URL params
-        const params = new URLSearchParams(window.location.search);
-        const sessionParam = params.get('session_id');
 
         // If no session_id in URL, find the most recent pending payment's session
         let checkoutSessionId = sessionParam;
@@ -63,6 +91,22 @@ const InvoicePaymentSuccess = () => {
           setError(fnError.message);
         } else {
           console.log('[INVOICE-SUCCESS] Result:', result);
+
+          // Place Stripe deposit hold on the saved card (non-blocking).
+          if (result?.rentalId) {
+            try {
+              const { data: holdData, error: holdError } = await supabase.functions.invoke('place-deposit-hold', {
+                body: { rentalId: result.rentalId },
+              });
+              if (holdError) {
+                console.warn('[INVOICE-SUCCESS] Deposit hold failed:', holdError);
+              } else {
+                console.log('[INVOICE-SUCCESS] Deposit hold placed:', holdData);
+              }
+            } catch (holdErr) {
+              console.warn('[INVOICE-SUCCESS] Deposit hold error (non-blocking):', holdErr);
+            }
+          }
         }
       } catch (err: any) {
         console.error('[INVOICE-SUCCESS] Error:', err);
@@ -71,8 +115,8 @@ const InvoicePaymentSuccess = () => {
       setProcessing(false);
     };
 
-    // Small delay to let Stripe finish processing
-    setTimeout(processPayment, 2000);
+    // Small delay to let Stripe finish processing.
+    setTimeout(() => { run(); }, 2000);
   }, [tenant?.id]);
 
   return (
@@ -87,12 +131,19 @@ const InvoicePaymentSuccess = () => {
               <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
             )}
           </div>
-          <h1 className="text-3xl font-bold">{processing ? 'Processing Payment...' : 'Payment Received'}</h1>
+          <h1 className="text-3xl font-bold">
+            {processing
+              ? (isHoldFlow ? 'Authorising Card...' : 'Processing Payment...')
+              : (isHoldFlow ? 'Hold Placed' : 'Payment Received')}
+          </h1>
           <p className="text-muted-foreground text-lg">
             {processing
-              ? 'Please wait while we confirm your payment.'
-              : 'Thank you! Your payment has been processed successfully.'
-            }
+              ? (isHoldFlow
+                  ? 'Authorising a temporary hold on your card — no money is being charged.'
+                  : 'Please wait while we confirm your payment.')
+              : (isHoldFlow
+                  ? 'Your card was authorised successfully. The hold will be released when your rental ends.'
+                  : 'Thank you! Your payment has been processed successfully.')}
           </p>
           {!processing && (
             <>
@@ -122,7 +173,7 @@ const BookingSuccessContent = () => {
   const sessionId = searchParams?.get("session_id");
   const rentalId = searchParams?.get("rental_id");
   const isInstallment = searchParams?.get("installment") === "true";
-  const isInvoicePayment = searchParams?.get("type") === "invoice";
+  const isInvoicePayment = searchParams?.get("type") === "invoice" || searchParams?.get("type") === "hold";
   const isAuthenticated = !!customerUser;
 
   // Clear persisted booking form data on successful booking
@@ -288,6 +339,22 @@ const BookingSuccessContent = () => {
                     }
                   } catch (applyErr) {
                     console.error("❌ Error applying payment:", applyErr);
+                  }
+
+                  // Place Stripe deposit hold on the saved card (non-blocking — if it
+                  // fails, the rental still completes and admin can retry manually).
+                  try {
+                    console.log('🔒 Placing deposit hold...');
+                    const { data: holdData, error: holdError } = await supabase.functions.invoke('place-deposit-hold', {
+                      body: { rentalId },
+                    });
+                    if (holdError) {
+                      console.warn('⚠️ Deposit hold failed:', holdError);
+                    } else {
+                      console.log('✅ Deposit hold placed:', holdData);
+                    }
+                  } catch (holdErr) {
+                    console.warn('⚠️ Deposit hold error (non-blocking):', holdErr);
                   }
 
                   // Send booking notification emails and create in-app notifications

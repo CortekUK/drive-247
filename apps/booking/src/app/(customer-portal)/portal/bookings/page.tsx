@@ -8,9 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Car, DollarSign, History, CalendarCheck, ArrowUpDown, ChevronRight, Calendar, AlertCircle } from 'lucide-react';
+import { Car, DollarSign, History, CalendarCheck, ArrowUpDown, ChevronRight, Calendar, AlertCircle, Search, X, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -81,10 +82,20 @@ function formatDateShort(date: string | null): string {
   }
 }
 
+function formatDateTimeShort(date: string | null): string {
+  if (!date) return '-';
+  try {
+    return format(new Date(date), 'dd MMM yyyy, HH:mm');
+  } catch {
+    return '-';
+  }
+}
+
 export default function BookingsPage() {
   const router = useRouter();
   const [filter, setFilter] = useState<BookingFilter>('all');
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
+  const [search, setSearch] = useState('');
   const { tenant } = useTenant();
 
   const { data: rentals, isLoading } = useCustomerRentals(filter);
@@ -103,15 +114,24 @@ export default function BookingsPage() {
     return ids;
   }, [notifications]);
 
-  // Sort rentals based on user selection
+  const getRef = (r: { rental_number?: string | null; id: string }) =>
+    r.rental_number || r.id?.slice(0, 8).toUpperCase();
+
+  // Sort by creation time (latest first by default) + filter by reference number.
+  // We sort by created_at (when the booking was made) rather than start_date so
+  // a just-booked future rental still shows at the top regardless of its status.
   const sortedRentals = useMemo(() => {
     if (!rentals) return [];
-    return [...rentals].sort((a, b) => {
-      const dateA = new Date(a.start_date).getTime();
-      const dateB = new Date(b.start_date).getTime();
+    const query = search.trim().toLowerCase();
+    const filtered = query
+      ? rentals.filter((r) => getRef(r).toLowerCase().includes(query))
+      : rentals;
+    return [...filtered].sort((a, b) => {
+      const dateA = new Date(a.created_at || a.start_date).getTime();
+      const dateB = new Date(b.created_at || b.start_date).getTime();
       return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
     });
-  }, [rentals, sortOrder]);
+  }, [rentals, sortOrder, search]);
 
   const getEmptyMessage = () => {
     switch (filter) {
@@ -154,7 +174,7 @@ export default function BookingsPage() {
         />
       </div>
 
-      {/* Tabs and Sort */}
+      {/* Tabs, Search, Sort */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <Tabs value={filter} onValueChange={(value) => setFilter(value as BookingFilter)}>
           <TabsList>
@@ -165,20 +185,42 @@ export default function BookingsPage() {
           </TabsList>
         </Tabs>
 
-        {rentals && rentals.length > 1 && (
-          <div className="flex items-center gap-2">
-            <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
-            <Select value={sortOrder} onValueChange={(value: SortOrder) => setSortOrder(value)}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="newest">Newest First</SelectItem>
-                <SelectItem value="oldest">Oldest First</SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by reference..."
+              className="h-9 pl-8 pr-8 text-sm"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
-        )}
+
+          {rentals && rentals.length > 1 && (
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+              <Select value={sortOrder} onValueChange={(value: SortOrder) => setSortOrder(value)}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest First</SelectItem>
+                  <SelectItem value="oldest">Oldest First</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Bookings List */}
@@ -231,17 +273,26 @@ export default function BookingsPage() {
 
                   {/* Main info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center rounded-md border border-indigo-500/30 bg-indigo-500/10 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums">
+                        #{getRef(rental)}
+                      </span>
                       <p className="font-medium truncate">{vehicleName}</p>
                       {vehicle?.reg && (
                         <span className="text-xs text-muted-foreground hidden sm:inline">{vehicle.reg}</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5 flex-wrap">
                       <span className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
                         {formatDateShort(rental.start_date)} — {formatDateShort(rental.end_date)}
                       </span>
+                      {rental.created_at && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          Booked {formatDateTimeShort(rental.created_at)}
+                        </span>
+                      )}
                       <span className="hidden sm:inline">
                         {formatCurrency(rental.monthly_amount || 0, tenant?.currency_code || 'USD')}
                       </span>
@@ -274,6 +325,13 @@ export default function BookingsPage() {
               );
             })}
           </div>
+        ) : search.trim() && rentals && rentals.length > 0 ? (
+          <Card className="p-8 text-center">
+            <Search className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+            <h3 className="font-semibold text-lg mb-2">No matches for “{search}”</h3>
+            <p className="text-muted-foreground mb-4">Try a different reference number or clear the search.</p>
+            <Button variant="outline" onClick={() => setSearch('')}>Clear search</Button>
+          </Card>
         ) : (
           <Card className="p-8 text-center">
             <Car className="h-12 w-12 mx-auto text-muted-foreground mb-4" />

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, ShieldX, Bolt } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, ShieldX, Bolt, Search, X } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -23,6 +23,7 @@ import { CreditCardIcon } from "@/components/ui/credit-card-icon";
 import { ReceiptIcon } from "@/components/ui/receipt";
 import { wrapAnimatedIcon } from "@/components/ui/animated-icon-wrapper";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
+import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useReminderStats } from "@/hooks/use-reminders";
@@ -151,6 +152,12 @@ export function AppSidebar() {
   // Settings mode: when on /settings path, show settings sidebar
   const isSettingsPage = pathname?.startsWith("/settings") || false;
   const activeSettingsTab = searchParams.get('tab') || 'general';
+  const [settingsSearch, setSettingsSearch] = useState("");
+
+  // Clear the search when leaving settings so it doesn't linger on return.
+  useEffect(() => {
+    if (!isSettingsPage && settingsSearch) setSettingsSearch("");
+  }, [isSettingsPage, settingsSearch]);
 
   const isActive = (path: string) => {
     if (path === "/") return pathname === "/";
@@ -304,12 +311,56 @@ export function AppSidebar() {
           </div>
         )}
 
+        {/* Search — hidden when sidebar is collapsed */}
+        {!collapsed && (
+          <div className="px-3 pt-2 pb-1.5">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={settingsSearch}
+                onChange={(e) => setSettingsSearch(e.target.value)}
+                placeholder="Search settings..."
+                className="h-8 pl-8 pr-7 text-[12px]"
+              />
+              {settingsSearch && (
+                <button
+                  type="button"
+                  onClick={() => setSettingsSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Settings Navigation */}
         <SidebarContent className="transition-all duration-300 ease-in-out gap-0">
-          {settingsTabGroups.map((group, groupIndex) => {
-            const visibleItems = group.items.filter(item => canViewSettings(item.value));
-            if (visibleItems.length === 0) return null;
-            const GroupIcon = visibleItems[0].icon;
+          {(() => {
+            const query = settingsSearch.trim().toLowerCase();
+            const groupsWithMatches = settingsTabGroups
+              .map(group => ({
+                ...group,
+                items: group.items.filter(item =>
+                  canViewSettings(item.value) &&
+                  (query === "" || item.label.toLowerCase().includes(query))
+                ),
+              }))
+              .filter(group => group.items.length > 0);
+
+            if (!collapsed && query !== "" && groupsWithMatches.length === 0) {
+              return (
+                <div className="px-4 py-6 text-center text-[12px] text-muted-foreground">
+                  No settings match “{settingsSearch}”.
+                </div>
+              );
+            }
+
+            return groupsWithMatches.map((group, groupIndex) => {
+              const visibleItems = group.items;
+              const GroupIcon = visibleItems[0].icon;
 
             return (
               <SidebarGroup key={group.label} className={`p-1.5 pb-0 ${groupIndex === settingsTabGroups.length - 1 ? 'pb-16' : ''}`}>
@@ -368,7 +419,8 @@ export function AppSidebar() {
                 )}
               </SidebarGroup>
             );
-          })}
+            });
+          })()}
         </SidebarContent>
 
         {/* Footer — trial/live status */}

@@ -136,32 +136,34 @@ const BookingVehiclesContent = () => {
         }
       }
 
-      // Overlap check: exclude vehicles with Pending/Active rentals overlapping selected dates
-      if (pickupDate && returnDate && tenant?.id) {
-        const { data: overlappingRentals } = await supabase
+      // Hide any vehicle that has a live booking (Pending, Active, or upcoming
+      // reservation) regardless of dates — we don't want to show vehicles that
+      // are already claimed on any non-terminal rental.
+      if (tenant?.id) {
+        const { data: blockedRentals } = await supabase
           .from("rentals")
           .select("vehicle_id")
           .eq("tenant_id", tenant.id)
-          .in("status", ["Pending", "Active"])
-          .lte("start_date", returnDate)
-          .or(`end_date.gte.${pickupDate},end_date.is.null`);
+          .not("status", "in", "(Cancelled,Rejected,Closed,Completed)");
 
-        if (overlappingRentals && overlappingRentals.length > 0) {
-          const overlappingIds = new Set(overlappingRentals.map(r => r.vehicle_id).filter(Boolean));
-          filteredData = filteredData.filter(v => !overlappingIds.has(v.id));
+        if (blockedRentals && blockedRentals.length > 0) {
+          const blockedIds = new Set(blockedRentals.map(r => r.vehicle_id).filter(Boolean));
+          filteredData = filteredData.filter(v => !blockedIds.has(v.id));
         }
 
         // Also exclude vehicles with overlapping external bookings (Turo/Airbnb iCal sync)
-        const { data: externalBookings } = await supabase
-          .from("external_bookings")
-          .select("vehicle_id")
-          .eq("tenant_id", tenant.id)
-          .lte("start_date", returnDate)
-          .gte("end_date", pickupDate);
+        if (pickupDate && returnDate) {
+          const { data: externalBookings } = await supabase
+            .from("external_bookings")
+            .select("vehicle_id")
+            .eq("tenant_id", tenant.id)
+            .lte("start_date", returnDate)
+            .gte("end_date", pickupDate);
 
-        if (externalBookings && externalBookings.length > 0) {
-          const externalIds = new Set(externalBookings.map((r: any) => r.vehicle_id).filter(Boolean));
-          filteredData = filteredData.filter(v => !externalIds.has(v.id));
+          if (externalBookings && externalBookings.length > 0) {
+            const externalIds = new Set(externalBookings.map((r: any) => r.vehicle_id).filter(Boolean));
+            filteredData = filteredData.filter(v => !externalIds.has(v.id));
+          }
         }
       }
 

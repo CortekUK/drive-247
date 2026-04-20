@@ -118,6 +118,20 @@ function AgreementCard({
     return () => clearTimeout(timer);
   }, [resendCooldown]);
 
+  // Derive a cooldown from envelope_sent_at so click-spam protection survives
+  // the row re-key that happens after a successful resend inserts a new row.
+  const sentAtMs = agreement.envelope_sent_at ? new Date(agreement.envelope_sent_at).getTime() : 0;
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (!sentAtMs) return;
+    const elapsed = Math.floor((Date.now() - sentAtMs) / 1000);
+    if (elapsed >= 60) return;
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [sentAtMs]);
+  const timestampResendCooldown = sentAtMs ? Math.max(0, 60 - Math.floor((nowTick - sentAtMs) / 1000)) : 0;
+  const effectiveResendCooldown = Math.max(resendCooldown, timestampResendCooldown);
+
   const statusInfo = getStatusInfo(agreement);
   const isSigned = statusInfo.label === 'Signed';
   const isCreditFailed = agreement.document_status === 'credit_failed';
@@ -166,23 +180,31 @@ function AgreementCard({
           }),
         }),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (data?.ok) {
         toast({ title: 'Agreement Resent', description: 'A new agreement has been sent for signing' });
         await queryClient.refetchQueries({ queryKey: ['rental-agreements'] });
         await queryClient.refetchQueries({ queryKey: ['rental'] });
+        setResendCooldown(60); // only start cooldown on success
       } else if (data?.error === 'insufficient_credits') {
         toast({ title: 'Insufficient Credits', description: 'Top up your credits to send this agreement', variant: 'destructive' });
         await queryClient.refetchQueries({ queryKey: ['rental-agreements'] });
         await queryClient.refetchQueries({ queryKey: ['rental'] });
       } else {
-        toast({ title: 'Resend Failed', description: data?.error || data?.detail || 'Failed to resend agreement', variant: 'destructive' });
+        const detail = data?.detail || data?.error || 'Failed to resend agreement';
+        const isRateLimit = typeof detail === 'string' && (detail.toLowerCase().includes('quota exceeded') || detail.toLowerCase().includes('rate limit'));
+        toast({
+          title: isRateLimit ? 'Rate Limit Reached' : 'Resend Failed',
+          description: isRateLimit
+            ? 'BoldSign API limit reached (50/hour). Please wait a few minutes before trying again.'
+            : detail,
+          variant: 'destructive',
+        });
       }
     } catch (error: any) {
       toast({ title: 'Error', description: error?.message || 'Failed to resend', variant: 'destructive' });
     } finally {
       setResending(false);
-      setResendCooldown(60); // 60s cooldown to protect BoldSign rate limit
     }
   };
 
@@ -268,9 +290,15 @@ function AgreementCard({
             </Button>
           )}
           {canEdit && hasSentDoc && !isSigned && (
-            <Button variant="ghost" size="sm" onClick={handleResend} disabled={resending || resendCooldown > 0}>
+            <Button variant="ghost" size="sm" onClick={handleResend} disabled={resending || effectiveResendCooldown > 0}>
               <Send className="h-3.5 w-3.5 mr-1" />
-              {resending ? 'Sending...' : resendCooldown > 0 ? `Wait ${resendCooldown}s` : 'Resend'}
+              {resending ? 'Sending...' : effectiveResendCooldown > 0 ? `Wait ${effectiveResendCooldown}s` : 'Resend'}
+            </Button>
+          )}
+          {canEdit && isCreditFailed && (
+            <Button variant="outline" size="sm" onClick={handleResend} disabled={resending}>
+              <Send className="h-3.5 w-3.5 mr-1" />
+              {resending ? 'Retrying...' : 'Retry Send'}
             </Button>
           )}
         </div>
@@ -314,13 +342,17 @@ export function AgreementTimeline({
       extensionAgreementsByNum[num].push(a);
     }
   });
-  // Fallback: if no agreements matched by dates (e.g. legacy data), assign unmatched ones by index
+  // Fallback: assign any unmatched agreements to groups that still have none,
+  // in order. Previously we only ran this fallback when NO agreement matched,
+  // which silently dropped agreements with slightly-off period dates.
   const unmatchedAgreements = extensionAgreements.filter((a) =>
     !Object.values(extensionAgreementsByNum).flat().includes(a)
   );
-  if (unmatchedAgreements.length > 0 && Object.keys(extensionAgreementsByNum).length === 0) {
+  if (unmatchedAgreements.length > 0) {
+    const unusedGroups = extensionGroups.filter((g) => !extensionAgreementsByNum[g.extensionNumber]);
     unmatchedAgreements.forEach((a, idx) => {
-      const num = idx + 1;
+      const group = unusedGroups[idx];
+      const num = group ? group.extensionNumber : idx + 1;
       if (!extensionAgreementsByNum[num]) extensionAgreementsByNum[num] = [];
       extensionAgreementsByNum[num].push(a);
     });

@@ -573,14 +573,15 @@ const BookingCheckoutContent = () => {
         }
       }
 
-      // Step 3c: Vehicle overlap check — ensure no Pending/Active rental overlaps selected dates
+      // Step 3c: Vehicle overlap check — must mirror DB trigger check_rental_overlap
+      // which blocks any status NOT in Cancelled/Rejected/Closed.
       {
         if (vehicleId && pickupDate && returnDate) {
           const { data: overlapping, error: overlapError } = await supabase
             .from("rentals")
             .select("id")
             .eq("vehicle_id", vehicleId)
-            .in("status", ["Pending", "Active"])
+            .not("status", "in", "(Cancelled,Rejected,Closed)")
             .lte("start_date", returnDate)
             .or(`end_date.gte.${pickupDate},end_date.is.null`)
             .limit(1);

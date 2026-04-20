@@ -976,13 +976,42 @@ export default function BookingCheckoutStep({
         rentalData.tenant_id = tenant.id;
       }
 
+      // Pre-insert overlap guard: mirrors the DB trigger check_rental_overlap.
+      // Catches races + date-change-after-vehicle-selection and gives a clear
+      // message instead of the raw Postgres trigger exception.
+      if (rentalData.vehicle_id && tenant?.id) {
+        const { data: conflicting } = await supabase
+          .from("rentals")
+          .select("id")
+          .eq("vehicle_id", rentalData.vehicle_id)
+          .eq("tenant_id", tenant.id)
+          .not("status", "in", "(Cancelled,Rejected,Closed)")
+          .lte("start_date", rentalData.end_date)
+          .or(`end_date.gte.${rentalData.start_date},end_date.is.null`)
+          .limit(1);
+
+        if (conflicting && conflicting.length > 0) {
+          throw new Error(
+            "This vehicle is no longer available for the selected dates. Please go back and choose different dates or a different vehicle."
+          );
+        }
+      }
+
       const { data: rental, error: rentalError } = await supabase
         .from("rentals")
         .insert(rentalData)
         .select()
         .single();
 
-      if (rentalError) throw rentalError;
+      if (rentalError) {
+        // Translate raw trigger exception into friendly copy.
+        if (/vehicle rental overlap/i.test(rentalError.message || "")) {
+          throw new Error(
+            "This vehicle was just booked for the selected dates. Please go back and choose different dates or a different vehicle."
+          );
+        }
+        throw rentalError;
+      }
 
       // Save selected extras to rental_extras_selections
       if (Object.keys(selectedExtras).length > 0) {

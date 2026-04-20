@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import {
@@ -20,6 +20,7 @@ import {
   Loader2,
   AlertCircle,
   CalendarPlus,
+  Copy,
 } from 'lucide-react';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -28,6 +29,8 @@ import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { useRentalAgreements, type RentalAgreement } from '@/hooks/use-rental-agreements';
 import { useRentalInsurancePolicies, type CustomerInsurancePolicy } from '@/hooks/use-rental-insurance-policies';
 import { useRentalExtensionTotals, sumExtensionOutstanding } from '@/hooks/use-rental-extension-totals';
+import { useRentalInvoice, useRentalPaymentBreakdown } from '@/hooks/use-rental-invoice';
+import { useRentalCharges } from '@/hooks/use-rental-ledger-data';
 import {
   useSignAgreement,
   useViewAgreement,
@@ -444,11 +447,12 @@ export default function BookingDetailPage() {
       const { data, error } = await supabase
         .from('rentals')
         .select(`
-          id, start_date, end_date, status, monthly_amount, rental_period_type,
+          id, rental_number, start_date, end_date, status, monthly_amount, rental_period_type,
           payment_status, approval_status, pickup_location, return_location,
           created_at, has_installment_plan, is_extended, previous_end_date,
           original_end_date, cancellation_requested, cancellation_reason,
           extension_checkout_url, extension_amount, delivery_method, delivery_address, delivery_fee,
+          collection_fee, deposit_hold_status, deposit_hold_amount,
           document_status, docusign_envelope_id, signed_document_id,
           vehicles:vehicle_id (id, reg, make, model, colour, photo_url, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, vehicle_photos (photo_url)),
           installment_plans!installment_plans_rental_id_fkey (id, plan_type, status, total_installable_amount, upfront_amount, upfront_paid, installment_amount, number_of_installments, paid_installments, total_paid, next_due_date, scheduled_installments (id, installment_number, amount, due_date, status))
@@ -492,6 +496,43 @@ export default function BookingDetailPage() {
     },
     enabled: !!id,
   });
+
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`customer-rental-${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ledger_entries', filter: `rental_id=eq.${id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['customer-rental-ledger', id] });
+        queryClient.invalidateQueries({ queryKey: ['rental-invoice'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: `rental_id=eq.${id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['customer-rental-payments', id] });
+        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_applications' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rental_extensions', filter: `rental_id=eq.${id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
+        queryClient.invalidateQueries({ queryKey: ['customer-rental-ledger', id] });
+        queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rentals', filter: `id=eq.${id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['customer-rental-detail', id] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, queryClient]);
 
   // ---- Derived data ----
 
@@ -550,13 +591,51 @@ export default function BookingDetailPage() {
   // Per-section outstanding: original charges vs extension charges
   const extensionCategories = ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance', 'Extension'];
 
-  const originalOutstanding = useMemo(
-    () =>
-      ledgerEntries
-        .filter((e) => e.type === 'Charge' && !extensionCategories.includes(e.category))
-        .reduce((sum, e) => sum + (e.remaining_amount || 0), 0),
-    [ledgerEntries]
-  );
+  // Use invoice + ledger to compute outstanding the same way admin does.
+  // Ledger charges are authoritative when present; otherwise fall back to
+  // invoice amounts so a freshly-created rental with no ledger entries still
+  // shows the correct amount due.
+  const { data: invoiceBreakdown } = useRentalInvoice(id || undefined);
+  const { data: rentalChargesForOutstanding } = useRentalCharges(id || undefined);
+  const { data: paymentBreakdownByCategory } = useRentalPaymentBreakdown(id || undefined);
+
+  const originalOutstanding = useMemo(() => {
+    const amounts: Record<string, number> = {};
+    const hasLedgerData = new Set<string>();
+
+    if (paymentBreakdownByCategory) {
+      for (const [cat, data] of Object.entries(paymentBreakdownByCategory)) {
+        if (extensionCategories.includes(cat)) continue;
+        hasLedgerData.add(cat);
+        if (data.remaining > 0) amounts[cat] = data.remaining;
+      }
+    }
+
+    if (invoiceBreakdown) {
+      const insuranceCharge = (rentalChargesForOutstanding || []).find((c) => c.category === 'Insurance');
+      const collectionCharge = (rentalChargesForOutstanding || []).find((c) => c.category === 'Collection Fee');
+      // Security Deposit is intentionally omitted — never an outstanding
+      // charge. Deposits live on rentals.deposit_hold_* and are Stripe
+      // preauth holds, not owed money.
+      const invoiceCategoryMap: Record<string, number> = {
+        Rental: invoiceBreakdown.rentalFee,
+        Tax: invoiceBreakdown.taxAmount,
+        Insurance: insuranceCharge?.amount ?? invoiceBreakdown.insurancePremium ?? 0,
+        'Service Fee': invoiceBreakdown.serviceFee,
+        'Delivery Fee': (rental as any)?.delivery_fee || invoiceBreakdown.deliveryFee || 0,
+        'Collection Fee': collectionCharge ? Number(collectionCharge.amount) : ((rental as any)?.collection_fee ?? 0),
+        Extras: invoiceBreakdown.extrasTotal ?? 0,
+      };
+
+      for (const [cat, invAmount] of Object.entries(invoiceCategoryMap)) {
+        if (amounts[cat] !== undefined || hasLedgerData.has(cat)) continue;
+        if (invAmount <= 0) continue;
+        amounts[cat] = invAmount;
+      }
+    }
+
+    return Object.values(amounts).reduce((s, v) => s + v, 0);
+  }, [paymentBreakdownByCategory, invoiceBreakdown, rentalChargesForOutstanding, rental]);
 
   // Phase 5: authoritative extension outstanding from the unified view.
   // Replaces the old ledger-sum which drifted when extension insurance was
@@ -652,22 +731,49 @@ export default function BookingDetailPage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold truncate">
-              {vehicle
-                ? `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || vehicle.reg
-                : 'Booking Details'}
-            </h1>
-            <Badge className={getRentalStatusColor(rental.status)}>
-              {rental.status?.replace(/_/g, ' ')}
-            </Badge>
-            {hasExtensionPending && (
-              <Badge className="bg-amber-100 text-amber-800">Extension Pending</Badge>
-            )}
-          </div>
-          {vehicle?.reg && (
-            <p className="text-sm text-muted-foreground">{vehicle.reg}</p>
-          )}
+          {(() => {
+            const ref = (rental as { rental_number?: string | null }).rental_number || rental.id?.slice(0, 8).toUpperCase();
+            const vehicleTitle = vehicle
+              ? `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || vehicle.reg
+              : 'Booking Details';
+            return (
+              <>
+                <div className="flex items-center gap-3 flex-wrap group">
+                  <h1 className="text-2xl font-bold font-mono tabular-nums tracking-tight">
+                    #{ref || '—'}
+                  </h1>
+                  {ref && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(String(ref));
+                          toast.success('Reference copied', { description: ref });
+                        } catch {
+                          toast.error('Copy failed');
+                        }
+                      }}
+                      className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      title="Copy reference"
+                      aria-label="Copy reference number"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </button>
+                  )}
+                  <Badge className={getRentalStatusColor(rental.status)}>
+                    {rental.status?.replace(/_/g, ' ')}
+                  </Badge>
+                  {hasExtensionPending && (
+                    <Badge className="bg-amber-100 text-amber-800">Extension Pending</Badge>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground mt-1 truncate">
+                  {vehicleTitle}
+                  {vehicle?.reg && ` • ${vehicle.reg}`}
+                </p>
+              </>
+            );
+          })()}
         </div>
         {canExtend && (
           <Button onClick={() => setExtendDialogOpen(true)}>

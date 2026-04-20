@@ -1415,7 +1415,12 @@ const CreateRental = () => {
                   console.log('[Bonzah] Policy activated:', confirmResult.policy_no);
                 }
 
-                // Step 3: Create ledger entry for insurance charge (matches buy-insurance-dialog)
+                // Step 3: Create ledger entry for insurance charge (matches buy-insurance-dialog).
+                // entry_date/due_date must match rental.start_date so the ux_rental_charge_unique
+                // index (rental_id, due_date, type, category, extension_id) collides with the
+                // Insurance row that generate_first_charge_for_rental inserts a moment later —
+                // otherwise two Insurance charges end up on the same rental.
+                const insuranceChargeDate = rental.start_date;
                 const { error: ledgerError } = await supabase
                   .from('ledger_entries')
                   .insert({
@@ -1428,8 +1433,8 @@ const CreateRental = () => {
                     customer_id: data.customer_id,
                     vehicle_id: data.vehicle_id,
                     tenant_id: tenant.id,
-                    entry_date: new Date().toISOString().split('T')[0],
-                    due_date: new Date().toISOString().split('T')[0],
+                    entry_date: insuranceChargeDate,
+                    due_date: insuranceChargeDate,
                   });
 
                 if (ledgerError) {

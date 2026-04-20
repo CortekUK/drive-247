@@ -1115,21 +1115,20 @@ const MultiStepBookingWidget = () => {
       }
     }
 
-    // Load Pending/Active rentals that overlap with selected dates for clash prevention
-    if (formData.pickupDate && formData.dropoffDate) {
-      const { data: overlappingRentals } = await supabase
-        .from("rentals")
-        .select("vehicle_id")
-        .eq("tenant_id", tenant.id)
-        .in("status", ["Pending", "Active"])
-        .lte("start_date", formData.dropoffDate)
-        .or(`end_date.gte.${formData.pickupDate},end_date.is.null`);
+    // Hide any vehicle that has a live booking (Pending, Active, or upcoming
+    // reservation) regardless of dates. We treat anything NOT in
+    // Cancelled/Rejected/Closed/Completed as "live" — that covers pending
+    // approvals, active rentals, and future scheduled ones.
+    const { data: blockedRentals } = await supabase
+      .from("rentals")
+      .select("vehicle_id")
+      .eq("tenant_id", tenant.id)
+      .not("status", "in", "(Cancelled,Rejected,Closed,Completed)");
 
-      if (overlappingRentals) {
-        setOverlappingVehicleIds(new Set(overlappingRentals.map(r => r.vehicle_id).filter(Boolean) as string[]));
-      } else {
-        setOverlappingVehicleIds(new Set());
-      }
+    if (blockedRentals) {
+      setOverlappingVehicleIds(new Set(blockedRentals.map(r => r.vehicle_id).filter(Boolean) as string[]));
+    } else {
+      setOverlappingVehicleIds(new Set());
     }
   };
 
@@ -1889,11 +1888,43 @@ const MultiStepBookingWidget = () => {
         rentalData.tenant_id = tenant.id;
       }
 
+      // Pre-insert overlap guard: mirrors the DB trigger check_rental_overlap.
+      // Catches both (a) race conditions where another rental was created between
+      // vehicle selection and submit, and (b) the user going back to change dates
+      // after already picking a vehicle. Gives a friendly error instead of the
+      // raw Postgres trigger exception.
+      if (formData.vehicleId && tenant?.id) {
+        const { data: conflicting } = await supabase
+          .from("rentals")
+          .select("id")
+          .eq("vehicle_id", formData.vehicleId)
+          .eq("tenant_id", tenant.id)
+          .not("status", "in", "(Cancelled,Rejected,Closed)")
+          .lte("start_date", rentalData.end_date)
+          .or(`end_date.gte.${rentalData.start_date},end_date.is.null`)
+          .limit(1);
+
+        if (conflicting && conflicting.length > 0) {
+          throw new Error(
+            "This vehicle is no longer available for the selected dates. Please go back and choose different dates or a different vehicle."
+          );
+        }
+      }
+
       const {
         data,
         error
       } = await supabase.from("rentals").insert(rentalData).select().single();
-      if (error) throw error;
+      if (error) {
+        // If the DB trigger still fires (tiny race window between our check and
+        // the insert), surface the same friendly message.
+        if (/vehicle rental overlap/i.test(error.message || "")) {
+          throw new Error(
+            "This vehicle was just booked for the selected dates. Please go back and choose different dates or a different vehicle."
+          );
+        }
+        throw error;
+      }
 
       // Update vehicle status to Rented (even for pending rentals)
       let vehicleUpdateQuery = supabase

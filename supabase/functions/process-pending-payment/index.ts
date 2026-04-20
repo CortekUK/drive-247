@@ -160,6 +160,7 @@ Deno.serve(async (req) => {
       ok: true,
       status: applyResult?.status || 'Completed',
       allocated: applyResult?.allocated || 0,
+      rentalId: payment.rental_id || null,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

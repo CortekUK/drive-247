@@ -262,37 +262,14 @@ export function ExtensionRequestDialog({
         throw new Error(`Failed to approve extension: ${updateError.message}`);
       }
 
-      // Insert ledger charges for extension (rental fee + tax + service fee)
-      if (extensionCost > 0) {
-        const extNum = (existingExtensionCount || 0) + 1;
-        const extRef = `Extension #${extNum}: ${extensionDays} day${extensionDays !== 1 ? 's' : ''} (${format(currentEndDate, 'MMM dd')} → ${format(requestedEndDate, 'MMM dd, yyyy')})`;
-        const baseLedger = {
-          rental_id: rental.id,
-          customer_id: rental.customer_id || rental.customers?.id,
-          vehicle_id: rental.vehicle_id || rental.vehicles?.id,
-          tenant_id: tenant.id,
-          type: 'Charge' as const,
-          entry_date: new Date().toISOString().split('T')[0],
-          due_date: (rental.previous_end_date || new Date().toISOString()).split('T')[0],
-        };
-        const ledgerEntries: any[] = [
-          { ...baseLedger, category: 'Extension Rental', reference: extRef, amount: extensionCost, remaining_amount: extensionCost },
-        ];
-        if (extensionTaxAmount > 0) {
-          ledgerEntries.push({ ...baseLedger, category: 'Extension Tax', reference: `Extension #${extNum}: Tax`, amount: extensionTaxAmount, remaining_amount: extensionTaxAmount });
-        }
-        if (extensionServiceFee > 0) {
-          ledgerEntries.push({ ...baseLedger, category: 'Extension Service Fee', reference: `Extension #${extNum}: Service Fee`, amount: extensionServiceFee, remaining_amount: extensionServiceFee });
-        }
-        const { error: ledgerError } = await supabase
-          .from('ledger_entries')
-          .insert(ledgerEntries);
-        if (ledgerError) console.error('Failed to create ledger entries:', ledgerError);
-      }
-
-      // Create Stripe checkout for extension payment
+      // Create Stripe checkout FIRST — the edge function (service role) creates
+      // the rental_extensions row and returns the extensionId + sequenceNumber.
+      // RLS blocks client-side inserts into rental_extensions, so we mirror
+      // AdminExtendRentalDialog's flow here to get an authoritative row before
+      // stamping ledger charges with extension_id.
       let checkoutUrl: string | undefined;
       let createdExtensionId: string | undefined;
+      let createdSequenceNumber: number | undefined;
       if (extensionTotalAmount > 0) {
         try {
           const { data: session } = await supabase.auth.getSession();
@@ -322,6 +299,7 @@ export function ExtensionRequestDialog({
             const result = await res.json();
             checkoutUrl = result.checkoutUrl;
             createdExtensionId = result.extensionId;
+            createdSequenceNumber = result.sequenceNumber;
 
             // Save checkout URL to rental for customer portal visibility
             if (checkoutUrl) {
@@ -336,6 +314,40 @@ export function ExtensionRequestDialog({
         } catch (err) {
           console.error('Error creating extension checkout:', err);
         }
+      }
+
+      // Insert ledger charges for extension (rental fee + tax + service fee)
+      // with the authoritative extension_id + sequence_number so the
+      // rental_extension_totals view and the customer-portal PaymentBreakdown
+      // can group charges by extension. Without extension_id stamped, the
+      // customer UI falls back to "all Extension Rental charges" and bleeds
+      // older paid extensions into Ext #N's status row.
+      const extNum = createdSequenceNumber ?? ((existingExtensionCount || 0) + 1);
+      if (extensionCost > 0) {
+        const extRef = `Extension #${extNum}: ${extensionDays} day${extensionDays !== 1 ? 's' : ''} (${format(currentEndDate, 'MMM dd')} → ${format(requestedEndDate, 'MMM dd, yyyy')})`;
+        const baseLedger = {
+          rental_id: rental.id,
+          customer_id: rental.customer_id || rental.customers?.id,
+          vehicle_id: rental.vehicle_id || rental.vehicles?.id,
+          tenant_id: tenant.id,
+          type: 'Charge' as const,
+          entry_date: new Date().toISOString().split('T')[0],
+          due_date: (rental.previous_end_date || new Date().toISOString()).split('T')[0],
+          ...(createdExtensionId ? { extension_id: createdExtensionId } : {}),
+        };
+        const ledgerEntries: any[] = [
+          { ...baseLedger, category: 'Extension Rental', reference: extRef, amount: extensionCost, remaining_amount: extensionCost },
+        ];
+        if (extensionTaxAmount > 0) {
+          ledgerEntries.push({ ...baseLedger, category: 'Extension Tax', reference: `Extension #${extNum}: Tax`, amount: extensionTaxAmount, remaining_amount: extensionTaxAmount });
+        }
+        if (extensionServiceFee > 0) {
+          ledgerEntries.push({ ...baseLedger, category: 'Extension Service Fee', reference: `Extension #${extNum}: Service Fee`, amount: extensionServiceFee, remaining_amount: extensionServiceFee });
+        }
+        const { error: ledgerError } = await supabase
+          .from('ledger_entries')
+          .insert(ledgerEntries);
+        if (ledgerError) console.error('Failed to create ledger entries:', ledgerError);
       }
 
       // Send notification email
@@ -404,7 +416,7 @@ export function ExtensionRequestDialog({
             agreementType: 'extension',
             extensionPreviousEndDate: rental.end_date,
             extensionNewEndDate: rental.previous_end_date,
-            extensionNumber: (existingExtensionCount || 0) + 1,
+            extensionNumber: extNum,
           }),
         }).then(res => {
           if (!res.ok) console.error('Extension agreement send failed:', res.status);
@@ -430,17 +442,25 @@ export function ExtensionRequestDialog({
               coverage: extensionCoverage,
               renter: originalPolicy.renter_details,
               policy_type: 'extension',
+              extension_id: createdExtensionId ?? undefined,
             },
           });
 
+          // Use the authoritative premium returned by the quote. UI state can
+          // be 0 if the admin clicks Approve before BonzahInsuranceSelector
+          // finishes calculating — that's what was causing the "admin has no
+          // Bonzah, customer does" split (policy created, ledger charge missing).
+          const actualPremium = Number(quoteResult?.total_premium ?? insurancePremium ?? 0);
+
           // Confirm the Bonzah policy now so it issues immediately, matching
           // the original-rental flow (admin buys from tenant balance at
-          // approval). Stamp the id onto rental_extensions for cross-ref.
+          // approval). Stamp the id + premium onto rental_extensions so the
+          // rental_extension_totals view picks up the right amount.
           if (quoteResult?.policy_record_id) {
             await supabase.functions.invoke('bonzah-confirm-payment', {
               body: {
                 policy_record_id: quoteResult.policy_record_id,
-                stripe_payment_intent_id: `portal-extension-${rental.id}`,
+                stripe_payment_intent_id: `portal-extension-${rental.id}-${createdExtensionId ?? Date.now()}`,
               },
             });
             if (createdExtensionId) {
@@ -449,13 +469,16 @@ export function ExtensionRequestDialog({
                 .update({
                   bonzah_policy_id: quoteResult.policy_record_id,
                   bonzah_confirmed_at: new Date().toISOString(),
+                  insurance_amount: actualPremium,
                 })
                 .eq('id', createdExtensionId);
             }
           }
 
-          // Create Extension Insurance ledger charge
-          if (insurancePremium > 0) {
+          // Create Extension Insurance ledger charge so the admin breakdown
+          // and customer PaymentBreakdown both see it. Use actualPremium so
+          // this doesn't skip on a stale UI value.
+          if (actualPremium > 0) {
             await supabase.from('ledger_entries').insert({
               customer_id: rental.customer_id || rental.customers?.id,
               rental_id: rental.id,
@@ -463,10 +486,12 @@ export function ExtensionRequestDialog({
               entry_date: rental.previous_end_date.split('T')[0],
               type: 'Charge',
               category: 'Extension Insurance',
-              amount: insurancePremium,
-              remaining_amount: insurancePremium,
+              reference: `Extension #${extNum}: Insurance`,
+              amount: actualPremium,
+              remaining_amount: actualPremium,
               due_date: rental.previous_end_date.split('T')[0],
               tenant_id: tenant.id,
+              ...(createdExtensionId ? { extension_id: createdExtensionId } : {}),
             });
           }
 
@@ -489,6 +514,7 @@ export function ExtensionRequestDialog({
       queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
       queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
       queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
       queryClient.invalidateQueries({ queryKey: ['extension-count', rental.id] });
       queryClient.invalidateQueries({ queryKey: ['rental-agreements', rental.id] });
       queryClient.invalidateQueries({ queryKey: ['rental-insurance-policies', rental.id] });

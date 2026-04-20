@@ -120,7 +120,7 @@ export const AddPaymentDialog = ({
       if (vehicle_id) form.setValue("vehicle_id", vehicle_id);
       // Prefer breakdown total > defaultAmount > outstanding
       if (breakdownTotal && breakdownTotal > 0) form.setValue("amount", Math.round(breakdownTotal * 100) / 100);
-      else if (defaultAmount) form.setValue("amount", defaultAmount);
+      else if (defaultAmount) form.setValue("amount", Math.round(defaultAmount * 100) / 100);
     }
   }, [open, customer_id, vehicle_id, defaultAmount, breakdownTotal, form]);
 
@@ -417,6 +417,16 @@ export const AddPaymentDialog = ({
     try {
       const amount = form.getValues("amount") || breakdownTotal || invoiceToSend?.total_amount || rentalDetails?.monthly_amount || 0;
 
+      // Derive booking-app origin from the portal origin so local dev (localhost)
+      // redirects to the local booking app instead of production. The portal host
+      // always contains ".portal." and in local dev uses :3001 (booking :3000).
+      //   test.portal.localhost:3001   -> test.localhost:3000
+      //   test.portal.drive-247.com    -> test.drive-247.com
+      const portalHost = typeof window !== 'undefined' ? window.location.host : '';
+      const protocol = typeof window !== 'undefined' ? window.location.protocol : 'https:';
+      const bookingHost = portalHost.replace('.portal.', '.').replace(':3001', ':3000');
+      const bookingOrigin = bookingHost ? `${protocol}//${bookingHost}` : `https://${tenant?.slug || 'app'}.drive-247.com`;
+
       // Step 1: Create Stripe checkout session
       const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout-session', {
         body: {
@@ -425,8 +435,8 @@ export const AddPaymentDialog = ({
           customerName,
           totalAmount: amount,
           tenantId: tenant?.id,
-          successUrl: `https://${tenant?.slug || 'app'}.drive-247.com/booking-success?type=invoice&status=paid&session_id={CHECKOUT_SESSION_ID}`,
-          cancelUrl: `https://${tenant?.slug || 'app'}.drive-247.com/portal/payments`,
+          successUrl: `${bookingOrigin}/booking-success?type=invoice&status=paid&session_id={CHECKOUT_SESSION_ID}`,
+          cancelUrl: `${bookingOrigin}/portal/payments`,
           source: 'portal',
           ...(targetCategories && targetCategories.length > 0 ? { targetCategories } : {}),
           ...(extensionId ? { extensionId } : {}),
@@ -576,6 +586,15 @@ export const AddPaymentDialog = ({
                           </div>
                         )}
                       </>
+                    ) : defaultAmount !== undefined ? (
+                      // Read-only amount display when the caller pre-computed the amount
+                      // (individual category, collective selection, Bonzah insurance,
+                      // extension payments, etc. — amount is derived from outstanding
+                      // and must not be edited by hand).
+                      <div className="flex items-center h-12 px-3 rounded-md border bg-muted/50 text-lg font-semibold">
+                        <span className="text-muted-foreground text-sm mr-1">{currencySymbol}</span>
+                        {formatCurrency(field.value || 0, tenant?.currency_code || 'USD').replace(/^[^\d]*/, '')}
+                      </div>
                     ) : (
                       <>
                         <FormControl>
@@ -590,12 +609,12 @@ export const AddPaymentDialog = ({
                             />
                           </div>
                         </FormControl>
-                        {!defaultAmount && outstandingBalance !== undefined && outstandingBalance > 0 && field.value !== outstandingBalance && (
+                        {outstandingBalance !== undefined && outstandingBalance > 0 && field.value !== outstandingBalance && (
                           <button type="button" className="text-xs text-primary hover:underline" onClick={() => field.onChange(outstandingBalance)}>
                             Use full outstanding: {formatCurrency(outstandingBalance, tenant?.currency_code || 'USD')}
                           </button>
                         )}
-                        {!defaultAmount && outstandingBalance !== undefined && outstandingBalance === 0 && selectedCustomerId && (
+                        {outstandingBalance !== undefined && outstandingBalance === 0 && selectedCustomerId && (
                           <p className="text-xs text-emerald-500">No outstanding balance</p>
                         )}
                       </>

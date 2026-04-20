@@ -55,6 +55,51 @@ export const useRentalInvoice = (rentalId: string | undefined) => {
   });
 };
 
+/**
+ * Refund amounts per category for a rental. For Extension* categories we
+ * also track refunds keyed by `${extension_id}|${category}` so multiple
+ * extensions with the same category don't collide on the customer portal.
+ */
+export interface RentalRefundBreakdown {
+  categoryRefunds: Record<string, number>;
+  extensionCategoryRefunds: Record<string, number>;
+}
+
+export const useRentalRefundBreakdown = (rentalId: string | undefined) => {
+  const { tenant } = useTenant();
+
+  return useQuery<RentalRefundBreakdown | null>({
+    queryKey: ['rental-refund-breakdown', tenant?.id, rentalId],
+    queryFn: async () => {
+      if (!rentalId) return null;
+
+      let q = supabase
+        .from('ledger_entries')
+        .select('category, amount, extension_id')
+        .eq('rental_id', rentalId)
+        .eq('type', 'Refund');
+      if (tenant?.id) q = q.eq('tenant_id', tenant.id);
+
+      const { data: refunds, error } = await q;
+      if (error) throw error;
+
+      const categoryRefunds: Record<string, number> = {};
+      const extensionCategoryRefunds: Record<string, number> = {};
+      (refunds || []).forEach((r: any) => {
+        const cat = r.category || 'Other';
+        const amt = Math.abs(Number(r.amount));
+        categoryRefunds[cat] = (categoryRefunds[cat] || 0) + amt;
+        if (r.extension_id && cat.startsWith('Extension')) {
+          const key = `${r.extension_id}|${cat}`;
+          extensionCategoryRefunds[key] = (extensionCategoryRefunds[key] || 0) + amt;
+        }
+      });
+      return { categoryRefunds, extensionCategoryRefunds };
+    },
+    enabled: !!tenant && !!rentalId,
+  });
+};
+
 export const useRentalPaymentBreakdown = (rentalId: string | undefined) => {
   const { tenant } = useTenant();
 
