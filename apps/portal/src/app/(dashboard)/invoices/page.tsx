@@ -228,12 +228,12 @@ const InvoicesList = () => {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Invoices</h1>
-          <p className="text-muted-foreground">View and manage rental invoices</p>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold">Invoices</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">View and manage rental invoices</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -241,6 +241,7 @@ const InvoicesList = () => {
             size="icon"
             onClick={handleExportCSV}
             disabled={!filteredInvoices.length}
+            className="shrink-0"
           >
             <Download className="h-4 w-4" />
           </Button>
@@ -250,8 +251,8 @@ const InvoicesList = () => {
       {/* Filters */}
       <div className="space-y-4">
         {/* Search and main filters */}
-        <div className="flex flex-wrap gap-4 items-center">
-          <div className="relative flex-1 min-w-[200px] sm:min-w-[300px]">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 sm:items-center">
+          <div className="relative w-full sm:flex-1 sm:min-w-[300px]">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               placeholder="Search by invoice #, customer, or vehicle..."
@@ -277,7 +278,7 @@ const InvoicesList = () => {
             </SelectContent>
           </Select>
 
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-wrap gap-2 items-center">
             <span className="text-sm text-muted-foreground whitespace-nowrap">Invoice Date:</span>
 
             <Popover open={dateFromOpen} onOpenChange={setDateFromOpen}>
@@ -285,7 +286,7 @@ const InvoicesList = () => {
                 <Button
                   variant="outline"
                   className={cn(
-                    "w-[110px] justify-start text-left font-normal",
+                    "flex-1 sm:flex-none sm:w-[110px] justify-start text-left font-normal",
                     !filters.dateFrom && "text-muted-foreground"
                   )}
                 >
@@ -293,7 +294,7 @@ const InvoicesList = () => {
                   {filters.dateFrom ? format(filters.dateFrom, "MMM dd") : "From"}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
+              <PopoverContent className="w-auto max-w-[95vw] p-0" align="start" collisionPadding={8}>
                 <CalendarComponent
                   mode="single"
                   selected={filters.dateFrom}
@@ -312,7 +313,7 @@ const InvoicesList = () => {
                 <Button
                   variant="outline"
                   className={cn(
-                    "w-[110px] justify-start text-left font-normal",
+                    "flex-1 sm:flex-none sm:w-[110px] justify-start text-left font-normal",
                     !filters.dateTo && "text-muted-foreground"
                   )}
                 >
@@ -320,7 +321,7 @@ const InvoicesList = () => {
                   {filters.dateTo ? format(filters.dateTo, "MMM dd") : "To"}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
+              <PopoverContent className="w-auto max-w-[95vw] p-0" align="start" collisionPadding={8}>
                 <CalendarComponent
                   mode="single"
                   selected={filters.dateTo}
@@ -336,7 +337,7 @@ const InvoicesList = () => {
           </div>
 
           {hasActiveFilters && (
-            <Button variant="outline" onClick={clearFilters} className="gap-2">
+            <Button variant="outline" onClick={clearFilters} className="gap-2 self-start">
               <X className="h-4 w-4" />
               Clear Filters
             </Button>

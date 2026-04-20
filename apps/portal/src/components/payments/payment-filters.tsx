@@ -227,7 +227,7 @@ export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
               </Button>
             </PopoverTrigger>
             <PopoverContent
-              className="w-auto max-w-[95vw] p-3"
+              className="w-auto max-w-[95vw] max-h-[min(80vh,600px)] overflow-y-auto p-3"
               align="end"
               collisionPadding={8}
             >

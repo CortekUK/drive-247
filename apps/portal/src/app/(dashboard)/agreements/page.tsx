@@ -575,16 +575,16 @@ export default function AgreementsList() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Agreements</h1>
-          <p className="text-muted-foreground">Manage rental agreements and signed documents</p>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold">Agreements</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Manage rental agreements and signed documents</p>
         </div>
         <div className="flex items-center gap-2">
           {allAgreements.length > 0 && (
-            <Link href="/agreements/analytics">
+            <Link href="/agreements/analytics" className="shrink-0">
               <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
                 <BarChart3 className="h-4 w-4" />
               </Button>
@@ -593,7 +593,7 @@ export default function AgreementsList() {
           <Button
             onClick={handleDownloadAll}
             disabled={isDownloadingAll || allAgreements.length === 0}
-            className="bg-gradient-primary"
+            className="bg-gradient-primary flex-1 sm:flex-none"
           >
             {isDownloadingAll ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -606,40 +606,40 @@ export default function AgreementsList() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20">
-          <CardContent className="p-4">
-            <p className="text-sm font-medium text-muted-foreground">Total Agreements</p>
-            <p className="text-2xl font-bold mt-1">{allAgreements.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">All agreement types</p>
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Total Agreements</p>
+            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{allAgreements.length}</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">All agreement types</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-violet-500/10 to-violet-500/5 border-violet-500/20">
-          <CardContent className="p-4">
-            <p className="text-sm font-medium text-muted-foreground">Original</p>
-            <p className="text-2xl font-bold mt-1">{rentalAgreements.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Rental agreements</p>
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Original</p>
+            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{rentalAgreements.length}</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">Rental agreements</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-cyan-500/10 to-cyan-500/5 border-cyan-500/20">
-          <CardContent className="p-4">
-            <p className="text-sm font-medium text-muted-foreground">Extensions</p>
-            <p className="text-2xl font-bold mt-1">{extensionAgreements.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Extension agreements</p>
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Extensions</p>
+            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{extensionAgreements.length}</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">Extension agreements</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
-          <CardContent className="p-4">
-            <p className="text-sm font-medium text-muted-foreground">Signed</p>
-            <p className="text-2xl font-bold mt-1">{signedAgreements.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Completed signatures</p>
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Signed</p>
+            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{signedAgreements.length}</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">Completed signatures</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Search */}
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             placeholder="Search by agreement name or customer..."

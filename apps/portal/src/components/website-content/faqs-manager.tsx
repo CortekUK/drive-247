@@ -292,19 +292,19 @@ export function FAQsManager() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <HelpCircle className="h-5 w-5 text-accent" />
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div className="min-w-0">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <HelpCircle className="h-5 w-5 text-accent shrink-0" />
               FAQs Management
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs sm:text-sm">
               Manage frequently asked questions displayed on the About page
             </CardDescription>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={resetForm}>
+              <Button onClick={resetForm} size="sm" className="w-full sm:w-auto">
                 <Plus className="w-4 h-4 mr-2" />
                 Add FAQ
               </Button>

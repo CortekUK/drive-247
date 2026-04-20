@@ -56,7 +56,7 @@ export const FineKPIs = () => {
 
   if (isLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <Card key={i}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -72,50 +72,50 @@ export const FineKPIs = () => {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
       <Card className="bg-gradient-to-br from-warning/10 to-warning/5 border-warning/20 hover:border-warning/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Open Fines</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
+          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Open Fines</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{kpiData?.openFines || 0}</div>
-          <p className="text-xs text-muted-foreground">
+        <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+          <div className="text-xl sm:text-2xl font-bold break-all">{kpiData?.openFines || 0}</div>
+          <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">
             Awaiting action
           </p>
         </CardContent>
       </Card>
 
       <Card className="bg-gradient-to-br from-destructive/10 to-destructive/5 border-destructive/20 hover:border-destructive/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Outstanding Amount</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
+          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Outstanding Amount</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{formatCurrency(kpiData?.outstandingAmount || 0, currencyCode)}</div>
-          <p className="text-xs text-muted-foreground">
+        <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+          <div className="text-xl sm:text-2xl font-bold break-all">{formatCurrency(kpiData?.outstandingAmount || 0, currencyCode)}</div>
+          <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">
             To collect from customers
           </p>
         </CardContent>
       </Card>
 
       <Card className="bg-gradient-to-br from-warning/10 to-warning/5 border-warning/20 hover:border-warning/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Due This Week</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
+          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Due This Week</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{kpiData?.dueThisWeek || 0}</div>
-          <p className="text-xs text-muted-foreground">
+        <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+          <div className="text-xl sm:text-2xl font-bold break-all">{kpiData?.dueThisWeek || 0}</div>
+          <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">
             Next 7 days
           </p>
         </CardContent>
       </Card>
 
       <Card className="bg-gradient-to-br from-destructive/10 to-destructive/5 border-destructive/20 hover:border-destructive/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Overdue</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
+          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Overdue</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-destructive">{kpiData?.overdue || 0}</div>
-          <p className="text-xs text-muted-foreground">
+          <div className="text-xl sm:text-2xl font-bold text-destructive break-all">{kpiData?.overdue || 0}</div>
+          <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">
             Past due date
           </p>
         </CardContent>

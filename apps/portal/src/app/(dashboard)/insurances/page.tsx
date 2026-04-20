@@ -418,16 +418,16 @@ export default function InsurancesList() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Insurances</h1>
-          <p className="text-muted-foreground">Manage customer insurance documents and Bonzah policies</p>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold">Insurances</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Manage customer insurance documents and Bonzah policies</p>
         </div>
         <div className="flex items-center gap-2">
           {allInsurances.length > 0 && (
-            <Link href="/insurances/analytics">
+            <Link href="/insurances/analytics" className="shrink-0">
               <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
                 <BarChart3 className="h-4 w-4" />
               </Button>
@@ -436,7 +436,7 @@ export default function InsurancesList() {
           <Button
             onClick={handleDownloadAll}
             disabled={isDownloadingAll || allInsurances.length === 0}
-            className="bg-gradient-primary"
+            className="bg-gradient-primary flex-1 sm:flex-none"
           >
             {isDownloadingAll ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -449,33 +449,33 @@ export default function InsurancesList() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20">
-          <CardContent className="p-4">
-            <p className="text-sm font-medium text-muted-foreground">Total Insurances</p>
-            <p className="text-2xl font-bold mt-1">{allInsurances.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">All insurance records</p>
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Total Insurances</p>
+            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{allInsurances.length}</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">All insurance records</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-pink-600/10 to-pink-600/5 border-pink-600/20">
-          <CardContent className="p-4">
-            <p className="text-sm font-medium text-muted-foreground">Bonzah Policies</p>
-            <p className="text-2xl font-bold mt-1">{allInsurances.filter(d => d.isBonzah).length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Via Bonzah integration</p>
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Bonzah Policies</p>
+            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{allInsurances.filter(d => d.isBonzah).length}</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">Via Bonzah integration</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-violet-500/10 to-violet-500/5 border-violet-500/20">
-          <CardContent className="p-4">
-            <p className="text-sm font-medium text-muted-foreground">Uploaded</p>
-            <p className="text-2xl font-bold mt-1">{allInsurances.filter(d => !d.isBonzah).length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Manually uploaded</p>
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Uploaded</p>
+            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{allInsurances.filter(d => !d.isBonzah).length}</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">Manually uploaded</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
-          <CardContent className="p-4">
-            <p className="text-sm font-medium text-muted-foreground">Active Policies</p>
-            <p className="text-2xl font-bold mt-1">{allInsurances.filter(d => d.status === 'active' || d.status === 'confirmed').length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Currently active</p>
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Active Policies</p>
+            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{allInsurances.filter(d => d.status === 'active' || d.status === 'confirmed').length}</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">Currently active</p>
           </CardContent>
         </Card>
       </div>

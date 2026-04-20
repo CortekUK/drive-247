@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -1202,13 +1202,24 @@ const Settings = () => {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Configure your fleet management system
-        </p>
+      <div className="flex items-start gap-2 sm:gap-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => window.history.back()}
+          className="lg:hidden shrink-0 h-9 px-2 -ml-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span className="sr-only">Back</span>
+        </Button>
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-semibold">Settings</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            Configure your fleet management system
+          </p>
+        </div>
       </div>
 
       {/* Settings Tabs */}
@@ -1216,7 +1227,7 @@ const Settings = () => {
         <div className="space-y-6">
           {/* Mobile: Horizontal scrollable nav (sidebar handles desktop nav) */}
           <div className="lg:hidden">
-            <TabsList className="flex w-full overflow-x-auto gap-1 bg-muted/50 p-1 rounded-lg">
+            <TabsList className="flex w-full overflow-x-auto gap-1 bg-muted/50 p-1 rounded-lg scrollbar-thin h-auto justify-start">
               {([
                 { value: 'general', icon: Building2, label: 'General' },
                 { value: 'locations', icon: MapPin, label: 'Locations' },

@@ -158,12 +158,12 @@ export default function RemindersPageEnhanced() {
   }
 
   return (
-    <div className="container mx-auto py-8 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 sm:py-8 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Reminders</h1>
-          <p className="text-muted-foreground">Monitor and manage fleet compliance reminders</p>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold">Reminders</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Monitor and manage fleet compliance reminders</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -172,18 +172,19 @@ export default function RemindersPageEnhanced() {
             size="icon"
             onClick={exportReminders}
             disabled={reminders.length === 0}
+            className="shrink-0"
           >
             <Download className="h-4 w-4" />
           </Button>
 
-          <Link href="/reminders/analytics">
+          <Link href="/reminders/analytics" className="shrink-0">
             <Button variant="outline" size="icon">
               <BarChart3 className="h-4 w-4" />
             </Button>
           </Link>
 
           {canEdit('reminders') && (
-            <Button onClick={() => setShowAddDialog(true)}>
+            <Button onClick={() => setShowAddDialog(true)} className="flex-1 sm:flex-none">
               <Plus className="h-4 w-4 mr-2" />
               New Reminder
             </Button>
@@ -192,40 +193,40 @@ export default function RemindersPageEnhanced() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
         <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20 hover:border-indigo-500/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Active</CardTitle>
+          <CardHeader className="pb-2 p-3 sm:p-6">
+            <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Total Active</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.total || 0}</div>
-            <p className="text-xs text-muted-foreground">All pending & snoozed</p>
+          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-bold break-all">{stats?.total || 0}</div>
+            <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">All pending & snoozed</p>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-warning/10 to-warning/5 border-warning/20 hover:border-warning/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Due Today</CardTitle>
+          <CardHeader className="pb-2 p-3 sm:p-6">
+            <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Due Today</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-warning">{stats?.due || 0}</div>
-            <p className="text-xs text-muted-foreground">Require attention</p>
+          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-bold text-warning break-all">{stats?.due || 0}</div>
+            <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">Require attention</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-destructive/10 to-destructive/5 border-destructive/20 hover:border-destructive/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Critical</CardTitle>
+        <Card className="bg-gradient-to-br from-destructive/10 to-destructive/5 border-destructive/20 hover:border-destructive/40 transition-all duration-200 cursor-pointer hover:shadow-md col-span-2 md:col-span-1">
+          <CardHeader className="pb-2 p-3 sm:p-6">
+            <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Critical</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">{stats?.critical || 0}</div>
-            <p className="text-xs text-muted-foreground">Urgent action needed</p>
+          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-bold text-destructive break-all">{stats?.critical || 0}</div>
+            <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">Urgent action needed</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
         <Select
           value={filters.severity?.[0] || ''}
           onValueChange={(value) =>

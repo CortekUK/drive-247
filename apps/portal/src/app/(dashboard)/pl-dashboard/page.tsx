@@ -603,8 +603,8 @@ const PLDashboard: React.FC = () => {
 
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-4">
+        <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold">Global P&L Dashboard</h1>
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Track profitability across your entire fleet
@@ -613,7 +613,7 @@ const PLDashboard: React.FC = () => {
 
         <Button
           onClick={exportToCSV}
-          className="bg-gradient-primary flex items-center gap-2"
+          className="bg-gradient-primary flex items-center gap-2 w-full sm:w-auto"
           disabled={(!vehiclePLData?.length && !monthlyPLData?.length)}
         >
           <Download className="h-4 w-4" />
@@ -622,7 +622,7 @@ const PLDashboard: React.FC = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
         {summaryCards.map((card, index) => (
           <Card key={index} className={cn(
             "shadow-sm transition-all duration-200 cursor-pointer hover:shadow-md",
@@ -632,10 +632,10 @@ const PLDashboard: React.FC = () => {
             card.title === 'Net Profit' && card.trend === 'negative' ? "bg-gradient-to-br from-destructive/10 to-destructive/5 border-destructive/20 hover:border-destructive/40" :
             "bg-card hover:bg-accent/50 border"
           )}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 gap-2">
+              <CardTitle className="text-xs sm:text-sm font-medium leading-tight">{card.title}</CardTitle>
               <card.icon className={cn(
-                "h-4 w-4",
+                "h-4 w-4 shrink-0",
                 card.title === 'Revenue' ? "text-success" :
                 card.title === 'Costs' ? "text-warning" :
                 card.title === 'Net Profit' && card.trend === 'positive' ? "text-success" :
@@ -643,9 +643,9 @@ const PLDashboard: React.FC = () => {
                 "text-muted-foreground"
               )} />
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
               <div className={cn(
-                "text-xl sm:text-2xl font-bold",
+                "text-lg sm:text-2xl font-bold break-all",
                 card.title === 'Net Profit' && card.trend === 'positive' ? "text-success" :
                 card.title === 'Net Profit' && card.trend === 'negative' ? "text-destructive" :
                 ""

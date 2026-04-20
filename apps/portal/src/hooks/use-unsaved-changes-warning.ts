@@ -115,7 +115,9 @@ export function useUnsavedChangesWarning({
         // Only intercept if actually navigating to a different path
         if (targetUrl !== current && !targetUrl.startsWith('#')) {
           pendingUrl.current = targetUrl;
-          setIsDialogOpen(true);
+          // Defer state update — Next.js 16's router calls pushState inside
+          // useInsertionEffect, where scheduling updates is forbidden.
+          queueMicrotask(() => setIsDialogOpen(true));
           return; // Block navigation
         }
       }

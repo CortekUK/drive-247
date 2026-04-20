@@ -128,13 +128,13 @@ export default function PaymentsAnalyticsPage() {
     return (<div className="container mx-auto p-6 space-y-6"><div className="h-8 bg-muted animate-pulse rounded"></div><div className="h-96 bg-muted animate-pulse rounded"></div></div>);
   }
 
-  return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/payments"><Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button></Link>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Payments Analytics</h1>
-          <p className="text-sm text-muted-foreground">Charts and insights for payment data</p>
+    return (
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
+      <div className="flex items-center gap-2 sm:gap-4">
+        <Link href="/payments" className="shrink-0"><Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button></Link>
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-3xl font-bold leading-tight">Payments Analytics</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">Charts and insights for payment data</p>
         </div>
       </div>
 
@@ -142,17 +142,17 @@ export default function PaymentsAnalyticsPage() {
         <TooltipProvider>
           <div className="space-y-4">
             {/* Daily Payment Collection */}
-            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+            <div className="rounded-lg border border-border/60 bg-card/50 p-3 sm:p-4 overflow-hidden">
               <div className="flex items-center gap-2 mb-3">
                 <h3 className="text-sm font-medium text-muted-foreground">Daily Payment Collection</h3>
                 <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" /></TooltipTrigger>
                 <TooltipContent>Total payment amounts collected per day this month</TooltipContent></Tooltip>
               </div>
               <ChartContainer config={areaChartConfig} className="h-[220px] w-full">
-                <BarChart data={dailyTrendData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+                <BarChart data={dailyTrendData} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(dailyTrendData.length / 10))} />
-                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} tickFormatter={(v) => formatCurrency(v, tenant?.currency_code || 'USD')} width={70} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={48} />
+                  <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`} width={36} />
                   <ChartTooltip cursor={{ fill: "hsl(var(--muted-foreground))", opacity: 0.08 }} content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload;
@@ -166,7 +166,7 @@ export default function PaymentsAnalyticsPage() {
             {/* Row: 3 supporting charts */}
             <div className="grid gap-4 md:grid-cols-3">
               {/* Payment Methods Donut */}
-              <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+              <div className="rounded-lg border border-border/60 bg-card/50 p-3 sm:p-4 overflow-hidden">
                 <div className="flex items-center gap-2 mb-3">
                   <h3 className="text-sm font-medium text-muted-foreground">Payment Methods</h3>
                   <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" /></TooltipTrigger>
@@ -192,17 +192,17 @@ export default function PaymentsAnalyticsPage() {
               </div>
 
               {/* Amount Distribution */}
-              <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+              <div className="rounded-lg border border-border/60 bg-card/50 p-3 sm:p-4 overflow-hidden">
                 <div className="flex items-center gap-2 mb-3">
                   <h3 className="text-sm font-medium text-muted-foreground">Amount Distribution</h3>
                   <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" /></TooltipTrigger>
                   <TooltipContent>Number of payments by amount range this month</TooltipContent></Tooltip>
                 </div>
                 <ChartContainer config={amountDistConfig} className="h-[200px] w-full">
-                  <BarChart data={amountDistData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <BarChart data={amountDistData} margin={{ top: 5, right: 8, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} interval={0} />
+                    <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
                     <ChartTooltip cursor={{ fill: "hsl(var(--muted-foreground))", opacity: 0.08 }} content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;
                       const d = payload[0].payload;
@@ -214,7 +214,7 @@ export default function PaymentsAnalyticsPage() {
               </div>
 
               {/* Approval Rate Radial */}
-              <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+              <div className="rounded-lg border border-border/60 bg-card/50 p-3 sm:p-4 overflow-hidden">
                 <div className="flex items-center gap-2 mb-3">
                   <h3 className="text-sm font-medium text-muted-foreground">Approval Rate</h3>
                   <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" /></TooltipTrigger>
