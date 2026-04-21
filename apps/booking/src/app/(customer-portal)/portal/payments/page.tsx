@@ -357,24 +357,24 @@ function InstallmentPlanCard({
       isOverdue && 'border-red-300 dark:border-red-800'
     )}>
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <CardTitle className="text-base">{vehicleName}</CardTitle>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
+          <div className="space-y-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-base break-words">{vehicleName}</CardTitle>
               <Badge variant={
                 isCompleted ? 'default' :
                 isOverdue ? 'destructive' :
                 'secondary'
-              }>
+              } className="shrink-0">
                 {plan.status.charAt(0).toUpperCase() + plan.status.slice(1)}
               </Badge>
             </div>
-            <CardDescription>
+            <CardDescription className="break-words">
               {plan.plan_type === 'semiweekly' ? 'Twice Weekly' : plan.plan_type.charAt(0).toUpperCase() + plan.plan_type.slice(1)} Plan
               {plan.rentals?.rental_number && ` • ${plan.rentals.rental_number}`}
             </CardDescription>
           </div>
-          <div className="text-right">
+          <div className="flex sm:block items-baseline gap-2 sm:text-right shrink-0">
             <p className="text-sm text-muted-foreground">Total</p>
             <p className="font-semibold">{formatCurrency(plan.total_installable_amount + plan.upfront_amount - ((plan as any).config?.charge_first_upfront !== false ? plan.installment_amount : 0), currencyCode)}</p>
           </div>
@@ -928,15 +928,15 @@ function DemoInstallmentCard({
       onClick={onClick}
     >
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <CardTitle className="text-base">{plan.vehicleName}</CardTitle>
-              <Badge variant="secondary">Demo</Badge>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
+          <div className="space-y-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-base break-words">{plan.vehicleName}</CardTitle>
+              <Badge variant="secondary" className="shrink-0">Demo</Badge>
             </div>
             <CardDescription>{plan.planType} Plan</CardDescription>
           </div>
-          <div className="text-right">
+          <div className="flex sm:block items-baseline gap-2 sm:text-right shrink-0">
             <p className="text-sm text-muted-foreground">Total</p>
             <p className="font-semibold">{formatCurrency(plan.totalAmount, currencyCode)}</p>
           </div>

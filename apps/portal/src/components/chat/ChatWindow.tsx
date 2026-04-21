@@ -278,13 +278,13 @@ export function ChatWindow({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* ── Header ──────────────────────────────────────────── */}
       <div className="border-b border-border/50 bg-card/50 backdrop-blur-sm">
         {/* Top row: customer info */}
-        <div className="px-6 py-4">
+        <div className="px-3 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
               {/* Back button - mobile only */}
               {onBack && (
                 <Button variant="ghost" size="icon" onClick={onBack} className="md:hidden h-9 w-9 shrink-0">
@@ -292,8 +292,8 @@ export function ChatWindow({
                 </Button>
               )}
               {/* Avatar with status */}
-              <div className="relative">
-                <Avatar className="h-11 w-11 ring-2 ring-background">
+              <div className="relative shrink-0">
+                <Avatar className="h-10 w-10 sm:h-11 sm:w-11 ring-2 ring-background">
                   <AvatarImage src={customerAvatar || undefined} alt={customerName} />
                   <AvatarFallback className="bg-primary/10 text-primary font-medium">{initials}</AvatarFallback>
                 </Avatar>
@@ -306,8 +306,8 @@ export function ChatWindow({
               </div>
 
               {/* Customer info */}
-              <div>
-                <h2 className="font-semibold text-base">{customerName}</h2>
+              <div className="min-w-0 flex-1">
+                <h2 className="font-semibold text-sm sm:text-base truncate">{customerName}</h2>
                 <div className="flex items-center gap-1.5 text-sm">
                   {isTyping ? (
                     <span className="text-primary font-medium flex items-center gap-1">
@@ -330,7 +330,7 @@ export function ChatWindow({
                 </div>
 
                 {/* Contact details — edit phone & email */}
-                <div className="flex items-center gap-3 mt-1">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
                   {isAddingPhone ? (
                     <div className="flex items-center gap-1">
                       <PhoneIcon className="h-3 w-3 text-muted-foreground" />
@@ -351,15 +351,15 @@ export function ChatWindow({
                   ) : (
                     <button
                       onClick={() => { setIsAddingPhone(true); setPhone(effectivePhone || ''); }}
-                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors min-w-0 w-full sm:w-auto sm:max-w-full"
                     >
-                      <PhoneIcon className="h-3 w-3" />
-                      {effectivePhone ? <span className="font-mono">{effectivePhone}</span> : <span className="italic">Add phone</span>}
-                      <Pencil className="h-2.5 w-2.5 ml-0.5 opacity-50" />
+                      <PhoneIcon className="h-3 w-3 shrink-0" />
+                      {effectivePhone ? <span className="font-mono truncate min-w-0">{effectivePhone}</span> : <span className="italic">Add phone</span>}
+                      <Pencil className="h-2.5 w-2.5 ml-0.5 opacity-50 shrink-0" />
                     </button>
                   )}
 
-                  <span className="text-muted-foreground/30">|</span>
+                  <span className="text-muted-foreground/30 hidden sm:inline">|</span>
 
                   {isAddingEmail ? (
                     <div className="flex items-center gap-1">
@@ -381,11 +381,11 @@ export function ChatWindow({
                   ) : (
                     <button
                       onClick={() => { setIsAddingEmail(true); setEmail(effectiveEmail || ''); }}
-                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors min-w-0 w-full sm:w-auto sm:max-w-full"
                     >
-                      <Mail className="h-3 w-3" />
-                      {effectiveEmail ? <span>{effectiveEmail}</span> : <span className="italic">Add email</span>}
-                      <Pencil className="h-2.5 w-2.5 ml-0.5 opacity-50" />
+                      <Mail className="h-3 w-3 shrink-0" />
+                      {effectiveEmail ? <span className="truncate min-w-0">{effectiveEmail}</span> : <span className="italic">Add email</span>}
+                      <Pencil className="h-2.5 w-2.5 ml-0.5 opacity-50 shrink-0" />
                     </button>
                   )}
                 </div>
@@ -395,8 +395,8 @@ export function ChatWindow({
         </div>
 
         {/* Channel selector row — all channels shown, disabled ones dimmed */}
-        <div className="px-6 pb-3">
-          <div className="flex items-center gap-1.5">
+        <div className="px-3 sm:px-6 pb-3 overflow-x-auto">
+          <div className="flex items-center gap-1.5 flex-nowrap min-w-max">
             <TooltipProvider delayDuration={300}>
               {/* Sort: enabled channels first, then disabled */}
               {[...CHANNELS].sort((a, b) => {
@@ -436,7 +436,7 @@ export function ChatWindow({
                         }}
                         disabled={!isEnabled}
                         className={cn(
-                          'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200',
+                          'inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200 shrink-0',
                           isActive && isEnabled
                             ? cn(ch.bgActive, ch.color)
                             : isEnabled
@@ -487,9 +487,9 @@ export function ChatWindow({
       )}
 
       {/* ── Messages area ───────────────────────────────────── */}
-      <div className="flex-1 relative overflow-hidden">
-        <ScrollArea ref={scrollAreaRef} className="h-full">
-          <div className="px-6 py-4">
+      <div className="flex-1 relative overflow-hidden min-w-0">
+        <ScrollArea ref={scrollAreaRef} className="h-full w-full">
+          <div className="px-3 sm:px-6 py-4 w-full min-w-0 overflow-x-hidden">
             {/* Load more button */}
             {hasMore && (
               <div className="flex justify-center py-4">

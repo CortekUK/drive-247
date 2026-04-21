@@ -161,7 +161,7 @@ export function CustomerChatInput({
       )}
 
       {/* Input area */}
-      <div className="p-4">
+      <div className="p-3 sm:p-4">
         <div
           className={cn(
             'flex items-end gap-2 rounded-2xl border bg-background p-2 transition-all duration-200',

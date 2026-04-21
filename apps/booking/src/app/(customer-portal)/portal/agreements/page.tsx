@@ -199,7 +199,7 @@ function AgreementCard({
                 )}
               </div>
 
-              <div className="flex items-center gap-1 flex-wrap self-end sm:self-auto">
+              <div className="flex items-center gap-1 flex-wrap self-start sm:self-auto">
                 {needsSignature && (
                   <Button
                     variant="default"

@@ -472,12 +472,12 @@ export const AddPaymentDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!isAnyLoading) onOpenChange(v); }}>
-      <DialogContent className="sm:max-w-[460px] p-0 gap-0 overflow-hidden max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[calc(100vw-16px)] sm:max-w-[460px] p-0 gap-0 overflow-hidden max-h-[calc(100dvh-16px)] sm:max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="px-6 pt-6 pb-4">
+        <div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-3 sm:pb-4">
           <DialogHeader>
-            <DialogTitle className="text-lg">Record Payment</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">
+            <DialogTitle className="text-base sm:text-lg">Record Payment</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
               {targetCategories && targetCategories.length > 0
                 ? `Paying for: ${targetCategories.join(', ')}`
                 : 'Record a payment against outstanding charges.'
@@ -488,7 +488,7 @@ export const AddPaymentDialog = ({
 
         {/* Customer/Vehicle selection when not pre-populated */}
         {(!customer_id || !vehicle_id) && (
-          <div className="px-6 pb-4 space-y-3 border-b">
+          <div className="px-4 sm:px-6 pb-4 space-y-3 border-b">
             {!customer_id && (
               <div>
                 <Label className="text-sm font-medium">Customer <span className="text-red-500">*</span></Label>
@@ -527,7 +527,7 @@ export const AddPaymentDialog = ({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
-            <div className="px-6 py-5 space-y-5">
+            <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5">
               {/* Amount */}
               <FormField
                 control={form.control}
@@ -696,7 +696,7 @@ export const AddPaymentDialog = ({
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t bg-muted/30 space-y-2">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t bg-muted/30 space-y-2">
               {/* Primary: Record manual payment */}
               <Button type="submit" disabled={isAnyLoading} className="w-full h-11">
                 {loading ? (
@@ -708,7 +708,7 @@ export const AddPaymentDialog = ({
 
               {/* Stripe options row */}
               {selectedCustomerId && (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Button
                     type="button"
                     variant="outline"

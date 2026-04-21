@@ -353,7 +353,11 @@ const AuditLogs = () => {
                       <TableCell>
                         <Badge
                           variant="secondary"
-                          className={cn("whitespace-nowrap", getActionColor(log.action))}
+                          title={formatActionName(log.action)}
+                          className={cn(
+                            "inline-block w-[120px] sm:w-auto sm:max-w-none max-w-[120px] truncate whitespace-nowrap text-center align-middle",
+                            getActionColor(log.action)
+                          )}
                         >
                           {formatActionName(log.action)}
                         </Badge>
