@@ -25,8 +25,9 @@ export function TraxChatPopup({ onClose }: TraxChatPopupProps) {
   return (
     <div
       className={cn(
-        'fixed bottom-6 right-6 z-50',
-        'w-[380px] h-[550px]',
+        'fixed z-50',
+        'inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-6 sm:right-6',
+        'sm:w-[380px] max-h-[calc(100dvh-24px)] sm:max-h-none sm:h-[550px]',
         'bg-background border rounded-xl shadow-2xl',
         'flex flex-col overflow-hidden',
         'animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200'

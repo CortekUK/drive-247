@@ -150,12 +150,12 @@ function StatCard({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className={cn('h-4 w-4', variantStyles[variant])} />
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
+        <CardTitle className="text-xs sm:text-sm font-medium min-w-0 truncate">{title}</CardTitle>
+        <Icon className={cn('h-4 w-4 shrink-0', variantStyles[variant])} />
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+      <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+        <div className="text-xl sm:text-2xl font-bold break-words">{value}</div>
         {description && (
           <p className="text-xs text-muted-foreground">{description}</p>
         )}
@@ -199,39 +199,42 @@ function NextPaymentCard({
       'border-accent'
     )}>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             {isOverdue || isFailed ? (
-              <AlertTriangle className="h-5 w-5 text-red-600" />
+              <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
             ) : isDueToday ? (
-              <AlertCircle className="h-5 w-5 text-yellow-600" />
+              <AlertCircle className="h-5 w-5 text-yellow-600 shrink-0" />
             ) : (
-              <Clock className="h-5 w-5 text-accent" />
+              <Clock className="h-5 w-5 text-accent shrink-0" />
             )}
-            <CardTitle className="text-lg">
+            <CardTitle className="text-base sm:text-lg truncate">
               {isOverdue ? 'Overdue Payment' : isFailed ? 'Payment Failed' : isDueToday ? 'Payment Due Today' : 'Next Payment'}
             </CardTitle>
           </div>
-          <Badge variant={isOverdue || isFailed ? 'destructive' : isDueToday ? 'secondary' : 'outline'}>
+          <Badge
+            variant={isOverdue || isFailed ? 'destructive' : isDueToday ? 'secondary' : 'outline'}
+            className="self-start sm:self-auto"
+          >
             {isOverdue ? 'Overdue' : isFailed ? 'Failed' : isDueToday ? 'Due Today' : formatDistanceToNow(dueDate, { addSuffix: true })}
           </Badge>
         </div>
-        <CardDescription className="flex items-center gap-1 mt-1">
-          <Car className="h-3 w-3" />
-          {vehicleName}
+        <CardDescription className="flex items-center gap-1 mt-1 break-words">
+          <Car className="h-3 w-3 shrink-0" />
+          <span className="truncate">{vehicleName}</span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-3xl font-bold">{formatCurrency(installment.amount, currencyCode)}</p>
-            <p className="text-sm text-muted-foreground">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-2xl sm:text-3xl font-bold break-words">{formatCurrency(installment.amount, currencyCode)}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">
               Installment #{installment.installment_number} of {plan.number_of_installments}
             </p>
           </div>
-          <div className="text-right">
-            <p className="text-sm font-medium">Due Date</p>
-            <p className="text-lg">{format(dueDate, 'MMM dd, yyyy')}</p>
+          <div className="sm:text-right">
+            <p className="text-xs sm:text-sm font-medium">Due Date</p>
+            <p className="text-base sm:text-lg">{format(dueDate, 'MMM dd, yyyy')}</p>
           </div>
         </div>
 
@@ -249,14 +252,14 @@ function NextPaymentCard({
           </div>
         )}
 
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           {isFailed ? (
             <>
               <Button
                 onClick={() => onRetry(installment.id)}
                 disabled={isPaying}
                 variant="destructive"
-                className="flex-1"
+                className="w-full sm:flex-1"
               >
                 {isPaying ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -267,7 +270,7 @@ function NextPaymentCard({
               </Button>
               <Button
                 variant="outline"
-                className="flex-1"
+                className="w-full sm:flex-1"
                 onClick={() => onUpdateCard(plan.id)}
               >
                 <CreditCard className="h-4 w-4 mr-2" />
@@ -1197,10 +1200,10 @@ export default function PaymentsPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Payments</h1>
-          <p className="text-muted-foreground">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold">Payments</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Manage your installment plans and view payment history
           </p>
         </div>
@@ -1208,6 +1211,7 @@ export default function PaymentsPage() {
           <Button
             variant="outline"
             onClick={() => setUpdateCardDialog({ open: true })}
+            className="w-full sm:w-auto"
           >
             <CreditCard className="h-4 w-4 mr-2" />
             Update Card
@@ -1217,20 +1221,20 @@ export default function PaymentsPage() {
 
       {/* Stats */}
       {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i}>
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-2 p-3 sm:p-6 sm:pb-2">
                 <Skeleton className="h-4 w-24" />
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
                 <Skeleton className="h-8 w-20" />
               </CardContent>
             </Card>
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <StatCard
             title="Active Plans"
             value={stats.activePlans}
@@ -1287,14 +1291,15 @@ export default function PaymentsPage() {
           {/* Demo Installments Section */}
           <Card className="border-dashed">
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg">Demo Installments</CardTitle>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <CardTitle className="text-base sm:text-lg">Demo Installments</CardTitle>
                   <CardDescription>See how installment plans work</CardDescription>
                 </div>
                 <Button
                   variant={showDemoInstallments ? "secondary" : "outline"}
                   onClick={() => setShowDemoInstallments(!showDemoInstallments)}
+                  className="w-full sm:w-auto"
                 >
                   {showDemoInstallments ? 'Hide Demo' : 'Show Demo'}
                 </Button>

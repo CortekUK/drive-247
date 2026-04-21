@@ -56,12 +56,12 @@ function StatCard({
 }) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
+        <CardTitle className="text-xs sm:text-sm font-medium min-w-0 truncate">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+      <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+        <div className="text-xl sm:text-2xl font-bold break-words">{value}</div>
         {description && (
           <p className="text-xs text-muted-foreground">{description}</p>
         )}
@@ -101,22 +101,22 @@ function AgreementCard({
 
   return (
     <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-4">
-        <div className="flex items-start gap-4">
-          <div className="flex-shrink-0 w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+      <CardContent className="p-3 sm:p-4">
+        <div className="flex items-start gap-3 sm:gap-4">
+          <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-lg flex items-center justify-center">
             {isExtension ? (
-              <CalendarPlus className="h-6 w-6 text-amber-600" />
+              <CalendarPlus className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
             ) : (
-              <FileText className="h-6 w-6 text-primary" />
+              <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="font-semibold truncate flex items-center gap-2">
-                  {isExtension ? 'Extension Agreement' : 'Rental Agreement'}
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="font-semibold text-sm sm:text-base flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span>{isExtension ? 'Extension Agreement' : 'Rental Agreement'}</span>
                   {agreement.rental_number && (
-                    <span className="text-muted-foreground font-normal text-sm">
+                    <span className="text-muted-foreground font-normal text-xs sm:text-sm break-all">
                       #{agreement.rental_number}
                     </span>
                   )}
@@ -126,29 +126,29 @@ function AgreementCard({
                     </Badge>
                   )}
                 </h3>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <Car className="h-3 w-3" />
-                  {vehicleInfo}
+                <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1">
+                  <Car className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{vehicleInfo}</span>
                 </p>
               </div>
-              <Badge variant={statusInfo.variant}>
+              <Badge variant={statusInfo.variant} className="self-start shrink-0">
                 {statusInfo.label === 'Completed' && <CheckCircle className="h-3 w-3 mr-1" />}
                 {statusInfo.label === 'Awaiting Signature' && <Clock className="h-3 w-3 mr-1" />}
                 {statusInfo.label}
               </Badge>
             </div>
 
-            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <div className="mt-2 grid grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-1 text-xs sm:text-sm">
               {isExtension ? (
                 <>
                   {agreement.period_start_date && (
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-muted-foreground">Previous End:</span>{' '}
                       {safeFormat(agreement.period_start_date, 'MMM d, yyyy')}
                     </div>
                   )}
                   {agreement.period_end_date && (
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-muted-foreground">Extended To:</span>{' '}
                       {safeFormat(agreement.period_end_date, 'MMM d, yyyy')}
                     </div>
@@ -157,13 +157,13 @@ function AgreementCard({
               ) : (
                 <>
                   {agreement.rental_start_date && (
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-muted-foreground">Start Date:</span>{' '}
                       {safeFormat(agreement.rental_start_date, 'MMM d, yyyy')}
                     </div>
                   )}
                   {agreement.rental_end_date && (
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-muted-foreground">End Date:</span>{' '}
                       {safeFormat(agreement.rental_end_date, 'MMM d, yyyy')}
                     </div>
@@ -171,20 +171,20 @@ function AgreementCard({
                 </>
               )}
               {agreement.envelope_sent_at && (
-                <div>
+                <div className="min-w-0">
                   <span className="text-muted-foreground">Sent:</span>{' '}
                   {safeFormat(agreement.envelope_sent_at, 'MMM d, yyyy')}
                 </div>
               )}
               {agreement.envelope_completed_at && (
-                <div>
+                <div className="min-w-0">
                   <span className="text-muted-foreground">Signed:</span>{' '}
                   {safeFormat(agreement.envelope_completed_at, 'MMM d, yyyy')}
                 </div>
               )}
             </div>
 
-            <div className="mt-3 flex items-center justify-between">
+            <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 {hasSignedDocument ? (
                   <Badge variant="outline" className="text-green-600 border-green-600">
@@ -199,7 +199,7 @@ function AgreementCard({
                 )}
               </div>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 flex-wrap self-end sm:self-auto">
                 {needsSignature && (
                   <Button
                     variant="default"
@@ -422,12 +422,12 @@ export default function AgreementsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">My Agreements</h1>
-          <p className="text-muted-foreground">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold">My Agreements</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             View and download your rental agreements
           </p>
         </div>
@@ -439,6 +439,7 @@ export default function AgreementsPage() {
             refetchStats();
           }}
           disabled={isFetching}
+          className="w-full sm:w-auto"
         >
           <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
           Refresh
@@ -446,12 +447,14 @@ export default function AgreementsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <StatCard
-          title="Total Agreements"
-          value={stats?.total || 0}
-          icon={FileText}
-        />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
+        <div className="col-span-2 md:col-span-1">
+          <StatCard
+            title="Total Agreements"
+            value={stats?.total || 0}
+            icon={FileText}
+          />
+        </div>
         <StatCard
           title="Signed"
           value={stats?.signed || 0}

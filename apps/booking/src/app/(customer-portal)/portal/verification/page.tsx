@@ -418,10 +418,10 @@ export default function VerificationPage() {
   // Show verification in progress
   if (verificationMode === 'ai' && aiSessionData) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">ID Verification</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl sm:text-2xl font-bold">ID Verification</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Complete your identity verification
           </p>
         </div>
@@ -453,11 +453,11 @@ export default function VerificationPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">ID Verification</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-xl sm:text-2xl font-bold">ID Verification</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
           View and manage your identity verification status
         </p>
       </div>
@@ -465,19 +465,19 @@ export default function VerificationPage() {
       {/* Current Verification Status */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-primary/10">
-                <Shield className="h-6 w-6 text-primary" />
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2 rounded-full bg-primary/10 shrink-0">
+                <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
               </div>
-              <div>
-                <CardTitle>Verification Status</CardTitle>
-                <CardDescription>
+              <div className="min-w-0">
+                <CardTitle className="text-base sm:text-lg">Verification Status</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
                   Your current identity verification
                 </CardDescription>
               </div>
             </div>
-            <Badge variant={statusInfo.variant} className="text-sm">
+            <Badge variant={statusInfo.variant} className="text-xs sm:text-sm shrink-0 mt-1">
               {statusInfo.label}
             </Badge>
           </div>
@@ -723,7 +723,7 @@ export default function VerificationPage() {
                     {currentVerification.selfie_image_url && (
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Selfie</p>
-                        <div className="aspect-[3/4] rounded-lg overflow-hidden border bg-muted">
+                        <div className="aspect-[3/2] sm:aspect-[3/4] rounded-lg overflow-hidden border bg-muted">
                           <BlurredImage
                             src={currentVerification.selfie_image_url}
                             alt="Selfie"
@@ -829,11 +829,11 @@ export default function VerificationPage() {
             <p className="text-sm text-muted-foreground">
               The verification process will guide you through submitting a new ID document and taking a selfie for verification.
             </p>
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setShowUpdateDialog(false)}>
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
+              <Button variant="outline" onClick={() => setShowUpdateDialog(false)} className="w-full sm:w-auto">
                 Cancel
               </Button>
-              <Button onClick={handleStartVerification} disabled={isStartingVerification}>
+              <Button onClick={handleStartVerification} disabled={isStartingVerification} className="w-full sm:w-auto">
                 {isStartingVerification ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1027,11 +1027,12 @@ export default function VerificationPage() {
             )}
           </div>
 
-          <div className="flex gap-3 justify-end pt-4 border-t">
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 sm:justify-end pt-4 border-t">
             <Button
               variant="outline"
               onClick={() => setShowEditDetailsDialog(false)}
               disabled={isSavingDetails || isValidatingDetails}
+              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
@@ -1039,6 +1040,7 @@ export default function VerificationPage() {
               variant="secondary"
               onClick={handleValidateDetails}
               disabled={isValidatingDetails || isSavingDetails}
+              className="w-full sm:w-auto"
             >
               {isValidatingDetails ? (
                 <>
@@ -1055,6 +1057,7 @@ export default function VerificationPage() {
             <Button
               onClick={handleSaveDetails}
               disabled={!validationApproved || isSavingDetails || isValidatingDetails}
+              className="w-full sm:w-auto"
             >
               {isSavingDetails ? (
                 <>

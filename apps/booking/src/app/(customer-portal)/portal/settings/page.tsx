@@ -303,11 +303,11 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Account Settings</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-xl sm:text-2xl font-bold">Account Settings</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
           Manage your profile, security, and account preferences
         </p>
       </div>
@@ -317,9 +317,9 @@ export default function SettingsPage() {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Email not verified</AlertTitle>
-          <AlertDescription className="flex items-center justify-between">
+          <AlertDescription className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <span>Please verify your email address to access all features.</span>
-            <Button variant="outline" size="sm" onClick={handleResendVerification}>
+            <Button variant="outline" size="sm" onClick={handleResendVerification} className="w-full sm:w-auto">
               Resend Verification
             </Button>
           </AlertDescription>
@@ -343,9 +343,9 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Profile Photo */}
-          <div className="flex items-center gap-6">
-            <div className="relative">
-              <Avatar className="h-24 w-24">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+            <div className="relative self-start shrink-0">
+              <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
                 <AvatarImage src={customerUser?.customer?.profile_photo_url || undefined} />
                 <AvatarFallback className="text-lg bg-primary/10">
                   {getInitials(customerUser?.customer?.name || 'U')}
@@ -372,7 +372,7 @@ export default function SettingsPage() {
                 onChange={handlePhotoUpload}
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="font-medium">Profile Photo</p>
               <p className="text-sm text-muted-foreground">
                 Click the camera icon to upload a new photo
@@ -452,9 +452,9 @@ export default function SettingsPage() {
                         <Input
                           value={format(new Date(docExpiry), 'MMMM d, yyyy')}
                           readOnly
-                          className="bg-muted/50 cursor-default"
+                          className="bg-muted/50 cursor-default pr-16"
                         />
-                        <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium px-2 py-0.5 rounded ${isExpired ? 'bg-destructive/10 text-destructive' : 'bg-green-500/10 text-green-600'}`}>
+                        <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs font-medium px-2 py-0.5 rounded ${isExpired ? 'bg-destructive/10 text-destructive' : 'bg-green-500/10 text-green-600'}`}>
                           {isExpired ? 'Expired' : 'Valid'}
                         </span>
                       </div>
@@ -511,7 +511,7 @@ export default function SettingsPage() {
             </p>
           </div>
 
-          <Button onClick={handleUpdateProfile} disabled={isUpdatingProfile}>
+          <Button onClick={handleUpdateProfile} disabled={isUpdatingProfile} className="w-full sm:w-auto">
             {isUpdatingProfile && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Save Changes
           </Button>
@@ -610,7 +610,7 @@ export default function SettingsPage() {
             These details will be used to auto-fill insurance forms during booking
           </p>
 
-          <Button onClick={handleUpdateProfile} disabled={isUpdatingProfile}>
+          <Button onClick={handleUpdateProfile} disabled={isUpdatingProfile} className="w-full sm:w-auto">
             {isUpdatingProfile && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Save Changes
           </Button>
@@ -633,19 +633,19 @@ export default function SettingsPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
-            <div className="flex items-center gap-3">
-              <Mail className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="font-medium">{customerEmail}</p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-4 rounded-lg bg-muted/50">
+            <div className="flex items-center gap-3 min-w-0">
+              <Mail className="h-5 w-5 text-muted-foreground shrink-0" />
+              <div className="min-w-0">
+                <p className="font-medium text-sm sm:text-base break-all">{customerEmail}</p>
                 <div className="flex items-center gap-2 mt-1">
                   {isEmailVerified ? (
-                    <span className="flex items-center gap-1 text-sm text-green-600">
+                    <span className="flex items-center gap-1 text-xs sm:text-sm text-green-600">
                       <CheckCircle className="h-4 w-4" />
                       Verified
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1 text-sm text-amber-600">
+                    <span className="flex items-center gap-1 text-xs sm:text-sm text-amber-600">
                       <AlertCircle className="h-4 w-4" />
                       Not verified
                     </span>
@@ -653,7 +653,7 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-            <Button variant="outline" onClick={() => setShowEmailDialog(true)}>
+            <Button variant="outline" onClick={() => setShowEmailDialog(true)} className="w-full sm:w-auto shrink-0">
               Change Email
             </Button>
           </div>
@@ -676,17 +676,17 @@ export default function SettingsPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
-            <div className="flex items-center gap-3">
-              <Lock className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="font-medium">Password</p>
-                <p className="text-sm text-muted-foreground">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-4 rounded-lg bg-muted/50">
+            <div className="flex items-center gap-3 min-w-0">
+              <Lock className="h-5 w-5 text-muted-foreground shrink-0" />
+              <div className="min-w-0">
+                <p className="font-medium text-sm sm:text-base">Password</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   Last changed: Unknown
                 </p>
               </div>
             </div>
-            <Button variant="outline" onClick={() => setShowPasswordDialog(true)}>
+            <Button variant="outline" onClick={() => setShowPasswordDialog(true)} className="w-full sm:w-auto shrink-0">
               Change Password
             </Button>
           </div>
