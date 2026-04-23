@@ -444,7 +444,7 @@ export default function BookingDetailPage() {
   const { data: rental, isLoading: rentalLoading } = useQuery({
     queryKey: ['customer-rental-detail', id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('rentals')
         .select(`
           id, rental_number, start_date, end_date, status, monthly_amount, rental_period_type,
@@ -454,6 +454,9 @@ export default function BookingDetailPage() {
           extension_checkout_url, extension_amount, delivery_method, delivery_address, delivery_fee,
           collection_fee, deposit_hold_status, deposit_hold_amount,
           document_status, docusign_envelope_id, signed_document_id,
+          is_pay_as_you_go, payg_start_ts, payg_next_accrual_at, payg_last_reminder_sent_at,
+          payg_reminder_count, payg_reminder_interval_days, payg_paused, payg_closed_at,
+          payg_accrual_day_count,
           vehicles:vehicle_id (id, reg, make, model, colour, photo_url, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, vehicle_photos (photo_url)),
           installment_plans!installment_plans_rental_id_fkey (id, plan_type, status, total_installable_amount, upfront_amount, upfront_paid, installment_amount, number_of_installments, paid_installments, total_paid, next_due_date, scheduled_installments (id, installment_number, amount, due_date, status))
         `)
@@ -668,7 +671,9 @@ export default function BookingDetailPage() {
 
   const [extendDialogOpen, setExtendDialogOpen] = useState(false);
 
-  const canExtend = rental?.status === 'Active' && !rental?.is_extended;
+  // PAYG rentals are open-ended by definition — the customer "extends" by simply
+  // continuing to rent (daily accrual), so the extension flow doesn't apply.
+  const canExtend = rental?.status === 'Active' && !rental?.is_extended && !(rental as any)?.is_pay_as_you_go;
   const hasExtensionPending = rental?.is_extended === true;
 
   // ---- Loading state ----
@@ -1172,8 +1177,8 @@ export default function BookingDetailPage() {
         </Card>
       )}
 
-      {/* Extend Rental Dialog */}
-      {rental && (
+      {/* Extend Rental Dialog — not mounted for PAYG (open-ended, no end_date to extend) */}
+      {rental && !(rental as any).is_pay_as_you_go && (
         <ExtendRentalDialog
           open={extendDialogOpen}
           onOpenChange={setExtendDialogOpen}

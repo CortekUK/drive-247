@@ -27,7 +27,7 @@ interface BuyInsuranceDialogProps {
   rental: {
     id: string;
     start_date: string;
-    end_date: string;
+    end_date: string | null;
     customer_id?: string;
     customers: { id: string; name: string; email?: string; phone?: string | null };
     vehicles: { id: string; reg: string; make: string; model: string };
@@ -97,7 +97,10 @@ export function BuyInsuranceDialog({
       });
   }, [open, rental.customers?.id]);
 
-  // Compute trip dates once — used by both the selector and the purchase handler
+  // Compute trip dates once — used by both the selector and the purchase handler.
+  // PAYG rentals have a null end_date (open-ended); fall back to start+30d so this
+  // dialog can still render without crashing even if it ever opens for a PAYG row.
+  // (PAYG should not surface this dialog at all — guarded at the call site too.)
   const tripDates = (() => {
     const now = new Date();
     const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -105,8 +108,14 @@ export function BuyInsuranceDialog({
       const extStart = extensionDates.start.split('T')[0];
       return { start: extStart < todayLocal ? todayLocal : extStart, end: extensionDates.end.split('T')[0] };
     }
-    const rentalStart = rental.start_date.split('T')[0];
-    return { start: rentalStart < todayLocal ? todayLocal : rentalStart, end: rental.end_date.split('T')[0] };
+    const rentalStart = rental.start_date?.split('T')[0] || todayLocal;
+    let rentalEnd = rental.end_date?.split('T')[0];
+    if (!rentalEnd) {
+      const fallback = new Date(`${rentalStart}T00:00:00Z`);
+      fallback.setUTCDate(fallback.getUTCDate() + 30);
+      rentalEnd = fallback.toISOString().split('T')[0];
+    }
+    return { start: rentalStart < todayLocal ? todayLocal : rentalStart, end: rentalEnd };
   })();
 
   const hasCoverage = coverage.cdw || coverage.rcli || coverage.sli || coverage.pai;

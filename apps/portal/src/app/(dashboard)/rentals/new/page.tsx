@@ -1555,35 +1555,39 @@ const CreateRental = () => {
       // Track if this is an installment rental (used for routing after creation)
       const isInstallmentRental = installmentPlanType !== 'full' && rentalSettings?.installments_enabled;
 
-      // Generate invoice — REQUIRED for payment breakdown to work
-      let invoiceCreated = false;
+      // Generate invoice — REQUIRED for payment breakdown to work.
+      // PAYG rentals skip the upfront invoice entirely: charges are accrued daily by the cron,
+      // not pre-billed. Creating an invoice here causes apply-payment to retroactively materialise
+      // Tax/Service Fee/Insurance/Delivery/Extras charges from the invoice, which then collide
+      // with daily accruals.
       const invoiceNotes = `Monthly rental fee for ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg})`;
 
-      const invoice = await createInvoice({
-        rental_id: rental.id,
-        customer_id: data.customer_id,
-        vehicle_id: data.vehicle_id,
-        invoice_date: data.start_date,
-        due_date: addMonths(data.start_date, 1),
-        subtotal: discountedAmount,
-        tax_amount: taxAmount,
-        service_fee: serviceFee,
-        security_deposit: securityDeposit,
-        insurance_premium: insurancePremium,
-        delivery_fee: effectiveDeliveryFee,
-        extras_total: extrasTotal,
-        total_amount: totalAmount,
-        notes: invoiceNotes,
-        tenant_id: tenant?.id,
-      });
+      if (!isPayAsYouGo) {
+        const invoice = await createInvoice({
+          rental_id: rental.id,
+          customer_id: data.customer_id,
+          vehicle_id: data.vehicle_id,
+          invoice_date: data.start_date,
+          due_date: addMonths(data.start_date, 1),
+          subtotal: discountedAmount,
+          tax_amount: taxAmount,
+          service_fee: serviceFee,
+          security_deposit: securityDeposit,
+          insurance_premium: insurancePremium,
+          delivery_fee: effectiveDeliveryFee,
+          extras_total: extrasTotal,
+          total_amount: totalAmount,
+          notes: invoiceNotes,
+          tenant_id: tenant?.id,
+        });
 
-      // Add discount info to invoice for display
-      setGeneratedInvoice({
-        ...invoice,
-        discount_amount: discountAmount > 0 ? discountAmount : undefined,
-        promo_code: promoDetails?.code,
-      } as any);
-      invoiceCreated = true;
+        // Add discount info to invoice for display
+        setGeneratedInvoice({
+          ...invoice,
+          discount_amount: discountAmount > 0 ? discountAmount : undefined,
+          promo_code: promoDetails?.code,
+        } as any);
+      }
 
       // Generate charges split by category (uses invoice breakdown created above).
       // Skip for PAYG — the accrual cron handles daily charge generation instead.
@@ -1815,11 +1819,18 @@ const CreateRental = () => {
       await new Promise(resolve => setTimeout(resolve, 600));
       setCreationProgress(0);
 
-      // If installment plan was selected, skip payment/invoice dialogs — go straight to rental detail
+      // If installment plan was selected, skip payment/invoice dialogs — go straight to rental detail.
+      // PAYG also skips: there is no upfront amount to collect — charges accrue daily.
       if (isInstallmentRental) {
         toast({
           title: "Rental Created with Installment Plan",
           description: `${installmentPlanType === 'weekly' ? 'Weekly' : 'Monthly'} installment plan created for ${customerName} • ${vehicleReg}`,
+        });
+        router.push(`/rentals/${rental.id}`);
+      } else if (isPayAsYouGo) {
+        toast({
+          title: "Pay-As-You-Go Rental Created",
+          description: `Daily accrual will start from ${rental.start_date}. View the ledger on the rental detail page.`,
         });
         router.push(`/rentals/${rental.id}`);
       } else {
@@ -2598,6 +2609,16 @@ const CreateRental = () => {
                           form.setValue('return_time', undefined as any);
                           form.setValue('return_location', '');
                           form.setValue('rental_period_type', 'Daily');
+                          // PAYG bills only the daily rental rate (+ tax/service fee on it) via the accrual cron.
+                          // Bonzah insurance, extras, delivery/collection fees, and uploaded insurance docs
+                          // do not belong on a PAYG rental — clear any state the user may have set so it
+                          // never leaks into the rental insert payload or the (skipped) invoice.
+                          setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+                          setBonzahPremium(0);
+                          setSelectedExtras({});
+                          setDeliveryFeeOverride(0);
+                          setCollectionFeeOverride(0);
+                          setInsuranceDocId(null);
                           // Auto-fill per-period rate with daily_rent from the selected vehicle
                           const vehicle = vehicles?.find((v: any) => v.id === selectedVehicleId);
                           if (vehicle) {

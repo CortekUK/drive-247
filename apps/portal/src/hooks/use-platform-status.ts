@@ -84,7 +84,7 @@ export function usePlatformStatus(): PlatformStatus {
         (supabase as any)
           .from("tenants")
           .select(
-            "logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, integration_twilio_sms, integration_whatsapp, twilio_phone_number, meta_whatsapp_phone_number, integration_veriff, stripe_mode, setup_completed_at"
+            "logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, integration_twilio_sms, integration_whatsapp, twilio_phone_number, meta_whatsapp_phone_number, integration_veriff, stripe_mode, subscription_stripe_mode, setup_completed_at"
           )
           .eq("id", tenant!.id)
           .single(),
@@ -103,6 +103,7 @@ export function usePlatformStatus(): PlatformStatus {
           meta_whatsapp_phone_number: string | null;
           integration_veriff: boolean | null;
           stripe_mode: string | null;
+          subscription_stripe_mode: "test" | "live" | null;
           setup_completed_at: string | null;
         } | null,
       };
@@ -153,7 +154,7 @@ export function usePlatformStatus(): PlatformStatus {
       actionPath: "/settings?tab=subscription",
       priority: 1,
       mode: isSubscribed
-        ? isTrialing ? "test" : "live"
+        ? (td?.subscription_stripe_mode ?? "test")
         : null,
     },
     {

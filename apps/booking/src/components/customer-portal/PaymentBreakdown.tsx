@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
   Car,
   Percent,
@@ -13,6 +13,7 @@ import {
   CalendarPlus,
   DollarSign,
   Loader2,
+  ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -41,6 +42,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { PaygDetailsDialog } from '@/components/customer-portal/payg-details-dialog';
 
 interface Rental {
   id: string;
@@ -52,6 +54,17 @@ interface Rental {
   deposit_hold_status?: string | null;
   status?: string | null;
   approval_status?: string | null;
+  has_installment_plan?: boolean | null;
+  // PAYG fields — present on PAYG rentals, null/false otherwise.
+  is_pay_as_you_go?: boolean | null;
+  payg_start_ts?: string | null;
+  payg_next_accrual_at?: string | null;
+  payg_last_reminder_sent_at?: string | null;
+  payg_reminder_count?: number | null;
+  payg_reminder_interval_days?: number | null;
+  payg_paused?: boolean | null;
+  payg_closed_at?: string | null;
+  payg_accrual_day_count?: number | null;
 }
 
 interface PaymentBreakdownProps {
@@ -80,8 +93,9 @@ const EXT_CATEGORIES = [
 export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreakdownProps) {
   const { tenant } = useTenant();
   const currencyCode = tenant?.currency_code || 'USD';
+  const isPayg = rental?.is_pay_as_you_go === true;
 
-  const { data: invoice } = useRentalInvoice(rental.id);
+  const { data: rawInvoice } = useRentalInvoice(rental.id);
   const { data: rentalCharges } = useRentalCharges(rental.id);
   const { data: paymentBreakdown } = useRentalPaymentBreakdown(rental.id);
   const { data: refundBreakdown } = useRentalRefundBreakdown(rental.id);
@@ -91,6 +105,53 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
   const [selectedOriginal, setSelectedOriginal] = useState<Set<string>>(new Set());
   // Map of extension number → selected categories
   const [selectedExt, setSelectedExt] = useState<Record<number, Set<string>>>({});
+  const [paygDetailsOpen, setPaygDetailsOpen] = useState(false);
+
+  // PAYG rentals have no upfront invoice — synthesise an invoice-shaped object
+  // from ledger_entries so the Payment Breakdown card can render. Regular rentals
+  // keep using the real invoice row untouched.
+  const invoice = useMemo(() => {
+    if (rawInvoice) return rawInvoice;
+    if (!isPayg) return null;
+
+    const sumBy = (cat: string) =>
+      (rentalCharges || [])
+        .filter((c) => c.category === cat)
+        .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+
+    const rentalFee = sumBy('Rental');
+    const taxAmount = sumBy('Tax');
+    const serviceFee = sumBy('Service Fee');
+    const insurancePremium = sumBy('Insurance');
+    const deliveryFee = sumBy('Delivery Fee');
+    const extrasTotal = sumBy('Extras');
+
+    return {
+      id: 'payg-synthetic',
+      rentalFee,
+      taxAmount,
+      serviceFee,
+      securityDeposit: 0,
+      insurancePremium,
+      deliveryFee,
+      extrasTotal,
+      totalAmount: rentalFee + taxAmount + serviceFee + insurancePremium + deliveryFee + extrasTotal,
+      status: rental?.payg_closed_at ? 'closed' : 'active',
+    } as NonNullable<typeof rawInvoice>;
+  }, [rawInvoice, isPayg, rentalCharges, rental?.payg_closed_at]);
+
+  // PAYG-accrued categories (Rental always; Tax if tenant taxes; Service Fee only
+  // when the tenant uses percentage-based fees since fixed-amount service fees
+  // are a one-off upfront charge, not accrued daily).
+  const paygCategories = useMemo(() => {
+    if (!isPayg) return [] as string[];
+    const cats: string[] = ['Rental'];
+    if ((Number(tenant?.tax_percentage) || 0) > 0) cats.push('Tax');
+    if (tenant?.service_fee_type === 'percentage' && (Number(tenant?.service_fee_value) || 0) > 0) {
+      cats.push('Service Fee');
+    }
+    return cats;
+  }, [isPayg, tenant?.tax_percentage, tenant?.service_fee_type, tenant?.service_fee_value]);
 
   // categoryRemainingAmounts — from ledger
   const categoryRemainingAmounts = useMemo<Record<string, number>>(() => {
@@ -299,8 +360,21 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
     rows: Row[],
     selected: Set<string>,
     setSelected: (s: Set<string>) => void,
-    extensionId?: string | null
+    extensionId?: string | null,
+    sectionIsPayg: boolean = false,
   ) => {
+    // For PAYG sections (the Original Rental table on a PAYG rental): sort PAYG
+    // categories to the top so the blue-tinted rows form one contiguous group,
+    // matching the admin portal's layout.
+    const orderedRows = sectionIsPayg
+      ? [...rows].sort((a, b) => {
+          const aPayg = paygCategories.includes(a.category);
+          const bPayg = paygCategories.includes(b.category);
+          if (aPayg && !bPayg) return -1;
+          if (!aPayg && bPayg) return 1;
+          return 0;
+        })
+      : rows;
     // A row is selectable (= customer can pay for it) when it has an amount
     // and is not already fully paid. "Fully paid" means a ledger charge
     // exists AND its remaining is 0. When no charge exists yet (fresh rental,
@@ -315,7 +389,7 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
       });
     };
 
-    const selectable = rows
+    const selectable = orderedRows
       .filter((r) => {
         if (r.amount <= 0) return false;
         if (r.category === 'Security Deposit') return false; // handled via Pre-Auth Hold, not this pay flow
@@ -342,7 +416,7 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
 
     const selectedTotal =
       Math.round(
-        rows
+        orderedRows
           .filter((r) => selected.has(r.category))
           .reduce((sum, r) => sum + amountToPay(r.category, r.amount), 0) * 100
       ) / 100;
@@ -374,6 +448,7 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
                 </TableHead>
               )}
               <TableHead className={selectable.length > 0 ? '' : 'pl-6'}>Category</TableHead>
+              <TableHead className="w-[110px]">Mode</TableHead>
               <TableHead className="text-center w-[110px]">Status</TableHead>
               <TableHead className="text-right w-[110px]">Amount</TableHead>
               <TableHead className="text-right w-[110px]">Refunded</TableHead>
@@ -381,7 +456,21 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map(({ label, category, amount, detail, icon: Icon, color, bg }) => {
+            {orderedRows.map(({ label, category, amount, detail, icon: Icon, color, bg }, idx) => {
+              // PAYG grouping: spot the transition from PAYG block to non-PAYG rows
+              // so we can drop an indigo divider between them. Matches the admin layout.
+              const thisIsPayg = sectionIsPayg && paygCategories.includes(category);
+              const prevRow = idx > 0 ? orderedRows[idx - 1] : null;
+              const prevIsPayg = sectionIsPayg && prevRow && paygCategories.includes(prevRow.category);
+              const isFirstNonPaygAfterPayg = sectionIsPayg && !thisIsPayg && prevIsPayg;
+              // Clicking any PAYG row opens the full PAYG timeline dialog.
+              const rowOnClick = thisIsPayg ? () => setPaygDetailsOpen(true) : undefined;
+              // Mode badge: PAYG > Installments > Regular.
+              const rowMode: 'PAYG' | 'Installments' | 'Regular' = thisIsPayg
+                ? 'PAYG'
+                : (!thisIsPayg && rental.has_installment_plan && ['Rental', 'Tax', 'Extras'].includes(category))
+                  ? 'Installments'
+                  : 'Regular';
               const applied = amount > 0;
               // Scope by extension_id when rendering an extension table so two
               // extensions with the same "Extension Rental" category don't
@@ -414,9 +503,13 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
               const isSelected = selected.has(category);
 
               return (
-                <TableRow key={category} className={!applied ? 'opacity-40' : ''}>
+                <Fragment key={category}>
+                <TableRow
+                  className={`${(!applied) && !thisIsPayg ? 'opacity-40' : ''} ${rowOnClick ? 'cursor-pointer hover:bg-muted/30' : ''} ${thisIsPayg ? 'bg-indigo-50 dark:bg-indigo-950/20' : ''} ${isFirstNonPaygAfterPayg ? 'border-t-4 border-t-indigo-200 dark:border-t-indigo-800/60' : ''}`}
+                  onClick={rowOnClick}
+                >
                   {selectable.length > 0 && (
-                    <TableCell className="pl-6 w-10">
+                    <TableCell className="pl-6 w-10" onClick={(e) => e.stopPropagation()}>
                       {isSelectable ? (
                         <Checkbox
                           checked={isSelected}
@@ -436,12 +529,29 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
                         />
                       </div>
                       <div>
-                        <p className="text-sm font-medium">{label}</p>
+                        <p className="text-sm font-medium flex items-center gap-1.5">
+                          {label}
+                          {rowOnClick && <ExternalLink className="h-3 w-3 text-muted-foreground" />}
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           {applied ? detail : 'Not applied'}
                         </p>
                       </div>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={
+                        rowMode === 'PAYG'
+                          ? 'text-indigo-600 border-indigo-300 bg-indigo-100 dark:text-indigo-400 dark:border-indigo-700 dark:bg-indigo-950/30 text-[11px]'
+                          : rowMode === 'Installments'
+                            ? 'text-violet-600 border-violet-300 bg-violet-100 dark:text-violet-400 dark:border-violet-700 dark:bg-violet-950/30 text-[11px]'
+                            : 'text-muted-foreground border-muted-foreground/20 text-[11px]'
+                      }
+                    >
+                      {rowMode}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     {(() => {
@@ -494,12 +604,15 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
                       <span className="text-sm text-muted-foreground/40">-</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right pr-6">
+                  <TableCell className="text-right pr-6" onClick={(e) => e.stopPropagation()}>
                     {hasUnpaid && !isCancelledOrRejected ? (
                       <button
                         className="text-xs font-medium text-blue-500 hover:text-blue-400 hover:underline disabled:opacity-50"
                         disabled={isProcessing}
-                        onClick={() => payCategories(amountToPay(category, amount), [category], extensionId)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          payCategories(amountToPay(category, amount), [category], extensionId);
+                        }}
                       >
                         Pay
                       </button>
@@ -508,6 +621,7 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
                     )}
                   </TableCell>
                 </TableRow>
+                </Fragment>
               );
             })}
           </TableBody>
@@ -617,20 +731,49 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
 
   const hasExtensions = extensionGroups.length > 0;
 
+  const paygDialogNode = isPayg ? (
+    <PaygDetailsDialog
+      open={paygDetailsOpen}
+      onOpenChange={setPaygDetailsOpen}
+      rentalId={rental.id}
+      isPayg
+      rental={{
+        payg_start_ts: rental.payg_start_ts,
+        payg_next_accrual_at: rental.payg_next_accrual_at,
+        payg_last_reminder_sent_at: rental.payg_last_reminder_sent_at,
+        payg_reminder_count: rental.payg_reminder_count,
+        payg_reminder_interval_days: rental.payg_reminder_interval_days,
+        payg_paused: rental.payg_paused,
+        payg_closed_at: rental.payg_closed_at,
+      }}
+      currencyCode={currencyCode}
+      // Customer-facing: "Take Payment" routes through the existing Stripe-checkout
+      // flow (payCategories) rather than the admin's manual AddPaymentDialog. The
+      // dialog closes itself before firing, so the user lands on Stripe cleanly.
+      onTakePayment={({ categories, amount }) => {
+        payCategories(amount, categories);
+      }}
+    />
+  ) : null;
+
   if (!hasExtensions) {
     return (
-      <Card className={isProcessing ? 'opacity-50 pointer-events-none' : ''}>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base font-medium">Payment Breakdown</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {renderTable(originalRows, selectedOriginal, setSelectedOriginal)}
-        </CardContent>
-      </Card>
+      <>
+        <Card className={isProcessing ? 'opacity-50 pointer-events-none' : ''}>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base font-medium">Payment Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {renderTable(originalRows, selectedOriginal, setSelectedOriginal, undefined, isPayg)}
+          </CardContent>
+        </Card>
+        {paygDialogNode}
+      </>
     );
   }
 
   return (
+    <>
     <Card className={isProcessing ? 'opacity-50 pointer-events-none' : ''}>
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-medium">Payment Breakdown</CardTitle>
@@ -650,7 +793,7 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-0 pb-0">
-              {renderTable(originalRows, selectedOriginal, setSelectedOriginal)}
+              {renderTable(originalRows, selectedOriginal, setSelectedOriginal, undefined, isPayg)}
             </AccordionContent>
           </AccordionItem>
 
@@ -690,5 +833,7 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
         </Accordion>
       </CardContent>
     </Card>
+    {paygDialogNode}
+    </>
   );
 }

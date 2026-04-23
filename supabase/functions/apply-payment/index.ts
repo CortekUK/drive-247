@@ -81,6 +81,22 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
       if (tenant?.currency_code) currencyCode = tenant.currency_code;
     }
 
+    // PAYG rentals must never have upfront ledger charges materialised from an invoice.
+    // Daily Rental/Tax/Service Fee charges are produced by accrue-payg-charges; if we
+    // pre-create them here, the cron's idempotency unique index (rental_id, accrual_day_index)
+    // will collide and accruals silently no-op, leaving the customer billed for the upfront
+    // total but never actually accruing daily.
+    let isPayg = false;
+    if (payment.rental_id) {
+      const { data: rentalRow } = await supabase
+        .from('rentals')
+        .select('is_pay_as_you_go')
+        .eq('id', payment.rental_id)
+        .single();
+      isPayg = !!rentalRow?.is_pay_as_you_go;
+      if (isPayg) console.log(`Payment ${paymentId} is for a PAYG rental — auto-create from invoice disabled.`);
+    }
+
     // For customer payments, all are treated as generic 'Payment' type
     // InitialFee payments are system-generated and handled separately
     const isCustomerPayment = payment.payment_type === 'Payment';
@@ -199,7 +215,8 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
 
         // Security Deposit intentionally excluded — deposits are now held on the
         // card via place-deposit-hold, never charged/allocated here.
-        const feeCategories = skipFeeCharges ? [] : [
+        // PAYG: skip fee auto-creation entirely; the accrual cron owns daily Tax/Service Fee.
+        const feeCategories = (skipFeeCharges || isPayg) ? [] : [
           { category: 'Service Fee', invoiceField: 'service_fee' },
           { category: 'Tax', invoiceField: 'tax_amount' },
           { category: 'Delivery Fee', invoiceField: 'delivery_fee' },
@@ -426,8 +443,10 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           .order('entry_date', { ascending: true })
           .order('id', { ascending: true });
 
-        // Auto-create ledger charge from invoice if category has no existing charge
-        if ((!outstandingCharges || outstandingCharges.length === 0) && payment.rental_id) {
+        // Auto-create ledger charge from invoice if category has no existing charge.
+        // For PAYG rentals this is a no-op: the accrual cron is the sole writer of daily
+        // Rental/Tax/Service Fee charges, and there is no upfront invoice to materialise.
+        if ((!outstandingCharges || outstandingCharges.length === 0) && payment.rental_id && !isPayg) {
           // Security Deposit is intentionally omitted — deposits are held via
           // place-deposit-hold, never auto-created as a ledger charge here.
           const invoiceCategoryMap: Record<string, string> = {

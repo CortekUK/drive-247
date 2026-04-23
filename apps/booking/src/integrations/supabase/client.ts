@@ -24,3 +24,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     detectSessionInUrl: typeof window !== 'undefined',
   }
 });
+
+// Untyped client for queries hitting columns that aren't yet in the generated
+// Database types (e.g. freshly added PAYG fields). Use sparingly — prefer the
+// typed `supabase` client everywhere else.
+export const supabaseUntyped = supabase as any;
