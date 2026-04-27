@@ -82,7 +82,7 @@ function frequencyLabel(unit: 'week' | 'month' | undefined, ppu: number | undefi
 function buildPaymentScheduleText(installment: InstallmentData, currencyCode: string): string {
     return installment.scheduled_installments
         .sort((a, b) => a.installment_number - b.installment_number)
-        .map(si => `${si.installment_number}. ${formatDate(si.due_date)} — ${formatCurrency(si.amount, currencyCode)}`)
+        .map(si => `${si.installment_number}. ${formatDate(si.due_date)} - ${formatCurrency(si.amount, currencyCode)}`)
         .join('\n');
 }
 
@@ -256,7 +256,7 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         first_payment_date: installment?.scheduled_installments?.[0]?.due_date ? formatDate(installment.scheduled_installments[0].due_date) : '',
         last_payment_date: installment?.scheduled_installments?.[installment.scheduled_installments.length - 1]?.due_date ? formatDate(installment.scheduled_installments[installment.scheduled_installments.length - 1].due_date) : '',
         collection_mode: installment?.collection_mode === 'manual' ? 'Manual collection' : 'Automatic card charging',
-        payment_method_label: installment?.stripe_payment_method_id ? `card on file (•••• ${String(installment.stripe_payment_method_id).slice(-4)})` : 'card to be saved at checkout',
+        payment_method_label: installment?.stripe_payment_method_id ? `card on file (ending ${String(installment.stripe_payment_method_id).slice(-4)})` : 'card to be saved at checkout',
         reminder_policy: 'If a scheduled payment cannot be collected, an email reminder will be sent every 24 hours with a secure link to settle the outstanding balance.',
         cumulative_clause: 'Where two or more scheduled payments remain outstanding, all unpaid amounts are bundled into a single cumulative charge. Settling the cumulative balance clears every prior unpaid installment in one go.',
         rental_total: installment ? formatCurrency(installment.total_installable_amount + installment.upfront_amount, currencyCode) : '',

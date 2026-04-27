@@ -7,7 +7,7 @@ SELECT
   t.id AS tenant_id,
   'Default Installment Plan Agreement' AS template_name,
 $DEFAULT$
-VEHICLE RENTAL AGREEMENT — INSTALLMENT PAYMENT PLAN
+VEHICLE RENTAL AGREEMENT - INSTALLMENT PAYMENT PLAN
 
 This agreement is between {{tenant_name}} ("the Operator") and
 {{customer_name}} ("the Renter") for the rental of:
@@ -17,13 +17,13 @@ This agreement is between {{tenant_name}} ("the Operator") and
    Pickup:         {{pickup_location}}
    Return:         {{return_location}}
 
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 1. PAYMENT PLAN
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 
 The Renter has elected to pay for this rental on an installment plan.
 
-   Plan type:                {{plan_type}} — {{frequency_label}}
+   Plan type:                {{plan_type}} - {{frequency_label}}
    Total rental charges:     {{rental_total}}
    Payable today:            {{upfront_amount}}
         Comprising: {{upfront_breakdown}}
@@ -37,9 +37,9 @@ The full schedule of payments:
 
 {{payment_schedule}}
 
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 2. PAYMENT METHOD AND AUTHORISATION
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 
 Collection mode: {{collection_mode}}
 
@@ -50,9 +50,9 @@ above without further notice. This authorisation continues until the
 final installment has been paid or the Renter replaces the saved
 payment method.
 
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 3. CUMULATIVE BALANCE AND MISSED PAYMENTS
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 
 {{cumulative_clause}}
 
@@ -62,9 +62,9 @@ will receive a daily email reminder containing a secure link to settle
 the full outstanding balance. Settling that link clears all earlier
 unpaid installments at once.
 
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 4. REMINDER POLICY
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 
 {{reminder_policy}}
 
@@ -73,9 +73,9 @@ requires re-authentication, the plan is moved to manual collection
 and the Renter must complete a new payment via the link in the
 reminder email.
 
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 5. SECURITY DEPOSIT
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 
 A refundable security hold of {{deposit_amount}} is placed on the
 Renter's card at the start of the rental period and released after
@@ -83,26 +83,26 @@ the vehicle is returned in acceptable condition. The deposit is held
 separately from the installment plan and is not part of the
 installment schedule.
 
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 6. CANCELLATION AND REFUNDS
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 
 If the rental is cancelled before commencement, any installments
 already paid will be refunded in accordance with the Operator's
 cancellation policy, less the non-refundable booking fee. Insurance
 premiums are non-refundable once the policy has been activated.
 
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 7. ACCEPTANCE
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 
 By signing below, the Renter confirms they have read, understood
 and agreed to:
 
-   • The full payment schedule above
-   • Automatic charging of the saved payment method on each due date
-   • The cumulative balance and reminder policy
-   • The cancellation and refund terms
+   * The full payment schedule above
+   * Automatic charging of the saved payment method on each due date
+   * The cumulative balance and reminder policy
+   * The cancellation and refund terms
 
 Signed by Renter:    ______________________________
                      {{customer_name}}      Date: __________
