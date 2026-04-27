@@ -51,6 +51,10 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url)
     let token = url.searchParams.get('token')
+    // Caller can also tell us where to bounce the customer after Stripe — used
+    // by the booking app /pay/[token] page so we land back on the right tenant
+    // subdomain, not the BOOKING_APP_URL env default.
+    const callerOrigin = url.searchParams.get('origin') || ''
     if (!token && req.method === 'POST') {
       try { const body = await req.json(); token = body?.token || null } catch { /* empty body */ }
     }
@@ -147,8 +151,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Create fresh Checkout session
-    const origin = Deno.env.get('BOOKING_APP_URL') || 'https://drive-247.com'
+    // Create fresh Checkout session — prefer the caller-provided origin so we
+    // land back on the actual tenant subdomain the customer started from.
+    const origin = callerOrigin || Deno.env.get('BOOKING_APP_URL') || 'https://drive-247.com'
     const session = await stripe.checkout.sessions.create({
       customer: validStripeCustomerId,
       customer_email: validStripeCustomerId ? undefined : customer?.email,
@@ -180,7 +185,7 @@ Deno.serve(async (req) => {
         },
       },
       client_reference_id: plan.rental_id,
-      success_url: `${origin}/portal/payments?paid=1`,
+      success_url: `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${plan.rental_id}&installment=true`,
       cancel_url: `${origin}/pay/${token}?cancelled=1`,
       metadata: {
         installment_plan_id: plan.id,

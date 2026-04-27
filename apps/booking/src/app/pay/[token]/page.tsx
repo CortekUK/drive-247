@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,13 @@ export default async function MagicLinkPayPage({ params, searchParams }: PagePro
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
+  // Reconstruct the tenant origin the customer is on so the edge fn can build
+  // success/cancel URLs that bounce them back to the same subdomain.
+  const hdrs = await headers();
+  const host = hdrs.get("x-forwarded-host") || hdrs.get("host") || "";
+  const proto = hdrs.get("x-forwarded-proto") || (host.startsWith("localhost") ? "http" : "https");
+  const callerOrigin = host ? `${proto}://${host}` : "";
+
   if (!token || !supabaseUrl || !anonKey) {
     return (
       <Shell title="Link missing">
@@ -26,7 +34,7 @@ export default async function MagicLinkPayPage({ params, searchParams }: PagePro
   // Resolve the magic-link → Stripe Checkout via the edge fn. We fetch with
   // redirect:manual so we can read the Location header and forward the user
   // straight to Stripe via Next's redirect().
-  const fnUrl = `${supabaseUrl}/functions/v1/installment-pay-link?token=${encodeURIComponent(token)}`;
+  const fnUrl = `${supabaseUrl}/functions/v1/installment-pay-link?token=${encodeURIComponent(token)}&origin=${encodeURIComponent(callerOrigin)}`;
   let checkoutUrl: string | null = null;
   let errorBody: string | null = null;
   try {
