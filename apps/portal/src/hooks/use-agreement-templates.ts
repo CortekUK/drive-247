@@ -5,7 +5,7 @@ import { toast } from '@/hooks/use-toast';
 import { DEFAULT_AGREEMENT_TEMPLATE } from '@/lib/default-agreement-template';
 
 export type TemplateType = 'default' | 'custom';
-export type TemplateCategory = 'standard' | 'payg' | 'extension';
+export type TemplateCategory = 'standard' | 'payg' | 'extension' | 'installment';
 
 export interface AgreementTemplate {
   id: string;

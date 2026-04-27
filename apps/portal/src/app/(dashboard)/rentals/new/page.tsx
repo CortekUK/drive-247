@@ -69,6 +69,7 @@ import { useAuditLog } from "@/hooks/use-audit-log";
 import { useVehicleBookedDates } from "@/hooks/use-vehicle-booked-dates";
 import { RentalProgressOverlay } from "@/components/rentals/rental-progress-overlay";
 import { getTimezonesByRegion, findTimezone } from "@/lib/timezones";
+import { InstallmentCalendar, type InstallmentCalendarItem } from "@/components/installments/InstallmentCalendar";
 
 // Base schema: end_date and return_location are optional at the schema level
 // because PAYG rentals don't have a fixed end date or a return location.
@@ -3645,6 +3646,43 @@ const CreateRental = () => {
                               Custom installment amount — applies only to this rental.
                             </p>
                           )}
+
+                          {/* Visual calendar preview — same component as the rental detail + customer portal */}
+                          {(() => {
+                            const items: InstallmentCalendarItem[] = [];
+                            // Day-zero (today) installment when chargeFirstUpfront is on
+                            if (chargeFirstUpfront) {
+                              items.push({
+                                number: 1,
+                                date: format(watchedStartDate, 'yyyy-MM-dd'),
+                                amount: effectiveInstallmentAmount,
+                                status: 'due_today',
+                              });
+                            }
+                            for (let i = 0; i < selectedPlan.scheduled; i++) {
+                              const dueDate = selectedPlan.type === 'weekly'
+                                ? addWeeks(watchedStartDate, i + 1)
+                                : addMonths(watchedStartDate, i + 1);
+                              const isLast = i === selectedPlan.scheduled - 1;
+                              const amt = isLast && installmentAmountOverride === null
+                                ? Math.round((installableAmount - (selectedPlan.amount * (selectedPlan.count - 1))) * 100) / 100
+                                : effectiveInstallmentAmount;
+                              items.push({
+                                number: i + (chargeFirstUpfront ? 2 : 1),
+                                date: format(dueDate, 'yyyy-MM-dd'),
+                                amount: amt,
+                                status: 'scheduled',
+                              });
+                            }
+                            return (
+                              <InstallmentCalendar
+                                schedule={items}
+                                rentalStart={format(watchedStartDate, 'yyyy-MM-dd')}
+                                rentalEnd={watchedEndDate ? format(watchedEndDate, 'yyyy-MM-dd') : undefined}
+                                currencyCode={currency}
+                              />
+                            );
+                          })()}
                         </div>
                       )}
                     </div>

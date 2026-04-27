@@ -30,6 +30,7 @@ import {
   Info,
   Clock,
   CalendarPlus,
+  CreditCard,
 } from 'lucide-react';
 import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
 import { useTenant } from '@/contexts/TenantContext';
@@ -344,7 +345,7 @@ function TemplateCategorySection({ category }: { category: TemplateCategory }) {
         <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
         <div className="text-sm text-muted-foreground">
           <p>
-            The active template will be used when sending {category === 'payg' ? 'Pay As You Go' : category === 'extension' ? 'extension' : ''} rental agreements for electronic signing.
+            The active template will be used when sending {category === 'payg' ? 'Pay As You Go' : category === 'extension' ? 'extension' : category === 'installment' ? 'installment plan' : ''} rental agreements for electronic signing.
             You can edit either template to customize the content using dynamic variables.
           </p>
         </div>
@@ -396,6 +397,10 @@ export default function AgreementTemplatesPage() {
               Pay As You Go
             </TabsTrigger>
           )}
+          <TabsTrigger value="installment" className="flex items-center gap-1.5">
+            <CreditCard className="h-3.5 w-3.5" />
+            Installment Plan
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="standard" className="mt-4">
           <TemplateCategorySection category="standard" />
@@ -408,6 +413,9 @@ export default function AgreementTemplatesPage() {
             <TemplateCategorySection category="payg" />
           </TabsContent>
         )}
+        <TabsContent value="installment" className="mt-4">
+          <TemplateCategorySection category="installment" />
+        </TabsContent>
       </Tabs>
     </div>
   );
