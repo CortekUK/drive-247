@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import {
@@ -21,6 +21,7 @@ import {
   AlertCircle,
   CalendarPlus,
   Copy,
+  XCircle,
 } from 'lucide-react';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -52,6 +53,16 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ExtendRentalDialog } from '@/components/customer-portal/ExtendRentalDialog';
 import PaymentBreakdown from '@/components/customer-portal/PaymentBreakdown';
 import { PaygSection } from '@/components/customer-portal/payg-section';
@@ -671,11 +682,32 @@ export default function BookingDetailPage() {
   })();
 
   const [extendDialogOpen, setExtendDialogOpen] = useState(false);
+  const [showCancelExtension, setShowCancelExtension] = useState(false);
 
   // PAYG rentals are open-ended by definition — the customer "extends" by simply
   // continuing to rent (daily accrual), so the extension flow doesn't apply.
   const canExtend = rental?.status === 'Active' && !rental?.is_extended && !(rental as any)?.is_pay_as_you_go;
   const hasExtensionPending = rental?.is_extended === true;
+
+  const cancelExtension = useMutation({
+    mutationFn: async () => {
+      if (!rental?.id) throw new Error('Missing rental');
+      const { error } = await supabase
+        .from('rentals')
+        .update({ is_extended: false, previous_end_date: null })
+        .eq('id', rental.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customer-rental-detail', id] });
+      queryClient.invalidateQueries({ queryKey: ['customer-rentals'] });
+      toast.success('Extension request cancelled');
+      setShowCancelExtension(false);
+    },
+    onError: () => {
+      toast.error('Failed to cancel extension request');
+    },
+  });
 
   // ---- Loading state ----
 
@@ -785,6 +817,16 @@ export default function BookingDetailPage() {
           <Button onClick={() => setExtendDialogOpen(true)}>
             <CalendarPlus className="h-4 w-4 mr-2" />
             Request Extension
+          </Button>
+        )}
+        {hasExtensionPending && (
+          <Button
+            variant="outline"
+            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => setShowCancelExtension(true)}
+          >
+            <XCircle className="h-4 w-4 mr-2" />
+            Cancel Extension Request
           </Button>
         )}
       </div>
@@ -1232,6 +1274,38 @@ export default function BookingDetailPage() {
           rental={rental as unknown as CustomerRental}
         />
       )}
+
+      {/* Cancel Extension Request Dialog */}
+      <AlertDialog open={showCancelExtension} onOpenChange={setShowCancelExtension}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Extension Request?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will cancel your request to extend
+              {rental?.previous_end_date
+                ? ` until ${format(new Date(rental.previous_end_date), 'MMM dd, yyyy')}`
+                : ''}
+              . You can submit a new extension request later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelExtension.isPending}>Keep Request</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                cancelExtension.mutate();
+              }}
+              disabled={cancelExtension.isPending}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {cancelExtension.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : null}
+              Cancel Request
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
