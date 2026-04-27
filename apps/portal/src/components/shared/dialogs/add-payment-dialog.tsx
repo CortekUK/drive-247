@@ -113,6 +113,28 @@ export const AddPaymentDialog = ({
     ? breakdownItems.reduce((sum, item) => sum + (item.type === 'discount' ? -Math.abs(item.amount) : item.amount), 0)
     : null;
 
+  // Detect installment plan + collection mode so we can warn when the operator
+  // chooses a non-Stripe method (no card to auto-charge future installments)
+  const [installmentPlanInfo, setInstallmentPlanInfo] = useState<{ id: string; collection_mode: string; status: string } | null>(null);
+  useEffect(() => {
+    if (!propRentalId || !open) { setInstallmentPlanInfo(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("installment_plans")
+        .select("id, collection_mode, status")
+        .eq("rental_id", propRentalId)
+        .maybeSingle();
+      if (!cancelled) setInstallmentPlanInfo(data ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [propRentalId, open]);
+  const watchedMethod = form.watch("method");
+  const showManualWarning = !!installmentPlanInfo
+    && installmentPlanInfo.status !== "cancelled"
+    && watchedMethod
+    && !["Card", "Stripe", "card"].includes(watchedMethod);
+
   // Update form values when props change
   useEffect(() => {
     if (open) {
@@ -496,6 +518,12 @@ export const AddPaymentDialog = ({
               }
             </DialogDescription>
           </DialogHeader>
+          {showManualWarning ? (
+            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
+              <strong className="font-semibold">Manual installment management.</strong> This rental has an installment plan.
+              Recording payment without a Stripe card means future installments will <strong>not be auto-charged</strong> — you'll need to mark each one paid manually. Use "Charge via Stripe" instead if the customer should be auto-billed for the remaining schedule.
+            </div>
+          ) : null}
         </div>
 
         {/* Customer/Vehicle selection when not pre-populated */}
