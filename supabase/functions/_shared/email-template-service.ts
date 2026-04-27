@@ -643,6 +643,27 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
 <p>Kind regards,<br>
 <strong>The {{company_name}} Team</strong></p>`,
   },
+  payg_reminder: {
+    subject: 'Payment Reminder — {{outstanding_amount}} outstanding ({{rental_number}})',
+    content: `<h1>Payment Reminder</h1>
+
+<p>Rental {{rental_number}} · Invoice {{invoice_ref}}</p>
+
+<p>Hi {{customer_name}},</p>
+
+<p>Your Pay-As-You-Go rental with <strong>{{company_name}}</strong> has been active for <strong>{{days_active}} day(s)</strong> and has an outstanding balance.</p>
+
+<p style="padding:16px; background:#f9fafb; border-radius:6px; border:1px solid #e5e7eb;">
+  Current balance: <strong style="font-size:18px; color:#111827;">{{outstanding_amount}}</strong>
+</p>
+
+<p>Please log in to your customer portal to settle the outstanding invoice. If you have already paid, please disregard this message.</p>
+
+<p>Need help? Contact us at <a href="mailto:{{company_email}}">{{company_email}}</a>{{company_phone}}.</p>
+
+<p>Kind regards,<br>
+<strong>The {{company_name}} Team</strong></p>`,
+  },
 };
 
 export interface EmailTemplateData {

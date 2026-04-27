@@ -657,6 +657,53 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
         console.error('Payment update error:', paymentUpdateError);
       }
 
+      // PAYG: after FIFO has fully consumed the latest open invoice's ledger entries,
+      // flip the invoice_status to 'paid' (and supersede priors). Without this, the
+      // Stripe-webhook settlement RPC never runs for manual payments and the UI keeps
+      // showing "Not paid" even though the ledger is settled. Idempotent — the RPC
+      // has WHERE invoice_status='open' guards.
+      if (isPayg && payment.rental_id) {
+        try {
+          const { data: latestOpen } = await supabase
+            .from('payg_accruals')
+            .select('id, ledger_entry_ids')
+            .eq('rental_id', payment.rental_id)
+            .eq('invoice_status', 'open')
+            .order('accrual_day_index', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (latestOpen) {
+            const ids = (latestOpen.ledger_entry_ids ?? []) as string[];
+            let allPaid = ids.length > 0;
+            if (allPaid) {
+              const { data: les } = await supabase
+                .from('ledger_entries')
+                .select('id, remaining_amount')
+                .in('id', ids);
+              allPaid = (les ?? []).length > 0
+                && (les ?? []).every((le: any) => Number(le.remaining_amount || 0) <= 0);
+            }
+            if (allPaid) {
+              const { error: rpcErr } = await supabase.rpc('payg_settle_invoice', {
+                p_payment_id: paymentId,
+                p_accrual_id: latestOpen.id,
+              });
+              if (rpcErr) {
+                console.error('payg_settle_invoice error:', rpcErr.message ?? rpcErr);
+              } else {
+                console.log(`PAYG settled invoice ${latestOpen.id} via payment ${paymentId}`);
+              }
+            } else {
+              console.log(`PAYG payment partially covered latest invoice; not settling.`);
+            }
+          }
+        } catch (settleErr: any) {
+          // Settlement is best-effort. Payment itself already succeeded.
+          console.error('PAYG settlement check failed (non-fatal):', settleErr?.message ?? settleErr);
+        }
+      }
+
       return {
         ok: true,
         paymentId: paymentId,

@@ -1,5 +1,73 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/cors.ts";
+import { sendEmail } from "../_shared/resend-service.ts";
+
+// --- Inline email template helpers (vendored from _shared/email-template-service.ts).
+// Kept in-file so MCP deploys don't have to upload the 34KB shared file. The
+// functions match `getEmailTemplate` + `replaceTemplateVariables` exactly so
+// `import { ... } from "../_shared/email-template-service.ts"` in the disk source
+// is interchangeable with these local copies — pick whichever path is convenient
+// at deploy time.
+const DEFAULT_PAYG_REMINDER_TEMPLATE = {
+  subject: "Payment Reminder — {{outstanding_amount}} outstanding ({{rental_number}})",
+  content: `<h1>Payment Reminder</h1>
+
+<p>Rental {{rental_number}} · Invoice {{invoice_ref}}</p>
+
+<p>Hi {{customer_name}},</p>
+
+<p>Your Pay-As-You-Go rental with <strong>{{company_name}}</strong> has been active for <strong>{{days_active}} day(s)</strong> and has an outstanding balance.</p>
+
+<p style="padding:16px; background:#f9fafb; border-radius:6px; border:1px solid #e5e7eb;">
+  Current balance: <strong style="font-size:18px; color:#111827;">{{outstanding_amount}}</strong>
+</p>
+
+<p>Please log in to your customer portal to settle the outstanding invoice. If you have already paid, please disregard this message.</p>
+
+<p>Need help? Contact us at <a href="mailto:{{company_email}}">{{company_email}}</a> {{company_phone}}.</p>
+
+<p>Kind regards,<br>
+<strong>The {{company_name}} Team</strong></p>`,
+};
+
+async function getEmailTemplate(
+  client: any,
+  tenantId: string,
+  templateKey: string,
+): Promise<{ subject: string; content: string; isCustom: boolean }> {
+  try {
+    const { data, error } = await client
+      .from("email_templates")
+      .select("subject, template_content")
+      .eq("tenant_id", tenantId)
+      .eq("template_key", templateKey)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (!error && data?.subject && data?.template_content) {
+      console.log(`[payg_reminder] using custom template for tenant ${tenantId}`);
+      return { subject: data.subject, content: data.template_content, isCustom: true };
+    }
+  } catch (err) {
+    console.warn(`[payg_reminder] template lookup failed, using default:`, err);
+  }
+  // Default fallback (only payg_reminder is implemented inline; other keys NA here)
+  if (templateKey === "payg_reminder") {
+    return { ...DEFAULT_PAYG_REMINDER_TEMPLATE, isCustom: false };
+  }
+  return { subject: "", content: "", isCustom: false };
+}
+
+function replaceTemplateVariables(template: string, data: Record<string, string | undefined>): string {
+  let result = template;
+  for (const [key, value] of Object.entries(data)) {
+    const regex = new RegExp(`\\{\\{${key}\\}\\}`, "g");
+    result = result.replace(regex, value ?? "");
+  }
+  // Strip any remaining {{unknown_var}} placeholders so they don't leak to the email.
+  result = result.replace(/\{\{[^}]+\}\}/g, "");
+  return result;
+}
+// --- End inline email template helpers
 
 /**
  * Pay-As-You-Go payment reminder cron.
@@ -24,16 +92,20 @@ interface Rental {
   status: string;
   payg_closed_at: string | null;
   customers: { id: string; name: string | null; email: string | null } | null;
+  vehicles: { make: string | null; model: string | null; reg: string | null } | null;
 }
 
 interface Tenant {
   id: string;
   payg_auto_reminders_enabled: boolean | null;
   currency_code: string | null;
-  name: string | null;
+  company_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+// TEST MODE: 5-min cadence between reminders (revert to `24 * 60 * 60 * 1000` for production).
+const DAY_MS = 5 * 60 * 1000;
 
 function fmtCurrency(amount: number, code: string | null): string {
   try {
@@ -120,7 +192,7 @@ Deno.serve(async (req) => {
 
     const { data: tenants, error: tenantErr } = await supabase
       .from("tenants")
-      .select("id, payg_auto_reminders_enabled, currency_code, name");
+      .select("id, payg_auto_reminders_enabled, currency_code, company_name, contact_email, contact_phone");
 
     if (tenantErr) throw tenantErr;
 
@@ -144,7 +216,8 @@ Deno.serve(async (req) => {
         is_pay_as_you_go,
         status,
         payg_closed_at,
-        customers!rentals_customer_id_fkey ( id, name, email )
+        customers!rentals_customer_id_fkey ( id, name, email ),
+        vehicles ( make, model, reg )
       `)
       .eq("is_pay_as_you_go", true)
       .eq("status", "Active")
@@ -223,26 +296,33 @@ Deno.serve(async (req) => {
         const daysActive = Math.max(0, daysBetween(now, startTs));
         const invoiceRef = `pg-${String(latestOpen.accrual_day_index).padStart(3, "0")}`;
 
-        const html = buildEmailHtml({
-          customerName: customer.name || "Customer",
-          rentalRef: r.rental_number || r.id,
-          invoiceRef,
-          daysActive,
-          totalOutstanding,
-          currencyCode: tenant.currency_code,
-          companyName: tenant.name || "Drive247",
-        });
+        // Resolve the tenant's `payg_reminder` template (custom or default fallback)
+        // and substitute variables. This lets each tenant edit the reminder copy
+        // from Settings → Email Templates without redeploying the function.
+        const templateData = {
+          customer_name: customer.name || "Customer",
+          customer_email: customer.email || "",
+          rental_number: r.rental_number || r.id,
+          invoice_ref: invoiceRef,
+          outstanding_amount: fmtCurrency(totalOutstanding, tenant.currency_code),
+          days_active: String(daysActive),
+          vehicle_make: r.vehicles?.make || "",
+          vehicle_model: r.vehicles?.model || "",
+          vehicle_reg: r.vehicles?.reg || "",
+          company_name: tenant.company_name || "Drive247",
+          company_email: tenant.contact_email || "",
+          company_phone: tenant.contact_phone || "",
+        };
 
-        const subject = `Payment Reminder — ${
-          fmtCurrency(totalOutstanding, tenant.currency_code)
-        } outstanding (${r.rental_number || r.id})`;
+        const tpl = await getEmailTemplate(supabase, r.tenant_id, "payg_reminder");
+        const subject = replaceTemplateVariables(tpl.subject, templateData);
+        const html = replaceTemplateVariables(tpl.content, templateData);
 
-        const { data: sendResult, error: sendErr } = await supabase.functions
-          .invoke("aws-ses-email", {
-            body: { to: customer.email, subject, html },
-          });
-
-        const success = !sendErr && (sendResult as any)?.success !== false;
+        // Send via Resend (using the shared resend-service drop-in).
+        // Pass tenant_id so Resend uses the tenant's branded {slug}@drive-247.com sender.
+        const sendResult = await sendEmail(customer.email, subject, html, supabase, r.tenant_id);
+        const success = sendResult.success;
+        const sendErr = success ? null : { message: sendResult.error || "Resend send failed" };
         const reminderNumber = (r.payg_reminder_count || 0) + 1;
 
         await supabase.from("payg_reminder_log").insert({

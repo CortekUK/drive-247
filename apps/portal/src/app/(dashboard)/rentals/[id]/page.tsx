@@ -55,7 +55,6 @@ import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-
 import { useRentalAgreements } from "@/hooks/use-rental-agreements";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
-import { PaygTestPanel } from "@/components/rentals/payg-test-panel";
 import { PaygSection } from "@/components/rentals/payg-section";
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
@@ -2411,25 +2410,6 @@ const RentalDetail = () => {
         );
       })()}
 
-      {/* PAYG Test Panel — only on localhost/dev */}
-      {rental.is_pay_as_you_go && typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
-        <PaygTestPanel
-          rentalId={rental.id}
-          currencyCode={tenant?.currency_code || 'USD'}
-          currentDay={(rental as any).payg_accrual_day_count || 0}
-          isPaused={(rental as any).payg_paused === true}
-          isClosed={!!(rental as any).payg_closed_at}
-          status={rental.status}
-          onRefresh={() => {
-            queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
-            queryClient.invalidateQueries({ queryKey: ['payg-ledger'] });
-            queryClient.invalidateQueries({ queryKey: ['payg-invoices'] });
-            queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
-            queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
-          }}
-        />
-      )}
-
       {/* PAYG section — inline rolling-invoice view, above the fixed-charges Payment Breakdown. */}
       {rental && (rental as any).is_pay_as_you_go && (
         <PaygSection
@@ -2438,6 +2418,9 @@ const RentalDetail = () => {
           showAdminActions
           customerName={rental.customers?.name || ''}
           customerEmail={rental.customers?.email || undefined}
+          customerPhone={(rental.customers as any)?.phone || undefined}
+          customerId={rental.customers?.id}
+          vehicleId={(rental as any).vehicle_id ?? rental.vehicles?.id}
           vehicle={{
             reg: rental.vehicles?.reg,
             make: rental.vehicles?.make,
@@ -2447,6 +2430,8 @@ const RentalDetail = () => {
             start_date: rental.start_date,
             end_date: rental.end_date,
             monthly_amount: rental.monthly_amount,
+            rental_number: (rental as any).rental_number ?? null,
+            payg_closed_at: (rental as any).payg_closed_at ?? null,
           }}
           currencyCode={tenant?.currency_code || 'USD'}
           onTakePayment={async ({ amount, paygAccrualId }) => {

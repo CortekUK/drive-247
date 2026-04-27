@@ -927,6 +927,7 @@ export default function BookingDetailPage() {
               currencyCode={currencyCode}
               customerName={customerUser?.customer?.name || ''}
               customerEmail={customerUser?.customer?.email || undefined}
+              customerPhone={customerUser?.customer?.phone || undefined}
               vehicle={{
                 reg: (rental as any).vehicles?.reg,
                 make: (rental as any).vehicles?.make,
@@ -936,6 +937,8 @@ export default function BookingDetailPage() {
                 start_date: (rental as any).start_date,
                 end_date: (rental as any).end_date,
                 monthly_amount: (rental as any).monthly_amount,
+                rental_number: (rental as any).rental_number,
+                payg_closed_at: (rental as any).payg_closed_at,
               }}
               onTakePayment={async ({ amount, paygAccrualId }) => {
                 if (!tenant?.id || amount <= 0) return;
