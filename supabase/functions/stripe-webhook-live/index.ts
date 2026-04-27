@@ -790,6 +790,47 @@ serve(async (req) => {
                 console.log("PAYG invoice settled:", paygAccrualId);
               }
             }
+
+            const installmentId = session.metadata?.installment_id;
+            const installmentPlanId = session.metadata?.installment_plan_id;
+            if (installmentId && finalPaymentId) {
+              const { error: instSettleErr } = await supabase.rpc("installment_settle_invoice", {
+                p_payment_id: finalPaymentId,
+                p_installment_id: installmentId,
+              });
+              if (instSettleErr) {
+                console.error("Installment settle_invoice failed:", instSettleErr);
+              } else {
+                console.log("Installment invoice settled:", installmentId);
+                if (installmentPlanId) {
+                  // Activate the plan + capture the saved card on first settlement
+                  const paymentIntentId = typeof session.payment_intent === "string"
+                    ? session.payment_intent
+                    : session.payment_intent?.id;
+                  let paymentMethodId: string | undefined;
+                  if (paymentIntentId) {
+                    try {
+                      const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+                      paymentMethodId = typeof pi.payment_method === "string"
+                        ? pi.payment_method
+                        : pi.payment_method?.id;
+                    } catch (piErr) {
+                      console.error("Failed to retrieve PI for installment plan:", piErr);
+                    }
+                  }
+                  await supabase
+                    .from("installment_plans")
+                    .update({
+                      status: "active",
+                      upfront_paid: true,
+                      upfront_payment_id: finalPaymentId,
+                      stripe_payment_method_id: paymentMethodId ?? null,
+                      collection_mode: paymentMethodId ? "auto" : "manual",
+                    })
+                    .eq("id", installmentPlanId);
+                }
+              }
+            }
           }
 
           // Send booking pending notification for booking flow (not portal)

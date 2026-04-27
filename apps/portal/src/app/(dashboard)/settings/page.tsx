@@ -46,6 +46,7 @@ import { TeslaFleetSettings } from '@/components/settings/tesla-fleet-settings';
 import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates-section';
 import { PricingRulesSettings } from '@/components/settings/pricing-rules-settings';
 import { InstallmentConfigDialog } from '@/components/settings/installment-config-dialog';
+import { InstallmentSettings } from '@/components/settings/InstallmentSettings';
 import { formatCurrency } from '@/lib/format-utils';
 import { cn } from '@/lib/utils';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
@@ -3028,78 +3029,7 @@ const Settings = () => {
 
         {/* Installments Tab */}
         <TabsContent value="installments" className="space-y-6">
-          {/* Installment Payments Summary Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Banknote className="h-5 w-5 text-primary" />
-                Installment Payments
-              </CardTitle>
-              <CardDescription>
-                Allow customers to split rental payments into scheduled installments
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="space-y-1">
-                  <h4 className="font-medium">Enable Installment Payments</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Let customers pay rental costs in weekly or monthly installments
-                  </p>
-                </div>
-                <Switch
-                  checked={rentalForm.installments_enabled ?? false}
-                  onCheckedChange={async (checked) => {
-                    setRentalForm(prev => ({ ...prev, installments_enabled: checked }));
-                    try {
-                      await updateRentalSettings({ installments_enabled: checked });
-                    } catch (error) {
-                      console.error('Failed to update installment toggle:', error);
-                    }
-                  }}
-                />
-              </div>
-
-              {rentalForm.installments_enabled && (
-                <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
-                  <div className="text-sm text-muted-foreground">
-                    Weekly: {rentalForm.installment_config?.weekly_installments_limit ?? 4} installments (min {rentalForm.installment_config?.minimum_days_weekly ?? 7} days
-                    {(rentalForm.installment_config?.limiting_amount_per_day_weekly ?? 0) > 0 && `, min ${formatCurrency(rentalForm.installment_config.limiting_amount_per_day_weekly, tenant?.currency_code || 'USD')}/day`})
-                    {' · '}
-                    Monthly: {rentalForm.installment_config?.monthly_installments_limit ?? 6} installments (min {rentalForm.installment_config?.minimum_days_monthly ?? 30} days
-                    {(rentalForm.installment_config?.limiting_amount_per_day_monthly ?? 0) > 0 && `, min ${formatCurrency(rentalForm.installment_config.limiting_amount_per_day_monthly, tenant?.currency_code || 'USD')}/day`})
-                    {' · '}
-                    {rentalForm.installment_config?.charge_first_upfront ? 'First payment upfront' : 'All scheduled'}
-                  </div>
-                  {canEditSettings('installments') && (
-                    <Button
-                      variant="outline"
-                      onClick={() => setInstallmentDialogOpen(true)}
-                      className="flex items-center gap-2"
-                    >
-                      <SettingsIcon className="h-4 w-4" />
-                      Configure
-                    </Button>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <InstallmentConfigDialog
-            open={installmentDialogOpen}
-            onOpenChange={setInstallmentDialogOpen}
-            config={rentalForm.installment_config}
-            onSave={async (newConfig) => {
-              setRentalForm(prev => ({ ...prev, installment_config: newConfig }));
-              await updateRentalSettings({
-                installments_enabled: rentalForm.installments_enabled,
-                installment_config: newConfig,
-              });
-            }}
-            isSaving={isUpdatingRentalSettings}
-          />
-
+          <InstallmentSettings />
         </TabsContent>
 
         {/* Promos Tab */}

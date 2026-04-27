@@ -3362,27 +3362,45 @@ export type Database = {
       }
       installment_notifications: {
         Row: {
+          amount: number | null
           created_at: string
           id: string
           installment_id: string
+          installment_plan_id: string | null
+          message: string | null
+          metadata: Json | null
           notification_type: string
+          payment_id: string | null
           sent_at: string
+          status: string | null
           tenant_id: string | null
         }
         Insert: {
+          amount?: number | null
           created_at?: string
           id?: string
           installment_id: string
+          installment_plan_id?: string | null
+          message?: string | null
+          metadata?: Json | null
           notification_type: string
+          payment_id?: string | null
           sent_at?: string
+          status?: string | null
           tenant_id?: string | null
         }
         Update: {
+          amount?: number | null
           created_at?: string
           id?: string
           installment_id?: string
+          installment_plan_id?: string | null
+          message?: string | null
+          metadata?: Json | null
           notification_type?: string
+          payment_id?: string | null
           sent_at?: string
+          status?: string | null
           tenant_id?: string | null
         }
         Relationships: [
@@ -3394,7 +3412,83 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "installment_notifications_installment_plan_id_fkey"
+            columns: ["installment_plan_id"]
+            isOneToOne: false
+            referencedRelation: "installment_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_notifications_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_notifications_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "v_payment_remaining"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "installment_notifications_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "view_payments_export"
+            referencedColumns: ["payment_id"]
+          },
+          {
             foreignKeyName: "installment_notifications_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      installment_payment_links: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          installment_plan_id: string
+          last_used_session_id: string | null
+          tenant_id: string
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          installment_plan_id: string
+          last_used_session_id?: string | null
+          tenant_id: string
+          token: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          installment_plan_id?: string
+          last_used_session_id?: string | null
+          tenant_id?: string
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "installment_payment_links_installment_plan_id_fkey"
+            columns: ["installment_plan_id"]
+            isOneToOne: false
+            referencedRelation: "installment_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_payment_links_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -3404,14 +3498,18 @@ export type Database = {
       }
       installment_plans: {
         Row: {
+          collection_mode: Database["public"]["Enums"]["installment_collection_mode"]
           config: Json | null
+          consecutive_sca_failures: number | null
           created_at: string | null
           customer_id: string
           id: string
           installment_amount: number
+          last_reminder_sent_at: string | null
           next_due_date: string | null
           number_of_installments: number
           paid_installments: number | null
+          payments_per_unit: number
           plan_type: string
           rental_id: string
           status: string
@@ -3421,20 +3519,25 @@ export type Database = {
           tenant_id: string
           total_installable_amount: number
           total_paid: number | null
+          unit: Database["public"]["Enums"]["installment_unit"]
           updated_at: string | null
           upfront_amount: number
           upfront_paid: boolean | null
           upfront_payment_id: string | null
         }
         Insert: {
+          collection_mode?: Database["public"]["Enums"]["installment_collection_mode"]
           config?: Json | null
+          consecutive_sca_failures?: number | null
           created_at?: string | null
           customer_id: string
           id?: string
           installment_amount: number
+          last_reminder_sent_at?: string | null
           next_due_date?: string | null
           number_of_installments: number
           paid_installments?: number | null
+          payments_per_unit?: number
           plan_type: string
           rental_id: string
           status?: string
@@ -3444,20 +3547,25 @@ export type Database = {
           tenant_id: string
           total_installable_amount: number
           total_paid?: number | null
+          unit: Database["public"]["Enums"]["installment_unit"]
           updated_at?: string | null
           upfront_amount?: number
           upfront_paid?: boolean | null
           upfront_payment_id?: string | null
         }
         Update: {
+          collection_mode?: Database["public"]["Enums"]["installment_collection_mode"]
           config?: Json | null
+          consecutive_sca_failures?: number | null
           created_at?: string | null
           customer_id?: string
           id?: string
           installment_amount?: number
+          last_reminder_sent_at?: string | null
           next_due_date?: string | null
           number_of_installments?: number
           paid_installments?: number | null
+          payments_per_unit?: number
           plan_type?: string
           rental_id?: string
           status?: string
@@ -3467,6 +3575,7 @@ export type Database = {
           tenant_id?: string
           total_installable_amount?: number
           total_paid?: number | null
+          unit?: Database["public"]["Enums"]["installment_unit"]
           updated_at?: string | null
           upfront_amount?: number
           upfront_paid?: boolean | null
@@ -7295,15 +7404,18 @@ export type Database = {
           id: string
           installment_number: number
           installment_plan_id: string
+          invoice_status: Database["public"]["Enums"]["installment_invoice_status"]
           last_attempted_at: string | null
           last_failure_reason: string | null
           ledger_entry_id: string | null
           paid_at: string | null
           payment_id: string | null
           rental_id: string
+          settling_payment_id: string | null
           status: string
           stripe_charge_id: string | null
           stripe_payment_intent_id: string | null
+          superseded_by_installment_id: string | null
           tenant_id: string
           updated_at: string | null
         }
@@ -7316,15 +7428,18 @@ export type Database = {
           id?: string
           installment_number: number
           installment_plan_id: string
+          invoice_status?: Database["public"]["Enums"]["installment_invoice_status"]
           last_attempted_at?: string | null
           last_failure_reason?: string | null
           ledger_entry_id?: string | null
           paid_at?: string | null
           payment_id?: string | null
           rental_id: string
+          settling_payment_id?: string | null
           status?: string
           stripe_charge_id?: string | null
           stripe_payment_intent_id?: string | null
+          superseded_by_installment_id?: string | null
           tenant_id: string
           updated_at?: string | null
         }
@@ -7337,15 +7452,18 @@ export type Database = {
           id?: string
           installment_number?: number
           installment_plan_id?: string
+          invoice_status?: Database["public"]["Enums"]["installment_invoice_status"]
           last_attempted_at?: string | null
           last_failure_reason?: string | null
           ledger_entry_id?: string | null
           paid_at?: string | null
           payment_id?: string | null
           rental_id?: string
+          settling_payment_id?: string | null
           status?: string
           stripe_charge_id?: string | null
           stripe_payment_intent_id?: string | null
+          superseded_by_installment_id?: string | null
           tenant_id?: string
           updated_at?: string | null
         }
@@ -7440,6 +7558,34 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rentals_export"
             referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_settling_payment_id_fkey"
+            columns: ["settling_payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_settling_payment_id_fkey"
+            columns: ["settling_payment_id"]
+            isOneToOne: false
+            referencedRelation: "v_payment_remaining"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_settling_payment_id_fkey"
+            columns: ["settling_payment_id"]
+            isOneToOne: false
+            referencedRelation: "view_payments_export"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_superseded_by_installment_id_fkey"
+            columns: ["superseded_by_installment_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_installments"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "scheduled_installments_tenant_id_fkey"
@@ -10597,6 +10743,10 @@ export type Database = {
         Args: { p_last_sent_at: string; p_rental_id: string }
         Returns: undefined
       }
+      installment_settle_invoice: {
+        Args: { p_installment_id: string; p_payment_id: string }
+        Returns: undefined
+      }
       is_current_user_admin: { Args: never; Returns: boolean }
       is_global_master_admin: { Args: never; Returns: boolean }
       is_globally_blacklisted: { Args: { p_email: string }; Returns: boolean }
@@ -10799,6 +10949,9 @@ export type Database = {
         | "Valet"
         | "Accessory"
         | "Other"
+      installment_collection_mode: "auto" | "manual"
+      installment_invoice_status: "open" | "paid" | "superseded"
+      installment_unit: "week" | "month"
       key_handover_type: "giving" | "receiving"
       ledger_status: "pending" | "applied"
       payment_status: "paid" | "due" | "overdue" | "void"
@@ -10967,6 +11120,9 @@ export const Constants = {
         "Accessory",
         "Other",
       ],
+      installment_collection_mode: ["auto", "manual"],
+      installment_invoice_status: ["open", "paid", "superseded"],
+      installment_unit: ["week", "month"],
       key_handover_type: ["giving", "receiving"],
       ledger_status: ["pending", "applied"],
       payment_status: ["paid", "due", "overdue", "void"],
