@@ -1672,6 +1672,58 @@ export type Database = {
           },
         ]
       }
+      customer_announcement_views: {
+        Row: {
+          announcement_id: string
+          created_at: string
+          customer_user_id: string
+          dismissed_at: string | null
+          id: string
+          seen_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          announcement_id: string
+          created_at?: string
+          customer_user_id: string
+          dismissed_at?: string | null
+          id?: string
+          seen_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          announcement_id?: string
+          created_at?: string
+          customer_user_id?: string
+          dismissed_at?: string | null
+          id?: string
+          seen_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_announcement_views_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "feature_announcement_stats"
+            referencedColumns: ["announcement_id"]
+          },
+          {
+            foreignKeyName: "customer_announcement_views_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "feature_announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_announcement_views_customer_user_id_fkey"
+            columns: ["customer_user_id"]
+            isOneToOne: false
+            referencedRelation: "customer_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_documents: {
         Row: {
           ai_confidence_score: number | null
@@ -2658,6 +2710,80 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feature_announcements: {
+        Row: {
+          audience_filter: Json | null
+          body_format: string
+          body_html: string | null
+          created_at: string
+          created_by: string | null
+          cta_label: string | null
+          cta_url: string | null
+          expires_at: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean
+          published_at: string | null
+          severity: string
+          sort_priority: number
+          status: string
+          summary: string | null
+          title: string
+          updated_at: string
+          video_url: string | null
+        }
+        Insert: {
+          audience_filter?: Json | null
+          body_format?: string
+          body_html?: string | null
+          created_at?: string
+          created_by?: string | null
+          cta_label?: string | null
+          cta_url?: string | null
+          expires_at?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          published_at?: string | null
+          severity?: string
+          sort_priority?: number
+          status?: string
+          summary?: string | null
+          title: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Update: {
+          audience_filter?: Json | null
+          body_format?: string
+          body_html?: string | null
+          created_at?: string
+          created_by?: string | null
+          cta_label?: string | null
+          cta_url?: string | null
+          expires_at?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          published_at?: string | null
+          severity?: string
+          sort_priority?: number
+          status?: string
+          summary?: string | null
+          title?: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
         ]
@@ -4507,10 +4633,14 @@ export type Database = {
           daily_rate: number
           hours_covered: number
           id: string
+          invoice_status: string
           is_partial: boolean
           ledger_entry_ids: string[]
+          paid_at: string | null
           rental_id: string
           service_fee_amount: number
+          settling_payment_id: string | null
+          superseded_by_accrual_id: string | null
           tax_amount: number
           tenant_id: string
         }
@@ -4522,10 +4652,14 @@ export type Database = {
           daily_rate: number
           hours_covered?: number
           id?: string
+          invoice_status?: string
           is_partial?: boolean
           ledger_entry_ids?: string[]
+          paid_at?: string | null
           rental_id: string
           service_fee_amount?: number
+          settling_payment_id?: string | null
+          superseded_by_accrual_id?: string | null
           tax_amount?: number
           tenant_id: string
         }
@@ -4537,10 +4671,14 @@ export type Database = {
           daily_rate?: number
           hours_covered?: number
           id?: string
+          invoice_status?: string
           is_partial?: boolean
           ledger_entry_ids?: string[]
+          paid_at?: string | null
           rental_id?: string
           service_fee_amount?: number
+          settling_payment_id?: string | null
+          superseded_by_accrual_id?: string | null
           tax_amount?: number
           tenant_id?: string
         }
@@ -4567,6 +4705,34 @@ export type Database = {
             referencedColumns: ["rental_id"]
           },
           {
+            foreignKeyName: "payg_accruals_settling_payment_id_fkey"
+            columns: ["settling_payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payg_accruals_settling_payment_id_fkey"
+            columns: ["settling_payment_id"]
+            isOneToOne: false
+            referencedRelation: "v_payment_remaining"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "payg_accruals_settling_payment_id_fkey"
+            columns: ["settling_payment_id"]
+            isOneToOne: false
+            referencedRelation: "view_payments_export"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "payg_accruals_superseded_by_accrual_id_fkey"
+            columns: ["superseded_by_accrual_id"]
+            isOneToOne: false
+            referencedRelation: "payg_accruals"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "payg_accruals_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -4577,6 +4743,7 @@ export type Database = {
       }
       payg_reminder_log: {
         Row: {
+          accrual_id: string | null
           channel: string
           created_at: string
           days_active: number
@@ -4592,6 +4759,7 @@ export type Database = {
           tenant_id: string
         }
         Insert: {
+          accrual_id?: string | null
           channel?: string
           created_at?: string
           days_active?: number
@@ -4607,6 +4775,7 @@ export type Database = {
           tenant_id: string
         }
         Update: {
+          accrual_id?: string | null
           channel?: string
           created_at?: string
           days_active?: number
@@ -4622,6 +4791,13 @@ export type Database = {
           tenant_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "payg_reminder_log_accrual_id_fkey"
+            columns: ["accrual_id"]
+            isOneToOne: false
+            referencedRelation: "payg_accruals"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payg_reminder_log_rental_id_fkey"
             columns: ["rental_id"]
@@ -7999,6 +8175,7 @@ export type Database = {
           multiple_locations_enabled: boolean | null
           og_image_url: string | null
           pay_as_you_go_enabled: boolean
+          payg_auto_reminders_enabled: boolean
           payg_grace_period_days: number
           payg_max_duration_days: number
           payg_max_reminders: number
@@ -8188,6 +8365,7 @@ export type Database = {
           multiple_locations_enabled?: boolean | null
           og_image_url?: string | null
           pay_as_you_go_enabled?: boolean
+          payg_auto_reminders_enabled?: boolean
           payg_grace_period_days?: number
           payg_max_duration_days?: number
           payg_max_reminders?: number
@@ -8377,6 +8555,7 @@ export type Database = {
           multiple_locations_enabled?: boolean | null
           og_image_url?: string | null
           pay_as_you_go_enabled?: boolean
+          payg_auto_reminders_enabled?: boolean
           payg_grace_period_days?: number
           payg_max_duration_days?: number
           payg_max_reminders?: number
@@ -9414,6 +9593,17 @@ export type Database = {
       }
     }
     Views: {
+      feature_announcement_stats: {
+        Row: {
+          announcement_id: string | null
+          dismissed_count: number | null
+          published_at: string | null
+          seen_count: number | null
+          severity: string | null
+          title: string | null
+        }
+        Relationships: []
+      }
       rental_extension_totals: {
         Row: {
           approved_at: string | null
@@ -10463,6 +10653,10 @@ export type Database = {
           source_id: string
           source_table: string
         }[]
+      }
+      payg_settle_invoice: {
+        Args: { p_accrual_id: string; p_payment_id: string }
+        Returns: undefined
       }
       payment_apply_fifo: { Args: { p_id: string }; Returns: undefined }
       payment_apply_fifo_v2: { Args: { p_id: string }; Returns: undefined }

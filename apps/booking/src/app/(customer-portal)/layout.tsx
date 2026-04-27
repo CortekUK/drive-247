@@ -14,6 +14,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { CustomerRealtimeChatProvider } from '@/contexts/CustomerRealtimeChatContext';
 import { BlockedAccountDialog } from '@/components/BlockedAccountDialog';
+import { AnnouncementModalGate } from '@/components/customer-portal/announcements/AnnouncementModalGate';
 
 function LoadingSkeleton() {
   return (
@@ -114,6 +115,7 @@ export default function CustomerPortalLayout({
         </SidebarInset>
       </SidebarProvider>
       <TraxChatWidget />
+      <AnnouncementModalGate />
     </CustomerRealtimeChatProvider>
   );
 }

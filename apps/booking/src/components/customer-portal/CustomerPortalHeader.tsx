@@ -7,6 +7,7 @@ import { Bell, LogOut, ChevronDown, MessageSquare, BellRing } from 'lucide-react
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { useCustomerNotifications } from '@/hooks/use-customer-notifications';
+import { AnnouncementsBell } from '@/components/customer-portal/announcements/AnnouncementsBell';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import {
   Popover,
@@ -220,6 +221,9 @@ export function CustomerPortalHeader() {
           unreadCount={unreadCount}
           markAsRead={markAsRead}
         />
+
+        {/* What's New */}
+        <AnnouncementsBell />
 
         <ThemeToggle />
 

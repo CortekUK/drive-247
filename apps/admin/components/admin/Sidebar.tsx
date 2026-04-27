@@ -20,6 +20,7 @@ import {
   LogOut,
   ScrollText,
   ArrowUpCircle,
+  Megaphone,
 } from 'lucide-react';
 
 interface NavItem {
@@ -50,6 +51,7 @@ function useNavigation() {
         { name: 'Global Blacklist', href: '/admin/blacklist', icon: Ban },
         { name: 'Contact Requests', href: '/admin/contacts', icon: Mail },
         { name: 'Mode Requests', href: '/admin/requests', icon: ArrowUpCircle },
+        { name: 'Announcements', href: '/admin/announcements', icon: Megaphone },
         { name: 'Audit Logs', href: '/admin/audit-logs', icon: ScrollText },
       ],
     },
