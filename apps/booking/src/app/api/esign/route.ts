@@ -338,7 +338,9 @@ export async function POST(request: NextRequest) {
 
         if (tenantId) {
             // Pick template category based on rental type, fall back to standard
-            const templateCategory = rental?.is_pay_as_you_go ? 'payg' : 'standard';
+            const templateCategory = rental?.has_installment_plan
+                ? 'installment'
+                : rental?.is_pay_as_you_go ? 'payg' : 'standard';
             let { data: templateData } = await supabase
                 .from('agreement_templates')
                 .select('template_content, template_name, is_active')

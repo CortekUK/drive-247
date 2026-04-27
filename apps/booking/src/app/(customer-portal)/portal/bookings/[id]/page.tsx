@@ -66,6 +66,7 @@ import {
 import { ExtendRentalDialog } from '@/components/customer-portal/ExtendRentalDialog';
 import PaymentBreakdown from '@/components/customer-portal/PaymentBreakdown';
 import { PaygSection } from '@/components/customer-portal/payg-section';
+import { CustomerInstallmentsView } from '@/components/installments/CustomerInstallmentsView';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 
 // ---------------------------------------------------------------------------
@@ -1136,8 +1137,18 @@ export default function BookingDetailPage() {
         </TabsContent>
       </Tabs>
 
-      {/* 4. Installment Plan */}
-      {installmentPlan && (
+      {/* 4. Installment Plan — new redesigned customer view */}
+      {installmentPlan && rental?.id ? (
+        <CustomerInstallmentsView
+          rentalId={rental.id}
+          rentalStart={rental.start_date}
+          rentalEnd={rental.end_date}
+          currencyCode={currencyCode}
+        />
+      ) : null}
+
+      {/* Legacy installment plan card — kept while new view stabilises */}
+      {false && installmentPlan && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">

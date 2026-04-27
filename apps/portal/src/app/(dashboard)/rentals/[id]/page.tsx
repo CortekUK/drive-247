@@ -37,6 +37,7 @@ import RejectionDialog from "@/components/rentals/rejection-dialog";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalDialog";
 import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
+import { InstallmentSection } from "@/components/installments/InstallmentSection";
 import { useInstallmentPlan } from "@/hooks/use-installment-plan";
 import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
 import { useBonzahBalance } from "@/hooks/use-bonzah-balance";
@@ -5027,11 +5028,12 @@ const RentalDetail = () => {
         </CardContent>
       </Card>
 
-      {/* Installment Plan Section — N/A for PAYG (no upfront amount to split) */}
+      {/* Installment Plan Section — new redesigned section. PAYG rentals don't have plans. */}
       {id && !(rental as any)?.is_pay_as_you_go && (
-        <InstallmentPlanCard
+        <InstallmentSection
           rentalId={id}
-          formatCurrency={formatCurrency}
+          rentalStart={rental?.start_date}
+          rentalEnd={rental?.end_date}
         />
       )}
 

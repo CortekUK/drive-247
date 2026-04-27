@@ -59,12 +59,31 @@ interface InstallmentData {
     installment_amount: number;
     upfront_amount: number;
     status: string;
+    unit?: 'week' | 'month';
+    payments_per_unit?: number;
+    collection_mode?: 'auto' | 'manual';
+    stripe_payment_method_id?: string | null;
     scheduled_installments: Array<{
         installment_number: number;
         amount: number;
         due_date: string;
         status: string;
     }>;
+}
+
+function frequencyLabel(unit: 'week' | 'month' | undefined, ppu: number | undefined, planType: string): string {
+    if (unit) {
+        if (unit === 'week') return ppu === 2 ? 'Twice weekly' : 'Weekly';
+        return ppu === 4 ? 'Weekly via monthly' : ppu === 2 ? 'Twice monthly' : 'Monthly';
+    }
+    return planType.charAt(0).toUpperCase() + planType.slice(1);
+}
+
+function buildPaymentScheduleText(installment: InstallmentData, currencyCode: string): string {
+    return installment.scheduled_installments
+        .sort((a, b) => a.installment_number - b.installment_number)
+        .map(si => `${si.installment_number}. ${formatDate(si.due_date)} — ${formatCurrency(si.amount, currencyCode)}`)
+        .join('\n');
 }
 
 function buildInstallmentScheduleHtml(installment: InstallmentData, currencyCode: string): string {
@@ -215,7 +234,7 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         })(),
         extension_number: extensionData?.extensionNumber ? extensionData.extensionNumber.toString() : '',
 
-        // Installment payment schedule
+        // Installment payment schedule (legacy variables — kept for old templates)
         installment_schedule: installment ? buildInstallmentScheduleHtml(installment, currencyCode) : '',
         has_installments: installment ? 'true' : 'false',
         installment_plan_type: installment ? installment.plan_type.charAt(0).toUpperCase() + installment.plan_type.slice(1) : '',
@@ -223,6 +242,25 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         installment_upfront_amount: installment ? formatCurrency(installment.upfront_amount, currencyCode) : '',
         installment_count: installment ? installment.number_of_installments.toString() : '',
         installment_per_payment: installment ? formatCurrency(installment.installment_amount, currencyCode) : '',
+
+        // Installment redesign variables (new template)
+        plan_type: installment ? installment.plan_type.charAt(0).toUpperCase() + installment.plan_type.slice(1) : '',
+        frequency_label: installment ? frequencyLabel(installment.unit, installment.payments_per_unit, installment.plan_type) : '',
+        total_installments: installment ? installment.number_of_installments.toString() : '',
+        installment_amount: installment ? formatCurrency(installment.installment_amount, currencyCode) : '',
+        upfront_amount: installment ? formatCurrency(installment.upfront_amount, currencyCode) : '',
+        upfront_breakdown: installment ? `${formatCurrency(installment.upfront_amount, currencyCode)} fees + ${formatCurrency(installment.installment_amount, currencyCode)} first installment` : '',
+        splittable_amount: installment ? formatCurrency(installment.total_installable_amount, currencyCode) : '',
+        deposit_amount: rental?.security_deposit_amount ? `${formatCurrency(rental.security_deposit_amount, currencyCode)} (refundable hold)` : 'Refundable hold per tenant policy',
+        payment_schedule: installment ? buildPaymentScheduleText(installment, currencyCode) : '',
+        first_payment_date: installment?.scheduled_installments?.[0]?.due_date ? formatDate(installment.scheduled_installments[0].due_date) : '',
+        last_payment_date: installment?.scheduled_installments?.[installment.scheduled_installments.length - 1]?.due_date ? formatDate(installment.scheduled_installments[installment.scheduled_installments.length - 1].due_date) : '',
+        collection_mode: installment?.collection_mode === 'manual' ? 'Manual collection' : 'Automatic card charging',
+        payment_method_label: installment?.stripe_payment_method_id ? `card on file (•••• ${String(installment.stripe_payment_method_id).slice(-4)})` : 'card to be saved at checkout',
+        reminder_policy: 'If a scheduled payment cannot be collected, an email reminder will be sent every 24 hours with a secure link to settle the outstanding balance.',
+        cumulative_clause: 'Where two or more scheduled payments remain outstanding, all unpaid amounts are bundled into a single cumulative charge. Settling the cumulative balance clears every prior unpaid installment in one go.',
+        rental_total: installment ? formatCurrency(installment.total_installable_amount + installment.upfront_amount, currencyCode) : '',
+        tenant_name: tenant?.company_name || 'Drive 247',
     };
 
     let result = template;
@@ -917,7 +955,7 @@ export async function POST(request: NextRequest) {
         if (body.rentalId) {
             const { data: plan } = await supabase
                 .from('installment_plans')
-                .select('plan_type, total_installable_amount, number_of_installments, installment_amount, upfront_amount, status')
+                .select('plan_type, total_installable_amount, number_of_installments, installment_amount, upfront_amount, status, unit, payments_per_unit, collection_mode, stripe_payment_method_id')
                 .eq('rental_id', body.rentalId)
                 .in('status', ['active', 'pending'])
                 .order('created_at', { ascending: false })
@@ -975,9 +1013,10 @@ export async function POST(request: NextRequest) {
         ctx.y = bannerY - 16; // spacing after banner
 
         if (body.tenantId) {
-            // Pick template category: extension > payg > standard
+            // Pick template category: extension > installment > payg > standard
             const templateCategory = body.agreementType === 'extension'
                 ? 'extension'
+                : (rental?.has_installment_plan && installment) ? 'installment'
                 : rental?.is_pay_as_you_go ? 'payg' : 'standard';
             let { data: templateData } = await supabase
                 .from('agreement_templates')

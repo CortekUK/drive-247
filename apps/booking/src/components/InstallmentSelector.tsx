@@ -19,21 +19,26 @@ import { cn } from '@/lib/utils';
 export type WhatGetsSplit = 'rental_only' | 'rental_tax' | 'rental_tax_extras';
 
 export interface InstallmentConfig {
-  minimum_days_weekly: number;
-  minimum_days_monthly: number;
-  minimum_days_semiweekly: number;
-  weekly_installments_limit: number;
-  monthly_installments_limit: number;
-  semiweekly_installments_limit: number;
-  limiting_amount_per_day_weekly: number;
-  limiting_amount_per_day_monthly: number;
-  limiting_amount_per_day_semiweekly: number;
+  // Redesigned shape (current source of truth)
+  weekly_enabled?: boolean;
+  weekly_payments_per_unit?: number;
+  monthly_enabled?: boolean;
+  monthly_payments_per_unit?: number;
+  // Legacy keys (read for back-compat with tenants on the old config)
+  minimum_days_weekly?: number;
+  minimum_days_monthly?: number;
+  minimum_days_semiweekly?: number;
+  weekly_installments_limit?: number;
+  monthly_installments_limit?: number;
+  semiweekly_installments_limit?: number;
+  limiting_amount_per_day_weekly?: number;
+  limiting_amount_per_day_monthly?: number;
+  limiting_amount_per_day_semiweekly?: number;
   charge_first_upfront?: boolean;
   what_gets_split?: WhatGetsSplit;
   grace_period_days?: number;
   max_retry_attempts?: number;
   retry_interval_days?: number;
-  // Backward compat (old keys)
   min_days_for_weekly?: number;
   min_days_for_monthly?: number;
   max_installments_weekly?: number;
@@ -64,8 +69,41 @@ interface InstallmentSelectorProps {
   formatCurrency: (amount: number) => string;
 }
 
-// Helper to resolve new keys with backward compat fallbacks
-function resolveConfig(config: InstallmentConfig) {
+// Helper to resolve new keys with backward compat fallbacks. The new model is
+// (weekly_enabled, weekly_payments_per_unit, monthly_enabled, monthly_payments_per_unit)
+// with min days hardcoded to 7/30; we still surface "semiweekly" as a derived
+// option whenever weekly_enabled + weekly_payments_per_unit === 2.
+function resolveConfig(config: InstallmentConfig, rentalDays: number) {
+  const usingNewShape =
+    config.weekly_enabled !== undefined ||
+    config.monthly_enabled !== undefined ||
+    config.weekly_payments_per_unit !== undefined;
+
+  if (usingNewShape) {
+    const weeklyPpu = config.weekly_payments_per_unit ?? 1;
+    const monthlyPpu = config.monthly_payments_per_unit ?? 1;
+    const weeklyEnabled = config.weekly_enabled === true;
+    const monthlyEnabled = config.monthly_enabled === true;
+    // Derive count from rental length so we don't surprise customers
+    const weeklyCount = weeklyEnabled
+      ? Math.max(2, Math.ceil(rentalDays / (7 / weeklyPpu)))
+      : 0;
+    const monthlyCount = monthlyEnabled
+      ? Math.max(2, Math.ceil(rentalDays / (30 / monthlyPpu)))
+      : 0;
+    return {
+      minimumDaysWeekly: 7,
+      minimumDaysMonthly: 30,
+      minimumDaysSemiweekly: 7,
+      weeklyInstallmentsLimit: weeklyEnabled && weeklyPpu === 1 ? weeklyCount : 0,
+      monthlyInstallmentsLimit: monthlyEnabled ? monthlyCount : 0,
+      semiweeklyInstallmentsLimit: weeklyEnabled && weeklyPpu === 2 ? weeklyCount : 0,
+      limitingAmountPerDayWeekly: 0,
+      limitingAmountPerDayMonthly: 0,
+      limitingAmountPerDaySemiweekly: 0,
+    };
+  }
+
   return {
     minimumDaysWeekly: config.minimum_days_weekly ?? config.min_days_for_weekly ?? 7,
     minimumDaysMonthly: config.minimum_days_monthly ?? config.min_days_for_monthly ?? 30,
@@ -93,7 +131,7 @@ export default function InstallmentSelector({
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const chargeFirstUpfront = config.charge_first_upfront !== false;
-  const resolved = resolveConfig(config);
+  const resolved = resolveConfig(config, rentalDays);
 
   const availableOptions = useMemo((): InstallmentOption[] => {
     const options: InstallmentOption[] = [];
