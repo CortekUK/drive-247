@@ -95,11 +95,11 @@ export function InstallmentCalendar({ schedule, rentalStart, rentalEnd, currency
   return (
     <div className={cn("bg-card border border-border/60 rounded-lg p-4", className)}>
       <div className="flex items-center justify-between mb-4">
-        <button onClick={goPrev} className="p-1.5 rounded hover:bg-muted" aria-label="Previous month">
+        <button type="button" onClick={goPrev} className="p-1.5 rounded hover:bg-muted" aria-label="Previous month">
           <ChevronLeft className="w-4 h-4 text-muted-foreground" />
         </button>
         <h3 className="text-sm font-medium text-foreground">{monthLabel}</h3>
-        <button onClick={goNext} className="p-1.5 rounded hover:bg-muted" aria-label="Next month">
+        <button type="button" onClick={goNext} className="p-1.5 rounded hover:bg-muted" aria-label="Next month">
           <ChevronRight className="w-4 h-4 text-muted-foreground" />
         </button>
       </div>
