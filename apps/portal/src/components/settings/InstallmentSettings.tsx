@@ -215,7 +215,7 @@ function ExampleDialog({ open, onClose, unit, paymentsPerUnit, currencyCode }: {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{label} — example</DialogTitle>
           <DialogDescription>

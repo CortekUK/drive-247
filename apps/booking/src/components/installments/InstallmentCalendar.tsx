@@ -122,7 +122,7 @@ export function InstallmentCalendar({ schedule, rentalStart, rentalEnd, currency
             <div
               key={cell.date}
               className={cn(
-                "relative rounded-md min-h-[64px] p-1.5 flex flex-col items-center text-xs",
+                "relative rounded-md min-h-[48px] p-1 flex flex-col items-center text-xs",
                 cell.inMonth ? "" : "opacity-30",
                 isInRental ? "bg-muted/40" : "",
                 isToday ? "ring-1 ring-indigo-500/40" : "",
