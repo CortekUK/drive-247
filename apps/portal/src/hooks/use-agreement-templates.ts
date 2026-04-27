@@ -2,10 +2,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
-import { DEFAULT_AGREEMENT_TEMPLATE } from '@/lib/default-agreement-template';
+import {
+  getDefaultTemplateForCategory,
+  type TemplateCategory as LibTemplateCategory,
+} from '@/lib/default-agreement-template';
 
 export type TemplateType = 'default' | 'custom';
-export type TemplateCategory = 'standard' | 'payg' | 'extension';
+export type TemplateCategory = LibTemplateCategory;
 
 export interface AgreementTemplate {
   id: string;
@@ -390,7 +393,7 @@ export const useTemplateSelection = (category: TemplateCategory = 'standard') =>
         .insert({
           tenant_id: tenant.id,
           template_name: DEFAULT_TEMPLATE_NAME,
-          template_content: DEFAULT_AGREEMENT_TEMPLATE,
+          template_content: getDefaultTemplateForCategory(category),
           template_category: category,
           is_active: true,
         })
@@ -651,12 +654,14 @@ export const useTemplateSelection = (category: TemplateCategory = 'standard') =>
 
       const existing = existingArr?.[0] || null;
 
+      const defaultContent = getDefaultTemplateForCategory(category);
+
       if (existing) {
         // Update existing template
         const { error } = await supabase
           .from('agreement_templates')
           .update({
-            template_content: DEFAULT_AGREEMENT_TEMPLATE,
+            template_content: defaultContent,
             updated_at: new Date().toISOString()
           })
           .eq('id', existing.id);
@@ -678,7 +683,7 @@ export const useTemplateSelection = (category: TemplateCategory = 'standard') =>
           .insert({
             tenant_id: tenant.id,
             template_name: DEFAULT_TEMPLATE_NAME,
-            template_content: DEFAULT_AGREEMENT_TEMPLATE,
+            template_content: defaultContent,
             template_category: category,
             is_active: true,
           });

@@ -33,7 +33,7 @@ import {
   DEFAULT_TEMPLATE_NAME,
   CUSTOM_TEMPLATE_NAME,
 } from '@/hooks/use-agreement-templates';
-import { DEFAULT_AGREEMENT_TEMPLATE } from '@/lib/default-agreement-template';
+import { getDefaultTemplateForCategory } from '@/lib/default-agreement-template';
 import {
   getSampleData,
   replaceVariables,
@@ -70,6 +70,12 @@ export default function EditAgreementTemplatePage() {
   const currentTemplate = templateType === 'default' ? defaultTemplate : customTemplate;
   const templateName = templateType === 'default' ? DEFAULT_TEMPLATE_NAME : CUSTOM_TEMPLATE_NAME;
   const isDefault = templateType === 'default';
+  const categoryLabel =
+    templateCategory === 'payg'
+      ? 'Pay As You Go'
+      : templateCategory === 'extension'
+        ? 'Extension'
+        : 'Standard';
 
   // Load template content when data is available
   useEffect(() => {
@@ -78,23 +84,23 @@ export default function EditAgreementTemplatePage() {
         // Template exists in database with content, use it
         setTemplateContent(currentTemplate.template_content);
       } else if (isDefault) {
-        // Default template - use default content from codebase
-        setTemplateContent(DEFAULT_AGREEMENT_TEMPLATE);
+        // Default template - use category-specific default content from codebase
+        setTemplateContent(getDefaultTemplateForCategory(templateCategory));
       } else {
         // Custom template - start blank
         setTemplateContent('');
       }
       setLoaded(true);
     }
-  }, [currentTemplate, loaded, isLoading, isDefault]);
+  }, [currentTemplate, loaded, isLoading, isDefault, templateCategory]);
 
   // Track changes
   useEffect(() => {
     if (loaded) {
-      const originalContent = currentTemplate?.template_content || (isDefault ? DEFAULT_AGREEMENT_TEMPLATE : '');
+      const originalContent = currentTemplate?.template_content || (isDefault ? getDefaultTemplateForCategory(templateCategory) : '');
       setHasChanges(templateContent !== originalContent);
     }
-  }, [templateContent, currentTemplate, loaded, isDefault]);
+  }, [templateContent, currentTemplate, loaded, isDefault, templateCategory]);
 
   // Save content without navigation (for unsaved changes warning)
   const saveContent = async (): Promise<boolean> => {
@@ -130,7 +136,7 @@ export default function EditAgreementTemplatePage() {
     if (isDefault) {
       try {
         await resetDefaultAsync();
-        setTemplateContent(DEFAULT_AGREEMENT_TEMPLATE);
+        setTemplateContent(getDefaultTemplateForCategory(templateCategory));
         setHasChanges(false);
       } catch (error) {
         // Error handled by hook
@@ -175,15 +181,15 @@ export default function EditAgreementTemplatePage() {
           </Button>
           <div>
             <h1 className="text-xl font-semibold flex items-center gap-2">
-              Edit {templateName}
+              Edit {categoryLabel} {templateName}
               {hasChanges && (
                 <Badge variant="secondary" className="text-xs">Unsaved changes</Badge>
               )}
             </h1>
             <p className="text-sm text-muted-foreground">
               {isDefault
-                ? 'Customize the standard rental agreement template'
-                : 'Create your own custom rental agreement'}
+                ? `Customize the ${categoryLabel} rental agreement template`
+                : `Create your own custom ${categoryLabel} rental agreement`}
             </p>
           </div>
         </div>

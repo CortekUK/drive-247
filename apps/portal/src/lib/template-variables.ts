@@ -8,7 +8,7 @@ export interface TemplateVariable {
   label: string;
   description: string;
   sample: string;
-  category: 'customer' | 'vehicle' | 'rental' | 'company' | 'payment';
+  category: 'customer' | 'vehicle' | 'rental' | 'company' | 'payment' | 'extension';
 }
 
 export const TEMPLATE_VARIABLES: TemplateVariable[] = [
@@ -335,6 +335,37 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
     description: 'Amount charged per installment payment',
     sample: '$450.00',
     category: 'payment',
+  },
+
+  // Extension variables — populated by the esign route when sending an extension agreement.
+  // Empty string in the editor preview unless rendered with extension sample data.
+  {
+    key: 'extension_number',
+    label: 'Extension Number',
+    description: 'Sequential number of this extension (1 = first extension, 2 = second, ...)',
+    sample: '1',
+    category: 'extension',
+  },
+  {
+    key: 'extension_previous_end_date',
+    label: 'Previous End Date',
+    description: 'The end date of the rental immediately before this extension was created',
+    sample: 'February 15, 2025',
+    category: 'extension',
+  },
+  {
+    key: 'extension_new_end_date',
+    label: 'New End Date',
+    description: 'The new end date of the rental after this extension is applied',
+    sample: 'March 15, 2025',
+    category: 'extension',
+  },
+  {
+    key: 'extension_days',
+    label: 'Extension Days',
+    description: 'Number of additional days added by this extension',
+    sample: '28',
+    category: 'extension',
   },
 ];
 

@@ -62,7 +62,8 @@
       "Bash(apt list:*)",
       "mcp__supabase__apply_migration",
       "mcp__supabase__execute_sql",
-      "Bash(fuser -k 3001/tcp)"
+      "Bash(fuser -k 3001/tcp)",
+      "Bash(npx eslint *)"
     ],
     "deny": [],
     "ask": []
