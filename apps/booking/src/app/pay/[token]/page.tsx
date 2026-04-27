@@ -39,7 +39,13 @@ export default async function MagicLinkPayPage({ params, searchParams }: PagePro
     if (res.status >= 300 && res.status < 400 && loc) {
       checkoutUrl = loc;
     } else {
-      errorBody = await res.text().catch(() => null);
+      // Don't bubble raw HTML up to the user — extract a meaningful line if we can,
+      // otherwise just record the status. The full body is server-side only.
+      const raw = await res.text().catch(() => "");
+      const titleMatch = raw.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+      const friendly = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, "").trim() : "";
+      errorBody = friendly || `Status ${res.status}`;
+      console.error("[/pay/[token]] edge fn returned non-redirect:", res.status, raw.slice(0, 400));
     }
   } catch (err: any) {
     errorBody = err?.message ?? "Network error reaching the payment service.";
@@ -56,7 +62,7 @@ export default async function MagicLinkPayPage({ params, searchParams }: PagePro
       ) : (
         <>
           <p>We couldn't open the payment page just now. The link may be expired, the plan may already be settled, or there may be a temporary issue.</p>
-          <p className="mt-3 text-xs text-slate-500">{errorBody?.slice(0, 240) ?? null}</p>
+          {errorBody ? <p className="mt-3 text-xs" style={{ color: "#94a3b8" }}>{errorBody}</p> : null}
         </>
       )}
     </Shell>

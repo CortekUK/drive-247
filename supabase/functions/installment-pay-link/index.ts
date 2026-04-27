@@ -134,11 +134,24 @@ Deno.serve(async (req) => {
       .eq('id', plan.customer_id)
       .single()
 
+    // Verify the saved Stripe customer still exists. Mock/seeded plans (and
+    // edge cases where Stripe-side data was deleted) won't resolve, so fall
+    // back to a customer-less session keyed by email instead of crashing.
+    let validStripeCustomerId: string | undefined = undefined
+    if (plan.stripe_customer_id) {
+      try {
+        await stripe.customers.retrieve(plan.stripe_customer_id, stripeOptions)
+        validStripeCustomerId = plan.stripe_customer_id
+      } catch (custErr: any) {
+        console.warn('Stripe customer not retrievable, falling back to email:', plan.stripe_customer_id, custErr?.code)
+      }
+    }
+
     // Create fresh Checkout session
     const origin = Deno.env.get('BOOKING_APP_URL') || 'https://drive-247.com'
     const session = await stripe.checkout.sessions.create({
-      customer: plan.stripe_customer_id || undefined,
-      customer_email: plan.stripe_customer_id ? undefined : customer?.email,
+      customer: validStripeCustomerId,
+      customer_email: validStripeCustomerId ? undefined : customer?.email,
       payment_method_types: ['card'],
       mode: 'payment',
       line_items: [{
