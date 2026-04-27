@@ -42,7 +42,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { PaygDetailsDialog } from '@/components/customer-portal/payg-details-dialog';
 
 interface Rental {
   id: string;
@@ -70,6 +69,7 @@ interface Rental {
 interface PaymentBreakdownProps {
   rental: Rental;
   customerEmail?: string | null;
+  customerName?: string | null;
 }
 
 interface Row {
@@ -90,7 +90,7 @@ const EXT_CATEGORIES = [
   'Extension Insurance',
 ];
 
-export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreakdownProps) {
+export default function PaymentBreakdown({ rental, customerEmail, customerName }: PaymentBreakdownProps) {
   const { tenant } = useTenant();
   const currencyCode = tenant?.currency_code || 'USD';
   const isPayg = rental?.is_pay_as_you_go === true;
@@ -105,7 +105,6 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
   const [selectedOriginal, setSelectedOriginal] = useState<Set<string>>(new Set());
   // Map of extension number → selected categories
   const [selectedExt, setSelectedExt] = useState<Record<number, Set<string>>>({});
-  const [paygDetailsOpen, setPaygDetailsOpen] = useState(false);
 
   // PAYG rentals have no upfront invoice — synthesise an invoice-shaped object
   // from ledger_entries so the Payment Breakdown card can render. Regular rentals
@@ -212,7 +211,8 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
   const payCategories = async (
     totalAmount: number,
     targetCategories: string[],
-    extensionId?: string | null
+    extensionId?: string | null,
+    paygAccrualId?: string | null,
   ) => {
     if (!tenant?.id || totalAmount <= 0) return;
     setIsProcessing(true);
@@ -226,6 +226,7 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
           source: 'booking',
           targetCategories,
           ...(extensionId ? { extensionId } : {}),
+          ...(paygAccrualId ? { paygAccrualId } : {}),
           successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rental.id}&type=invoice`,
           cancelUrl: `${window.location.origin}/portal/bookings/${rental.id}`,
         },
@@ -356,6 +357,16 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
     });
   }
 
+  // PAYG rentals: strip PAYG-accrued categories from this fixed-charges breakdown
+  // (they live in the PaygSection rendered separately, above this component).
+  if (isPayg) {
+    for (let i = originalRows.length - 1; i >= 0; i--) {
+      if (paygCategories.includes(originalRows[i].category)) {
+        originalRows.splice(i, 1);
+      }
+    }
+  }
+
   const renderTable = (
     rows: Row[],
     selected: Set<string>,
@@ -463,8 +474,9 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
               const prevRow = idx > 0 ? orderedRows[idx - 1] : null;
               const prevIsPayg = sectionIsPayg && prevRow && paygCategories.includes(prevRow.category);
               const isFirstNonPaygAfterPayg = sectionIsPayg && !thisIsPayg && prevIsPayg;
-              // Clicking any PAYG row opens the full PAYG timeline dialog.
-              const rowOnClick = thisIsPayg ? () => setPaygDetailsOpen(true) : undefined;
+              // PAYG rows are filtered out of this breakdown (handled in PaygSection),
+              // so no click handler is needed here.
+              const rowOnClick = undefined;
               // Mode badge: PAYG > Installments > Regular.
               const rowMode: 'PAYG' | 'Installments' | 'Regular' = thisIsPayg
                 ? 'PAYG'
@@ -731,49 +743,25 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
 
   const hasExtensions = extensionGroups.length > 0;
 
-  const paygDialogNode = isPayg ? (
-    <PaygDetailsDialog
-      open={paygDetailsOpen}
-      onOpenChange={setPaygDetailsOpen}
-      rentalId={rental.id}
-      isPayg
-      rental={{
-        payg_start_ts: rental.payg_start_ts,
-        payg_next_accrual_at: rental.payg_next_accrual_at,
-        payg_last_reminder_sent_at: rental.payg_last_reminder_sent_at,
-        payg_reminder_count: rental.payg_reminder_count,
-        payg_reminder_interval_days: rental.payg_reminder_interval_days,
-        payg_paused: rental.payg_paused,
-        payg_closed_at: rental.payg_closed_at,
-      }}
-      currencyCode={currencyCode}
-      // Customer-facing: "Take Payment" routes through the existing Stripe-checkout
-      // flow (payCategories) rather than the admin's manual AddPaymentDialog. The
-      // dialog closes itself before firing, so the user lands on Stripe cleanly.
-      onTakePayment={({ categories, amount }) => {
-        payCategories(amount, categories);
-      }}
-    />
-  ) : null;
+  // For pure PAYG rentals with no extras/fines/excess mileage and no extensions,
+  // the fixed-charges breakdown has nothing left to render — hide the card entirely.
+  const hasNonZeroOriginalRow = originalRows.some((r) => r.amount > 0);
+  if (isPayg && !hasExtensions && !hasNonZeroOriginalRow) return null;
 
   if (!hasExtensions) {
     return (
-      <>
-        <Card className={isProcessing ? 'opacity-50 pointer-events-none' : ''}>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base font-medium">Payment Breakdown</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {renderTable(originalRows, selectedOriginal, setSelectedOriginal, undefined, isPayg)}
-          </CardContent>
-        </Card>
-        {paygDialogNode}
-      </>
+      <Card className={isProcessing ? 'opacity-50 pointer-events-none' : ''}>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base font-medium">Payment Breakdown</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {renderTable(originalRows, selectedOriginal, setSelectedOriginal, undefined, isPayg)}
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <>
     <Card className={isProcessing ? 'opacity-50 pointer-events-none' : ''}>
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-medium">Payment Breakdown</CardTitle>
@@ -833,7 +821,5 @@ export default function PaymentBreakdown({ rental, customerEmail }: PaymentBreak
         </Accordion>
       </CardContent>
     </Card>
-    {paygDialogNode}
-    </>
   );
 }

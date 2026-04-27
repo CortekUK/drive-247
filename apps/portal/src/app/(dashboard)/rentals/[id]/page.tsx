@@ -56,7 +56,7 @@ import { useRentalAgreements } from "@/hooks/use-rental-agreements";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
 import { PaygTestPanel } from "@/components/rentals/payg-test-panel";
-import { PaygDetailsDialog } from "@/components/rentals/payg-details-dialog";
+import { PaygSection } from "@/components/rentals/payg-section";
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 import { InsuranceTimeline } from "@/components/rentals/InsuranceTimeline";
@@ -293,7 +293,6 @@ const RentalDetail = () => {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedExtCategories, setSelectedExtCategories] = useState<Set<string>>(new Set());
   const [showTargetedPayment, setShowTargetedPayment] = useState(false);
-  const [showPaygDetails, setShowPaygDetails] = useState(false);
 
   // Add reminder dialog state (from breakdown rows)
   const [showRowReminder, setShowRowReminder] = useState(false);
@@ -2424,15 +2423,71 @@ const RentalDetail = () => {
           onRefresh={() => {
             queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
             queryClient.invalidateQueries({ queryKey: ['payg-ledger'] });
-            queryClient.invalidateQueries({ queryKey: ['payg-timeline'] });
+            queryClient.invalidateQueries({ queryKey: ['payg-invoices'] });
             queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
             queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
           }}
         />
       )}
 
-      {/* Payment Breakdown — upfront category matrix. Shown for all rental types;
-          PAYG integration lives inside this card (not a separate block above). */}
+      {/* PAYG section — inline rolling-invoice view, above the fixed-charges Payment Breakdown. */}
+      {rental && (rental as any).is_pay_as_you_go && (
+        <PaygSection
+          rentalId={rental.id}
+          isPayg
+          showAdminActions
+          customerName={rental.customers?.name || ''}
+          customerEmail={rental.customers?.email || undefined}
+          vehicle={{
+            reg: rental.vehicles?.reg,
+            make: rental.vehicles?.make,
+            model: rental.vehicles?.model,
+          }}
+          rental={{
+            start_date: rental.start_date,
+            end_date: rental.end_date,
+            monthly_amount: rental.monthly_amount,
+          }}
+          currencyCode={tenant?.currency_code || 'USD'}
+          onTakePayment={async ({ amount, paygAccrualId }) => {
+            try {
+              const portalOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+              const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+                body: {
+                  rentalId: rental.id,
+                  customerEmail: rental.customers?.email || undefined,
+                  customerName: rental.customers?.name || '',
+                  totalAmount: amount,
+                  tenantId: tenant?.id,
+                  successUrl: `${portalOrigin}/rentals/${rental.id}?payment=success`,
+                  cancelUrl: `${portalOrigin}/rentals/${rental.id}?payment=cancelled`,
+                  source: 'portal',
+                  targetCategories: ['Rental', 'Tax', 'Service Fee'],
+                  paygAccrualId,
+                },
+              });
+              if (error) throw error;
+              if (!data?.url) throw new Error('No checkout URL returned');
+              window.open(data.url, '_blank');
+              toast({
+                title: 'Checkout opened',
+                description: 'Payment link opened in a new tab. Invoice will settle automatically when the customer completes checkout.',
+              });
+            } catch (err: any) {
+              toast({ title: 'Checkout failed', description: err.message || 'Unknown error', variant: 'destructive' });
+            }
+          }}
+          onRefresh={() => {
+            queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+            queryClient.invalidateQueries({ queryKey: ['payg-invoices'] });
+            queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+          }}
+        />
+      )}
+
+      {/* Payment Breakdown — upfront fixed charges (Insurance, Delivery, Fines, etc.).
+          For PAYG rentals, the PAYG-accrued categories (Rental, Tax, Service Fee) are
+          handled by the PaygSection above and are filtered out here. */}
       {invoiceBreakdown && (() => {
         const canRefund = totalPayments > 0 && rental.status !== 'Cancelled';
         // Determine insurance amount: prefer ledger charge, fall back to invoice
@@ -2568,19 +2623,20 @@ const RentalDetail = () => {
           });
         }
 
-        // PAYG: group the blue (PAYG) rows together so they render as one contiguous block
-        // at the top of the breakdown. Preserves their declaration order (Rental → Tax →
-        // Service Fee) and keeps non-PAYG rows in their original relative order afterwards.
-        // Array.prototype.sort is stable in all modern engines (ES2019+).
+        // PAYG rentals: the accrued categories (Rental / Tax / Service Fee) live in the
+        // PaygSection above. Strip them from this fixed-charges breakdown so the card
+        // only shows one-off upfront items (Insurance, Delivery, Fines, etc.).
         if (isPayg) {
-          rows.sort((a, b) => {
-            const aIsPayg = paygCategories.includes(a.category);
-            const bIsPayg = paygCategories.includes(b.category);
-            if (aIsPayg && !bIsPayg) return -1;
-            if (!aIsPayg && bIsPayg) return 1;
-            return 0;
-          });
+          for (let i = rows.length - 1; i >= 0; i--) {
+            if (paygCategories.includes(rows[i].category)) {
+              rows.splice(i, 1);
+            }
+          }
         }
+
+        // If nothing left to bill up-front (pure PAYG rental with no extras), hide the card entirely.
+        const hasNonZeroRow = rows.some(r => r.amount > 0);
+        if (isPayg && !hasNonZeroRow) return null;
 
         // Compute which rows have unpaid charges (selectable for targeted payment)
         // Don't allow payments on cancelled/rejected rentals
@@ -2679,9 +2735,9 @@ const RentalDetail = () => {
                     : (hasInstallmentPlan && installmentPlan && installCats.includes(category))
                       ? 'Installments'
                       : 'Regular';
-                  // Clicking any PAYG row opens the timeline dialog. Falls back to the row's
-                  // own onClick for non-PAYG rows (e.g. Supercharger, Installment Plan).
-                  const effectiveOnClick = thisIsPayg ? () => setShowPaygDetails(true) : onClick;
+                  // PAYG rows are filtered out of this breakdown (shown in PaygSection above),
+                  // so the click-to-open-dialog branch is no longer needed here.
+                  const effectiveOnClick = onClick;
                   const isSelected = selectedCategories.has(category);
 
                   return (
@@ -5069,31 +5125,6 @@ const RentalDetail = () => {
           defaultAmount={extensionPaymentAmount}
           targetCategories={extensionPaymentCategories.length > 0 ? extensionPaymentCategories : undefined}
           extensionId={extensionPaymentExtensionId}
-        />
-      )}
-
-      {/* PAYG Details Dialog — opened by clicking any PAYG row in the Payment Breakdown.
-          Shows the full timeline: countdowns, per-day accruals, payments, refunds, reminders. */}
-      {rental && (rental as any).is_pay_as_you_go && (
-        <PaygDetailsDialog
-          open={showPaygDetails}
-          onOpenChange={setShowPaygDetails}
-          rentalId={rental.id}
-          isPayg
-          rental={{
-            payg_start_ts: (rental as any).payg_start_ts,
-            payg_next_accrual_at: (rental as any).payg_next_accrual_at,
-            payg_last_reminder_sent_at: (rental as any).payg_last_reminder_sent_at,
-            payg_reminder_count: (rental as any).payg_reminder_count,
-            payg_reminder_interval_days: (rental as any).payg_reminder_interval_days,
-            payg_paused: (rental as any).payg_paused,
-            payg_closed_at: (rental as any).payg_closed_at,
-          }}
-          currencyCode={tenant?.currency_code || 'USD'}
-          onTakePayment={({ categories }) => {
-            setSelectedCategories(new Set(categories));
-            setShowTargetedPayment(true);
-          }}
         />
       )}
 

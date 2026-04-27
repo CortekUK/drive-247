@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
+  AlertTriangle,
   CreditCard,
   Crown,
   Loader2,
@@ -327,8 +328,48 @@ export function SubscriptionSettings() {
   }
 
   // Subscribed state
+  const unpaidInvoice = invoices.find(
+    (inv) => inv.status === "open" || inv.status === "uncollectible"
+  );
+
   return (
     <div className="space-y-6">
+      {/* Payment Failed Banner */}
+      {unpaidInvoice && (
+        <div className="flex items-start justify-between gap-4 rounded-lg border border-orange-200 bg-orange-50 p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-orange-600" />
+            <div className="space-y-0.5">
+              <p className="text-sm font-semibold text-orange-900">
+                Payment failed
+              </p>
+              <p className="text-sm text-orange-800">
+                Your invoice of{" "}
+                {formatCurrency(unpaidInvoice.amount_due, unpaidInvoice.currency)}
+                {" "}for{" "}
+                {formatDate(unpaidInvoice.period_start)} – {formatDate(unpaidInvoice.period_end)}
+                {" "}is unpaid. Pay now to keep your subscription active.
+              </p>
+            </div>
+          </div>
+          {unpaidInvoice.stripe_hosted_invoice_url && (
+            <Button
+              asChild
+              size="sm"
+              className="shrink-0 bg-orange-600 text-white hover:bg-orange-700"
+            >
+              <a
+                href={unpaidInvoice.stripe_hosted_invoice_url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Pay now
+              </a>
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Plan Section */}
       <div className="flex items-start justify-between rounded-lg border bg-card p-6">
         <div className="flex items-start gap-4">

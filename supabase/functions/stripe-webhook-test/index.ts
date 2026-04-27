@@ -781,6 +781,19 @@ serve(async (req) => {
             } catch (applyError) {
               console.error("Error applying payment:", applyError);
             }
+
+            const paygAccrualId = session.metadata?.payg_accrual_id;
+            if (paygAccrualId) {
+              const { error: settleErr } = await supabase.rpc("payg_settle_invoice", {
+                p_payment_id: finalPaymentId,
+                p_accrual_id: paygAccrualId,
+              });
+              if (settleErr) {
+                console.error("PAYG settle_invoice failed:", settleErr);
+              } else {
+                console.log("PAYG invoice settled:", paygAccrualId);
+              }
+            }
           }
 
           // Send booking pending notification for booking flow (not portal)
