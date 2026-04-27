@@ -54,6 +54,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ExtendRentalDialog } from '@/components/customer-portal/ExtendRentalDialog';
 import PaymentBreakdown from '@/components/customer-portal/PaymentBreakdown';
+import { PaygSection } from '@/components/customer-portal/payg-section';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 
 // ---------------------------------------------------------------------------
@@ -918,10 +919,56 @@ export default function BookingDetailPage() {
           <TabsTrigger value="insurance">Insurance</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="payments" className="mt-4">
+        <TabsContent value="payments" className="mt-4 space-y-4">
+          {(rental as any)?.is_pay_as_you_go && (
+            <PaygSection
+              rentalId={(rental as any).id}
+              isPayg
+              currencyCode={currencyCode}
+              customerName={customerUser?.customer?.name || ''}
+              customerEmail={customerUser?.customer?.email || undefined}
+              vehicle={{
+                reg: (rental as any).vehicles?.reg,
+                make: (rental as any).vehicles?.make,
+                model: (rental as any).vehicles?.model,
+              }}
+              rental={{
+                start_date: (rental as any).start_date,
+                end_date: (rental as any).end_date,
+                monthly_amount: (rental as any).monthly_amount,
+              }}
+              onTakePayment={async ({ amount, paygAccrualId }) => {
+                if (!tenant?.id || amount <= 0) return;
+                try {
+                  const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+                    body: {
+                      rentalId: (rental as any).id,
+                      totalAmount: amount,
+                      tenantId: tenant.id,
+                      customerEmail: customerUser?.customer?.email,
+                      source: 'booking',
+                      targetCategories: ['Rental', 'Tax', 'Service Fee'],
+                      paygAccrualId,
+                      successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${(rental as any).id}&type=invoice`,
+                      cancelUrl: `${window.location.origin}/portal/bookings/${(rental as any).id}`,
+                    },
+                  });
+                  if (error) throw error;
+                  if (data?.url) {
+                    window.location.href = data.url;
+                  } else {
+                    toast.error('Failed to create payment link');
+                  }
+                } catch (e: any) {
+                  toast.error(e?.message || 'Failed to create payment link');
+                }
+              }}
+            />
+          )}
           <PaymentBreakdown
             rental={rental as any}
             customerEmail={customerUser?.customer?.email}
+            customerName={customerUser?.customer?.name || null}
           />
         </TabsContent>
 

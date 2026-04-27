@@ -3,14 +3,8 @@
 import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { BellRing, Loader2, RotateCcw, FileText } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,9 +12,7 @@ import { formatCurrency } from "@/lib/format-utils";
 import { usePaygInvoices, type PaygInvoiceRow } from "@/hooks/use-payg-invoices";
 import { InvoiceDialog } from "@/components/shared/dialogs/invoice-dialog";
 
-interface PaygDetailsDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+interface PaygSectionProps {
   rentalId: string;
   isPayg: boolean;
   currencyCode: string;
@@ -32,23 +24,22 @@ interface PaygDetailsDialogProps {
     end_date?: string | null;
     monthly_amount?: number | null;
   };
-  /** Admin-only actions visible only in the portal view. Hide in customer portal. */
+  /** Admin-only actions. Hide in customer portal. */
   showAdminActions?: boolean;
-  /** Fired when user clicks Pay on the latest open invoice. Parent wires Stripe checkout. */
   onTakePayment?: (args: {
     categories: string[];
     amount: number;
     paygAccrualId: string;
   }) => void;
-  /** Fired when admin clicks Refund. Parent opens refund dialog. */
   onRefund?: () => void;
-  /** Invalidate any external queries after reminder sent / payment taken. */
   onRefresh?: () => void;
 }
 
-export function PaygDetailsDialog({
-  open,
-  onOpenChange,
+/**
+ * Inline PAYG rolling-invoice view. Renders as a Card (no dialog wrapper) so
+ * it can live directly on the rental page above the Payment Breakdown.
+ */
+export function PaygSection({
   rentalId,
   isPayg,
   currencyCode,
@@ -60,14 +51,14 @@ export function PaygDetailsDialog({
   onTakePayment,
   onRefund,
   onRefresh,
-}: PaygDetailsDialogProps) {
+}: PaygSectionProps) {
   const { toast } = useToast();
-  const { data, isLoading, refetch } = usePaygInvoices(rentalId, open && isPayg);
+  const { data, isLoading, refetch } = usePaygInvoices(rentalId, isPayg);
   const [remindLoading, setRemindLoading] = useState(false);
   const [invoicePreview, setInvoicePreview] = useState<PaygInvoiceRow | null>(null);
 
   const displayInvoices = useMemo(
-    () => [...data.invoices].reverse(), // newest first
+    () => [...data.invoices].reverse(),
     [data.invoices],
   );
 
@@ -100,7 +91,6 @@ export function PaygDetailsDialog({
   const handlePayLatest = () => {
     const latest = data.latestOpenInvoice;
     if (!latest) return;
-    onOpenChange(false);
     onTakePayment?.({
       categories: ["Rental", "Tax", "Service Fee"],
       amount: latest.cumulativeAmount,
@@ -110,47 +100,19 @@ export function PaygDetailsDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Pay-As-You-Go Details</DialogTitle>
-          </DialogHeader>
-
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base font-medium">
+            Pay-As-You-Go
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
           {isLoading ? (
-            <div className="flex items-center justify-center py-16">
+            <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* 4 stat cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard
-                  label="Collected"
-                  value={formatCurrency(data.totals.collected, currencyCode)}
-                  valueClassName="text-emerald-600 dark:text-emerald-400"
-                />
-                <StatCard
-                  label="Balance Due"
-                  value={formatCurrency(data.totals.balanceDue, currencyCode)}
-                  valueClassName={
-                    data.totals.balanceDue > 0
-                      ? "text-red-600 dark:text-red-400"
-                      : "text-muted-foreground"
-                  }
-                />
-                <StatCard
-                  label="Refunded"
-                  value={formatCurrency(data.totals.refunded, currencyCode)}
-                  sub={data.totals.refunded > 0 ? undefined : "No refunds"}
-                />
-                <StatCard
-                  label="Net Received"
-                  value={formatCurrency(data.totals.netReceived, currencyCode)}
-                  valueClassName="text-indigo-600 dark:text-indigo-400"
-                />
-              </div>
-
-              {/* Daily charge + last updated + admin actions */}
+            <>
               <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border">
                 <div className="flex flex-wrap items-center gap-6 text-sm">
                   <div>
@@ -188,10 +150,7 @@ export function PaygDetailsDialog({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          onOpenChange(false);
-                          onRefund();
-                        }}
+                        onClick={onRefund}
                       >
                         <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
                         Refund
@@ -201,7 +160,6 @@ export function PaygDetailsDialog({
                 )}
               </div>
 
-              {/* Timeline */}
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                   Timeline
@@ -215,24 +173,12 @@ export function PaygDetailsDialog({
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-indigo-50 dark:bg-indigo-950/30">
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
-                            #
-                          </th>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
-                            Date / time
-                          </th>
-                          <th className="px-3 py-2 text-right text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
-                            Amount
-                          </th>
-                          <th className="px-3 py-2 text-center text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
-                            Pay
-                          </th>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
-                            Status
-                          </th>
-                          <th className="px-3 py-2 text-center text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
-                            Invoice
-                          </th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">#</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">Date / time</th>
+                          <th className="px-3 py-2 text-right text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">Amount</th>
+                          <th className="px-3 py-2 text-center text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">Pay</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">Status</th>
+                          <th className="px-3 py-2 text-center text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">Invoice</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -241,33 +187,18 @@ export function PaygDetailsDialog({
                           const showBreakdown =
                             Math.abs(inv.cumulativeAmount - inv.dayTotal) > 0.001;
                           return (
-                            <tr
-                              key={inv.id}
-                              className="border-t border-border hover:bg-muted/40"
-                            >
-                              <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">
-                                #{inv.invoiceRef}
-                              </td>
-                              <td className="px-3 py-2.5 text-sm">
-                                {format(parseISO(inv.createdAt), "dd MMM · HH:mm")}
-                              </td>
+                            <tr key={inv.id} className="border-t border-border hover:bg-muted/40">
+                              <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">#{inv.invoiceRef}</td>
+                              <td className="px-3 py-2.5 text-sm">{format(parseISO(inv.createdAt), "dd MMM · HH:mm")}</td>
                               <td className="px-3 py-2.5 text-right font-medium tabular-nums">
                                 {formatCurrency(inv.cumulativeAmount, currencyCode)}
                                 {showBreakdown && (
-                                  <span className="block text-xs text-muted-foreground font-normal">
-                                    incl. prior
-                                  </span>
+                                  <span className="block text-xs text-muted-foreground font-normal">incl. prior</span>
                                 )}
                               </td>
                               <td className="px-3 py-2.5 text-center">
                                 {isLatestOpen ? (
-                                  <Button
-                                    size="sm"
-                                    className="h-7 text-xs"
-                                    onClick={handlePayLatest}
-                                  >
-                                    Pay
-                                  </Button>
+                                  <Button size="sm" className="h-7 text-xs" onClick={handlePayLatest}>Pay</Button>
                                 ) : (
                                   <span className="text-muted-foreground text-xs">—</span>
                                 )}
@@ -293,7 +224,6 @@ export function PaygDetailsDialog({
                 )}
               </div>
 
-              {/* Reminder log */}
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                   Reminder log
@@ -307,38 +237,22 @@ export function PaygDetailsDialog({
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-muted/40">
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                            #
-                          </th>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                            Date / time
-                          </th>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                            Invoice
-                          </th>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                            Channel
-                          </th>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                            Result
-                          </th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">#</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date / time</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Invoice</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Channel</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Result</th>
                         </tr>
                       </thead>
                       <tbody>
                         {data.reminders.map((r) => (
                           <tr key={r.id} className="border-t border-border">
-                            <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                              {r.reminderNumber}
-                            </td>
-                            <td className="px-3 py-2">
-                              {format(parseISO(r.sentAt), "dd MMM · HH:mm")}
-                            </td>
+                            <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{r.reminderNumber}</td>
+                            <td className="px-3 py-2">{format(parseISO(r.sentAt), "dd MMM · HH:mm")}</td>
                             <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
                               {r.invoiceRef ? `#${r.invoiceRef}` : "—"}
                             </td>
-                            <td className="px-3 py-2 text-xs capitalize">
-                              {r.channel}
-                            </td>
+                            <td className="px-3 py-2 text-xs capitalize">{r.channel}</td>
                             <td className="px-3 py-2 text-xs">
                               {r.success ? (
                                 <span className="text-emerald-600 dark:text-emerald-400">Sent</span>
@@ -353,12 +267,11 @@ export function PaygDetailsDialog({
                   </div>
                 )}
               </div>
-            </div>
+            </>
           )}
-        </DialogContent>
-      </Dialog>
+        </CardContent>
+      </Card>
 
-      {/* Per-invoice PDF preview — reuses the existing shared InvoiceDialog */}
       {invoicePreview && (
         <InvoiceDialog
           open={!!invoicePreview}
@@ -370,46 +283,23 @@ export function PaygDetailsDialog({
             tax_amount: 0,
             total_amount: invoicePreview.cumulativeAmount,
           }}
-          customer={{
-            name: customerName,
-            email: customerEmail,
-          }}
+          customer={{ name: customerName, email: customerEmail }}
           vehicle={{
             reg: vehicle.reg || "",
             make: vehicle.make || "",
             model: vehicle.model || "",
           }}
           rental={{
-            start_date: rental.start_date || "",
-            end_date: rental.end_date || "",
+            // PAYG rentals have no end_date (open-ended) and each invoice represents
+            // a single day, so pass the invoice's own date for both start and end.
+            start_date: invoicePreview.createdAt.split("T")[0],
+            end_date: invoicePreview.createdAt.split("T")[0],
             monthly_amount: rental.monthly_amount || 0,
           }}
           currencyCode={currencyCode}
         />
       )}
     </>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  sub,
-  valueClassName,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  valueClassName?: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="text-xs text-muted-foreground font-medium mb-1">{label}</div>
-        <div className={`text-2xl font-bold ${valueClassName || ""}`}>{value}</div>
-        {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
-      </CardContent>
-    </Card>
   );
 }
 

@@ -104,12 +104,24 @@ function InvoiceHistoryTable({
                   </span>
                 </td>
                 <td className="py-2.5 px-3 text-sm">
-                  <button
-                    onClick={() => onViewInvoice(inv)}
-                    className="text-primary hover:underline"
-                  >
-                    View
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => onViewInvoice(inv)}
+                      className="text-primary hover:underline"
+                    >
+                      View
+                    </button>
+                    {(inv.status === "open" || inv.status === "uncollectible") && inv.stripe_hosted_invoice_url && (
+                      <a
+                        href={inv.stripe_hosted_invoice_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-orange-600 hover:underline"
+                      >
+                        Pay
+                      </a>
+                    )}
+                  </div>
                 </td>
               </tr>
             );

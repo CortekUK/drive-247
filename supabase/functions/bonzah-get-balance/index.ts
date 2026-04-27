@@ -221,25 +221,34 @@ Deno.serve(async (req) => {
     const apiUrl = getBonzahApiUrl(effectiveMode)
     const token = await getBonzahTokenForCredentials(effectiveCredentials.username, effectiveCredentials.password, apiUrl)
 
-    // Fetch broker-level balance
-    const resp = await fetch(`${apiUrl}/Bonzah/cdBalance`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'in-auth-token': token,
-      },
-    })
+    // Fetch broker-level balance (may error for some tenants — fall through to /deposit)
+    let brokerBalance: string | null = null
+    let brokerRawData: unknown = null
+    let cdBalanceError: string | null = null
+    try {
+      const resp = await fetch(`${apiUrl}/Bonzah/cdBalance`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'in-auth-token': token,
+        },
+      })
 
-    const data = await resp.json()
+      const data = await resp.json()
 
-    console.log('[Bonzah Balance] cdBalance response:', JSON.stringify(data))
+      console.log('[Bonzah Balance] cdBalance response:', JSON.stringify(data))
 
-    if (data.status !== 0) {
-      console.error('[Bonzah Balance] API error:', data.txt)
-      return errorResponse(data.txt || 'Failed to fetch balance', 400)
+      if (data.status === 0) {
+        brokerBalance = data.data?.amount ?? data.data?.balance ?? '0'
+        brokerRawData = data.data
+      } else {
+        cdBalanceError = data.txt || 'cdBalance returned error status'
+        console.warn('[Bonzah Balance] cdBalance error, will fall back to /deposit:', cdBalanceError)
+      }
+    } catch (err) {
+      cdBalanceError = err instanceof Error ? err.message : String(err)
+      console.warn('[Bonzah Balance] cdBalance request threw, will fall back to /deposit:', cdBalanceError)
     }
-
-    const brokerBalance = data.data?.amount ?? data.data?.balance ?? '0'
 
     // Fetch sub-user/entity balances from /deposit endpoint
     let allocatedBalance: string | null = null
@@ -265,8 +274,16 @@ Deno.serve(async (req) => {
       console.log('[Bonzah Balance] /deposit endpoint failed:', err)
     }
 
-    // Use allocated (sub-user) balance if found and non-zero, otherwise fall back to broker balance
-    const balance = allocatedBalance && Number(allocatedBalance) > 0 ? allocatedBalance : brokerBalance
+    // Both endpoints failed — surface the original error
+    if (brokerBalance === null && allocatedBalance === null) {
+      return errorResponse(cdBalanceError || 'Failed to fetch balance', 400)
+    }
+
+    // Prefer non-zero allocated (entity-level), then broker, then allocated even if zero
+    const balance =
+      allocatedBalance !== null && Number(allocatedBalance) > 0
+        ? allocatedBalance
+        : brokerBalance ?? allocatedBalance ?? '0'
 
     // Check threshold and create reminder/notifications if needed
     const balanceNum = Number(balance)
@@ -274,7 +291,7 @@ Deno.serve(async (req) => {
       await checkLowBalanceThreshold(supabase, body.tenant_id, balanceNum)
     }
 
-    return jsonResponse({ balance, allocatedBalance, mode: effectiveMode, rawData: data.data })
+    return jsonResponse({ balance, allocatedBalance, mode: effectiveMode, rawData: brokerRawData })
   } catch (error) {
     console.error('[Bonzah Balance] Error:', error)
     return errorResponse(

@@ -163,6 +163,7 @@ const Settings = () => {
     return_reminder_enabled: boolean;
     return_reminder_hours: number;
     pay_as_you_go_enabled: boolean;
+    payg_auto_reminders_enabled: boolean;
     payg_reminder_interval_days: number;
     payg_grace_period_days: number;
     payg_max_reminders: number;
@@ -230,6 +231,7 @@ const Settings = () => {
     return_reminder_hours: 24,
     // Pay As You Go
     pay_as_you_go_enabled: false,
+    payg_auto_reminders_enabled: true,
     payg_reminder_interval_days: 4,
     payg_grace_period_days: 2,
     payg_max_reminders: 10,
@@ -293,6 +295,7 @@ const Settings = () => {
         return_reminder_hours: (rentalSettings as any).return_reminder_hours ?? 24,
         // Pay As You Go
         pay_as_you_go_enabled: rentalSettings.pay_as_you_go_enabled ?? false,
+        payg_auto_reminders_enabled: (rentalSettings as any).payg_auto_reminders_enabled ?? true,
         payg_reminder_interval_days: (rentalSettings as any).payg_reminder_interval_days ?? 4,
         payg_grace_period_days: (rentalSettings as any).payg_grace_period_days ?? 2,
         payg_max_reminders: (rentalSettings as any).payg_max_reminders ?? 10,
@@ -2980,204 +2983,44 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* PAYG Automation & Reminder Settings */}
+          {/* PAYG Reminder toggle — everything else is hardcoded (daily cadence, open-ended). */}
           {rentalForm.pay_as_you_go_enabled && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Clock className="h-5 w-5 text-primary" />
-                  PAYG Automation
+                  PAYG Reminders
                 </CardTitle>
                 <CardDescription>
-                  Configure how PAYG rentals accrue charges and send reminders. Individual rentals can override the reminder interval.
+                  Reminders fire once every 24 hours from rental activation while there's an outstanding balance. Manual reminders can always be sent from the PAYG dialog regardless of this setting.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-5">
-                {/* Check if the PAYG migration has been pushed via the _paygMigrationReady flag */}
-                {!(rentalSettings as any)?._paygMigrationReady ? (
-                  <div className="p-4 border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 rounded-lg space-y-2">
-                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Database Migration Required</p>
-                    <p className="text-sm text-amber-700 dark:text-amber-300">
-                      The PAYG automation columns have not been added to the database yet. Run the migration from the Supabase Dashboard SQL editor:
-                    </p>
-                    <p className="text-xs text-amber-600 dark:text-amber-400 font-mono">
-                      supabase/migrations/20260410120000_add_payg_foundation.sql
-                    </p>
-                    <p className="text-sm text-amber-700 dark:text-amber-300">
-                      After running the migration, refresh this page to configure PAYG automation.
-                    </p>
-                  </div>
-                ) : (<>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Reminder Interval (days)</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={365}
-                      value={rentalForm.payg_reminder_interval_days || ''}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        setRentalForm(prev => ({
-                          ...prev,
-                          payg_reminder_interval_days: raw === '' ? ('' as any) : parseInt(raw) || 0,
-                        }));
-                      }}
-                      onBlur={(e) => {
-                        const val = parseInt(e.target.value);
-                        setRentalForm(prev => ({
-                          ...prev,
-                          payg_reminder_interval_days: isNaN(val) || val < 1 ? 4 : Math.min(365, val),
-                        }));
-                      }}
-                    />
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between gap-4 py-2">
+                  <div className="space-y-0.5">
+                    <Label>Send automated reminders</Label>
                     <p className="text-xs text-muted-foreground">
-                      How often a reminder email is sent while the customer has an outstanding balance. Admin can override per rental.
+                      When on, customers with an outstanding balance get a daily reminder email.
                     </p>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label>Grace Period (days)</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={365}
-                      value={rentalForm.payg_grace_period_days ?? ''}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        setRentalForm(prev => ({
-                          ...prev,
-                          payg_grace_period_days: raw === '' ? ('' as any) : parseInt(raw) || 0,
-                        }));
-                      }}
-                      onBlur={(e) => {
-                        const val = parseInt(e.target.value);
-                        setRentalForm(prev => ({
-                          ...prev,
-                          payg_grace_period_days: isNaN(val) || val < 0 ? 2 : Math.min(365, val),
-                        }));
-                      }}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Days after the rental starts before the first reminder can fire.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Max Reminders</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={1000}
-                      value={rentalForm.payg_max_reminders || ''}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        setRentalForm(prev => ({
-                          ...prev,
-                          payg_max_reminders: raw === '' ? ('' as any) : parseInt(raw) || 0,
-                        }));
-                      }}
-                      onBlur={(e) => {
-                        const val = parseInt(e.target.value);
-                        setRentalForm(prev => ({
-                          ...prev,
-                          payg_max_reminders: isNaN(val) || val < 1 ? 10 : Math.min(1000, val),
-                        }));
-                      }}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Safety cap — no more reminders sent once this number is reached.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Pre-Authorization (days of rate)</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={30}
-                      value={rentalForm.payg_preauth_days ?? ''}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        setRentalForm(prev => ({
-                          ...prev,
-                          payg_preauth_days: raw === '' ? ('' as any) : parseInt(raw) || 0,
-                        }));
-                      }}
-                      onBlur={(e) => {
-                        const val = parseInt(e.target.value);
-                        setRentalForm(prev => ({
-                          ...prev,
-                          payg_preauth_days: isNaN(val) || val < 0 ? 2 : Math.min(30, val),
-                        }));
-                      }}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Pre-auth amount = this × daily rate. 0 disables PAYG-specific pre-auth (falls back to tenant default).
-                    </p>
-                  </div>
-
-                  <div className="space-y-2 md:col-span-2">
-                    <Label>Max Duration (days)</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={3650}
-                      value={rentalForm.payg_max_duration_days || ''}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        setRentalForm(prev => ({
-                          ...prev,
-                          payg_max_duration_days: raw === '' ? ('' as any) : parseInt(raw) || 0,
-                        }));
-                      }}
-                      onBlur={(e) => {
-                        const val = parseInt(e.target.value);
-                        setRentalForm(prev => ({
-                          ...prev,
-                          payg_max_duration_days: isNaN(val) || val < 1 ? 90 : Math.min(3650, val),
-                        }));
-                      }}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Safety cap — after this many days of continuous accrual, the rental stops accruing automatically and the admin is alerted to close it.
-                    </p>
-                  </div>
-                </div>
-
-                <Button
-                  onClick={async () => {
-                    try {
-                      await updateRentalSettings({
-                        payg_reminder_interval_days: rentalForm.payg_reminder_interval_days,
-                        payg_grace_period_days: rentalForm.payg_grace_period_days,
-                        payg_max_reminders: rentalForm.payg_max_reminders,
-                        payg_preauth_days: rentalForm.payg_preauth_days,
-                        payg_max_duration_days: rentalForm.payg_max_duration_days,
-                      } as any);
-                    } catch (error: any) {
-                      const msg = error?.message || '';
-                      if (msg.includes('does not exist') || msg.includes('column')) {
+                  <Switch
+                    checked={rentalForm.payg_auto_reminders_enabled}
+                    onCheckedChange={async (checked) => {
+                      setRentalForm(prev => ({ ...prev, payg_auto_reminders_enabled: checked }));
+                      try {
+                        await updateRentalSettings({ payg_auto_reminders_enabled: checked } as any);
+                      } catch (error: any) {
+                        console.error('Failed to update PAYG reminders toggle:', error);
                         toast({
-                          title: 'Migration Required',
-                          description: 'PAYG automation columns are not yet in the database. Run `npx supabase db push` to apply the PAYG migration, then try again.',
+                          title: 'Save failed',
+                          description: error?.message || 'Could not update reminders setting',
                           variant: 'destructive',
                         });
                       }
-                      console.error('Failed to update PAYG automation settings:', error);
-                    }
-                  }}
-                  disabled={isUpdatingRentalSettings}
-                  className="flex items-center gap-2"
-                >
-                  {isUpdatingRentalSettings ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  Save PAYG Automation Settings
-                </Button>
-                </>)}
+                    }}
+                    disabled={isUpdatingRentalSettings}
+                  />
+                </div>
               </CardContent>
             </Card>
           )}
@@ -4012,6 +3855,7 @@ const Settings = () => {
                             return_reminder_enabled: false,
                             return_reminder_hours: 24,
                             pay_as_you_go_enabled: false,
+                            payg_auto_reminders_enabled: true,
                             payg_reminder_interval_days: 4,
                             payg_grace_period_days: 2,
                             payg_max_reminders: 10,
