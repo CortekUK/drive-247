@@ -44,15 +44,15 @@ function fmtDate(s: string) {
 function visualStatus(row: ScheduleRow): {
   label: string; tone: string; Icon: typeof CheckCircle2;
 } {
-  if (row.invoice_status === "paid") return { label: "Paid", tone: "text-emerald-600", Icon: CheckCircle2 };
-  if (row.invoice_status === "superseded") return { label: "Superseded", tone: "text-slate-400", Icon: XCircle };
+  if (row.invoice_status === "paid") return { label: "Paid", tone: "text-emerald-600 dark:text-emerald-400", Icon: CheckCircle2 };
+  if (row.invoice_status === "superseded") return { label: "Superseded", tone: "text-muted-foreground/70", Icon: XCircle };
   const today = new Date().toISOString().split("T")[0];
   if (row.due_date < today) {
     const days = Math.floor((Date.now() - new Date(row.due_date).getTime()) / (1000*60*60*24));
-    return { label: `Overdue ${days}d`, tone: "text-red-600", Icon: AlertCircle };
+    return { label: `Overdue ${days}d`, tone: "text-red-600 dark:text-red-400", Icon: AlertCircle };
   }
-  if (row.due_date === today) return { label: "Due today", tone: "text-indigo-600 font-semibold", Icon: Clock };
-  return { label: "Scheduled", tone: "text-slate-600", Icon: Clock };
+  if (row.due_date === today) return { label: "Due today", tone: "text-indigo-600 dark:text-indigo-400 font-semibold", Icon: Clock };
+  return { label: "Scheduled", tone: "text-muted-foreground", Icon: Clock };
 }
 
 export function InstallmentScheduleTable({
@@ -60,15 +60,15 @@ export function InstallmentScheduleTable({
   isOperator = false, onCharge, onMarkPaid, onReceipt, busyId,
 }: Props) {
   return (
-    <div className="bg-white border border-slate-100 rounded-lg overflow-hidden">
+    <div className="bg-card border border-border/60 rounded-lg overflow-hidden">
       <table className="w-full text-sm">
-        <thead className="bg-indigo-50/60">
+        <thead className="bg-primary/10">
           <tr>
-            <th className="text-left px-4 py-2.5 text-xs font-semibold text-indigo-900 uppercase tracking-wide w-12">#</th>
-            <th className="text-left px-4 py-2.5 text-xs font-semibold text-indigo-900 uppercase tracking-wide">Date</th>
-            <th className="text-right px-4 py-2.5 text-xs font-semibold text-indigo-900 uppercase tracking-wide">Amount</th>
-            <th className="text-left px-4 py-2.5 text-xs font-semibold text-indigo-900 uppercase tracking-wide">Status</th>
-            <th className="text-right px-4 py-2.5 text-xs font-semibold text-indigo-900 uppercase tracking-wide">Action</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold text-foreground uppercase tracking-wide w-12">#</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold text-foreground uppercase tracking-wide">Date</th>
+            <th className="text-right px-4 py-2.5 text-xs font-semibold text-foreground uppercase tracking-wide">Amount</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold text-foreground uppercase tracking-wide">Status</th>
+            <th className="text-right px-4 py-2.5 text-xs font-semibold text-foreground uppercase tracking-wide">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -77,10 +77,10 @@ export function InstallmentScheduleTable({
             const Icon = v.Icon;
             const isBusy = busyId === r.id;
             return (
-              <tr key={r.id} className="border-t border-slate-100">
-                <td className="px-4 py-3 text-slate-600">{r.installment_number}</td>
-                <td className="px-4 py-3 text-slate-700">{fmtDate(r.due_date)}</td>
-                <td className="px-4 py-3 text-right font-medium text-slate-900">{fmt(r.amount, currencyCode)}</td>
+              <tr key={r.id} className="border-t border-border/60">
+                <td className="px-4 py-3 text-muted-foreground">{r.installment_number}</td>
+                <td className="px-4 py-3 text-foreground/90">{fmtDate(r.due_date)}</td>
+                <td className="px-4 py-3 text-right font-medium text-foreground">{fmt(r.amount, currencyCode)}</td>
                 <td className={cn("px-4 py-3 inline-flex items-center gap-1.5", v.tone)}>
                   <Icon className="w-3.5 h-3.5" /> {v.label}
                 </td>

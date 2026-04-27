@@ -23,11 +23,11 @@ const DAY_NAMES = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
 const STATUS_TONE: Record<InstallmentCalendarItem["status"], string> = {
   paid:       "bg-emerald-500 text-white",
-  open:       "bg-amber-400 text-amber-950",
+  open:       "bg-amber-400 text-amber-800 dark:text-amber-200",
   overdue:    "bg-red-500 text-white",
   due_today:  "bg-indigo-500 text-white animate-pulse",
-  scheduled:  "bg-indigo-100 text-indigo-700 border border-indigo-200",
-  superseded: "bg-slate-200 text-slate-500 line-through",
+  scheduled:  "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30",
+  superseded: "bg-muted text-muted-foreground line-through",
 };
 
 const STATUS_LABEL: Record<InstallmentCalendarItem["status"], string> = {
@@ -93,20 +93,20 @@ export function InstallmentCalendar({ schedule, rentalStart, rentalEnd, currency
   }
 
   return (
-    <div className={cn("bg-white border border-slate-100 rounded-lg p-4", className)}>
+    <div className={cn("bg-card border border-border/60 rounded-lg p-4", className)}>
       <div className="flex items-center justify-between mb-4">
-        <button onClick={goPrev} className="p-1.5 rounded hover:bg-slate-100" aria-label="Previous month">
-          <ChevronLeft className="w-4 h-4 text-slate-600" />
+        <button onClick={goPrev} className="p-1.5 rounded hover:bg-muted" aria-label="Previous month">
+          <ChevronLeft className="w-4 h-4 text-muted-foreground" />
         </button>
-        <h3 className="text-sm font-medium text-slate-900">{monthLabel}</h3>
-        <button onClick={goNext} className="p-1.5 rounded hover:bg-slate-100" aria-label="Next month">
-          <ChevronRight className="w-4 h-4 text-slate-600" />
+        <h3 className="text-sm font-medium text-foreground">{monthLabel}</h3>
+        <button onClick={goNext} className="p-1.5 rounded hover:bg-muted" aria-label="Next month">
+          <ChevronRight className="w-4 h-4 text-muted-foreground" />
         </button>
       </div>
 
       <div className="grid grid-cols-7 gap-1 mb-1">
         {DAY_NAMES.map((d) => (
-          <div key={d} className="text-center text-[11px] font-medium text-slate-500 uppercase tracking-wide">{d}</div>
+          <div key={d} className="text-center text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{d}</div>
         ))}
       </div>
 
@@ -124,11 +124,11 @@ export function InstallmentCalendar({ schedule, rentalStart, rentalEnd, currency
               className={cn(
                 "relative rounded-md min-h-[64px] p-1.5 flex flex-col items-center text-xs",
                 cell.inMonth ? "" : "opacity-30",
-                isInRental ? "bg-slate-50" : "",
-                isToday ? "ring-1 ring-indigo-300" : "",
+                isInRental ? "bg-muted/40" : "",
+                isToday ? "ring-1 ring-indigo-500/40" : "",
               )}
             >
-              <div className={cn("text-[11px] font-medium", isToday ? "text-indigo-600" : "text-slate-400")}>{dayNum}</div>
+              <div className={cn("text-[11px] font-medium", isToday ? "text-indigo-600 dark:text-indigo-400" : "text-muted-foreground/70")}>{dayNum}</div>
               {item ? (
                 <div className={cn(
                   "mt-1 w-full rounded px-1 py-0.5 text-center text-[10px] font-semibold leading-tight",
@@ -142,7 +142,7 @@ export function InstallmentCalendar({ schedule, rentalStart, rentalEnd, currency
         })}
       </div>
 
-      <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap gap-3 text-[11px] text-slate-600">
+      <div className="mt-4 pt-3 border-t border-border/60 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
         {(["paid","due_today","overdue","scheduled","superseded"] as const).map((s) => (
           <div key={s} className="flex items-center gap-1.5">
             <span className={cn("inline-block w-3 h-3 rounded-sm", STATUS_TONE[s])}></span>

@@ -79,10 +79,10 @@ export function InstallmentSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white border border-slate-100 rounded-lg p-6">
-        <h2 className="text-lg font-medium text-slate-900 mb-1">Installments</h2>
-        <p className="text-sm text-slate-500 mb-4">Configure how customers can split their rental payments.</p>
-        <div className="rounded-md bg-indigo-50/50 border border-indigo-100 px-4 py-3 text-sm text-indigo-900">
+      <div className="bg-card border border-border/60 rounded-lg p-6">
+        <h2 className="text-lg font-medium text-foreground mb-1">Installments</h2>
+        <p className="text-sm text-muted-foreground mb-4">Configure how customers can split their rental payments.</p>
+        <div className="rounded-md bg-primary/10 border border-primary/30 px-4 py-3 text-sm text-foreground">
           <span className="font-medium">Note:</span> only the rental base amount, taxes, and service fees are split into installments.
           Insurance, deposits, and delivery fees are always paid upfront.
         </div>
@@ -99,17 +99,17 @@ export function InstallmentSettings() {
               onCheckedChange={(v) => setConfig({ ...config, weekly_enabled: v })}
               id="weekly-enabled"
             />
-            <Label htmlFor="weekly-enabled" className="text-sm text-slate-700">Enable weekly installments</Label>
+            <Label htmlFor="weekly-enabled" className="text-sm text-foreground/90">Enable weekly installments</Label>
           </div>
           {config.weekly_enabled && (
             <div className="space-y-2">
-              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Payments per week</div>
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payments per week</div>
               <div className="flex items-center gap-2">
                 <PillButton active={config.weekly_payments_per_unit === 1} onClick={() => setConfig({ ...config, weekly_payments_per_unit: 1 })}>1×</PillButton>
                 <PillButton active={config.weekly_payments_per_unit === 2} onClick={() => setConfig({ ...config, weekly_payments_per_unit: 2 })}>2× (twice weekly)</PillButton>
                 <button
                   type="button"
-                  className="ml-auto inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-700"
+                  className="ml-auto inline-flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-200"
                   onClick={() => setPreviewOpen({ unit: "week", paymentsPerUnit: config.weekly_payments_per_unit })}
                 >
                   <Eye className="w-4 h-4" /> See example
@@ -131,18 +131,18 @@ export function InstallmentSettings() {
               onCheckedChange={(v) => setConfig({ ...config, monthly_enabled: v })}
               id="monthly-enabled"
             />
-            <Label htmlFor="monthly-enabled" className="text-sm text-slate-700">Enable monthly installments</Label>
+            <Label htmlFor="monthly-enabled" className="text-sm text-foreground/90">Enable monthly installments</Label>
           </div>
           {config.monthly_enabled && (
             <div className="space-y-2">
-              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Payments per month</div>
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payments per month</div>
               <div className="flex items-center gap-2">
                 <PillButton active={config.monthly_payments_per_unit === 1} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 1 })}>1×</PillButton>
                 <PillButton active={config.monthly_payments_per_unit === 2} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 2 })}>2×</PillButton>
                 <PillButton active={config.monthly_payments_per_unit === 4} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 4 })}>4×</PillButton>
                 <button
                   type="button"
-                  className="ml-auto inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-700"
+                  className="ml-auto inline-flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-200"
                   onClick={() => setPreviewOpen({ unit: "month", paymentsPerUnit: config.monthly_payments_per_unit })}
                 >
                   <Eye className="w-4 h-4" /> See example
@@ -154,7 +154,7 @@ export function InstallmentSettings() {
       </SectionRow>
 
       <div className="flex justify-end pt-2">
-        <Button onClick={save} disabled={saving} className="bg-slate-900 hover:bg-slate-800 text-white">
+        <Button onClick={save} disabled={saving} className="bg-foreground text-background hover:bg-foreground/90">
           {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
           Save changes
         </Button>
@@ -175,10 +175,10 @@ export function InstallmentSettings() {
 
 function SectionRow({ label, sublabel, children }: { label: string; sublabel?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white border border-slate-100 rounded-lg flex flex-col md:flex-row md:items-start gap-4 p-6">
+    <div className="bg-card border border-border/60 rounded-lg flex flex-col md:flex-row md:items-start gap-4 p-6">
       <div className="md:w-[304px] flex-none">
-        <div className="text-sm font-medium text-slate-900">{label}</div>
-        {sublabel ? <div className="text-xs text-slate-500 mt-1">{sublabel}</div> : null}
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        {sublabel ? <div className="text-xs text-muted-foreground mt-1">{sublabel}</div> : null}
       </div>
       <div className="flex-1 min-w-0">{children}</div>
     </div>
@@ -193,8 +193,8 @@ function PillButton({ active, onClick, children }: { active: boolean; onClick: (
       className={cn(
         "px-3 py-1.5 rounded-md text-sm font-medium border transition-colors",
         active
-          ? "bg-indigo-50 border-indigo-300 text-indigo-700"
-          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50",
+          ? "bg-primary/15 border-indigo-500/50 text-indigo-700 dark:text-indigo-300"
+          : "bg-card border-border text-muted-foreground hover:bg-muted/40",
       )}
     >
       {children}
@@ -223,11 +223,11 @@ function ExampleDialog({ open, onClose, unit, paymentsPerUnit, currencyCode }: {
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="bg-slate-50 border border-slate-100 rounded-md p-4 text-sm text-slate-700">
+          <div className="bg-muted/40 border border-border/60 rounded-md p-4 text-sm text-foreground/90">
             Splittable {fmt(sampleTotal)} ÷ {schedule.length} payments → {fmt(schedule[0]?.amount ?? 0)} each
           </div>
           <InstallmentCalendar schedule={schedule} currencyCode={currencyCode} />
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-muted-foreground">
             Customers will see these amounts and dates before checkout.
           </div>
         </div>

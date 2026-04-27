@@ -70,7 +70,7 @@ export function CustomerInstallmentsView({ rentalId, rentalStart, rentalEnd, cur
     return { overdueTotal, overdueCount: overdue.length, totalPaid, totalAmount };
   }, [data]);
 
-  if (isLoading) return <div className="text-sm text-slate-500">Loading…</div>;
+  if (isLoading) return <div className="text-sm text-muted-foreground">Loading…</div>;
   if (!data || !data.plan) return null;
 
   async function handlePayNow() {
@@ -110,20 +110,20 @@ export function CustomerInstallmentsView({ rentalId, rentalStart, rentalEnd, cur
     : (data.plan.payments_per_unit === 4 ? "Weekly via monthly" : data.plan.payments_per_unit === 2 ? "Twice monthly" : "Monthly");
 
   return (
-    <div className="bg-white border border-slate-100 rounded-lg overflow-hidden">
-      <div className="px-6 py-5 border-b border-slate-100">
-        <h2 className="text-lg font-medium text-slate-900">Your Payment Plan</h2>
-        <p className="text-sm text-slate-500 mt-0.5">{planType} · {data.plan.number_of_installments} payments of {fmt(Number(data.plan.installment_amount), currencyCode)}</p>
+    <div className="bg-card border border-border/60 rounded-lg overflow-hidden">
+      <div className="px-6 py-5 border-b border-border/60">
+        <h2 className="text-lg font-medium text-foreground">Your Payment Plan</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">{planType} · {data.plan.number_of_installments} payments of {fmt(Number(data.plan.installment_amount), currencyCode)}</p>
       </div>
 
       <div className="p-6 space-y-6">
         {summary && summary.overdueTotal > 0 ? (
-          <div className="rounded-md bg-red-50 border border-red-100 px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="rounded-md bg-red-500/10 border border-red-500/30 px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex items-start gap-3 flex-1">
-              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
               <div>
-                <div className="text-sm font-semibold text-red-900">{fmt(summary.overdueTotal, currencyCode)} due now</div>
-                <div className="text-xs text-red-700 mt-0.5">
+                <div className="text-sm font-semibold text-red-700 dark:text-red-300">{fmt(summary.overdueTotal, currencyCode)} due now</div>
+                <div className="text-xs text-red-700 dark:text-red-300 mt-0.5">
                   You have {summary.overdueCount} unpaid installment{summary.overdueCount === 1 ? "" : "s"}. Pay today to keep your rental active.
                 </div>
               </div>
@@ -138,10 +138,10 @@ export function CustomerInstallmentsView({ rentalId, rentalStart, rentalEnd, cur
         {summary ? (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs uppercase tracking-wide text-slate-500 font-medium">Progress</span>
-              <span className="text-sm text-slate-600">{fmt(summary.totalPaid, currencyCode)} of {fmt(summary.totalAmount, currencyCode)} paid</span>
+              <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Progress</span>
+              <span className="text-sm text-muted-foreground">{fmt(summary.totalPaid, currencyCode)} of {fmt(summary.totalAmount, currencyCode)} paid</span>
             </div>
-            <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
               <div
                 className="h-full bg-emerald-500 transition-all"
                 style={{ width: `${Math.min(100, Math.round((summary.totalPaid / Math.max(1, summary.totalAmount)) * 100))}%` }}
@@ -158,20 +158,20 @@ export function CustomerInstallmentsView({ rentalId, rentalStart, rentalEnd, cur
         />
 
         <div>
-          <h3 className="text-sm font-medium text-slate-900 mb-3">Payments</h3>
+          <h3 className="text-sm font-medium text-foreground mb-3">Payments</h3>
           <InstallmentScheduleTable rows={tableRows} currencyCode={currencyCode} collectionMode={data.plan.collection_mode || "auto"} />
         </div>
 
         {data.plan.stripe_payment_method_id ? (
-          <div className="rounded-md border border-slate-100 px-4 py-3 flex items-center gap-3">
-            <CreditCard className="w-5 h-5 text-slate-500" />
-            <div className="flex-1 text-sm text-slate-700">
+          <div className="rounded-md border border-border/60 px-4 py-3 flex items-center gap-3">
+            <CreditCard className="w-5 h-5 text-muted-foreground" />
+            <div className="flex-1 text-sm text-foreground/90">
               Card on file (•••• <span className="font-mono">{String(data.plan.stripe_payment_method_id).slice(-4)}</span>)
             </div>
           </div>
         ) : null}
 
-        <div className="text-xs text-slate-500 pt-2 border-t border-slate-100">
+        <div className="text-xs text-muted-foreground pt-2 border-t border-border/60">
           Need help? Contact your rental operator.
         </div>
       </div>
