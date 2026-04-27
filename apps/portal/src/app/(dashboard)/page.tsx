@@ -28,6 +28,7 @@ import { AIInsightsPanel } from "@/components/rentals/calendar/ai-insights-panel
 import { BonzahPendingAlert } from "@/components/dashboard/bonzah-pending-alert";
 import { PlatformStatusBanner } from "@/components/dashboard/platform-status-banner";
 import { CommandCenter } from "@/components/dashboard/command-center";
+import { LowCreditsBanner } from "@/components/dashboard/low-credits-banner";
 import { useCalendarRentals } from "@/hooks/use-calendar-rentals";
 import { useDashboardKPIs } from "@/hooks/use-dashboard-kpis";
 import { usePlatformStatus } from "@/hooks/use-platform-status";
@@ -187,6 +188,9 @@ export default function DashboardPage() {
 
       {/* AI Insights Marquee */}
       {canView('rentals') && <AIInsightsPanel grouped={todayCalendar?.grouped || []} />}
+
+      {/* Low credit balance warning */}
+      <LowCreditsBanner />
 
       {/* Platform Status */}
       <PlatformStatusBanner
