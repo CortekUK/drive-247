@@ -4581,6 +4581,68 @@ export type Database = {
           },
         ]
       }
+      openai_usage_logs: {
+        Row: {
+          completion_tokens: number
+          cost_usd: number
+          created_at: string
+          duration_ms: number | null
+          endpoint: string
+          error_message: string | null
+          function_name: string
+          id: string
+          is_fallback: boolean
+          metadata: Json | null
+          model: string
+          prompt_tokens: number
+          status: string
+          tenant_id: string | null
+          total_tokens: number
+        }
+        Insert: {
+          completion_tokens?: number
+          cost_usd?: number
+          created_at?: string
+          duration_ms?: number | null
+          endpoint: string
+          error_message?: string | null
+          function_name: string
+          id?: string
+          is_fallback?: boolean
+          metadata?: Json | null
+          model: string
+          prompt_tokens?: number
+          status?: string
+          tenant_id?: string | null
+          total_tokens?: number
+        }
+        Update: {
+          completion_tokens?: number
+          cost_usd?: number
+          created_at?: string
+          duration_ms?: number | null
+          endpoint?: string
+          error_message?: string | null
+          function_name?: string
+          id?: string
+          is_fallback?: boolean
+          metadata?: Json | null
+          model?: string
+          prompt_tokens?: number
+          status?: string
+          tenant_id?: string | null
+          total_tokens?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "openai_usage_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_settings: {
         Row: {
           accent_color: string | null

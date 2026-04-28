@@ -102,7 +102,8 @@ ${rentalsList}`;
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      { temperature: 0.3, max_tokens: 1024 }
+      { temperature: 0.3, max_tokens: 1024 },
+      { functionName: "rental-insights", tenantId: (body as { tenantId?: string }).tenantId ?? null }
     );
 
     const content = response.choices[0]?.message?.content || "{}";

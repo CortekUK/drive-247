@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors } from '../_shared/cors.ts';
-import { chatCompletion } from '../_shared/openai.ts';
+import { chatCompletion, logExternalUsage } from '../_shared/openai.ts';
 
 /**
  * process-call-recording
@@ -126,6 +126,8 @@ Deno.serve(async (req) => {
 
     // Step 3: Transcribe via OpenAI Whisper
     let transcript = '';
+    const whisperStartedAt = Date.now();
+    const whisperDurationSec = parseInt(recordingDuration || '0', 10);
     try {
       const whisperForm = new FormData();
       whisperForm.append('file', audioBlob, 'recording.mp3');
@@ -142,12 +144,36 @@ Deno.serve(async (req) => {
 
       if (!whisperResponse.ok) {
         const errText = await whisperResponse.text();
+        await logExternalUsage({
+          context: { functionName: 'process-call-recording', tenantId: callLog.tenant_id },
+          endpoint: 'audio/transcriptions',
+          model: 'whisper-1',
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          status: 'error',
+          durationMs: Date.now() - whisperStartedAt,
+          errorMessage: `${whisperResponse.status}: ${errText.slice(0, 500)}`,
+        });
         throw new Error(`Whisper API error: ${whisperResponse.status} - ${errText}`);
       }
 
       transcript = await whisperResponse.text();
       transcript = transcript.trim();
       console.log(`[process-call-recording] Transcript length: ${transcript.length} chars`);
+
+      // Whisper is priced per minute: $0.006/min
+      await logExternalUsage({
+        context: { functionName: 'process-call-recording', tenantId: callLog.tenant_id, metadata: { call_log_id: callLog.id } },
+        endpoint: 'audio/transcriptions',
+        model: 'whisper-1',
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        status: 'success',
+        durationMs: Date.now() - whisperStartedAt,
+        costOverride: (whisperDurationSec / 60) * 0.006,
+      });
     } catch (err: any) {
       console.error(`[process-call-recording] Transcription failed:`, err.message);
       // Save what we have and return
@@ -194,7 +220,7 @@ ${transcript}`,
       ], {
         temperature: 0.3,
         max_tokens: 512,
-      });
+      }, { functionName: 'process-call-recording', tenantId: callLog.tenant_id, metadata: { call_log_id: callLog.id, duration_sec: durationSec } });
 
       const content = result.choices?.[0]?.message?.content || '';
 

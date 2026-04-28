@@ -61,9 +61,67 @@ interface ChatCompletionResponse {
   };
 }
 
+interface UsageLogContext {
+  tenantId?: string | null;
+  customerId?: string | null;
+}
+
+async function logUsage(params: {
+  ctx: UsageLogContext;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  status: 'success' | 'error';
+  durationMs: number;
+  errorMessage?: string;
+}): Promise<void> {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceKey) return;
+
+    // gpt-4o-mini pricing (USD per 1M tokens)
+    const pricing: Record<string, { input: number; output: number }> = {
+      'gpt-4o-mini': { input: 0.15, output: 0.60 },
+      'gpt-4o': { input: 2.50, output: 10.00 },
+    };
+    const p = pricing[params.model] ?? pricing['gpt-4o-mini'];
+    const cost = (params.promptTokens * p.input + params.completionTokens * p.output) / 1_000_000;
+
+    await fetch(`${supabaseUrl}/rest/v1/openai_usage_logs`, {
+      method: 'POST',
+      headers: {
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify({
+        tenant_id: params.ctx.tenantId ?? null,
+        function_name: 'customer-chat',
+        endpoint: 'chat/completions',
+        model: params.model,
+        prompt_tokens: params.promptTokens,
+        completion_tokens: params.completionTokens,
+        total_tokens: params.totalTokens,
+        cost_usd: cost,
+        status: params.status,
+        is_fallback: false,
+        duration_ms: params.durationMs,
+        error_message: params.errorMessage ?? null,
+        metadata: params.ctx.customerId ? { customer_id: params.ctx.customerId } : null,
+      }),
+    });
+  } catch (err) {
+    console.error('[customer-chat-usage-log] Failed:', err);
+  }
+}
+
 async function chatCompletion(
   messages: ChatMessage[],
-  options: ChatCompletionOptions = {}
+  options: ChatCompletionOptions = {},
+  ctx: UsageLogContext = {}
 ): Promise<ChatCompletionResponse> {
   const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
   if (!OPENAI_API_KEY) {
@@ -71,6 +129,7 @@ async function chatCompletion(
   }
 
   const { temperature = 0.7, max_tokens = 2048, model = CHAT_MODEL } = options;
+  const startedAt = Date.now();
 
   const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
     method: 'POST',
@@ -83,10 +142,23 @@ async function chatCompletion(
 
   if (!response.ok) {
     const error = await response.text();
+    await logUsage({
+      ctx, model, promptTokens: 0, completionTokens: 0, totalTokens: 0,
+      status: 'error', durationMs: Date.now() - startedAt,
+      errorMessage: `${response.status}: ${error.slice(0, 500)}`,
+    });
     throw new Error(`OpenAI chat completion error: ${response.status} - ${error}`);
   }
 
-  return await response.json();
+  const data: ChatCompletionResponse = await response.json();
+  await logUsage({
+    ctx, model,
+    promptTokens: data.usage?.prompt_tokens ?? 0,
+    completionTokens: data.usage?.completion_tokens ?? 0,
+    totalTokens: data.usage?.total_tokens ?? 0,
+    status: 'success', durationMs: Date.now() - startedAt,
+  });
+  return data;
 }
 
 // ============================================================================
@@ -417,7 +489,7 @@ serve(async (req) => {
     const completion = await chatCompletion(messages, {
       temperature: 0.7,
       max_tokens: 1024,
-    });
+    }, { tenantId, customerId });
 
     const aiResponseContent = completion.choices[0]?.message?.content ||
       'I apologize, but I was unable to generate a response. Please try again or contact support.';

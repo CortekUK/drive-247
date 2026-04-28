@@ -148,7 +148,11 @@ serve(async (req) => {
             // Generate embeddings for batch
             for (const doc of documents) {
               try {
-                const embedding = await generateEmbedding(doc.content);
+                const embedding = await generateEmbedding(doc.content, {
+                  functionName: 'rag-init',
+                  tenantId: tenant.id,
+                  metadata: { source_table: tableName, source_id: doc.id },
+                });
 
                 // Upsert into rag_documents
                 const { error: upsertError } = await supabase

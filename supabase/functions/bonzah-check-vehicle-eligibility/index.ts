@@ -76,7 +76,8 @@ serve(async (req) => {
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: `Vehicle Make: ${body.vehicle_make}\nVehicle Model: ${body.vehicle_model}` },
         ],
-        { temperature: 0, max_tokens: 150 }
+        { temperature: 0, max_tokens: 150 },
+        { functionName: 'bonzah-check-vehicle-eligibility', tenantId: (body as { tenant_id?: string }).tenant_id ?? null }
       )
 
       const content = response.choices?.[0]?.message?.content?.trim()

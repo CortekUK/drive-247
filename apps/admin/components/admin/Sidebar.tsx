@@ -21,6 +21,7 @@ import {
   ScrollText,
   ArrowUpCircle,
   Megaphone,
+  Sparkles,
 } from 'lucide-react';
 
 interface NavItem {
@@ -53,6 +54,7 @@ function useNavigation() {
         { name: 'Mode Requests', href: '/admin/requests', icon: ArrowUpCircle },
         { name: 'Announcements', href: '/admin/announcements', icon: Megaphone },
         { name: 'Audit Logs', href: '/admin/audit-logs', icon: ScrollText },
+        { name: 'OpenAI Usage', href: '/admin/openai-usage', icon: Sparkles },
       ],
     },
     {

@@ -375,7 +375,10 @@ async function handleChatMessage(
   console.log(`Chat request from ${userName} (${user.id}) in tenant ${ctx.tenantId}`);
 
   // Step 1: Generate embedding for the user's query
-  const queryEmbedding = await generateEmbedding(message);
+  const queryEmbedding = await generateEmbedding(message, {
+    functionName: 'chat',
+    tenantId: ctx.tenantId,
+  });
 
   // Step 2: Semantic search for relevant documents
   const { data: matchedDocs, error: matchError } = await ctx.supabase
@@ -465,11 +468,15 @@ async function handleChatMessage(
   });
 
   // Step 7: Get AI response (with tools if available)
-  const completion = await chatCompletion(messages, {
-    temperature: 0.3,
-    max_tokens: 2048,
-    tools: hasActions ? tools : undefined,
-  });
+  const completion = await chatCompletion(
+    messages,
+    {
+      temperature: 0.3,
+      max_tokens: 2048,
+      tools: hasActions ? tools : undefined,
+    },
+    { functionName: 'chat', tenantId: ctx.tenantId, metadata: { user_id: user.id, role: ctx.appUser.role } },
+  );
 
   const choice = completion.choices[0];
   const toolCalls = choice?.message?.tool_calls;

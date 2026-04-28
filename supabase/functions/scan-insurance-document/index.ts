@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getDocumentProxy } from "npm:unpdf";
 import { encode as base64Encode } from "https://deno.land/std@0.190.0/encoding/base64.ts";
+import { logExternalUsage } from "../_shared/openai.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -101,7 +102,7 @@ serve(async (req) => {
     // Get document record to find the actual file URL
     const { data: docRecord, error: docError } = await supabase
       .from('customer_documents')
-      .select('file_url, mime_type, file_name')
+      .select('file_url, mime_type, file_name, tenant_id')
       .eq('id', documentId)
       .single();
 
@@ -244,8 +245,10 @@ IMPORTANT:
 - Check if dates are logically consistent (expiration after effective date)
 - Flag any suspicious patterns or quality issues`;
 
-    // Helper function to make OpenAI API call
-    const makeOpenAICall = async (apiKey: string, isPdfText: boolean, base64Data?: string) => {
+    const tenantIdForLog = (docRecord as { tenant_id?: string })?.tenant_id ?? null;
+
+    // Helper function to make OpenAI API call WITH usage logging
+    const makeOpenAICall = async (apiKey: string, isPdfText: boolean, base64Data: string | undefined, isFallback: boolean) => {
       const requestBody = isPdfText ? {
         model: AI_MODEL,
         messages: [
@@ -270,7 +273,8 @@ IMPORTANT:
         temperature: 0.1
       };
 
-      return fetch(OPENAI_API_URL, {
+      const startedAt = Date.now();
+      const resp = await fetch(OPENAI_API_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -278,6 +282,40 @@ IMPORTANT:
         },
         body: JSON.stringify(requestBody)
       });
+
+      // Clone so caller can still consume the response body
+      const cloned = resp.clone();
+      if (resp.ok) {
+        try {
+          const data = await cloned.json();
+          await logExternalUsage({
+            context: { functionName: 'scan-insurance-document', tenantId: tenantIdForLog, isFallback, metadata: { document_id: documentId, mode: isPdfText ? 'pdf-text' : 'vision' } },
+            endpoint: 'chat/completions',
+            model: AI_MODEL,
+            promptTokens: data.usage?.prompt_tokens ?? 0,
+            completionTokens: data.usage?.completion_tokens ?? 0,
+            totalTokens: data.usage?.total_tokens ?? 0,
+            status: 'success',
+            durationMs: Date.now() - startedAt,
+          });
+        } catch (e) {
+          console.error('[INSURANCE-AI] usage log parse failed:', e);
+        }
+      } else {
+        const errText = await cloned.text();
+        await logExternalUsage({
+          context: { functionName: 'scan-insurance-document', tenantId: tenantIdForLog, isFallback, metadata: { document_id: documentId, mode: isPdfText ? 'pdf-text' : 'vision' } },
+          endpoint: 'chat/completions',
+          model: AI_MODEL,
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          status: 'error',
+          durationMs: Date.now() - startedAt,
+          errorMessage: `${resp.status}: ${errText.slice(0, 500)}`,
+        });
+      }
+      return resp;
     };
 
     let openaiResponse;
@@ -290,17 +328,17 @@ IMPORTANT:
     // Try primary key first
     if (openaiApiKey) {
       console.log('[INSURANCE-AI] Attempting with primary API key...');
-      openaiResponse = await makeOpenAICall(openaiApiKey, isPdfText, base64Data);
+      openaiResponse = await makeOpenAICall(openaiApiKey, isPdfText, base64Data, false);
 
       if (!openaiResponse.ok && openaiApiKeyFallback) {
         const errorText = await openaiResponse.text();
         console.error('[INSURANCE-AI] Primary key failed:', openaiResponse.status, errorText);
         console.log('[INSURANCE-AI] Retrying with fallback API key...');
-        openaiResponse = await makeOpenAICall(openaiApiKeyFallback, isPdfText, base64Data);
+        openaiResponse = await makeOpenAICall(openaiApiKeyFallback, isPdfText, base64Data, true);
       }
     } else if (openaiApiKeyFallback) {
       console.log('[INSURANCE-AI] Using fallback API key (no primary)...');
-      openaiResponse = await makeOpenAICall(openaiApiKeyFallback, isPdfText, base64Data);
+      openaiResponse = await makeOpenAICall(openaiApiKeyFallback, isPdfText, base64Data, true);
     }
 
     if (!openaiResponse || !openaiResponse.ok) {

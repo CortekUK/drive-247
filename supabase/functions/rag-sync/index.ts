@@ -144,7 +144,11 @@ serve(async (req) => {
             const doc = toDocument(record);
 
             // Generate embedding
-            const embedding = await generateEmbedding(doc.content);
+            const embedding = await generateEmbedding(doc.content, {
+              functionName: 'rag-sync',
+              tenantId: item.tenant_id,
+              metadata: { source_table: item.source_table, source_id: item.source_id },
+            });
 
             // Upsert into rag_documents
             const { error: upsertError } = await supabase

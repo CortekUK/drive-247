@@ -1,6 +1,7 @@
 // @ts-nocheck - This is a Deno Edge Function, not Node.js TypeScript
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { logExternalUsage } from '../_shared/openai.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -175,6 +176,7 @@ Guidelines:
     });
   }
 
+  const startedAt = Date.now();
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -201,10 +203,31 @@ Guidelines:
   if (!response.ok) {
     const errorText = await response.text();
     console.error('OpenAI API error:', errorText);
+    await logExternalUsage({
+      context: { functionName: 'validate-name-against-document' },
+      endpoint: 'chat/completions',
+      model: 'gpt-4o',
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      status: 'error',
+      durationMs: Date.now() - startedAt,
+      errorMessage: `${response.status}: ${errorText.slice(0, 500)}`,
+    });
     throw new Error(`OpenAI API error: ${response.status}`);
   }
 
   const data = await response.json();
+  await logExternalUsage({
+    context: { functionName: 'validate-name-against-document' },
+    endpoint: 'chat/completions',
+    model: 'gpt-4o',
+    promptTokens: data.usage?.prompt_tokens ?? 0,
+    completionTokens: data.usage?.completion_tokens ?? 0,
+    totalTokens: data.usage?.total_tokens ?? 0,
+    status: 'success',
+    durationMs: Date.now() - startedAt,
+  });
   const content = data.choices?.[0]?.message?.content;
 
   if (!content) {

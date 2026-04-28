@@ -90,7 +90,8 @@ Deno.serve(async (req) => {
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      { temperature: 0.3, max_tokens: 256 }
+      { temperature: 0.3, max_tokens: 256 },
+      { functionName: "generate-review-summary", tenantId, metadata: { customer_id: customerId } }
     );
 
     const summaryText = aiResponse.choices[0]?.message?.content?.trim() || "Unable to generate summary.";
