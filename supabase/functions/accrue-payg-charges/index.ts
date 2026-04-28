@@ -193,9 +193,8 @@ Deno.serve(async (req) => {
           // R1 design: currentNextAccrual is the START of the window we're posting now.
           // window_start = currentNextAccrual, window_end = currentNextAccrual + 24h.
           const windowStartDt = new Date(currentNextAccrual);
-          // TEST MODE: 5-min accrual window (revert to `24 * 60 * 60 * 1000` for production).
           const windowEndDt = new Date(
-            currentNextAccrual.getTime() + 5 * 60 * 1000,
+            currentNextAccrual.getTime() + 24 * 60 * 60 * 1000,
           );
 
           // Compute rates for this specific day.

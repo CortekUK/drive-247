@@ -8,19 +8,52 @@ const DEFAULT_PAYG_REMINDER_TEMPLATE = {
   subject: "Payment Reminder — {{outstanding_amount}} outstanding ({{rental_number}})",
   content: `<h1>Payment Reminder</h1>
 
-<p>Rental {{rental_number}} · Invoice {{invoice_ref}}</p>
+<p>Dear {{customer_name}},</p>
 
-<p>Hi {{customer_name}},</p>
+<p>This is a friendly reminder that your Pay-As-You-Go rental with <strong>{{company_name}}</strong> currently has an outstanding balance. With Pay-As-You-Go, charges accrue automatically each day the vehicle is in your possession and are added to a single rolling invoice until you pay.</p>
 
-<p>Your Pay-As-You-Go rental with <strong>{{company_name}}</strong> has been active for <strong>{{days_active}} day(s)</strong> and has an outstanding balance.</p>
+<hr>
 
-<p style="padding:16px; background:#f9fafb; border-radius:6px; border:1px solid #e5e7eb;">
-  Current balance: <strong style="font-size:18px; color:#111827;">{{outstanding_amount}}</strong>
-</p>
+<h2>Outstanding Balance</h2>
 
-<p>Please log in to your customer portal to settle the outstanding invoice. If you have already paid, please disregard this message.</p>
+<table>
+  <tr><td><strong>Current Balance:</strong></td><td>{{outstanding_amount}}</td></tr>
+  <tr><td><strong>Latest Invoice:</strong></td><td>{{invoice_ref}}</td></tr>
+  <tr><td><strong>Days Active:</strong></td><td>{{days_active}}</td></tr>
+</table>
 
-<p>Need help? Contact us at <a href="mailto:{{company_email}}">{{company_email}}</a> {{company_phone}}.</p>
+<hr>
+
+<h2>Rental Details</h2>
+
+<table>
+  <tr><td><strong>Rental Reference:</strong></td><td>{{rental_number}}</td></tr>
+  <tr><td><strong>Vehicle:</strong></td><td>{{vehicle_make}} {{vehicle_model}}</td></tr>
+  <tr><td><strong>Registration:</strong></td><td>{{vehicle_reg}}</td></tr>
+</table>
+
+<hr>
+
+<h2>How to Pay</h2>
+
+<ol>
+  <li><strong>Log into your customer portal</strong> to see the latest invoice and your full charge timeline</li>
+  <li><strong>Settle invoice {{invoice_ref}}</strong> using your saved payment method</li>
+  <li><strong>Receive instant confirmation</strong> — paid charges roll out of your balance and a fresh cycle begins</li>
+</ol>
+
+<p><em>Already paid? You can disregard this message — your payment may still be processing and will reconcile shortly.</em></p>
+
+<hr>
+
+<h2>Need Help?</h2>
+
+<ul>
+  <li><strong>Email:</strong> {{company_email}}</li>
+  <li><strong>Phone:</strong> {{company_phone}}</li>
+</ul>
+
+<p>Thank you for renting with {{company_name}}.</p>
 
 <p>Kind regards,<br>
 <strong>The {{company_name}} Team</strong></p>`,

@@ -238,11 +238,11 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
       };
     },
     enabled: !!rentalId && !!tenant?.id && enabled,
-    // TEST MODE: 5-min accrual cycle => poll every 5s and treat data as immediately
-    // stale. For production (24h cycles) bump staleTime to ~30s and refetchInterval
-    // to 30-60s so we don't hammer the DB on idle pages.
-    staleTime: 0,
-    refetchInterval: 5_000,
+    // Realtime subscription above pushes invalidations on row changes (instant
+    // sync). Polling stays as a safety net in case the websocket drops, but at
+    // a low rate so we don't hammer the DB on idle pages.
+    staleTime: 30_000,
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });

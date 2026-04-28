@@ -95,9 +95,7 @@ const EMPTY: PaygInvoiceData = {
   reminderStatus: { autoEnabled: false, nextReminderAt: null, blockReason: null },
 };
 
-// TEST MODE: 5-min reminder cadence so the "Next reminder" countdown matches the
-// edge functions (revert to `24 * 60 * 60 * 1000` for production).
-const DAY_MS = 5 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
@@ -322,11 +320,11 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
       };
     },
     enabled: !!rentalId && !!tenant?.id && enabled,
-    // TEST MODE: 5-min accrual cycle => poll every 5s and treat data as immediately
-    // stale so React Query refetches eagerly. For production (24h cycles) bump
-    // staleTime back to ~30s and refetchInterval to 30-60s.
-    staleTime: 0,
-    refetchInterval: 5_000,
+    // Realtime subscription above pushes invalidations on row changes (instant
+    // sync). Polling stays as a safety net in case the websocket drops, but at
+    // a low rate so we don't hammer the DB on idle pages.
+    staleTime: 30_000,
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
