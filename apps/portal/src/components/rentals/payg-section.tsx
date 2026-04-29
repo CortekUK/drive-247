@@ -77,9 +77,11 @@ export function PaygSection({
   const [invoicePreview, setInvoicePreview] = useState<PaygInvoiceRow | null>(null);
   const [statementOpen, setStatementOpen] = useState(false);
   // Admin "Record Payment" dialog target — set when an admin clicks Pay on a PAYG row.
-  // Holds the locked amount (cumulative outstanding of the latest open invoice) so the
-  // dialog opens with that amount pre-filled and read-only via its existing defaultAmount path.
-  const [recordPaymentTarget, setRecordPaymentTarget] = useState<{ amount: number } | null>(null);
+  // Holds the locked amount AND the accrual id so the dialog can:
+  //   - pre-fill amount via defaultAmount (auto-locks the input)
+  //   - forward accrualId to create-checkout-session for the Charge-via-Stripe /
+  //     Email-Stripe-Link paths, so the Stripe webhook can settle this exact invoice.
+  const [recordPaymentTarget, setRecordPaymentTarget] = useState<{ amount: number; paygAccrualId: string } | null>(null);
 
   const displayInvoices = useMemo(
     () => [...data.invoices].reverse(),
@@ -137,10 +139,12 @@ export function PaygSection({
     const amount = Math.round(latest.cumulativeAmount * 100) / 100;
 
     // Admin path: open the Record-Payment dialog with the amount locked.
-    // The existing AddPaymentDialog auto-locks the Amount field when defaultAmount is set,
-    // so we don't need any new prop on the dialog.
+    // Pass the accrual id so the dialog's Charge-via-Stripe / Email-Stripe-Link
+    // paths can stamp it on the Checkout session metadata. The Stripe webhook
+    // then settles THIS invoice (not just FIFO-applies the payment) so the
+    // invoice flips to Paid the moment the customer completes checkout.
     if (showAdminActions) {
-      setRecordPaymentTarget({ amount });
+      setRecordPaymentTarget({ amount, paygAccrualId: latest.id });
       return;
     }
 
@@ -404,6 +408,7 @@ export function PaygSection({
           vehicle_id={vehicleId}
           defaultAmount={recordPaymentTarget.amount}
           targetCategories={["Rental", "Tax", "Service Fee"]}
+          paygAccrualId={recordPaymentTarget.paygAccrualId}
           onPaymentSuccess={async (kind) => {
             // ONLY settle when the dialog actually committed a payment (manual Record
             // Payment). For 'pending' (Charge-via-Stripe / Email-Stripe-Link) the

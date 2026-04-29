@@ -238,12 +238,11 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
       };
     },
     enabled: !!rentalId && !!tenant?.id && enabled,
-    // Realtime subscription above pushes invalidations on row changes (instant
-    // sync). Polling stays as a safety net in case the websocket drops, but at
-    // a low rate so we don't hammer the DB on idle pages.
-    staleTime: 30_000,
-    refetchInterval: 60_000,
-    refetchIntervalInBackground: false,
+    // TEST MODE: poll fast so the customer view catches new 5-min "days" without
+    // waiting on Realtime. Revert to staleTime 30_000 / refetchInterval 60_000 for prod.
+    staleTime: 2_000,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
 

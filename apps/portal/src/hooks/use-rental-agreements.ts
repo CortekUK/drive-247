@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 
@@ -27,8 +28,9 @@ export interface RentalAgreement {
 
 export function useRentalAgreements(rentalId: string | undefined) {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['rental-agreements', rentalId, tenant?.id],
     queryFn: async () => {
       if (!rentalId) return [];
@@ -54,9 +56,14 @@ export function useRentalAgreements(rentalId: string | undefined) {
       return (data || []) as RentalAgreement[];
     },
     enabled: !!rentalId && !!tenant,
-    // Poll every 30s if any agreement has a document_id but is not yet signed
-    refetchInterval: (query) => {
-      const agreements = query.state.data;
+    // Once we have data, treat it as fresh — Realtime keeps it in sync,
+    // and a long staleTime prevents transient invalidations from clearing
+    // the UI back to an empty state during a refetch in flight.
+    staleTime: 60_000,
+    // Polling kept as a safety net only when something is mid-signature
+    // and we missed a Realtime event (e.g. brief disconnect).
+    refetchInterval: (q) => {
+      const agreements = q.state.data;
       if (!agreements) return false;
       const hasPending = agreements.some(
         (a) =>
@@ -64,7 +71,32 @@ export function useRentalAgreements(rentalId: string | undefined) {
           a.document_status !== 'completed' &&
           a.document_status !== 'signed'
       );
-      return hasPending ? 30000 : false;
+      return hasPending ? 60_000 : false;
     },
   });
+
+  // Realtime: any INSERT/UPDATE/DELETE on rental_agreements for this rental
+  // invalidates the cache so AgreementTimeline reflects the latest state
+  // without depending on the optimistic-write + refetch dance.
+  useEffect(() => {
+    if (!rentalId || !tenant?.id) return;
+    const channel = supabase
+      .channel(`rental-agreements:${rentalId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'rental_agreements', filter: `rental_id=eq.${rentalId}` },
+        () => {
+          queryClient.invalidateQueries({
+            queryKey: ['rental-agreements', rentalId, tenant.id],
+            refetchType: 'all',
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [rentalId, tenant?.id, queryClient]);
+
+  return query;
 }

@@ -40,6 +40,7 @@ interface AgreementTimelineProps {
     signed_document_id?: string | null;
     boldsign_mode?: string | null;
     status?: string;
+    start_date?: string;
     end_date?: string;
     customers?: { id: string; name: string; email?: string };
   };
@@ -151,8 +152,20 @@ function AgreementCard({
       if (data?.ok) {
         const friendlyStatus: Record<string, string> = { sent: 'Awaiting Signature', delivered: 'Viewed', signed: 'Signed', completed: 'Signed', declined: 'Declined', voided: 'Voided', expired: 'Expired', pending: 'Draft' };
         toast({ title: 'Status Updated', description: `Document status: ${friendlyStatus[data.status] || data.status}` });
-        await queryClient.refetchQueries({ queryKey: ['rental-agreements'] });
-        await queryClient.refetchQueries({ queryKey: ['rental'] });
+        // Same scoped + refetchType:'all' invalidation as the Send handler.
+        // Loose ['rental-agreements'] alone misses cases where the active
+        // observer is paused or the cache entry is keyed by [prefix, rentalId, tenantId].
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ['rental-agreements', rentalId, tenantId],
+            refetchType: 'all',
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ['rental-agreements'],
+            refetchType: 'all',
+          }),
+          queryClient.invalidateQueries({ queryKey: ['rental', rentalId], refetchType: 'all' }),
+        ]);
       } else {
         toast({ title: 'Check Failed', description: data?.error || 'Could not check status', variant: 'destructive' });
       }
@@ -183,13 +196,34 @@ function AgreementCard({
       const data = await response.json().catch(() => ({}));
       if (data?.ok) {
         toast({ title: 'Agreement Resent', description: 'A new agreement has been sent for signing' });
-        await queryClient.refetchQueries({ queryKey: ['rental-agreements'] });
-        await queryClient.refetchQueries({ queryKey: ['rental'] });
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ['rental-agreements', rentalId, tenantId],
+            refetchType: 'all',
+          }),
+          queryClient.invalidateQueries({ queryKey: ['rental', rentalId], refetchType: 'all' }),
+        ]);
+        await queryClient.refetchQueries({
+          queryKey: ['rental-agreements', rentalId, tenantId],
+          type: 'all',
+        });
         setResendCooldown(60); // only start cooldown on success
       } else if (data?.error === 'insufficient_credits') {
         toast({ title: 'Insufficient Credits', description: 'Top up your credits to send this agreement', variant: 'destructive' });
-        await queryClient.refetchQueries({ queryKey: ['rental-agreements'] });
-        await queryClient.refetchQueries({ queryKey: ['rental'] });
+        // Same scoped + refetchType:'all' invalidation as the Send handler.
+        // Loose ['rental-agreements'] alone misses cases where the active
+        // observer is paused or the cache entry is keyed by [prefix, rentalId, tenantId].
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ['rental-agreements', rentalId, tenantId],
+            refetchType: 'all',
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ['rental-agreements'],
+            refetchType: 'all',
+          }),
+          queryClient.invalidateQueries({ queryKey: ['rental', rentalId], refetchType: 'all' }),
+        ]);
       } else {
         const detail = data?.detail || data?.error || 'Failed to resend agreement';
         const isRateLimit = typeof detail === 'string' && (detail.toLowerCase().includes('quota exceeded') || detail.toLowerCase().includes('rate limit'));
@@ -323,8 +357,22 @@ export function AgreementTimeline({
   const [sendingAgreement, setSendingAgreement] = useState<string | null>(null);
   const [openAccordion, setOpenAccordion] = useState<string>('original');
 
-  const originalAgreements = agreements.filter((a) => a.agreement_type === 'original');
-  const extensionAgreements = agreements.filter((a) => a.agreement_type === 'extension');
+  // Guard against the cache flickering back to [] mid-refetch: once we've
+  // seen agreements, keep that snapshot until a fresh non-empty list arrives.
+  // The prop wins whenever it's non-empty; we only fall back to the cached
+  // copy when the prop briefly goes empty (e.g. during a query invalidation
+  // refetch race) so the empty-state placeholder doesn't reappear after a
+  // successful Send.
+  const [stickyAgreements, setStickyAgreements] = useState<RentalAgreement[]>(agreements);
+  useEffect(() => {
+    if (agreements.length > 0) {
+      setStickyAgreements(agreements);
+    }
+  }, [agreements]);
+  const effectiveAgreements = agreements.length > 0 ? agreements : stickyAgreements;
+
+  const originalAgreements = effectiveAgreements.filter((a) => a.agreement_type === 'original');
+  const extensionAgreements = effectiveAgreements.filter((a) => a.agreement_type === 'extension');
   const hasOriginal = originalAgreements.length > 0;
 
   // Map extension agreements to extension groups by matching period dates
@@ -391,8 +439,20 @@ export function AgreementTimeline({
           description: 'Top up your credits to send this agreement',
           variant: 'destructive',
         });
-        await queryClient.refetchQueries({ queryKey: ['rental-agreements'] });
-        await queryClient.refetchQueries({ queryKey: ['rental'] });
+        // Same scoped + refetchType:'all' invalidation as the Send handler.
+        // Loose ['rental-agreements'] alone misses cases where the active
+        // observer is paused or the cache entry is keyed by [prefix, rentalId, tenantId].
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ['rental-agreements', rentalId, tenantId],
+            refetchType: 'all',
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ['rental-agreements'],
+            refetchType: 'all',
+          }),
+          queryClient.invalidateQueries({ queryKey: ['rental', rentalId], refetchType: 'all' }),
+        ]);
       } else if (!response.ok || !data?.ok) {
         const detail = data?.detail || data?.error || 'Failed to send agreement.';
         const isRateLimit = detail.toLowerCase().includes('quota exceeded') || detail.toLowerCase().includes('rate limit');
@@ -410,8 +470,54 @@ export function AgreementTimeline({
             ? `Extension #${extGroup?.extensionNumber} agreement has been sent for signing`
             : 'Rental agreement has been sent for signing',
         });
-        await queryClient.refetchQueries({ queryKey: ['rental-agreements'] });
-        await queryClient.refetchQueries({ queryKey: ['rental'] });
+        // Optimistic cache update — write a synthetic row immediately so the
+        // empty-state placeholder flips even if the API response is missing
+        // agreementId (don't gate on data?.agreementId — that left the empty
+        // state visible whenever the response was malformed). The real row
+        // overrides this on the next refetch.
+        if (tenantId) {
+          const optimistic = {
+            id: data?.agreementId ?? `optimistic-${Date.now()}`,
+            rental_id: rentalId,
+            tenant_id: tenantId,
+            agreement_type: agreementType,
+            document_id: data?.envelopeId ?? null,
+            document_status: 'sent',
+            boldsign_mode: null,
+            envelope_created_at: new Date().toISOString(),
+            envelope_sent_at: new Date().toISOString(),
+            envelope_completed_at: null,
+            signed_document_id: null,
+            period_start_date: agreementType === 'extension'
+              ? extGroup?.previousEndDate ?? null
+              : rental?.start_date ?? null,
+            period_end_date: agreementType === 'extension'
+              ? extGroup?.newEndDate ?? null
+              : rental?.end_date ?? null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            signed_document: null,
+          };
+          queryClient.setQueryData(
+            ['rental-agreements', rentalId, tenantId],
+            (old: any) => [...(Array.isArray(old) ? old : []), optimistic],
+          );
+        }
+        // Invalidate + force a fresh fetch. refetchQueries (not just
+        // invalidateQueries) guarantees the network call fires now even if
+        // the observer thinks data is fresh, so the synthetic optimistic row
+        // gets replaced with the real DB row within the same tick.
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ['rental-agreements', rentalId, tenantId],
+            refetchType: 'all',
+          }),
+          queryClient.invalidateQueries({ queryKey: ['rental', rentalId], refetchType: 'all' }),
+        ]);
+        await queryClient.refetchQueries({
+          queryKey: ['rental-agreements', rentalId, tenantId],
+          type: 'all',
+        });
       }
     } catch (error: any) {
       toast({ title: 'Agreement Error', description: error?.message || 'Failed to send agreement', variant: 'destructive' });

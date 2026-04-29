@@ -1,6 +1,224 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { corsHeaders } from "../_shared/cors.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
+
+// --- Stripe Checkout session helpers for reminder pay-now button.
+// The reminder email embeds a Stripe Checkout link so the customer can pay with
+// one click. To avoid stale links being usable, when we send a NEW reminder we
+// expire the prior reminder's session (only if not already completed). The
+// session metadata carries `payg_accrual_id` + `target_categories` so the
+// existing webhook + DB-trigger settlement chain (auto_fifo_on_payment_completed,
+// auto_settle_payg_on_ledger_drain, settle_ghost_paid_payg_on_payment_*) flips
+// the right invoice to 'paid' the moment the customer pays.
+
+interface StripeContext {
+  stripe: Stripe;
+  mode: "test" | "live";
+  connectAccountId: string | null;
+  currencyCode: string;
+}
+
+async function getStripeContext(supabase: any, tenantId: string): Promise<StripeContext | null> {
+  const { data: tenant } = await supabase
+    .from("tenants")
+    .select("id, stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code")
+    .eq("id", tenantId)
+    .single();
+  const mode: "test" | "live" = tenant?.stripe_mode === "live" ? "live" : "test";
+  const secretKey = mode === "live"
+    ? Deno.env.get("STRIPE_LIVE_SECRET_KEY")
+    : Deno.env.get("STRIPE_TEST_SECRET_KEY");
+  if (!secretKey) {
+    console.warn(`[payg_reminder] No Stripe secret key for ${mode} mode — skipping payment link`);
+    return null;
+  }
+  const stripe = new Stripe(secretKey, {
+    apiVersion: "2023-10-16",
+    httpClient: Stripe.createFetchHttpClient(),
+  });
+  let connectAccountId: string | null = null;
+  if (mode === "test") {
+    connectAccountId = Deno.env.get("STRIPE_TEST_CONNECT_ACCOUNT_ID") || null;
+  } else if (tenant?.stripe_onboarding_complete && tenant?.stripe_account_id) {
+    connectAccountId = tenant.stripe_account_id;
+  }
+  return { stripe, mode, connectAccountId, currencyCode: tenant?.currency_code || "USD" };
+}
+
+// Find the most recent reminder for this rental that still has a live Stripe
+// session, retrieve it from Stripe to inspect status, and expire it ONLY if it's
+// safe to do so (no payment in flight). Stamping expired_at on our row prevents
+// future reminders from re-checking the same session.
+//
+// Why the safety check: in test mode the reminder cadence is 5 minutes. If a
+// customer is mid-checkout when the next reminder fires, blindly calling expire()
+// would cancel their in-flight payment. Stripe's session has both a `status`
+// (open/expired/complete) and a `payment_intent` reference — if the latter is
+// set, the customer has reached the "click pay" step. We skip expire in that
+// case and let them finish; the session naturally completes and Stripe's webhook
+// commits the payment via the existing trigger chain.
+async function expirePriorReminderSession(
+  supabase: any,
+  rentalId: string,
+  ctx: StripeContext,
+): Promise<void> {
+  const { data: prior } = await supabase
+    .from("payg_reminder_log")
+    .select("id, stripe_checkout_session_id")
+    .eq("rental_id", rentalId)
+    .not("stripe_checkout_session_id", "is", null)
+    .is("stripe_session_expired_at", null)
+    .order("sent_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!prior?.stripe_checkout_session_id) return;
+
+  const opts = ctx.connectAccountId ? { stripeAccount: ctx.connectAccountId } : undefined;
+  let canStampExpired = false;
+
+  try {
+    const session = await ctx.stripe.checkout.sessions.retrieve(prior.stripe_checkout_session_id, opts);
+
+    if (session.status === "complete" || session.payment_status === "paid" || session.payment_status === "no_payment_required") {
+      // Already paid (or finalised); no expire needed, just stamp our row.
+      canStampExpired = true;
+    } else if (session.status === "expired") {
+      // Already expired by Stripe; just stamp our row.
+      canStampExpired = true;
+    } else if (session.payment_intent) {
+      // Customer is mid-checkout — payment_intent has been created. DO NOT expire.
+      // Leave expired_at NULL so we re-check on the next reminder. If the customer
+      // abandons, Stripe naturally expires the session after ~24h and we'll stamp
+      // it then. If they finish paying, the webhook + DB triggers settle the right
+      // invoice (idempotently).
+      console.log(`[payg_reminder] skipping expire — payment_intent in flight on ${prior.stripe_checkout_session_id}`);
+      return;
+    } else {
+      // Open, no in-flight payment → safe to expire.
+      await ctx.stripe.checkout.sessions.expire(prior.stripe_checkout_session_id, opts);
+      console.log(`[payg_reminder] expired prior session ${prior.stripe_checkout_session_id}`);
+      canStampExpired = true;
+    }
+  } catch (err: any) {
+    // If retrieve/expire fails (Stripe transient error, missing session), be
+    // conservative — DON'T stamp expired_at, so we re-check next reminder. Old
+    // links left alive cannot double-bill the customer because payg_settle_invoice
+    // is idempotent and FIFO routes excess money to the next open accrual.
+    console.log(`[payg_reminder] could not retrieve/expire ${prior.stripe_checkout_session_id}: ${err?.message}`);
+    return;
+  }
+
+  if (canStampExpired) {
+    await supabase
+      .from("payg_reminder_log")
+      .update({ stripe_session_expired_at: new Date().toISOString() })
+      .eq("id", prior.id);
+  }
+}
+
+// Build the booking-app origin used for Stripe success/cancel URLs.
+// Resolution order:
+//   1. BOOKING_BASE_URL — full URL override (for local/dev testing or single-domain setups)
+//   2. {slug}.{BOOKING_BASE_DOMAIN} — multi-tenant subdomain pattern (default)
+function deriveBookingOrigin(tenantSlug: string): string {
+  const fullOverride = Deno.env.get("BOOKING_BASE_URL");
+  if (fullOverride) return fullOverride.replace(/\/+$/, "");
+  const baseDomain = Deno.env.get("BOOKING_BASE_DOMAIN") || "drive-247.com";
+  return `https://${tenantSlug}.${baseDomain}`;
+}
+
+async function createReminderCheckoutSession(args: {
+  ctx: StripeContext;
+  rentalId: string;
+  tenantId: string;
+  tenantSlug: string;
+  customerEmail: string;
+  customerName: string;
+  amount: number;
+  paygAccrualId: string;
+  invoiceRef: string;
+  // Supabase client + denormalised IDs needed to mirror create-checkout-session's
+  // Pending payment-row insert. Without that row, process-pending-payment can't
+  // find the session when the customer pays and bails out with "Payment not found".
+  supabase: any;
+  customerId: string;
+  vehicleId: string | null;
+}): Promise<{ id: string; url: string } | null> {
+  try {
+    const opts = args.ctx.connectAccountId ? { stripeAccount: args.ctx.connectAccountId } : undefined;
+    const origin = deriveBookingOrigin(args.tenantSlug);
+    const session = await args.ctx.stripe.checkout.sessions.create(
+      {
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: args.ctx.currencyCode.toLowerCase(),
+              product_data: {
+                name: "Pay-As-You-Go Charge",
+                description: `Settle invoice ${args.invoiceRef}`,
+              },
+              unit_amount: Math.round(args.amount * 100),
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "payment",
+        customer_email: args.customerEmail,
+        payment_intent_data: { setup_future_usage: "off_session" },
+        client_reference_id: args.rentalId,
+        success_url: `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${args.rentalId}&type=invoice`,
+        cancel_url: `${origin}/portal/bookings/${args.rentalId}`,
+        metadata: {
+          rental_id: args.rentalId,
+          customer_name: args.customerName,
+          tenant_id: args.tenantId,
+          tenant_slug: args.tenantSlug,
+          source: "payg_reminder",
+          target_categories: JSON.stringify(["Rental", "Tax", "Service Fee"]),
+          payg_accrual_id: args.paygAccrualId,
+        },
+      },
+      opts,
+    );
+
+    // Mirror create-checkout-session: pre-create a Pending payment row so the
+    // booking-success page's process-pending-payment call can find this session
+    // by stripe_checkout_session_id. Without this row, process-pending-payment
+    // returns 404 ("Payment not found") and the customer's payment never lands
+    // in our DB even though Stripe captured the money.
+    const today = new Date().toISOString().split("T")[0];
+    const { error: paymentInsertErr } = await args.supabase.from("payments").insert({
+      rental_id: args.rentalId,
+      customer_id: args.customerId,
+      vehicle_id: args.vehicleId,
+      tenant_id: args.tenantId,
+      amount: args.amount,
+      remaining_amount: args.amount,
+      payment_date: today,
+      method: "Card",
+      payment_type: "Payment",
+      status: "Pending",
+      verification_status: "pending",
+      stripe_checkout_session_id: session.id,
+      capture_status: "requires_capture",
+      booking_source: "website",
+      target_categories: ["Rental", "Tax", "Service Fee"],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    if (paymentInsertErr) {
+      console.error("[payg_reminder] failed to pre-create Pending payment row:", paymentInsertErr.message ?? paymentInsertErr);
+    }
+
+    return { id: session.id, url: session.url || "" };
+  } catch (err: any) {
+    console.error("[payg_reminder] failed to create Checkout session:", err?.message);
+    return null;
+  }
+}
+// --- End Stripe helpers
 
 // --- Inline email template helpers (vendored from _shared/email-template-service.ts).
 // Kept in-file so MCP deploys don't have to upload the 34KB shared file. The
@@ -38,13 +256,15 @@ const DEFAULT_PAYG_REMINDER_TEMPLATE = {
 
 <hr>
 
-<h2>How to Pay</h2>
+<h2>Pay Now</h2>
 
-<ol>
-  <li><strong>Log into your customer portal</strong> to see the latest invoice and your full charge timeline</li>
-  <li><strong>Settle invoice {{invoice_ref}}</strong> using your saved payment method</li>
-  <li><strong>Receive instant confirmation</strong> — paid charges roll out of your balance and a fresh cycle begins</li>
-</ol>
+<p>Click the button below to settle invoice <strong>{{invoice_ref}}</strong> for <strong>{{outstanding_amount}}</strong>. Your saved card on file will be used.</p>
+
+<p style="text-align:center; margin:24px 0;">
+  <a href="{{payment_url}}" style="display:inline-block; background:#0f172a; color:#ffffff; padding:14px 28px; border-radius:8px; font-weight:600; text-decoration:none;">Pay {{outstanding_amount}} Now</a>
+</p>
+
+<p style="font-size:12px; color:#64748b;">This payment link is valid until your next reminder is sent. After that, this link is suspended and you'll need to use the latest reminder or log into your customer portal.</p>
 
 <p><em>Already paid? You can disregard this message — your payment may still be processing and will reconcile shortly.</em></p>
 
@@ -116,6 +336,7 @@ interface Rental {
   rental_number: string | null;
   tenant_id: string;
   customer_id: string;
+  vehicle_id: string | null;
   monthly_amount: number;
   payg_start_ts: string;
   payg_last_reminder_sent_at: string | null;
@@ -130,6 +351,7 @@ interface Rental {
 
 interface Tenant {
   id: string;
+  slug: string | null;
   payg_auto_reminders_enabled: boolean | null;
   currency_code: string | null;
   company_name: string | null;
@@ -137,7 +359,9 @@ interface Tenant {
   contact_phone: string | null;
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+// TEST MODE: a "day" is compressed to 5 minutes so the reminder cron fires
+// rapidly during end-to-end QA. Revert to `24 * 60 * 60 * 1000` for production.
+const DAY_MS = 5 * 60 * 1000;
 
 function fmtCurrency(amount: number, code: string | null): string {
   try {
@@ -224,7 +448,7 @@ Deno.serve(async (req) => {
 
     const { data: tenants, error: tenantErr } = await supabase
       .from("tenants")
-      .select("id, payg_auto_reminders_enabled, currency_code, company_name, contact_email, contact_phone");
+      .select("id, slug, payg_auto_reminders_enabled, currency_code, company_name, contact_email, contact_phone");
 
     if (tenantErr) throw tenantErr;
 
@@ -240,6 +464,7 @@ Deno.serve(async (req) => {
         rental_number,
         tenant_id,
         customer_id,
+        vehicle_id,
         monthly_amount,
         payg_start_ts,
         payg_last_reminder_sent_at,
@@ -328,6 +553,40 @@ Deno.serve(async (req) => {
         const daysActive = Math.max(0, daysBetween(now, startTs));
         const invoiceRef = `pg-${String(latestOpen.accrual_day_index).padStart(3, "0")}`;
 
+        // 1. Expire the prior reminder's Stripe Checkout session (if any) so an
+        //    older link can no longer be used to pay (avoids stale-link races).
+        // 2. Create a fresh Stripe Checkout session for THIS reminder, scoped to
+        //    the latest open accrual via metadata.payg_accrual_id. The webhook +
+        //    DB triggers will settle the right invoice when the customer pays.
+        // 3. Embed the new session URL in the email via {{payment_url}}. If
+        //    Stripe creation fails (no key, network), we fall back to the
+        //    customer portal URL so the email's button still works.
+        const stripeCtx = await getStripeContext(supabase, r.tenant_id);
+        let paymentUrl = `${deriveBookingOrigin(tenant.slug || "app")}/portal/bookings/${r.id}`;
+        let stripeSessionId: string | null = null;
+
+        if (stripeCtx) {
+          await expirePriorReminderSession(supabase, r.id, stripeCtx);
+          const session = await createReminderCheckoutSession({
+            ctx: stripeCtx,
+            rentalId: r.id,
+            tenantId: r.tenant_id,
+            tenantSlug: tenant.slug || "app",
+            customerEmail: customer.email,
+            customerName: customer.name || "",
+            amount: totalOutstanding,
+            paygAccrualId: latestOpen.id,
+            invoiceRef,
+            supabase,
+            customerId: r.customer_id,
+            vehicleId: r.vehicle_id,
+          });
+          if (session) {
+            paymentUrl = session.url;
+            stripeSessionId = session.id;
+          }
+        }
+
         // Resolve the tenant's `payg_reminder` template (custom or default fallback)
         // and substitute variables. This lets each tenant edit the reminder copy
         // from Settings → Email Templates without redeploying the function.
@@ -344,6 +603,7 @@ Deno.serve(async (req) => {
           company_name: tenant.company_name || "Drive247",
           company_email: tenant.contact_email || "",
           company_phone: tenant.contact_phone || "",
+          payment_url: paymentUrl,
         };
 
         const tpl = await getEmailTemplate(supabase, r.tenant_id, "payg_reminder");
@@ -370,6 +630,9 @@ Deno.serve(async (req) => {
           recipient: customer.email,
           success,
           error_message: success ? null : (sendErr?.message ?? "Unknown error"),
+          // Tracks the Stripe Checkout session attached to THIS reminder so a
+          // future reminder can call expirePriorReminderSession on it.
+          stripe_checkout_session_id: stripeSessionId,
         });
 
         if (!success) {

@@ -176,6 +176,13 @@ export const EMAIL_TEMPLATE_VARIABLES: EmailTemplateVariable[] = [
     sample: 'pg-005',
     category: 'email',
   },
+  {
+    key: 'payment_url',
+    label: 'Payment Link URL',
+    description: 'Stripe Checkout link unique to this reminder. Suspended automatically when the next reminder is sent.',
+    sample: 'https://checkout.stripe.com/c/pay/cs_test_...',
+    category: 'email',
+  },
 ];
 
 // Email template types with metadata
@@ -263,7 +270,7 @@ export const EMAIL_TEMPLATE_TYPES: EmailTemplateType[] = [
     name: 'PAYG Payment Reminder',
     description: 'Sent to customers with an outstanding Pay-As-You-Go balance — fires automatically every 24h while a balance is unpaid, and on demand from the portal "Send reminder" button',
     defaultSubject: 'Payment Reminder — {{outstanding_amount}} outstanding ({{rental_number}})',
-    availableVariables: ['customer_name', 'customer_email', 'rental_number', 'invoice_ref', 'outstanding_amount', 'days_active', 'vehicle_make', 'vehicle_model', 'vehicle_reg', 'company_name', 'company_email', 'company_phone'],
+    availableVariables: ['customer_name', 'customer_email', 'rental_number', 'invoice_ref', 'outstanding_amount', 'days_active', 'vehicle_make', 'vehicle_model', 'vehicle_reg', 'company_name', 'company_email', 'company_phone', 'payment_url'],
   },
 ];
 

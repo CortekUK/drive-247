@@ -279,26 +279,44 @@ const CustomerDetail = () => {
   const { data: gigDriverImages } = useGigDriverImages(id);
   const deleteGigDriverImage = useDeleteGigDriverImage();
 
-  // Fetch per-rental outstanding amounts from ledger entries
+  // Fetch per-rental outstanding amounts.
+  // For fixed-term rentals: sum ledger Charge.remaining_amount.
+  // For PAYG rentals: ledger remaining drops to 0 as soon as the auto-allocate
+  // trigger drains older Partial/Credit payments, so add open accrual day-totals
+  // from payg_accruals to get the real outstanding shown on the rental detail page.
   const { data: rentalOutstandings } = useQuery({
     queryKey: ["customer-rental-outstandings", tenant?.id, id],
     queryFn: async () => {
       if (!tenant) throw new Error("No tenant context available");
 
-      const { data, error } = await supabase
-        .from("ledger_entries")
-        .select("rental_id, remaining_amount")
-        .eq("tenant_id", tenant.id)
-        .eq("customer_id", id)
-        .eq("type", "Charge");
+      const [ledgerRes, paygRes] = await Promise.all([
+        supabase
+          .from("ledger_entries")
+          .select("rental_id, remaining_amount")
+          .eq("tenant_id", tenant.id)
+          .eq("customer_id", id)
+          .eq("type", "Charge"),
+        supabase
+          .from("payg_accruals")
+          .select("rental_id, daily_rate, tax_amount, service_fee_amount, rentals!inner(customer_id, payg_closed_at)")
+          .eq("tenant_id", tenant.id)
+          .eq("rentals.customer_id", id)
+          .eq("invoice_status", "open")
+          .is("rentals.payg_closed_at", null),
+      ]);
 
-      if (error) throw error;
+      if (ledgerRes.error) throw ledgerRes.error;
+      if (paygRes.error) console.error("PAYG outstanding fetch failed:", paygRes.error);
 
-      // Group by rental_id and sum remaining_amount
       const map: Record<string, number> = {};
-      data?.forEach(entry => {
+      ledgerRes.data?.forEach(entry => {
         const key = entry.rental_id || "__no_rental__";
         map[key] = (map[key] || 0) + (entry.remaining_amount || 0);
+      });
+      (paygRes.data as any[])?.forEach(a => {
+        const key = a.rental_id || "__no_rental__";
+        const dayTotal = Number(a.daily_rate || 0) + Number(a.tax_amount || 0) + Number(a.service_fee_amount || 0);
+        map[key] = (map[key] || 0) + dayTotal;
       });
       return map;
     },

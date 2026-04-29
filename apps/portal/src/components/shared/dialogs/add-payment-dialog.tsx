@@ -54,6 +54,16 @@ interface AddPaymentDialogProps {
   targetCategories?: string[];
   extensionId?: string;
   /**
+   * PAYG accrual id of the invoice the customer is paying off. When set, the
+   * Charge-via-Stripe and Email-Stripe-Link paths forward it as
+   * `paygAccrualId` to `create-checkout-session`, which stamps it on the
+   * Stripe Checkout metadata. The Stripe webhook then calls
+   * `payg_settle_invoice(payment_id, accrual_id)` to flip the accrual to
+   * `paid` (and supersede earlier opens), so PAYG status mirrors the
+   * non-PAYG flow where Stripe payments settle automatically.
+   */
+  paygAccrualId?: string;
+  /**
    * Called after a successful action. The `kind` arg tells the caller whether
    * the payment is already settled in the DB or only initiated:
    *   - 'recorded' — manual Record Payment path; ledger + payment row are committed.
@@ -86,6 +96,7 @@ export const AddPaymentDialog = ({
   insuranceChargeMode,
   targetCategories,
   extensionId,
+  paygAccrualId,
   onPaymentSuccess,
   breakdownItems
 }: AddPaymentDialogProps) => {
@@ -404,6 +415,9 @@ export const AddPaymentDialog = ({
           source: 'portal',
           ...(targetCategories && targetCategories.length > 0 ? { targetCategories } : {}),
           ...(extensionId ? { extensionId } : {}),
+          // PAYG: stamp the accrual id on the checkout metadata so the Stripe
+          // webhook can call payg_settle_invoice once the customer pays.
+          ...(paygAccrualId ? { paygAccrualId } : {}),
         },
       });
 
@@ -446,15 +460,26 @@ export const AddPaymentDialog = ({
     try {
       const amount = form.getValues("amount") || breakdownTotal || invoiceToSend?.total_amount || rentalDetails?.monthly_amount || 0;
 
-      // Derive booking-app origin from the portal origin so local dev (localhost)
-      // redirects to the local booking app instead of production. The portal host
-      // always contains ".portal." and in local dev uses :3001 (booking :3000).
-      //   test.portal.localhost:3001   -> test.localhost:3000
-      //   test.portal.drive-247.com    -> test.drive-247.com
-      const portalHost = typeof window !== 'undefined' ? window.location.host : '';
-      const protocol = typeof window !== 'undefined' ? window.location.protocol : 'https:';
-      const bookingHost = portalHost.replace('.portal.', '.').replace(':3001', ':3000');
-      const bookingOrigin = bookingHost ? `${protocol}//${bookingHost}` : `https://${tenant?.slug || 'app'}.drive-247.com`;
+      // Mirror the PAYG reminder cron's URL strategy: emails go to real
+      // customers and must always land on production (or wherever the customer
+      // can actually reach). NEVER point at localhost — even when the admin is
+      // testing from a local dev portal, the customer reading the email is on
+      // their own machine and can't resolve test.localhost:3000.
+      //
+      // Resolution order (matches send-payg-reminders' deriveBookingOrigin):
+      //   1. NEXT_PUBLIC_BOOKING_BASE_URL — explicit override (single-domain
+      //      deployments or QA environments)
+      //   2. https://{tenant.slug}.{NEXT_PUBLIC_BOOKING_BASE_DOMAIN || drive-247.com}
+      //
+      // Local DB updates still propagate because production booking-success
+      // hits the same shared Supabase project, AND the rental detail page's
+      // localStorage polling on the admin's machine fires `process-pending-payment`
+      // every 5s for 5min as a safety net even if the customer never lands.
+      const fullOverride = process.env.NEXT_PUBLIC_BOOKING_BASE_URL;
+      const baseDomain = process.env.NEXT_PUBLIC_BOOKING_BASE_DOMAIN || 'drive-247.com';
+      const bookingOrigin = fullOverride
+        ? fullOverride.replace(/\/+$/, '')
+        : `https://${tenant?.slug || 'app'}.${baseDomain}`;
 
       // Step 1: Create Stripe checkout session
       const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout-session', {
@@ -469,6 +494,9 @@ export const AddPaymentDialog = ({
           source: 'portal',
           ...(targetCategories && targetCategories.length > 0 ? { targetCategories } : {}),
           ...(extensionId ? { extensionId } : {}),
+          // PAYG: stamp the accrual id so when the customer clicks the
+          // emailed link and pays, the Stripe webhook settles the right invoice.
+          ...(paygAccrualId ? { paygAccrualId } : {}),
         },
       });
 

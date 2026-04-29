@@ -211,7 +211,17 @@ const CustomersList = () => {
     enabled: !!tenant,
   });
 
-  // Fetch customer balances using remaining_amount from ledger entries
+  // Fetch customer balances using remaining_amount from ledger entries.
+  //
+  // PAYG note: ledger entries on PAYG rentals get drained by the
+  // auto_allocate_payments_on_new_charge trigger (which spreads older Partial
+  // / Credit payments into newly-inserted Charge rows). After that drain the
+  // ledger says remaining_amount = 0 even though the customer still hasn't
+  // settled their PAYG accrual via a real payment for the latest invoice.
+  // Source of truth for PAYG outstanding is payg_accruals.invoice_status='open'
+  // — sum of (daily_rate + tax_amount + service_fee_amount) for open rows on
+  // each PAYG rental owned by the customer. We add that on top of the ledger
+  // balance so the Balance column reflects what the rental detail page shows.
   const customerBalanceQueries = useQuery({
     queryKey: ["customer-balances-enhanced", tenant?.id],
     queryFn: async () => {
@@ -251,7 +261,38 @@ const CustomersList = () => {
         return {};
       }
 
-      // Group entries by customer
+      // PAYG outstanding per customer — sum of OPEN payg_accruals' day totals
+      // joined back to the rental owner. We drop accruals on rentals that are
+      // cancelled/closed/paused so the Balance column matches what the rental
+      // detail page shows for the same customer.
+      let paygQuery = supabase
+        .from("payg_accruals")
+        .select("rental_id, daily_rate, tax_amount, service_fee_amount, rentals!inner(customer_id, payg_closed_at)")
+        .in("rentals.customer_id", customerIds)
+        .eq("invoice_status", "open")
+        .is("rentals.payg_closed_at", null);
+
+      if (tenant?.id) {
+        paygQuery = paygQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: paygOpenAccruals, error: paygErr } = await paygQuery;
+      if (paygErr) {
+        console.error('Error fetching PAYG open accruals:', paygErr);
+      }
+
+      // Bucket PAYG outstanding by customer (skipping cancelled/rejected rentals).
+      const paygOutstandingByCustomer: Record<string, number> = {};
+      (paygOpenAccruals as any[])?.forEach(a => {
+        const rental = Array.isArray(a.rentals) ? a.rentals[0] : a.rentals;
+        const customerId = rental?.customer_id;
+        if (!customerId) return;
+        if (a.rental_id && excludedRentalIds.has(a.rental_id)) return;
+        const dayTotal = Number(a.daily_rate || 0) + Number(a.tax_amount || 0) + Number(a.service_fee_amount || 0);
+        paygOutstandingByCustomer[customerId] = (paygOutstandingByCustomer[customerId] || 0) + dayTotal;
+      });
+
+      // Group ledger entries by customer
       const entriesByCustomer: Record<string, typeof allEntries> = {};
       allEntries?.forEach(entry => {
         if (!entriesByCustomer[entry.customer_id]) {
@@ -266,7 +307,7 @@ const CustomersList = () => {
 
         let totalCharges = 0;
         let totalPayments = 0;
-        let balance = 0; // Outstanding = sum of remaining_amount on due charges
+        let ledgerBalance = 0; // Outstanding from ledger (covers fixed-term + non-PAYG fees/fines)
 
         entries.forEach(entry => {
           if (entry.type === 'Charge') {
@@ -279,13 +320,20 @@ const CustomersList = () => {
             if (entry.category === 'Rental' && entry.due_date && new Date(entry.due_date) > new Date()) {
               return; // Future charge - don't add to balance
             }
-            balance += (entry.remaining_amount || 0);
+            ledgerBalance += (entry.remaining_amount || 0);
           } else if (entry.type === 'Payment') {
             totalPayments += Math.abs(entry.amount);
           }
         });
 
-        // Determine status
+        // Combined balance = ledger-based outstanding (fixed-term, fees, fines)
+        // + PAYG accrual-based outstanding (rolling daily invoices). For pure
+        // PAYG customers ledgerBalance is usually 0 because the ledger gets
+        // drained by the auto-allocate trigger; PAYG balance still reflects
+        // the unpaid accruals correctly.
+        const paygBalance = paygOutstandingByCustomer[customer.id] || 0;
+        const balance = ledgerBalance + paygBalance;
+
         let status: 'In Credit' | 'Settled' | 'In Debt';
         if (Math.abs(balance) < 0.01) {
           status = 'Settled';

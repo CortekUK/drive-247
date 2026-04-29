@@ -754,13 +754,15 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
 
 <hr>
 
-<h2>How to Pay</h2>
+<h2>Pay Now</h2>
 
-<ol>
-  <li><strong>Log into your customer portal</strong> to see the latest invoice and your full charge timeline</li>
-  <li><strong>Settle invoice {{invoice_ref}}</strong> using your saved payment method</li>
-  <li><strong>Receive instant confirmation</strong> — paid charges roll out of your balance and a fresh cycle begins</li>
-</ol>
+<p>Click the button below to settle invoice <strong>{{invoice_ref}}</strong> for <strong>{{outstanding_amount}}</strong>. Your saved card on file will be used.</p>
+
+<p style="text-align:center; margin:24px 0;">
+  <a href="{{payment_url}}" style="display:inline-block; background:#0f172a; color:#ffffff; padding:14px 28px; border-radius:8px; font-weight:600; text-decoration:none;">Pay {{outstanding_amount}} Now</a>
+</p>
+
+<p style="font-size:12px; color:#64748b;">This payment link is valid until your next reminder is sent. After that, this link is suspended and you'll need to use the latest reminder or log into your customer portal.</p>
 
 <p><em>Already paid? You can disregard this message — your payment may still be processing and will reconcile shortly.</em></p>
 
