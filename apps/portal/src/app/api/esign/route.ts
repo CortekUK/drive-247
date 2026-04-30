@@ -1283,12 +1283,21 @@ export async function POST(request: NextRequest) {
         const now = new Date().toISOString();
 
         // Insert into rental_agreements table
-        console.log('Creating rental_agreements record, type:', agreementType);
+        // Always source tenant_id from the rental row server-side. Trusting
+        // body.tenantId from the client is fragile: if the operator's
+        // TenantContext briefly resolves to a different tenant (or undefined
+        // during a rapid navigation), the row would land with the wrong
+        // tenant_id. RLS on rental_agreements is `tenant_id =
+        // get_user_tenant_id()`, so a mismatched insert silently hides the
+        // row from the operator who just sent it — which is exactly the
+        // bug we're guarding against.
+        const resolvedTenantId = (rental?.tenant_id as string | undefined) || body.tenantId;
+        console.log('Creating rental_agreements record, type:', agreementType, 'tenant:', resolvedTenantId);
         const { data: agreementRow, error: agreementError } = await supabase
             .from('rental_agreements')
             .insert({
                 rental_id: body.rentalId,
-                tenant_id: body.tenantId,
+                tenant_id: resolvedTenantId,
                 agreement_type: agreementType,
                 document_id: documentId,
                 document_status: 'sent',

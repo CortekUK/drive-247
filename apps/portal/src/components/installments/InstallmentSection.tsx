@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CreditCard, Send, CheckCircle2, AlertCircle, Pause, Ban, Clock } from "lucide-react";
+import { Send, CheckCircle2, AlertCircle, Pause, Ban, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -44,6 +44,55 @@ function calendarItem(row: any): InstallmentCalendarItem {
     amount: Number(row.amount),
     status,
   };
+}
+
+// Synchronizes the rental-detail calendar with the new-rental form preview by
+// surfacing the same "Today" amount the operator saw at booking. The
+// scheduled_installments rows store only the rental-installment portion of each
+// payment ($179 in the screenshot); when charge_first_upfront is on, day zero
+// also collects deposit + service fee + (sometimes) tax, all rolled into
+// installment_plans.upfront_amount. The new-rental form's calendar showed
+// upfront_amount on the day-zero tile — this helper makes the detail and
+// customer calendars do the same. When charge_first_upfront is off, a synthetic
+// day-zero tile is prepended so the calendar still reflects what's actually
+// collected on rental start (deposit + fees, no installment).
+function buildCalendarItems(
+  schedule: any[],
+  plan: any,
+  rentalStart?: string,
+): InstallmentCalendarItem[] {
+  const today = new Date().toISOString().split("T")[0];
+  const chargeFirst = plan?.config?.charge_first_upfront !== false;
+  const upfrontAmount = Number(plan?.upfront_amount || 0);
+  const upfrontPaid = plan?.upfront_paid === true;
+
+  const items = schedule.map((row) => {
+    const item = calendarItem(row);
+    if (chargeFirst && row.installment_number === 1 && upfrontAmount > 0) {
+      // Replace just the displayed amount; status, date, number all remain
+      // anchored to the underlying scheduled_installments row.
+      return { ...item, amount: upfrontAmount };
+    }
+    return item;
+  });
+
+  if (!chargeFirst && upfrontAmount > 0 && rentalStart) {
+    const status: InstallmentCalendarItem["status"] = upfrontPaid
+      ? "paid"
+      : rentalStart < today
+        ? "overdue"
+        : rentalStart === today
+          ? "due_today"
+          : "scheduled";
+    items.unshift({
+      number: 0, // synthetic sentinel — not a scheduled_installments row
+      date: rentalStart,
+      amount: upfrontAmount,
+      status,
+    });
+  }
+
+  return items;
 }
 
 export function InstallmentSection({ rentalId, rentalStart, rentalEnd }: Props) {
@@ -94,9 +143,24 @@ export function InstallmentSection({ rentalId, rentalStart, rentalEnd }: Props) 
     const paid = data.schedule.filter((s) => s.invoice_status === "paid");
     const today = new Date().toISOString().split("T")[0];
     const overdue = open.filter((s) => s.due_date < today);
-    const overdueTotal = overdue.reduce((s, r) => s + Number(r.amount), 0);
-    const totalPaid = paid.reduce((s, r) => s + Number(r.amount), 0);
-    const totalAmount = data.schedule.reduce((s, r) => s + Number(r.amount), 0);
+
+    // Slot 1 on a charge-first plan represents the day-zero collection: the
+    // bare installment plus deposit/service-fee/tax. The calendar and table
+    // already display installment_plans.upfront_amount on that row; mirror
+    // that here so the overdue banner, paid totals, and progress total all
+    // tell the same story. For non-slot-1 rows or charge-first-off plans the
+    // raw scheduled_installments.amount is the right number.
+    const planAny = data.plan as any;
+    const chargeFirst = planAny?.config?.charge_first_upfront !== false;
+    const upfrontAmount = Number(planAny?.upfront_amount || 0);
+    const displayAmount = (row: any) =>
+      (chargeFirst && row.installment_number === 1 && upfrontAmount > 0)
+        ? upfrontAmount
+        : Number(row.amount);
+
+    const overdueTotal = overdue.reduce((s, r) => s + displayAmount(r), 0);
+    const totalPaid = paid.reduce((s, r) => s + displayAmount(r), 0);
+    const totalAmount = data.schedule.reduce((s, r) => s + displayAmount(r), 0);
     return { overdue, overdueTotal, totalPaid, totalAmount, openCount: open.length, paidCount: paid.length };
   }, [data]);
 
@@ -152,16 +216,29 @@ export function InstallmentSection({ rentalId, rentalStart, rentalEnd }: Props) 
     setBusyId(null);
   }
 
-  const calendarItems = data.schedule.map(calendarItem);
-  const tableRows: ScheduleRow[] = data.schedule.map((s) => ({
-    id: s.id,
-    installment_number: s.installment_number,
-    due_date: s.due_date,
-    amount: Number(s.amount),
-    invoice_status: s.invoice_status,
-    status: s.status,
-    paid_at: s.paid_at,
-  }));
+  const calendarItems = buildCalendarItems(data.schedule, plan, rentalStart);
+  // Mirror the calendar's day-zero override on the schedule table so the two
+  // surfaces agree on what the customer pays today. For charge-first plans
+  // the installment_plans.upfront_amount already includes the 1st installment,
+  // so showing it on row 1 matches the new-rental form preview and the
+  // calendar tile. The underlying scheduled_installments row id is unchanged
+  // — Mark paid still operates on the real slot (and credits its true
+  // installment-portion amount to total_paid; the deposit/fees portions are
+  // tracked via their own payment records).
+  const chargeFirstUpfront = plan?.config?.charge_first_upfront !== false;
+  const planUpfrontAmount = Number(plan?.upfront_amount || 0);
+  const tableRows: ScheduleRow[] = data.schedule.map((s) => {
+    const useUpfrontDisplay = chargeFirstUpfront && s.installment_number === 1 && planUpfrontAmount > 0;
+    return {
+      id: s.id,
+      installment_number: s.installment_number,
+      due_date: s.due_date,
+      amount: useUpfrontDisplay ? planUpfrontAmount : Number(s.amount),
+      invoice_status: s.invoice_status,
+      status: s.status,
+      paid_at: s.paid_at,
+    };
+  });
 
   const planTypeLabel = plan.unit === "week"
     ? (plan.payments_per_unit === 2 ? "Twice weekly" : "Weekly")
@@ -235,17 +312,6 @@ export function InstallmentSection({ rentalId, rentalStart, rentalEnd }: Props) 
           onMarkPaid={handleMarkPaid}
           busyId={busyId}
         />
-
-        <div className="rounded-md border border-border/60 px-4 py-3 flex items-center gap-3">
-          <CreditCard className="w-5 h-5 text-muted-foreground" />
-          <div className="flex-1 text-sm">
-            {plan.stripe_payment_method_id ? (
-              <span className="text-foreground/90">Card on file (Stripe payment method <span className="font-mono text-xs text-muted-foreground">{String(plan.stripe_payment_method_id).slice(-8)}</span>)</span>
-            ) : (
-              <span className="text-muted-foreground">No card on file — manual collection</span>
-            )}
-          </div>
-        </div>
 
         {events && events.length > 0 ? (
           <div>
