@@ -1,0 +1,5411 @@
+{
+  "communities": {
+    "0": [
+      "app_sidebar_appsidebar",
+      "auth_store_fetchappuser",
+      "auth_store_useauth",
+      "bonzah_balance_bonzahbalance",
+      "bonzah_pending_alert_bonzahpendingalert",
+      "bookingconfirmation_bookingconfirmation",
+      "bulk_action_bar_bulkactionbar",
+      "compliance_overview_card_complianceoverviewcard",
+      "credit_balance_creditbalance",
+      "customerauthprovider_customerauthprovider",
+      "customerrealtimechatcontext_customerrealtimechatprovider",
+      "customerrealtimechatcontext_usecustomerrealtimechat",
+      "dynamic_theme_provider_dynamicthemeprovider",
+      "global_voice_call_provider_globalvoicecallprovider",
+      "go_live_banner_golivebanner",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_bookingconfirmation_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_toaster_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_contexts_customerrealtimechatcontext_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_contexts_tenantcontext_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_customer_chat_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_customer_rentals_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_customer_unread_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_dynamic_pricing_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_extension_conflicts_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_extension_pricing_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_gig_driver_images_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_payg_invoices_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_payg_ledger_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_payg_timeline_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_rental_agreements_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_rental_extras_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_rental_insurance_policies_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_rental_invoice_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_rental_ledger_data_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_vehicle_booked_dates_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_useblogposts_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_usebonzahpremium_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_usebonzahvehicleeligibility_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_providers_customerauthprovider_tsx",
+      "insurance_policy_drawer_insurancepolicydrawer",
+      "insurance_upload_dialog_insuranceuploaddialog",
+      "page_capitalize",
+      "page_reminderspageenhanced",
+      "payg_payment_breakdown_paygpaymentbreakdown",
+      "payment_summary_cards_paymentsummarycards",
+      "realtimechatcontext_realtimechatprovider",
+      "realtimechatcontext_userealtimechat",
+      "rental_charge_row_getchargestatus",
+      "rental_charge_row_rentalchargerow",
+      "src_app_dashboard_reminders_analytics_page_tsx",
+      "src_app_dashboard_reminders_page_tsx",
+      "src_components_bookingconfirmation_tsx",
+      "src_components_dashboard_bonzah_pending_alert_tsx",
+      "src_components_dashboard_compliance_overview_card_tsx",
+      "src_components_dashboard_go_live_banner_tsx",
+      "src_components_fines_bulk_action_bar_tsx",
+      "src_components_insurance_insurance_policy_drawer_tsx",
+      "src_components_payments_payment_summary_cards_tsx",
+      "src_components_rentals_payg_payment_breakdown_tsx",
+      "src_components_rentals_rental_charge_row_tsx",
+      "src_components_shared_dialogs_insurance_upload_dialog_tsx",
+      "src_components_shared_layout_app_sidebar_tsx",
+      "src_components_shared_layout_bonzah_balance_tsx",
+      "src_components_shared_layout_credit_balance_tsx",
+      "src_components_shared_layout_dynamic_theme_provider_tsx",
+      "src_components_ui_toaster_tsx",
+      "src_components_voice_global_voice_call_provider_tsx",
+      "src_contexts_customerrealtimechatcontext_tsx",
+      "src_contexts_realtimechatcontext_tsx",
+      "src_contexts_tenantcontext_tsx",
+      "src_hooks_use_active_rentals_ts",
+      "src_hooks_use_agreement_templates_ts",
+      "src_hooks_use_audit_log_on_open_ts",
+      "src_hooks_use_audit_log_ts",
+      "src_hooks_use_audit_logs_ts",
+      "src_hooks_use_blocked_dates_ts",
+      "src_hooks_use_blog_categories_ts",
+      "src_hooks_use_blog_posts_ts",
+      "src_hooks_use_blog_versions_ts",
+      "src_hooks_use_bonzah_alert_config_ts",
+      "src_hooks_use_bonzah_balance_ts",
+      "src_hooks_use_bonzah_premium_ts",
+      "src_hooks_use_bonzah_retry_all_ts",
+      "src_hooks_use_bonzah_vehicle_eligibility_ts",
+      "src_hooks_use_booking_approval_ts",
+      "src_hooks_use_calendar_rentals_ts",
+      "src_hooks_use_calendar_today_ts",
+      "src_hooks_use_cancel_rental_ts",
+      "src_hooks_use_chat_channels_ts",
+      "src_hooks_use_chat_messages_ts",
+      "src_hooks_use_chat_ts",
+      "src_hooks_use_cms_media_ts",
+      "src_hooks_use_cms_page_sections_ts",
+      "src_hooks_use_cms_pages_ts",
+      "src_hooks_use_cms_versions_ts",
+      "src_hooks_use_credit_wallet_ts",
+      "src_hooks_use_customer_active_rentals_ts",
+      "src_hooks_use_customer_balance_ts",
+      "src_hooks_use_customer_blocking_ts",
+      "src_hooks_use_customer_chat_ts",
+      "src_hooks_use_customer_fines_ts",
+      "src_hooks_use_customer_insurance_ts",
+      "src_hooks_use_customer_payments_ts",
+      "src_hooks_use_customer_rentals_ts",
+      "src_hooks_use_customer_review_summary_ts",
+      "src_hooks_use_customer_reviews_ts",
+      "src_hooks_use_customer_status_actions_ts",
+      "src_hooks_use_customer_unread_ts",
+      "src_hooks_use_customer_vehicle_history_ts",
+      "src_hooks_use_dynamic_pricing_ts",
+      "src_hooks_use_email_templates_ts",
+      "src_hooks_use_enhanced_rentals_ts",
+      "src_hooks_use_esign_usage_ts",
+      "src_hooks_use_extension_conflicts_ts",
+      "src_hooks_use_extension_pricing_ts",
+      "src_hooks_use_fines_data_ts",
+      "src_hooks_use_gig_driver_images_ts",
+      "src_hooks_use_global_search_ts",
+      "src_hooks_use_go_live_request_ts",
+      "src_hooks_use_insurance_data_ts",
+      "src_hooks_use_key_handover_ts",
+      "src_hooks_use_lockbox_templates_ts",
+      "src_hooks_use_manager_permissions_ts",
+      "src_hooks_use_notifications_ts",
+      "src_hooks_use_org_settings_ts",
+      "src_hooks_use_payg_invoices_ts",
+      "src_hooks_use_payg_ledger_ts",
+      "src_hooks_use_payg_timeline_ts",
+      "src_hooks_use_payment_verification_ts",
+      "src_hooks_use_pending_bookings_ts",
+      "src_hooks_use_pickup_locations_ts",
+      "src_hooks_use_platform_status_ts",
+      "src_hooks_use_recent_activity_ts",
+      "src_hooks_use_reminder_rules_ts",
+      "src_hooks_use_reminders_ts",
+      "src_hooks_use_rental_agreements_ts",
+      "src_hooks_use_rental_extras_ts",
+      "src_hooks_use_rental_initial_fee_ts",
+      "src_hooks_use_rental_insights_ts",
+      "src_hooks_use_rental_insurance_policies_ts",
+      "src_hooks_use_rental_invoice_ts",
+      "src_hooks_use_rental_ledger_data_ts",
+      "src_hooks_use_rental_review_ts",
+      "src_hooks_use_rental_settings_ts",
+      "src_hooks_use_review_tags_ts",
+      "src_hooks_use_setup_status_ts",
+      "src_hooks_use_subscription_plans_ts",
+      "src_hooks_use_tenant_branding_ts",
+      "src_hooks_use_tenant_holidays_ts",
+      "src_hooks_use_tenant_subscription_ts",
+      "src_hooks_use_tesla_supercharger_charges_ts",
+      "src_hooks_use_testimonials_ts",
+      "src_hooks_use_twilio_sms_ts",
+      "src_hooks_use_twilio_voice_ts",
+      "src_hooks_use_unread_count_ts",
+      "src_hooks_use_usage_data_ts",
+      "src_hooks_use_vehicle_booked_dates_ts",
+      "src_hooks_use_vehicle_disposal_ts",
+      "src_hooks_use_vehicle_events_ts",
+      "src_hooks_use_vehicle_expenses_ts",
+      "src_hooks_use_vehicle_extras_ts",
+      "src_hooks_use_vehicle_files_ts",
+      "src_hooks_use_vehicle_photo_ts",
+      "src_hooks_use_vehicle_services_ts",
+      "src_hooks_use_voice_call_ts",
+      "src_hooks_use_weekend_pricing_ts",
+      "src_hooks_use_whatsapp_meta_ts",
+      "src_hooks_useblogposts_ts",
+      "src_hooks_usebonzahpremium_ts",
+      "src_hooks_usebonzahvehicleeligibility_ts",
+      "src_providers_customerauthprovider_tsx",
+      "src_stores_auth_store_ts",
+      "tenantcontext_extractsubdomain",
+      "tenantcontext_extracttenantslug",
+      "tenantcontext_isplatformdomain",
+      "tenantcontext_tenantprovider",
+      "tenantcontext_usetenant",
+      "toaster_toaster",
+      "use_active_rentals_useactiverentals",
+      "use_agreement_templates_useactiveagreementtemplate",
+      "use_agreement_templates_useagreementtemplates",
+      "use_agreement_templates_usetemplateselection",
+      "use_audit_log_createauditlog",
+      "use_audit_log_on_open_useauditlogonopen",
+      "use_audit_log_useauditlog",
+      "use_audit_logs_formatactionname",
+      "use_audit_logs_getactioncolor",
+      "use_audit_logs_useadminusers",
+      "use_audit_logs_useauditlogactions",
+      "use_audit_logs_useauditlogs",
+      "use_blocked_dates_useblockeddates",
+      "use_blog_categories_generateslug",
+      "use_blog_categories_useblogcategories",
+      "use_blog_posts_computereadingtime",
+      "use_blog_posts_generateslug",
+      "use_blog_posts_useblogpost",
+      "use_blog_posts_useblogposts",
+      "use_blog_versions_useblogversions",
+      "use_bonzah_alert_config_usebonzahalertconfig",
+      "use_bonzah_balance_getbonzahportalurl",
+      "use_bonzah_balance_usebonzahbalance",
+      "use_bonzah_premium_usebonzahpremium",
+      "use_bonzah_retry_all_usebonzahretryall",
+      "use_bonzah_vehicle_eligibility_usebonzahvehicleeligibility",
+      "use_booking_approval_useapprovebooking",
+      "use_booking_approval_userejectbooking",
+      "use_calendar_rentals_usecalendarrentals",
+      "use_calendar_today_usecalendartoday",
+      "use_cancel_rental_usecancelrental",
+      "use_chat_channels_usechatchannels",
+      "use_chat_messages_usechatmessages",
+      "use_chat_usechat",
+      "use_cms_media_usecmsmedia",
+      "use_cms_page_sections_usecmspagesections",
+      "use_cms_pages_usecmspage",
+      "use_cms_pages_usecmspages",
+      "use_cms_versions_usecmsversions",
+      "use_credit_wallet_usecreditwallet",
+      "use_customer_active_rentals_usecustomeractiverentals",
+      "use_customer_balance_fetchpaygoutstandingforcustomer",
+      "use_customer_balance_usecustomerbalance",
+      "use_customer_balance_usecustomerbalancewithstatus",
+      "use_customer_balance_userentalbalance",
+      "use_customer_balance_userentalchargesandpayments",
+      "use_customer_blocking_checkidentityblocked",
+      "use_customer_blocking_useblockedidentities",
+      "use_customer_blocking_usecheckblockedidentity",
+      "use_customer_blocking_usecustomerblockingactions",
+      "use_customer_chat_usecustomerchat",
+      "use_customer_fines_usecustomerfines",
+      "use_customer_fines_usecustomerfinestats",
+      "use_customer_insurance_usecustomerinsurance",
+      "use_customer_insurance_usepolicydocuments",
+      "use_customer_payments_usecustomerpayments",
+      "use_customer_payments_usecustomerpaymentstats",
+      "use_customer_rentals_usecustomerrentals",
+      "use_customer_rentals_usecustomerrentalstats",
+      "use_customer_review_summary_usecustomerreviewsummary",
+      "use_customer_reviews_usecustomerreviews",
+      "use_customer_status_actions_usecustomerstatusactions",
+      "use_customer_unread_usecustomerunreadcount",
+      "use_customer_vehicle_history_usecustomervehiclehistory",
+      "use_dynamic_pricing_usedynamicpricing",
+      "use_dynamic_theme_usedynamictheme",
+      "use_email_templates_useemailtemplate",
+      "use_email_templates_useemailtemplates",
+      "use_enhanced_rentals_useenhancedrentals",
+      "use_esign_usage_useesignusage",
+      "use_extension_conflicts_useextensionconflicts",
+      "use_extension_pricing_geteffectivedailyrate",
+      "use_extension_pricing_useextensionpricing",
+      "use_fines_data_usefinesdata",
+      "use_gig_driver_images_usedeletegigdriverimage",
+      "use_gig_driver_images_usegigdriverimages",
+      "use_gig_driver_images_useuploadgigdriverimage",
+      "use_global_search_useglobalsearch",
+      "use_go_live_request_usegoliverequests",
+      "use_insurance_data_useinsurancedata",
+      "use_insurance_data_useinsurancevalidation",
+      "use_key_handover_usekeyhandover",
+      "use_lockbox_templates_uselockboxtemplates",
+      "use_manager_permissions_usemanagerpermissions",
+      "use_notifications_usenotifications",
+      "use_org_settings_useorgsettings",
+      "use_payg_invoices_invoicereffor",
+      "use_payg_invoices_round2",
+      "use_payg_invoices_usepayginvoices",
+      "use_payg_ledger_usepaygledger",
+      "use_payg_timeline_usepaygtimeline",
+      "use_payment_verification_getverificationstatusinfo",
+      "use_payment_verification_usepaymentverificationactions",
+      "use_payment_verification_usependingpaymentscount",
+      "use_pending_bookings_usependingbookings",
+      "use_pending_bookings_usependingbookingscount",
+      "use_pickup_locations_usepickuplocations",
+      "use_platform_status_useplatformstatus",
+      "use_recent_activity_userecentactivity",
+      "use_reminder_rules_usereminderruleactions",
+      "use_reminder_rules_usereminderrules",
+      "use_reminder_rules_usereminderrulesbycategory",
+      "use_reminders_usecreatereminder",
+      "use_reminders_usereminderactions",
+      "use_reminders_useremindergeneration",
+      "use_reminders_usereminders",
+      "use_reminders_useremindersbyobject",
+      "use_reminders_usereminderstats",
+      "use_rental_agreements_userentalagreements",
+      "use_rental_extras_userentalextras",
+      "use_rental_initial_fee_userentalinitialfee",
+      "use_rental_insights_fetchinsights",
+      "use_rental_insights_preparepayload",
+      "use_rental_insights_userentalinsights",
+      "use_rental_insurance_policies_userentalinsurancepolicies",
+      "use_rental_invoice_userentalinvoice",
+      "use_rental_invoice_userentalpaymentbreakdown",
+      "use_rental_invoice_userentalrefundbreakdown",
+      "use_rental_ledger_data_userentalcharges",
+      "use_rental_ledger_data_userentalpayments",
+      "use_rental_ledger_data_userentaltotals",
+      "use_rental_review_userentalreview",
+      "use_rental_review_useskiprentalreview",
+      "use_rental_review_usesubmitrentalreview",
+      "use_rental_settings_userentalsettings",
+      "use_review_tags_usecreatereviewtag",
+      "use_review_tags_usereviewtags",
+      "use_setup_status_usesetupstatus",
+      "use_subscription_plans_usesubscriptionplans",
+      "use_tenant_branding_usetenantbranding",
+      "use_tenant_holidays_usetenantholidays",
+      "use_tenant_subscription_usetenantsubscription",
+      "use_tesla_supercharger_charges_useteslasuperchargercharges",
+      "use_testimonials_usetestimonials",
+      "use_toast_usetoast",
+      "use_twilio_sms_invokemanagetwilio",
+      "use_twilio_sms_usetwiliosms",
+      "use_twilio_voice_invokemanagevoice",
+      "use_twilio_voice_usetwiliovoice",
+      "use_unread_count_usechannelunreadcount",
+      "use_unread_count_useunreadcount",
+      "use_usage_data_useesigncategorydata",
+      "use_usage_data_useusagedata",
+      "use_vehicle_booked_dates_usevehiclebookeddates",
+      "use_vehicle_disposal_usevehicledisposal",
+      "use_vehicle_events_usevehicleevents",
+      "use_vehicle_expenses_usevehicleexpenses",
+      "use_vehicle_extras_usevehicleextras",
+      "use_vehicle_files_usevehiclefiles",
+      "use_vehicle_photo_usevehiclephoto",
+      "use_vehicle_services_usevehicleservices",
+      "use_voice_call_usevoicecall",
+      "use_weekend_pricing_useweekendpricing",
+      "use_whatsapp_meta_invokemanagewhatsapp",
+      "use_whatsapp_meta_usewhatsappmeta",
+      "useblogposts_useblogcategories",
+      "useblogposts_useblogpost",
+      "useblogposts_useblogposts",
+      "usebonzahpremium_usebonzahpremium",
+      "usebonzahvehicleeligibility_usebonzahvehicleeligibility"
+    ],
+    "1": [
+      "add_hold_dialog_getbookingorigin",
+      "add_hold_dialog_handleplaceviastripe",
+      "add_hold_dialog_handlesendemail",
+      "add_payment_dialog_handlesendinvoiceemail",
+      "add_payment_dialog_handlestripepayment",
+      "add_payment_dialog_invalidateallpaymentqueries",
+      "add_payment_dialog_onsubmit",
+      "adminextendrentaldialog_handleback",
+      "adminextendrentaldialog_handleextend",
+      "adminextendrentaldialog_handlenextstep",
+      "adminextendrentaldialog_newenddate",
+      "agreementtimeline_getgroupstatusbadge",
+      "agreementtimeline_getstatusinfo",
+      "agreementtimeline_handlecheckstatus",
+      "agreementtimeline_handleresend",
+      "agreementtimeline_handlesendagreement",
+      "agreementtimeline_issuperseded",
+      "bonzah_insurance_selector_coverageicon",
+      "bonzah_insurance_selector_handleaddinsurance",
+      "bonzah_insurance_selector_handlecoveragetoggle",
+      "bonzah_insurance_selector_handlesavedetails",
+      "bonzah_insurance_selector_handleskipinsurance",
+      "bonzah_settings_handledisconnect",
+      "bonzah_settings_handlesavealert",
+      "bonzah_settings_handleverifyandconnect",
+      "bulkmessagemodal_deselectall",
+      "bulkmessagemodal_handleopenchange",
+      "bulkmessagemodal_handlesend",
+      "bulkmessagemodal_selectall",
+      "bulkmessagemodal_togglecustomer",
+      "call_transcript_dialog_fetchtranscript",
+      "call_transcript_dialog_handlecopy",
+      "call_transcript_dialog_handleexport",
+      "customer_form_modal_checkblockedidentity",
+      "customer_form_modal_handledevfill",
+      "customer_form_modal_handledialogchange",
+      "customer_form_modal_handleskipverification",
+      "customer_form_modal_handlestartverification",
+      "customer_form_modal_onsubmit",
+      "data_cleanup_dialog_handlecancel",
+      "data_cleanup_dialog_handlefinalconfirm",
+      "data_cleanup_dialog_handleinitialconfirm",
+      "edit_vehicle_dialog_enhanced_generatelockboxcode",
+      "edit_vehicle_dialog_enhanced_handleopenchange",
+      "edit_vehicle_dialog_enhanced_onsubmit",
+      "edit_vehicle_dialog_handleopenchange",
+      "edit_vehicle_dialog_onsubmit",
+      "email_template_dialog_handlesave",
+      "email_template_dialog_insertvariable",
+      "email_template_preview_handlerender",
+      "enhanced_vehicle_plates_panel_handleeditplate",
+      "enhanced_vehicle_plates_panel_handleunassignplate",
+      "enhanced_vehicle_plates_panel_handleviewhistory",
+      "esign_settings_handletogglemode",
+      "esign_settings_updatemode",
+      "export_buttons_handleexport",
+      "extensionrequestdialog_handleapprove",
+      "extensionrequestdialog_handlereject",
+      "extensionrequestdialog_requestedenddate",
+      "faqs_manager_confirmdelete",
+      "faqs_manager_handledelete",
+      "faqs_manager_handleedit",
+      "faqs_manager_handlemovedown",
+      "faqs_manager_handlemoveup",
+      "faqs_manager_handletoggleactive",
+      "faqs_manager_loadfaqs",
+      "faqs_manager_onsubmit",
+      "faqs_manager_resetform",
+      "favicon_upload_handledrop",
+      "favicon_upload_handlefileupload",
+      "favicon_upload_handleremovefavicon",
+      "favicon_upload_resizetofavicon",
+      "generate_invite_dialog_handleclose",
+      "generate_invite_dialog_handlecopy",
+      "generate_invite_dialog_handlegenerate",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_toast_ts",
+      "insurancetimeline_getcoveragebadges",
+      "insurancetimeline_getstatusinfo",
+      "insurancetimeline_handledownloadpdf",
+      "insurancetimeline_handlerefreshpolicy",
+      "insurancetimeline_handleretrypurchase",
+      "key_handover_section_generatelockboxcode",
+      "key_handover_section_handleconfirmhandover",
+      "key_handover_section_handleconfirmundo",
+      "key_handover_section_handlerequesthandover",
+      "key_handover_section_handleupload",
+      "linkunknownthreaddialog_handlelink",
+      "linkunknownthreaddialog_handlesearch",
+      "location_settings_handlecenteraddresschange",
+      "location_settings_handledeletelocation",
+      "location_settings_handleopenadddialog",
+      "location_settings_handleopeneditdialog",
+      "location_settings_handlepickupareachange",
+      "location_settings_handlepickupfixedchange",
+      "location_settings_handlepickupmultiplechange",
+      "location_settings_handlereturnareachange",
+      "location_settings_handlereturnfixedchange",
+      "location_settings_handlereturnmultiplechange",
+      "location_settings_handlesavelocation",
+      "location_settings_handletoggleactive",
+      "lockbox_templates_section_handleresetalltodefaults",
+      "lockbox_templates_section_handlesaveemail",
+      "lockbox_templates_section_handlesaveinstructions",
+      "lockbox_templates_section_handlesavesms",
+      "lockbox_templates_section_handlesavewhatsapp",
+      "logo_upload_with_resize_handledrop",
+      "logo_upload_with_resize_handlefileselect",
+      "logo_upload_with_resize_handleremovelogo",
+      "logo_upload_with_resize_handleupload",
+      "logo_upload_with_resize_resetscale",
+      "og_image_upload_handledragleave",
+      "og_image_upload_handledragover",
+      "og_image_upload_handledrop",
+      "og_image_upload_handlefileupload",
+      "og_image_upload_handleremoveimage",
+      "og_image_upload_handleurlsubmit",
+      "page_clearallfilters",
+      "page_copyplatenumber",
+      "page_generatelockboxcode",
+      "page_getbacklabel",
+      "page_getbacklink",
+      "page_getbreadcrumbitems",
+      "page_getdocumentfilename",
+      "page_getidentitytypebadge",
+      "page_handleaddidentity",
+      "page_handleassignplate",
+      "page_handlebackfillpayments",
+      "page_handleblockcustomer",
+      "page_handlecanceleditdob",
+      "page_handlecanceleditname",
+      "page_handlecompanyprofilesubmit",
+      "page_handlecreatepromo",
+      "page_handlecustomerselect",
+      "page_handledeleteplate",
+      "page_handledocumentfilter",
+      "page_handleeditplate",
+      "page_handleexport",
+      "page_handlemarkexpired",
+      "page_handleremoveidentity",
+      "page_handleresetall",
+      "page_handlerowclick",
+      "page_handlesavebranding",
+      "page_handlesavedob",
+      "page_handlesavegeneralsettings",
+      "page_handlesavename",
+      "page_handlesearch",
+      "page_handlestarteditdob",
+      "page_handlestarteditname",
+      "page_handlestatusfilter",
+      "page_handleunassignplate",
+      "page_handleunblockcustomer",
+      "page_handleupdatepromo",
+      "page_handleviewhistory",
+      "page_openpreviewmodal",
+      "page_resetbrandingform",
+      "page_savelockboxcode",
+      "page_updatefilters",
+      "payment_management_paymentstatusbadge",
+      "payment_management_paymenttypebadge",
+      "pricing_rules_settings_handledeleteholiday",
+      "pricing_rules_settings_handlesaveholiday",
+      "pricing_rules_settings_handlesaveweekend",
+      "pricing_rules_settings_handleweekenddaytoggle",
+      "pricing_rules_settings_openaddholiday",
+      "pricing_rules_settings_openeditholiday",
+      "setup_hub_countdownunit",
+      "setup_hub_update",
+      "src_app_dashboard_blocked_customers_page_tsx",
+      "src_app_dashboard_customers_id_page_tsx",
+      "src_app_dashboard_plates_page_tsx",
+      "src_app_dashboard_reports_page_tsx",
+      "src_app_dashboard_settings_email_templates_page_tsx",
+      "src_app_dashboard_settings_page_tsx",
+      "src_app_dashboard_vehicles_id_page_tsx",
+      "src_app_dashboard_vehicles_page_tsx",
+      "src_components_blocked_dates_working_hours_card_tsx",
+      "src_components_chat_bulkmessagemodal_tsx",
+      "src_components_chat_call_transcript_dialog_tsx",
+      "src_components_chat_linkunknownthreaddialog_tsx",
+      "src_components_customers_customer_form_modal_tsx",
+      "src_components_customers_generate_invite_dialog_tsx",
+      "src_components_dashboard_setup_hub_tsx",
+      "src_components_payments_payment_management_tsx",
+      "src_components_rentals_adminextendrentaldialog_tsx",
+      "src_components_rentals_agreementtimeline_tsx",
+      "src_components_rentals_bonzah_insurance_selector_tsx",
+      "src_components_rentals_extensionrequestdialog_tsx",
+      "src_components_rentals_insurancetimeline_tsx",
+      "src_components_rentals_key_handover_section_tsx",
+      "src_components_reports_export_buttons_tsx",
+      "src_components_settings_bonzah_settings_tsx",
+      "src_components_settings_data_cleanup_dialog_tsx",
+      "src_components_settings_email_template_dialog_tsx",
+      "src_components_settings_email_template_preview_tsx",
+      "src_components_settings_esign_settings_tsx",
+      "src_components_settings_favicon_upload_tsx",
+      "src_components_settings_location_settings_tsx",
+      "src_components_settings_lockbox_templates_section_tsx",
+      "src_components_settings_logo_upload_with_resize_tsx",
+      "src_components_settings_og_image_upload_tsx",
+      "src_components_settings_pricing_rules_settings_tsx",
+      "src_components_settings_stripe_connect_settings_tsx",
+      "src_components_settings_tesla_fleet_settings_tsx",
+      "src_components_settings_twilio_whatsapp_settings_tsx",
+      "src_components_shared_dialogs_add_hold_dialog_tsx",
+      "src_components_shared_dialogs_add_payment_dialog_tsx",
+      "src_components_shared_layout_user_menu_tsx",
+      "src_components_vehicles_edit_vehicle_dialog_enhanced_tsx",
+      "src_components_vehicles_edit_vehicle_dialog_tsx",
+      "src_components_vehicles_enhanced_vehicle_plates_panel_tsx",
+      "src_components_vehicles_vehicle_calendar_sync_tsx",
+      "src_components_vehicles_vehicle_photo_gallery_tsx",
+      "src_components_website_content_faqs_manager_tsx",
+      "src_components_website_content_logo_upload_with_resize_tsx",
+      "src_hooks_use_toast_ts",
+      "stripe_connect_settings_copyaccountid",
+      "stripe_connect_settings_handlegeneratelink",
+      "tenantqueries_tenantupdate",
+      "tesla_fleet_settings_handleconnect",
+      "tesla_fleet_settings_handledisconnect",
+      "twilio_whatsapp_settings_handlecheckstatus",
+      "twilio_whatsapp_settings_handlecreatetemplate",
+      "twilio_whatsapp_settings_handledeletetemplate",
+      "twilio_whatsapp_settings_handledisconnect",
+      "twilio_whatsapp_settings_handlesave",
+      "twilio_whatsapp_settings_handlesendtest",
+      "twilio_whatsapp_settings_loadtemplates",
+      "use_toast_addtoremovequeue",
+      "use_toast_dispatch",
+      "use_toast_genid",
+      "use_toast_reducer",
+      "use_toast_toast",
+      "user_menu_getrolebadgevariant",
+      "user_menu_getroledisplay",
+      "user_menu_handlefileselected",
+      "user_menu_handlenamechange",
+      "user_menu_handleopennamedialog",
+      "user_menu_handlepasswordchange",
+      "user_menu_handlesignout",
+      "vehicle_calendar_sync_copyexport",
+      "vehicle_calendar_sync_patch",
+      "vehicle_photo_gallery_handledeletephoto",
+      "vehicle_photo_gallery_handledragend",
+      "vehicle_photo_gallery_handlefileselect",
+      "vehicle_photo_gallery_handleuploadclick",
+      "working_hours_card_canedit",
+      "working_hours_card_copytoalldays",
+      "working_hours_card_formattime",
+      "working_hours_card_handlesave",
+      "working_hours_card_parse24",
+      "working_hours_card_to24",
+      "working_hours_card_updatedayschedule"
+    ],
+    "2": [
+      "app_layout_tsx",
+      "calendar_utils_calculatebarposition",
+      "calendar_utils_formatdaterange",
+      "calendar_utils_getdaterange",
+      "calendar_utils_getdatesinrange",
+      "calendar_utils_getstatuscolor",
+      "calendar_utils_grouprentalsbyvehicle",
+      "customerextensioncalendar_customerextensioncalendar",
+      "customerextensioncalendar_daywithtooltip",
+      "feedbackmodal_handlesubmit",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_layout_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_api_blog_rss_route_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_api_check_veriff_status_route_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_blog_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_blog_slug_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_booking_success_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_layout_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_customerextensioncalendar_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_feedbackmodal_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_notfound_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_sidebar_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_middleware_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_app_layout_tsx",
+      "layout_authinitializer",
+      "layout_generatemetadata",
+      "layout_globalkeyboardshortcuts",
+      "layout_rootlayout",
+      "location_map_createmarkersvg",
+      "location_map_ensurelibraries",
+      "location_map_fullscreenmap",
+      "location_map_geocodeaddress",
+      "location_map_geocodecached",
+      "location_map_rendermaptocontainer",
+      "manager_permissions_selector_getaccesslevel",
+      "manager_permissions_selector_ischecked",
+      "manager_permissions_selector_toggleaccesslevel",
+      "manager_permissions_selector_toggletab",
+      "middleware_extractsubdomain",
+      "middleware_extracttenantslug",
+      "middleware_isplatformdomain",
+      "middleware_middleware",
+      "notfound_notfound",
+      "page_blogpage",
+      "page_blogpostpage",
+      "page_generatemetadata",
+      "page_processpayment",
+      "page_run",
+      "page_updaterentalstatus",
+      "reminder_generator_cleanupduplicatereminders",
+      "reminder_generator_expireoldreminders",
+      "reminder_generator_formatdate",
+      "reminder_generator_generatedocumentreminders",
+      "reminder_generator_generatefinereminders",
+      "reminder_generator_generaterentalreminders",
+      "reminder_generator_generatevehiclereminders",
+      "reminder_generator_getorgtimezone",
+      "reminder_generator_gettoday",
+      "reminder_generator_selectbestrule",
+      "reminder_generator_upsertreminder",
+      "reminder_templates_getmessagetemplate",
+      "reminder_templates_getseverityforrule",
+      "reminder_templates_gettitletemplate",
+      "route_generateveriffsignature",
+      "route_get",
+      "sidebar_cn",
+      "sidebar_handlekeydown",
+      "sidebar_usesidebar",
+      "src_app_api_blog_rss_route_ts",
+      "src_app_api_check_veriff_status_route_ts",
+      "src_app_api_esign_signing_redirect_route_ts",
+      "src_app_blog_page_tsx",
+      "src_app_blog_slug_page_tsx",
+      "src_app_booking_success_page_tsx",
+      "src_app_layout_tsx",
+      "src_components_customer_portal_customerextensioncalendar_tsx",
+      "src_components_feedbackmodal_tsx",
+      "src_components_notfound_tsx",
+      "src_components_ui_location_map_tsx",
+      "src_components_ui_sidebar_tsx",
+      "src_components_users_manager_permissions_selector_tsx",
+      "src_lib_calendar_utils_ts",
+      "src_lib_reminder_generator_ts",
+      "src_lib_reminder_templates_ts",
+      "src_middleware_ts"
+    ],
+    "3": [
+      "add_vehicle_dialog_handledevfillvehicle",
+      "add_vehicle_dialog_handleopenchange",
+      "add_vehicle_dialog_handlephotoselect",
+      "add_vehicle_dialog_handleremovephoto",
+      "add_vehicle_dialog_onsubmit",
+      "carousel_images_editor_handleaddurl",
+      "carousel_images_editor_handlefileupload",
+      "carousel_images_editor_handlemoveimage",
+      "carousel_images_editor_handleremoveimage",
+      "carousel_media_editor_formatfilesize",
+      "carousel_media_editor_getmaxfilesize",
+      "carousel_media_editor_getmediatypefromurl",
+      "carousel_media_editor_handleaddurl",
+      "carousel_media_editor_handlefileupload",
+      "carousel_media_editor_handlemovemedia",
+      "carousel_media_editor_handleremovemedia",
+      "carousel_media_editor_isvideotype",
+      "company_logo_upload_handledragleave",
+      "company_logo_upload_handledragover",
+      "company_logo_upload_handledrop",
+      "company_logo_upload_handlefileupload",
+      "company_logo_upload_handleremovelogo",
+      "hero_image_upload_handledrop",
+      "hero_image_upload_handlefileupload",
+      "hero_image_upload_handleremoveimage",
+      "hero_image_upload_handleurlsubmit",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_customer_portal_portal_agreements_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_customer_portal_portal_bookings_id_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_customer_portal_portal_gig_driver_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_customer_portal_portal_settings_page_tsx",
+      "page_boldsignicon",
+      "page_boldsignicondark",
+      "page_bonzahicon",
+      "page_bonzahicondark",
+      "page_formatdatetime",
+      "page_formatdaylabel",
+      "page_formatmonthlabel",
+      "page_generateagreementpdf",
+      "page_generateinsurancepdf",
+      "page_getagreementstatuscolor",
+      "page_getagreementstatuslabel",
+      "page_getinitials",
+      "page_getinstallmentstatuscolor",
+      "page_getinsurancestatuscolor",
+      "page_getpaymentstatuscolor",
+      "page_getperiodlabel",
+      "page_getpublicurl",
+      "page_getrentalstatuscolor",
+      "page_handlebonzahdownload",
+      "page_handlechangeemail",
+      "page_handlechangepassword",
+      "page_handleclosedialog",
+      "page_handleclosesigndialog",
+      "page_handlecloseviewdialog",
+      "page_handledownload",
+      "page_handledownloadagreement",
+      "page_handlephotoupload",
+      "page_handleresendverification",
+      "page_handlesaveautorefill",
+      "page_handlesearchchange",
+      "page_handlesign",
+      "page_handleupdateprofile",
+      "page_handleupload",
+      "page_handleview",
+      "page_handleviewagreement",
+      "page_handleviewagreementbyid",
+      "page_safeformat",
+      "page_tocustomeragreement",
+      "src_app_customer_portal_portal_agreements_page_tsx",
+      "src_app_customer_portal_portal_bookings_id_page_tsx",
+      "src_app_customer_portal_portal_gig_driver_page_tsx",
+      "src_app_customer_portal_portal_settings_page_tsx",
+      "src_app_dashboard_agreements_page_tsx",
+      "src_app_dashboard_credits_analytics_page_tsx",
+      "src_app_dashboard_credits_page_tsx",
+      "src_app_dashboard_insurances_page_tsx",
+      "src_components_settings_company_logo_upload_tsx",
+      "src_components_vehicles_add_vehicle_dialog_tsx",
+      "src_components_website_content_carousel_images_editor_tsx",
+      "src_components_website_content_carousel_media_editor_tsx",
+      "src_components_website_content_hero_image_upload_tsx"
+    ],
+    "4": [
+      "app_admin_protected_audit_logs_page_tsx",
+      "app_admin_protected_rentals_id_page_tsx",
+      "app_admin_protected_rentals_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_admin_protected_audit_logs_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_admin_protected_rentals_id_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_admin_protected_rentals_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_about_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_faq_page_tsx",
+      "mermaiddiagram_cn",
+      "mermaiddiagram_renderdiagram",
+      "page_addfeature",
+      "page_async",
+      "page_confirmmodechange",
+      "page_copyallcredentials",
+      "page_copytoclipboard",
+      "page_executemodechange",
+      "page_exportcsv",
+      "page_faqsbycategory",
+      "page_fetchfilters",
+      "page_formatactionlabel",
+      "page_formatactionname",
+      "page_formatdate",
+      "page_generatepassword",
+      "page_generaterandompassword",
+      "page_getactionbadgevariant",
+      "page_getdynamicvalue",
+      "page_geticon",
+      "page_getrolebadgevariant",
+      "page_getroledisplay",
+      "page_handleadduser",
+      "page_handleclick",
+      "page_handlecreatetenant",
+      "page_handledeleteplan",
+      "page_handleforcelogout",
+      "page_handlemodetoggle",
+      "page_handleopeneditpermissions",
+      "page_handleperiodchange",
+      "page_handlesavebanner",
+      "page_handlesaveedit",
+      "page_handlesaveplan",
+      "page_handletemplatechange",
+      "page_handletoggleintegration",
+      "page_handletoggleplanactive",
+      "page_handletogglestripemode",
+      "page_handleupdatetype",
+      "page_initialize",
+      "page_loadchartdata",
+      "page_loadfaqs",
+      "page_loadplans",
+      "page_loadpolicyacceptances",
+      "page_loadrecentactivity",
+      "page_loadstaffusers",
+      "page_loadstats",
+      "page_loadsubscription",
+      "page_loadtenant",
+      "page_loadtenants",
+      "page_openaddplan",
+      "page_openeditplan",
+      "page_removefeature",
+      "page_resetfilters",
+      "page_togglefavorite",
+      "page_validateslug",
+      "rental_date_picker_daywithtooltip",
+      "rental_date_picker_occupancylegend",
+      "rental_date_picker_rentaldaterangepicker",
+      "rental_date_picker_startdate",
+      "src_app_about_page_tsx",
+      "src_app_dashboard_settings_agreement_templates_page_tsx",
+      "src_app_dashboard_settings_users_page_tsx",
+      "src_app_dashboard_users_page_tsx",
+      "src_app_faq_page_tsx",
+      "src_components_chat_mermaiddiagram_tsx",
+      "src_components_shared_forms_rental_date_picker_tsx"
+    ],
+    "5": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_booking_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_customer_portal_portal_verification_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_register_token_page_tsx",
+      "invoice_utils_createinvoice",
+      "invoice_utils_generateinvoicenumber",
+      "page_calculateage",
+      "page_calculatediscount",
+      "page_calculatesecuritydeposit",
+      "page_calculateservicefee",
+      "page_calculatetaxamount",
+      "page_cancelverificationsession",
+      "page_canreversepayment",
+      "page_checkblockeddatesoverlap",
+      "page_createrentaldetailsschema",
+      "page_fmtcurrency",
+      "page_formatcurrency",
+      "page_formatcurrencyutil",
+      "page_formattime",
+      "page_getdeliveryfee",
+      "page_getglobalblockeddates",
+      "page_getinitialfilters",
+      "page_getpaymenttypedisplay",
+      "page_getredirectpath",
+      "page_getstatusicon",
+      "page_getvehicleblockeddates",
+      "page_handleapprovepayment",
+      "page_handlecancelverification",
+      "page_handlecreateverification",
+      "page_handledevautofill",
+      "page_handledevclear",
+      "page_handledevfillfine",
+      "page_handleforgotpassword",
+      "page_handleissuedatechange",
+      "page_handlemanagepayment",
+      "page_handleopenrejectdialog",
+      "page_handleopenreversedialog",
+      "page_handleotpchange",
+      "page_handleotpkeydown",
+      "page_handleotppaste",
+      "page_handlerejectpayment",
+      "page_handleresendresetotp",
+      "page_handlerestartverification",
+      "page_handlereversepayment",
+      "page_handlesetnewpassword",
+      "page_handlestartveriffverification",
+      "page_handlestartverification",
+      "page_handlesubmitregistration",
+      "page_handlesubscribe",
+      "page_handleverifyresetotp",
+      "page_handleviewledger",
+      "page_normalizedate",
+      "page_onsubmit",
+      "page_parselocaldate",
+      "page_rentaldurationcontent",
+      "page_statusbadge",
+      "page_updatetime",
+      "page_validatepromocode",
+      "page_validatetoken",
+      "page_watchedenddate",
+      "page_wouldspanbookedperiod",
+      "src_app_auth_login_page_tsx",
+      "src_app_booking_page_tsx",
+      "src_app_customer_portal_portal_verification_page_tsx",
+      "src_app_dashboard_fines_new_page_tsx",
+      "src_app_dashboard_payments_page_tsx",
+      "src_app_dashboard_rentals_new_page_tsx",
+      "src_app_dashboard_subscription_page_tsx",
+      "src_app_register_token_page_tsx",
+      "src_lib_invoice_utils_ts"
+    ],
+    "6": [
+      "app_admin_protected_announcements_page_tsx",
+      "app_admin_protected_contacts_page_tsx",
+      "app_admin_protected_requests_page_tsx",
+      "app_admin_protected_settings_page_tsx",
+      "default_agreement_template_getdefaulttemplateforcategory",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_admin_protected_announcements_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_admin_protected_contacts_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_admin_protected_requests_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_admin_protected_settings_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_customer_portal_portal_documents_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_promotions_page_tsx",
+      "page_addemail",
+      "page_archive",
+      "page_confirmdelete",
+      "page_filterandsortpromotions",
+      "page_getdiscountbadge",
+      "page_getintegrationbadge",
+      "page_getpromotionstatus",
+      "page_getsectioncontent",
+      "page_getstatusbadge",
+      "page_handleapplybooking",
+      "page_handlecontentchange",
+      "page_handledelete",
+      "page_handleedit",
+      "page_handleglobalforcelogout",
+      "page_handleimageupload",
+      "page_handlenamechange",
+      "page_handlepublish",
+      "page_handlereset",
+      "page_handleresettodefaults",
+      "page_handlesave",
+      "page_handlesavehero",
+      "page_handlesaveseo",
+      "page_handletoggle",
+      "page_handletoggleactive",
+      "page_handleupdatestatus",
+      "page_load",
+      "page_loaddata",
+      "page_loadpromotions",
+      "page_loadrequests",
+      "page_loadsettings",
+      "page_openconfirm",
+      "page_opencreate",
+      "page_openedit",
+      "page_remove",
+      "page_removeemail",
+      "page_resetform",
+      "page_save",
+      "page_savecontent",
+      "src_app_customer_portal_portal_documents_page_tsx",
+      "src_app_dashboard_cms_about_page_tsx",
+      "src_app_dashboard_cms_blog_categories_page_tsx",
+      "src_app_dashboard_cms_blog_page_tsx",
+      "src_app_dashboard_cms_blog_settings_page_tsx",
+      "src_app_dashboard_cms_contact_page_tsx",
+      "src_app_dashboard_cms_fleet_page_tsx",
+      "src_app_dashboard_cms_home_page_tsx",
+      "src_app_dashboard_cms_privacy_page_tsx",
+      "src_app_dashboard_cms_promotions_page_tsx",
+      "src_app_dashboard_cms_reviews_page_tsx",
+      "src_app_dashboard_cms_site_settings_page_tsx",
+      "src_app_dashboard_cms_terms_page_tsx",
+      "src_app_dashboard_promotions_page_tsx",
+      "src_app_dashboard_settings_agreement_templates_edit_page_tsx",
+      "src_app_dashboard_settings_email_templates_key_page_tsx",
+      "src_app_dashboard_settings_reminders_page_tsx",
+      "src_app_promotions_page_tsx",
+      "src_lib_default_agreement_template_ts"
+    ],
+    "7": [
+      "buy_insurance_dialog_handleclose",
+      "buy_insurance_dialog_handlecoveragechange",
+      "buy_insurance_dialog_handlepurchase",
+      "buy_insurance_dialog_handleskipinsurance",
+      "charge_deposit_dialog_onsubmit",
+      "customer_form_modal_handlekeydown",
+      "email_template_variables_formatemailcurrency",
+      "email_template_variables_formatemaildate",
+      "email_template_variables_getemailsampledata",
+      "email_template_variables_getemailtemplatetype",
+      "email_template_variables_getemailvariablesbycategory",
+      "email_template_variables_getvariablesfortemplatetype",
+      "email_template_variables_replaceemailvariables",
+      "extendrentaldialog_handleback",
+      "extendrentaldialog_handleclose",
+      "extendrentaldialog_handleconfirmsubmit",
+      "extendrentaldialog_handlerequestclick",
+      "extendrentaldialog_newenddate",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_extendrentaldialog_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_payg_details_dialog_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_invoicedialog_tsx",
+      "invoice_dialog_fc",
+      "invoicedialog_fmt",
+      "net_pl_chip_netplchip",
+      "payg_details_dialog_formatcurrency",
+      "payg_details_dialog_handlepaylatest",
+      "payg_details_dialog_sendmanualreminder",
+      "rejection_dialog_getpaymentlabel",
+      "rejection_dialog_handleclose",
+      "rejection_dialog_handlesubmit",
+      "rejection_dialog_renderemailpreview",
+      "rental_payment_row_getallocationsummary",
+      "service_history_table_formatcost",
+      "service_history_table_formatdate",
+      "src_components_customer_portal_extendrentaldialog_tsx",
+      "src_components_customer_portal_payg_details_dialog_tsx",
+      "src_components_invoicedialog_tsx",
+      "src_components_rentals_buy_insurance_dialog_tsx",
+      "src_components_rentals_payg_details_dialog_tsx",
+      "src_components_rentals_rejection_dialog_tsx",
+      "src_components_rentals_rental_payment_row_tsx",
+      "src_components_settings_tiptap_editor_tsx",
+      "src_components_shared_dialogs_charge_deposit_dialog_tsx",
+      "src_components_shared_dialogs_invoice_dialog_tsx",
+      "src_components_vehicles_net_pl_chip_tsx",
+      "src_components_vehicles_service_history_table_tsx",
+      "src_components_vehicles_vehicle_dynamic_pricing_tsx",
+      "src_lib_email_template_variables_ts",
+      "src_lib_template_variables_ts",
+      "template_variables_buildtemplatedata",
+      "template_variables_formatdate",
+      "template_variables_formattemplatecurrency",
+      "template_variables_getsampledata",
+      "template_variables_getvariablesbycategory",
+      "template_variables_replacevariables",
+      "tiptap_editor_tiptapeditor",
+      "tiptap_editor_toolbarbutton",
+      "use_customer_balance_getbalancestatus",
+      "vehicle_dynamic_pricing_computeeffectiverate",
+      "vehicle_dynamic_pricing_getholidayoverride",
+      "vehicle_dynamic_pricing_getoverridelabel",
+      "vehicle_dynamic_pricing_getweekendoverride",
+      "vehicle_dynamic_pricing_handlereset",
+      "vehicle_dynamic_pricing_handlesaveoverride",
+      "vehicle_dynamic_pricing_openoverridedialog"
+    ],
+    "8": [
+      "format_utils_displayunittokm",
+      "format_utils_formatcurrency",
+      "format_utils_formatdistance",
+      "format_utils_formatdistancelong",
+      "format_utils_getcurrencysymbol",
+      "format_utils_getdistanceunitlong",
+      "format_utils_getearthradius",
+      "format_utils_getmileagetierlabel",
+      "format_utils_getperdaylabel",
+      "format_utils_getperdaylabellong",
+      "format_utils_getpermonthlabel",
+      "format_utils_getpermonthlabellong",
+      "format_utils_getperweeklabel",
+      "format_utils_getperweeklabellong",
+      "format_utils_getunlimitedlabel",
+      "format_utils_kmtodisplayunit",
+      "format_utils_meterstounit",
+      "format_utils_unittometers",
+      "formatters_formatcurrency",
+      "formatters_formatdate",
+      "formatters_formatdatetime",
+      "formatters_formatnumber",
+      "formatters_formatpercentage",
+      "formatters_formatrelativedate",
+      "formatters_getstatusvariant",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_fleet_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_protectionplanselector_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_lib_format_utils_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_lib_mileage_utils_ts",
+      "last_service_card_formatdate",
+      "last_service_card_formatmileage",
+      "location_settings_handlesavesettings",
+      "mileage_utils_calculatetotalmileageallowance",
+      "mileage_utils_getmileagetier",
+      "mileage_utils_gettiermileage",
+      "mileage_utils_isunlimitedmileage",
+      "page_getdaysuntilexpiry",
+      "page_getexpirybadge",
+      "page_geticoncomponent",
+      "page_getmileagedisplay",
+      "page_getvehiclename",
+      "page_getverificationbadge",
+      "page_handleapprove",
+      "page_handlereject",
+      "protectionplanselector_calculateplancost",
+      "protectionplanselector_getsavingstext",
+      "protectionplanselector_loadprotectionplans",
+      "protectionplanselector_tiericon",
+      "src_app_dashboard_pending_bookings_page_tsx",
+      "src_app_fleet_page_tsx",
+      "src_components_protectionplanselector_tsx",
+      "src_components_vehicles_last_service_card_tsx",
+      "src_lib_format_utils_ts",
+      "src_lib_formatters_ts",
+      "src_lib_mileage_utils_ts"
+    ],
+    "9": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_customer_portal_portal_payments_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_payg_section_tsx",
+      "page_cn",
+      "page_computestatus",
+      "page_executepayment",
+      "page_for",
+      "page_getdecisiondisplay",
+      "page_getscorecolor",
+      "page_getscorelabel",
+      "page_getstatuslabel",
+      "page_getstatusvariant",
+      "page_handleactivate",
+      "page_handleapproveclick",
+      "page_handlecopy",
+      "page_handlepaynow",
+      "page_handlepayoff",
+      "page_handlerejectinsurance",
+      "page_handleretry",
+      "page_handlevisibilitychange",
+      "page_parserefdate",
+      "page_proceedtoapproveafterchecks",
+      "page_processstripepayment",
+      "page_scrolltoinsurance",
+      "page_scrolltokeyhandover",
+      "page_scrolltoledger",
+      "page_showsensitiveinfo",
+      "page_startpolling",
+      "page_switch",
+      "page_syncstatustoactive",
+      "page_toggleallextunpaid",
+      "page_toggleallunpaid",
+      "page_togglecategory",
+      "page_toggleextcategory",
+      "page_uploadinsurancedoc",
+      "payg_section",
+      "payg_section_formatcurrency",
+      "payg_section_handlepaylatest",
+      "payg_section_sendmanualreminder",
+      "src_app_customer_portal_portal_payments_page_tsx",
+      "src_app_dashboard_plates_id_page_tsx",
+      "src_app_dashboard_rentals_id_page_tsx",
+      "src_components_customer_portal_payg_section_tsx",
+      "src_components_rentals_payg_section_tsx",
+      "src_components_website_content_why_choose_us_editor_tsx",
+      "why_choose_us_editor_additem",
+      "why_choose_us_editor_geticoncomponent",
+      "why_choose_us_editor_handlesave",
+      "why_choose_us_editor_removeitem",
+      "why_choose_us_editor_updateitem"
+    ],
+    "10": [
+      "format_utils_getdistanceunitshort",
+      "google_places_session_placessessionmanager",
+      "google_places_session_placessessionmanager_gettoken",
+      "google_places_session_placessessionmanager_refreshtoken",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_locationautocomplete_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_locationautocompletewithradius_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_locationpicker_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_usedeliverylocations_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_lib_google_places_session_ts",
+      "location_autocomplete_fetchsuggestions",
+      "location_autocomplete_handleclickoutside",
+      "location_autocomplete_handlefocus",
+      "location_autocomplete_handleinputchange",
+      "location_autocomplete_handleselectsuggestion",
+      "location_autocomplete_with_radius_fetchsuggestions",
+      "location_autocomplete_with_radius_formatdistancedisplay",
+      "location_autocomplete_with_radius_handleclickoutside",
+      "location_autocomplete_with_radius_handlefocus",
+      "location_autocomplete_with_radius_handleinputchange",
+      "location_autocomplete_with_radius_handleselectsuggestion",
+      "location_autocomplete_with_radius_haversinedistance",
+      "location_autocomplete_with_radius_kmtodisplayunit",
+      "locationautocomplete_fetchsuggestions",
+      "locationautocomplete_handleclickoutside",
+      "locationautocomplete_handlefocus",
+      "locationautocomplete_handleinputchange",
+      "locationautocomplete_handleselectsuggestion",
+      "locationautocompletewithradius_fetchsuggestions",
+      "locationautocompletewithradius_formatdistance",
+      "locationautocompletewithradius_handleclickoutside",
+      "locationautocompletewithradius_handlefocus",
+      "locationautocompletewithradius_handleinputchange",
+      "locationautocompletewithradius_handleselectsuggestion",
+      "locationautocompletewithradius_haversinedistance",
+      "locationautocompletewithradius_kmtodisplayunit",
+      "locationpicker_kmtodisplayunit",
+      "locationpicker_locationpicker",
+      "mileage_summary_card_allowedmileage",
+      "mileage_summary_card_getchargestatus",
+      "mileage_summary_card_getdistanceunitshort",
+      "src_components_locationautocomplete_tsx",
+      "src_components_locationautocompletewithradius_tsx",
+      "src_components_locationpicker_tsx",
+      "src_components_rentals_mileage_summary_card_tsx",
+      "src_components_ui_location_autocomplete_tsx",
+      "src_components_ui_location_autocomplete_with_radius_tsx",
+      "src_hooks_usedeliverylocations_ts",
+      "src_lib_google_places_session_ts",
+      "usedeliverylocations_usedeliverylocations"
+    ],
+    "11": [
+      "page_clearfilters",
+      "page_exporttocsv",
+      "page_gettotalsbadge",
+      "page_handleaddcustomer",
+      "page_handleaddpolicy",
+      "page_handleapprovecustomer",
+      "page_handleblockclick",
+      "page_handleclearfilters",
+      "page_handlecustomerselected",
+      "page_handledeactivatepolicy",
+      "page_handledeleteclick",
+      "page_handledeletecustomer",
+      "page_handleeditcustomer",
+      "page_handleeditpolicy",
+      "page_handleexportcsv",
+      "page_handlefilterschange",
+      "page_handlekeydown",
+      "page_handlemonthclick",
+      "page_handlepagechange",
+      "page_handlerejectclick",
+      "page_handlerejectconfirm",
+      "page_handleselectall",
+      "page_handleselectfine",
+      "page_handlesort",
+      "page_handleuploaddocument",
+      "page_handlevehicleclick",
+      "page_handleviewchange",
+      "page_handleviewpolicy",
+      "page_handleviewrejecteddetails",
+      "page_hasnextofkin",
+      "page_ispolicyurgent",
+      "page_openpaymentdialog",
+      "page_sortbutton",
+      "page_sorticon",
+      "page_syncfinestatusafterpayment",
+      "src_app_dashboard_audit_logs_page_tsx",
+      "src_app_dashboard_customers_page_tsx",
+      "src_app_dashboard_fines_id_page_tsx",
+      "src_app_dashboard_fines_page_tsx",
+      "src_app_dashboard_insurance_page_tsx",
+      "src_app_dashboard_pl_dashboard_monthly_month_page_tsx",
+      "src_app_dashboard_pl_dashboard_page_tsx",
+      "src_app_dashboard_rentals_page_tsx",
+      "src_hooks_use_payments_data_ts",
+      "use_payments_data_exportpaymentscsv",
+      "use_payments_data_formatdatefordb",
+      "use_payments_data_usepaymentsdata"
+    ],
+    "12": [
+      "concept_marketing_landing",
+      "enhancedservicehighlights_enhancedservicehighlights",
+      "enhancedservicehighlights_geticoncomponent",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_testimonials_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_enhancedservicehighlights_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_seo_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_themeinitializer_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_usebrandingsettings_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_usedynamictheme_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_usepagecontent_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_utils_tenantname_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_app_page_tsx",
+      "page_home",
+      "page_testimonials",
+      "readme_md",
+      "readme_nextjs_starter",
+      "seo_seo",
+      "src_app_dashboard_testimonials_page_tsx",
+      "src_app_page_tsx",
+      "src_app_testimonials_page_tsx",
+      "src_components_enhancedservicehighlights_tsx",
+      "src_components_seo_tsx",
+      "src_components_themeinitializer_tsx",
+      "src_hooks_usebrandingsettings_ts",
+      "src_hooks_usedynamictheme_ts",
+      "src_hooks_usepagecontent_ts",
+      "src_utils_tenantname_ts",
+      "tenantname_createcompanynamereplacer",
+      "tenantname_replacecompanyname",
+      "themeinitializer_themeinitializer",
+      "usebrandingsettings_usebrandingsettings",
+      "usedynamictheme_formathsl",
+      "usedynamictheme_generatecolorvariants",
+      "usedynamictheme_hextohsl",
+      "usedynamictheme_usedynamictheme",
+      "usepagecontent_mergewithdefaults",
+      "usepagecontent_usepagecontent"
+    ],
+    "13": [
+      "app_admin_login_page_tsx",
+      "bookingcheckout_calculateextrastotal",
+      "bookingcheckout_calculaterentaldays",
+      "bookingcheckout_calculatetotal",
+      "bookingcheckout_calculatevehicleprice",
+      "bookingcheckout_handleextratoggle",
+      "bookingcheckout_handlesubmit",
+      "bookingcheckout_loaddata",
+      "bookingcheckout_validateform",
+      "calculate_rental_price_calculaterentalpricebreakdown",
+      "calculate_rental_price_findmatchingholiday",
+      "calculate_rental_price_formatdate",
+      "calculate_rental_price_getdayrate",
+      "calculate_rental_price_parsedatestring",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_admin_login_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_booking_checkout_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_booking_vehicles_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_contact_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_bookingcheckout_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_lib_calculate_rental_price_ts",
+      "page_calculatecompletetotal",
+      "page_calculateprice",
+      "page_calculaterentaldays",
+      "page_calculatetotal",
+      "page_calculatevehicleprice",
+      "page_calculatevehiclepriceresult",
+      "page_handlesubmit",
+      "page_handlevehicleselect",
+      "page_loadvehicles",
+      "page_validatefield",
+      "page_validateform",
+      "src_app_booking_checkout_page_tsx",
+      "src_app_booking_vehicles_page_tsx",
+      "src_app_contact_page_tsx",
+      "src_components_bookingcheckout_tsx",
+      "src_lib_calculate_rental_price_ts"
+    ],
+    "14": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_api_esign_route_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_api_esign_sign_route_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_api_esign_view_route_ts",
+      "route_buildinstallmentschedulehtml",
+      "route_decodeentities",
+      "route_drawtext",
+      "route_drawwrappedruns",
+      "route_ensurespace",
+      "route_extractalign",
+      "route_formatcurrency",
+      "route_formatdate",
+      "route_generatedefaultagreement",
+      "route_getboldsignapikey",
+      "route_getcachedproperties",
+      "route_htmltotext",
+      "route_mapdocumentstatus",
+      "route_measurerunswidth",
+      "route_newpage",
+      "route_parsehtmltoblocks",
+      "route_parseinlineruns",
+      "route_parselistitems",
+      "route_parsetablerows",
+      "route_pickfont",
+      "route_post",
+      "route_processtemplate",
+      "route_removeemptyfields",
+      "route_renderblockstopdf",
+      "route_rendertexttopdf",
+      "route_sanitizepdftext",
+      "route_setcachedproperties",
+      "route_striptags",
+      "src_app_api_esign_route_ts",
+      "src_app_api_esign_sign_route_ts",
+      "src_app_api_esign_status_route_ts",
+      "src_app_api_esign_view_route_ts"
+    ],
+    "15": [
+      "bookingcheckoutstep_builddailybreakdown",
+      "bookingcheckoutstep_buildrentalbreakdown",
+      "bookingcheckoutstep_calculatedeliveryfees",
+      "bookingcheckoutstep_calculatediscountedvehicletotal",
+      "bookingcheckoutstep_calculateextrastotal",
+      "bookingcheckoutstep_calculategrandtotal",
+      "bookingcheckoutstep_calculatemonthlyamount",
+      "bookingcheckoutstep_calculatepromodiscount",
+      "bookingcheckoutstep_calculaterentalperiodtype",
+      "bookingcheckoutstep_calculatesecuritydeposit",
+      "bookingcheckoutstep_calculateservicefee",
+      "bookingcheckoutstep_calculatetaxamount",
+      "bookingcheckoutstep_createbonzahquote",
+      "bookingcheckoutstep_fmt",
+      "bookingcheckoutstep_getbookingmode",
+      "bookingcheckoutstep_getpayableamount",
+      "bookingcheckoutstep_handlepayment",
+      "bookingcheckoutstep_handlesenddocusign",
+      "bookingcheckoutstep_proceedwithpayment",
+      "bookingcheckoutstep_redirecttoinstallmentcheckout",
+      "bookingcheckoutstep_redirecttopreauthpayment",
+      "bookingcheckoutstep_redirecttostripepayment",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_bookingcheckoutstep_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_lib_invoiceutils_ts",
+      "invoiceutils_createinvoice",
+      "invoiceutils_createinvoicewithfallback",
+      "invoiceutils_createlocalinvoice",
+      "invoiceutils_generateinvoicenumber",
+      "src_components_bookingcheckoutstep_tsx",
+      "src_lib_invoiceutils_ts"
+    ],
+    "16": [
+      "notification_service_notificationservice",
+      "notification_service_notificationservice_createbulkinappnotifications",
+      "notification_service_notificationservice_createinappnotification",
+      "notification_service_notificationservice_getadminuserids",
+      "notification_service_notificationservice_notifyadmins",
+      "notification_service_notificationservice_notifyadminsallchannels",
+      "notification_service_notificationservice_sendcompletenotification",
+      "notification_service_notificationservice_sendemail",
+      "notification_service_notificationservice_sendsms",
+      "notifications_sendbookingnotification",
+      "notifications_sendpaymentrejectionnotification",
+      "notifications_sendpaymentverificationnotification",
+      "reminder_notifier_createnotificationsforpendingreminders",
+      "reminder_notifier_createremindernotification",
+      "reminder_notifier_sendremindernotificationsviaedgefunction",
+      "sms_service_smsservice",
+      "sms_service_smsservice_formatphonenumber",
+      "sms_service_smsservice_sendbulksms",
+      "sms_service_smsservice_sendmessage",
+      "sms_service_smsservice_sendsms",
+      "src_lib_notifications_ts",
+      "src_lib_reminder_notifier_ts",
+      "src_lib_services_notification_service_ts",
+      "src_lib_services_sms_service_ts"
+    ],
+    "17": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_lib_tenantqueries_ts",
+      "src_lib_tenantqueries_ts",
+      "tenantqueries_cancustomerbook",
+      "tenantqueries_createtenantbooking",
+      "tenantqueries_createtenantcontactrequest",
+      "tenantqueries_gettenantblockeddates",
+      "tenantqueries_gettenantpromotions",
+      "tenantqueries_gettenantsettings",
+      "tenantqueries_gettenanttestimonials",
+      "tenantqueries_gettenantvehiclebyid",
+      "tenantqueries_gettenantvehicles",
+      "tenantqueries_iscustomerblocked",
+      "tenantqueries_iscustomerblockedforlogin",
+      "tenantqueries_isgloballyblacklisted",
+      "tenantqueries_isidentityblocked",
+      "tenantqueries_tenantcount",
+      "tenantqueries_tenantdelete",
+      "tenantqueries_tenantgetbyid",
+      "tenantqueries_tenantinsert",
+      "tenantqueries_tenantquery",
+      "tenantqueries_usetenantquery"
+    ],
+    "18": [
+      "booking_preview_v4_dark_png",
+      "booking_preview_v4_png",
+      "booking_website_bookingwebsite",
+      "cta_band_ctaband",
+      "demand_activation_demandactivation",
+      "faq_section_faqsection",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_sections_booking_website_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_sections_cta_band_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_sections_demand_activation_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_sections_faq_section_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_sections_pricing_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_hooks_use_fade_in_ts",
+      "pricing_pricingsection",
+      "src_components_sections_booking_website_tsx",
+      "src_components_sections_cta_band_tsx",
+      "src_components_sections_demand_activation_tsx",
+      "src_components_sections_faq_section_tsx",
+      "src_components_sections_pricing_tsx",
+      "src_hooks_use_fade_in_ts",
+      "use_fade_in_usefadein"
+    ],
+    "19": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_verify_token_page_tsx",
+      "page_getcurrentimage",
+      "page_getcurrentpreview",
+      "page_getstepinfo",
+      "page_handleback",
+      "page_handlecapture",
+      "page_handlefileupload",
+      "page_handlenext",
+      "page_handler",
+      "page_handleretake",
+      "page_handleskipback",
+      "page_handleunpublish",
+      "page_processverification",
+      "page_stopcamera",
+      "page_uploadimage",
+      "page_validatesession",
+      "src_app_dashboard_cms_blog_id_page_tsx",
+      "src_app_verify_token_page_tsx"
+    ],
+    "20": [
+      "authpromptdialog_handleclose",
+      "authpromptdialog_handleforgotpassword",
+      "authpromptdialog_handlelogin",
+      "authpromptdialog_handleotpchange",
+      "authpromptdialog_handleotpkeydown",
+      "authpromptdialog_handleotppaste",
+      "authpromptdialog_handleotpsubmit",
+      "authpromptdialog_handleresendotp",
+      "authpromptdialog_handleresendresetotp",
+      "authpromptdialog_handleresetotpchange",
+      "authpromptdialog_handleresetotpkeydown",
+      "authpromptdialog_handleresetotppaste",
+      "authpromptdialog_handleresetotpsubmit",
+      "authpromptdialog_handlesetnewpassword",
+      "authpromptdialog_handlesignup",
+      "authpromptdialog_handleskip",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_booking_authpromptdialog_tsx",
+      "src_components_booking_authpromptdialog_tsx"
+    ],
+    "21": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_rentaltimeline_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_customer_agreements_ts",
+      "rentaltimeline_agreementitem",
+      "rentaltimeline_getagreementdotclass",
+      "rentaltimeline_getagreementstatusbadge",
+      "rentaltimeline_getinsurancedotclass",
+      "rentaltimeline_getinsurancestatusbadge",
+      "rentaltimeline_safeformat",
+      "rentaltimeline_tocustomeragreement",
+      "src_components_customer_portal_rentaltimeline_tsx",
+      "src_hooks_use_customer_agreements_ts",
+      "use_customer_agreements_getagreementstatusinfo",
+      "use_customer_agreements_usecustomeragreements",
+      "use_customer_agreements_usecustomeragreementstats",
+      "use_customer_agreements_usedownloadagreement",
+      "use_customer_agreements_usesignagreement",
+      "use_customer_agreements_useviewagreement"
+    ],
+    "22": [
+      "extras_editor_addextra",
+      "extras_editor_moveextra",
+      "extras_editor_onsubmit",
+      "extras_editor_removeextra",
+      "extras_editor_updateextra",
+      "extras_settings_getrowclassname",
+      "extras_settings_handledelete",
+      "extras_settings_handleimageupload",
+      "extras_settings_handleopenadd",
+      "extras_settings_handleopenedit",
+      "extras_settings_handlesave",
+      "extras_settings_handletoggleactive",
+      "extras_settings_handleupdatestock",
+      "extras_settings_islowstock",
+      "src_components_settings_extras_settings_tsx",
+      "src_components_website_content_extras_editor_tsx"
+    ],
+    "23": [
+      "agreement_template_editor_formatbold",
+      "agreement_template_editor_formatbulletlist",
+      "agreement_template_editor_formath1",
+      "agreement_template_editor_formath2",
+      "agreement_template_editor_formath3",
+      "agreement_template_editor_formathorizontalrule",
+      "agreement_template_editor_formatitalic",
+      "agreement_template_editor_formatlink",
+      "agreement_template_editor_formatnumberedlist",
+      "agreement_template_editor_formatquote",
+      "agreement_template_editor_formattable",
+      "agreement_template_editor_formatunderline",
+      "agreement_template_editor_toolbarbutton",
+      "src_components_settings_agreement_template_editor_tsx"
+    ],
+    "24": [
+      "asset_boldsign_logo",
+      "asset_boldsign_logo_dark",
+      "asset_bonzah_logo",
+      "asset_bonzah_logo_dark",
+      "asset_cmd_logo",
+      "asset_cmd_logo_dark",
+      "asset_stripe_wordmark",
+      "asset_stripe_wordmark_dark",
+      "asset_twilio_logo",
+      "asset_twilio_logo_dark",
+      "asset_whatsapp_logo",
+      "asset_whatsapp_logo_dark",
+      "concept_dual_theme_branding",
+      "concept_third_party_integrations"
+    ],
+    "25": [
+      "apple_touch_icon_png",
+      "concept_seo_metadata",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_sitemap_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_app_robots_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_app_sitemap_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_shared_json_ld_tsx",
+      "json_ld_jsonld",
+      "og_png",
+      "robots_robots",
+      "sitemap_sitemap",
+      "src_app_icon_png",
+      "src_app_robots_ts",
+      "src_app_sitemap_ts",
+      "src_components_shared_json_ld_tsx"
+    ],
+    "26": [
+      "components_admin_mobileheader_tsx",
+      "components_admin_sidebarcontext_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_admin_mobileheader_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_admin_sidebarcontext_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_hooks_use_mobile_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_mobile_tsx",
+      "hooks_use_mobile_ts",
+      "mobileheader_mobileheader",
+      "sidebarcontext_sidebarprovider",
+      "sidebarcontext_usesidebar",
+      "src_hooks_use_mobile_tsx",
+      "use_mobile_useismobile"
+    ],
+    "27": [
+      "bookings_management_v2_dark_png",
+      "bookings_management_v2_png",
+      "dashboard_preview_v5_dark_png",
+      "dashboard_preview_v5_png",
+      "fleet_management_v3_dark_png",
+      "fleet_management_v3_png",
+      "payments_management_v2_dark_png",
+      "payments_management_v2_png",
+      "revenue_analytics_v2_dark_png",
+      "revenue_analytics_v2_png",
+      "src_components_sections_hero_tsx",
+      "src_components_sections_operations_dashboard_tsx"
+    ],
+    "28": [
+      "devpanel_createcustomer",
+      "devpanel_createfine",
+      "devpanel_createpayment",
+      "devpanel_createvehicle",
+      "devpanel_fillloginform",
+      "devpanel_fillrentalform",
+      "devpanel_generaterandomvehicledata",
+      "devpanel_handlekeydown",
+      "devpanel_navigateto",
+      "devpanel_togglesection",
+      "src_components_shared_devpanel_tsx"
+    ],
+    "29": [
+      "gig_driver_upload_dialog_addfiles",
+      "gig_driver_upload_dialog_handlecancel",
+      "gig_driver_upload_dialog_handledrag",
+      "gig_driver_upload_dialog_handledrop",
+      "gig_driver_upload_dialog_handlefilechange",
+      "gig_driver_upload_dialog_handleupload",
+      "gig_driver_upload_dialog_removefile",
+      "gig_driver_upload_dialog_validatefile",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_booking_gig_driver_upload_dialog_tsx",
+      "src_components_booking_gig_driver_upload_dialog_tsx",
+      "src_components_customers_gig_driver_upload_dialog_tsx"
+    ],
+    "30": [
+      "inspection_registration_status_chip_getstatusicon",
+      "inspection_registration_status_chip_getstatusvariant",
+      "inspection_registration_status_chip_inspectionregistrationstatuschip",
+      "mot_tax_utils_formatduestatustext",
+      "mot_tax_utils_getduestatus",
+      "src_components_insurance_inspection_registration_status_chip_tsx",
+      "src_components_vehicles_warranty_status_chip_tsx",
+      "src_lib_mot_tax_utils_ts",
+      "warranty_status_chip_getstatusicon",
+      "warranty_status_chip_getstatusvariant",
+      "warranty_status_chip_warrantystatuschip"
+    ],
+    "31": [
+      "add_service_record_dialog_handleopenchange",
+      "add_service_record_dialog_handlesubmit",
+      "add_user_dialog_handleopenchange",
+      "add_user_dialog_handlesubmit",
+      "insurance_policy_dialog_handleclose",
+      "insurance_policy_dialog_onsubmit",
+      "src_components_insurance_insurance_policy_dialog_tsx",
+      "src_components_users_add_user_dialog_tsx",
+      "src_components_vehicles_add_service_record_dialog_tsx",
+      "src_components_vehicles_vehicle_expense_dialog_tsx",
+      "vehicle_expense_dialog_handlesubmit"
+    ],
+    "32": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_customer_installments_ts",
+      "src_hooks_use_customer_installments_ts",
+      "use_customer_installments_formatcardlast4",
+      "use_customer_installments_getinstallmentstatusbadge",
+      "use_customer_installments_getinstallmentstatuscolor",
+      "use_customer_installments_useactiveinstallmentplans",
+      "use_customer_installments_usecustomerinstallmentplans",
+      "use_customer_installments_usecustomerpaymenthistory",
+      "use_customer_installments_useinstallmentstats",
+      "use_customer_installments_usenextinstallmentpayment",
+      "use_customer_installments_userentalinstallmentplan"
+    ],
+    "33": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_lib_sanitize_ts",
+      "sanitize_escapehtml",
+      "sanitize_isinputsafe",
+      "sanitize_sanitizeemail",
+      "sanitize_sanitizelocation",
+      "sanitize_sanitizename",
+      "sanitize_sanitizephone",
+      "sanitize_sanitizetext",
+      "sanitize_sanitizetextarea",
+      "src_lib_sanitize_ts"
+    ],
+    "34": [
+      "ai_insurance_verification_analyzetextresponse",
+      "ai_insurance_verification_buildverificationprompt",
+      "ai_insurance_verification_callopenrouterapi",
+      "ai_insurance_verification_getsuggestionforrejection",
+      "ai_insurance_verification_maprecommendationtostatus",
+      "ai_insurance_verification_maptorejectioncode",
+      "ai_insurance_verification_parseairesponse",
+      "ai_insurance_verification_verifyinsurancedocument",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_lib_ai_insurance_verification_ts",
+      "src_lib_ai_insurance_verification_ts"
+    ],
+    "35": [
+      "devjumppanel_clearalldata",
+      "devjumppanel_fetchfirstavailablevehicle",
+      "devjumppanel_handlekeydown",
+      "devjumppanel_handleuploadinsuranceonly",
+      "devjumppanel_jumptostep",
+      "devjumppanel_setinsuranceverified",
+      "devjumppanel_setverificationstate",
+      "devjumppanel_uploadsampleinsurance",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_devjumppanel_tsx",
+      "src_components_devjumppanel_tsx"
+    ],
+    "36": [
+      "document_status_badge_documentstatusbadge",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_customer_documents_ts",
+      "src_components_customers_document_status_badge_tsx",
+      "src_hooks_use_customer_documents_ts",
+      "use_customer_documents_getdocumentstatus",
+      "use_customer_documents_usecustomerdocuments",
+      "use_customer_documents_usecustomerdocumentstats",
+      "use_customer_documents_usedeletecustomerdocument",
+      "use_customer_documents_usedownloaddocument"
+    ],
+    "37": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_lib_utils_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_lib_utils_ts",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_lib_utils_ts",
+      "lib_utils_ts",
+      "src_lib_utils_ts",
+      "utils_cn",
+      "utils_formatcurrency",
+      "utils_getnavigationurl",
+      "utils_totitlecase"
+    ],
+    "38": [
+      "ai_scan_progress_fetchstatus",
+      "ai_scan_progress_formatdate",
+      "ai_scan_progress_getdecisiondisplay",
+      "ai_scan_progress_getscorecolor",
+      "ai_scan_progress_getscorelabel",
+      "ai_scan_progress_getstatusconfig",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ai_scan_progress_tsx",
+      "src_components_ai_scan_progress_tsx",
+      "src_components_insurance_ai_scan_progress_tsx"
+    ],
+    "39": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_insurance_upload_dialog_tsx",
+      "insurance_upload_dialog_handlecancel",
+      "insurance_upload_dialog_handledrag",
+      "insurance_upload_dialog_handledrop",
+      "insurance_upload_dialog_handlefilechange",
+      "insurance_upload_dialog_handleupload",
+      "insurance_upload_dialog_removefile",
+      "insurance_upload_dialog_validatefile",
+      "src_components_insurance_upload_dialog_tsx"
+    ],
+    "40": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_time_picker_tsx",
+      "src_components_ui_time_picker_tsx",
+      "time_picker_converttimebetweentimezones",
+      "time_picker_formattime12hour",
+      "time_picker_gettimezoneoffset",
+      "time_picker_getvalidtimerangeincustomertimezone",
+      "time_picker_istimewithinbusinesshours",
+      "time_picker_timepicker",
+      "time_picker_timetominutes"
+    ],
+    "41": [
+      "editinsurancedialog_handlecancel",
+      "editinsurancedialog_handledrag",
+      "editinsurancedialog_handledrop",
+      "editinsurancedialog_handlefilechange",
+      "editinsurancedialog_handleupload",
+      "editinsurancedialog_removefile",
+      "editinsurancedialog_validatefile",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_editinsurancedialog_tsx",
+      "src_components_customer_portal_editinsurancedialog_tsx"
+    ],
+    "42": [
+      "documentuploaddialog_handledrag",
+      "documentuploaddialog_handledrop",
+      "documentuploaddialog_handlefilechange",
+      "documentuploaddialog_handleupload",
+      "documentuploaddialog_removefile",
+      "documentuploaddialog_resetform",
+      "documentuploaddialog_validatefile",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_documentuploaddialog_tsx",
+      "src_components_customer_portal_documentuploaddialog_tsx"
+    ],
+    "43": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_payment_actions_ts",
+      "src_hooks_use_payment_actions_ts",
+      "use_payment_actions_useconfirmpaymentmethod",
+      "use_payment_actions_usecreatesetupintent",
+      "use_payment_actions_usecreateupfrontcheckout",
+      "use_payment_actions_usecurrentcard",
+      "use_payment_actions_usepayinstallmentearly",
+      "use_payment_actions_usepayremaininginstallments",
+      "use_payment_actions_useretrypayment"
+    ],
+    "44": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_useworkinghours_ts",
+      "src_hooks_useworkinghours_ts",
+      "useworkinghours_buildweeklyschedule",
+      "useworkinghours_formattime12hour",
+      "useworkinghours_getdaykeyfromcalendardate",
+      "useworkinghours_getdaykeyintimezone",
+      "useworkinghours_getworkinghoursfordate",
+      "useworkinghours_istimewithinworkinghours",
+      "useworkinghours_useworkinghours"
+    ],
+    "45": [
+      "src_components_settings_subscription_settings_tsx",
+      "subscription_settings_formatcurrency",
+      "subscription_settings_formatdate",
+      "subscription_settings_formatdatelong",
+      "subscription_settings_handlemanagepayment",
+      "subscription_settings_handleprint",
+      "subscription_settings_handlesubscribe",
+      "subscription_settings_statusbadge"
+    ],
+    "46": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_payg_timeline_tsx",
+      "payg_timeline_fmtdate",
+      "payg_timeline_fmtdatetime",
+      "payg_timeline_fmtrelative",
+      "payg_timeline_formatcurrency",
+      "payg_timeline_usecountdown",
+      "src_components_customer_portal_payg_timeline_tsx",
+      "src_components_rentals_payg_timeline_tsx"
+    ],
+    "47": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_maintenancebanner_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_maintenance_banner_ts",
+      "maintenance_banner_maintenancebanner",
+      "maintenancebanner_maintenancebanner",
+      "src_components_dashboard_maintenance_banner_tsx",
+      "src_components_maintenancebanner_tsx",
+      "src_hooks_use_maintenance_banner_ts",
+      "use_maintenance_banner_usemaintenancebanner"
+    ],
+    "48": [
+      "bonzahdetailsform_handlesubmit",
+      "bonzahdetailsform_validate",
+      "booking_onsubmit",
+      "booking_rentalduration",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_bonzahdetailsform_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_booking_tsx",
+      "src_components_bonzahdetailsform_tsx",
+      "src_components_booking_tsx"
+    ],
+    "49": [
+      "bookingwidget_calculateprice",
+      "bookingwidget_calculatepricenumber",
+      "bookingwidget_formatcurrency",
+      "bookingwidget_handlecloseconfirmation",
+      "bookingwidget_handlesubmit",
+      "bookingwidget_loadvehicles",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_bookingwidget_tsx",
+      "src_components_bookingwidget_tsx"
+    ],
+    "50": [
+      "enhancedbookingwidget_calculatepricebreakdown",
+      "enhancedbookingwidget_formatcurrency",
+      "enhancedbookingwidget_handlecloseconfirmation",
+      "enhancedbookingwidget_handlesubmit",
+      "enhancedbookingwidget_loaddata",
+      "enhancedbookingwidget_toggleextra",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_enhancedbookingwidget_tsx",
+      "src_components_enhancedbookingwidget_tsx"
+    ],
+    "51": [
+      "app_admin_protected_blacklist_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_admin_protected_blacklist_page_tsx",
+      "page_getauthheaders",
+      "page_handleconfirmaction",
+      "page_loadblockedcustomers",
+      "page_opendialog",
+      "page_togglerow",
+      "src_app_dashboard_settings_blacklist_page_tsx"
+    ],
+    "52": [
+      "rental_utils_calculateduration",
+      "rental_utils_calculatedurationinmonths",
+      "rental_utils_formatduration",
+      "rental_utils_formatrentalduration",
+      "rental_utils_getdurationfilter",
+      "rental_utils_getrentalstatus",
+      "src_lib_rental_utils_ts"
+    ],
+    "53": [
+      "insurance_policy_status_chip_insurancepolicystatuschip",
+      "insurance_utils_formatinsurancecurrency",
+      "insurance_utils_getinsurancestatusinfo",
+      "insurance_utils_validatedaterange",
+      "insurance_utils_validatepolicynumber",
+      "src_components_insurance_insurance_policy_status_chip_tsx",
+      "src_lib_insurance_utils_ts"
+    ],
+    "54": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_pagination_tsx",
+      "pagination_pagination",
+      "pagination_paginationellipsis",
+      "pagination_paginationlink",
+      "pagination_paginationnext",
+      "pagination_paginationprevious",
+      "src_components_ui_pagination_tsx"
+    ],
+    "55": [
+      "dialog_cn",
+      "dialog_dialog",
+      "dialog_dialogclose",
+      "dialog_dialogportal",
+      "dialog_dialogtrigger",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_ui_dialog_tsx",
+      "src_components_ui_dialog_tsx"
+    ],
+    "56": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_customer_portal_portal_bookings_page_tsx",
+      "page_formatdateshort",
+      "page_formatdatetimeshort",
+      "page_getemptymessage",
+      "page_getref",
+      "page_statcard",
+      "src_app_customer_portal_portal_bookings_page_tsx"
+    ],
+    "57": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_paymentbreakdown_tsx",
+      "paymentbreakdown_amounttopay",
+      "paymentbreakdown_chargesforrow",
+      "paymentbreakdown_paycategories",
+      "paymentbreakdown_toggle",
+      "paymentbreakdown_toggleall",
+      "src_components_customer_portal_paymentbreakdown_tsx"
+    ],
+    "58": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_phone_input_tsx",
+      "phone_input_cn",
+      "phone_input_getdefaultkey",
+      "phone_input_handlecountryselect",
+      "phone_input_handlenumberchange",
+      "phone_input_parsevalue",
+      "src_components_ui_phone_input_tsx"
+    ],
+    "59": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_renewrentaldialog_tsx",
+      "renewrentaldialog_formatcurrency",
+      "renewrentaldialog_handleback",
+      "renewrentaldialog_handleclose",
+      "renewrentaldialog_handleconfirmsubmit",
+      "renewrentaldialog_handlereviewclick",
+      "src_components_customer_portal_renewrentaldialog_tsx"
+    ],
+    "60": [
+      "app_admin_protected_openai_usage_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_admin_protected_openai_usage_page_tsx",
+      "page_fmtnum",
+      "page_fmttokens",
+      "page_fmtusd",
+      "page_functionbadgecolor",
+      "page_rangestartiso"
+    ],
+    "61": [
+      "concept_dark_mode_theming",
+      "header_onscroll",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_layout_header_tsx",
+      "logo_dark_png",
+      "logo_light_png",
+      "src_components_layout_header_tsx",
+      "src_components_shared_theme_toggle_tsx"
+    ],
+    "62": [
+      "concept_lead_capture",
+      "consultation_form_consultationform",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_forms_consultation_form_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_forms_lead_capture_form_tsx",
+      "lead_capture_form_leadcaptureform",
+      "src_components_forms_consultation_form_tsx",
+      "src_components_forms_lead_capture_form_tsx"
+    ],
+    "63": [
+      "src_lib_vehicle_utils_ts",
+      "vehicle_utils_checkregistrationunique",
+      "vehicle_utils_computevehiclestatus",
+      "vehicle_utils_formatvehiclecurrency",
+      "vehicle_utils_getcontracttotal",
+      "vehicle_utils_normalizeregistration"
+    ],
+    "64": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_lib_timezones_ts",
+      "src_lib_timezones_ts",
+      "timezones_findtimezone",
+      "timezones_getdetectedtimezone",
+      "timezones_gettimezonedisplaylabel",
+      "timezones_gettimezonesbyregion"
+    ],
+    "65": [
+      "calculate_extension_price_calculateextensionprice",
+      "calculate_extension_price_findmatchingholiday",
+      "calculate_extension_price_formatdate",
+      "calculate_extension_price_getdayrate",
+      "calculate_extension_price_parsedatestring",
+      "src_lib_calculate_extension_price_ts"
+    ],
+    "66": [
+      "email_service_emailservice",
+      "email_service_emailservice_sendemail",
+      "email_service_emailservice_sendhtmlemail",
+      "email_service_emailservice_sendtemplateemail",
+      "email_service_emailservice_sendtextemail",
+      "src_lib_services_email_service_ts"
+    ],
+    "67": [
+      "src_middleware_tenantmiddleware_ts",
+      "tenantmiddleware_extractsubdomain",
+      "tenantmiddleware_getcurrenttenantslug",
+      "tenantmiddleware_istenantrequest",
+      "tenantmiddleware_redirecttomaindomain",
+      "tenantmiddleware_redirecttotenant"
+    ],
+    "68": [
+      "breadcrumb_breadcrumbellipsis",
+      "breadcrumb_breadcrumbseparator",
+      "components_ui_breadcrumb_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_breadcrumb_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_breadcrumb_tsx",
+      "src_components_ui_breadcrumb_tsx"
+    ],
+    "69": [
+      "global_search_getentityemoji",
+      "global_search_geticon",
+      "global_search_handlekeydown",
+      "global_search_handleselect",
+      "global_search_rendergroup",
+      "src_components_shared_layout_global_search_tsx"
+    ],
+    "70": [
+      "blocked_dates_manager_confirmdelete",
+      "blocked_dates_manager_handleaddblockeddate",
+      "blocked_dates_manager_handledeleteclick",
+      "blocked_dates_manager_isdateblocked",
+      "blocked_dates_manager_proceedwithblock",
+      "src_components_blocked_dates_blocked_dates_manager_tsx"
+    ],
+    "71": [
+      "reminder_rules_config_handleleaddayschange",
+      "reminder_rules_config_handlereset",
+      "reminder_rules_config_handleresetall",
+      "reminder_rules_config_handleruleupdate",
+      "reminder_rules_config_handlesave",
+      "src_components_settings_reminder_rules_config_tsx"
+    ],
+    "72": [
+      "installment_config_dialog_getdraft",
+      "installment_config_dialog_handlenumberblur",
+      "installment_config_dialog_handlenumberchange",
+      "installment_config_dialog_handlesave",
+      "installment_config_dialog_update",
+      "src_components_settings_installment_config_dialog_tsx"
+    ],
+    "73": [
+      "call_forwarding_settings_handlechange",
+      "call_forwarding_settings_handlesave",
+      "call_forwarding_settings_handlesavenumber",
+      "call_forwarding_settings_handletoggleforwarding",
+      "call_forwarding_settings_handletogglevoicemail",
+      "src_components_settings_call_forwarding_settings_tsx"
+    ],
+    "74": [
+      "src_components_website_content_stats_editor_tsx",
+      "stats_editor_additem",
+      "stats_editor_geticoncomponent",
+      "stats_editor_handlesave",
+      "stats_editor_removeitem",
+      "stats_editor_updateitem"
+    ],
+    "75": [
+      "src_components_website_content_terms_editor_tsx",
+      "terms_editor_addterm",
+      "terms_editor_moveterm",
+      "terms_editor_onsubmit",
+      "terms_editor_removeterm",
+      "terms_editor_updateterm"
+    ],
+    "76": [
+      "inclusions_editor_additem",
+      "inclusions_editor_moveitem",
+      "inclusions_editor_onsubmit",
+      "inclusions_editor_removeitem",
+      "inclusions_editor_updateitem",
+      "src_components_website_content_inclusions_editor_tsx"
+    ],
+    "77": [
+      "how_it_works_editor_addstep",
+      "how_it_works_editor_movestep",
+      "how_it_works_editor_onsubmit",
+      "how_it_works_editor_removestep",
+      "how_it_works_editor_updatestep",
+      "src_components_website_content_how_it_works_editor_tsx"
+    ],
+    "78": [
+      "bookingpicker_formatrentalnumber",
+      "bookingpicker_getstatuscolor",
+      "bookingpicker_handleselect",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_chat_bookingpicker_tsx",
+      "src_components_chat_bookingpicker_tsx",
+      "src_components_customer_portal_chat_bookingpicker_tsx"
+    ],
+    "79": [
+      "installmentplancard_getinstallmentstatusicon",
+      "installmentplancard_getstatusbadge",
+      "installmentplancard_installmentplancard",
+      "src_components_rentals_installmentplancard_tsx",
+      "src_hooks_use_installment_plan_ts",
+      "use_installment_plan_useinstallmentplan"
+    ],
+    "80": [
+      "herocarousel_gotoslide",
+      "herocarousel_handleended",
+      "herocarousel_handlekeydown",
+      "herocarousel_normalizemedia",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_herocarousel_tsx",
+      "src_components_herocarousel_tsx"
+    ],
+    "81": [
+      "bookingvehicles_calculateprice",
+      "bookingvehicles_calculaterentaldays",
+      "bookingvehicles_handlevehicleselect",
+      "bookingvehicles_loadvehicles",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_bookingvehicles_tsx",
+      "src_components_bookingvehicles_tsx"
+    ],
+    "82": [
+      "aiverificationqr_fetchinitialstate",
+      "aiverificationqr_formattime",
+      "aiverificationqr_getqrcodeurl",
+      "aiverificationqr_updatetime",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_aiverificationqr_tsx",
+      "src_components_aiverificationqr_tsx"
+    ],
+    "83": [
+      "bonzahinsuranceselector_coverageicon",
+      "bonzahinsuranceselector_handleaddinsurance",
+      "bonzahinsuranceselector_handlecoveragetoggle",
+      "bonzahinsuranceselector_handleskipinsurance",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_bonzahinsuranceselector_tsx",
+      "src_components_bonzahinsuranceselector_tsx"
+    ],
+    "84": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_installments_installmentscheduletable_tsx",
+      "installmentscheduletable_fmt",
+      "installmentscheduletable_fmtdate",
+      "installmentscheduletable_installmentscheduletable",
+      "installmentscheduletable_visualstatus",
+      "src_components_installments_installmentscheduletable_tsx"
+    ],
+    "85": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_installments_installmentcalendar_tsx",
+      "installmentcalendar_buildmonthgrid",
+      "installmentcalendar_formatcurrency",
+      "installmentcalendar_gonext",
+      "installmentcalendar_goprev",
+      "src_components_installments_installmentcalendar_tsx"
+    ],
+    "86": [
+      "cancelbookingdialog_handleback",
+      "cancelbookingdialog_handleclose",
+      "cancelbookingdialog_handleconfirmsubmit",
+      "cancelbookingdialog_handlerequestclick",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_cancelbookingdialog_tsx",
+      "src_components_customer_portal_cancelbookingdialog_tsx"
+    ],
+    "87": [
+      "announcementmodalgate_announcementmodalgate",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_announcements_announcementmodalgate_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_customer_announcements_ts",
+      "src_components_customer_portal_announcements_announcementmodalgate_tsx",
+      "src_hooks_use_customer_announcements_ts",
+      "use_customer_announcements_usecustomerannouncements"
+    ],
+    "88": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_portfolio_portfoliogallery_tsx",
+      "portfoliogallery_gotonext",
+      "portfoliogallery_gotoprevious",
+      "portfoliogallery_handlekeydown",
+      "portfoliogallery_openlightbox",
+      "src_components_portfolio_portfoliogallery_tsx"
+    ],
+    "89": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_mobileactions_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_usesitesettings_tsx",
+      "mobileactions_mobileactions",
+      "src_components_mobileactions_tsx",
+      "src_hooks_usesitesettings_tsx",
+      "usesitesettings_usesitesettings"
+    ],
+    "90": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_navigation_tsx",
+      "navigation_getinitials",
+      "navigation_handlescroll",
+      "navigation_handlesignout",
+      "navigation_isactive",
+      "src_components_navigation_tsx"
+    ],
+    "91": [
+      "page_getdateranges",
+      "page_getfirstname",
+      "page_getgreeting",
+      "page_handledaterangechange",
+      "src_app_dashboard_page_tsx"
+    ],
+    "92": [
+      "chart_usechart",
+      "components_ui_chart_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_chart_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_chart_tsx",
+      "src_components_ui_chart_tsx"
+    ],
+    "93": [
+      "components_ui_sonner_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_sonner_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_sonner_tsx",
+      "sonner_toaster",
+      "src_components_ui_sonner_tsx"
+    ],
+    "94": [
+      "drawer_drawer",
+      "drawer_drawerfooter",
+      "drawer_drawerheader",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_drawer_tsx",
+      "src_components_ui_drawer_tsx"
+    ],
+    "95": [
+      "accordion_accordion",
+      "accordion_accordionitem",
+      "accordion_accordiontrigger",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_ui_accordion_tsx",
+      "src_components_ui_accordion_tsx"
+    ],
+    "96": [
+      "src_components_testimonials_testimonials_manager_tsx",
+      "testimonials_manager_handleclosedialog",
+      "testimonials_manager_handledelete",
+      "testimonials_manager_handleopendialog",
+      "testimonials_manager_handlesubmit"
+    ],
+    "97": [
+      "rental_review_dialog_handleaddnewtag",
+      "rental_review_dialog_handleskip",
+      "rental_review_dialog_handlesubmit",
+      "rental_review_dialog_handletoggletag",
+      "src_components_reviews_rental_review_dialog_tsx"
+    ],
+    "98": [
+      "src_components_customers_start_verification_dialog_tsx",
+      "start_verification_dialog_formattime",
+      "start_verification_dialog_handlecopylink",
+      "start_verification_dialog_handlestart",
+      "start_verification_dialog_updatetime"
+    ],
+    "99": [
+      "identity_verification_tab_fetchverifications",
+      "identity_verification_tab_getproviderbadge",
+      "identity_verification_tab_getstatusbadge",
+      "identity_verification_tab_handlecreateverification",
+      "src_components_customers_identity_verification_tab_tsx"
+    ],
+    "100": [
+      "src_components_vehicles_vehicle_extras_manager_tsx",
+      "vehicle_extras_manager_handleassign",
+      "vehicle_extras_manager_handlecreate",
+      "vehicle_extras_manager_handleremove",
+      "vehicle_extras_manager_handleupdateprice"
+    ],
+    "101": [
+      "plate_status_badge_platestatusbadge",
+      "src_components_plates_plate_status_badge_tsx",
+      "src_components_vehicles_vehicle_status_badge_tsx",
+      "vehicle_status_badge_getstatusconfig",
+      "vehicle_status_badge_vehiclestatusbadge"
+    ],
+    "102": [
+      "home_cta_editor_addtrustpoint",
+      "home_cta_editor_onsubmit",
+      "home_cta_editor_removetrustpoint",
+      "home_cta_editor_updatetrustpoint",
+      "src_components_website_content_home_cta_editor_tsx"
+    ],
+    "103": [
+      "booking_header_editor_addtrustpoint",
+      "booking_header_editor_onsubmit",
+      "booking_header_editor_removetrustpoint",
+      "booking_header_editor_updatetrustpoint",
+      "src_components_website_content_booking_header_editor_tsx"
+    ],
+    "104": [
+      "service_highlights_editor_addservice",
+      "service_highlights_editor_onsubmit",
+      "service_highlights_editor_removeservice",
+      "service_highlights_editor_updateservice",
+      "src_components_website_content_service_highlights_editor_tsx"
+    ],
+    "105": [
+      "fleet_overview_getoperationalcosts",
+      "fleet_overview_getoperationalprofit",
+      "fleet_overview_gettotalpl",
+      "fleet_overview_getvehiclephoto",
+      "src_components_dashboard_fleet_overview_tsx"
+    ],
+    "106": [
+      "bookingreferencecard_getstatuscolor",
+      "bookingreferencecard_handleclick",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_chat_bookingreferencecard_tsx",
+      "src_components_chat_bookingreferencecard_tsx",
+      "src_components_customer_portal_chat_bookingreferencecard_tsx"
+    ],
+    "107": [
+      "chatmessagebubble_formattime",
+      "chatmessagebubble_toggleplay",
+      "chatmessagebubble_twilioiconsmall",
+      "chatmessagebubble_whatsappiconsmall",
+      "src_components_chat_chatmessagebubble_tsx"
+    ],
+    "108": [
+      "src_components_chat_traxaidialog_tsx",
+      "traxaidialog_cn",
+      "traxaidialog_handlechange",
+      "traxaidialog_handlekeydown",
+      "traxaidialog_handlesend"
+    ],
+    "109": [
+      "chatwindow_isinternational",
+      "chatwindow_scrolltobottom",
+      "chatwindow_twilioicon",
+      "chatwindow_whatsappicon",
+      "src_components_chat_chatwindow_tsx"
+    ],
+    "110": [
+      "payg_statement_dialog_fmtdate",
+      "payg_statement_dialog_fmtdatetime",
+      "payg_statement_dialog_round2",
+      "payg_statement_dialog_statementcontent",
+      "src_components_rentals_payg_statement_dialog_tsx"
+    ],
+    "111": [
+      "rental_documents_getdocumenttypecolor",
+      "rental_documents_getfileicon",
+      "rental_documents_getstatuscolor",
+      "rental_documents_handledownload",
+      "src_components_rentals_rental_documents_tsx"
+    ],
+    "112": [
+      "calendar_view_handlenext",
+      "calendar_view_handleprev",
+      "calendar_view_handletoday",
+      "calendar_view_togglestatus",
+      "src_components_rentals_calendar_calendar_view_tsx"
+    ],
+    "113": [
+      "src_hooks_use_dynamic_theme_ts",
+      "use_dynamic_theme_formathsl",
+      "use_dynamic_theme_generatecolorvariants",
+      "use_dynamic_theme_hextohsl",
+      "use_dynamic_theme_updatemetatag"
+    ],
+    "114": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_booking_enquiry_submitted_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_booking_pending_page_tsx",
+      "page_fetchbookingdetails",
+      "src_app_booking_enquiry_submitted_page_tsx",
+      "src_app_booking_pending_page_tsx"
+    ],
+    "115": [
+      "auditlogger_generatefieldsummary",
+      "auditlogger_getchangedfields",
+      "auditlogger_logauditevent",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_lib_auditlogger_ts",
+      "src_lib_auditlogger_ts"
+    ],
+    "116": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_testimonialscarousel_tsx",
+      "src_components_testimonialscarousel_tsx",
+      "testimonialscarousel_loadtestimonials",
+      "testimonialscarousel_nexttestimonial",
+      "testimonialscarousel_prevtestimonial"
+    ],
+    "117": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_installmentselector_tsx",
+      "installmentselector_handleconfirm",
+      "installmentselector_handleselectoption",
+      "installmentselector_resolveconfig",
+      "src_components_installmentselector_tsx"
+    ],
+    "118": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_pwainstall_tsx",
+      "pwainstall_checkinstalled",
+      "pwainstall_handlebeforeinstallprompt",
+      "pwainstall_handleinstallclick",
+      "src_components_pwainstall_tsx"
+    ],
+    "119": [
+      "customerinstallmentsview_calendaritem",
+      "customerinstallmentsview_fmt",
+      "customerinstallmentsview_handlepaynow",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_installments_customerinstallmentsview_tsx",
+      "src_components_installments_customerinstallmentsview_tsx"
+    ],
+    "120": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_rentalcard_tsx",
+      "rentalcard_async",
+      "rentalcard_formatduration",
+      "rentalcard_getstatusbadgevariant",
+      "src_components_customer_portal_rentalcard_tsx"
+    ],
+    "121": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_portfolio_portfoliocarousel_tsx",
+      "portfoliocarousel_fetchportfolioitems",
+      "portfoliocarousel_handlenext",
+      "portfoliocarousel_handleprevious",
+      "src_components_portfolio_portfoliocarousel_tsx"
+    ],
+    "122": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_customer_verification_ts",
+      "src_hooks_use_customer_verification_ts",
+      "use_customer_verification_getverificationstatuslabel",
+      "use_customer_verification_usecustomerverification",
+      "use_customer_verification_usecustomerverificationhistory"
+    ],
+    "123": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_customer_invoices_ts",
+      "src_hooks_use_customer_invoices_ts",
+      "use_customer_invoices_usecustomerinvoices",
+      "use_customer_invoices_useinvoicebyid",
+      "use_customer_invoices_useinvoicestats"
+    ],
+    "124": [
+      "components_admin_tenant_credits_tab_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_admin_tenant_credits_tab_tsx",
+      "tenant_credits_tab_fetchdata",
+      "tenant_credits_tab_formatdatetime",
+      "tenant_credits_tab_handleadjust"
+    ],
+    "125": [
+      "card_carddescription",
+      "card_cardfooter",
+      "card_cn",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_ui_card_tsx",
+      "src_components_ui_card_tsx"
+    ],
+    "126": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_sections_renter_portal_tsx",
+      "renter_portal_featureitem",
+      "renter_portal_preview_v3_dark_png",
+      "renter_portal_preview_v3_png",
+      "src_components_sections_renter_portal_tsx"
+    ],
+    "127": [
+      "credit_config_getservicecost",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_lib_credit_config_ts",
+      "lib_credit_config_ts",
+      "src_lib_credit_config_ts"
+    ],
+    "128": [
+      "calendar_calendar",
+      "components_ui_calendar_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_calendar_tsx",
+      "src_components_ui_calendar_tsx"
+    ],
+    "129": [
+      "review_tags_getratingbgcolor",
+      "review_tags_getratingcolor",
+      "review_tags_getslidercolor",
+      "src_components_reviews_review_tags_ts"
+    ],
+    "130": [
+      "avatar_crop_dialog_getcroppedimg",
+      "avatar_crop_dialog_handleconfirm",
+      "avatar_crop_dialog_handleopenchange",
+      "src_components_shared_layout_avatar_crop_dialog_tsx"
+    ],
+    "131": [
+      "report_preview_modal_formatvalue",
+      "report_preview_modal_getactivefilters",
+      "report_preview_modal_getcolumns",
+      "src_components_reports_report_preview_modal_tsx"
+    ],
+    "132": [
+      "data_table_formatvalue",
+      "data_table_getcolumns",
+      "data_table_gettotals",
+      "src_components_reports_data_table_tsx"
+    ],
+    "133": [
+      "filter_sidebar_clearallfilters",
+      "filter_sidebar_togglearrayvalue",
+      "filter_sidebar_updatefilters",
+      "src_components_reports_filter_sidebar_tsx"
+    ],
+    "134": [
+      "aging_receivables_detail_formatcurrency",
+      "aging_receivables_detail_getbucketcolor",
+      "aging_receivables_detail_getbucketicon",
+      "src_components_reports_aging_receivables_detail_tsx"
+    ],
+    "135": [
+      "src_components_customers_verification_qr_modal_tsx",
+      "verification_qr_modal_formattime",
+      "verification_qr_modal_handleclose",
+      "verification_qr_modal_updatetime"
+    ],
+    "136": [
+      "add_customer_document_dialog_handlefileselect",
+      "add_customer_document_dialog_onsubmit",
+      "add_customer_document_dialog_uploadfile",
+      "src_components_customers_add_customer_document_dialog_tsx"
+    ],
+    "137": [
+      "src_components_vehicles_vehicle_photo_upload_tsx",
+      "vehicle_photo_upload_handlefileselect",
+      "vehicle_photo_upload_handleremovephoto",
+      "vehicle_photo_upload_handleuploadclick"
+    ],
+    "138": [
+      "src_components_vehicles_vehicle_plates_panel_tsx",
+      "vehicle_plates_panel_getstatusbadgeclass",
+      "vehicle_plates_panel_getstatusbadgevariant",
+      "vehicle_plates_panel_handlemanageinplates"
+    ],
+    "139": [
+      "policy_acceptance_gate_checkacceptance",
+      "policy_acceptance_gate_handleaccept",
+      "policy_acceptance_gate_handlelogout",
+      "src_components_policy_policy_acceptance_gate_tsx"
+    ],
+    "140": [
+      "src_components_settings_usage_dashboard_tsx",
+      "usage_dashboard_formatcurrency",
+      "usage_dashboard_formatcurrencyfromcents",
+      "usage_dashboard_formatdate"
+    ],
+    "141": [
+      "payment_filters_applyquickfilter",
+      "payment_filters_clearfilters",
+      "payment_filters_updatefilters",
+      "src_components_payments_payment_filters_tsx"
+    ],
+    "142": [
+      "blog_editor_getreadingtime",
+      "blog_editor_getwordcount",
+      "blog_editor_toolbarbutton",
+      "src_components_website_content_blog_editor_tsx"
+    ],
+    "143": [
+      "enhanced_file_upload_formatfilesize",
+      "enhanced_file_upload_getfileicon",
+      "enhanced_file_upload_removefile",
+      "src_components_fines_enhanced_file_upload_tsx"
+    ],
+    "144": [
+      "fine_filters_clearfilters",
+      "fine_filters_normalizedate",
+      "fine_filters_updatefilter",
+      "src_components_fines_fine_filters_tsx"
+    ],
+    "145": [
+      "getting_started_checklist_handledismiss",
+      "getting_started_checklist_progressring",
+      "getting_started_checklist_togglecollapsed",
+      "src_components_dashboard_getting_started_checklist_tsx"
+    ],
+    "146": [
+      "document_upload_dialog_handleclose",
+      "document_upload_dialog_handlefileselect",
+      "document_upload_dialog_removefile",
+      "src_components_insurance_document_upload_dialog_tsx"
+    ],
+    "147": [
+      "insurance_filters_cleardaterange",
+      "insurance_filters_setquickfilter",
+      "insurance_filters_updatefilters",
+      "src_components_insurance_insurance_filters_tsx"
+    ],
+    "148": [
+      "chatrentalcards_formatdate",
+      "chatrentalcards_statusbadge",
+      "chatrentalcards_viewrentallink",
+      "src_components_chat_chatrentalcards_tsx"
+    ],
+    "149": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_config_tenant_config_ts",
+      "src_config_tenant_config_ts",
+      "tenant_config_isenquirybasedtenant",
+      "tenant_config_isinsuranceexempttenant"
+    ],
+    "150": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_scrolltotop_tsx",
+      "scrolltotop_scrolltotop",
+      "scrolltotop_togglevisibility",
+      "src_components_scrolltotop_tsx"
+    ],
+    "151": [
+      "chauffeurservices_handleherocta",
+      "chauffeurservices_handleserviceclick",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_chauffeurservices_tsx",
+      "src_components_chauffeurservices_tsx"
+    ],
+    "152": [
+      "faq_faqsbycategory",
+      "faq_loadfaqs",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_faq_tsx",
+      "src_components_faq_tsx"
+    ],
+    "153": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_installments_installmentbreakdown_tsx",
+      "installmentbreakdown_fmt",
+      "installmentbreakdown_installmentbreakdown",
+      "src_components_installments_installmentbreakdown_tsx"
+    ],
+    "154": [
+      "extras_selector_toggleextra",
+      "extras_selector_updatequantity",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_booking_extras_selector_tsx",
+      "src_components_booking_extras_selector_tsx"
+    ],
+    "155": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_updatepaymentmethoddialog_tsx",
+      "src_components_customer_portal_updatepaymentmethoddialog_tsx",
+      "updatepaymentmethoddialog_handlesubmit",
+      "updatepaymentmethoddialog_handlesuccess"
+    ],
+    "156": [
+      "customerportalheader_getinitials",
+      "customerportalheader_handlesignout",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_customerportalheader_tsx",
+      "src_components_customer_portal_customerportalheader_tsx"
+    ],
+    "157": [
+      "announcementsbell_handleexpand",
+      "announcementsbell_handleopenchange",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_announcements_announcementsbell_tsx",
+      "src_components_customer_portal_announcements_announcementsbell_tsx"
+    ],
+    "158": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_multistepbookingwidget_tsx",
+      "multistepbookingwidget_async",
+      "multistepbookingwidget_liveclock",
+      "src_components_multistepbookingwidget_tsx"
+    ],
+    "159": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_rental_extension_totals_ts",
+      "src_hooks_use_rental_extension_totals_ts",
+      "use_rental_extension_totals_sumextensionoutstanding",
+      "use_rental_extension_totals_userentalextensiontotals"
+    ],
+    "160": [
+      "customer_auth_store_fetchcustomeruser",
+      "customer_auth_store_usecustomerauth",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_stores_customer_auth_store_ts",
+      "src_stores_customer_auth_store_ts"
+    ],
+    "161": [
+      "app_admin_protected_admins_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_admin_protected_admins_page_tsx",
+      "page_handlecreateadmin",
+      "page_loadadmins"
+    ],
+    "162": [
+      "components_ui_date_picker_tsx",
+      "date_picker_datepicker",
+      "date_picker_value",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_date_picker_tsx"
+    ],
+    "163": [
+      "components_admin_sidebar_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_admin_sidebar_tsx",
+      "sidebar_isactive",
+      "sidebar_usenavigation"
+    ],
+    "164": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_actions_lead_capture_ts",
+      "lead_capture_captureconsultationaction",
+      "lead_capture_captureleadaction",
+      "src_actions_lead_capture_ts"
+    ],
+    "165": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_veriff_callback_page_tsx",
+      "page_handlemanualclose",
+      "src_app_veriff_callback_page_tsx"
+    ],
+    "166": [
+      "search_service_fuzzymatch",
+      "search_service_rankresults",
+      "src_lib_search_service_ts"
+    ],
+    "167": [
+      "default_email_templates_getalldefaultemailtemplates",
+      "default_email_templates_getdefaultemailtemplate",
+      "src_lib_default_email_templates_ts"
+    ],
+    "168": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_ui_input_tsx",
+      "input_input",
+      "src_components_ui_input_tsx"
+    ],
+    "169": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_ui_tabs_tsx",
+      "src_components_ui_tabs_tsx",
+      "tabs_cn"
+    ],
+    "170": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_resizable_tsx",
+      "resizable_resizablepanelgroup",
+      "src_components_ui_resizable_tsx"
+    ],
+    "171": [
+      "carousel_usecarousel",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_carousel_tsx",
+      "src_components_ui_carousel_tsx"
+    ],
+    "172": [
+      "form_useformfield",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_form_tsx",
+      "src_components_ui_form_tsx"
+    ],
+    "173": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_ui_separator_tsx",
+      "separator_separator",
+      "src_components_ui_separator_tsx"
+    ],
+    "174": [
+      "badge_badge",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_ui_badge_tsx",
+      "src_components_ui_badge_tsx"
+    ],
+    "175": [
+      "src_components_subscription_subscription_gate_dialog_tsx",
+      "subscription_gate_dialog_formatprice",
+      "subscription_gate_dialog_handlesubscribe"
+    ],
+    "176": [
+      "cancel_rental_dialog_handlecancel",
+      "cancel_rental_dialog_handleclose",
+      "src_components_shared_dialogs_cancel_rental_dialog_tsx"
+    ],
+    "177": [
+      "notification_bell_handlenotificationclick",
+      "notification_bell_notificationitem",
+      "src_components_shared_layout_notification_bell_tsx"
+    ],
+    "178": [
+      "report_card_handleexportclick",
+      "report_card_isexporting",
+      "src_components_reports_report_card_tsx"
+    ],
+    "179": [
+      "reject_customer_dialog_handleclose",
+      "reject_customer_dialog_handleconfirm",
+      "src_components_customers_reject_customer_dialog_tsx"
+    ],
+    "180": [
+      "metric_card_formatvalue",
+      "metric_card_getvaluecolor",
+      "src_components_vehicles_metric_card_tsx"
+    ],
+    "181": [
+      "src_components_vehicles_vehicle_photo_thumbnail_tsx",
+      "vehicle_photo_thumbnail_carsilhouette",
+      "vehicle_photo_thumbnail_cn"
+    ],
+    "182": [
+      "src_components_vehicles_vehicle_file_upload_tsx",
+      "vehicle_file_upload_formatfilesize",
+      "vehicle_file_upload_getfileicon"
+    ],
+    "183": [
+      "src_components_vehicles_vehicle_compliance_panel_tsx",
+      "vehicle_compliance_panel_getstatuscolor",
+      "vehicle_compliance_panel_getstatusicon"
+    ],
+    "184": [
+      "src_components_vehicles_vehicle_disposal_dialog_tsx",
+      "vehicle_disposal_dialog_handleopenchange",
+      "vehicle_disposal_dialog_onsubmit"
+    ],
+    "185": [
+      "date_range_filter_clearfilter",
+      "date_range_filter_formatdaterange",
+      "src_components_vehicles_date_range_filter_tsx"
+    ],
+    "186": [
+      "color_picker_handlecolorchange",
+      "color_picker_handleinputchange",
+      "src_components_settings_color_picker_tsx"
+    ],
+    "187": [
+      "src_components_website_content_trust_badges_editor_tsx",
+      "trust_badges_editor_geticoncomponent",
+      "trust_badges_editor_handlesubmit"
+    ],
+    "188": [
+      "home_hero_editor_migratecarouselimages",
+      "home_hero_editor_onsubmit",
+      "src_components_website_content_home_hero_editor_tsx"
+    ],
+    "189": [
+      "add_fine_dialog_handleissuedatechange",
+      "add_fine_dialog_onsubmit",
+      "src_components_fines_add_fine_dialog_tsx"
+    ],
+    "190": [
+      "dashboard_stats_gettrendcolor",
+      "dashboard_stats_gettrendicon",
+      "src_components_dashboard_dashboard_stats_tsx"
+    ],
+    "191": [
+      "insurance_tab_content_handleaddpolicy",
+      "insurance_tab_content_handleeditpolicy",
+      "src_components_insurance_insurance_tab_content_tsx"
+    ],
+    "192": [
+      "insurance_document_upload_handledownload",
+      "insurance_document_upload_handlefileselect",
+      "src_components_insurance_insurance_document_upload_tsx"
+    ],
+    "193": [
+      "src_components_chat_voicecallbar_tsx",
+      "voicecallbar_formatduration",
+      "voicecallbar_formatphonenumber"
+    ],
+    "194": [
+      "channellist_clearsearch",
+      "channellist_highlighttext",
+      "src_components_chat_channellist_tsx"
+    ],
+    "195": [
+      "chatmessage_copytoclipboard",
+      "chatmessage_if",
+      "src_components_chat_chatmessage_tsx"
+    ],
+    "196": [
+      "rentals_filters_normalizedate",
+      "rentals_filters_updatefilter",
+      "src_components_rentals_rentals_filters_tsx"
+    ],
+    "197": [
+      "rental_bar_formatdate",
+      "rental_bar_getduration",
+      "src_components_rentals_calendar_rental_bar_tsx"
+    ],
+    "198": [
+      "asset_default_logo",
+      "asset_logo_drive247",
+      "asset_logo_drive917"
+    ],
+    "199": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_auth_callback_page_tsx",
+      "page_authcallbackpage",
+      "src_app_auth_callback_page_tsx"
+    ],
+    "200": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_booking_cancelled_page_tsx",
+      "page_cleanupfailedrental",
+      "src_app_booking_cancelled_page_tsx"
+    ],
+    "201": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_customer_portal_portal_page_tsx",
+      "page_portalpage",
+      "src_app_customer_portal_portal_page_tsx"
+    ],
+    "202": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_customer_portal_portal_messages_page_tsx",
+      "page_customermessagespage",
+      "src_app_customer_portal_portal_messages_page_tsx"
+    ],
+    "203": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_customer_portal_portal_notifications_page_tsx",
+      "page_getnotificationicon",
+      "src_app_customer_portal_portal_notifications_page_tsx"
+    ],
+    "204": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_customer_portal_portal_bookings_history_page_tsx",
+      "page_bookinghistorypage",
+      "src_app_customer_portal_portal_bookings_history_page_tsx"
+    ],
+    "205": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_lib_sanitize_html_ts",
+      "sanitize_html_sanitizehtml",
+      "src_lib_sanitize_html_ts"
+    ],
+    "206": [
+      "document_document",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_pages_document_tsx",
+      "src_pages_document_tsx"
+    ],
+    "207": [
+      "app_app",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_pages_app_tsx",
+      "src_pages_app_tsx"
+    ],
+    "208": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_scrolltotoponnavigate_tsx",
+      "scrolltotoponnavigate_scrolltotoponnavigate",
+      "src_components_scrolltotoponnavigate_tsx"
+    ],
+    "209": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_queryclientprovider_tsx",
+      "queryclientprovider_queryclientprovider",
+      "src_components_queryclientprovider_tsx"
+    ],
+    "210": [
+      "bookingsuccess_updaterentalstatus",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_bookingsuccess_tsx",
+      "src_components_bookingsuccess_tsx"
+    ],
+    "211": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_servicehighlights_tsx",
+      "servicehighlights_servicehighlights",
+      "src_components_servicehighlights_tsx"
+    ],
+    "212": [
+      "enhancedtestimonials_loadtestimonials",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_enhancedtestimonials_tsx",
+      "src_components_enhancedtestimonials_tsx"
+    ],
+    "213": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_themetoggle_tsx",
+      "src_components_themetoggle_tsx",
+      "themetoggle_themetoggle"
+    ],
+    "214": [
+      "bookingpersistenceguard_bookingpersistenceguard",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_bookingpersistenceguard_tsx",
+      "src_components_bookingpersistenceguard_tsx"
+    ],
+    "215": [
+      "gdprconsent_gdprconsent",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_gdprconsent_tsx",
+      "src_components_gdprconsent_tsx"
+    ],
+    "216": [
+      "bookingpending_fetchbookingdetails",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_bookingpending_tsx",
+      "src_components_bookingpending_tsx"
+    ],
+    "217": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_trustbadges_tsx",
+      "src_components_trustbadges_tsx",
+      "trustbadges_trustbadges"
+    ],
+    "218": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_veriffcallback_tsx",
+      "src_components_veriffcallback_tsx",
+      "veriffcallback_handlemanualclose"
+    ],
+    "219": [
+      "bookingcancelled_cleanupfailedrental",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_bookingcancelled_tsx",
+      "src_components_bookingcancelled_tsx"
+    ],
+    "220": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_universalhero_tsx",
+      "src_components_universalhero_tsx",
+      "universalhero_rendercta"
+    ],
+    "221": [
+      "date_range_picker_handleselect",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_date_range_picker_tsx",
+      "src_components_ui_date_range_picker_tsx"
+    ],
+    "222": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_insurancepoliciessection_tsx",
+      "insurancepoliciessection_getstatusconfig",
+      "src_components_customer_portal_insurancepoliciessection_tsx"
+    ],
+    "223": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_trax_chat_traxaichatinput_tsx",
+      "src_components_customer_portal_trax_chat_traxaichatinput_tsx",
+      "traxaichatinput_traxaichatinput"
+    ],
+    "224": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_trax_chat_traxchatwidget_tsx",
+      "src_components_customer_portal_trax_chat_traxchatwidget_tsx",
+      "traxchatwidget_traxchatwidget"
+    ],
+    "225": [
+      "announcementbody_announcementbody",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_announcements_announcementbody_tsx",
+      "src_components_customer_portal_announcements_announcementbody_tsx"
+    ],
+    "226": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_portfolio_portfoliofilters_tsx",
+      "portfoliofilters_handlefilterchange",
+      "src_components_portfolio_portfoliofilters_tsx"
+    ],
+    "227": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_installment_plan_realtime_ts",
+      "src_hooks_use_installment_plan_realtime_ts",
+      "use_installment_plan_realtime_useinstallmentplanrealtime"
+    ],
+    "228": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_trax_chat_ts",
+      "src_hooks_use_trax_chat_ts",
+      "use_trax_chat_usetraxchat"
+    ],
+    "229": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_usegooglemapsloader_ts",
+      "src_hooks_usegooglemapsloader_ts",
+      "usegooglemapsloader_usegooglemapsloader"
+    ],
+    "230": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_customer_insurance_policies_ts",
+      "src_hooks_use_customer_insurance_policies_ts",
+      "use_customer_insurance_policies_usecustomerinsurancepolicies"
+    ],
+    "231": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_customer_notifications_ts",
+      "src_hooks_use_customer_notifications_ts",
+      "use_customer_notifications_usecustomernotifications"
+    ],
+    "232": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_hooks_use_customer_onboarding_ts",
+      "src_hooks_use_customer_onboarding_ts",
+      "use_customer_onboarding_usecustomeronboarding"
+    ],
+    "233": [
+      "booking_store_usebooking",
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_stores_booking_store_ts",
+      "src_stores_booking_store_ts"
+    ],
+    "234": [
+      "app_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_page_tsx",
+      "page_rootpage"
+    ],
+    "235": [
+      "app_admin_protected_dashboard_page_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_admin_protected_dashboard_page_tsx",
+      "page_dashboardpage"
+    ],
+    "236": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_lib_supabase_test_ts",
+      "lib_supabase_test_ts",
+      "supabase_test_testsupabaseconfig"
+    ],
+    "237": [
+      "components_ui_skeleton_tsx",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_skeleton_tsx",
+      "skeleton_skeleton"
+    ],
+    "238": [
+      "components_admin_header_tsx",
+      "header_usebreadcrumbs",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_admin_header_tsx"
+    ],
+    "239": [
+      "components_dev_devpanel_tsx",
+      "devpanel_devpanel",
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_dev_devpanel_tsx"
+    ],
+    "240": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_app_privacy_page_tsx",
+      "page_privacypage",
+      "src_app_privacy_page_tsx"
+    ],
+    "241": [
+      "button_cn",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_ui_button_tsx",
+      "src_components_ui_button_tsx"
+    ],
+    "242": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_shared_theme_provider_tsx",
+      "src_components_shared_theme_provider_tsx",
+      "theme_provider_themeprovider"
+    ],
+    "243": [
+      "aurora_background_aurorabackground",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_shared_aurora_background_tsx",
+      "src_components_shared_aurora_background_tsx"
+    ],
+    "244": [
+      "footer_footer",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_layout_footer_tsx",
+      "src_components_layout_footer_tsx"
+    ],
+    "245": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_sections_problem_section_tsx",
+      "problem_section_problemcard",
+      "src_components_sections_problem_section_tsx"
+    ],
+    "246": [
+      "credibility_strip_metricitem",
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_sections_credibility_strip_tsx",
+      "src_components_sections_credibility_strip_tsx"
+    ],
+    "247": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_hooks_use_active_section_ts",
+      "src_hooks_use_active_section_ts",
+      "use_active_section_useactivesection"
+    ],
+    "248": [
+      "not_found_notfound",
+      "src_app_not_found_tsx"
+    ],
+    "249": [
+      "layout_authlayout",
+      "src_app_auth_layout_tsx"
+    ],
+    "250": [
+      "page_resetpasswordpage",
+      "src_app_auth_reset_password_page_tsx"
+    ],
+    "251": [
+      "page_documentsredirect",
+      "src_app_dashboard_documents_page_tsx"
+    ],
+    "252": [
+      "page_handleselectchannel",
+      "src_app_dashboard_messages_page_tsx"
+    ],
+    "253": [
+      "page_blockeddates",
+      "src_app_dashboard_blocked_dates_page_tsx"
+    ],
+    "254": [
+      "csv_export_exportinsurancetocsv",
+      "src_lib_csv_export_ts"
+    ],
+    "255": [
+      "src_lib_usage_categories_ts",
+      "usage_categories_getcategoryconfig"
+    ],
+    "256": [
+      "permissions_gettabkeyforroute",
+      "src_lib_permissions_ts"
+    ],
+    "257": [
+      "add_vehicle_dialog_gettoday",
+      "src_client_schemas_vehicles_add_vehicle_dialog_ts"
+    ],
+    "258": [
+      "edit_vehicle_gettoday",
+      "src_client_schemas_vehicles_edit_vehicle_ts"
+    ],
+    "259": [
+      "edit_vehicle_enhanced_gettoday",
+      "src_client_schemas_vehicles_edit_vehicle_enhanced_ts"
+    ],
+    "260": [
+      "client_getstorage",
+      "src_integrations_supabase_client_ts"
+    ],
+    "261": [
+      "add_reminder_dialog_onsubmit",
+      "src_components_reminders_add_reminder_dialog_tsx"
+    ],
+    "262": [
+      "animated_icon_wrapper_wrapanimatedicon",
+      "src_components_ui_animated_icon_wrapper_tsx"
+    ],
+    "263": [
+      "src_components_subscription_subscription_block_screen_tsx",
+      "subscription_block_screen_subscriptionblockscreen"
+    ],
+    "264": [
+      "pricing_card_formatprice",
+      "src_components_subscription_pricing_card_tsx"
+    ],
+    "265": [
+      "review_status_badge_reviewstatusbadge",
+      "src_components_reviews_review_status_badge_tsx"
+    ],
+    "266": [
+      "src_components_shared_data_display_truncated_cell_tsx",
+      "truncated_cell_truncatedcell"
+    ],
+    "267": [
+      "layout_layout",
+      "src_components_shared_layout_layout_tsx"
+    ],
+    "268": [
+      "header_search_headersearch",
+      "src_components_shared_layout_header_search_tsx"
+    ],
+    "269": [
+      "src_components_shared_layout_theme_toggle_tsx",
+      "theme_toggle_themetoggle"
+    ],
+    "270": [
+      "fine_status_badge_finestatusbadge",
+      "src_components_shared_status_fine_status_badge_tsx"
+    ],
+    "271": [
+      "customer_summary_cards_customersummarycards",
+      "src_components_customers_customer_summary_cards_tsx"
+    ],
+    "272": [
+      "payment_status_badge_paymentstatusbadge",
+      "src_components_customers_payment_status_badge_tsx"
+    ],
+    "273": [
+      "src_components_icons_tesla_logo_tsx",
+      "tesla_logo_teslalogo"
+    ],
+    "274": [
+      "acquisition_badge_acquisitionbadge",
+      "src_components_vehicles_acquisition_badge_tsx"
+    ],
+    "275": [
+      "src_components_vehicles_vehicle_undo_disposal_dialog_tsx",
+      "vehicle_undo_disposal_dialog_handleundo"
+    ],
+    "276": [
+      "mot_tax_status_chip_mottaxstatuschip",
+      "src_components_vehicles_mot_tax_status_chip_tsx"
+    ],
+    "277": [
+      "service_plan_chip_serviceplanchip",
+      "src_components_vehicles_service_plan_chip_tsx"
+    ],
+    "278": [
+      "fleet_summary_cards_fleetsummarycards",
+      "src_components_vehicles_fleet_summary_cards_tsx"
+    ],
+    "279": [
+      "communication_settings_channelstatusbadge",
+      "src_components_settings_communication_settings_tsx"
+    ],
+    "280": [
+      "src_components_settings_twilio_sms_settings_tsx",
+      "twilio_sms_settings_copybutton"
+    ],
+    "281": [
+      "plate_history_drawer_geteventicon",
+      "src_components_plates_plate_history_drawer_tsx"
+    ],
+    "282": [
+      "legal_page_editor_handlesave",
+      "src_components_website_content_legal_page_editor_tsx"
+    ],
+    "283": [
+      "rental_rates_editor_onsubmit",
+      "src_components_website_content_rental_rates_editor_tsx"
+    ],
+    "284": [
+      "contact_form_editor_handlesubmit",
+      "src_components_website_content_contact_form_editor_tsx"
+    ],
+    "285": [
+      "fleet_hero_editor_onsubmit",
+      "src_components_website_content_fleet_hero_editor_tsx"
+    ],
+    "286": [
+      "seo_editor_handlesubmit",
+      "src_components_website_content_seo_editor_tsx"
+    ],
+    "287": [
+      "promotions_hero_editor_onsubmit",
+      "src_components_website_content_promotions_hero_editor_tsx"
+    ],
+    "288": [
+      "cta_editor_handlesave",
+      "src_components_website_content_cta_editor_tsx"
+    ],
+    "289": [
+      "feedback_cta_editor_handlesave",
+      "src_components_website_content_feedback_cta_editor_tsx"
+    ],
+    "290": [
+      "contact_card_editor_onsubmit",
+      "src_components_website_content_contact_card_editor_tsx"
+    ],
+    "291": [
+      "src_components_website_content_testimonials_header_editor_tsx",
+      "testimonials_header_editor_onsubmit"
+    ],
+    "292": [
+      "rich_text_editor_richtexteditor",
+      "src_components_website_content_rich_text_editor_tsx"
+    ],
+    "293": [
+      "about_story_editor_handlesave",
+      "src_components_website_content_about_story_editor_tsx"
+    ],
+    "294": [
+      "contact_info_editor_handlesubmit",
+      "src_components_website_content_contact_info_editor_tsx"
+    ],
+    "295": [
+      "promo_badge_editor_onsubmit",
+      "src_components_website_content_promo_badge_editor_tsx"
+    ],
+    "296": [
+      "pwa_install_editor_handlesave",
+      "src_components_website_content_pwa_install_editor_tsx"
+    ],
+    "297": [
+      "site_settings_editor_sitesettingseditor",
+      "src_components_website_content_site_settings_editor_tsx"
+    ],
+    "298": [
+      "hero_section_editor_handlesubmit",
+      "src_components_website_content_hero_section_editor_tsx"
+    ],
+    "299": [
+      "src_components_website_content_version_history_dialog_tsx",
+      "version_history_dialog_handlerollback"
+    ],
+    "300": [
+      "empty_state_editor_onsubmit",
+      "src_components_website_content_empty_state_editor_tsx"
+    ],
+    "301": [
+      "authority_payment_dialog_onsubmit",
+      "src_components_fines_authority_payment_dialog_tsx"
+    ],
+    "302": [
+      "command_center_progressring",
+      "src_components_dashboard_command_center_tsx"
+    ],
+    "303": [
+      "recent_activity_activityicon",
+      "src_components_dashboard_recent_activity_tsx"
+    ],
+    "304": [
+      "customer_selection_dialog_handleselectcustomer",
+      "src_components_insurance_customer_selection_dialog_tsx"
+    ],
+    "305": [
+      "src_components_chat_typingindicator_tsx",
+      "typingindicator_typingindicator"
+    ],
+    "306": [
+      "chatchart_generatecolorpalette",
+      "src_components_chat_chatchart_tsx"
+    ],
+    "307": [
+      "src_components_chat_unreadbadge_tsx",
+      "unreadbadge_unreadbadge"
+    ],
+    "308": [
+      "chatinput_handlechange",
+      "src_components_chat_chatinput_tsx"
+    ],
+    "309": [
+      "src_components_chat_traxicon_tsx",
+      "traxicon_traxicon"
+    ],
+    "310": [
+      "key_handover_action_banner_keyhandoveractionbanner",
+      "src_components_rentals_key_handover_action_banner_tsx"
+    ],
+    "311": [
+      "compliance_status_panel_getseverityicon",
+      "src_components_rentals_compliance_status_panel_tsx"
+    ],
+    "312": [
+      "key_handover_photos_handlefileselect",
+      "src_components_rentals_key_handover_photos_tsx"
+    ],
+    "313": [
+      "lockbox_countdown_ticker_formatcountdown",
+      "src_components_rentals_lockbox_countdown_ticker_tsx"
+    ],
+    "314": [
+      "src_components_rentals_vehicleconflictdialog_tsx",
+      "vehicleconflictdialog_formatdate"
+    ],
+    "315": [
+      "ai_insights_panel_tick",
+      "src_components_rentals_calendar_ai_insights_panel_tsx"
+    ],
+    "316": [
+      "src_hooks_use_customer_vehicle_rental_ts",
+      "use_customer_vehicle_rental_usecustomervehiclerental"
+    ],
+    "317": [
+      "src_hooks_use_dashboard_kpis_ts",
+      "use_dashboard_kpis_usedashboardkpis"
+    ],
+    "318": [
+      "src_hooks_use_auth_validation_ts",
+      "use_auth_validation_useauthvalidation"
+    ],
+    "319": [
+      "src_hooks_use_google_maps_loader_ts",
+      "use_google_maps_loader_usegooglemapsloader"
+    ],
+    "320": [
+      "src_hooks_use_rental_conflicts_ts",
+      "use_rental_conflicts_checkrentalconflicts"
+    ],
+    "321": [
+      "src_hooks_use_debounce_ts",
+      "use_debounce_usedebounce"
+    ],
+    "322": [
+      "src_hooks_use_rate_limiting_ts",
+      "use_rate_limiting_useratelimiting"
+    ],
+    "323": [
+      "src_hooks_use_data_cleanup_ts",
+      "use_data_cleanup_usedatacleanup"
+    ],
+    "324": [
+      "src_hooks_use_vehicle_pricing_overrides_ts",
+      "use_vehicle_pricing_overrides_usevehiclepricingoverrides"
+    ],
+    "325": [
+      "src_hooks_use_unsaved_changes_warning_ts",
+      "use_unsaved_changes_warning_useunsavedchangeswarning"
+    ],
+    "326": [
+      "postcss_config_js"
+    ],
+    "327": [
+      "next_env_d_ts"
+    ],
+    "328": [
+      "vitest_config_ts"
+    ],
+    "329": [
+      "next_config_js"
+    ],
+    "330": [
+      "tailwind_config_ts"
+    ],
+    "331": [
+      "src_types_chat_ts"
+    ],
+    "332": [
+      "src_types_cms_ts"
+    ],
+    "333": [
+      "src_types_blog_ts"
+    ],
+    "334": [
+      "src_app_auth_terms_page_tsx"
+    ],
+    "335": [
+      "src_app_dashboard_layout_tsx"
+    ],
+    "336": [
+      "src_app_dashboard_cms_page_tsx"
+    ],
+    "337": [
+      "src_app_dashboard_documents_analytics_page_tsx"
+    ],
+    "338": [
+      "src_app_dashboard_invoices_page_tsx"
+    ],
+    "339": [
+      "src_app_dashboard_customers_analytics_page_tsx"
+    ],
+    "340": [
+      "src_app_dashboard_vehicles_analytics_page_tsx"
+    ],
+    "341": [
+      "src_app_dashboard_payments_id_page_tsx"
+    ],
+    "342": [
+      "src_app_dashboard_payments_analytics_page_tsx"
+    ],
+    "343": [
+      "src_app_dashboard_agreements_analytics_page_tsx"
+    ],
+    "344": [
+      "src_app_dashboard_fines_analytics_page_tsx"
+    ],
+    "345": [
+      "src_app_dashboard_rentals_analytics_page_tsx"
+    ],
+    "346": [
+      "src_app_dashboard_insurances_analytics_page_tsx"
+    ],
+    "347": [
+      "src_app_payment_preview_page_tsx"
+    ],
+    "348": [
+      "src_constants_website_content_ts"
+    ],
+    "349": [
+      "src_constants_constants_ts"
+    ],
+    "350": [
+      "src_constants_pnl_ts"
+    ],
+    "351": [
+      "src_constants_defaults_ts"
+    ],
+    "352": [
+      "src_constants_shared_ts"
+    ],
+    "353": [
+      "src_constants_index_ts"
+    ],
+    "354": [
+      "src_lib_us_states_ts"
+    ],
+    "355": [
+      "src_lib_services_index_ts"
+    ],
+    "356": [
+      "src_client_schemas_shared_add_fine_dialog_ts"
+    ],
+    "357": [
+      "src_client_schemas_shared_add_payment_dialog_ts"
+    ],
+    "358": [
+      "src_client_schemas_customers_add_customer_document_ts"
+    ],
+    "359": [
+      "src_client_schemas_customers_customer_form_modal_ts"
+    ],
+    "360": [
+      "src_client_schemas_vehicles_vehicle_disposal_ts"
+    ],
+    "361": [
+      "src_client_schemas_vehicles_vehicle_expense_ts"
+    ],
+    "362": [
+      "src_client_schemas_vehicles_add_service_record_ts"
+    ],
+    "363": [
+      "src_client_schemas_settings_protection_plan_dialog_ts"
+    ],
+    "364": [
+      "src_client_schemas_plates_assign_plate_ts"
+    ],
+    "365": [
+      "src_client_schemas_plates_enhanced_assign_plate_ts"
+    ],
+    "366": [
+      "src_client_schemas_plates_add_plate_ts"
+    ],
+    "367": [
+      "src_client_schemas_plates_enhanced_add_plate_ts"
+    ],
+    "368": [
+      "src_client_schemas_website_content_extras_editor_ts"
+    ],
+    "369": [
+      "src_client_schemas_website_content_promo_badge_editor_ts"
+    ],
+    "370": [
+      "src_client_schemas_website_content_contact_card_editor_ts"
+    ],
+    "371": [
+      "src_client_schemas_website_content_inclusions_editor_ts"
+    ],
+    "372": [
+      "src_client_schemas_website_content_testimonials_header_editor_ts"
+    ],
+    "373": [
+      "src_client_schemas_website_content_service_highlights_editor_ts"
+    ],
+    "374": [
+      "src_client_schemas_website_content_empty_state_editor_ts"
+    ],
+    "375": [
+      "src_client_schemas_website_content_booking_header_editor_ts"
+    ],
+    "376": [
+      "src_client_schemas_website_content_trust_badges_editor_ts"
+    ],
+    "377": [
+      "src_client_schemas_website_content_seo_editor_ts"
+    ],
+    "378": [
+      "src_client_schemas_website_content_contact_info_editor_ts"
+    ],
+    "379": [
+      "src_client_schemas_website_content_hero_section_editor_ts"
+    ],
+    "380": [
+      "src_client_schemas_website_content_promotions_hero_editor_ts"
+    ],
+    "381": [
+      "src_client_schemas_website_content_home_hero_editor_ts"
+    ],
+    "382": [
+      "src_client_schemas_website_content_how_it_works_editor_ts"
+    ],
+    "383": [
+      "src_client_schemas_website_content_faqs_manager_ts"
+    ],
+    "384": [
+      "src_client_schemas_website_content_fleet_hero_editor_ts"
+    ],
+    "385": [
+      "src_client_schemas_website_content_contact_form_editor_ts"
+    ],
+    "386": [
+      "src_client_schemas_website_content_rental_rates_editor_ts"
+    ],
+    "387": [
+      "src_client_schemas_website_content_home_cta_editor_ts"
+    ],
+    "388": [
+      "src_client_schemas_website_content_terms_editor_ts"
+    ],
+    "389": [
+      "src_client_schemas_fines_fine_appeal_ts"
+    ],
+    "390": [
+      "src_client_schemas_fines_authority_payment_ts"
+    ],
+    "391": [
+      "src_client_schemas_insurance_insurance_policy_ts"
+    ],
+    "392": [
+      "src_client_schemas_users_add_user_ts"
+    ],
+    "393": [
+      "src_client_schemas_rentals_close_rental_ts"
+    ],
+    "394": [
+      "src_integrations_supabase_types_ts"
+    ],
+    "395": [
+      "src_components_ui_collapsible_tsx"
+    ],
+    "396": [
+      "src_components_ui_chart_bar_increasing_tsx"
+    ],
+    "397": [
+      "src_components_ui_dropdown_menu_tsx"
+    ],
+    "398": [
+      "src_components_ui_receipt_tsx"
+    ],
+    "399": [
+      "src_components_ui_timeline_tsx"
+    ],
+    "400": [
+      "src_components_ui_popover_tsx"
+    ],
+    "401": [
+      "src_components_ui_calendar_days_tsx"
+    ],
+    "402": [
+      "src_components_ui_textarea_tsx"
+    ],
+    "403": [
+      "src_components_ui_earth_tsx"
+    ],
+    "404": [
+      "src_components_ui_alert_dialog_tsx"
+    ],
+    "405": [
+      "src_components_ui_switch_tsx"
+    ],
+    "406": [
+      "src_components_ui_menubar_tsx"
+    ],
+    "407": [
+      "src_components_ui_car_tsx"
+    ],
+    "408": [
+      "src_components_ui_table_tsx"
+    ],
+    "409": [
+      "src_components_ui_scroll_area_tsx"
+    ],
+    "410": [
+      "src_components_ui_toggle_group_tsx"
+    ],
+    "411": [
+      "src_components_ui_users_tsx"
+    ],
+    "412": [
+      "src_components_ui_alert_tsx"
+    ],
+    "413": [
+      "src_components_ui_toast_tsx"
+    ],
+    "414": [
+      "src_components_ui_credit_card_icon_tsx"
+    ],
+    "415": [
+      "src_components_ui_label_tsx"
+    ],
+    "416": [
+      "src_components_ui_file_text_tsx"
+    ],
+    "417": [
+      "src_components_ui_select_tsx"
+    ],
+    "418": [
+      "src_components_ui_ban_tsx"
+    ],
+    "419": [
+      "src_components_ui_location_picker_tsx"
+    ],
+    "420": [
+      "src_components_ui_context_menu_tsx"
+    ],
+    "421": [
+      "src_components_ui_progress_tsx"
+    ],
+    "422": [
+      "src_components_ui_bell_tsx"
+    ],
+    "423": [
+      "src_components_ui_info_grid_tsx"
+    ],
+    "424": [
+      "src_components_ui_badge_alert_tsx"
+    ],
+    "425": [
+      "src_components_ui_toggle_tsx"
+    ],
+    "426": [
+      "src_components_ui_skeleton_tsx"
+    ],
+    "427": [
+      "src_components_ui_history_tsx"
+    ],
+    "428": [
+      "src_components_ui_radio_group_tsx"
+    ],
+    "429": [
+      "src_components_ui_aspect_ratio_tsx"
+    ],
+    "430": [
+      "src_components_ui_avatar_tsx"
+    ],
+    "431": [
+      "src_components_ui_folder_open_tsx"
+    ],
+    "432": [
+      "src_components_ui_trending_up_tsx"
+    ],
+    "433": [
+      "src_components_ui_kpi_card_tsx"
+    ],
+    "434": [
+      "src_components_ui_blurred_image_tsx"
+    ],
+    "435": [
+      "src_components_ui_input_otp_tsx"
+    ],
+    "436": [
+      "src_components_ui_message_square_tsx"
+    ],
+    "437": [
+      "src_components_ui_hover_card_tsx"
+    ],
+    "438": [
+      "src_components_ui_tooltip_tsx"
+    ],
+    "439": [
+      "src_components_ui_navigation_menu_tsx"
+    ],
+    "440": [
+      "src_components_ui_slider_tsx"
+    ],
+    "441": [
+      "src_components_ui_use_toast_ts"
+    ],
+    "442": [
+      "src_components_ui_sheet_tsx"
+    ],
+    "443": [
+      "src_components_ui_settings_tsx"
+    ],
+    "444": [
+      "src_components_ui_blocks_tsx"
+    ],
+    "445": [
+      "src_components_ui_checkbox_tsx"
+    ],
+    "446": [
+      "src_components_ui_command_tsx"
+    ],
+    "447": [
+      "src_components_reviews_customer_review_summary_card_tsx"
+    ],
+    "448": [
+      "src_components_reviews_approval_review_summary_tsx"
+    ],
+    "449": [
+      "src_components_reviews_review_display_card_tsx"
+    ],
+    "450": [
+      "src_components_reviews_customer_reviews_dialog_tsx"
+    ],
+    "451": [
+      "src_components_shared_unsaved_changes_dialog_tsx"
+    ],
+    "452": [
+      "src_components_shared_dialogs_add_fine_dialog_tsx"
+    ],
+    "453": [
+      "src_components_shared_dialogs_refund_dialog_tsx"
+    ],
+    "454": [
+      "src_components_shared_data_display_pl_breadcrumb_tsx"
+    ],
+    "455": [
+      "src_components_shared_data_display_empty_state_tsx"
+    ],
+    "456": [
+      "src_components_shared_forms_currency_input_tsx"
+    ],
+    "457": [
+      "src_components_shared_forms_date_picker_input_tsx"
+    ],
+    "458": [
+      "src_components_invoices_delete_invoice_dialog_tsx"
+    ],
+    "459": [
+      "src_components_invoices_send_invoice_email_dialog_tsx"
+    ],
+    "460": [
+      "src_components_reports_empty_state_illustration_tsx"
+    ],
+    "461": [
+      "src_components_customers_document_signing_status_badge_tsx"
+    ],
+    "462": [
+      "src_components_customers_customer_balance_chip_tsx"
+    ],
+    "463": [
+      "src_components_customers_next_of_kin_card_tsx"
+    ],
+    "464": [
+      "src_components_customers_rejected_customer_dialog_tsx"
+    ],
+    "465": [
+      "src_components_vehicles_spare_key_chip_tsx"
+    ],
+    "466": [
+      "src_components_settings_whatsapp_meta_settings_tsx"
+    ],
+    "467": [
+      "src_components_plates_enhanced_assign_plate_dialog_tsx"
+    ],
+    "468": [
+      "src_components_plates_add_plate_dialog_tsx"
+    ],
+    "469": [
+      "src_components_plates_assign_plate_dialog_tsx"
+    ],
+    "470": [
+      "src_components_plates_enhanced_add_plate_dialog_tsx"
+    ],
+    "471": [
+      "src_components_website_content_index_ts"
+    ],
+    "472": [
+      "src_components_fines_fine_kpis_tsx"
+    ],
+    "473": [
+      "src_components_fines_fine_appeal_dialog_tsx"
+    ],
+    "474": [
+      "src_components_dashboard_revenue_chart_tsx"
+    ],
+    "475": [
+      "src_components_dashboard_platform_status_banner_tsx"
+    ],
+    "476": [
+      "src_components_dashboard_integration_status_grid_tsx"
+    ],
+    "477": [
+      "src_components_dashboard_dashboard_kpi_cards_tsx"
+    ],
+    "478": [
+      "src_components_dashboard_action_items_tsx"
+    ],
+    "479": [
+      "src_components_dashboard_bonzah_balance_widget_tsx"
+    ],
+    "480": [
+      "src_components_dashboard_dashboard_charts_tsx"
+    ],
+    "481": [
+      "src_components_dashboard_calendar_widget_tsx"
+    ],
+    "482": [
+      "src_components_insurance_insurance_kpis_tsx"
+    ],
+    "483": [
+      "src_components_chat_customerchatinput_tsx"
+    ],
+    "484": [
+      "src_components_chat_chatactioncard_tsx"
+    ],
+    "485": [
+      "src_components_chat_chatsidebar_tsx"
+    ],
+    "486": [
+      "src_components_chat_index_ts"
+    ],
+    "487": [
+      "src_components_rentals_rental_progress_overlay_tsx"
+    ],
+    "488": [
+      "src_components_rentals_rental_ledger_tsx"
+    ],
+    "489": [
+      "src_components_rentals_contract_summary_tsx"
+    ],
+    "490": [
+      "src_components_rentals_close_rental_dialog_tsx"
+    ],
+    "491": [
+      "src_components_rentals_delete_rental_dialog_tsx"
+    ],
+    "492": [
+      "src_components_rentals_supercharger_charges_dialog_tsx"
+    ],
+    "493": [
+      "src_components_rentals_lockbox_send_timeline_tsx"
+    ],
+    "494": [
+      "src_components_rentals_calendar_calendar_header_tsx"
+    ],
+    "495": [
+      "src_components_rentals_calendar_vehicle_row_tsx"
+    ],
+    "496": [
+      "src_stores_settings_store_ts"
+    ],
+    "497": [
+      "src_tests_setup_ts"
+    ],
+    "498": [
+      "src_tests_hooks_use_pickup_locations_test_ts"
+    ],
+    "499": [
+      "robots_txt_seo_policy"
+    ],
+    "500": [
+      "asset_login_hero"
+    ],
+    "501": [
+      "next_config_ts"
+    ],
+    "502": [
+      "vite_config_ts"
+    ],
+    "503": [
+      "public_service_worker_js"
+    ],
+    "504": [
+      "src_vite_env_d_ts"
+    ],
+    "505": [
+      "src_types_google_maps_d_ts"
+    ],
+    "506": [
+      "src_app_error_tsx"
+    ],
+    "507": [
+      "src_app_global_error_tsx"
+    ],
+    "508": [
+      "src_app_terms_page_tsx"
+    ],
+    "509": [
+      "src_app_blog_blog_listing_client_tsx"
+    ],
+    "510": [
+      "src_app_blog_slug_blog_post_client_tsx"
+    ],
+    "511": [
+      "src_app_pay_token_page_tsx"
+    ],
+    "512": [
+      "src_app_customer_portal_layout_tsx"
+    ],
+    "513": [
+      "src_client_schemas_auth_ts"
+    ],
+    "514": [
+      "src_pages_error_tsx"
+    ],
+    "515": [
+      "src_components_blockedaccountdialog_tsx"
+    ],
+    "516": [
+      "src_components_contactcard_tsx"
+    ],
+    "517": [
+      "src_components_checkoutprogressoverlay_tsx"
+    ],
+    "518": [
+      "src_components_closeprotectionmodal_tsx"
+    ],
+    "519": [
+      "src_components_terms_tsx"
+    ],
+    "520": [
+      "src_components_privacy_tsx"
+    ],
+    "521": [
+      "src_components_footer_tsx"
+    ],
+    "522": [
+      "src_components_customer_portal_customerportalsidebar_tsx"
+    ],
+    "523": [
+      "src_components_customer_portal_trax_chat_traxchatbutton_tsx"
+    ],
+    "524": [
+      "src_components_customer_portal_trax_chat_traxchatchart_tsx"
+    ],
+    "525": [
+      "src_components_customer_portal_trax_chat_traxaichatwindow_tsx"
+    ],
+    "526": [
+      "src_components_customer_portal_trax_chat_traxchatpopup_tsx"
+    ],
+    "527": [
+      "src_components_customer_portal_trax_chat_traxaichatmessage_tsx"
+    ],
+    "528": [
+      "src_components_customer_portal_trax_chat_index_ts"
+    ],
+    "529": [
+      "src_components_customer_portal_announcements_announcementmodal_tsx"
+    ],
+    "530": [
+      "src_components_customer_portal_chat_customerchatinput_tsx"
+    ],
+    "531": [
+      "src_components_customer_portal_chat_customerchatwindowcompact_tsx"
+    ],
+    "532": [
+      "src_components_customer_portal_chat_customerchatmessage_tsx"
+    ],
+    "533": [
+      "src_components_customer_portal_chat_customerchatwindow_tsx"
+    ],
+    "534": [
+      "src_components_customer_portal_chat_index_ts"
+    ],
+    "535": [
+      "src_config_stripe_ts"
+    ],
+    "536": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_postcss_config_js"
+    ],
+    "537": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_next_config_ts"
+    ],
+    "538": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_next_env_d_ts"
+    ],
+    "539": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_vite_config_ts"
+    ],
+    "540": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_vitest_config_ts"
+    ],
+    "541": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_tailwind_config_ts"
+    ],
+    "542": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_public_service_worker_js"
+    ],
+    "543": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_vite_env_d_ts"
+    ],
+    "544": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_types_google_maps_d_ts"
+    ],
+    "545": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_error_tsx"
+    ],
+    "546": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_global_error_tsx"
+    ],
+    "547": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_not_found_tsx"
+    ],
+    "548": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_terms_page_tsx"
+    ],
+    "549": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_blog_blog_listing_client_tsx"
+    ],
+    "550": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_blog_slug_blog_post_client_tsx"
+    ],
+    "551": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_pay_token_page_tsx"
+    ],
+    "552": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_customer_portal_layout_tsx"
+    ],
+    "553": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_app_privacy_page_tsx"
+    ],
+    "554": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_lib_us_states_ts"
+    ],
+    "555": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_client_schemas_auth_ts"
+    ],
+    "556": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_pages_error_tsx"
+    ],
+    "557": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_integrations_supabase_types_ts"
+    ],
+    "558": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_integrations_supabase_client_ts"
+    ],
+    "559": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_blockedaccountdialog_tsx"
+    ],
+    "560": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_contactcard_tsx"
+    ],
+    "561": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_checkoutprogressoverlay_tsx"
+    ],
+    "562": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_closeprotectionmodal_tsx"
+    ],
+    "563": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_terms_tsx"
+    ],
+    "564": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_privacy_tsx"
+    ],
+    "565": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_footer_tsx"
+    ],
+    "566": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_collapsible_tsx"
+    ],
+    "567": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_input_tsx"
+    ],
+    "568": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_dropdown_menu_tsx"
+    ],
+    "569": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_popover_tsx"
+    ],
+    "570": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_textarea_tsx"
+    ],
+    "571": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_card_tsx"
+    ],
+    "572": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_alert_dialog_tsx"
+    ],
+    "573": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_switch_tsx"
+    ],
+    "574": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_menubar_tsx"
+    ],
+    "575": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_calendar_tsx"
+    ],
+    "576": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_table_tsx"
+    ],
+    "577": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_scroll_area_tsx"
+    ],
+    "578": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_toggle_group_tsx"
+    ],
+    "579": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_alert_tsx"
+    ],
+    "580": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_toast_tsx"
+    ],
+    "581": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_tabs_tsx"
+    ],
+    "582": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_label_tsx"
+    ],
+    "583": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_select_tsx"
+    ],
+    "584": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_context_menu_tsx"
+    ],
+    "585": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_progress_tsx"
+    ],
+    "586": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_dialog_tsx"
+    ],
+    "587": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_toggle_tsx"
+    ],
+    "588": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_skeleton_tsx"
+    ],
+    "589": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_radio_group_tsx"
+    ],
+    "590": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_aspect_ratio_tsx"
+    ],
+    "591": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_avatar_tsx"
+    ],
+    "592": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_blurred_image_tsx"
+    ],
+    "593": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_separator_tsx"
+    ],
+    "594": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_input_otp_tsx"
+    ],
+    "595": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_button_tsx"
+    ],
+    "596": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_hover_card_tsx"
+    ],
+    "597": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_tooltip_tsx"
+    ],
+    "598": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_navigation_menu_tsx"
+    ],
+    "599": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_slider_tsx"
+    ],
+    "600": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_badge_tsx"
+    ],
+    "601": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_use_toast_ts"
+    ],
+    "602": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_sheet_tsx"
+    ],
+    "603": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_checkbox_tsx"
+    ],
+    "604": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_accordion_tsx"
+    ],
+    "605": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_ui_command_tsx"
+    ],
+    "606": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_customerportalsidebar_tsx"
+    ],
+    "607": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_trax_chat_traxchatbutton_tsx"
+    ],
+    "608": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_trax_chat_traxchatchart_tsx"
+    ],
+    "609": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_trax_chat_traxaichatwindow_tsx"
+    ],
+    "610": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_trax_chat_traxchatpopup_tsx"
+    ],
+    "611": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_trax_chat_traxaichatmessage_tsx"
+    ],
+    "612": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_trax_chat_index_ts"
+    ],
+    "613": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_announcements_announcementmodal_tsx"
+    ],
+    "614": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_chat_customerchatinput_tsx"
+    ],
+    "615": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_chat_customerchatwindowcompact_tsx"
+    ],
+    "616": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_chat_customerchatmessage_tsx"
+    ],
+    "617": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_chat_customerchatwindow_tsx"
+    ],
+    "618": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_components_customer_portal_chat_index_ts"
+    ],
+    "619": [
+      "home_haseeb_raza_desktop_drive_247_apps_booking_src_config_stripe_ts"
+    ],
+    "620": [
+      "next_config_mjs"
+    ],
+    "621": [
+      "postcss_config_mjs"
+    ],
+    "622": [
+      "store_authstore_ts"
+    ],
+    "623": [
+      "app_admin_protected_layout_tsx"
+    ],
+    "624": [
+      "lib_supabase_ts"
+    ],
+    "625": [
+      "components_ui_input_tsx"
+    ],
+    "626": [
+      "components_ui_chart_bar_increasing_tsx"
+    ],
+    "627": [
+      "components_ui_dropdown_menu_tsx"
+    ],
+    "628": [
+      "components_ui_popover_tsx"
+    ],
+    "629": [
+      "components_ui_textarea_tsx"
+    ],
+    "630": [
+      "components_ui_card_tsx"
+    ],
+    "631": [
+      "components_ui_switch_tsx"
+    ],
+    "632": [
+      "components_ui_table_tsx"
+    ],
+    "633": [
+      "components_ui_scroll_area_tsx"
+    ],
+    "634": [
+      "components_ui_tabs_tsx"
+    ],
+    "635": [
+      "components_ui_label_tsx"
+    ],
+    "636": [
+      "components_ui_select_tsx"
+    ],
+    "637": [
+      "components_ui_dialog_tsx"
+    ],
+    "638": [
+      "components_ui_avatar_tsx"
+    ],
+    "639": [
+      "components_ui_kpi_card_tsx"
+    ],
+    "640": [
+      "components_ui_separator_tsx"
+    ],
+    "641": [
+      "components_ui_button_tsx"
+    ],
+    "642": [
+      "components_ui_tooltip_tsx"
+    ],
+    "643": [
+      "components_ui_badge_tsx"
+    ],
+    "644": [
+      "components_ui_sheet_tsx"
+    ],
+    "645": [
+      "components_skeletons_dashboardskeleton_tsx"
+    ],
+    "646": [
+      "components_skeletons_tableskeleton_tsx"
+    ],
+    "647": [
+      "components_announcements_announcementpreview_tsx"
+    ],
+    "648": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_next_config_mjs"
+    ],
+    "649": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_next_env_d_ts"
+    ],
+    "650": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_postcss_config_mjs"
+    ],
+    "651": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_tailwind_config_ts"
+    ],
+    "652": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_store_authstore_ts"
+    ],
+    "653": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_app_admin_protected_layout_tsx"
+    ],
+    "654": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_lib_supabase_ts"
+    ],
+    "655": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_input_tsx"
+    ],
+    "656": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_chart_bar_increasing_tsx"
+    ],
+    "657": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_dropdown_menu_tsx"
+    ],
+    "658": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_popover_tsx"
+    ],
+    "659": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_textarea_tsx"
+    ],
+    "660": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_card_tsx"
+    ],
+    "661": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_switch_tsx"
+    ],
+    "662": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_table_tsx"
+    ],
+    "663": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_scroll_area_tsx"
+    ],
+    "664": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_tabs_tsx"
+    ],
+    "665": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_label_tsx"
+    ],
+    "666": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_select_tsx"
+    ],
+    "667": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_dialog_tsx"
+    ],
+    "668": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_avatar_tsx"
+    ],
+    "669": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_kpi_card_tsx"
+    ],
+    "670": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_separator_tsx"
+    ],
+    "671": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_button_tsx"
+    ],
+    "672": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_tooltip_tsx"
+    ],
+    "673": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_badge_tsx"
+    ],
+    "674": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_ui_sheet_tsx"
+    ],
+    "675": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_skeletons_dashboardskeleton_tsx"
+    ],
+    "676": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_skeletons_tableskeleton_tsx"
+    ],
+    "677": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_components_announcements_announcementpreview_tsx"
+    ],
+    "678": [
+      "home_haseeb_raza_desktop_drive_247_apps_admin_src_integrations_supabase_types_ts"
+    ],
+    "679": [
+      "stripe_logo_brand"
+    ],
+    "680": [
+      "boldsign_logo_brand"
+    ],
+    "681": [
+      "bonzah_logo_brand"
+    ],
+    "682": [
+      "eslint_config_mjs"
+    ],
+    "683": [
+      "src_types_index_ts"
+    ],
+    "684": [
+      "src_app_security_page_tsx"
+    ],
+    "685": [
+      "src_lib_constants_ts"
+    ],
+    "686": [
+      "src_lib_supabase_server_ts"
+    ],
+    "687": [
+      "src_components_sections_timeline_tsx"
+    ],
+    "688": [
+      "src_components_sections_social_proof_tsx"
+    ],
+    "689": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_eslint_config_mjs"
+    ],
+    "690": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_next_config_ts"
+    ],
+    "691": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_next_env_d_ts"
+    ],
+    "692": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_postcss_config_mjs"
+    ],
+    "693": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_types_index_ts"
+    ],
+    "694": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_app_terms_page_tsx"
+    ],
+    "695": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_app_security_page_tsx"
+    ],
+    "696": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_lib_constants_ts"
+    ],
+    "697": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_lib_supabase_server_ts"
+    ],
+    "698": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_shared_theme_toggle_tsx"
+    ],
+    "699": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_sections_operations_dashboard_tsx"
+    ],
+    "700": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_sections_timeline_tsx"
+    ],
+    "701": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_sections_hero_tsx"
+    ],
+    "702": [
+      "home_haseeb_raza_desktop_drive_247_apps_web_src_components_sections_social_proof_tsx"
+    ]
+  },
+  "cohesion": {
+    "0": 0.01,
+    "1": 0.01,
+    "2": 0.04,
+    "3": 0.04,
+    "4": 0.05,
+    "5": 0.04,
+    "6": 0.06,
+    "7": 0.04,
+    "8": 0.06,
+    "9": 0.05,
+    "10": 0.06,
+    "11": 0.05,
+    "12": 0.07,
+    "13": 0.12,
+    "14": 0.15,
+    "15": 0.18,
+    "16": 0.13,
+    "17": 0.18,
+    "18": 0.11,
+    "19": 0.24,
+    "20": 0.21,
+    "21": 0.24,
+    "22": 0.15,
+    "23": 0.14,
+    "24": 0.2,
+    "25": 0.14,
+    "26": 0.18,
+    "27": 0.24,
+    "28": 0.2,
+    "29": 0.45,
+    "30": 0.29,
+    "31": 0.18,
+    "32": 0.4,
+    "33": 0.44,
+    "34": 0.51,
+    "35": 0.42,
+    "36": 0.33,
+    "37": 0.31,
+    "38": 0.42,
+    "39": 0.39,
+    "40": 0.47,
+    "41": 0.39,
+    "42": 0.42,
+    "43": 0.39,
+    "44": 0.53,
+    "45": 0.25,
+    "46": 0.61,
+    "47": 0.25,
+    "48": 0.36,
+    "49": 0.5,
+    "50": 0.43,
+    "51": 0.46,
+    "52": 0.29,
+    "53": 0.29,
+    "54": 0.48,
+    "55": 0.48,
+    "56": 0.48,
+    "57": 0.52,
+    "58": 0.52,
+    "59": 0.52,
+    "60": 0.48,
+    "61": 0.38,
+    "62": 0.29,
+    "63": 0.4,
+    "64": 0.6,
+    "65": 0.73,
+    "66": 0.53,
+    "67": 0.47,
+    "68": 0.53,
+    "69": 0.4,
+    "70": 0.4,
+    "71": 0.33,
+    "72": 0.47,
+    "73": 0.33,
+    "74": 0.33,
+    "75": 0.33,
+    "76": 0.33,
+    "77": 0.33,
+    "78": 0.67,
+    "79": 0.33,
+    "80": 0.53,
+    "81": 0.6,
+    "82": 0.53,
+    "83": 0.53,
+    "84": 0.53,
+    "85": 0.53,
+    "86": 0.6,
+    "87": 0.33,
+    "88": 0.67,
+    "89": 0.33,
+    "90": 0.53,
+    "91": 0.5,
+    "92": 0.4,
+    "93": 0.4,
+    "94": 0.6,
+    "95": 0.6,
+    "96": 0.4,
+    "97": 0.4,
+    "98": 0.4,
+    "99": 0.5,
+    "100": 0.4,
+    "101": 0.5,
+    "102": 0.4,
+    "103": 0.4,
+    "104": 0.4,
+    "105": 0.5,
+    "106": 0.6,
+    "107": 0.4,
+    "108": 0.5,
+    "109": 0.4,
+    "110": 0.6,
+    "111": 0.4,
+    "112": 0.4,
+    "113": 0.6,
+    "114": 0.4,
+    "115": 0.7,
+    "116": 0.6,
+    "117": 0.6,
+    "118": 0.6,
+    "119": 0.6,
+    "120": 0.6,
+    "121": 0.6,
+    "122": 0.6,
+    "123": 0.7,
+    "124": 0.7,
+    "125": 0.6,
+    "126": 0.5,
+    "127": 0.5,
+    "128": 0.5,
+    "129": 0.5,
+    "130": 0.67,
+    "131": 0.5,
+    "132": 0.67,
+    "133": 0.67,
+    "134": 0.5,
+    "135": 0.67,
+    "136": 0.5,
+    "137": 0.5,
+    "138": 0.5,
+    "139": 0.5,
+    "140": 0.67,
+    "141": 0.67,
+    "142": 0.67,
+    "143": 0.5,
+    "144": 0.5,
+    "145": 0.5,
+    "146": 0.5,
+    "147": 0.83,
+    "148": 0.5,
+    "149": 0.67,
+    "150": 0.67,
+    "151": 0.67,
+    "152": 0.67,
+    "153": 0.67,
+    "154": 0.67,
+    "155": 0.67,
+    "156": 0.67,
+    "157": 0.67,
+    "158": 0.67,
+    "159": 0.67,
+    "160": 0.67,
+    "161": 0.83,
+    "162": 0.67,
+    "163": 0.67,
+    "164": 0.67,
+    "165": 0.67,
+    "166": 0.67,
+    "167": 0.67,
+    "168": 0.67,
+    "169": 0.67,
+    "170": 0.67,
+    "171": 0.67,
+    "172": 0.67,
+    "173": 0.67,
+    "174": 0.67,
+    "175": 0.67,
+    "176": 0.67,
+    "177": 0.67,
+    "178": 0.67,
+    "179": 0.67,
+    "180": 0.67,
+    "181": 0.67,
+    "182": 0.67,
+    "183": 0.67,
+    "184": 1.0,
+    "185": 0.67,
+    "186": 0.67,
+    "187": 0.67,
+    "188": 0.67,
+    "189": 0.67,
+    "190": 0.67,
+    "191": 0.67,
+    "192": 0.67,
+    "193": 0.67,
+    "194": 0.67,
+    "195": 0.67,
+    "196": 0.67,
+    "197": 0.67,
+    "198": 0.67,
+    "199": 0.67,
+    "200": 0.67,
+    "201": 0.67,
+    "202": 0.67,
+    "203": 0.67,
+    "204": 0.67,
+    "205": 0.67,
+    "206": 0.67,
+    "207": 0.67,
+    "208": 0.67,
+    "209": 0.67,
+    "210": 0.67,
+    "211": 0.67,
+    "212": 0.67,
+    "213": 0.67,
+    "214": 0.67,
+    "215": 0.67,
+    "216": 0.67,
+    "217": 0.67,
+    "218": 0.67,
+    "219": 0.67,
+    "220": 0.67,
+    "221": 0.67,
+    "222": 0.67,
+    "223": 0.67,
+    "224": 0.67,
+    "225": 0.67,
+    "226": 0.67,
+    "227": 0.67,
+    "228": 0.67,
+    "229": 0.67,
+    "230": 0.67,
+    "231": 0.67,
+    "232": 0.67,
+    "233": 0.67,
+    "234": 0.67,
+    "235": 0.67,
+    "236": 0.67,
+    "237": 0.67,
+    "238": 0.67,
+    "239": 0.67,
+    "240": 0.67,
+    "241": 0.67,
+    "242": 0.67,
+    "243": 0.67,
+    "244": 0.67,
+    "245": 0.67,
+    "246": 0.67,
+    "247": 0.67,
+    "248": 1.0,
+    "249": 1.0,
+    "250": 1.0,
+    "251": 1.0,
+    "252": 1.0,
+    "253": 1.0,
+    "254": 1.0,
+    "255": 1.0,
+    "256": 1.0,
+    "257": 1.0,
+    "258": 1.0,
+    "259": 1.0,
+    "260": 1.0,
+    "261": 1.0,
+    "262": 1.0,
+    "263": 1.0,
+    "264": 1.0,
+    "265": 1.0,
+    "266": 1.0,
+    "267": 1.0,
+    "268": 1.0,
+    "269": 1.0,
+    "270": 1.0,
+    "271": 1.0,
+    "272": 1.0,
+    "273": 1.0,
+    "274": 1.0,
+    "275": 1.0,
+    "276": 1.0,
+    "277": 1.0,
+    "278": 1.0,
+    "279": 1.0,
+    "280": 1.0,
+    "281": 1.0,
+    "282": 1.0,
+    "283": 1.0,
+    "284": 1.0,
+    "285": 1.0,
+    "286": 1.0,
+    "287": 1.0,
+    "288": 1.0,
+    "289": 1.0,
+    "290": 1.0,
+    "291": 1.0,
+    "292": 1.0,
+    "293": 1.0,
+    "294": 1.0,
+    "295": 1.0,
+    "296": 1.0,
+    "297": 1.0,
+    "298": 1.0,
+    "299": 1.0,
+    "300": 1.0,
+    "301": 1.0,
+    "302": 1.0,
+    "303": 1.0,
+    "304": 1.0,
+    "305": 1.0,
+    "306": 1.0,
+    "307": 1.0,
+    "308": 1.0,
+    "309": 1.0,
+    "310": 1.0,
+    "311": 1.0,
+    "312": 1.0,
+    "313": 1.0,
+    "314": 1.0,
+    "315": 1.0,
+    "316": 1.0,
+    "317": 1.0,
+    "318": 1.0,
+    "319": 1.0,
+    "320": 1.0,
+    "321": 1.0,
+    "322": 1.0,
+    "323": 1.0,
+    "324": 1.0,
+    "325": 1.0,
+    "326": 1.0,
+    "327": 1.0,
+    "328": 1.0,
+    "329": 1.0,
+    "330": 1.0,
+    "331": 1.0,
+    "332": 1.0,
+    "333": 1.0,
+    "334": 1.0,
+    "335": 1.0,
+    "336": 1.0,
+    "337": 1.0,
+    "338": 1.0,
+    "339": 1.0,
+    "340": 1.0,
+    "341": 1.0,
+    "342": 1.0,
+    "343": 1.0,
+    "344": 1.0,
+    "345": 1.0,
+    "346": 1.0,
+    "347": 1.0,
+    "348": 1.0,
+    "349": 1.0,
+    "350": 1.0,
+    "351": 1.0,
+    "352": 1.0,
+    "353": 1.0,
+    "354": 1.0,
+    "355": 1.0,
+    "356": 1.0,
+    "357": 1.0,
+    "358": 1.0,
+    "359": 1.0,
+    "360": 1.0,
+    "361": 1.0,
+    "362": 1.0,
+    "363": 1.0,
+    "364": 1.0,
+    "365": 1.0,
+    "366": 1.0,
+    "367": 1.0,
+    "368": 1.0,
+    "369": 1.0,
+    "370": 1.0,
+    "371": 1.0,
+    "372": 1.0,
+    "373": 1.0,
+    "374": 1.0,
+    "375": 1.0,
+    "376": 1.0,
+    "377": 1.0,
+    "378": 1.0,
+    "379": 1.0,
+    "380": 1.0,
+    "381": 1.0,
+    "382": 1.0,
+    "383": 1.0,
+    "384": 1.0,
+    "385": 1.0,
+    "386": 1.0,
+    "387": 1.0,
+    "388": 1.0,
+    "389": 1.0,
+    "390": 1.0,
+    "391": 1.0,
+    "392": 1.0,
+    "393": 1.0,
+    "394": 1.0,
+    "395": 1.0,
+    "396": 1.0,
+    "397": 1.0,
+    "398": 1.0,
+    "399": 1.0,
+    "400": 1.0,
+    "401": 1.0,
+    "402": 1.0,
+    "403": 1.0,
+    "404": 1.0,
+    "405": 1.0,
+    "406": 1.0,
+    "407": 1.0,
+    "408": 1.0,
+    "409": 1.0,
+    "410": 1.0,
+    "411": 1.0,
+    "412": 1.0,
+    "413": 1.0,
+    "414": 1.0,
+    "415": 1.0,
+    "416": 1.0,
+    "417": 1.0,
+    "418": 1.0,
+    "419": 1.0,
+    "420": 1.0,
+    "421": 1.0,
+    "422": 1.0,
+    "423": 1.0,
+    "424": 1.0,
+    "425": 1.0,
+    "426": 1.0,
+    "427": 1.0,
+    "428": 1.0,
+    "429": 1.0,
+    "430": 1.0,
+    "431": 1.0,
+    "432": 1.0,
+    "433": 1.0,
+    "434": 1.0,
+    "435": 1.0,
+    "436": 1.0,
+    "437": 1.0,
+    "438": 1.0,
+    "439": 1.0,
+    "440": 1.0,
+    "441": 1.0,
+    "442": 1.0,
+    "443": 1.0,
+    "444": 1.0,
+    "445": 1.0,
+    "446": 1.0,
+    "447": 1.0,
+    "448": 1.0,
+    "449": 1.0,
+    "450": 1.0,
+    "451": 1.0,
+    "452": 1.0,
+    "453": 1.0,
+    "454": 1.0,
+    "455": 1.0,
+    "456": 1.0,
+    "457": 1.0,
+    "458": 1.0,
+    "459": 1.0,
+    "460": 1.0,
+    "461": 1.0,
+    "462": 1.0,
+    "463": 1.0,
+    "464": 1.0,
+    "465": 1.0,
+    "466": 1.0,
+    "467": 1.0,
+    "468": 1.0,
+    "469": 1.0,
+    "470": 1.0,
+    "471": 1.0,
+    "472": 1.0,
+    "473": 1.0,
+    "474": 1.0,
+    "475": 1.0,
+    "476": 1.0,
+    "477": 1.0,
+    "478": 1.0,
+    "479": 1.0,
+    "480": 1.0,
+    "481": 1.0,
+    "482": 1.0,
+    "483": 1.0,
+    "484": 1.0,
+    "485": 1.0,
+    "486": 1.0,
+    "487": 1.0,
+    "488": 1.0,
+    "489": 1.0,
+    "490": 1.0,
+    "491": 1.0,
+    "492": 1.0,
+    "493": 1.0,
+    "494": 1.0,
+    "495": 1.0,
+    "496": 1.0,
+    "497": 1.0,
+    "498": 1.0,
+    "499": 1.0,
+    "500": 1.0,
+    "501": 1.0,
+    "502": 1.0,
+    "503": 1.0,
+    "504": 1.0,
+    "505": 1.0,
+    "506": 1.0,
+    "507": 1.0,
+    "508": 1.0,
+    "509": 1.0,
+    "510": 1.0,
+    "511": 1.0,
+    "512": 1.0,
+    "513": 1.0,
+    "514": 1.0,
+    "515": 1.0,
+    "516": 1.0,
+    "517": 1.0,
+    "518": 1.0,
+    "519": 1.0,
+    "520": 1.0,
+    "521": 1.0,
+    "522": 1.0,
+    "523": 1.0,
+    "524": 1.0,
+    "525": 1.0,
+    "526": 1.0,
+    "527": 1.0,
+    "528": 1.0,
+    "529": 1.0,
+    "530": 1.0,
+    "531": 1.0,
+    "532": 1.0,
+    "533": 1.0,
+    "534": 1.0,
+    "535": 1.0,
+    "536": 1.0,
+    "537": 1.0,
+    "538": 1.0,
+    "539": 1.0,
+    "540": 1.0,
+    "541": 1.0,
+    "542": 1.0,
+    "543": 1.0,
+    "544": 1.0,
+    "545": 1.0,
+    "546": 1.0,
+    "547": 1.0,
+    "548": 1.0,
+    "549": 1.0,
+    "550": 1.0,
+    "551": 1.0,
+    "552": 1.0,
+    "553": 1.0,
+    "554": 1.0,
+    "555": 1.0,
+    "556": 1.0,
+    "557": 1.0,
+    "558": 1.0,
+    "559": 1.0,
+    "560": 1.0,
+    "561": 1.0,
+    "562": 1.0,
+    "563": 1.0,
+    "564": 1.0,
+    "565": 1.0,
+    "566": 1.0,
+    "567": 1.0,
+    "568": 1.0,
+    "569": 1.0,
+    "570": 1.0,
+    "571": 1.0,
+    "572": 1.0,
+    "573": 1.0,
+    "574": 1.0,
+    "575": 1.0,
+    "576": 1.0,
+    "577": 1.0,
+    "578": 1.0,
+    "579": 1.0,
+    "580": 1.0,
+    "581": 1.0,
+    "582": 1.0,
+    "583": 1.0,
+    "584": 1.0,
+    "585": 1.0,
+    "586": 1.0,
+    "587": 1.0,
+    "588": 1.0,
+    "589": 1.0,
+    "590": 1.0,
+    "591": 1.0,
+    "592": 1.0,
+    "593": 1.0,
+    "594": 1.0,
+    "595": 1.0,
+    "596": 1.0,
+    "597": 1.0,
+    "598": 1.0,
+    "599": 1.0,
+    "600": 1.0,
+    "601": 1.0,
+    "602": 1.0,
+    "603": 1.0,
+    "604": 1.0,
+    "605": 1.0,
+    "606": 1.0,
+    "607": 1.0,
+    "608": 1.0,
+    "609": 1.0,
+    "610": 1.0,
+    "611": 1.0,
+    "612": 1.0,
+    "613": 1.0,
+    "614": 1.0,
+    "615": 1.0,
+    "616": 1.0,
+    "617": 1.0,
+    "618": 1.0,
+    "619": 1.0,
+    "620": 1.0,
+    "621": 1.0,
+    "622": 1.0,
+    "623": 1.0,
+    "624": 1.0,
+    "625": 1.0,
+    "626": 1.0,
+    "627": 1.0,
+    "628": 1.0,
+    "629": 1.0,
+    "630": 1.0,
+    "631": 1.0,
+    "632": 1.0,
+    "633": 1.0,
+    "634": 1.0,
+    "635": 1.0,
+    "636": 1.0,
+    "637": 1.0,
+    "638": 1.0,
+    "639": 1.0,
+    "640": 1.0,
+    "641": 1.0,
+    "642": 1.0,
+    "643": 1.0,
+    "644": 1.0,
+    "645": 1.0,
+    "646": 1.0,
+    "647": 1.0,
+    "648": 1.0,
+    "649": 1.0,
+    "650": 1.0,
+    "651": 1.0,
+    "652": 1.0,
+    "653": 1.0,
+    "654": 1.0,
+    "655": 1.0,
+    "656": 1.0,
+    "657": 1.0,
+    "658": 1.0,
+    "659": 1.0,
+    "660": 1.0,
+    "661": 1.0,
+    "662": 1.0,
+    "663": 1.0,
+    "664": 1.0,
+    "665": 1.0,
+    "666": 1.0,
+    "667": 1.0,
+    "668": 1.0,
+    "669": 1.0,
+    "670": 1.0,
+    "671": 1.0,
+    "672": 1.0,
+    "673": 1.0,
+    "674": 1.0,
+    "675": 1.0,
+    "676": 1.0,
+    "677": 1.0,
+    "678": 1.0,
+    "679": 1.0,
+    "680": 1.0,
+    "681": 1.0,
+    "682": 1.0,
+    "683": 1.0,
+    "684": 1.0,
+    "685": 1.0,
+    "686": 1.0,
+    "687": 1.0,
+    "688": 1.0,
+    "689": 1.0,
+    "690": 1.0,
+    "691": 1.0,
+    "692": 1.0,
+    "693": 1.0,
+    "694": 1.0,
+    "695": 1.0,
+    "696": 1.0,
+    "697": 1.0,
+    "698": 1.0,
+    "699": 1.0,
+    "700": 1.0,
+    "701": 1.0,
+    "702": 1.0
+  },
+  "gods": [
+    {
+      "id": "tenantcontext_usetenant",
+      "label": "useTenant()",
+      "degree": 159
+    },
+    {
+      "id": "use_toast_toast",
+      "label": "toast()",
+      "degree": 118
+    },
+    {
+      "id": "setup_hub_update",
+      "label": "update()",
+      "degree": 44
+    },
+    {
+      "id": "use_toast_usetoast",
+      "label": "useToast()",
+      "degree": 27
+    },
+    {
+      "id": "route_get",
+      "label": "GET()",
+      "degree": 25
+    },
+    {
+      "id": "payg_details_dialog_formatcurrency",
+      "label": "formatCurrency()",
+      "degree": 24
+    },
+    {
+      "id": "route_post",
+      "label": "POST()",
+      "degree": 22
+    },
+    {
+      "id": "page_getpublicurl",
+      "label": "getPublicUrl()",
+      "degree": 22
+    },
+    {
+      "id": "page_onsubmit",
+      "label": "onSubmit()",
+      "degree": 21
+    },
+    {
+      "id": "use_audit_log_useauditlog",
+      "label": "useAuditLog()",
+      "degree": 21
+    }
+  ],
+  "surprises": [
+    {
+      "source": "Open Graph Social Card",
+      "target": "SEO and Metadata",
+      "source_files": [
+        "public/og.png",
+        "src/app/layout.tsx"
+      ],
+      "confidence": "INFERRED",
+      "relation": "conceptually_related_to",
+      "why": "inferred connection - not explicitly stated in source; crosses file types (image \u2194 code); connects across different repos/directories; peripheral node `Open Graph Social Card` unexpectedly reaches hub `SEO and Metadata`"
+    },
+    {
+      "source": "Apple Touch Icon",
+      "target": "SEO and Metadata",
+      "source_files": [
+        "public/apple-touch-icon.png",
+        "src/app/layout.tsx"
+      ],
+      "confidence": "INFERRED",
+      "relation": "conceptually_related_to",
+      "why": "inferred connection - not explicitly stated in source; crosses file types (image \u2194 code); connects across different repos/directories; peripheral node `Apple Touch Icon` unexpectedly reaches hub `SEO and Metadata`"
+    },
+    {
+      "source": "Light Mode Logo",
+      "target": "Dark Mode Theming",
+      "source_files": [
+        "public/logo-light.png",
+        "src/components/shared/theme-provider.tsx"
+      ],
+      "confidence": "INFERRED",
+      "relation": "conceptually_related_to",
+      "why": "inferred connection - not explicitly stated in source; crosses file types (image \u2194 code); connects across different repos/directories"
+    },
+    {
+      "source": "Dark Mode Logo",
+      "target": "Dark Mode Theming",
+      "source_files": [
+        "public/logo-dark.png",
+        "src/components/shared/theme-provider.tsx"
+      ],
+      "confidence": "INFERRED",
+      "relation": "conceptually_related_to",
+      "why": "inferred connection - not explicitly stated in source; crosses file types (image \u2194 code); connects across different repos/directories"
+    },
+    {
+      "source": "App Favicon Icon",
+      "target": "SEO and Metadata",
+      "source_files": [
+        "src/app/icon.png",
+        "src/app/layout.tsx"
+      ],
+      "confidence": "INFERRED",
+      "relation": "conceptually_related_to",
+      "why": "inferred connection - not explicitly stated in source; crosses file types (image \u2194 code); peripheral node `App Favicon Icon` unexpectedly reaches hub `SEO and Metadata`"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `toast()` connect `Payment & Hold Dialogs` to `Rental Calendar Utils`, `Vehicle & Image Editors`, `Public & Admin Pages`, `Booking & Invoice Flow`, `Settings & Communications`, `Insurance & Customer Forms`, `Format Utilities`, `Payments & PAYG Page`, `Page Action Handlers`, `Extras Editor`?",
+      "why": "High betweenness centrality (0.138) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `useTenant()` connect `Portal Sidebar & Auth` to `Customer Documents`, `Location & Places`, `Page Action Handlers`, `Marketing Landing`, `Working Hours`, `Maintenance Banner`, `Installment Plan Card`, `Mobile Actions`, `useRentalExtensionTotals()`?",
+      "why": "High betweenness centrality (0.083) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `useToast()` connect `Portal Sidebar & Auth` to `Payment & Hold Dialogs`?",
+      "why": "High betweenness centrality (0.052) - this node is a cross-community bridge."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 157 inferred relationships involving `useTenant()` (e.g. with `Testimonials()` and `InsuranceUploadDialog()`) actually correct?",
+      "why": "`useTenant()` has 157 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 114 inferred relationships involving `toast()` (e.g. with `onSubmit()` and `handleResendResetOTP()`) actually correct?",
+      "why": "`toast()` has 114 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 43 inferred relationships involving `update()` (e.g. with `onSubmit()` and `POST()`) actually correct?",
+      "why": "`update()` has 43 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 25 inferred relationships involving `useToast()` (e.g. with `Toaster()` and `InsuranceUploadDialog()`) actually correct?",
+      "why": "`useToast()` has 25 INFERRED edges - model-reasoned connections that need verification."
+    }
+  ]
+}

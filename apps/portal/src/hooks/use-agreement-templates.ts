@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
-import { DEFAULT_AGREEMENT_TEMPLATE } from '@/lib/default-agreement-template';
+import { getDefaultTemplateForCategory } from '@/lib/default-agreement-template';
 
 export type TemplateType = 'default' | 'custom';
 export type TemplateCategory = 'standard' | 'payg' | 'extension' | 'installment';
@@ -385,12 +385,30 @@ export const useTemplateSelection = (category: TemplateCategory = 'standard') =>
         return existingArr[0];
       }
 
+      // Some categories were seeded with a different template_name (e.g. the
+      // installment category was seeded as "Default Installment Plan Agreement"
+      // by an earlier migration). The unique_active_template_per_tenant index
+      // allows only one active row per (tenant, category), so inserting a new
+      // active "Default Template" row would conflict. Deactivate any other
+      // legacy rows in this category first so the new row can take over as
+      // active without violating the constraint.
+      const { error: deactivateError } = await supabase
+        .from('agreement_templates')
+        .update({ is_active: false })
+        .eq('tenant_id', tenant.id)
+        .eq('template_category', category)
+        .eq('is_active', true);
+
+      if (deactivateError) {
+        throw deactivateError;
+      }
+
       const { data, error } = await supabase
         .from('agreement_templates')
         .insert({
           tenant_id: tenant.id,
           template_name: DEFAULT_TEMPLATE_NAME,
-          template_content: DEFAULT_AGREEMENT_TEMPLATE,
+          template_content: getDefaultTemplateForCategory(category),
           template_category: category,
           is_active: true,
         })
@@ -651,12 +669,14 @@ export const useTemplateSelection = (category: TemplateCategory = 'standard') =>
 
       const existing = existingArr?.[0] || null;
 
+      const defaultContent = getDefaultTemplateForCategory(category);
+
       if (existing) {
         // Update existing template
         const { error } = await supabase
           .from('agreement_templates')
           .update({
-            template_content: DEFAULT_AGREEMENT_TEMPLATE,
+            template_content: defaultContent,
             updated_at: new Date().toISOString()
           })
           .eq('id', existing.id);
@@ -678,7 +698,7 @@ export const useTemplateSelection = (category: TemplateCategory = 'standard') =>
           .insert({
             tenant_id: tenant.id,
             template_name: DEFAULT_TEMPLATE_NAME,
-            template_content: DEFAULT_AGREEMENT_TEMPLATE,
+            template_content: defaultContent,
             template_category: category,
             is_active: true,
           });
