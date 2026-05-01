@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Loader2, CalendarPlus, Calendar, AlertCircle, AlertTriangle, CreditCard, ArrowLeft, Shield, ShieldCheck, Upload, Gauge, ExternalLink } from 'lucide-react';
+import { Loader2, CalendarPlus, Calendar, AlertCircle, AlertTriangle, CreditCard, ArrowLeft, Shield, ShieldCheck, Upload, Gauge, ExternalLink, Tag, ChevronsUpDown, Check, XCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
@@ -26,7 +26,7 @@ import { useExtensionPricing } from '@/hooks/use-extension-pricing';
 import { useVehicleBookedDates } from '@/hooks/use-vehicle-booked-dates';
 import { RentalDateRangePicker } from '@/components/shared/forms/rental-date-picker';
 import { format } from 'date-fns';
-import { getCurrencySymbol } from '@/lib/format-utils';
+import { formatCurrency, getCurrencySymbol } from '@/lib/format-utils';
 import { useQuery } from '@tanstack/react-query';
 import { calculateTotalMileageAllowance, getMileageTier, isUnlimitedMileage } from '@/lib/mileage-utils';
 import { useRentalSettings } from '@/hooks/use-rental-settings';
@@ -34,6 +34,9 @@ import { type CoverageOptions } from '@/hooks/use-bonzah-premium';
 import { Checkbox } from '@/components/ui/checkbox';
 import BonzahInsuranceSelector from '@/components/rentals/bonzah-insurance-selector';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { cn } from '@/lib/utils';
 
 interface AdminExtendRentalDialogProps {
   open: boolean;
@@ -87,6 +90,76 @@ export function AdminExtendRentalDialog({
   const [extensionCoverage, setExtensionCoverage] = useState<CoverageOptions>({ cdw: false, rcli: false, sli: false, pai: false });
   const [bonzahPremiumAmount, setBonzahPremiumAmount] = useState(0);
   const [ownInsuranceFile, setOwnInsuranceFile] = useState<File | null>(null);
+
+  // Promo code state — applied against the extension rental fee only.
+  // Tax + service fee recompute on the discounted base, mirroring new-rental flow.
+  const [promoCodeOpen, setPromoCodeOpen] = useState(false);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoDetails, setPromoDetails] = useState<{
+    code: string;
+    type: 'percentage' | 'fixed_amount';
+    value: number;
+    id: string;
+  } | null>(null);
+
+  const { data: promoCodes } = useQuery({
+    queryKey: ['promo-codes', tenant?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('promocodes')
+        .select('id, code, type, value, expires_at')
+        .eq('tenant_id', tenant!.id)
+        .order('code', { ascending: true });
+      if (error) throw error;
+      const now = new Date();
+      return (data || []).filter((p: any) => !p.expires_at || new Date(p.expires_at) >= now);
+    },
+    enabled: !!tenant?.id,
+  });
+
+  const validatePromoCode = async (code: string) => {
+    if (!code || !tenant?.id) return;
+    setPromoLoading(true);
+    setPromoError(null);
+    setPromoDetails(null);
+    try {
+      const { data, error } = await (supabase as any)
+        .from('promocodes')
+        .select('*')
+        .eq('code', code.trim())
+        .eq('tenant_id', tenant.id)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        setPromoError('Invalid promo code');
+        return;
+      }
+      if (data.expires_at && new Date(data.expires_at) < new Date()) {
+        setPromoError('Promo code has expired');
+        return;
+      }
+      setPromoDetails({
+        code: data.code,
+        type: data.type === 'value' ? 'fixed_amount' : 'percentage',
+        value: data.value,
+        id: data.id,
+      });
+    } catch (err) {
+      console.error('Promo validation error:', err);
+      setPromoError('Failed to validate promo code');
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  const calculateExtensionDiscount = (rentalAmount: number): number => {
+    if (!promoDetails) return 0;
+    if (promoDetails.type === 'fixed_amount') {
+      return rentalAmount > promoDetails.value ? promoDetails.value : 0;
+    }
+    return Math.round((rentalAmount * promoDetails.value) / 100 * 100) / 100;
+  };
 
   // Fetch original Bonzah policy to pre-fill coverage options
   const { data: originalPolicy } = useQuery({
@@ -198,18 +271,21 @@ export function AdminExtendRentalDialog({
     enabled: !!rental.id && !!tenant?.id,
   });
 
-  // Compute extension breakdown (tax, service fee on top of base extension cost)
+  // Apply promo discount to the extension rental fee. Tax and service fee
+  // recompute on the discounted base — matches the new-rental flow.
+  const extensionDiscount = calculateExtensionDiscount(extensionCost);
+  const discountedExtensionCost = Math.max(0, extensionCost - extensionDiscount);
   const extensionTaxAmount = rentalSettings?.tax_enabled && rentalSettings?.tax_percentage
-    ? Math.round(extensionCost * (rentalSettings.tax_percentage / 100) * 100) / 100
+    ? Math.round(discountedExtensionCost * (rentalSettings.tax_percentage / 100) * 100) / 100
     : 0;
   const extensionServiceFee = (() => {
     if (!rentalSettings?.service_fee_enabled) return 0;
     if (rentalSettings.service_fee_type === 'percentage' && rentalSettings.service_fee_value) {
-      return Math.round(extensionCost * (rentalSettings.service_fee_value / 100) * 100) / 100;
+      return Math.round(discountedExtensionCost * (rentalSettings.service_fee_value / 100) * 100) / 100;
     }
     return rentalSettings.service_fee_value || rentalSettings.service_fee_amount || 0;
   })();
-  const extensionTotalAmount = extensionCost + extensionTaxAmount + extensionServiceFee + insurancePremium;
+  const extensionTotalAmount = discountedExtensionCost + extensionTaxAmount + extensionServiceFee + insurancePremium;
 
   // Fetch vehicle occupancy for the color-coded date picker (exclude current rental)
   const { occupancyMap, occupancyModifiers } = useVehicleBookedDates(vehicleId, rental.id);
@@ -312,7 +388,8 @@ export function AdminExtendRentalDialog({
       //    so we have the authoritative sequence_number + extension_id to
       //    stamp on every row — keeping numbering and grouping in sync.
       const extNum = createdSequenceNumber ?? ((existingExtensionCount || 0) + 1);
-      const extRef = `Extension #${extNum}: ${extensionDays} day${extensionDays !== 1 ? 's' : ''} (${format(currentEndDate, 'MMM dd')} → ${format(new Date(newEndDate), 'MMM dd, yyyy')})`;
+      const promoSuffix = extensionDiscount > 0 && promoDetails?.code ? ` — promo ${promoDetails.code}` : '';
+      const extRef = `Extension #${extNum}: ${extensionDays} day${extensionDays !== 1 ? 's' : ''} (${format(currentEndDate, 'MMM dd')} → ${format(new Date(newEndDate), 'MMM dd, yyyy')})${promoSuffix}`;
       const today = new Date().toISOString().split('T')[0];
       const baseLedger = {
         rental_id: rental.id,
@@ -325,9 +402,9 @@ export function AdminExtendRentalDialog({
         ...(createdExtensionId ? { extension_id: createdExtensionId } : {}),
       };
 
-      if (extensionCost > 0) {
+      if (discountedExtensionCost > 0) {
         const ledgerEntries: any[] = [
-          { ...baseLedger, category: 'Extension Rental', reference: extRef, amount: extensionCost, remaining_amount: extensionCost },
+          { ...baseLedger, category: 'Extension Rental', reference: extRef, amount: discountedExtensionCost, remaining_amount: discountedExtensionCost },
         ];
         if (extensionTaxAmount > 0) {
           ledgerEntries.push({ ...baseLedger, category: 'Extension Tax', reference: `Extension #${extNum}: Tax`, amount: extensionTaxAmount, remaining_amount: extensionTaxAmount });
@@ -566,6 +643,8 @@ export function AdminExtendRentalDialog({
       setExtensionInsuranceType(rental.bonzah_policy_id ? 'bonzah' : 'own');
       setCoverageInitialized(false);
       setOwnInsuranceFile(null);
+      setPromoDetails(null);
+      setPromoError(null);
       onOpenChange(false);
     } catch (error: any) {
       console.error('Admin extend rental error:', error);
@@ -592,6 +671,8 @@ export function AdminExtendRentalDialog({
           setExtensionInsuranceType(rental.bonzah_policy_id ? 'bonzah' : 'own');
           setCoverageInitialized(false);
           setOwnInsuranceFile(null);
+          setPromoDetails(null);
+          setPromoError(null);
         }
         onOpenChange(val);
       }}
@@ -691,6 +772,11 @@ export function AdminExtendRentalDialog({
                             Rental: {extensionDays} day{extensionDays !== 1 ? 's' : ''} x {currencySymbol}{dailyRate.toFixed(2)}/day = {currencySymbol}{extensionCost.toFixed(2)}
                           </p>
                         )}
+                        {extensionDiscount > 0 && (
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                            Discount ({promoDetails?.code}): -{currencySymbol}{extensionDiscount.toFixed(2)}
+                          </p>
+                        )}
                         {extensionTaxAmount > 0 && (
                           <p className="text-xs text-blue-600 dark:text-blue-400">
                             Tax ({rentalSettings?.tax_percentage}%): {currencySymbol}{extensionTaxAmount.toFixed(2)}
@@ -706,6 +792,104 @@ export function AdminExtendRentalDialog({
                   ) : (
                     <p className="text-sm text-muted-foreground">
                       {extensionDays} day{extensionDays !== 1 ? 's' : ''} (daily rate not available)
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Promo Code */}
+              {extensionDays > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Tag className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                      Promo Code
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Popover open={promoCodeOpen} onOpenChange={setPromoCodeOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={promoCodeOpen}
+                          className={cn(
+                            'flex-1 justify-between font-normal',
+                            !promoDetails?.code && 'text-muted-foreground',
+                            promoError ? 'border-destructive' : promoDetails ? 'border-green-500' : ''
+                          )}
+                        >
+                          {promoDetails?.code || 'Select promo code'}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search promo codes..." />
+                          <CommandList>
+                            <CommandEmpty>No promo codes found</CommandEmpty>
+                            <CommandGroup>
+                              {promoCodes?.map((promo: any) => (
+                                <CommandItem
+                                  key={promo.id}
+                                  value={promo.code}
+                                  onSelect={() => {
+                                    setPromoCodeOpen(false);
+                                    setPromoError(null);
+                                    setPromoDetails(null);
+                                    validatePromoCode(promo.code);
+                                  }}
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{promo.code}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {promo.type === 'percentage'
+                                        ? `${promo.value}% off`
+                                        : `${formatCurrency(promo.value, tenant?.currency_code || 'USD')} off`}
+                                      {promo.expires_at && ` · Expires ${format(new Date(promo.expires_at), 'MMM d, yyyy')}`}
+                                    </span>
+                                  </div>
+                                  <Check
+                                    className={cn(
+                                      'ml-auto h-4 w-4',
+                                      promoDetails?.code === promo.code ? 'opacity-100' : 'opacity-0'
+                                    )}
+                                  />
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {promoDetails?.code && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          setPromoDetails(null);
+                          setPromoError(null);
+                        }}
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  {promoLoading && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Validating...
+                    </p>
+                  )}
+                  {promoError && <p className="text-xs text-destructive">{promoError}</p>}
+                  {promoDetails && extensionDiscount > 0 && (
+                    <p className="text-xs text-emerald-600 font-medium">
+                      {promoDetails.type === 'percentage'
+                        ? `${promoDetails.value}% off`
+                        : `${currencySymbol}${promoDetails.value.toFixed(2)} off`}
+                      {' '}— saving {currencySymbol}{extensionDiscount.toFixed(2)} on this extension
                     </p>
                   )}
                 </div>
@@ -936,6 +1120,12 @@ export function AdminExtendRentalDialog({
                       <span className="text-sm text-muted-foreground">Rental Fee</span>
                       <span className="text-sm font-medium">{currencySymbol}{extensionCost.toFixed(2)}</span>
                     </div>
+                    {extensionDiscount > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-emerald-600">Discount ({promoDetails?.code})</span>
+                        <span className="text-sm font-medium text-emerald-600">-{currencySymbol}{extensionDiscount.toFixed(2)}</span>
+                      </div>
+                    )}
                     {extensionTaxAmount > 0 && (
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Tax ({rentalSettings?.tax_percentage}%)</span>
