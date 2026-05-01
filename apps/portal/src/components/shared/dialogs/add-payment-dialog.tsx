@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -53,7 +53,27 @@ interface AddPaymentDialogProps {
   insuranceChargeMode?: boolean;
   targetCategories?: string[];
   extensionId?: string;
-  onPaymentSuccess?: () => void;
+  /**
+   * PAYG accrual id of the invoice the customer is paying off. When set, the
+   * Charge-via-Stripe and Email-Stripe-Link paths forward it as
+   * `paygAccrualId` to `create-checkout-session`, which stamps it on the
+   * Stripe Checkout metadata. The Stripe webhook then calls
+   * `payg_settle_invoice(payment_id, accrual_id)` to flip the accrual to
+   * `paid` (and supersede earlier opens), so PAYG status mirrors the
+   * non-PAYG flow where Stripe payments settle automatically.
+   */
+  paygAccrualId?: string;
+  /**
+   * Called after a successful action. The `kind` arg tells the caller whether
+   * the payment is already settled in the DB or only initiated:
+   *   - 'recorded' — manual Record Payment path; ledger + payment row are committed.
+   *     Caller may safely run any "post-settle" logic (e.g. flipping invoice status).
+   *   - 'pending'  — Charge-via-Stripe / Email-Stripe-Link path; only a checkout
+   *     session was created. The actual Stripe webhook will commit the payment
+   *     and run any settlement logic. Callers MUST NOT mark anything as paid here.
+   * The arg is optional so existing callers that ignore it keep working.
+   */
+  onPaymentSuccess?: (kind?: 'recorded' | 'pending') => void;
   breakdownItems?: BreakdownItem[];
 }
 
@@ -76,6 +96,7 @@ export const AddPaymentDialog = ({
   insuranceChargeMode,
   targetCategories,
   extensionId,
+  paygAccrualId,
   onPaymentSuccess,
   breakdownItems
 }: AddPaymentDialogProps) => {
@@ -83,6 +104,13 @@ export const AddPaymentDialog = ({
   const [stripeLoading, setStripeLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  // Synchronous double-submit guards. React `loading` state is async — between
+  // a click and the next render, a second click can slip through and create a
+  // duplicate payment / duplicate Stripe checkout. Refs update synchronously
+  // so they catch rapid double-clicks even within the same event-loop tick.
+  const submitInFlight = useRef(false);
+  const stripeInFlight = useRef(false);
+  const emailInFlight = useRef(false);
   const { toast } = useToast();
   const { tenant } = useTenant();
   const { logAction } = useAuditLog();
@@ -112,28 +140,6 @@ export const AddPaymentDialog = ({
   const breakdownTotal = breakdownItems && breakdownItems.length > 0
     ? breakdownItems.reduce((sum, item) => sum + (item.type === 'discount' ? -Math.abs(item.amount) : item.amount), 0)
     : null;
-
-  // Detect installment plan + collection mode so we can warn when the operator
-  // chooses a non-Stripe method (no card to auto-charge future installments)
-  const [installmentPlanInfo, setInstallmentPlanInfo] = useState<{ id: string; collection_mode: string; status: string } | null>(null);
-  useEffect(() => {
-    if (!propRentalId || !open) { setInstallmentPlanInfo(null); return; }
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from("installment_plans")
-        .select("id, collection_mode, status")
-        .eq("rental_id", propRentalId)
-        .maybeSingle();
-      if (!cancelled) setInstallmentPlanInfo(data ?? null);
-    })();
-    return () => { cancelled = true; };
-  }, [propRentalId, open]);
-  const watchedMethod = form.watch("method");
-  const showManualWarning = !!installmentPlanInfo
-    && installmentPlanInfo.status !== "cancelled"
-    && watchedMethod
-    && !["Card", "Stripe", "card"].includes(watchedMethod);
 
   // Update form values when props change
   useEffect(() => {
@@ -178,7 +184,8 @@ export const AddPaymentDialog = ({
   // Auto-fill amount with outstanding balance when it loads (and no defaultAmount was provided)
   useEffect(() => {
     if (open && outstandingBalance > 0 && !defaultAmount && !form.getValues("amount")) {
-      form.setValue("amount", outstandingBalance);
+      // Round to 2dp — outstandingBalance is a sum of fractional charges and can carry FP noise.
+      form.setValue("amount", Math.round(outstandingBalance * 100) / 100);
     }
   }, [open, outstandingBalance, defaultAmount]);
 
@@ -298,6 +305,9 @@ export const AddPaymentDialog = ({
 
   // Manual payment submit
   const onSubmit = async (data: PaymentFormData) => {
+    // Synchronous double-submit guard — see ref declaration for rationale.
+    if (submitInFlight.current) return;
+    submitInFlight.current = true;
     setLoading(true);
     try {
       const finalCustomerId = data.customer_id || customer_id;
@@ -368,7 +378,7 @@ export const AddPaymentDialog = ({
       toast({ title: "Payment Recorded", description: `Payment of ${formatCurrency(data.amount, tenant?.currency_code || 'USD')} has been recorded and applied.` });
       logAction({ action: "payment_created", entityType: "payment", entityId: payment.id, details: { amount: data.amount, method: data.method || "manual", customer_id: finalCustomerId } });
       await invalidateAllPaymentQueries(finalCustomerId);
-      if (onPaymentSuccess) onPaymentSuccess();
+      if (onPaymentSuccess) onPaymentSuccess('recorded');
       form.reset();
       onOpenChange(false);
     } catch (error) {
@@ -376,17 +386,20 @@ export const AddPaymentDialog = ({
       toast({ title: "Error", description: (error as any).message || "Failed to add payment.", variant: "destructive" });
     } finally {
       setLoading(false);
+      submitInFlight.current = false;
     }
   };
 
   // Stripe checkout handler
   const handleStripePayment = async () => {
+    if (stripeInFlight.current) return;
     const finalCustomerId = selectedCustomerId || customer_id;
     if (!finalCustomerId) { toast({ title: "Error", description: "Please select a customer first.", variant: "destructive" }); return; }
 
     const amount = form.getValues("amount") || breakdownTotal || defaultAmount || outstandingBalance || rentalDetails?.monthly_amount || latestInvoice?.total_amount || 0;
     if (amount <= 0) { toast({ title: "Error", description: "No outstanding amount to charge.", variant: "destructive" }); return; }
 
+    stripeInFlight.current = true;
     setStripeLoading(true);
     try {
       const portalOrigin = window.location.origin;
@@ -402,6 +415,9 @@ export const AddPaymentDialog = ({
           source: 'portal',
           ...(targetCategories && targetCategories.length > 0 ? { targetCategories } : {}),
           ...(extensionId ? { extensionId } : {}),
+          // PAYG: stamp the accrual id on the checkout metadata so the Stripe
+          // webhook can call payg_settle_invoice once the customer pays.
+          ...(paygAccrualId ? { paygAccrualId } : {}),
         },
       });
 
@@ -416,18 +432,22 @@ export const AddPaymentDialog = ({
       window.open(data.url, '_blank');
 
       toast({ title: "Stripe Checkout Opened", description: "Payment link opened in a new tab. Payment will be recorded automatically when the customer completes checkout." });
-      if (onPaymentSuccess) onPaymentSuccess();
+      // 'pending' — Stripe webhook will commit + settle the payment. Caller must NOT
+      // flip any local "paid" state here.
+      if (onPaymentSuccess) onPaymentSuccess('pending');
       onOpenChange(false);
     } catch (error: any) {
       console.error("Error creating Stripe checkout:", error);
       toast({ title: "Error", description: error.message || "Failed to create Stripe checkout.", variant: "destructive" });
     } finally {
       setStripeLoading(false);
+      stripeInFlight.current = false;
     }
   };
 
   // Email Stripe link handler — creates checkout session first, then emails it
   const handleSendInvoiceEmail = async () => {
+    if (emailInFlight.current) return;
     const finalCustomerId = selectedCustomerId || customer_id;
     if (!finalCustomerId) { toast({ title: "Error", description: "Please select a customer first.", variant: "destructive" }); return; }
     if (!customerEmail) { toast({ title: "Error", description: "Customer has no email address.", variant: "destructive" }); return; }
@@ -435,19 +455,31 @@ export const AddPaymentDialog = ({
 
     const invoiceToSend = latestInvoice;
 
+    emailInFlight.current = true;
     setEmailLoading(true);
     try {
       const amount = form.getValues("amount") || breakdownTotal || invoiceToSend?.total_amount || rentalDetails?.monthly_amount || 0;
 
-      // Derive booking-app origin from the portal origin so local dev (localhost)
-      // redirects to the local booking app instead of production. The portal host
-      // always contains ".portal." and in local dev uses :3001 (booking :3000).
-      //   test.portal.localhost:3001   -> test.localhost:3000
-      //   test.portal.drive-247.com    -> test.drive-247.com
-      const portalHost = typeof window !== 'undefined' ? window.location.host : '';
-      const protocol = typeof window !== 'undefined' ? window.location.protocol : 'https:';
-      const bookingHost = portalHost.replace('.portal.', '.').replace(':3001', ':3000');
-      const bookingOrigin = bookingHost ? `${protocol}//${bookingHost}` : `https://${tenant?.slug || 'app'}.drive-247.com`;
+      // Mirror the PAYG reminder cron's URL strategy: emails go to real
+      // customers and must always land on production (or wherever the customer
+      // can actually reach). NEVER point at localhost — even when the admin is
+      // testing from a local dev portal, the customer reading the email is on
+      // their own machine and can't resolve test.localhost:3000.
+      //
+      // Resolution order (matches send-payg-reminders' deriveBookingOrigin):
+      //   1. NEXT_PUBLIC_BOOKING_BASE_URL — explicit override (single-domain
+      //      deployments or QA environments)
+      //   2. https://{tenant.slug}.{NEXT_PUBLIC_BOOKING_BASE_DOMAIN || drive-247.com}
+      //
+      // Local DB updates still propagate because production booking-success
+      // hits the same shared Supabase project, AND the rental detail page's
+      // localStorage polling on the admin's machine fires `process-pending-payment`
+      // every 5s for 5min as a safety net even if the customer never lands.
+      const fullOverride = process.env.NEXT_PUBLIC_BOOKING_BASE_URL;
+      const baseDomain = process.env.NEXT_PUBLIC_BOOKING_BASE_DOMAIN || 'drive-247.com';
+      const bookingOrigin = fullOverride
+        ? fullOverride.replace(/\/+$/, '')
+        : `https://${tenant?.slug || 'app'}.${baseDomain}`;
 
       // Step 1: Create Stripe checkout session
       const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout-session', {
@@ -462,6 +494,9 @@ export const AddPaymentDialog = ({
           source: 'portal',
           ...(targetCategories && targetCategories.length > 0 ? { targetCategories } : {}),
           ...(extensionId ? { extensionId } : {}),
+          // PAYG: stamp the accrual id so when the customer clicks the
+          // emailed link and pays, the Stripe webhook settles the right invoice.
+          ...(paygAccrualId ? { paygAccrualId } : {}),
         },
       });
 
@@ -491,13 +526,16 @@ export const AddPaymentDialog = ({
       }
 
       toast({ title: "Payment Link Sent", description: `Payment link emailed to ${customerEmail}. Payment will be recorded automatically when the customer pays.` });
-      if (onPaymentSuccess) onPaymentSuccess();
+      // 'pending' — Stripe webhook will commit + settle the payment when the
+      // customer clicks the link and completes checkout.
+      if (onPaymentSuccess) onPaymentSuccess('pending');
       onOpenChange(false);
     } catch (error: any) {
       console.error("Error sending payment email:", error);
       toast({ title: "Error", description: error.message || "Failed to send payment email.", variant: "destructive" });
     } finally {
       setEmailLoading(false);
+      emailInFlight.current = false;
     }
   };
 
@@ -518,12 +556,6 @@ export const AddPaymentDialog = ({
               }
             </DialogDescription>
           </DialogHeader>
-          {showManualWarning ? (
-            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
-              <strong className="font-semibold">Manual installment management.</strong> This rental has an installment plan.
-              Recording payment without a Stripe card means future installments will <strong>not be auto-charged</strong> — you'll need to mark each one paid manually. Use "Charge via Stripe" instead if the customer should be auto-billed for the remaining schedule.
-            </div>
-          ) : null}
         </div>
 
         {/* Customer/Vehicle selection when not pre-populated */}
@@ -632,13 +664,20 @@ export const AddPaymentDialog = ({
                               type="number" step="0.01" placeholder="0.00"
                               className="pl-7 text-lg font-semibold h-12"
                               {...field}
-                              value={field.value ?? ''}
-                              onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                              value={typeof field.value === 'number' ? Math.round(field.value * 100) / 100 : ''}
+                              onChange={(e) => {
+                                if (e.target.value === '') {
+                                  field.onChange(undefined);
+                                  return;
+                                }
+                                const parsed = parseFloat(e.target.value);
+                                field.onChange(Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : undefined);
+                              }}
                             />
                           </div>
                         </FormControl>
-                        {outstandingBalance !== undefined && outstandingBalance > 0 && field.value !== outstandingBalance && (
-                          <button type="button" className="text-xs text-primary hover:underline" onClick={() => field.onChange(outstandingBalance)}>
+                        {outstandingBalance !== undefined && outstandingBalance > 0 && field.value !== Math.round(outstandingBalance * 100) / 100 && (
+                          <button type="button" className="text-xs text-primary hover:underline" onClick={() => field.onChange(Math.round(outstandingBalance * 100) / 100)}>
                             Use full outstanding: {formatCurrency(outstandingBalance, tenant?.currency_code || 'USD')}
                           </button>
                         )}
