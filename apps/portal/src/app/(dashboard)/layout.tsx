@@ -73,8 +73,7 @@ export default function DashboardLayout({
   const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
   const isSubscriptionPage = pathname === "/subscription" || pathname === "/credits" || pathname?.startsWith("/settings");
   const hasActivePlans = !!plans && plans.length > 0;
-  const isExemptTenant = tenant?.slug === "amgroadside";
-  const showSetupGate = !subscriptionLoading && !plansLoading && !isSubscribed && hasActivePlans && !isSubscriptionPage && !isExemptTenant;
+  const showSetupGate = !subscriptionLoading && !plansLoading && !isSubscribed && hasActivePlans && !isSubscriptionPage;
 
   useEffect(() => {
     if (!loading) {
