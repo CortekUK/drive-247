@@ -13,7 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase, Bell, Eye, EyeOff } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase, Bell, Eye, EyeOff, Pencil } from "lucide-react";
 import { BlurredImage } from "@/components/ui/blurred-image";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
@@ -36,6 +36,7 @@ import { AddFineDialog } from "@/components/fines/add-fine-dialog";
 import RejectionDialog from "@/components/rentals/rejection-dialog";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalDialog";
+import { EditPickupReturnDialog } from "@/components/rentals/edit-pickup-return-dialog";
 import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
 import { InstallmentSection } from "@/components/installments/InstallmentSection";
 import { useInstallmentPlan } from "@/hooks/use-installment-plan";
@@ -271,6 +272,9 @@ const RentalDetail = () => {
   // Extension dialog state
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
   const [showAdminExtendDialog, setShowAdminExtendDialog] = useState(false);
+
+  // Edit pickup/return dialog state
+  const [showEditPickupReturn, setShowEditPickupReturn] = useState(false);
 
   // Extension payment state
   const [showExtensionPayment, setShowExtensionPayment] = useState(false);
@@ -3943,7 +3947,20 @@ const RentalDetail = () => {
 
             return (
               <div className="border rounded-lg p-5">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-4">Pickup & Return</p>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Pickup & Return</p>
+                  {canEdit && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowEditPickupReturn(true)}
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Edit
+                    </Button>
+                  )}
+                </div>
 
                 <LocationActionButtons pickupAddress={pickupAddr} returnAddress={returnAddr} pickupLoc={pickupLoc} returnLoc={returnLoc} pickupFee={pickupFee} returnFee={returnFee} rental={rental} currencyCode={tenant?.currency_code || 'USD'} />
 
@@ -3956,6 +3973,12 @@ const RentalDetail = () => {
               </div>
             );
           })()}
+
+          <EditPickupReturnDialog
+            open={showEditPickupReturn}
+            onOpenChange={setShowEditPickupReturn}
+            rental={rental}
+          />
 
           {/* Status Overview */}
           <div className="border rounded-lg p-4">

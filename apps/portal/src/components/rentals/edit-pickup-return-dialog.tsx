@@ -1,0 +1,299 @@
+'use client';
+
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { MapPin } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { LocationAutocomplete } from "@/components/ui/location-autocomplete";
+import { TimePicker } from "@/components/ui/time-picker";
+import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/use-audit-log";
+import { useTenant } from "@/contexts/TenantContext";
+
+const timeRegex = /^\d{2}:\d{2}(:\d{2})?$/;
+
+const editPickupReturnSchema = z.object({
+  pickup_location: z.string().trim().min(1, "Pickup location is required"),
+  pickup_time: z
+    .string()
+    .trim()
+    .regex(timeRegex, "Pickup time is required")
+    .or(z.literal("")),
+  return_location: z.string().trim().min(1, "Return location is required"),
+  return_time: z
+    .string()
+    .trim()
+    .regex(timeRegex, "Return time is required")
+    .or(z.literal("")),
+});
+
+type EditPickupReturnValues = z.infer<typeof editPickupReturnSchema>;
+
+interface RentalForEdit {
+  id: string;
+  pickup_location?: string | null;
+  return_location?: string | null;
+  pickup_time?: string | null;
+  return_time?: string | null;
+  delivery_address?: string | null;
+  collection_address?: string | null;
+}
+
+interface EditPickupReturnDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  rental: RentalForEdit | null;
+}
+
+const normalizeTime = (t?: string | null) => {
+  if (!t) return "";
+  const [h = "", m = ""] = t.split(":");
+  if (!h || !m) return "";
+  return `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
+};
+
+export function EditPickupReturnDialog({
+  open,
+  onOpenChange,
+  rental,
+}: EditPickupReturnDialogProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
+
+  const form = useForm<EditPickupReturnValues>({
+    resolver: zodResolver(editPickupReturnSchema),
+    defaultValues: {
+      pickup_location: "",
+      pickup_time: "",
+      return_location: "",
+      return_time: "",
+    },
+  });
+
+  useEffect(() => {
+    if (open && rental) {
+      form.reset({
+        pickup_location:
+          rental.pickup_location || rental.delivery_address || "",
+        pickup_time: normalizeTime(rental.pickup_time),
+        return_location:
+          rental.return_location || rental.collection_address || "",
+        return_time: normalizeTime(rental.return_time),
+      });
+    }
+  }, [open, rental, form]);
+
+  const updateMutation = useMutation({
+    mutationFn: async (values: EditPickupReturnValues) => {
+      if (!rental) throw new Error("No rental selected");
+
+      let query = supabase
+        .from("rentals")
+        .update({
+          pickup_location: values.pickup_location,
+          return_location: values.return_location,
+          pickup_time: values.pickup_time || null,
+          return_time: values.return_time || null,
+          // Clear saved-location FKs since we're now using freeform addresses
+          pickup_location_id: null,
+          return_location_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", rental.id);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
+      if (error) throw error;
+    },
+    onSuccess: (_data, values) => {
+      toast({
+        title: "Pickup & return updated",
+        description: "Locations and times have been saved.",
+      });
+      if (rental) {
+        queryClient.invalidateQueries({ queryKey: ["rental", rental.id] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["rentals"] });
+      queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-rentals"] });
+
+      if (rental) {
+        logAction({
+          action: "rental_pickup_return_updated",
+          entityType: "rental",
+          entityId: rental.id,
+          details: {
+            pickup_location: values.pickup_location,
+            pickup_time: values.pickup_time || null,
+            return_location: values.return_location,
+            return_time: values.return_time || null,
+          },
+        });
+      }
+
+      onOpenChange(false);
+    },
+    onError: (error: unknown) => {
+      const message =
+        error instanceof Error ? error.message : "Failed to update.";
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = (values: EditPickupReturnValues) => {
+    updateMutation.mutate(values);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[560px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-primary" />
+            Edit Pickup &amp; Return
+          </DialogTitle>
+          <DialogDescription>
+            Update the pickup and return locations and times for this rental.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+            <div className="rounded-lg border p-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-500">
+                Pickup
+              </p>
+
+              <FormField
+                control={form.control}
+                name="pickup_location"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Location</FormLabel>
+                    <FormControl>
+                      <LocationAutocomplete
+                        id="pickup_location"
+                        value={field.value}
+                        onChange={(address) => field.onChange(address)}
+                        placeholder="Enter pickup address"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="pickup_time"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Time</FormLabel>
+                    <FormControl>
+                      <TimePicker
+                        id="pickup_time"
+                        value={field.value}
+                        onChange={(v) => field.onChange(v)}
+                        placeholder="Select pickup time"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="rounded-lg border p-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-500">
+                Return
+              </p>
+
+              <FormField
+                control={form.control}
+                name="return_location"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Location</FormLabel>
+                    <FormControl>
+                      <LocationAutocomplete
+                        id="return_location"
+                        value={field.value}
+                        onChange={(address) => field.onChange(address)}
+                        placeholder="Enter return address"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="return_time"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Time</FormLabel>
+                    <FormControl>
+                      <TimePicker
+                        id="return_time"
+                        value={field.value}
+                        onChange={(v) => field.onChange(v)}
+                        placeholder="Select return time"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={updateMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "Saving..." : "Save changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default EditPickupReturnDialog;
