@@ -795,8 +795,49 @@ serve(async (req) => {
               }
             }
 
-            const installmentId = session.metadata?.installment_id;
+            let installmentId = session.metadata?.installment_id;
             const installmentPlanId = session.metadata?.installment_plan_id;
+
+            // SELF-HEAL FALLBACK: when the dialog forgot to stamp
+            // installment_id (typically a stale dev bundle that didn't
+            // forward the prop, but possible for any consumer that doesn't
+            // know about installments), discover it server-side. We have
+            // enough signal: rental_id is always on metadata, and the
+            // rental either has an installment plan or doesn't. If it does
+            // AND the payment looks like a rental-installment payment (not
+            // an extension/bonzah/etc.), settle the latest overdue or
+            // due-today open slot. installment_settle_invoice cumulatively
+            // supersedes earlier opens, so this matches the
+            // PAYG-style "pay the latest invoice and earlier ones clear"
+            // behavior that's already wired for paygAccrualId.
+            const rentalIdFromMeta = session.metadata?.rental_id;
+            const hasExtensionId = !!session.metadata?.extension_id;
+            const hasBonzahId = !!session.metadata?.bonzah_policy_id;
+            if (!installmentId && finalPaymentId && rentalIdFromMeta && !hasExtensionId && !hasBonzahId) {
+              try {
+                const todayStr = new Date().toISOString().split("T")[0];
+                // Find the latest overdue/due-today open installment for
+                // this rental. Latest (highest installment_number) is the
+                // PAYG-style cumulative target — settling it auto-clears
+                // earlier ones via supersession.
+                const { data: targetSlot } = await supabase
+                  .from("scheduled_installments")
+                  .select("id, installment_number, due_date, installment_plan_id")
+                  .eq("rental_id", rentalIdFromMeta)
+                  .eq("invoice_status", "open")
+                  .lte("due_date", todayStr)
+                  .order("installment_number", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (targetSlot) {
+                  installmentId = targetSlot.id;
+                  console.log("Installment self-heal: resolved", targetSlot.id, "from rental", rentalIdFromMeta, "(slot", targetSlot.installment_number + ")");
+                }
+              } catch (fbErr) {
+                console.error("Installment self-heal lookup failed:", fbErr);
+              }
+            }
+
             if (installmentId && finalPaymentId) {
               const { error: instSettleErr } = await supabase.rpc("installment_settle_invoice", {
                 p_payment_id: finalPaymentId,

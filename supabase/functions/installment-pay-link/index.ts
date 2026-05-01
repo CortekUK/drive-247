@@ -118,10 +118,14 @@ Deno.serve(async (req) => {
     const cumulative = openOverdue.reduce((s, i) => s + Number(i.amount || 0), 0)
     const latest = openOverdue[openOverdue.length - 1]
 
-    // Tenant Stripe context
+    // Tenant Stripe context. `slug` is needed for the production-safe
+    // booking-origin fallback below — when the magic link comes from a real
+    // customer email we MUST land on a routable production URL, never on
+    // localhost (which is what callerOrigin would carry if an admin tested
+    // the email locally).
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('id, company_name, stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code')
+      .select('id, slug, company_name, stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code')
       .eq('id', plan.tenant_id)
       .single()
 
@@ -151,9 +155,25 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Create fresh Checkout session — prefer the caller-provided origin so we
-    // land back on the actual tenant subdomain the customer started from.
-    const origin = callerOrigin || Deno.env.get('BOOKING_APP_URL') || 'https://drive-247.com'
+    // Create fresh Checkout session — production-safe origin resolution.
+    // Order (mirrors send-payg-reminders' deriveBookingOrigin):
+    //   1. BOOKING_BASE_URL — full override (single-domain QA / staging)
+    //   2. https://{tenant.slug}.{BOOKING_BASE_DOMAIN || drive-247.com}
+    //      — the always-correct multi-tenant subdomain
+    //   3. callerOrigin — ONLY if it's not localhost (so admin testing in
+    //      dev still stays in dev, but a real customer email NEVER lands
+    //      back on a host they can't resolve)
+    //   4. legacy BOOKING_APP_URL fallback, then drive-247.com
+    function deriveBookingOrigin(): string {
+      const fullOverride = Deno.env.get('BOOKING_BASE_URL')
+      if (fullOverride) return fullOverride.replace(/\/+$/, '')
+      const baseDomain = Deno.env.get('BOOKING_BASE_DOMAIN') || 'drive-247.com'
+      if (tenant?.slug) return `https://${tenant.slug}.${baseDomain}`
+      const callerIsLocal = /^https?:\/\/(localhost|127\.0\.0\.1|.*\.localhost)(:|\/|$)/i.test(callerOrigin)
+      if (callerOrigin && !callerIsLocal) return callerOrigin.replace(/\/+$/, '')
+      return Deno.env.get('BOOKING_APP_URL') || 'https://drive-247.com'
+    }
+    const origin = deriveBookingOrigin()
     const session = await stripe.checkout.sessions.create({
       customer: validStripeCustomerId,
       customer_email: validStripeCustomerId ? undefined : customer?.email,

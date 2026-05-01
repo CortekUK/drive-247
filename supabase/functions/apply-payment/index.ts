@@ -752,6 +752,57 @@ serve(async (req) => {
       });
     }
 
+    // Installment self-heal — runs for EVERY successful payment allocation,
+    // regardless of which entry path called us (Stripe webhook, polling cron,
+    // booking-success page, rental-detail-page Charge-via-Stripe handler,
+    // or admin Record Payment). This is the single chokepoint where every
+    // Stripe + manual payment funnels through, so settling the matching
+    // installment slot here is the most reliable place. The RPC is idempotent;
+    // re-applying for an already-paid slot is a no-op.
+    try {
+      const { data: payment } = await supabase
+        .from('payments')
+        .select('id, rental_id, extension_id')
+        .eq('id', paymentId)
+        .maybeSingle();
+      if (payment?.rental_id && !payment.extension_id) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        // Latest open overdue/due-today slot. installment_settle_invoice
+        // cumulatively supersedes earlier opens, so picking the highest
+        // installment_number gives PAYG-style "pay newest, earlier ones clear"
+        // behavior. Skips when nothing is due yet (future-only slots).
+        const { data: targetSlot } = await supabase
+          .from('scheduled_installments')
+          .select('id, installment_plan_id, installment_number')
+          .eq('rental_id', payment.rental_id)
+          .eq('invoice_status', 'open')
+          .lte('due_date', todayStr)
+          .order('installment_number', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (targetSlot) {
+          const { error: settleErr } = await supabase.rpc('installment_settle_invoice', {
+            p_payment_id: payment.id,
+            p_installment_id: targetSlot.id,
+          });
+          if (settleErr) {
+            console.error('[APPLY-PAYMENT] installment_settle_invoice error:', settleErr);
+          } else {
+            console.log('[APPLY-PAYMENT] Installment settled (post-allocation):', targetSlot.id, 'slot', targetSlot.installment_number);
+            // Activate the plan if it was still pending; idempotent against
+            // already-active plans because we use neq('status','active').
+            await supabase
+              .from('installment_plans')
+              .update({ status: 'active', upfront_paid: true, upfront_payment_id: payment.id })
+              .eq('id', targetSlot.installment_plan_id)
+              .neq('status', 'active');
+          }
+        }
+      }
+    } catch (instErr) {
+      console.error('[APPLY-PAYMENT] installment self-heal (non-fatal):', instErr);
+    }
+
     return new Response(JSON.stringify(result), {
       status: 201,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

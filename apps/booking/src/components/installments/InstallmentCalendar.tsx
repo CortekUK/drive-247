@@ -17,6 +17,13 @@ interface Props {
   rentalEnd?: string;
   currencyCode?: string;
   className?: string;
+  /** Optional click handler for a tile that has a schedule item attached.
+   * The parent (InstallmentSection / CustomerInstallmentsView) uses this to
+   * open the same Pay dialog the table's Pay button opens — clicking either
+   * surface starts the same flow. Tiles without an item (empty days) and
+   * "paid" / "superseded" tiles do nothing (handler is only invoked for
+   * actionable rows: open / due_today / overdue). */
+  onItemClick?: (item: InstallmentCalendarItem) => void;
 }
 
 const DAY_NAMES = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
@@ -69,7 +76,7 @@ function buildMonthGrid(year: number, month: number) {
   return cells;
 }
 
-export function InstallmentCalendar({ schedule, rentalStart, rentalEnd, currencyCode = "USD", className }: Props) {
+export function InstallmentCalendar({ schedule, rentalStart, rentalEnd, currencyCode = "USD", className, onItemClick }: Props) {
   const today = new Date().toISOString().split("T")[0];
   const initialDate = useMemo(() => schedule[0] ? new Date(schedule[0].date) : new Date(), [schedule]);
   const [view, setView] = useState({ y: initialDate.getUTCFullYear(), m: initialDate.getUTCMonth() });
@@ -118,16 +125,28 @@ export function InstallmentCalendar({ schedule, rentalStart, rentalEnd, currency
           const isToday = cell.date === today;
           const dayNum = parseInt(cell.date.split("-")[2], 10);
 
-          return (
-            <div
-              key={cell.date}
-              className={cn(
-                "relative rounded-md min-h-[48px] p-1 flex flex-col items-center text-xs",
-                cell.inMonth ? "" : "opacity-30",
-                isInRental ? "bg-muted/40" : "",
-                isToday ? "ring-1 ring-indigo-500/40" : "",
-              )}
-            >
+          // Tile is clickable when there's a schedule item AND a click
+          // handler AND the item is in an actionable state. Paid /
+          // superseded tiles stay non-interactive (no ambiguous "click to
+          // re-pay" UX). The whole cell becomes a button so the operator
+          // gets a clear hover/focus state, not just the inner pill.
+          // Only currently-actionable tiles open the Pay dialog. Scheduled
+          // (future) tiles are informational — clicking them would either
+          // trigger early cumulative settlement or leave the schedule out
+          // of order, so we keep them non-interactive (matches the
+          // disabled-Pay-button rule on the table).
+          const isClickable =
+            !!item && !!onItemClick &&
+            (item.status === "due_today" || item.status === "overdue" || item.status === "open");
+          const cellClasses = cn(
+            "relative rounded-md min-h-[48px] p-1 flex flex-col items-center text-xs",
+            cell.inMonth ? "" : "opacity-30",
+            isInRental ? "bg-muted/40" : "",
+            isToday ? "ring-1 ring-indigo-500/40" : "",
+            isClickable ? "cursor-pointer hover:bg-muted/60 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-colors" : "",
+          );
+          const inner = (
+            <>
               <div className={cn("text-[11px] font-medium", isToday ? "text-indigo-600 dark:text-indigo-400" : "text-muted-foreground/70")}>{dayNum}</div>
               {item ? (
                 <div className={cn(
@@ -137,6 +156,21 @@ export function InstallmentCalendar({ schedule, rentalStart, rentalEnd, currency
                   {formatCurrency(item.amount, currencyCode)}
                 </div>
               ) : null}
+            </>
+          );
+          return isClickable ? (
+            <button
+              key={cell.date}
+              type="button"
+              className={cellClasses}
+              onClick={() => onItemClick!(item!)}
+              aria-label={`Pay ${formatCurrency(item!.amount, currencyCode)} due ${cell.date}`}
+            >
+              {inner}
+            </button>
+          ) : (
+            <div key={cell.date} className={cellClasses}>
+              {inner}
             </div>
           );
         })}

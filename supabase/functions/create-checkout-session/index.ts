@@ -16,7 +16,7 @@ serve(async (req) => {
   }
 
   try {
-    const { bookingId, rentalId, customerEmail, customerName, customerId, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId, successUrl, cancelUrl, targetCategories, extensionId, source, paygAccrualId } = await req.json()
+    const { bookingId, rentalId, customerEmail, customerName, customerId, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId, successUrl, cancelUrl, targetCategories, extensionId, source, paygAccrualId, installmentId } = await req.json()
 
     // Get tenant slug from header or body
     const slug = tenantSlug || req.headers.get('x-tenant-slug')
@@ -197,6 +197,7 @@ serve(async (req) => {
         ...(targetCategories && targetCategories.length > 0 ? { target_categories: JSON.stringify(targetCategories) } : {}),
         ...(extensionId ? { extension_id: extensionId } : {}),
         ...(paygAccrualId ? { payg_accrual_id: paygAccrualId } : {}),
+        ...(installmentId ? { installment_id: installmentId } : {}),
       },
     }
 

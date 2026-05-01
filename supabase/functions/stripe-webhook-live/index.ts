@@ -791,8 +791,40 @@ serve(async (req) => {
               }
             }
 
-            const installmentId = session.metadata?.installment_id;
+            let installmentId = session.metadata?.installment_id;
             const installmentPlanId = session.metadata?.installment_plan_id;
+
+            // SELF-HEAL FALLBACK (mirrors stripe-webhook-test). When the
+            // dialog forgot to stamp installment_id but the rental has an
+            // installment plan and the payment isn't for an extension/
+            // bonzah/etc., resolve the latest overdue or due-today open
+            // slot from the DB. installment_settle_invoice cumulatively
+            // supersedes earlier opens so this matches PAYG-style
+            // "pay latest, earlier ones clear" behavior.
+            const rentalIdFromMeta = session.metadata?.rental_id;
+            const hasExtensionId = !!session.metadata?.extension_id;
+            const hasBonzahId = !!session.metadata?.bonzah_policy_id;
+            if (!installmentId && finalPaymentId && rentalIdFromMeta && !hasExtensionId && !hasBonzahId) {
+              try {
+                const todayStr = new Date().toISOString().split("T")[0];
+                const { data: targetSlot } = await supabase
+                  .from("scheduled_installments")
+                  .select("id, installment_number, due_date, installment_plan_id")
+                  .eq("rental_id", rentalIdFromMeta)
+                  .eq("invoice_status", "open")
+                  .lte("due_date", todayStr)
+                  .order("installment_number", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (targetSlot) {
+                  installmentId = targetSlot.id;
+                  console.log("Installment self-heal: resolved", targetSlot.id, "from rental", rentalIdFromMeta, "(slot", targetSlot.installment_number + ")");
+                }
+              } catch (fbErr) {
+                console.error("Installment self-heal lookup failed:", fbErr);
+              }
+            }
+
             if (installmentId && finalPaymentId) {
               const { error: instSettleErr } = await supabase.rpc("installment_settle_invoice", {
                 p_payment_id: finalPaymentId,

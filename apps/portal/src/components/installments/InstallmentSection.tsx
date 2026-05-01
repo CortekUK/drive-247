@@ -12,12 +12,18 @@ import { InstallmentCalendar, type InstallmentCalendarItem } from "./Installment
 import { InstallmentScheduleTable, type ScheduleRow } from "./InstallmentScheduleTable";
 import { InstallmentBreakdown } from "./InstallmentBreakdown";
 import { useInstallmentPlanRealtime } from "@/hooks/use-installment-plan-realtime";
+import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { cn } from "@/lib/utils";
 
 interface Props {
   rentalId: string;
   rentalStart?: string;
   rentalEnd?: string;
+  /** Optional — passed through so AddPaymentDialog can attribute the payment
+   * to the right customer/vehicle without re-querying the rental. The
+   * rental detail page already has these in scope. */
+  customerId?: string;
+  vehicleId?: string;
 }
 
 function fmtCurrency(amount: number, code = "USD") {
@@ -95,11 +101,17 @@ function buildCalendarItems(
   return items;
 }
 
-export function InstallmentSection({ rentalId, rentalStart, rentalEnd }: Props) {
+export function InstallmentSection({ rentalId, rentalStart, rentalEnd, customerId, vehicleId }: Props) {
   const { tenant } = useTenant();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Pay-dialog target: the scheduled_installments row the operator chose
+  // (either via the table's Pay button or by clicking a calendar tile).
+  // The dialog locks the amount to `displayAmount` and stamps `installmentId`
+  // on every checkout-session call so the Stripe webhook settles this exact
+  // row through `installment_settle_invoice`.
+  const [payTarget, setPayTarget] = useState<{ id: string; amount: number } | null>(null);
   const currency = tenant?.currency_code || "USD";
 
   const { data, isLoading } = useQuery({
@@ -182,18 +194,54 @@ export function InstallmentSection({ rentalId, rentalStart, rentalEnd }: Props) 
     } finally { setBusyId(null); }
   }
 
-  async function handleMarkPaid(installmentId: string) {
-    setBusyId(installmentId);
+  // Open the unified Pay dialog. Looks up the row's display amount (which
+  // already incorporates the day-zero upfront override on slot 1, so the
+  // dialog matches the calendar/table number the operator just clicked).
+  // Called by both the table's Pay button and by clicking an actionable
+  // calendar tile — same dialog, same flow, same settlement.
+  function handlePay(installmentId: string) {
+    const row = data?.schedule.find((s) => s.id === installmentId);
+    if (!row) return;
+    const planAny = data!.plan as any;
+    const chargeFirst = planAny?.config?.charge_first_upfront !== false;
+    const upfrontAmount = Number(planAny?.upfront_amount || 0);
+    const displayAmount =
+      chargeFirst && row.installment_number === 1 && upfrontAmount > 0
+        ? upfrontAmount
+        : Number(row.amount);
+    setPayTarget({ id: installmentId, amount: displayAmount });
+  }
+
+  // Post-Record-Payment settlement. The dialog's manual path commits a
+  // payments row but doesn't know about installment_plans; this callback
+  // bridges that gap by calling installment_settle_invoice with the just-
+  // -created payment id, mirroring PAYG's `payg_settle_invoice` post-process.
+  async function settleAfterRecord(installmentId: string) {
     try {
-      const { error } = await supabase.functions.invoke("mark-installment-paid", {
-        body: { installmentId, method: "cash", reference: "Marked paid by operator" },
+      // The payment row we just inserted is the most recent for this rental.
+      // Race-window < 1s so created_at DESC LIMIT 1 picks ours.
+      const { data: latestPayment } = await supabase
+        .from("payments")
+        .select("id")
+        .eq("rental_id", rentalId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!latestPayment?.id) return;
+      const { error } = await (supabase as any).rpc("installment_settle_invoice", {
+        p_payment_id: latestPayment.id,
+        p_installment_id: installmentId,
       });
-      if (error) throw error;
-      toast({ title: "Marked as paid" });
-      qc.invalidateQueries({ queryKey: ["installment-plan-full"] });
-    } catch (e: any) {
-      toast({ title: "Failed", description: e.message, variant: "destructive" });
-    } finally { setBusyId(null); }
+      if (error) {
+        console.error("installment_settle_invoice failed:", error.message);
+        toast({
+          title: "Payment recorded",
+          description: "Payment saved, but installment status couldn't auto-update. Refresh in a moment.",
+        });
+      }
+    } catch (err: any) {
+      console.error("Installment settlement post-process failed:", err?.message ?? err);
+    }
   }
 
   async function handlePauseToggle() {
@@ -302,15 +350,23 @@ export function InstallmentSection({ rentalId, rentalStart, rentalEnd }: Props) 
           rentalStart={rentalStart}
           rentalEnd={rentalEnd}
           currencyCode={currency}
+          onItemClick={(item) => {
+            // Synthetic day-zero tiles (number=0, used when chargeFirst=false)
+            // aren't backed by a scheduled_installments row, so the Pay
+            // dialog has no installment to settle. Skip silently — the
+            // synthetic tile is informational only; the real payment for
+            // upfront fees flows through its own invoice path.
+            if (item.number === 0) return;
+            const row = data.schedule.find((s) => s.installment_number === item.number);
+            if (row) handlePay(row.id);
+          }}
         />
 
         <InstallmentScheduleTable
           rows={tableRows}
           currencyCode={currency}
-          collectionMode={plan.collection_mode || "auto"}
           isOperator
-          onMarkPaid={handleMarkPaid}
-          busyId={busyId}
+          onPay={handlePay}
         />
 
         {events && events.length > 0 ? (
@@ -353,6 +409,31 @@ export function InstallmentSection({ rentalId, rentalStart, rentalEnd }: Props) 
           </Button>
         </div>
       </div>
+
+      {payTarget && (
+        <AddPaymentDialog
+          open={!!payTarget}
+          onOpenChange={(o) => !o && setPayTarget(null)}
+          rental_id={rentalId}
+          customer_id={customerId || (plan.customer_id as string | undefined)}
+          vehicle_id={vehicleId}
+          defaultAmount={payTarget.amount}
+          targetCategories={["Rental", "Tax", "Service Fee"]}
+          installmentId={payTarget.id}
+          onPaymentSuccess={async (kind) => {
+            // ONLY settle on the manual Record-Payment path. For 'pending'
+            // (Charge-via-Stripe / Email-Stripe-Link) the Stripe webhook
+            // calls installment_settle_invoice itself when the customer
+            // completes checkout — flipping anything to paid here would be
+            // a false positive (matches PAYG's PaygSection contract).
+            if (kind === "recorded") {
+              await settleAfterRecord(payTarget.id);
+            }
+            qc.invalidateQueries({ queryKey: ["installment-plan-full"] });
+            setPayTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }

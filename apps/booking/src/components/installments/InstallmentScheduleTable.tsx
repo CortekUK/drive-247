@@ -22,6 +22,12 @@ interface Props {
   onCharge?: (id: string) => void;
   onMarkPaid?: (id: string) => void;
   onReceipt?: (id: string) => void;
+  /** Customer-side per-row Pay button. Same contract as PAYG's onTakePayment:
+   * gets the installment id + display amount, parent kicks off Stripe Checkout
+   * directly (no dialog, no magic-link middleware). When provided, shows a
+   * Pay button on every open row that's overdue/due-today. Future-dated open
+   * rows render disabled with a tooltip — same rule the operator side uses. */
+  onPay?: (id: string, amount: number) => void;
   busyId?: string | null;
 }
 
@@ -57,7 +63,7 @@ function visualStatus(row: ScheduleRow): {
 
 export function InstallmentScheduleTable({
   rows, currencyCode = "USD", collectionMode = "auto",
-  isOperator = false, onCharge, onMarkPaid, onReceipt, busyId,
+  isOperator = false, onCharge, onMarkPaid, onReceipt, onPay, busyId,
 }: Props) {
   return (
     <div className="bg-card border border-border/60 rounded-lg overflow-hidden">
@@ -89,6 +95,27 @@ export function InstallmentScheduleTable({
                     <Button variant="ghost" size="sm" onClick={() => onReceipt(r.id)} className="h-7">
                       <Receipt className="w-3.5 h-3.5 mr-1" /> Receipt
                     </Button>
+                  ) : r.invoice_status === "open" && onPay ? (
+                    // Customer-side Pay button (and operator side too if onPay
+                    // is wired). Mirrors PAYG: no dialog, click goes straight
+                    // to Stripe via the parent's onPay handler. Disabled until
+                    // the slot is at or past its due date — prevents early
+                    // cumulative settlement.
+                    (() => {
+                      const today = new Date().toISOString().split("T")[0];
+                      const isPayable = r.due_date <= today;
+                      return (
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={!isPayable || isBusy}
+                          onClick={() => isPayable && onPay(r.id, r.amount)}
+                          title={isPayable ? undefined : "Available on the due date"}
+                        >
+                          {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Pay"}
+                        </Button>
+                      );
+                    })()
                   ) : r.invoice_status === "open" && isOperator ? (
                     <div className="inline-flex gap-1">
                       {collectionMode === "auto" && onCharge ? (

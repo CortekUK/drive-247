@@ -80,6 +80,7 @@ function buildCalendarItems(
 
 export function CustomerInstallmentsView({ rentalId, rentalStart, rentalEnd, currencyCode = "USD" }: Props) {
   const [busy, setBusy] = useState(false);
+  const [busyRowId, setBusyRowId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["customer-installment-plan", rentalId],
@@ -131,24 +132,59 @@ export function CustomerInstallmentsView({ rentalId, rentalStart, rentalEnd, cur
   if (isLoading) return <div className="text-sm text-muted-foreground">Loading…</div>;
   if (!data || !data.plan) return null;
 
-  async function handlePayNow() {
+  // Direct Stripe Checkout — same flow as PAYG's customer-side Pay and as
+  // the operator's "Charge via Stripe". No magic-link middleware: we mint a
+  // Checkout Session here and redirect straight to Stripe. The webhook calls
+  // installment_settle_invoice on completion via the installment_id metadata.
+  async function startStripeCheckout(args: { installmentId: string; amount: number }) {
     if (!data?.plan) return;
-    setBusy(true);
     try {
-      // Generate a magic-link token via direct insert (we own the customer-portal session)
-      const token = crypto.randomUUID().replace(/-/g, "");
-      const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-      const { error: linkErr } = await supabase.from("installment_payment_links").insert({
-        token,
-        installment_plan_id: data.plan.id,
-        tenant_id: data.plan.tenant_id,
-        expires_at: expiresAt,
+      const { data: session, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: {
+          rentalId,
+          totalAmount: args.amount,
+          tenantId: data.plan.tenant_id,
+          source: 'booking',
+          targetCategories: ['Rental', 'Tax', 'Service Fee'],
+          installmentId: args.installmentId,
+          successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rentalId}&type=invoice`,
+          cancelUrl: `${window.location.origin}/portal/bookings/${rentalId}`,
+        },
       });
-      if (linkErr) throw linkErr;
-      window.location.href = `/pay/${token}`;
+      if (error) throw error;
+      if (!session?.url) throw new Error('No checkout URL returned');
+      window.location.href = session.url;
     } catch (e: any) {
       toast.error("Couldn't open payment", { description: e?.message });
+      throw e;
+    }
+  }
+
+  async function handlePayNow() {
+    if (!data?.plan || !data?.schedule) return;
+    const today = new Date().toISOString().split("T")[0];
+    const overdue = data.schedule
+      .filter((s) => s.invoice_status === "open" && s.due_date <= today)
+      .sort((a, b) => a.installment_number - b.installment_number);
+    const latest = overdue[overdue.length - 1];
+    if (!latest) return;
+    const cumulative = overdue.reduce((s, r) => s + Number(r.amount || 0), 0);
+    setBusy(true);
+    try {
+      // Cumulative settle: pay the total of all overdue rows, stamp the
+      // latest one as installment_id so the webhook supersedes earlier slots.
+      await startStripeCheckout({ installmentId: latest.id, amount: cumulative });
+    } catch {
       setBusy(false);
+    }
+  }
+
+  async function handlePayInstallment(id: string, amount: number) {
+    setBusyRowId(id);
+    try {
+      await startStripeCheckout({ installmentId: id, amount });
+    } catch {
+      setBusyRowId(null);
     }
   }
 
@@ -222,11 +258,32 @@ export function CustomerInstallmentsView({ rentalId, rentalStart, rentalEnd, cur
           rentalStart={rentalStart}
           rentalEnd={rentalEnd}
           currencyCode={currencyCode}
+          // Customer-side: clicking any actionable tile creates a Stripe
+          // Checkout Session for that specific installment and redirects.
+          // Mirrors the per-row Pay button — no magic-link middleware.
+          // Synthetic day-zero tiles (number=0) have no scheduled_installments
+          // row to settle, so they're skipped.
+          onItemClick={(item) => {
+            if (item.number === 0) return;
+            const row = data?.schedule.find((s) => s.installment_number === item.number);
+            if (row && row.invoice_status === "open") {
+              const today = new Date().toISOString().split("T")[0];
+              if (row.due_date <= today) {
+                handlePayInstallment(row.id, Number(row.amount));
+              }
+            }
+          }}
         />
 
         <div>
           <h3 className="text-sm font-medium text-foreground mb-3">Payments</h3>
-          <InstallmentScheduleTable rows={tableRows} currencyCode={currencyCode} collectionMode={data.plan.collection_mode || "auto"} />
+          <InstallmentScheduleTable
+            rows={tableRows}
+            currencyCode={currencyCode}
+            collectionMode={data.plan.collection_mode || "auto"}
+            onPay={handlePayInstallment}
+            busyId={busyRowId}
+          />
         </div>
 
         {data.plan.stripe_payment_method_id ? (

@@ -5034,6 +5034,8 @@ const RentalDetail = () => {
           rentalId={id}
           rentalStart={rental?.start_date}
           rentalEnd={rental?.end_date}
+          customerId={rental?.customers?.id}
+          vehicleId={rental?.vehicles?.id}
         />
       )}
 
