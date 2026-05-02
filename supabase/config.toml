@@ -77,3 +77,6 @@ verify_jwt = false
 
 [functions.vehicle-ical-export]
 verify_jwt = false
+
+[functions.submit-enquiry]
+verify_jwt = false

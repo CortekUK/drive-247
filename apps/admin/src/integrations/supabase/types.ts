@@ -114,7 +114,7 @@ export type Database = {
       }
       app_users: {
         Row: {
-          auth_user_id: string
+          auth_user_id: string | null
           avatar_url: string | null
           created_at: string
           email: string
@@ -130,7 +130,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          auth_user_id: string
+          auth_user_id?: string | null
           avatar_url?: string | null
           created_at?: string
           email: string
@@ -146,7 +146,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          auth_user_id?: string
+          auth_user_id?: string | null
           avatar_url?: string | null
           created_at?: string
           email?: string
@@ -758,6 +758,94 @@ export type Database = {
           },
           {
             foreignKeyName: "bonzah_insurance_policies_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bonzah_onboarding_submissions: {
+        Row: {
+          admin_note: string | null
+          business_legal_name: string
+          business_trade_name: string
+          created_at: string
+          data: Json
+          ein: string | null
+          file_urls: Json
+          id: string
+          primary_contact_email: string
+          primary_contact_first_name: string | null
+          primary_contact_last_name: string | null
+          primary_contact_phone: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submitted_at: string
+          submitted_by: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          admin_note?: string | null
+          business_legal_name: string
+          business_trade_name: string
+          created_at?: string
+          data?: Json
+          ein?: string | null
+          file_urls?: Json
+          id?: string
+          primary_contact_email: string
+          primary_contact_first_name?: string | null
+          primary_contact_last_name?: string | null
+          primary_contact_phone?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string
+          submitted_by?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          admin_note?: string | null
+          business_legal_name?: string
+          business_trade_name?: string
+          created_at?: string
+          data?: Json
+          ein?: string | null
+          file_urls?: Json
+          id?: string
+          primary_contact_email?: string
+          primary_contact_first_name?: string | null
+          primary_contact_last_name?: string | null
+          primary_contact_phone?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string
+          submitted_by?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonzah_onboarding_submissions_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_onboarding_submissions_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_onboarding_submissions_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -2496,6 +2584,143 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      enquiries: {
+        Row: {
+          created_at: string
+          customer_email: string
+          customer_id: string | null
+          customer_name: string
+          customer_phone: string
+          description: string
+          end_date: string
+          id: string
+          ip_address: unknown
+          is_read: boolean
+          read_at: string | null
+          read_by: string | null
+          source: string
+          start_date: string
+          status: string
+          tenant_id: string
+          updated_at: string
+          user_agent: string | null
+          vehicle_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_email: string
+          customer_id?: string | null
+          customer_name: string
+          customer_phone: string
+          description: string
+          end_date: string
+          id?: string
+          ip_address?: unknown
+          is_read?: boolean
+          read_at?: string | null
+          read_by?: string | null
+          source?: string
+          start_date: string
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          user_agent?: string | null
+          vehicle_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_email?: string
+          customer_id?: string | null
+          customer_name?: string
+          customer_phone?: string
+          description?: string
+          end_date?: string
+          id?: string
+          ip_address?: unknown
+          is_read?: boolean
+          read_at?: string | null
+          read_by?: string | null
+          source?: string
+          start_date?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          user_agent?: string | null
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enquiries_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enquiries_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "enquiries_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "enquiries_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "enquiries_read_by_fkey"
+            columns: ["read_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enquiries_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enquiries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "enquiries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enquiries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "enquiries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
           },
         ]
       }
@@ -4926,6 +5151,8 @@ export type Database = {
           reminder_number: number
           rental_id: string
           sent_at: string
+          stripe_checkout_session_id: string | null
+          stripe_session_expired_at: string | null
           success: boolean
           tenant_id: string
         }
@@ -4942,6 +5169,8 @@ export type Database = {
           reminder_number: number
           rental_id: string
           sent_at?: string
+          stripe_checkout_session_id?: string | null
+          stripe_session_expired_at?: string | null
           success?: boolean
           tenant_id: string
         }
@@ -4958,6 +5187,8 @@ export type Database = {
           reminder_number?: number
           rental_id?: string
           sent_at?: string
+          stripe_checkout_session_id?: string | null
+          stripe_session_expired_at?: string | null
           success?: boolean
           tenant_id?: string
         }
@@ -6389,6 +6620,109 @@ export type Database = {
           },
           {
             foreignKeyName: "rental_agreements_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rental_damage_reports: {
+        Row: {
+          created_at: string | null
+          findings: Json | null
+          generated_at: string | null
+          generated_by: string | null
+          giving_photo_count: number | null
+          has_new_damage: boolean | null
+          id: string
+          model: string | null
+          overall_severity: string | null
+          receiving_photo_count: number | null
+          rental_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewer_notes: string | null
+          summary: string | null
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          findings?: Json | null
+          generated_at?: string | null
+          generated_by?: string | null
+          giving_photo_count?: number | null
+          has_new_damage?: boolean | null
+          id?: string
+          model?: string | null
+          overall_severity?: string | null
+          receiving_photo_count?: number | null
+          rental_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_notes?: string | null
+          summary?: string | null
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          findings?: Json | null
+          generated_at?: string | null
+          generated_by?: string | null
+          giving_photo_count?: number | null
+          has_new_damage?: boolean | null
+          id?: string
+          model?: string | null
+          overall_severity?: string | null
+          receiving_photo_count?: number | null
+          rental_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_notes?: string | null
+          summary?: string | null
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_damage_reports_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_damage_reports_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: true
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_damage_reports_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: true
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "rental_damage_reports_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: true
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "rental_damage_reports_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_damage_reports_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -8328,6 +8662,7 @@ export type Database = {
           delivery_enabled: boolean | null
           deposit_mode: string | null
           distance_unit: string | null
+          enquiries_enabled: boolean
           facebook_url: string | null
           favicon_url: string | null
           fixed_address_enabled: boolean | null
@@ -8518,6 +8853,7 @@ export type Database = {
           delivery_enabled?: boolean | null
           deposit_mode?: string | null
           distance_unit?: string | null
+          enquiries_enabled?: boolean
           facebook_url?: string | null
           favicon_url?: string | null
           fixed_address_enabled?: boolean | null
@@ -8708,6 +9044,7 @@ export type Database = {
           delivery_enabled?: boolean | null
           deposit_mode?: string | null
           distance_unit?: string | null
+          enquiries_enabled?: boolean
           facebook_url?: string | null
           favicon_url?: string | null
           fixed_address_enabled?: boolean | null
