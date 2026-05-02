@@ -211,23 +211,35 @@ export function LocationMap({ pickupAddress, returnAddress, className }: Locatio
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  const initialized = useRef(false);
 
   useEffect(() => {
-    if (!mapRef.current || initialized.current) return;
+    const container = mapRef.current;
+    if (!container) return;
     if (!pickupAddress && !returnAddress) {
       setLoading(false);
       return;
     }
 
-    initialized.current = true;
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+    container.innerHTML = '';
 
-    renderMapToContainer(mapRef.current, pickupAddress, returnAddress)
+    renderMapToContainer(container, pickupAddress, returnAddress)
       .then((map) => {
-        if (!map) { setError(true); }
+        if (cancelled) return;
+        if (!map) setError(true);
         setLoading(false);
       })
-      .catch(() => { setError(true); setLoading(false); });
+      .catch(() => {
+        if (cancelled) return;
+        setError(true);
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [pickupAddress, returnAddress]);
 
   if (!pickupAddress && !returnAddress) return null;
