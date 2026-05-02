@@ -15,6 +15,36 @@ function getBoldSignApiKey(mode: 'test' | 'live'): string {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
+/**
+ * Sanitize text for pdf-lib's StandardFonts (WinAnsi/CP1252 only).
+ * Replaces common Unicode chars with WinAnsi-compatible equivalents and
+ * substitutes anything still outside WinAnsi with '?' to avoid encoding errors
+ * like: WinAnsi cannot encode "☐" (0x2610).
+ */
+const WINANSI_REPLACEMENTS: Record<string, string> = {
+    '☐': '[ ]', '☑': '[x]', '☒': '[x]',
+    '✓': 'Y', '✔': 'Y', '✗': 'X', '✘': 'X',
+    '→': '->', '←': '<-', '⇒': '=>',
+    ' ': ' ',
+};
+const WINANSI_HIGH = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
+function sanitizePdfText(s: string): string {
+    if (!s) return '';
+    let out = '';
+    for (const ch of s) {
+        const replacement = WINANSI_REPLACEMENTS[ch];
+        if (replacement !== undefined) { out += replacement; continue; }
+        const code = ch.codePointAt(0)!;
+        if (code === 0x09 || code === 0x0A || code === 0x0D) { out += ch; continue; }
+        if (code < 0x20) continue;
+        if (code <= 0x7E) { out += ch; continue; }
+        if (code >= 0xA0 && code <= 0xFF) { out += ch; continue; }
+        if (WINANSI_HIGH.has(ch)) { out += ch; continue; }
+        out += '?';
+    }
+    return out;
+}
+
 interface EnvelopeRequest {
     rentalId: string;
     customerEmail: string;
@@ -401,7 +431,8 @@ export async function POST(request: NextRequest) {
         let page = pdfDoc.addPage([pageWidth, pageHeight]);
         let y = pageHeight - margin;
 
-        for (const line of lines) {
+        for (const rawLine of lines) {
+            const line = sanitizePdfText(rawLine);
             // Wrap long lines
             const words = line.split(' ');
             let currentLine = '';

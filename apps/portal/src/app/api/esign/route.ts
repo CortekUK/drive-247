@@ -471,9 +471,42 @@ function parseHtmlToBlocks(html: string): PdfBlock[] {
 // STRUCTURED PDF RENDERER
 // ============================================================================
 
-/** Strip null bytes and control characters that WinAnsi/pdf-lib cannot encode */
+/**
+ * Sanitize text for pdf-lib's StandardFonts (WinAnsi/CP1252 only).
+ * Replaces common Unicode chars with WinAnsi-compatible equivalents and
+ * substitutes anything still outside WinAnsi with '?' to avoid encoding errors
+ * like: WinAnsi cannot encode "☐" (0x2610).
+ */
+const WINANSI_REPLACEMENTS: Record<string, string> = {
+    '☐': '[ ]',  // ☐ ballot box
+    '☑': '[x]',  // ☑ ballot box with check
+    '☒': '[x]',  // ☒ ballot box with x
+    '✓': 'Y',    // ✓ check mark
+    '✔': 'Y',    // ✔ heavy check mark
+    '✗': 'X',    // ✗ ballot x
+    '✘': 'X',    // ✘ heavy ballot x
+    '→': '->',   // → rightwards arrow
+    '←': '<-',   // ← leftwards arrow
+    '⇒': '=>',   // ⇒
+    ' ': ' ',    // nbsp -> regular space
+};
+// CP1252 high chars (0x80–0x9F range) that ARE encodable by WinAnsi
+const WINANSI_HIGH = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
 function sanitizePdfText(s: string): string {
-    return s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+    if (!s) return '';
+    let out = '';
+    for (const ch of s) {
+        const replacement = WINANSI_REPLACEMENTS[ch];
+        if (replacement !== undefined) { out += replacement; continue; }
+        const code = ch.codePointAt(0)!;
+        if (code === 0x09 || code === 0x0A || code === 0x0D) { out += ch; continue; }
+        if (code < 0x20) continue;
+        if (code <= 0x7E) { out += ch; continue; }
+        if (code >= 0xA0 && code <= 0xFF) { out += ch; continue; }
+        if (WINANSI_HIGH.has(ch)) { out += ch; continue; }
+        out += '?';
+    }
+    return out;
 }
 
 const PAGE_W = 595;  // A4
