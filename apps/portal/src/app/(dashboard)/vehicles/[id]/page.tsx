@@ -79,6 +79,9 @@ interface Vehicle {
   weekly_mileage?: number | null;
   monthly_mileage?: number | null;
   excess_mileage_rate?: number | null;
+  // Unlimited mileage upgrade (paid add-on offered to customers)
+  unlimited_mileage_available?: boolean | null;
+  unlimited_mileage_price_per_day?: number | null;
   // MOT & TAX fields
   mot_due_date?: string;
   tax_due_date?: string;
@@ -168,7 +171,14 @@ export default function VehicleDetail() {
   const [lockboxSaving, setLockboxSaving] = useState(false);
   const [mileageEditing, setMileageEditing] = useState(false);
   const [mileageSaving, setMileageSaving] = useState(false);
-  const [mileageForm, setMileageForm] = useState({ daily_mileage: '', weekly_mileage: '', monthly_mileage: '', excess_mileage_rate: '' });
+  const [mileageForm, setMileageForm] = useState({
+    daily_mileage: '',
+    weekly_mileage: '',
+    monthly_mileage: '',
+    excess_mileage_rate: '',
+    unlimited_mileage_available: false,
+    unlimited_mileage_price_per_day: '',
+  });
 
   // Tesla Fleet API state
   const [teslaChecking, setTeslaChecking] = useState(false);
@@ -818,6 +828,8 @@ export default function VehicleDetail() {
                           weekly_mileage: vehicle.weekly_mileage?.toString() ?? '',
                           monthly_mileage: vehicle.monthly_mileage?.toString() ?? '',
                           excess_mileage_rate: vehicle.excess_mileage_rate?.toString() ?? '',
+                          unlimited_mileage_available: vehicle.unlimited_mileage_available === true,
+                          unlimited_mileage_price_per_day: vehicle.unlimited_mileage_price_per_day?.toString() ?? '',
                         });
                         setMileageEditing(true);
                       }}
@@ -843,6 +855,18 @@ export default function VehicleDetail() {
                       className="h-7 text-xs"
                       disabled={mileageSaving}
                       onClick={async () => {
+                        // If unlimited upgrade is being offered, require a price > 0.
+                        const unlimitedPriceNum = mileageForm.unlimited_mileage_price_per_day
+                          ? parseFloat(mileageForm.unlimited_mileage_price_per_day)
+                          : 0;
+                        if (mileageForm.unlimited_mileage_available && (!Number.isFinite(unlimitedPriceNum) || unlimitedPriceNum <= 0)) {
+                          toast({
+                            title: "Set a price for the unlimited-mileage upgrade",
+                            description: "Enter a per-day price greater than 0 before enabling the upgrade.",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
                         setMileageSaving(true);
                         try {
                           await supabase.from("vehicles").update({
@@ -850,7 +874,11 @@ export default function VehicleDetail() {
                             weekly_mileage: mileageForm.weekly_mileage ? parseInt(mileageForm.weekly_mileage) : null,
                             monthly_mileage: mileageForm.monthly_mileage ? parseInt(mileageForm.monthly_mileage) : null,
                             excess_mileage_rate: mileageForm.excess_mileage_rate ? parseFloat(mileageForm.excess_mileage_rate) : null,
-                          }).eq("id", vehicle.id);
+                            unlimited_mileage_available: mileageForm.unlimited_mileage_available,
+                            unlimited_mileage_price_per_day: mileageForm.unlimited_mileage_available && unlimitedPriceNum > 0
+                              ? unlimitedPriceNum
+                              : null,
+                          } as any).eq("id", vehicle.id);
                           queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
                           setMileageEditing(false);
                           toast({ title: "Mileage allowance updated" });
@@ -868,68 +896,130 @@ export default function VehicleDetail() {
                 )}
               </div>
               {mileageEditing ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Daily</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      placeholder="Unlimited"
-                      value={mileageForm.daily_mileage}
-                      onChange={(e) => setMileageForm(prev => ({ ...prev, daily_mileage: e.target.value }))}
-                    />
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Daily</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        placeholder="Unlimited"
+                        value={mileageForm.daily_mileage}
+                        onChange={(e) => setMileageForm(prev => ({ ...prev, daily_mileage: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Weekly</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        placeholder="Unlimited"
+                        value={mileageForm.weekly_mileage}
+                        onChange={(e) => setMileageForm(prev => ({ ...prev, weekly_mileage: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Monthly</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        placeholder="Unlimited"
+                        value={mileageForm.monthly_mileage}
+                        onChange={(e) => setMileageForm(prev => ({ ...prev, monthly_mileage: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Excess Rate</label>
+                      <Input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        placeholder={`per ${distanceUnit === 'miles' ? 'mile' : 'km'}`}
+                        value={mileageForm.excess_mileage_rate}
+                        onChange={(e) => setMileageForm(prev => ({ ...prev, excess_mileage_rate: e.target.value }))}
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Weekly</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      placeholder="Unlimited"
-                      value={mileageForm.weekly_mileage}
-                      onChange={(e) => setMileageForm(prev => ({ ...prev, weekly_mileage: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Monthly</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      placeholder="Unlimited"
-                      value={mileageForm.monthly_mileage}
-                      onChange={(e) => setMileageForm(prev => ({ ...prev, monthly_mileage: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Excess Rate</label>
-                    <Input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      placeholder={`per ${distanceUnit === 'miles' ? 'mile' : 'km'}`}
-                      value={mileageForm.excess_mileage_rate}
-                      onChange={(e) => setMileageForm(prev => ({ ...prev, excess_mileage_rate: e.target.value }))}
-                    />
-                  </div>
-                </div>
+
+                  {/* Unlimited Mileage Upgrade — paid add-on customers can opt into at checkout */}
+                  {(() => {
+                    const inherentlyUnlimited = !mileageForm.daily_mileage && !mileageForm.weekly_mileage && !mileageForm.monthly_mileage;
+                    if (inherentlyUnlimited) {
+                      return (
+                        <p className="mt-4 text-xs text-muted-foreground italic">
+                          Vehicle has no tier limits — upgrade is unnecessary.
+                        </p>
+                      );
+                    }
+                    return (
+                      <div className="mt-5 pt-4 border-t border-border/60 space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-medium">Unlimited Mileage Upgrade</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                              Offer customers a paid upgrade at checkout to drive without per-day limits.
+                            </p>
+                          </div>
+                          <Switch
+                            checked={mileageForm.unlimited_mileage_available}
+                            onCheckedChange={(checked) =>
+                              setMileageForm(prev => ({ ...prev, unlimited_mileage_available: checked === true }))
+                            }
+                          />
+                        </div>
+                        {mileageForm.unlimited_mileage_available && (
+                          <div className="space-y-1 max-w-xs">
+                            <label className="text-xs text-muted-foreground">Price per day *</label>
+                            <Input
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              placeholder="e.g. 25"
+                              value={mileageForm.unlimited_mileage_price_per_day}
+                              onChange={(e) =>
+                                setMileageForm(prev => ({ ...prev, unlimited_mileage_price_per_day: e.target.value }))
+                              }
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-3">
-                  <MetricItem
-                    label="Daily"
-                    value={vehicle.daily_mileage ? `${vehicle.daily_mileage.toLocaleString()} ${getPerDayLabelLong(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}
-                  />
-                  <MetricItem
-                    label="Weekly"
-                    value={vehicle.weekly_mileage ? `${vehicle.weekly_mileage.toLocaleString()} ${getPerWeekLabelLong(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}
-                  />
-                  <MetricItem
-                    label="Monthly"
-                    value={vehicle.monthly_mileage ? `${vehicle.monthly_mileage.toLocaleString()} ${getPerMonthLabelLong(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}
-                  />
-                  <MetricItem
-                    label="Excess Rate"
-                    value={vehicle.excess_mileage_rate ? formatCurrency(vehicle.excess_mileage_rate, tenant?.currency_code || 'USD') + `/${distanceUnit === 'miles' ? 'mile' : 'km'}` : 'Not set'}
-                  />
-                </div>
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-3">
+                    <MetricItem
+                      label="Daily"
+                      value={vehicle.daily_mileage ? `${vehicle.daily_mileage.toLocaleString()} ${getPerDayLabelLong(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}
+                    />
+                    <MetricItem
+                      label="Weekly"
+                      value={vehicle.weekly_mileage ? `${vehicle.weekly_mileage.toLocaleString()} ${getPerWeekLabelLong(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}
+                    />
+                    <MetricItem
+                      label="Monthly"
+                      value={vehicle.monthly_mileage ? `${vehicle.monthly_mileage.toLocaleString()} ${getPerMonthLabelLong(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}
+                    />
+                    <MetricItem
+                      label="Excess Rate"
+                      value={vehicle.excess_mileage_rate ? formatCurrency(vehicle.excess_mileage_rate, tenant?.currency_code || 'USD') + `/${distanceUnit === 'miles' ? 'mile' : 'km'}` : 'Not set'}
+                    />
+                  </div>
+                  {/* Unlimited Mileage Upgrade — show only when vehicle has at least one tier limit */}
+                  {(vehicle.daily_mileage != null || vehicle.weekly_mileage != null || vehicle.monthly_mileage != null) && (
+                    <div className="mt-4 pt-3 border-t border-border/60">
+                      <MetricItem
+                        label="Unlimited Mileage Upgrade"
+                        value={
+                          vehicle.unlimited_mileage_available && vehicle.unlimited_mileage_price_per_day && vehicle.unlimited_mileage_price_per_day > 0
+                            ? `Available · ${formatCurrency(vehicle.unlimited_mileage_price_per_day, tenant?.currency_code || 'USD')}/day`
+                            : 'Disabled'
+                        }
+                      />
+                    </div>
+                  )}
+                </>
               )}
             </div>
 

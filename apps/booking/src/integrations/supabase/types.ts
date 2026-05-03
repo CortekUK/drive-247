@@ -7529,6 +7529,7 @@ export type Database = {
           is_extended: boolean | null
           is_gig_driver: boolean | null
           is_pay_as_you_go: boolean
+          is_unlimited_mileage: boolean
           lockbox_sent_at: string | null
           monthly_amount: number
           monthly_mileage_override: number | null
@@ -7564,6 +7565,8 @@ export type Database = {
           start_date: string
           status: string | null
           tenant_id: string | null
+          unlimited_mileage_price_per_day: number | null
+          unlimited_mileage_total: number | null
           updated_at: string
           uses_delivery_service: boolean | null
           vehicle_id: string | null
@@ -7613,6 +7616,7 @@ export type Database = {
           is_extended?: boolean | null
           is_gig_driver?: boolean | null
           is_pay_as_you_go?: boolean
+          is_unlimited_mileage?: boolean
           lockbox_sent_at?: string | null
           monthly_amount: number
           monthly_mileage_override?: number | null
@@ -7648,6 +7652,8 @@ export type Database = {
           start_date: string
           status?: string | null
           tenant_id?: string | null
+          unlimited_mileage_price_per_day?: number | null
+          unlimited_mileage_total?: number | null
           updated_at?: string
           uses_delivery_service?: boolean | null
           vehicle_id?: string | null
@@ -7697,6 +7703,7 @@ export type Database = {
           is_extended?: boolean | null
           is_gig_driver?: boolean | null
           is_pay_as_you_go?: boolean
+          is_unlimited_mileage?: boolean
           lockbox_sent_at?: string | null
           monthly_amount?: number
           monthly_mileage_override?: number | null
@@ -7732,6 +7739,8 @@ export type Database = {
           start_date?: string
           status?: string | null
           tenant_id?: string | null
+          unlimited_mileage_price_per_day?: number | null
+          unlimited_mileage_total?: number | null
           updated_at?: string
           uses_delivery_service?: boolean | null
           vehicle_id?: string | null
@@ -9895,6 +9904,8 @@ export type Database = {
           term_months: number | null
           tesla_fleet_enabled: boolean | null
           tesla_fleet_vehicle_id: string | null
+          unlimited_mileage_available: boolean
+          unlimited_mileage_price_per_day: number | null
           updated_at: string
           vin: string | null
           warranty_end_date: string | null
@@ -9960,6 +9971,8 @@ export type Database = {
           term_months?: number | null
           tesla_fleet_enabled?: boolean | null
           tesla_fleet_vehicle_id?: string | null
+          unlimited_mileage_available?: boolean
+          unlimited_mileage_price_per_day?: number | null
           updated_at?: string
           vin?: string | null
           warranty_end_date?: string | null
@@ -10025,6 +10038,8 @@ export type Database = {
           term_months?: number | null
           tesla_fleet_enabled?: boolean | null
           tesla_fleet_vehicle_id?: string | null
+          unlimited_mileage_available?: boolean
+          unlimited_mileage_price_per_day?: number | null
           updated_at?: string
           vin?: string | null
           warranty_end_date?: string | null

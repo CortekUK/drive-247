@@ -21,6 +21,8 @@ import { useBookingStore } from "@/stores/booking-store";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown } from "@/lib/calculate-rental-price";
+import { getUnlimitedMileageOption } from "@/lib/mileage-utils";
+import { Infinity as InfinityIcon } from "lucide-react";
 const checkoutSchema = z.object({
   customerName: z.string().min(2, "Name must be at least 2 characters"),
   customerEmail: z.string().email("Invalid email address"),
@@ -109,6 +111,10 @@ const BookingCheckoutContent = () => {
     agreeTerms: false,
     agreeCharges: false
   });
+
+  // Unlimited Mileage upgrade — opt-in at checkout, locked into the rental at booking time.
+  // Computed values (option, total) live in calculateCompleteTotal below to avoid TDZ.
+  const [addUnlimitedMileage, setAddUnlimitedMileage] = useState(false);
 
   // Promo code state — read from localStorage (set by MultiStepBookingWidget)
   const [promoDetails, setPromoDetails] = useState<{ code: string; type: 'percentage' | 'fixed_amount'; value: number } | null>(null);
@@ -239,7 +245,19 @@ const BookingCheckoutContent = () => {
     }
 
     const collectionFee = 0;
-    const subtotal = discountedVehiclePrice + extrasTotal + deliveryFee + collectionFee;
+
+    // Unlimited mileage upgrade — only counted when the vehicle exposes it AND the box is ticked.
+    const unlimitedOption = vehicleDetails
+      ? getUnlimitedMileageOption(vehicleDetails)
+      : { available: false, pricePerDay: 0 };
+    const rentalDaysForUnlimited = vehicleDetails ? Math.max(1, calculateRentalDays()) : 0;
+    const unlimitedMileageEffective = addUnlimitedMileage && unlimitedOption.available;
+    const unlimitedMileagePricePerDay = unlimitedMileageEffective ? unlimitedOption.pricePerDay : 0;
+    const unlimitedMileageTotal = unlimitedMileageEffective
+      ? unlimitedOption.pricePerDay * rentalDaysForUnlimited
+      : 0;
+
+    const subtotal = discountedVehiclePrice + extrasTotal + deliveryFee + collectionFee + unlimitedMileageTotal;
 
     // Tax on discounted amount
     const taxPercentage = tenant?.tax_percentage || 0;
@@ -269,6 +287,12 @@ const BookingCheckoutContent = () => {
       taxPercentage,
       serviceFee,
       deposit,
+      // Unlimited mileage upgrade
+      unlimitedMileageAvailable: unlimitedOption.available,
+      unlimitedMileagePricePerDay: unlimitedOption.pricePerDay,
+      unlimitedMileageEffective,
+      unlimitedMileageTotal,
+      unlimitedMileageDays: rentalDaysForUnlimited,
       grandTotal: subtotal + taxAmount + serviceFee, // Deposit is a hold at pickup, not charged at booking
     };
   };
@@ -648,11 +672,36 @@ const BookingCheckoutContent = () => {
           discount_applied: currentTotals.discountAmount > 0 ? currentTotals.discountAmount : null,
           // Mileage snapshot from vehicle at time of booking
           ...mileageOverrides,
+          // Unlimited mileage upgrade — locked at booking time
+          is_unlimited_mileage: currentTotals.unlimitedMileageEffective,
+          unlimited_mileage_price_per_day: currentTotals.unlimitedMileageEffective ? currentTotals.unlimitedMileagePricePerDay : null,
+          unlimited_mileage_total: currentTotals.unlimitedMileageEffective ? currentTotals.unlimitedMileageTotal : null,
         } as any)
         .select()
         .single();
 
       if (rentalError) throw rentalError;
+
+      // Step 5b: Insert ledger entry for the unlimited-mileage upgrade so payments and P&L pick it up.
+      // Non-fatal — booking completes even if this fails; the rental row still carries the data.
+      if (currentTotals.unlimitedMileageEffective && currentTotals.unlimitedMileageTotal > 0) {
+        const { error: unlimitedLedgerError } = await supabase.from("ledger_entries").insert({
+          customer_id: customer.id,
+          rental_id: rental.id,
+          vehicle_id: vehicleId,
+          tenant_id: tenant?.id,
+          entry_date: pickupDate,
+          due_date: pickupDate,
+          type: "Charge",
+          category: "Unlimited Mileage",
+          amount: currentTotals.unlimitedMileageTotal,
+          remaining_amount: currentTotals.unlimitedMileageTotal,
+          reference: `Unlimited mileage: ${formatCurrency(currentTotals.unlimitedMileagePricePerDay)}/day × ${currentTotals.unlimitedMileageDays} day${currentTotals.unlimitedMileageDays === 1 ? "" : "s"}`,
+        });
+        if (unlimitedLedgerError) {
+          console.error("Failed to insert Unlimited Mileage ledger entry:", unlimitedLedgerError);
+        }
+      }
 
       // Step 6: Update vehicle status to Rented (filtered by tenant)
       let vehicleUpdateQuery = supabase
@@ -963,6 +1012,43 @@ const BookingCheckoutContent = () => {
                 </div>
               </Card>
 
+              {/* Unlimited Mileage Upgrade — only when the vehicle exposes it */}
+              {totals.unlimitedMileageAvailable && (
+                <Card className="p-6">
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0 rounded-md bg-accent/10 p-2">
+                      <InfinityIcon className="w-5 h-5 text-accent" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h2 className="text-base font-semibold">Unlimited Mileage</h2>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Drive as far as you'd like — no per-day limit, no excess charges.
+                          </p>
+                        </div>
+                        <Checkbox
+                          id="checkout-unlimited-mileage"
+                          checked={addUnlimitedMileage}
+                          onCheckedChange={(checked) => setAddUnlimitedMileage(checked === true)}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div className="mt-3 flex items-baseline justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          {formatCurrency(totals.unlimitedMileagePricePerDay)}/day × {totals.unlimitedMileageDays} day{totals.unlimitedMileageDays === 1 ? "" : "s"}
+                        </span>
+                        <span className="font-semibold">
+                          {addUnlimitedMileage
+                            ? `+${formatCurrency(totals.unlimitedMileageTotal)}`
+                            : formatCurrency(totals.unlimitedMileagePricePerDay * totals.unlimitedMileageDays)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
               {/* Installment Payment Options */}
               {calculateRentalDays() >= Math.min(installmentConfig.minimum_days_weekly ?? installmentConfig.min_days_for_weekly ?? 7, installmentConfig.minimum_days_monthly ?? installmentConfig.min_days_for_monthly ?? 30) && (
                 <InstallmentSelector
@@ -1086,6 +1172,22 @@ const BookingCheckoutContent = () => {
                     <p className="text-xs text-muted-foreground">
                       Same fee applies for both delivery and collection
                     </p>
+                  </div>
+                )}
+
+                {/* Unlimited Mileage Upgrade */}
+                {totals.unlimitedMileageEffective && (
+                  <div className="space-y-1 py-4 border-b border-border">
+                    <p className="text-sm font-medium flex items-center gap-2">
+                      <InfinityIcon className="w-4 h-4 text-accent" />
+                      Unlimited Mileage
+                    </p>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {formatCurrency(totals.unlimitedMileagePricePerDay)}/day × {totals.unlimitedMileageDays} day{totals.unlimitedMileageDays === 1 ? "" : "s"}
+                      </span>
+                      <span className="font-medium">+{formatCurrency(totals.unlimitedMileageTotal)}</span>
+                    </div>
                   </div>
                 )}
 

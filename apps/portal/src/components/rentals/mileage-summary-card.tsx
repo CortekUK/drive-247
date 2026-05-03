@@ -37,9 +37,18 @@ interface RentalOverrides {
   weekly_mileage_override: number | null;
   monthly_mileage_override: number | null;
   excess_mileage_rate_override: number | null;
+  is_unlimited_mileage: boolean | null;
+  unlimited_mileage_price_per_day: number | null;
+  unlimited_mileage_total: number | null;
 }
 
 interface ExcessMileageCharge {
+  id: string;
+  amount: number;
+  remaining_amount: number;
+}
+
+interface UnlimitedMileageCharge {
   id: string;
   amount: number;
   remaining_amount: number;
@@ -85,13 +94,13 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
     enabled: !!vehicleId,
   });
 
-  // Fetch rental-level mileage overrides
+  // Fetch rental-level mileage overrides + unlimited-mileage flags
   const { data: rentalOverrides } = useQuery({
     queryKey: ["rental-mileage-overrides", rentalId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("rentals")
-        .select("daily_mileage_override, weekly_mileage_override, monthly_mileage_override, excess_mileage_rate_override")
+        .select("daily_mileage_override, weekly_mileage_override, monthly_mileage_override, excess_mileage_rate_override, is_unlimited_mileage, unlimited_mileage_price_per_day, unlimited_mileage_total")
         .eq("id", rentalId)
         .single();
 
@@ -100,6 +109,8 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
     },
     enabled: !!rentalId,
   });
+
+  const isUnlimited = rentalOverrides?.is_unlimited_mileage === true;
 
   // Build effective mileage config: rental overrides take precedence over vehicle defaults
   const hasOverrides = rentalOverrides && (
@@ -134,7 +145,28 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
       if (error) throw error;
       return data as ExcessMileageCharge | null;
     },
-    enabled: !!rentalId,
+    enabled: !!rentalId && !isUnlimited,
+  });
+
+  // Fetch unlimited-mileage upgrade charge — sum across rows so extension deltas are included.
+  const { data: unlimitedCharge } = useQuery({
+    queryKey: ["unlimited-mileage-charge", rentalId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ledger_entries")
+        .select("id, amount, remaining_amount")
+        .eq("rental_id", rentalId)
+        .eq("type", "Charge")
+        .eq("category", "Unlimited Mileage");
+
+      if (error) throw error;
+      const rows = (data ?? []) as UnlimitedMileageCharge[];
+      if (rows.length === 0) return null;
+      const totalAmount = rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+      const totalRemaining = rows.reduce((sum, r) => sum + Number(r.remaining_amount || 0), 0);
+      return { id: rows[0].id, amount: totalAmount, remaining_amount: totalRemaining };
+    },
+    enabled: !!rentalId && isUnlimited,
   });
 
   const givingHandover = handovers?.find((h) => h.handover_type === "giving");
@@ -225,46 +257,94 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
             </p>
           </div>
 
-          {/* Over/Under Allowance */}
+          {/* vs Allowance — replaced with an "Unlimited" badge when the rental was booked with the upgrade. */}
           <div className="space-y-1 p-3 bg-muted/50 rounded-lg">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              vs Allowance {allowedMileage ? `(${allowedMileage.toLocaleString()})` : ""}
-            </p>
-            {mileageDifference !== null ? (
-              <div className="flex items-center gap-2">
-                {mileageDifference > 0 ? (
-                  <>
-                    <TrendingUp className="h-4 w-4 text-destructive" />
-                    <span className="text-xl font-semibold text-destructive">
-                      +{mileageDifference.toLocaleString()} {getDistanceUnitShort(distanceUnit)}
-                    </span>
-                    <Badge variant="destructive" className="text-xs">Over</Badge>
-                  </>
-                ) : mileageDifference < 0 ? (
-                  <>
-                    <TrendingDown className="h-4 w-4 text-green-600" />
-                    <span className="text-xl font-semibold text-green-600">
-                      {mileageDifference.toLocaleString()} {getDistanceUnitShort(distanceUnit)}
-                    </span>
-                    <Badge className="bg-green-100 text-green-700 text-xs">Under</Badge>
-                  </>
-                ) : (
-                  <>
-                    <Minus className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-xl font-semibold">Exact</span>
-                  </>
-                )}
-              </div>
-            ) : allowedMileage ? (
-              <p className="text-xl font-semibold text-muted-foreground">—</p>
+            {isUnlimited ? (
+              <>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Allowance</p>
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-green-100 text-green-700 text-xs">Unlimited</Badge>
+                  <span className="text-sm text-muted-foreground">no excess charges</span>
+                </div>
+              </>
             ) : (
-              <p className="text-sm text-muted-foreground">Unlimited</p>
+              <>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                  vs Allowance {allowedMileage ? `(${allowedMileage.toLocaleString()})` : ""}
+                </p>
+                {mileageDifference !== null ? (
+                  <div className="flex items-center gap-2">
+                    {mileageDifference > 0 ? (
+                      <>
+                        <TrendingUp className="h-4 w-4 text-destructive" />
+                        <span className="text-xl font-semibold text-destructive">
+                          +{mileageDifference.toLocaleString()} {getDistanceUnitShort(distanceUnit)}
+                        </span>
+                        <Badge variant="destructive" className="text-xs">Over</Badge>
+                      </>
+                    ) : mileageDifference < 0 ? (
+                      <>
+                        <TrendingDown className="h-4 w-4 text-green-600" />
+                        <span className="text-xl font-semibold text-green-600">
+                          {mileageDifference.toLocaleString()} {getDistanceUnitShort(distanceUnit)}
+                        </span>
+                        <Badge className="bg-green-100 text-green-700 text-xs">Under</Badge>
+                      </>
+                    ) : (
+                      <>
+                        <Minus className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-xl font-semibold">Exact</span>
+                      </>
+                    )}
+                  </div>
+                ) : allowedMileage ? (
+                  <p className="text-xl font-semibold text-muted-foreground">—</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Unlimited</p>
+                )}
+              </>
             )}
           </div>
         </div>
 
-        {/* Allowance Calculation Breakdown */}
-        {tier && perUnitMileage !== null && (
+        {/* Unlimited Mileage Upgrade panel — replaces tier breakdown / excess UI when active. */}
+        {isUnlimited && (
+          <div className="mt-4 pt-4 border-t space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Unlimited Mileage Upgrade</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm">
+                <DollarSign className="h-4 w-4 text-primary" />
+                {rentalOverrides?.unlimited_mileage_price_per_day != null && rentalDays > 0 ? (
+                  <span className="text-muted-foreground">
+                    {formatCurrency(rentalOverrides.unlimited_mileage_price_per_day, currencyCode)}/day × {rentalDays} day{rentalDays !== 1 ? 's' : ''} =
+                    {' '}
+                    <span className="font-semibold text-foreground">
+                      {formatCurrency(
+                        Number(rentalOverrides.unlimited_mileage_total ?? rentalOverrides.unlimited_mileage_price_per_day * rentalDays),
+                        currencyCode,
+                      )}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="font-medium">Unlimited mileage included on this rental.</span>
+                )}
+              </div>
+              {unlimitedCharge && (() => {
+                const status = unlimitedCharge.remaining_amount <= 0
+                  ? 'Paid'
+                  : unlimitedCharge.remaining_amount < unlimitedCharge.amount
+                    ? 'Partially Paid'
+                    : 'Unpaid';
+                if (status === 'Paid') return <Badge className="bg-green-100 text-green-700 text-xs">Paid</Badge>;
+                if (status === 'Partially Paid') return <Badge className="bg-amber-100 text-amber-700 text-xs">Partially Paid</Badge>;
+                return <Badge variant="destructive" className="text-xs">Unpaid</Badge>;
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* Allowance Calculation Breakdown — hidden when unlimited */}
+        {!isUnlimited && tier && perUnitMileage !== null && (
           <div className="mt-4 pt-4 border-t space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">How Allowance is Calculated</p>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
@@ -279,15 +359,15 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
             </div>
           </div>
         )}
-        {tier && perUnitMileage === null && (
+        {!isUnlimited && tier && perUnitMileage === null && (
           <div className="mt-4 pt-4 border-t">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Mileage</p>
             <p className="text-sm text-muted-foreground mt-1">Unlimited mileage — no per-{tierUnitLabel} limit configured for this vehicle.</p>
           </div>
         )}
 
-        {/* Excess Mileage Charge Info */}
-        {mileageDifference !== null && mileageDifference > 0 && excessCharge && (
+        {/* Excess Mileage Charge Info — never shown when unlimited */}
+        {!isUnlimited && mileageDifference !== null && mileageDifference > 0 && excessCharge && (
           <div className="mt-4 pt-4 border-t">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm">

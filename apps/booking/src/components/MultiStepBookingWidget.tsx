@@ -52,7 +52,7 @@ import { useGigDriverImages } from "@/hooks/use-gig-driver-images";
 import GigDriverUploadDialog from "@/components/booking/gig-driver-upload-dialog";
 import { formatCurrency, getEarthRadius, metersToUnit, getPerMonthLabel, getUnlimitedLabel, getDistanceUnitLong, getDistanceUnitShort, getMileageTierLabel, formatDistance } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
-import { getMileageTier, getTierMileage, calculateTotalMileageAllowance, isUnlimitedMileage } from "@/lib/mileage-utils";
+import { getMileageTier, getTierMileage, calculateTotalMileageAllowance, isUnlimitedMileage, getUnlimitedMileageOption } from "@/lib/mileage-utils";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown, parseDateString as parseDateStringSafe } from "@/lib/calculate-rental-price";
 interface VehiclePhoto {
@@ -82,6 +82,8 @@ interface Vehicle {
   weekly_mileage?: number | null;
   monthly_mileage?: number | null;
   excess_mileage_rate?: number | null;
+  unlimited_mileage_available?: boolean | null;
+  unlimited_mileage_price_per_day?: number | null;
 }
 interface PricingExtra {
   id: string;
@@ -3988,6 +3990,14 @@ const MultiStepBookingWidget = () => {
                                     <Gauge className="h-3 w-3" />
                                     <span>{getVehicleMileageDisplay(vehicle)}</span>
                                   </div>
+                                  {(() => {
+                                    const um = getUnlimitedMileageOption(vehicle as any);
+                                    return um.available ? (
+                                      <p className="text-[11px] text-accent/80 mt-1">
+                                        Unlimited mileage available · {formatCurrency(um.pricePerDay, currencyCode)}/day
+                                      </p>
+                                    ) : null;
+                                  })()}
                                 </div>
                                 {isSelected && <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
                                   <Check className="w-4 h-4 text-black" />
@@ -4398,6 +4408,7 @@ const MultiStepBookingWidget = () => {
                     }
                     const totalAllowance = calculateTotalMileageAllowance(selectedVehicle, days, tenant?.monthly_tier_days ?? 30);
                     if (totalAllowance === null) return null;
+                    const unlimitedHint = getUnlimitedMileageOption(selectedVehicle as any);
                     return (
                       <div className="text-xs space-y-1 pt-2 border-t border-border/30">
                         <div className="flex justify-between text-muted-foreground">
@@ -4409,6 +4420,11 @@ const MultiStepBookingWidget = () => {
                             <span>Excess rate</span>
                             <span>{formatCurrency(selectedVehicle.excess_mileage_rate, currencyCode, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/{getDistanceUnitShort(distanceUnit)}</span>
                           </div>
+                        )}
+                        {unlimitedHint.available && (
+                          <p className="text-[11px] text-accent/80 leading-snug">
+                            Unlimited mileage available at checkout · {formatCurrency(unlimitedHint.pricePerDay, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/day
+                          </p>
                         )}
                       </div>
                     );
