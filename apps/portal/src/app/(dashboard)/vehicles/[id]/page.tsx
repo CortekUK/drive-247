@@ -80,8 +80,11 @@ interface Vehicle {
   monthly_mileage?: number | null;
   excess_mileage_rate?: number | null;
   // Unlimited mileage upgrade (paid add-on offered to customers)
+  // Flat per-tier price — applied based on which tier the booking falls into.
   unlimited_mileage_available?: boolean | null;
-  unlimited_mileage_price_per_day?: number | null;
+  unlimited_mileage_price_daily?: number | null;
+  unlimited_mileage_price_weekly?: number | null;
+  unlimited_mileage_price_monthly?: number | null;
   // MOT & TAX fields
   mot_due_date?: string;
   tax_due_date?: string;
@@ -177,7 +180,9 @@ export default function VehicleDetail() {
     monthly_mileage: '',
     excess_mileage_rate: '',
     unlimited_mileage_available: false,
-    unlimited_mileage_price_per_day: '',
+    unlimited_mileage_price_daily: '',
+    unlimited_mileage_price_weekly: '',
+    unlimited_mileage_price_monthly: '',
   });
 
   // Tesla Fleet API state
@@ -829,7 +834,9 @@ export default function VehicleDetail() {
                           monthly_mileage: vehicle.monthly_mileage?.toString() ?? '',
                           excess_mileage_rate: vehicle.excess_mileage_rate?.toString() ?? '',
                           unlimited_mileage_available: vehicle.unlimited_mileage_available === true,
-                          unlimited_mileage_price_per_day: vehicle.unlimited_mileage_price_per_day?.toString() ?? '',
+                          unlimited_mileage_price_daily: vehicle.unlimited_mileage_price_daily?.toString() ?? '',
+                          unlimited_mileage_price_weekly: vehicle.unlimited_mileage_price_weekly?.toString() ?? '',
+                          unlimited_mileage_price_monthly: vehicle.unlimited_mileage_price_monthly?.toString() ?? '',
                         });
                         setMileageEditing(true);
                       }}
@@ -855,14 +862,19 @@ export default function VehicleDetail() {
                       className="h-7 text-xs"
                       disabled={mileageSaving}
                       onClick={async () => {
-                        // If unlimited upgrade is being offered, require a price > 0.
-                        const unlimitedPriceNum = mileageForm.unlimited_mileage_price_per_day
-                          ? parseFloat(mileageForm.unlimited_mileage_price_per_day)
-                          : 0;
-                        if (mileageForm.unlimited_mileage_available && (!Number.isFinite(unlimitedPriceNum) || unlimitedPriceNum <= 0)) {
+                        const parsePrice = (raw: string): number | null => {
+                          if (!raw) return null;
+                          const n = parseFloat(raw);
+                          return Number.isFinite(n) && n > 0 ? n : null;
+                        };
+                        const dailyPrice = parsePrice(mileageForm.unlimited_mileage_price_daily);
+                        const weeklyPrice = parsePrice(mileageForm.unlimited_mileage_price_weekly);
+                        const monthlyPrice = parsePrice(mileageForm.unlimited_mileage_price_monthly);
+                        // If upgrade is being offered, require at least one tier price > 0.
+                        if (mileageForm.unlimited_mileage_available && dailyPrice == null && weeklyPrice == null && monthlyPrice == null) {
                           toast({
-                            title: "Set a price for the unlimited-mileage upgrade",
-                            description: "Enter a per-day price greater than 0 before enabling the upgrade.",
+                            title: "Set at least one tier price",
+                            description: "Enter a daily, weekly, or monthly price greater than 0 before enabling the upgrade.",
                             variant: "destructive",
                           });
                           return;
@@ -875,9 +887,9 @@ export default function VehicleDetail() {
                             monthly_mileage: mileageForm.monthly_mileage ? parseInt(mileageForm.monthly_mileage) : null,
                             excess_mileage_rate: mileageForm.excess_mileage_rate ? parseFloat(mileageForm.excess_mileage_rate) : null,
                             unlimited_mileage_available: mileageForm.unlimited_mileage_available,
-                            unlimited_mileage_price_per_day: mileageForm.unlimited_mileage_available && unlimitedPriceNum > 0
-                              ? unlimitedPriceNum
-                              : null,
+                            unlimited_mileage_price_daily: mileageForm.unlimited_mileage_available ? dailyPrice : null,
+                            unlimited_mileage_price_weekly: mileageForm.unlimited_mileage_available ? weeklyPrice : null,
+                            unlimited_mileage_price_monthly: mileageForm.unlimited_mileage_available ? monthlyPrice : null,
                           } as any).eq("id", vehicle.id);
                           queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
                           setMileageEditing(false);
@@ -941,7 +953,8 @@ export default function VehicleDetail() {
                     </div>
                   </div>
 
-                  {/* Unlimited Mileage Upgrade — paid add-on customers can opt into at checkout */}
+                  {/* Unlimited Mileage Upgrade — paid add-on customers can opt into at checkout.
+                      Flat per-tier price; system applies the price for the tier the booking falls into. */}
                   {(() => {
                     const inherentlyUnlimited = !mileageForm.daily_mileage && !mileageForm.weekly_mileage && !mileageForm.monthly_mileage;
                     if (inherentlyUnlimited) {
@@ -957,7 +970,7 @@ export default function VehicleDetail() {
                           <div>
                             <p className="text-xs font-medium">Unlimited Mileage Upgrade</p>
                             <p className="text-[11px] text-muted-foreground mt-0.5">
-                              Offer customers a paid upgrade at checkout to drive without per-day limits.
+                              Flat charge offered at checkout. The price applied matches the booking's tier.
                             </p>
                           </div>
                           <Switch
@@ -968,19 +981,55 @@ export default function VehicleDetail() {
                           />
                         </div>
                         {mileageForm.unlimited_mileage_available && (
-                          <div className="space-y-1 max-w-xs">
-                            <label className="text-xs text-muted-foreground">Price per day *</label>
-                            <Input
-                              type="number"
-                              min="0.01"
-                              step="0.01"
-                              placeholder="e.g. 25"
-                              value={mileageForm.unlimited_mileage_price_per_day}
-                              onChange={(e) =>
-                                setMileageForm(prev => ({ ...prev, unlimited_mileage_price_per_day: e.target.value }))
-                              }
-                            />
-                          </div>
+                          <>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              <div className="space-y-1">
+                                <label className="text-xs text-muted-foreground">Daily flat *</label>
+                                <Input
+                                  type="number"
+                                  min="0.01"
+                                  step="0.01"
+                                  placeholder="e.g. 25"
+                                  value={mileageForm.unlimited_mileage_price_daily}
+                                  onChange={(e) =>
+                                    setMileageForm(prev => ({ ...prev, unlimited_mileage_price_daily: e.target.value }))
+                                  }
+                                />
+                                <p className="text-[10px] text-muted-foreground">&lt; 7 day bookings</p>
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs text-muted-foreground">Weekly flat *</label>
+                                <Input
+                                  type="number"
+                                  min="0.01"
+                                  step="0.01"
+                                  placeholder="e.g. 140"
+                                  value={mileageForm.unlimited_mileage_price_weekly}
+                                  onChange={(e) =>
+                                    setMileageForm(prev => ({ ...prev, unlimited_mileage_price_weekly: e.target.value }))
+                                  }
+                                />
+                                <p className="text-[10px] text-muted-foreground">7–29 day bookings</p>
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs text-muted-foreground">Monthly flat *</label>
+                                <Input
+                                  type="number"
+                                  min="0.01"
+                                  step="0.01"
+                                  placeholder="e.g. 600"
+                                  value={mileageForm.unlimited_mileage_price_monthly}
+                                  onChange={(e) =>
+                                    setMileageForm(prev => ({ ...prev, unlimited_mileage_price_monthly: e.target.value }))
+                                  }
+                                />
+                                <p className="text-[10px] text-muted-foreground">30+ day bookings</p>
+                              </div>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                              Leave a tier blank to disable the upgrade for that duration. At least one tier must be priced.
+                            </p>
+                          </>
                         )}
                       </div>
                     );
@@ -1007,18 +1056,51 @@ export default function VehicleDetail() {
                     />
                   </div>
                   {/* Unlimited Mileage Upgrade — show only when vehicle has at least one tier limit */}
-                  {(vehicle.daily_mileage != null || vehicle.weekly_mileage != null || vehicle.monthly_mileage != null) && (
-                    <div className="mt-4 pt-3 border-t border-border/60">
-                      <MetricItem
-                        label="Unlimited Mileage Upgrade"
-                        value={
-                          vehicle.unlimited_mileage_available && vehicle.unlimited_mileage_price_per_day && vehicle.unlimited_mileage_price_per_day > 0
-                            ? `Available · ${formatCurrency(vehicle.unlimited_mileage_price_per_day, tenant?.currency_code || 'USD')}/day`
-                            : 'Disabled'
-                        }
-                      />
-                    </div>
-                  )}
+                  {(vehicle.daily_mileage != null || vehicle.weekly_mileage != null || vehicle.monthly_mileage != null) && (() => {
+                    const cc = tenant?.currency_code || 'USD';
+                    const hasAnyPrice = (vehicle.unlimited_mileage_price_daily ?? 0) > 0
+                      || (vehicle.unlimited_mileage_price_weekly ?? 0) > 0
+                      || (vehicle.unlimited_mileage_price_monthly ?? 0) > 0;
+                    const enabled = vehicle.unlimited_mileage_available === true && hasAnyPrice;
+                    return (
+                      <div className="mt-4 pt-3 border-t border-border/60 space-y-2">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="text-xs text-muted-foreground">Unlimited Mileage Upgrade</span>
+                          <span className={`text-sm font-medium ${enabled ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                            {enabled ? 'Available' : 'Disabled'}
+                          </span>
+                        </div>
+                        {enabled && (
+                          <div className="grid grid-cols-3 gap-x-6 gap-y-1 pt-1">
+                            <div className="flex items-baseline justify-between">
+                              <span className="text-[11px] text-muted-foreground">Daily</span>
+                              <span className="text-xs font-medium">
+                                {vehicle.unlimited_mileage_price_daily && vehicle.unlimited_mileage_price_daily > 0
+                                  ? `${formatCurrency(vehicle.unlimited_mileage_price_daily, cc)} flat`
+                                  : '—'}
+                              </span>
+                            </div>
+                            <div className="flex items-baseline justify-between">
+                              <span className="text-[11px] text-muted-foreground">Weekly</span>
+                              <span className="text-xs font-medium">
+                                {vehicle.unlimited_mileage_price_weekly && vehicle.unlimited_mileage_price_weekly > 0
+                                  ? `${formatCurrency(vehicle.unlimited_mileage_price_weekly, cc)} flat`
+                                  : '—'}
+                              </span>
+                            </div>
+                            <div className="flex items-baseline justify-between">
+                              <span className="text-[11px] text-muted-foreground">Monthly</span>
+                              <span className="text-xs font-medium">
+                                {vehicle.unlimited_mileage_price_monthly && vehicle.unlimited_mileage_price_monthly > 0
+                                  ? `${formatCurrency(vehicle.unlimited_mileage_price_monthly, cc)} flat`
+                                  : '—'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </>
               )}
             </div>

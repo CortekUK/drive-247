@@ -58,6 +58,10 @@ interface Vehicle {
   weekly_mileage?: number | null;
   monthly_mileage?: number | null;
   excess_mileage_rate?: number | null;
+  unlimited_mileage_available?: boolean | null;
+  unlimited_mileage_price_daily?: number | null;
+  unlimited_mileage_price_weekly?: number | null;
+  unlimited_mileage_price_monthly?: number | null;
   status: string;
   photo_url?: string | null;
   vehicle_photos?: VehiclePhoto[];
@@ -404,7 +408,17 @@ const Pricing = () => {
                           {/* Mileage */}
                           {(() => {
                             const mileage = getMileageDisplay(vehicle, distanceUnit);
-                            const unlimited = getUnlimitedMileageOption(vehicle as any);
+                            // No booking duration on the fleet page yet; show "from <cheapest tier>" if upgrade is offered.
+                            const upgradePrices = vehicle.unlimited_mileage_available === true
+                              ? [
+                                  vehicle.unlimited_mileage_price_daily,
+                                  vehicle.unlimited_mileage_price_weekly,
+                                  vehicle.unlimited_mileage_price_monthly,
+                                ]
+                                  .map((p: any) => (p == null ? null : Number(p)))
+                                  .filter((n: any): n is number => Number.isFinite(n) && n > 0)
+                              : [];
+                            const minUpgrade = upgradePrices.length ? Math.min(...upgradePrices) : null;
                             return (
                               <>
                                 <div className="flex items-center gap-1.5 mt-2">
@@ -418,9 +432,9 @@ const Pricing = () => {
                                     </span>
                                   )}
                                 </div>
-                                {unlimited.available && (
+                                {minUpgrade != null && (
                                   <p className="text-[11px] text-accent/80 mt-1">
-                                    Unlimited mileage available · {formatCurrency(unlimited.pricePerDay, tenant?.currency_code || 'USD')}/day
+                                    Unlimited mileage upgrade available · from {formatCurrency(minUpgrade, tenant?.currency_code || 'USD')}
                                   </p>
                                 )}
                               </>

@@ -16,8 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, AlertTriangle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase, ExternalLink, Mail, Phone as PhoneIcon, MessageSquarePlus } from "lucide-react";
-import { EnquiryModal } from "@/components/enquiry/enquiry-modal";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, AlertTriangle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase, ExternalLink, Mail, Phone as PhoneIcon } from "lucide-react";
 import { BlurredImage } from "@/components/ui/blurred-image";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -83,7 +82,9 @@ interface Vehicle {
   monthly_mileage?: number | null;
   excess_mileage_rate?: number | null;
   unlimited_mileage_available?: boolean | null;
-  unlimited_mileage_price_per_day?: number | null;
+  unlimited_mileage_price_daily?: number | null;
+  unlimited_mileage_price_weekly?: number | null;
+  unlimited_mileage_price_monthly?: number | null;
 }
 interface PricingExtra {
   id: string;
@@ -155,7 +156,6 @@ const MultiStepBookingWidget = () => {
   const { data: customerDocuments } = useCustomerDocuments();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showBlockedDialog, setShowBlockedDialog] = useState(false);
-  const [enquiryOpen, setEnquiryOpen] = useState(false);
 
   // Gig driver state (restored from localStorage)
   const [isGigDriver, setIsGigDriver] = useState(() => {
@@ -3579,16 +3579,6 @@ const MultiStepBookingWidget = () => {
                 Select Your Vehicle
               </h3>
               <div className="flex items-center gap-2 shrink-0">
-                {tenant?.enquiries_enabled !== false && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs gap-1.5"
-                    onClick={() => setEnquiryOpen(true)}
-                  >
-                    <MessageSquarePlus className="w-3 h-3" /> Submit enquiry
-                  </Button>
-                )}
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:text-destructive hover:bg-destructive/10 hover:border-destructive text-xs gap-1.5 shrink-0">
@@ -3840,18 +3830,12 @@ const MultiStepBookingWidget = () => {
                 <Car className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-40" />
                 <p className="text-lg font-medium text-foreground mb-2">No vehicles match your filters</p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Try adjusting your dates or categories — or send us an enquiry and our team will follow up.
+                  Try adjusting your dates or categories — or send us an enquiry from the top navigation.
                 </p>
                 <div className="flex items-center justify-center gap-2 flex-wrap">
                   <Button variant="outline" onClick={clearAllFilters} className="border-primary/30">
                     Clear Filters
                   </Button>
-                  {tenant?.enquiries_enabled !== false && (
-                    <Button onClick={() => setEnquiryOpen(true)}>
-                      <MessageSquarePlus className="w-4 h-4 mr-2" />
-                      Submit an enquiry
-                    </Button>
-                  )}
                 </div>
               </Card> : <div className="max-h-[70vh] overflow-y-auto pr-2 vehicle-list-scroll" style={{ scrollbarGutter: 'stable' }}>
                 <div className={cn("grid gap-6", viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1")}>
@@ -3991,12 +3975,21 @@ const MultiStepBookingWidget = () => {
                                     <span>{getVehicleMileageDisplay(vehicle)}</span>
                                   </div>
                                   {(() => {
-                                    const um = getUnlimitedMileageOption(vehicle as any);
-                                    return um.available ? (
+                                    if (vehicle.unlimited_mileage_available !== true) return null;
+                                    const prices = [
+                                      vehicle.unlimited_mileage_price_daily,
+                                      vehicle.unlimited_mileage_price_weekly,
+                                      vehicle.unlimited_mileage_price_monthly,
+                                    ]
+                                      .map((p) => (p == null ? null : Number(p)))
+                                      .filter((n): n is number => Number.isFinite(n) && (n as number) > 0);
+                                    if (!prices.length) return null;
+                                    const min = Math.min(...prices);
+                                    return (
                                       <p className="text-[11px] text-accent/80 mt-1">
-                                        Unlimited mileage available · {formatCurrency(um.pricePerDay, currencyCode)}/day
+                                        Unlimited mileage upgrade available · from {formatCurrency(min, currencyCode)}
                                       </p>
-                                    ) : null;
+                                    );
                                   })()}
                                 </div>
                                 {isSelected && <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
@@ -4408,7 +4401,7 @@ const MultiStepBookingWidget = () => {
                     }
                     const totalAllowance = calculateTotalMileageAllowance(selectedVehicle, days, tenant?.monthly_tier_days ?? 30);
                     if (totalAllowance === null) return null;
-                    const unlimitedHint = getUnlimitedMileageOption(selectedVehicle as any);
+                    const unlimitedHint = getUnlimitedMileageOption(selectedVehicle as any, days, tenant?.monthly_tier_days ?? 30);
                     return (
                       <div className="text-xs space-y-1 pt-2 border-t border-border/30">
                         <div className="flex justify-between text-muted-foreground">
@@ -4423,7 +4416,7 @@ const MultiStepBookingWidget = () => {
                         )}
                         {unlimitedHint.available && (
                           <p className="text-[11px] text-accent/80 leading-snug">
-                            Unlimited mileage available at checkout · {formatCurrency(unlimitedHint.pricePerDay, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/day
+                            Unlimited mileage available at checkout · {formatCurrency(unlimitedHint.flatAmount, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} flat
                           </p>
                         )}
                       </div>
@@ -5983,11 +5976,6 @@ const MultiStepBookingWidget = () => {
       open={showBlockedDialog}
       onOpenChange={setShowBlockedDialog}
     />
-
-    {/* Enquiry Modal — accessible from the vehicle-selection step */}
-    {tenant?.enquiries_enabled !== false && (
-      <EnquiryModal open={enquiryOpen} onOpenChange={setEnquiryOpen} />
-    )}
   </>;
 };
 export default MultiStepBookingWidget;

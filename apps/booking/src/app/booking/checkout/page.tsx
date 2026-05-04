@@ -246,16 +246,14 @@ const BookingCheckoutContent = () => {
 
     const collectionFee = 0;
 
-    // Unlimited mileage upgrade — only counted when the vehicle exposes it AND the box is ticked.
-    const unlimitedOption = vehicleDetails
-      ? getUnlimitedMileageOption(vehicleDetails)
-      : { available: false, pricePerDay: 0 };
+    // Unlimited mileage upgrade — flat per-tier charge, only counted when the vehicle
+    // exposes it for the booking's tier AND the box is ticked.
     const rentalDaysForUnlimited = vehicleDetails ? Math.max(1, calculateRentalDays()) : 0;
+    const unlimitedOption = vehicleDetails
+      ? getUnlimitedMileageOption(vehicleDetails, rentalDaysForUnlimited, tenant?.monthly_tier_days ?? 30)
+      : { available: false, tier: 'daily' as const, flatAmount: 0 };
     const unlimitedMileageEffective = addUnlimitedMileage && unlimitedOption.available;
-    const unlimitedMileagePricePerDay = unlimitedMileageEffective ? unlimitedOption.pricePerDay : 0;
-    const unlimitedMileageTotal = unlimitedMileageEffective
-      ? unlimitedOption.pricePerDay * rentalDaysForUnlimited
-      : 0;
+    const unlimitedMileageTotal = unlimitedMileageEffective ? unlimitedOption.flatAmount : 0;
 
     const subtotal = discountedVehiclePrice + extrasTotal + deliveryFee + collectionFee + unlimitedMileageTotal;
 
@@ -289,7 +287,8 @@ const BookingCheckoutContent = () => {
       deposit,
       // Unlimited mileage upgrade
       unlimitedMileageAvailable: unlimitedOption.available,
-      unlimitedMileagePricePerDay: unlimitedOption.pricePerDay,
+      unlimitedMileageTier: unlimitedOption.tier,
+      unlimitedMileageFlat: unlimitedOption.flatAmount,
       unlimitedMileageEffective,
       unlimitedMileageTotal,
       unlimitedMileageDays: rentalDaysForUnlimited,
@@ -672,9 +671,9 @@ const BookingCheckoutContent = () => {
           discount_applied: currentTotals.discountAmount > 0 ? currentTotals.discountAmount : null,
           // Mileage snapshot from vehicle at time of booking
           ...mileageOverrides,
-          // Unlimited mileage upgrade — locked at booking time
+          // Unlimited mileage upgrade — locked at booking time as a flat per-tier charge
           is_unlimited_mileage: currentTotals.unlimitedMileageEffective,
-          unlimited_mileage_price_per_day: currentTotals.unlimitedMileageEffective ? currentTotals.unlimitedMileagePricePerDay : null,
+          unlimited_mileage_tier: currentTotals.unlimitedMileageEffective ? currentTotals.unlimitedMileageTier : null,
           unlimited_mileage_total: currentTotals.unlimitedMileageEffective ? currentTotals.unlimitedMileageTotal : null,
         } as any)
         .select()
@@ -696,7 +695,7 @@ const BookingCheckoutContent = () => {
           category: "Unlimited Mileage",
           amount: currentTotals.unlimitedMileageTotal,
           remaining_amount: currentTotals.unlimitedMileageTotal,
-          reference: `Unlimited mileage: ${formatCurrency(currentTotals.unlimitedMileagePricePerDay)}/day × ${currentTotals.unlimitedMileageDays} day${currentTotals.unlimitedMileageDays === 1 ? "" : "s"}`,
+          reference: `Unlimited mileage (${currentTotals.unlimitedMileageTier} tier): ${formatCurrency(currentTotals.unlimitedMileageTotal)} flat`,
         });
         if (unlimitedLedgerError) {
           console.error("Failed to insert Unlimited Mileage ledger entry:", unlimitedLedgerError);
@@ -1035,13 +1034,13 @@ const BookingCheckoutContent = () => {
                         />
                       </div>
                       <div className="mt-3 flex items-baseline justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          {formatCurrency(totals.unlimitedMileagePricePerDay)}/day × {totals.unlimitedMileageDays} day{totals.unlimitedMileageDays === 1 ? "" : "s"}
+                        <span className="text-muted-foreground capitalize">
+                          {totals.unlimitedMileageTier} tier · flat charge
                         </span>
                         <span className="font-semibold">
                           {addUnlimitedMileage
                             ? `+${formatCurrency(totals.unlimitedMileageTotal)}`
-                            : formatCurrency(totals.unlimitedMileagePricePerDay * totals.unlimitedMileageDays)}
+                            : formatCurrency(totals.unlimitedMileageFlat)}
                         </span>
                       </div>
                     </div>
@@ -1183,8 +1182,8 @@ const BookingCheckoutContent = () => {
                       Unlimited Mileage
                     </p>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {formatCurrency(totals.unlimitedMileagePricePerDay)}/day × {totals.unlimitedMileageDays} day{totals.unlimitedMileageDays === 1 ? "" : "s"}
+                      <span className="text-muted-foreground capitalize">
+                        {totals.unlimitedMileageTier} tier · flat charge
                       </span>
                       <span className="font-medium">+{formatCurrency(totals.unlimitedMileageTotal)}</span>
                     </div>

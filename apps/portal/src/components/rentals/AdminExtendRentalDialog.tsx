@@ -416,38 +416,66 @@ export function AdminExtendRentalDialog({
         if (ledgerError) console.error('Failed to create ledger entries:', ledgerError);
       }
 
-      // Unlimited Mileage extension delta — when extending an unlimited rental,
-      // charge price_per_day × extra_days as a separate ledger row and bump the
-      // rental's `unlimited_mileage_total` so the on-rental snapshot stays accurate.
+      // Unlimited Mileage extension — flat per-tier charge carries through. If the
+      // extension pushes the booking into a higher tier (daily → weekly → monthly)
+      // we charge the delta between the new tier's flat amount and what was already
+      // booked. Same tier = no extra charge (flat already covers the whole rental).
       try {
         const { data: rentalSnap } = await (supabase as any)
           .from('rentals')
-          .select('is_unlimited_mileage, unlimited_mileage_price_per_day, unlimited_mileage_total')
+          .select('is_unlimited_mileage, unlimited_mileage_tier, unlimited_mileage_total, vehicle_id, start_date')
           .eq('id', rental.id)
           .single();
-        if (
-          rentalSnap?.is_unlimited_mileage === true &&
-          rentalSnap?.unlimited_mileage_price_per_day != null &&
-          extensionDays > 0
-        ) {
-          const perDay = Number(rentalSnap.unlimited_mileage_price_per_day);
-          const delta = Number((perDay * extensionDays).toFixed(2));
-          if (delta > 0) {
-            const { error: umError } = await (supabase as any).from('ledger_entries').insert({
-              ...baseLedger,
-              category: 'Unlimited Mileage',
-              reference: `Extension #${extNum}: Unlimited mileage (${extensionDays} day${extensionDays !== 1 ? 's' : ''})`,
-              amount: delta,
-              remaining_amount: delta,
-            });
-            if (umError) console.error('Failed to insert Unlimited Mileage extension delta:', umError);
+        if (rentalSnap?.is_unlimited_mileage === true && rentalSnap?.unlimited_mileage_tier && extensionDays > 0) {
+          const tierRank: Record<string, number> = { daily: 0, weekly: 1, monthly: 2 };
+          const oldTier = String(rentalSnap.unlimited_mileage_tier);
+          const _mtd = tenant?.monthly_tier_days ?? 30;
+          const newCombinedDays = Math.max(
+            1,
+            Math.ceil((new Date(newEndDate).getTime() - new Date(rentalSnap.start_date).getTime()) / (1000 * 60 * 60 * 24)),
+          );
+          const newTier = getMileageTier(newCombinedDays, _mtd);
 
-            const newTotal = Number((Number(rentalSnap.unlimited_mileage_total ?? 0) + delta).toFixed(2));
-            const { error: bumpError } = await (supabase as any)
-              .from('rentals')
-              .update({ unlimited_mileage_total: newTotal })
-              .eq('id', rental.id);
-            if (bumpError) console.error('Failed to update unlimited_mileage_total:', bumpError);
+          if (tierRank[newTier] > tierRank[oldTier]) {
+            const { data: vehicleSnap } = await (supabase as any)
+              .from('vehicles')
+              .select('unlimited_mileage_price_daily, unlimited_mileage_price_weekly, unlimited_mileage_price_monthly')
+              .eq('id', rentalSnap.vehicle_id)
+              .single();
+            const tierColumn = newTier === 'daily'
+              ? 'unlimited_mileage_price_daily'
+              : newTier === 'weekly'
+                ? 'unlimited_mileage_price_weekly'
+                : 'unlimited_mileage_price_monthly';
+            const newFlatRaw = vehicleSnap?.[tierColumn];
+            const newFlat = newFlatRaw != null ? Number(newFlatRaw) : null;
+            const oldTotal = Number(rentalSnap.unlimited_mileage_total ?? 0);
+
+            if (newFlat != null && newFlat > 0 && newFlat > oldTotal) {
+              const delta = Number((newFlat - oldTotal).toFixed(2));
+              const { error: umError } = await (supabase as any).from('ledger_entries').insert({
+                ...baseLedger,
+                category: 'Unlimited Mileage',
+                reference: `Extension #${extNum}: Unlimited mileage tier upgrade (${oldTier} → ${newTier})`,
+                amount: delta,
+                remaining_amount: delta,
+              });
+              if (umError) console.error('Failed to insert Unlimited Mileage extension delta:', umError);
+
+              const { error: bumpError } = await (supabase as any)
+                .from('rentals')
+                .update({
+                  unlimited_mileage_tier: newTier,
+                  unlimited_mileage_total: Number(newFlat.toFixed(2)),
+                })
+                .eq('id', rental.id);
+              if (bumpError) console.error('Failed to update unlimited_mileage tier/total:', bumpError);
+            } else if (newFlat == null) {
+              // Vehicle has no flat price configured for the new tier — leave the
+              // rental's locked tier/total untouched. Operators can add a manual
+              // adjustment if they want to charge for the tier jump.
+              console.warn(`Vehicle ${rentalSnap.vehicle_id} has no ${newTier}-tier unlimited price; tier-jump delta skipped.`);
+            }
           }
         }
       } catch (umErr) {

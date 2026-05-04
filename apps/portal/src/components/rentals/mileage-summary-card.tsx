@@ -38,7 +38,7 @@ interface RentalOverrides {
   monthly_mileage_override: number | null;
   excess_mileage_rate_override: number | null;
   is_unlimited_mileage: boolean | null;
-  unlimited_mileage_price_per_day: number | null;
+  unlimited_mileage_tier: 'daily' | 'weekly' | 'monthly' | null;
   unlimited_mileage_total: number | null;
 }
 
@@ -100,7 +100,7 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
     queryFn: async () => {
       const { data, error } = await supabase
         .from("rentals")
-        .select("daily_mileage_override, weekly_mileage_override, monthly_mileage_override, excess_mileage_rate_override, is_unlimited_mileage, unlimited_mileage_price_per_day, unlimited_mileage_total")
+        .select("daily_mileage_override, weekly_mileage_override, monthly_mileage_override, excess_mileage_rate_override, is_unlimited_mileage, unlimited_mileage_tier, unlimited_mileage_total")
         .eq("id", rentalId)
         .single();
 
@@ -314,15 +314,14 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm">
                 <DollarSign className="h-4 w-4 text-primary" />
-                {rentalOverrides?.unlimited_mileage_price_per_day != null && rentalDays > 0 ? (
+                {rentalOverrides?.unlimited_mileage_total != null && Number(rentalOverrides.unlimited_mileage_total) > 0 ? (
                   <span className="text-muted-foreground">
-                    {formatCurrency(rentalOverrides.unlimited_mileage_price_per_day, currencyCode)}/day × {rentalDays} day{rentalDays !== 1 ? 's' : ''} =
-                    {' '}
+                    {rentalOverrides.unlimited_mileage_tier && (
+                      <span className="capitalize">{rentalOverrides.unlimited_mileage_tier} tier · </span>
+                    )}
+                    flat charge:{' '}
                     <span className="font-semibold text-foreground">
-                      {formatCurrency(
-                        Number(rentalOverrides.unlimited_mileage_total ?? rentalOverrides.unlimited_mileage_price_per_day * rentalDays),
-                        currencyCode,
-                      )}
+                      {formatCurrency(Number(rentalOverrides.unlimited_mileage_total), currencyCode)}
                     </span>
                   </span>
                 ) : (

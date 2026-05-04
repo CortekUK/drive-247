@@ -7565,7 +7565,7 @@ export type Database = {
           start_date: string
           status: string | null
           tenant_id: string | null
-          unlimited_mileage_price_per_day: number | null
+          unlimited_mileage_tier: string | null
           unlimited_mileage_total: number | null
           updated_at: string
           uses_delivery_service: boolean | null
@@ -7652,7 +7652,7 @@ export type Database = {
           start_date: string
           status?: string | null
           tenant_id?: string | null
-          unlimited_mileage_price_per_day?: number | null
+          unlimited_mileage_tier?: string | null
           unlimited_mileage_total?: number | null
           updated_at?: string
           uses_delivery_service?: boolean | null
@@ -7739,7 +7739,7 @@ export type Database = {
           start_date?: string
           status?: string | null
           tenant_id?: string | null
-          unlimited_mileage_price_per_day?: number | null
+          unlimited_mileage_tier?: string | null
           unlimited_mileage_total?: number | null
           updated_at?: string
           uses_delivery_service?: boolean | null
@@ -9908,7 +9908,9 @@ export type Database = {
           tesla_fleet_enabled: boolean | null
           tesla_fleet_vehicle_id: string | null
           unlimited_mileage_available: boolean
-          unlimited_mileage_price_per_day: number | null
+          unlimited_mileage_price_daily: number | null
+          unlimited_mileage_price_monthly: number | null
+          unlimited_mileage_price_weekly: number | null
           updated_at: string
           vin: string | null
           warranty_end_date: string | null
@@ -9975,7 +9977,9 @@ export type Database = {
           tesla_fleet_enabled?: boolean | null
           tesla_fleet_vehicle_id?: string | null
           unlimited_mileage_available?: boolean
-          unlimited_mileage_price_per_day?: number | null
+          unlimited_mileage_price_daily?: number | null
+          unlimited_mileage_price_monthly?: number | null
+          unlimited_mileage_price_weekly?: number | null
           updated_at?: string
           vin?: string | null
           warranty_end_date?: string | null
@@ -10042,7 +10046,9 @@ export type Database = {
           tesla_fleet_enabled?: boolean | null
           tesla_fleet_vehicle_id?: string | null
           unlimited_mileage_available?: boolean
-          unlimited_mileage_price_per_day?: number | null
+          unlimited_mileage_price_daily?: number | null
+          unlimited_mileage_price_monthly?: number | null
+          unlimited_mileage_price_weekly?: number | null
           updated_at?: string
           vin?: string | null
           warranty_end_date?: string | null

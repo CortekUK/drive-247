@@ -48,28 +48,58 @@ export function isUnlimitedMileage(vehicle: VehicleMileage): boolean {
 
 interface UnlimitedUpgradeVehicle extends VehicleMileage {
   unlimited_mileage_available?: boolean | null;
-  unlimited_mileage_price_per_day?: number | string | null;
+  unlimited_mileage_price_daily?: number | string | null;
+  unlimited_mileage_price_weekly?: number | string | null;
+  unlimited_mileage_price_monthly?: number | string | null;
+}
+
+export interface UnlimitedMileagePrices {
+  daily: number | null;
+  weekly: number | null;
+  monthly: number | null;
 }
 
 export interface UnlimitedMileageOption {
   /** Should the customer be shown the opt-in at checkout? */
   available: boolean;
-  /** Per-day upcharge (0 when not available). */
-  pricePerDay: number;
+  /** Which tier this booking falls into. */
+  tier: MileageTier;
+  /** Flat amount the customer is charged for the upgrade on this booking (0 when not available). */
+  flatAmount: number;
+}
+
+const toNumberOrNull = (raw: number | string | null | undefined): number | null => {
+  if (raw == null) return null;
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+/** Read the three configured tier prices off a vehicle row. */
+export function getUnlimitedMileagePrices(vehicle: UnlimitedUpgradeVehicle): UnlimitedMileagePrices {
+  return {
+    daily: toNumberOrNull(vehicle.unlimited_mileage_price_daily),
+    weekly: toNumberOrNull(vehicle.unlimited_mileage_price_weekly),
+    monthly: toNumberOrNull(vehicle.unlimited_mileage_price_monthly),
+  };
 }
 
 /**
  * Decide whether the unlimited-mileage upgrade should be exposed to the
- * customer for this vehicle. Vehicles that are inherently unlimited (no tier
- * limits set) skip the upgrade — it would be redundant.
+ * customer for this vehicle/booking. Vehicles that are inherently unlimited
+ * (no tier limits set) skip the upgrade — it would be redundant.
+ *
+ * The price is a flat amount keyed to the booking's tier.
  */
-export function getUnlimitedMileageOption(vehicle: UnlimitedUpgradeVehicle): UnlimitedMileageOption {
-  if (isUnlimitedMileage(vehicle)) return { available: false, pricePerDay: 0 };
-  const enabled = vehicle.unlimited_mileage_available === true;
-  const raw = vehicle.unlimited_mileage_price_per_day;
-  const price = typeof raw === 'number' ? raw : raw != null ? Number(raw) : 0;
-  if (!enabled || !Number.isFinite(price) || price <= 0) {
-    return { available: false, pricePerDay: 0 };
-  }
-  return { available: true, pricePerDay: price };
+export function getUnlimitedMileageOption(
+  vehicle: UnlimitedUpgradeVehicle,
+  rentalDays: number,
+  monthlyTierDays: number = 30,
+): UnlimitedMileageOption {
+  const tier = getMileageTier(Math.max(1, rentalDays), monthlyTierDays);
+  if (isUnlimitedMileage(vehicle)) return { available: false, tier, flatAmount: 0 };
+  if (vehicle.unlimited_mileage_available !== true) return { available: false, tier, flatAmount: 0 };
+  const prices = getUnlimitedMileagePrices(vehicle);
+  const flat = prices[tier];
+  if (flat == null) return { available: false, tier, flatAmount: 0 };
+  return { available: true, tier, flatAmount: flat };
 }

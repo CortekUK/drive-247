@@ -203,8 +203,9 @@ const CreateRental = () => {
   const [excessRateOverride, setExcessRateOverride] = useState<number | null>(null);
 
   // Unlimited Mileage upgrade — operator can grant on any vehicle, regardless of vehicle setting.
+  // Flat amount keyed to the booking's tier; pre-fills from vehicle's tier-applicable column.
   const [unlimitedMileageEnabled, setUnlimitedMileageEnabled] = useState(false);
-  const [unlimitedMileagePricePerDay, setUnlimitedMileagePricePerDay] = useState<number | null>(null);
+  const [unlimitedMileageFlat, setUnlimitedMileageFlat] = useState<number | null>(null);
 
   // Verification override state — admin can override document type per-rental
   const [verificationDocTypeOverride, setVerificationDocTypeOverride] = useState<string | null>(null);
@@ -1302,15 +1303,17 @@ const CreateRental = () => {
         weekly_mileage_override: weeklyMileageOverride,
         monthly_mileage_override: monthlyMileageOverride,
         excess_mileage_rate_override: excessRateOverride,
-        // Unlimited mileage upgrade — locked at booking time
+        // Unlimited mileage upgrade — locked at booking time as a flat per-tier charge
         is_unlimited_mileage: unlimitedMileageEnabled,
-        unlimited_mileage_price_per_day: unlimitedMileageEnabled ? unlimitedMileagePricePerDay : null,
-        unlimited_mileage_total: (() => {
-          if (!unlimitedMileageEnabled || !unlimitedMileagePricePerDay) return null;
-          if (!watchedStartDate || !watchedEndDate) return null;
-          const days = Math.max(1, differenceInDays(watchedEndDate, watchedStartDate));
-          return Number((unlimitedMileagePricePerDay * days).toFixed(2));
-        })(),
+        unlimited_mileage_tier: unlimitedMileageEnabled && watchedStartDate && watchedEndDate
+          ? getMileageTier(
+              Math.max(1, differenceInDays(watchedEndDate, watchedStartDate)),
+              tenant?.monthly_tier_days ?? 30,
+            )
+          : null,
+        unlimited_mileage_total: unlimitedMileageEnabled && unlimitedMileageFlat
+          ? Number(unlimitedMileageFlat.toFixed(2))
+          : null,
         has_installment_plan: !isPayAsYouGo && installmentPlanType !== 'full' && rentalSettings?.installments_enabled,
         is_pay_as_you_go: isPayAsYouGo,
         // PAYG accrual state (nullable — only set when PAYG)
@@ -1334,26 +1337,25 @@ const CreateRental = () => {
 
       // Insert ledger entry for the unlimited-mileage upgrade if granted at creation.
       // Non-fatal — rental row carries the data so we can recover.
-      if (unlimitedMileageEnabled && unlimitedMileagePricePerDay && watchedStartDate && watchedEndDate) {
+      if (unlimitedMileageEnabled && unlimitedMileageFlat && unlimitedMileageFlat > 0 && watchedStartDate && watchedEndDate) {
         const _days = Math.max(1, differenceInDays(watchedEndDate, watchedStartDate));
-        const _total = Number((unlimitedMileagePricePerDay * _days).toFixed(2));
-        if (_total > 0) {
-          const { error: umLedgerError } = await (supabase as any).from("ledger_entries").insert({
-            customer_id: rental.customer_id,
-            rental_id: rental.id,
-            vehicle_id: rental.vehicle_id,
-            tenant_id: tenant?.id,
-            entry_date: rental.start_date,
-            due_date: rental.start_date,
-            type: "Charge",
-            category: "Unlimited Mileage",
-            amount: _total,
-            remaining_amount: _total,
-            reference: `Unlimited mileage: ${formatCurrency(unlimitedMileagePricePerDay, tenant?.currency_code || 'USD')}/day × ${_days} day${_days === 1 ? '' : 's'}`,
-          });
-          if (umLedgerError) {
-            console.error("Failed to insert Unlimited Mileage ledger entry:", umLedgerError);
-          }
+        const _tier = getMileageTier(_days, tenant?.monthly_tier_days ?? 30);
+        const _total = Number(unlimitedMileageFlat.toFixed(2));
+        const { error: umLedgerError } = await (supabase as any).from("ledger_entries").insert({
+          customer_id: rental.customer_id,
+          rental_id: rental.id,
+          vehicle_id: rental.vehicle_id,
+          tenant_id: tenant?.id,
+          entry_date: rental.start_date,
+          due_date: rental.start_date,
+          type: "Charge",
+          category: "Unlimited Mileage",
+          amount: _total,
+          remaining_amount: _total,
+          reference: `Unlimited mileage (${_tier} tier): ${formatCurrency(_total, tenant?.currency_code || 'USD')} flat`,
+        });
+        if (umLedgerError) {
+          console.error("Failed to insert Unlimited Mileage ledger entry:", umLedgerError);
         }
       }
 
@@ -2623,13 +2625,10 @@ const CreateRental = () => {
                                             setWeeklyMileageOverride(null);
                                             setMonthlyMileageOverride(null);
                                             setExcessRateOverride(null);
-                                            // Reset unlimited-mileage toggle and prefill price from vehicle defaults.
+                                            // Reset unlimited-mileage toggle; tier-applicable price will be
+                                            // computed once dates are picked (effect below).
                                             setUnlimitedMileageEnabled(false);
-                                            setUnlimitedMileagePricePerDay(
-                                              vehicle.unlimited_mileage_price_per_day != null
-                                                ? Number(vehicle.unlimited_mileage_price_per_day)
-                                                : null
-                                            );
+                                            setUnlimitedMileageFlat(null);
                                             setLockboxCodeInput(vehicle.lockbox_code || '');
                                             // Reset dates when vehicle changes so user picks dates valid for this vehicle
                                             form.setValue("start_date", undefined as any);
@@ -3973,52 +3972,80 @@ const CreateRental = () => {
                         </div>
                       )}
 
-                      {/* Unlimited Mileage Upgrade — operator can grant on any vehicle */}
-                      <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium">Unlimited Mileage</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Override tier limits and charge a flat per-day fee for unlimited driving.
-                            </p>
-                          </div>
-                          <Switch
-                            checked={unlimitedMileageEnabled}
-                            onCheckedChange={(checked) => setUnlimitedMileageEnabled(checked === true)}
-                          />
-                        </div>
-                        {unlimitedMileageEnabled && (
-                          <>
-                            <div className="flex items-center gap-3">
-                              <Label className="text-sm text-muted-foreground whitespace-nowrap">Price per day *</Label>
-                              <CurrencyInput
-                                value={unlimitedMileagePricePerDay ?? 0}
-                                onChange={(val) => {
-                                  const num = typeof val === 'string' ? parseFloat(val) : val;
-                                  setUnlimitedMileagePricePerDay(isNaN(num) ? null : num);
-                                }}
-                                currencySymbol={currencySymbol}
-                                className="w-32"
-                              />
-                              <span className="text-xs text-muted-foreground">/day</span>
-                            </div>
-                            {unlimitedMileagePricePerDay != null && unlimitedMileagePricePerDay > 0 ? (
-                              <div className="rounded-md bg-background border p-3 flex items-center justify-between">
-                                <span className="text-sm text-muted-foreground">
-                                  {formatCurrency(unlimitedMileagePricePerDay, mCurrency)}/day × {days} day{days !== 1 ? 's' : ''}
-                                </span>
-                                <span className="text-sm font-bold">
-                                  {formatCurrency(Number((unlimitedMileagePricePerDay * days).toFixed(2)), mCurrency)}
-                                </span>
+                      {/* Unlimited Mileage Upgrade — operator can grant on any vehicle, regardless of vehicle setting.
+                          Price is a flat amount keyed to the booking's tier; pre-filled from vehicle defaults. */}
+                      {(() => {
+                        const tierColumn = tier === 'daily'
+                          ? 'unlimited_mileage_price_daily'
+                          : tier === 'weekly'
+                            ? 'unlimited_mileage_price_weekly'
+                            : 'unlimited_mileage_price_monthly';
+                        const vehicleTierPrice = vehicle[tierColumn] != null ? Number(vehicle[tierColumn]) : null;
+                        const tierLabel = tier === 'daily' ? 'Daily' : tier === 'weekly' ? 'Weekly' : 'Monthly';
+                        return (
+                          <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium">Unlimited Mileage</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  Override tier limits with a flat charge for unlimited driving on this booking.
+                                </p>
                               </div>
-                            ) : (
-                              <p className="text-xs text-amber-600 dark:text-amber-400">
-                                Set a price greater than 0 before saving.
-                              </p>
+                              <Switch
+                                checked={unlimitedMileageEnabled}
+                                onCheckedChange={(checked) => {
+                                  const enabled = checked === true;
+                                  setUnlimitedMileageEnabled(enabled);
+                                  // On enable: pre-fill from the vehicle's tier-applicable price (if any).
+                                  // On disable: clear so toggling back on re-prefills (in case dates changed).
+                                  if (enabled) {
+                                    setUnlimitedMileageFlat(
+                                      vehicleTierPrice != null && vehicleTierPrice > 0 ? vehicleTierPrice : null,
+                                    );
+                                  } else {
+                                    setUnlimitedMileageFlat(null);
+                                  }
+                                }}
+                              />
+                            </div>
+                            {unlimitedMileageEnabled && (
+                              <>
+                                <div className="flex items-center gap-3">
+                                  <Label className="text-sm text-muted-foreground whitespace-nowrap">Flat charge *</Label>
+                                  <CurrencyInput
+                                    value={unlimitedMileageFlat ?? 0}
+                                    onChange={(val) => {
+                                      const num = typeof val === 'string' ? parseFloat(val) : val;
+                                      setUnlimitedMileageFlat(isNaN(num) ? null : num);
+                                    }}
+                                    currencySymbol={currencySymbol}
+                                    className="w-36"
+                                  />
+                                  <span className="text-xs text-muted-foreground">
+                                    {tierLabel} tier · {days} day{days !== 1 ? 's' : ''}
+                                  </span>
+                                </div>
+                                {unlimitedMileageFlat != null && unlimitedMileageFlat > 0 ? (
+                                  <div className="rounded-md bg-background border p-3 flex items-center justify-between">
+                                    <span className="text-sm text-muted-foreground capitalize">
+                                      {tier} tier flat charge
+                                    </span>
+                                    <span className="text-sm font-bold">
+                                      {formatCurrency(Number(unlimitedMileageFlat.toFixed(2)), mCurrency)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                                    {vehicleTierPrice == null
+                                      ? `Vehicle has no ${tier} tier price configured — set a flat charge to grant the upgrade.`
+                                      : 'Set a price greater than 0 before saving.'}
+                                  </p>
+                                )}
+                              </>
                             )}
-                          </>
-                        )}
-                      </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Tier-based UI — hidden when the unlimited upgrade is granted */}
                       {!unlimitedMileageEnabled && (() => {

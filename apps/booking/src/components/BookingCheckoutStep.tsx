@@ -111,13 +111,14 @@ export default function BookingCheckoutStep({
   const [bonzahPolicyId, setBonzahPolicyId] = useState<string | null>(null);
 
   // Unlimited Mileage upgrade — opt-in at checkout, locked into the rental at booking time.
+  // Flat charge keyed to the booking's tier (daily/weekly/monthly).
   const [addUnlimitedMileage, setAddUnlimitedMileage] = useState(false);
-  const unlimitedOption = selectedVehicle ? getUnlimitedMileageOption(selectedVehicle) : { available: false, pricePerDay: 0 };
   const unlimitedRentalDays = Math.max(1, rentalDuration?.days || 0);
+  const unlimitedOption = selectedVehicle
+    ? getUnlimitedMileageOption(selectedVehicle, unlimitedRentalDays, tenant?.monthly_tier_days ?? 30)
+    : { available: false, tier: 'daily' as const, flatAmount: 0 };
   const unlimitedMileageEffective = addUnlimitedMileage && unlimitedOption.available;
-  const unlimitedMileageTotal = unlimitedMileageEffective
-    ? Number((unlimitedOption.pricePerDay * unlimitedRentalDays).toFixed(2))
-    : 0;
+  const unlimitedMileageTotal = unlimitedMileageEffective ? unlimitedOption.flatAmount : 0;
 
   // Checkout progress overlay
   const [checkoutProgress, setCheckoutProgress] = useState(0);
@@ -1017,9 +1018,9 @@ export default function BookingCheckoutStep({
         delivery_fee: pickupDeliveryFee || 0,
         collection_fee: returnDeliveryFee || 0,
         is_gig_driver: (bookingContext as any)?.isGigDriver === true,
-        // Unlimited mileage upgrade — locked at booking time
+        // Unlimited mileage upgrade — locked at booking time as a flat per-tier charge
         is_unlimited_mileage: unlimitedMileageEffective,
-        unlimited_mileage_price_per_day: unlimitedMileageEffective ? unlimitedOption.pricePerDay : null,
+        unlimited_mileage_tier: unlimitedMileageEffective ? unlimitedOption.tier : null,
         unlimited_mileage_total: unlimitedMileageEffective ? unlimitedMileageTotal : null,
       };
 
@@ -1078,7 +1079,7 @@ export default function BookingCheckoutStep({
           category: "Unlimited Mileage",
           amount: unlimitedMileageTotal,
           remaining_amount: unlimitedMileageTotal,
-          reference: `Unlimited mileage: ${fmt(unlimitedOption.pricePerDay)}/day × ${unlimitedRentalDays} day${unlimitedRentalDays === 1 ? "" : "s"}`,
+          reference: `Unlimited mileage (${unlimitedOption.tier} tier): ${fmt(unlimitedMileageTotal)} flat`,
         });
         if (umLedgerError) {
           console.error("Failed to insert Unlimited Mileage ledger entry:", umLedgerError);
@@ -1584,14 +1585,14 @@ export default function BookingCheckoutStep({
                     />
                   </div>
                   <div className="mt-4 flex items-baseline justify-between gap-3 pt-3 border-t border-border/50">
-                    <span className="text-xs text-muted-foreground">
-                      {fmt(unlimitedOption.pricePerDay)}/day × {unlimitedRentalDays} day{unlimitedRentalDays === 1 ? "" : "s"}
+                    <span className="text-xs text-muted-foreground capitalize">
+                      {unlimitedOption.tier} tier · flat charge
                     </span>
                     <span className={cn(
                       "text-lg font-bold",
                       addUnlimitedMileage ? "text-accent" : "text-foreground"
                     )}>
-                      {addUnlimitedMileage ? "+" : ""}{fmt(unlimitedMileageTotal || unlimitedOption.pricePerDay * unlimitedRentalDays)}
+                      {addUnlimitedMileage ? "+" : ""}{fmt(unlimitedOption.flatAmount)}
                     </span>
                   </div>
                 </div>
@@ -1925,8 +1926,8 @@ export default function BookingCheckoutStep({
                       <span className="text-muted-foreground flex items-center gap-1">
                         <InfinityIcon className="w-3 h-3" />
                         Unlimited Mileage
-                        <span className="text-xs text-muted-foreground/70 ml-1">
-                          ({fmt(unlimitedOption.pricePerDay)}/day × {unlimitedRentalDays}d)
+                        <span className="text-xs text-muted-foreground/70 ml-1 capitalize">
+                          ({unlimitedOption.tier} tier)
                         </span>
                       </span>
                       <span className="font-medium">{fmt(unlimitedMileageTotal)}</span>
@@ -1953,7 +1954,7 @@ export default function BookingCheckoutStep({
                         Add Unlimited Mileage
                       </span>
                       <span className="text-sm font-semibold text-accent">
-                        +{fmt(unlimitedOption.pricePerDay * unlimitedRentalDays)}
+                        +{fmt(unlimitedOption.flatAmount)}
                       </span>
                     </button>
                   )}

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu, Phone, X, User, LogIn, LogOut, ChevronDown, LayoutDashboard } from 'lucide-react';
+import { Menu, Phone, X, User, LogIn, LogOut, ChevronDown, LayoutDashboard, MessageSquarePlus } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -10,6 +10,7 @@ import { useSiteSettings } from '@/hooks/useSiteSettings';
 import { useTenant } from '@/contexts/TenantContext';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { AuthPromptDialog } from '@/components/booking/AuthPromptDialog';
+import { EnquiryModal } from '@/components/enquiry/enquiry-modal';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +25,7 @@ const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { settings } = useSiteSettings();
@@ -174,17 +176,27 @@ const Navigation = () => {
                   className="text-sm font-medium border-accent/50 hover:bg-accent hover:text-accent-foreground text-foreground"
                 >
                   <LogIn className="w-4 h-4 mr-2" />
-                  Login / Sign Up
+                  Login
                 </Button>
               )
             )}
-            <ThemeToggle />
+            {tenant?.enquiries_enabled !== false && (
+              <Button
+                variant="outline"
+                onClick={() => setEnquiryOpen(true)}
+                className="text-sm font-medium border-accent/50 hover:bg-accent hover:text-accent-foreground text-foreground"
+              >
+                <MessageSquarePlus className="w-4 h-4 mr-2" />
+                Enquiry
+              </Button>
+            )}
             <a href={`tel:${phoneLink}`}>
               <Button className="gradient-accent shadow-glow text-sm font-semibold whitespace-nowrap">
                 <Phone className="w-4 h-4 2xl:mr-2" />
                 <span className="hidden 2xl:inline">{phoneDisplay}</span>
               </Button>
             </a>
+            <ThemeToggle />
           </div>
 
           {/* Mobile Header Actions */}
@@ -239,6 +251,19 @@ const Navigation = () => {
                 {link.label}
               </Link>
             ))}
+            {tenant?.enquiries_enabled !== false && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsOpen(false);
+                  setEnquiryOpen(true);
+                }}
+                className="w-full text-sm font-medium border-accent/50 hover:bg-accent hover:text-accent-foreground text-foreground"
+              >
+                <MessageSquarePlus className="w-4 h-4 mr-2" />
+                Enquiry
+              </Button>
+            )}
             {/* Authenticated-only: keep account access in mobile menu. */}
             {/* Login/Sign Up and phone CTA intentionally hidden on mobile — */}
             {/* they live in the header/hero instead to keep the drawer focused on navigation. */}
@@ -290,6 +315,9 @@ const Navigation = () => {
           router.push('/portal');
         }}
       />
+
+      {/* Enquiry modal triggered from the navbar Submit-enquiry button */}
+      <EnquiryModal open={enquiryOpen} onOpenChange={setEnquiryOpen} />
     </nav>
   );
 };

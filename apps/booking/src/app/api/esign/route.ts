@@ -157,13 +157,13 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
             return vehicle?.monthly_mileage?.toString() || '';
         })(),
         // Unlimited-mileage upgrade — true/false strings for {{is_unlimited_mileage}} conditionals,
-        // plus the per-day rate and total upcharge for breakdown rendering.
+        // plus the booking tier and flat upcharge total for breakdown rendering.
         is_unlimited_mileage: rental?.is_unlimited_mileage ? 'true' : 'false',
+        unlimited_mileage_tier: rental?.is_unlimited_mileage
+            ? (rental?.unlimited_mileage_tier || '')
+            : '',
         unlimited_mileage_total: rental?.is_unlimited_mileage
             ? formatCurrency(rental?.unlimited_mileage_total, cc)
-            : '',
-        unlimited_mileage_price_per_day: rental?.is_unlimited_mileage
-            ? formatCurrency(rental?.unlimited_mileage_price_per_day, cc)
             : '',
 
         // Rental

@@ -470,7 +470,7 @@ export default function BookingDetailPage() {
           is_pay_as_you_go, payg_start_ts, payg_next_accrual_at, payg_last_reminder_sent_at,
           payg_reminder_count, payg_reminder_interval_days, payg_paused, payg_closed_at,
           payg_accrual_day_count,
-          is_unlimited_mileage, unlimited_mileage_price_per_day, unlimited_mileage_total,
+          is_unlimited_mileage, unlimited_mileage_tier, unlimited_mileage_total,
           vehicles:vehicle_id (id, reg, make, model, colour, photo_url, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, vehicle_photos (photo_url)),
           installment_plans!installment_plans_rental_id_fkey (id, plan_type, status, total_installable_amount, upfront_amount, upfront_paid, installment_amount, number_of_installments, paid_installments, total_paid, next_due_date, scheduled_installments (id, installment_number, amount, due_date, status))
         `)
