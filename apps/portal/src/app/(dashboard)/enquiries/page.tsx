@@ -35,21 +35,18 @@ const STATUS_FILTERS: { value: EnquiryStatus | "all"; label: string }[] = [
   { value: "new", label: "New" },
   { value: "contacted", label: "Contacted" },
   { value: "resolved", label: "Resolved" },
-  { value: "archived", label: "Archived" },
 ];
 
 const STATUS_TEXT: Record<EnquiryStatus, string> = {
   new: "text-blue-600 dark:text-blue-400",
   contacted: "text-amber-600 dark:text-amber-400",
   resolved: "text-green-600 dark:text-green-400",
-  archived: "text-muted-foreground",
 };
 
 const STATUS_LABEL: Record<EnquiryStatus, string> = {
   new: "New",
   contacted: "Contacted",
   resolved: "Resolved",
-  archived: "Archived",
 };
 
 function safeDate(s: string) {

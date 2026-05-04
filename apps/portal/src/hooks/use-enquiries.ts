@@ -7,7 +7,7 @@ import { useAuth } from "@/stores/auth-store";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "@/hooks/use-toast";
 
-export type EnquiryStatus = "new" | "contacted" | "resolved" | "archived";
+export type EnquiryStatus = "new" | "contacted" | "resolved";
 
 export interface Enquiry {
   id: string;
@@ -162,6 +162,33 @@ export function useUpdateEnquiryStatus() {
     onError: (err) => {
       toast({
         title: "Failed to update enquiry",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+export function useDeleteEnquiry() {
+  const queryClient = useQueryClient();
+  const { tenant } = useTenant();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("enquiries")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["enquiries", tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ["enquiry-stats", tenant?.id] });
+      toast({ title: "Enquiry deleted" });
+    },
+    onError: (err) => {
+      toast({
+        title: "Failed to delete enquiry",
         description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
