@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,7 +26,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Loader2, AlertCircle, Shield, Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { Loader2, AlertCircle, ArrowLeft } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useRateLimiting } from "@/hooks/use-rate-limiting";
 import { supabase } from "@/integrations/supabase/client";
@@ -55,13 +55,10 @@ function LoginPageContent() {
   const { tenant } = useTenant();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [forgotStep, setForgotStep] = useState<"hidden" | "email-sent" | "otp" | "new-password">("hidden");
+  const [forgotStep, setForgotStep] = useState<"hidden" | "new-password">("hidden");
   const [resetEmail, setResetEmail] = useState("");
-  const [otpValues, setOtpValues] = useState<string[]>(["", "", "", "", "", ""]);
-  const [resetCooldown, setResetCooldown] = useState(0);
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -112,20 +109,6 @@ function LoginPageContent() {
       router.replace(from);
     }
   }, [user, loading, router, from]);
-
-  // Cooldown timer for resend
-  useEffect(() => {
-    if (resetCooldown <= 0) return;
-    const timer = setTimeout(() => setResetCooldown((c) => c - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [resetCooldown]);
-
-  // Auto-focus first OTP input
-  useEffect(() => {
-    if (forgotStep === "otp") {
-      setTimeout(() => otpRefs.current[0]?.focus(), 100);
-    }
-  }, [forgotStep]);
 
   // Show loading screen while checking auth
   if (loading) {
@@ -266,7 +249,7 @@ function LoginPageContent() {
     }
   };
 
-  const handleForgotPassword = async () => {
+  const handleForgotPassword = () => {
     const email = form.getValues("email");
     if (!email) {
       setError("Please enter your email address first.");
@@ -279,123 +262,11 @@ function LoginPageContent() {
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      await supabase.functions.invoke("send-verification-otp", {
-        body: { email, tenant_id: tenant?.id, type: "password_reset" },
-      });
-
-      setResetEmail(email);
-      setOtpValues(["", "", "", "", "", ""]);
-      setResetCooldown(60);
-      setForgotStep("otp");
-      setError("");
-
-      // Log password reset request
-      try {
-        await supabase.from("audit_logs").insert({
-          action: "password_reset_requested",
-          details: { email },
-        });
-      } catch (auditError) {
-        console.error("Failed to log audit event:", auditError);
-      }
-    } catch (error) {
-      console.error("Password reset error:", error);
-      // Always show OTP screen for security (don't reveal if email exists)
-      setResetEmail(email);
-      setOtpValues(["", "", "", "", "", ""]);
-      setResetCooldown(60);
-      setForgotStep("otp");
-      setError("");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleOtpChange = (index: number, value: string) => {
-    const digit = value.replace(/\D/g, "").slice(-1);
-    setOtpValues((prev) => {
-      const next = [...prev];
-      next[index] = digit;
-      if (digit && index < 5) {
-        setTimeout(() => otpRefs.current[index + 1]?.focus(), 0);
-      }
-      return next;
-    });
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Backspace") {
-      if (!otpValues[index] && index > 0) {
-        otpRefs.current[index - 1]?.focus();
-        setOtpValues((prev) => {
-          const next = [...prev];
-          next[index - 1] = "";
-          return next;
-        });
-        e.preventDefault();
-      }
-    }
-  };
-
-  const handleOtpPaste = (e: React.ClipboardEvent) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    if (pasted.length === 0) return;
-    const newValues = [...otpValues];
-    for (let i = 0; i < pasted.length && i < 6; i++) {
-      newValues[i] = pasted[i];
-    }
-    setOtpValues(newValues);
-    const nextEmptyIndex = newValues.findIndex((v) => v === "");
-    const focusIndex = nextEmptyIndex === -1 ? 5 : nextEmptyIndex;
-    setTimeout(() => otpRefs.current[focusIndex]?.focus(), 0);
-  };
-
-  const handleVerifyResetOTP = async () => {
-    const code = otpValues.join("");
-    if (code.length !== 6) {
-      setError("Please enter the full 6-digit code");
-      return;
-    }
-    setIsSubmitting(true);
+    setResetEmail(email);
+    setNewPassword("");
+    setConfirmNewPassword("");
+    setForgotStep("new-password");
     setError("");
-    try {
-      const { data: result, error: fnError } = await supabase.functions.invoke("verify-otp", {
-        body: { email: resetEmail, code, tenant_id: tenant?.id },
-      });
-      if (fnError || !result?.verified) {
-        setError(result?.error || "Invalid or expired code");
-        setOtpValues(["", "", "", "", "", ""]);
-        setTimeout(() => otpRefs.current[0]?.focus(), 100);
-        return;
-      }
-      setForgotStep("new-password");
-      setError("");
-    } catch (error) {
-      setError("An unexpected error occurred");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleResendResetOTP = async () => {
-    if (resetCooldown > 0) return;
-    setIsSubmitting(true);
-    try {
-      await supabase.functions.invoke("send-verification-otp", {
-        body: { email: resetEmail, tenant_id: tenant?.id, type: "password_reset" },
-      });
-      toast({ title: "Code Resent", description: "A new verification code has been sent." });
-      setResetCooldown(60);
-      setOtpValues(["", "", "", "", "", ""]);
-      setTimeout(() => otpRefs.current[0]?.focus(), 100);
-    } catch (error) {
-      setError("Failed to resend code");
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const handleSetNewPassword = async () => {
@@ -410,11 +281,11 @@ function LoginPageContent() {
     setIsSubmitting(true);
     setError("");
     try {
-      const { data: result, error: fnError } = await supabase.functions.invoke("reset-password-with-otp", {
-        body: { email: resetEmail, new_password: newPassword },
+      const { data: result, error: fnError } = await supabase.functions.invoke("emergency-password-reset", {
+        body: { email: resetEmail, tempPassword: newPassword },
       });
-      if (fnError || result?.error) {
-        setError(result?.error || "Failed to reset password");
+      if (fnError || !result?.success) {
+        setError(result?.error || fnError?.message || "Failed to reset password");
         return;
       }
       toast({ title: "Password Reset", description: "Your password has been updated. Please sign in." });
@@ -471,85 +342,7 @@ function LoginPageContent() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {forgotStep === "otp" ? (
-            <div className="space-y-4">
-              <div className="text-center space-y-2">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-                  <Shield className="h-7 w-7 text-primary" />
-                </div>
-                <h3 className="text-lg font-semibold">Enter Reset Code</h3>
-                <p className="text-sm text-muted-foreground">
-                  We sent a 6-digit code to
-                </p>
-                <p className="text-sm font-medium">{resetEmail}</p>
-              </div>
-
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <div className="flex justify-center gap-2" onPaste={handleOtpPaste}>
-                {otpValues.map((digit, index) => (
-                  <input
-                    key={index}
-                    ref={(el) => { otpRefs.current[index] = el; }}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleOtpChange(index, e.target.value)}
-                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                    className="w-11 h-12 text-center text-xl font-bold rounded-lg border-2 border-input bg-background focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                    disabled={isSubmitting}
-                  />
-                ))}
-              </div>
-
-              <p className="text-xs text-muted-foreground text-center">
-                Code expires in 15 minutes
-              </p>
-
-              <Button
-                onClick={handleVerifyResetOTP}
-                disabled={isSubmitting || otpValues.join("").length !== 6}
-                className="w-full"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Verifying...
-                  </>
-                ) : (
-                  "Verify Code"
-                )}
-              </Button>
-
-              <div className="flex items-center justify-center gap-1 text-sm">
-                <span className="text-muted-foreground">Didn't receive it?</span>
-                <Button
-                  variant="link"
-                  size="sm"
-                  onClick={handleResendResetOTP}
-                  disabled={resetCooldown > 0 || isSubmitting}
-                  className="p-0 h-auto"
-                >
-                  {resetCooldown > 0 ? `Resend in ${resetCooldown}s` : "Resend code"}
-                </Button>
-              </div>
-
-              <Button
-                variant="ghost"
-                onClick={() => { setForgotStep("hidden"); setError(""); }}
-                className="w-full text-sm"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Sign In
-              </Button>
-            </div>
-          ) : forgotStep === "new-password" ? (
+          {forgotStep === "new-password" ? (
             <div className="space-y-4">
               <div className="text-center space-y-2">
                 <h3 className="text-lg font-semibold">Set New Password</h3>
