@@ -87,7 +87,23 @@ function TemplateCategorySection({ category }: { category: TemplateCategory }) {
         }
         setInitialized(true);
       } catch (error) {
-        console.error('Error initializing templates:', error);
+        // Supabase/PostgrestError instances do not stringify well; pull the
+        // useful fields out so we get a readable log instead of "{}".
+        const e = error as {
+          message?: string;
+          code?: string;
+          details?: string;
+          hint?: string;
+          name?: string;
+        } | undefined;
+        console.error('Error initializing templates:', {
+          category,
+          message: e?.message ?? String(error),
+          code: e?.code,
+          details: e?.details,
+          hint: e?.hint,
+          name: e?.name,
+        });
         setInitialized(true);
       }
     };

@@ -38,3 +38,6 @@ out/
 helper-folder
 quality-assurance
 testing-qa.env
+
+# Code analysis tool output (graphify) — generated artifacts, never commit
+graphify-out/

@@ -64,6 +64,18 @@ interface AddPaymentDialogProps {
    */
   paygAccrualId?: string;
   /**
+   * scheduled_installments row id the customer is paying off. Same shape as
+   * paygAccrualId — Charge-via-Stripe and Email-Stripe-Link paths forward it
+   * to `create-checkout-session` which stamps `installment_id` on the Stripe
+   * Checkout metadata. The Stripe webhook then calls
+   * `installment_settle_invoice(payment_id, installment_id)` to flip the
+   * scheduled installment to `paid` and supersede any cumulative
+   * predecessors. The manual Record-Payment path settles the installment via
+   * `mark-installment-paid` after the payment row commits (handled by the
+   * parent's `onPaymentSuccess('recorded')` callback).
+   */
+  installmentId?: string;
+  /**
    * Called after a successful action. The `kind` arg tells the caller whether
    * the payment is already settled in the DB or only initiated:
    *   - 'recorded' — manual Record Payment path; ledger + payment row are committed.
@@ -97,6 +109,7 @@ export const AddPaymentDialog = ({
   targetCategories,
   extensionId,
   paygAccrualId,
+  installmentId,
   onPaymentSuccess,
   breakdownItems
 }: AddPaymentDialogProps) => {
@@ -140,28 +153,6 @@ export const AddPaymentDialog = ({
   const breakdownTotal = breakdownItems && breakdownItems.length > 0
     ? breakdownItems.reduce((sum, item) => sum + (item.type === 'discount' ? -Math.abs(item.amount) : item.amount), 0)
     : null;
-
-  // Detect installment plan + collection mode so we can warn when the operator
-  // chooses a non-Stripe method (no card to auto-charge future installments)
-  const [installmentPlanInfo, setInstallmentPlanInfo] = useState<{ id: string; collection_mode: string; status: string } | null>(null);
-  useEffect(() => {
-    if (!propRentalId || !open) { setInstallmentPlanInfo(null); return; }
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from("installment_plans")
-        .select("id, collection_mode, status")
-        .eq("rental_id", propRentalId)
-        .maybeSingle();
-      if (!cancelled) setInstallmentPlanInfo(data ?? null);
-    })();
-    return () => { cancelled = true; };
-  }, [propRentalId, open]);
-  const watchedMethod = form.watch("method");
-  const showManualWarning = !!installmentPlanInfo
-    && installmentPlanInfo.status !== "cancelled"
-    && watchedMethod
-    && !["Card", "Stripe", "card"].includes(watchedMethod);
 
   // Update form values when props change
   useEffect(() => {
@@ -440,6 +431,9 @@ export const AddPaymentDialog = ({
           // PAYG: stamp the accrual id on the checkout metadata so the Stripe
           // webhook can call payg_settle_invoice once the customer pays.
           ...(paygAccrualId ? { paygAccrualId } : {}),
+          // Installments: stamp the scheduled_installments id so the Stripe
+          // webhook can call installment_settle_invoice once the customer pays.
+          ...(installmentId ? { installmentId } : {}),
         },
       });
 
@@ -519,6 +513,9 @@ export const AddPaymentDialog = ({
           // PAYG: stamp the accrual id so when the customer clicks the
           // emailed link and pays, the Stripe webhook settles the right invoice.
           ...(paygAccrualId ? { paygAccrualId } : {}),
+          // Installments: stamp the scheduled_installments id so the Stripe
+          // webhook can settle the right installment when the customer pays.
+          ...(installmentId ? { installmentId } : {}),
         },
       });
 
@@ -578,12 +575,6 @@ export const AddPaymentDialog = ({
               }
             </DialogDescription>
           </DialogHeader>
-          {showManualWarning ? (
-            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
-              <strong className="font-semibold">Manual installment management.</strong> This rental has an installment plan.
-              Recording payment without a Stripe card means future installments will <strong>not be auto-charged</strong> — you'll need to mark each one paid manually. Use "Charge via Stripe" instead if the customer should be auto-billed for the remaining schedule.
-            </div>
-          ) : null}
         </div>
 
         {/* Customer/Vehicle selection when not pre-populated */}

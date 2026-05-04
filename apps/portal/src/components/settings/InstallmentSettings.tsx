@@ -1,15 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useTenant } from "@/contexts/TenantContext";
-import { supabase } from "@/integrations/supabase/client";
+import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 import { InstallmentCalendar, type InstallmentCalendarItem } from "@/components/installments/InstallmentCalendar";
 import { cn } from "@/lib/utils";
 
@@ -44,38 +43,64 @@ function buildSampleSchedule(unit: "week" | "month", paymentsPerUnit: number, da
 }
 
 export function InstallmentSettings() {
-  const { tenant, refetchTenant } = useTenant();
+  const { tenant } = useTenant();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const { settings, updateSettings, isUpdating } = useRentalSettings();
 
-  const tenantCfg = (tenant as any)?.installment_config as Partial<InstallmentConfig> | undefined;
-  const initial: InstallmentConfig = {
-    weekly_enabled: tenantCfg?.weekly_enabled ?? false,
-    weekly_payments_per_unit: (tenantCfg?.weekly_payments_per_unit ?? 1) as 1 | 2,
-    monthly_enabled: tenantCfg?.monthly_enabled ?? false,
-    monthly_payments_per_unit: (tenantCfg?.monthly_payments_per_unit ?? 1) as 1 | 2 | 4,
-  };
+  // The portal's TenantContext does NOT include installment_config in its
+  // SELECT list, so we read from useRentalSettings() (which does SELECT *).
+  // That way the toggles reflect the saved DB state on every (re)mount —
+  // previously the component would read undefined, default to false, and
+  // appear to "lose" the toggle after a tab switch / refetch.
+  const tenantCfg = settings?.installment_config as unknown as
+    | (Partial<InstallmentConfig> & Record<string, unknown>)
+    | null
+    | undefined;
 
-  const [config, setConfig] = useState<InstallmentConfig>(initial);
-  const [saving, setSaving] = useState(false);
+  const [config, setConfig] = useState<InstallmentConfig>({
+    weekly_enabled: false,
+    weekly_payments_per_unit: 1,
+    monthly_enabled: false,
+    monthly_payments_per_unit: 1,
+  });
   const [previewOpen, setPreviewOpen] = useState<null | { unit: "week" | "month"; paymentsPerUnit: number }>(null);
+
+  // Hydrate local state from server when the server snapshot changes (initial
+  // load, after save, refetches). Field-level deps avoid resyncing on
+  // unrelated reference changes from React Query.
+  useEffect(() => {
+    if (!tenantCfg) return;
+    setConfig({
+      weekly_enabled: tenantCfg.weekly_enabled ?? false,
+      weekly_payments_per_unit: (tenantCfg.weekly_payments_per_unit ?? 1) as 1 | 2,
+      monthly_enabled: tenantCfg.monthly_enabled ?? false,
+      monthly_payments_per_unit: (tenantCfg.monthly_payments_per_unit ?? 1) as 1 | 2 | 4,
+    });
+  }, [
+    tenantCfg?.weekly_enabled,
+    tenantCfg?.weekly_payments_per_unit,
+    tenantCfg?.monthly_enabled,
+    tenantCfg?.monthly_payments_per_unit,
+  ]);
 
   async function save() {
     if (!tenant?.id) return;
-    setSaving(true);
-    const { error } = await supabase
-      .from("tenants")
-      .update({ installment_config: config as any })
-      .eq("id", tenant.id);
-    setSaving(false);
-    if (error) {
-      toast({ title: "Couldn't save", description: error.message, variant: "destructive" });
-      return;
+    try {
+      // Merge with the existing config so fields owned by the broader settings
+      // page (charge_first_upfront, what_gets_split, minimum_days_*,
+      // *_installments_limit, limiting_amount_per_day_*, grace_period_days,
+      // max_retry_attempts, retry_interval_days) are preserved. The previous
+      // implementation replaced the entire JSONB blob with just the 4 fields
+      // managed here, silently wiping the rest.
+      const merged = { ...(tenantCfg ?? {}), ...config };
+      await updateSettings({ installment_config: merged as any });
+      toast({ title: "Saved", description: "Installment settings updated." });
+    } catch (error) {
+      // useRentalSettings already shows an error toast — nothing to do here.
     }
-    toast({ title: "Saved", description: "Installment settings updated." });
-    await refetchTenant?.();
-    queryClient.invalidateQueries({ queryKey: ["tenant"] });
   }
+
+  const saving = isUpdating;
 
   return (
     <div className="space-y-6">

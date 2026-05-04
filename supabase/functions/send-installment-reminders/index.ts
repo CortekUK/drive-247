@@ -12,6 +12,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import { corsHeaders } from '../_shared/cors.ts'
+import { sendEmail } from '../_shared/resend-service.ts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const TOKEN_LIFETIME_DAYS = 14
@@ -127,17 +128,64 @@ async function sendForPlan(
   const cumulative = openOverdue.reduce((s: number, i: any) => s + Number(i.amount || 0), 0)
   const latest = openOverdue[openOverdue.length - 1]
 
-  const token = genToken()
-  const expiresAt = new Date(now.getTime() + TOKEN_LIFETIME_DAYS * DAY_MS).toISOString()
-  await supabase.from('installment_payment_links').insert({
-    token,
-    installment_plan_id: plan.id,
-    tenant_id: plan.tenant_id,
-    expires_at: expiresAt,
-  })
+  // Mirror the AddPaymentDialog "Email Stripe Link" flow: create the Stripe
+  // Checkout session at send time and embed the Stripe URL directly in the
+  // email. This skips the /pay/<token> middleware page so the customer goes
+  // straight to Stripe — same UX as the dialog-emailed link.
+  //
+  // Resolution for the success/cancel origin matches AddPaymentDialog:
+  //   1. BOOKING_BASE_URL — explicit override (single-domain QA)
+  //   2. https://{tenant.slug}.{BOOKING_BASE_DOMAIN || drive-247.com}
+  // Customers receiving this email may be on any device — must NEVER
+  // redirect them to localhost, even if an admin tested locally.
+  let stripeCheckoutUrl: string | null = null
+  try {
+    // tenant.slug needed for the success URL fallback
+    const { data: tenantSlug } = await supabase
+      .from('tenants').select('slug').eq('id', plan.tenant_id).single()
+    const fullOverride = Deno.env.get('BOOKING_BASE_URL')
+    const baseDomain = Deno.env.get('BOOKING_BASE_DOMAIN') || 'drive-247.com'
+    const bookingOrigin = fullOverride
+      ? fullOverride.replace(/\/+$/, '')
+      : `https://${tenantSlug?.slug || 'app'}.${baseDomain}`
 
-  const origin = Deno.env.get('BOOKING_APP_URL') || 'https://drive-247.com'
-  const payUrl = `${origin}/pay/${token}`
+    const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout-session', {
+      body: {
+        rentalId: plan.rental_id,
+        customerEmail: customer.email,
+        customerName: customer.name || 'Customer',
+        totalAmount: cumulative,
+        tenantId: plan.tenant_id,
+        successUrl: `${bookingOrigin}/booking-success?type=invoice&status=paid&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${bookingOrigin}/portal/payments`,
+        source: 'reminder-email',
+        targetCategories: ['Rental', 'Tax', 'Service Fee'],
+        // Stamp installment_id so the Stripe webhook can call
+        // installment_settle_invoice on completion. Latest overdue slot is
+        // the cumulative-settle target — matches PAYG paygAccrualId pattern.
+        installmentId: latest.id,
+      },
+    })
+    if (checkoutError || !checkoutData?.url) {
+      throw new Error(checkoutError?.message || 'Failed to create Stripe checkout session')
+    }
+    stripeCheckoutUrl = checkoutData.url
+  } catch (err: any) {
+    console.error('[send-installment-reminders] checkout-session error:', err)
+    await supabase.from('installment_notifications').insert({
+      installment_id: latest.id,
+      installment_plan_id: plan.id,
+      tenant_id: plan.tenant_id,
+      notification_type: 'reminder_sent',
+      status: 'failed',
+      amount: cumulative,
+      message: `Reminder send failed: ${err.message || 'could not create Stripe checkout'}`,
+      sent_at: now.toISOString(),
+    })
+    return 'failed'
+  }
+
+  const payUrl = stripeCheckoutUrl
 
   const html = buildEmailHtml({
     customerName: customer.name || 'there',
@@ -152,9 +200,17 @@ async function sendForPlan(
 
   const subject = `Payment due — ${fmtCurrency(cumulative, tenant?.currency_code || null)} outstanding`
 
-  const { error: sendErr } = await supabase.functions.invoke('aws-ses-email', {
-    body: { to: customer.email, subject, html },
-  })
+  // Resend (not AWS SES). The shared sendEmail helper handles tenant
+  // branding/from-address resolution + falls back to a simulated send when
+  // RESEND_API_KEY isn't configured (so tests don't hard-fail). Mirrors the
+  // pattern the rest of the codebase uses for tenant-aware customer emails.
+  const sendResult = await sendEmail(
+    customer.email,
+    subject,
+    html,
+    supabase,
+    plan.tenant_id,
+  )
 
   await supabase.from('installment_plans')
     .update({ last_reminder_sent_at: now.toISOString() })
@@ -165,15 +221,15 @@ async function sendForPlan(
     installment_plan_id: plan.id,
     tenant_id: plan.tenant_id,
     notification_type: 'reminder_sent',
-    status: sendErr ? 'failed' : 'success',
+    status: sendResult.success ? 'success' : 'failed',
     amount: cumulative,
-    message: sendErr
-      ? `Reminder send failed: ${sendErr.message}`
-      : `Reminder sent to ${customer.email} — ${openOverdue.length} unpaid (${cumulative.toFixed(2)})`,
+    message: sendResult.success
+      ? `Reminder sent to ${customer.email} — ${openOverdue.length} unpaid (${cumulative.toFixed(2)})`
+      : `Reminder send failed: ${sendResult.error || 'unknown error'}`,
     sent_at: now.toISOString(),
   })
 
-  return sendErr ? 'failed' : 'sent'
+  return sendResult.success ? 'sent' : 'failed'
 }
 
 Deno.serve(async (req) => {

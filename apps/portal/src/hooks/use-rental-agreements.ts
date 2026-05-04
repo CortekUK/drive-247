@@ -56,12 +56,12 @@ export function useRentalAgreements(rentalId: string | undefined) {
       return (data || []) as RentalAgreement[];
     },
     enabled: !!rentalId && !!tenant,
-    // Once we have data, treat it as fresh — Realtime keeps it in sync,
-    // and a long staleTime prevents transient invalidations from clearing
-    // the UI back to an empty state during a refetch in flight.
+    // Treat fetched data as fresh — Realtime keeps the cache in sync, and a
+    // long staleTime prevents transient invalidations from briefly flashing
+    // the empty state during a refetch in flight.
     staleTime: 60_000,
-    // Polling kept as a safety net only when something is mid-signature
-    // and we missed a Realtime event (e.g. brief disconnect).
+    // Polling is a safety net for missed Realtime events (e.g. brief socket
+    // disconnect during signing). Active only while something is pending.
     refetchInterval: (q) => {
       const agreements = q.state.data;
       if (!agreements) return false;
@@ -75,9 +75,12 @@ export function useRentalAgreements(rentalId: string | undefined) {
     },
   });
 
-  // Realtime: any INSERT/UPDATE/DELETE on rental_agreements for this rental
-  // invalidates the cache so AgreementTimeline reflects the latest state
-  // without depending on the optimistic-write + refetch dance.
+  // Postgres Realtime subscription: any INSERT/UPDATE/DELETE on
+  // rental_agreements for this rental invalidates the cache so the timeline
+  // surfaces a freshly-sent agreement (INSERT from /api/esign POST) and a
+  // signed status update (UPDATE from boldsign-webhook) without depending on
+  // the polling cadence — which is gated on hasPending and therefore wouldn't
+  // run at all when the list is currently empty.
   useEffect(() => {
     if (!rentalId || !tenant?.id) return;
     const channel = supabase

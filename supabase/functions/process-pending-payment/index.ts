@@ -46,7 +46,45 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (payment.status === 'Applied' || payment.status === 'Completed') {
+    if (payment.status === 'Applied' || payment.status === 'Completed' || payment.status === 'Partial') {
+      // Even though the payment row is already settled, the installment side
+      // may not be — if this payment was processed before installment self-heal
+      // landed, the slot is still 'open'. Run the same lookup-and-settle here
+      // so revisiting the success page (or the rental detail polling) will
+      // retroactively settle. The RPC is idempotent: a second call on an
+      // already-paid slot is a no-op.
+      if (payment.rental_id && !payment.extension_id) {
+        try {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const { data: targetSlot } = await supabase
+            .from('scheduled_installments')
+            .select('id, installment_plan_id, installment_number')
+            .eq('rental_id', payment.rental_id)
+            .eq('invoice_status', 'open')
+            .lte('due_date', todayStr)
+            .order('installment_number', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (targetSlot) {
+            const { error: settleErr } = await supabase.rpc('installment_settle_invoice', {
+              p_payment_id: payment.id,
+              p_installment_id: targetSlot.id,
+            });
+            if (settleErr) {
+              console.error('[PROCESS-PENDING] retroactive settle error:', settleErr);
+            } else {
+              console.log('[PROCESS-PENDING] Retroactively settled installment:', targetSlot.id, 'slot', targetSlot.installment_number, 'for payment', payment.id);
+              await supabase
+                .from('installment_plans')
+                .update({ status: 'active', upfront_paid: true, upfront_payment_id: payment.id })
+                .eq('id', targetSlot.installment_plan_id)
+                .neq('status', 'active');
+            }
+          }
+        } catch (instErr) {
+          console.error('[PROCESS-PENDING] retroactive self-heal error:', instErr);
+        }
+      }
       return new Response(JSON.stringify({ ok: true, status: payment.status, alreadyProcessed: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -132,6 +170,64 @@ Deno.serve(async (req) => {
         console.error("[PROCESS-PENDING] finalize_rental_extension error:", finalizeError);
       } else {
         console.log("[PROCESS-PENDING] Extension finalized:", finalizeResult);
+      }
+    }
+
+    // Installment settlement (mirrors stripe-webhook-test/live).
+    // Stripe webhooks don't always reach our endpoint reliably (and in dev
+    // sometimes never fire), so this polling path also needs to settle the
+    // matching installment when the payment is for a rental with an
+    // installment plan. We use only DB signals — no metadata required —
+    // so it works regardless of what create-checkout-session stamped.
+    // Skips when the payment is for a different concern (extension or
+    // bonzah) so we don't accidentally settle installments on those.
+    if (payment.rental_id && !payment.extension_id) {
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        // Latest overdue or due-today open slot for this rental.
+        // installment_settle_invoice cumulatively supersedes earlier
+        // open slots, so picking the latest gives PAYG-style behavior.
+        const { data: targetSlot } = await supabase
+          .from('scheduled_installments')
+          .select('id, installment_plan_id, installment_number')
+          .eq('rental_id', payment.rental_id)
+          .eq('invoice_status', 'open')
+          .lte('due_date', todayStr)
+          .order('installment_number', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (targetSlot) {
+          const { error: settleErr } = await supabase.rpc('installment_settle_invoice', {
+            p_payment_id: payment.id,
+            p_installment_id: targetSlot.id,
+          });
+          if (settleErr) {
+            console.error('[PROCESS-PENDING] installment_settle_invoice error:', settleErr);
+          } else {
+            console.log('[PROCESS-PENDING] Installment settled (poll-fallback):', targetSlot.id, 'slot', targetSlot.installment_number);
+            // Activate the plan + capture saved card, mirroring the webhook path
+            try {
+              const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+              const paymentMethodId = typeof pi.payment_method === 'string'
+                ? pi.payment_method
+                : pi.payment_method?.id;
+              await supabase
+                .from('installment_plans')
+                .update({
+                  status: 'active',
+                  upfront_paid: true,
+                  upfront_payment_id: payment.id,
+                  stripe_payment_method_id: paymentMethodId ?? null,
+                  collection_mode: paymentMethodId ? 'auto' : 'manual',
+                })
+                .eq('id', targetSlot.installment_plan_id);
+            } catch (planErr) {
+              console.error('[PROCESS-PENDING] plan activation error (non-fatal):', planErr);
+            }
+          }
+        }
+      } catch (instErr) {
+        console.error('[PROCESS-PENDING] installment self-heal error:', instErr);
       }
     }
 

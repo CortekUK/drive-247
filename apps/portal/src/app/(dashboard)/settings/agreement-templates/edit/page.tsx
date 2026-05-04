@@ -77,6 +77,8 @@ export default function EditAgreementTemplatePage() {
         ? 'Extension'
         : 'Standard';
 
+  const defaultContentForCategory = getDefaultTemplateForCategory(templateCategory);
+
   // Load template content when data is available
   useEffect(() => {
     if (!isLoading && !loaded) {
@@ -85,22 +87,22 @@ export default function EditAgreementTemplatePage() {
         setTemplateContent(currentTemplate.template_content);
       } else if (isDefault) {
         // Default template - use category-specific default content from codebase
-        setTemplateContent(getDefaultTemplateForCategory(templateCategory));
+        setTemplateContent(defaultContentForCategory);
       } else {
         // Custom template - start blank
         setTemplateContent('');
       }
       setLoaded(true);
     }
-  }, [currentTemplate, loaded, isLoading, isDefault, templateCategory]);
+  }, [currentTemplate, loaded, isLoading, isDefault, defaultContentForCategory]);
 
   // Track changes
   useEffect(() => {
     if (loaded) {
-      const originalContent = currentTemplate?.template_content || (isDefault ? getDefaultTemplateForCategory(templateCategory) : '');
+      const originalContent = currentTemplate?.template_content || (isDefault ? defaultContentForCategory : '');
       setHasChanges(templateContent !== originalContent);
     }
-  }, [templateContent, currentTemplate, loaded, isDefault, templateCategory]);
+  }, [templateContent, currentTemplate, loaded, isDefault, defaultContentForCategory]);
 
   // Save content without navigation (for unsaved changes warning)
   const saveContent = async (): Promise<boolean> => {
@@ -136,7 +138,7 @@ export default function EditAgreementTemplatePage() {
     if (isDefault) {
       try {
         await resetDefaultAsync();
-        setTemplateContent(getDefaultTemplateForCategory(templateCategory));
+        setTemplateContent(defaultContentForCategory);
         setHasChanges(false);
       } catch (error) {
         // Error handled by hook
@@ -188,8 +190,24 @@ export default function EditAgreementTemplatePage() {
             </h1>
             <p className="text-sm text-muted-foreground">
               {isDefault
-                ? `Customize the ${categoryLabel} rental agreement template`
-                : `Create your own custom ${categoryLabel} rental agreement`}
+                ? `Customize the ${
+                    templateCategory === 'installment'
+                      ? 'installment plan'
+                      : templateCategory === 'payg'
+                        ? 'pay-as-you-go'
+                        : templateCategory === 'extension'
+                          ? 'extension'
+                          : 'standard rental'
+                  } agreement template`
+                : `Create your own custom ${
+                    templateCategory === 'installment'
+                      ? 'installment plan'
+                      : templateCategory === 'payg'
+                        ? 'pay-as-you-go'
+                        : templateCategory === 'extension'
+                          ? 'extension'
+                          : 'rental'
+                  } agreement`}
             </p>
           </div>
         </div>

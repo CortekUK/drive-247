@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 
@@ -25,8 +26,9 @@ export interface RentalAgreement {
 
 export function useRentalAgreements(rentalId: string | undefined) {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['rental-agreements', rentalId, tenant?.id],
     queryFn: async () => {
       if (!rentalId) return [];
@@ -79,9 +81,12 @@ export function useRentalAgreements(rentalId: string | undefined) {
       })) as RentalAgreement[];
     },
     enabled: !!rentalId && !!tenant,
-    // Poll every 5s if any agreement has been sent but not yet signed
-    refetchInterval: (query) => {
-      const agreements = query.state.data;
+    // Realtime keeps this fresh; staleTime prevents transient empty flashes
+    // during in-flight refetches.
+    staleTime: 60_000,
+    // Polling stays as a safety net while signing is in flight.
+    refetchInterval: (q) => {
+      const agreements = q.state.data;
       if (!agreements) return false;
       const hasPending = agreements.some(
         (a) =>
@@ -89,7 +94,34 @@ export function useRentalAgreements(rentalId: string | undefined) {
           a.document_status !== 'completed' &&
           a.document_status !== 'signed'
       );
-      return hasPending ? 30000 : false;
+      return hasPending ? 60_000 : false;
     },
   });
+
+  // Postgres Realtime subscription so a freshly-sent agreement (INSERT) and a
+  // signed status update (UPDATE from boldsign-webhook) appear immediately.
+  // Without this, the polling above is gated on hasPending and never runs
+  // when the list is currently empty — leaving the UI stuck on
+  // "No agreements have been sent for this rental yet" until manual refresh.
+  useEffect(() => {
+    if (!rentalId || !tenant?.id) return;
+    const channel = supabase
+      .channel(`rental-agreements:${rentalId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'rental_agreements', filter: `rental_id=eq.${rentalId}` },
+        () => {
+          queryClient.invalidateQueries({
+            queryKey: ['rental-agreements', rentalId, tenant.id],
+            refetchType: 'all',
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [rentalId, tenant?.id, queryClient]);
+
+  return query;
 }

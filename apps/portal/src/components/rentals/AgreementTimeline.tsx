@@ -152,9 +152,9 @@ function AgreementCard({
       if (data?.ok) {
         const friendlyStatus: Record<string, string> = { sent: 'Awaiting Signature', delivered: 'Viewed', signed: 'Signed', completed: 'Signed', declined: 'Declined', voided: 'Voided', expired: 'Expired', pending: 'Draft' };
         toast({ title: 'Status Updated', description: `Document status: ${friendlyStatus[data.status] || data.status}` });
-        // Same scoped + refetchType:'all' invalidation as the Send handler.
-        // Loose ['rental-agreements'] alone misses cases where the active
-        // observer is paused or the cache entry is keyed by [prefix, rentalId, tenantId].
+        // Scoped + refetchType:'all' invalidation. Loose ['rental-agreements']
+        // alone misses cases where the active observer is paused or the cache
+        // entry is keyed by [prefix, rentalId, tenantId].
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: ['rental-agreements', rentalId, tenantId],
@@ -203,6 +203,7 @@ function AgreementCard({
           }),
           queryClient.invalidateQueries({ queryKey: ['rental', rentalId], refetchType: 'all' }),
         ]);
+        // Force a network call now even if the observer thinks data is fresh.
         await queryClient.refetchQueries({
           queryKey: ['rental-agreements', rentalId, tenantId],
           type: 'all',
@@ -210,9 +211,6 @@ function AgreementCard({
         setResendCooldown(60); // only start cooldown on success
       } else if (data?.error === 'insufficient_credits') {
         toast({ title: 'Insufficient Credits', description: 'Top up your credits to send this agreement', variant: 'destructive' });
-        // Same scoped + refetchType:'all' invalidation as the Send handler.
-        // Loose ['rental-agreements'] alone misses cases where the active
-        // observer is paused or the cache entry is keyed by [prefix, rentalId, tenantId].
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: ['rental-agreements', rentalId, tenantId],
@@ -439,9 +437,8 @@ export function AgreementTimeline({
           description: 'Top up your credits to send this agreement',
           variant: 'destructive',
         });
-        // Same scoped + refetchType:'all' invalidation as the Send handler.
-        // Loose ['rental-agreements'] alone misses cases where the active
-        // observer is paused or the cache entry is keyed by [prefix, rentalId, tenantId].
+        // Scoped + refetchType:'all' invalidation. Loose ['rental-agreements']
+        // alone misses cache entries keyed by [prefix, rentalId, tenantId].
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: ['rental-agreements', rentalId, tenantId],
@@ -472,9 +469,7 @@ export function AgreementTimeline({
         });
         // Optimistic cache update — write a synthetic row immediately so the
         // empty-state placeholder flips even if the API response is missing
-        // agreementId (don't gate on data?.agreementId — that left the empty
-        // state visible whenever the response was malformed). The real row
-        // overrides this on the next refetch.
+        // agreementId. The real row replaces this on the next refetch.
         if (tenantId) {
           const optimistic = {
             id: data?.agreementId ?? `optimistic-${Date.now()}`,
@@ -503,10 +498,8 @@ export function AgreementTimeline({
             (old: any) => [...(Array.isArray(old) ? old : []), optimistic],
           );
         }
-        // Invalidate + force a fresh fetch. refetchQueries (not just
-        // invalidateQueries) guarantees the network call fires now even if
-        // the observer thinks data is fresh, so the synthetic optimistic row
-        // gets replaced with the real DB row within the same tick.
+        // Invalidate + force a fresh fetch so the synthetic row is replaced
+        // by the real DB row within the same tick.
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: ['rental-agreements', rentalId, tenantId],

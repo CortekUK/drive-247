@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Clock, AlertCircle, XCircle, Receipt, Loader2 } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, XCircle, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -17,12 +17,15 @@ export interface ScheduleRow {
 interface Props {
   rows: ScheduleRow[];
   currencyCode?: string;
-  collectionMode?: "auto" | "manual";
+  /** Operator-facing controls (Pay button + Receipt). Customer view passes false. */
   isOperator?: boolean;
-  onCharge?: (id: string) => void;
-  onMarkPaid?: (id: string) => void;
+  /** Called when the operator clicks Pay on an open row. Opens the parent's
+   * AddPaymentDialog with the row's id stamped as `installmentId` so the
+   * Stripe-Charge / Email-Stripe-Link / Record-Payment paths all settle the
+   * specific scheduled_installments row through `installment_settle_invoice`.
+   * Mirrors PAYG's `onPay(accrualId)` contract. */
+  onPay?: (id: string) => void;
   onReceipt?: (id: string) => void;
-  busyId?: string | null;
 }
 
 function fmt(amount: number, code = "USD") {
@@ -41,6 +44,10 @@ function fmtDate(s: string) {
   }
 }
 
+// Detailed visual status — mirrors what was on screen before: Paid /
+// Overdue Nd / Due today / Scheduled / Superseded with leading icon and
+// tone color. The cron evaluates open vs paid; the date-derived "overdue
+// Nd" / "due today" labels are presentation-only.
 function visualStatus(row: ScheduleRow): {
   label: string; tone: string; Icon: typeof CheckCircle2;
 } {
@@ -48,7 +55,7 @@ function visualStatus(row: ScheduleRow): {
   if (row.invoice_status === "superseded") return { label: "Superseded", tone: "text-muted-foreground/70", Icon: XCircle };
   const today = new Date().toISOString().split("T")[0];
   if (row.due_date < today) {
-    const days = Math.floor((Date.now() - new Date(row.due_date).getTime()) / (1000*60*60*24));
+    const days = Math.floor((Date.now() - new Date(row.due_date).getTime()) / (1000 * 60 * 60 * 24));
     return { label: `Overdue ${days}d`, tone: "text-red-600 dark:text-red-400", Icon: AlertCircle };
   }
   if (row.due_date === today) return { label: "Due today", tone: "text-indigo-600 dark:text-indigo-400 font-semibold", Icon: Clock };
@@ -56,8 +63,11 @@ function visualStatus(row: ScheduleRow): {
 }
 
 export function InstallmentScheduleTable({
-  rows, currencyCode = "USD", collectionMode = "auto",
-  isOperator = false, onCharge, onMarkPaid, onReceipt, busyId,
+  rows,
+  currencyCode = "USD",
+  isOperator = false,
+  onPay,
+  onReceipt,
 }: Props) {
   return (
     <div className="bg-card border border-border/60 rounded-lg overflow-hidden">
@@ -75,33 +85,53 @@ export function InstallmentScheduleTable({
           {rows.map((r) => {
             const v = visualStatus(r);
             const Icon = v.Icon;
-            const isBusy = busyId === r.id;
             return (
               <tr key={r.id} className="border-t border-border/60">
                 <td className="px-4 py-3 text-muted-foreground">{r.installment_number}</td>
                 <td className="px-4 py-3 text-foreground/90">{fmtDate(r.due_date)}</td>
                 <td className="px-4 py-3 text-right font-medium text-foreground">{fmt(r.amount, currencyCode)}</td>
-                <td className={cn("px-4 py-3 inline-flex items-center gap-1.5", v.tone)}>
-                  <Icon className="w-3.5 h-3.5" /> {v.label}
+                <td className={cn("px-4 py-3", v.tone)}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Icon className="w-3.5 h-3.5" /> {v.label}
+                  </span>
                 </td>
                 <td className="px-4 py-3 text-right">
+                  {/* Action column — Pay for open rows (operator), Receipt
+                      once paid. The dialog opened by onPay locks the amount
+                      and forwards installmentId to create-checkout-session,
+                      so the operator can't accidentally over- or under-
+                      charge. Customer view (isOperator=false) shows nothing
+                      in this column for open rows; their pay path is the
+                      banner button + calendar click → magic-link page. */}
                   {r.invoice_status === "paid" && onReceipt ? (
                     <Button variant="ghost" size="sm" onClick={() => onReceipt(r.id)} className="h-7">
                       <Receipt className="w-3.5 h-3.5 mr-1" /> Receipt
                     </Button>
-                  ) : r.invoice_status === "open" && isOperator ? (
-                    <div className="inline-flex gap-1">
-                      {collectionMode === "auto" && onCharge ? (
-                        <Button variant="outline" size="sm" disabled={isBusy} onClick={() => onCharge(r.id)} className="h-7">
-                          {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Charge now"}
+                  ) : r.invoice_status === "open" && isOperator && onPay ? (
+                    (() => {
+                      // Only allow Pay on installments that are at or past
+                      // their due date. Scheduled (future) rows render the
+                      // button in a disabled state with an explanatory
+                      // tooltip — collecting an installment early would
+                      // either trigger cumulative settlement (paying off
+                      // everything up to that date via
+                      // installment_settle_invoice's PAYG-style supersession)
+                      // or leave the schedule out of order, neither of which
+                      // matches operator expectations.
+                      const today = new Date().toISOString().split("T")[0];
+                      const isPayable = r.due_date <= today;
+                      return (
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => isPayable && onPay(r.id)}
+                          disabled={!isPayable}
+                          title={isPayable ? undefined : "Available on the due date"}
+                        >
+                          Pay
                         </Button>
-                      ) : null}
-                      {onMarkPaid ? (
-                        <Button variant="outline" size="sm" disabled={isBusy} onClick={() => onMarkPaid(r.id)} className="h-7">
-                          Mark paid
-                        </Button>
-                      ) : null}
-                    </div>
+                      );
+                    })()
                   ) : null}
                 </td>
               </tr>
