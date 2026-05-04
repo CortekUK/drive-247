@@ -161,6 +161,9 @@ export interface Tenant {
 
   // Buffer time between rentals (minutes)
   buffer_time_minutes: number | null;
+
+  // Lead capture
+  enquiries_enabled: boolean | null;
 }
 
 interface TenantContextType {
@@ -433,7 +436,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           weekend_days,
           maintenance_banner_enabled,
           maintenance_banner_message,
-          buffer_time_minutes
+          buffer_time_minutes,
+          enquiries_enabled
         `)
         .eq('slug', slug)
         .eq('status', 'active')

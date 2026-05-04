@@ -470,6 +470,7 @@ export default function BookingDetailPage() {
           is_pay_as_you_go, payg_start_ts, payg_next_accrual_at, payg_last_reminder_sent_at,
           payg_reminder_count, payg_reminder_interval_days, payg_paused, payg_closed_at,
           payg_accrual_day_count,
+          is_unlimited_mileage, unlimited_mileage_price_per_day, unlimited_mileage_total,
           vehicles:vehicle_id (id, reg, make, model, colour, photo_url, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, vehicle_photos (photo_url)),
           installment_plans!installment_plans_rental_id_fkey (id, plan_type, status, total_installable_amount, upfront_amount, upfront_paid, installment_amount, number_of_installments, paid_installments, total_paid, next_due_date, scheduled_installments (id, installment_number, amount, due_date, status))
         `)
@@ -897,7 +898,20 @@ export default function BookingDetailPage() {
                     )}
                   </div>
                 )}
-                {mileageAllowance != null && (
+                {rental.is_unlimited_mileage ? (
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <span className="text-muted-foreground">Mileage:</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                      Unlimited Mileage included
+                    </span>
+                    {rental.unlimited_mileage_total != null && rental.unlimited_mileage_total > 0 && (
+                      <span className="text-muted-foreground">
+                        ({formatCurrency(rental.unlimited_mileage_total, currencyCode)} on this rental)
+                      </span>
+                    )}
+                  </div>
+                ) : mileageAllowance != null && (
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                     <span className="text-muted-foreground">Mileage:</span>

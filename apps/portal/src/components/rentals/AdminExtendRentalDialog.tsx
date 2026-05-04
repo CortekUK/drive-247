@@ -416,6 +416,44 @@ export function AdminExtendRentalDialog({
         if (ledgerError) console.error('Failed to create ledger entries:', ledgerError);
       }
 
+      // Unlimited Mileage extension delta — when extending an unlimited rental,
+      // charge price_per_day × extra_days as a separate ledger row and bump the
+      // rental's `unlimited_mileage_total` so the on-rental snapshot stays accurate.
+      try {
+        const { data: rentalSnap } = await (supabase as any)
+          .from('rentals')
+          .select('is_unlimited_mileage, unlimited_mileage_price_per_day, unlimited_mileage_total')
+          .eq('id', rental.id)
+          .single();
+        if (
+          rentalSnap?.is_unlimited_mileage === true &&
+          rentalSnap?.unlimited_mileage_price_per_day != null &&
+          extensionDays > 0
+        ) {
+          const perDay = Number(rentalSnap.unlimited_mileage_price_per_day);
+          const delta = Number((perDay * extensionDays).toFixed(2));
+          if (delta > 0) {
+            const { error: umError } = await (supabase as any).from('ledger_entries').insert({
+              ...baseLedger,
+              category: 'Unlimited Mileage',
+              reference: `Extension #${extNum}: Unlimited mileage (${extensionDays} day${extensionDays !== 1 ? 's' : ''})`,
+              amount: delta,
+              remaining_amount: delta,
+            });
+            if (umError) console.error('Failed to insert Unlimited Mileage extension delta:', umError);
+
+            const newTotal = Number((Number(rentalSnap.unlimited_mileage_total ?? 0) + delta).toFixed(2));
+            const { error: bumpError } = await (supabase as any)
+              .from('rentals')
+              .update({ unlimited_mileage_total: newTotal })
+              .eq('id', rental.id);
+            if (bumpError) console.error('Failed to update unlimited_mileage_total:', bumpError);
+          }
+        }
+      } catch (umErr) {
+        console.error('Unlimited mileage extension delta failed (non-fatal):', umErr);
+      }
+
       setSubmissionStep('Sending notifications...');
       // 4. Send notification email
       try {

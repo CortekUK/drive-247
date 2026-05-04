@@ -16,7 +16,7 @@ import { usePageContent, defaultFleetContent, mergeWithDefaults } from "@/hooks/
 import { useBrandingSettings } from "@/hooks/useBrandingSettings";
 import { createCompanyNameReplacer } from "@/utils/tenantName";
 import { formatCurrency, getUnlimitedLabel, formatDistance, getDistanceUnitShort, getPerMonthLabel, type DistanceUnit } from "@/lib/format-utils";
-import { isUnlimitedMileage } from "@/lib/mileage-utils";
+import { isUnlimitedMileage, getUnlimitedMileageOption } from "@/lib/mileage-utils";
 import {
   Car,
   CarFront,
@@ -404,18 +404,26 @@ const Pricing = () => {
                           {/* Mileage */}
                           {(() => {
                             const mileage = getMileageDisplay(vehicle, distanceUnit);
+                            const unlimited = getUnlimitedMileageOption(vehicle as any);
                             return (
-                              <div className="flex items-center gap-1.5 mt-2">
-                                <Gauge className="w-3.5 h-3.5 text-accent/70" />
-                                <span className="text-xs text-muted-foreground">
-                                  {mileage.label}
-                                </span>
-                                {mileage.excess != null && (
-                                  <span className="text-xs text-muted-foreground/70">
-                                    · {formatCurrency(mileage.excess, tenant?.currency_code || 'USD')}/{getDistanceUnitShort(distanceUnit)} excess
+                              <>
+                                <div className="flex items-center gap-1.5 mt-2">
+                                  <Gauge className="w-3.5 h-3.5 text-accent/70" />
+                                  <span className="text-xs text-muted-foreground">
+                                    {mileage.label}
                                   </span>
+                                  {mileage.excess != null && (
+                                    <span className="text-xs text-muted-foreground/70">
+                                      · {formatCurrency(mileage.excess, tenant?.currency_code || 'USD')}/{getDistanceUnitShort(distanceUnit)} excess
+                                    </span>
+                                  )}
+                                </div>
+                                {unlimited.available && (
+                                  <p className="text-[11px] text-accent/80 mt-1">
+                                    Unlimited mileage available · {formatCurrency(unlimited.pricePerDay, tenant?.currency_code || 'USD')}/day
+                                  </p>
                                 )}
-                              </div>
+                              </>
                             );
                           })()}
                         </div>

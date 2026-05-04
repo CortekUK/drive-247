@@ -16,7 +16,8 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, AlertTriangle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase, ExternalLink, Mail, Phone as PhoneIcon } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, AlertTriangle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase, ExternalLink, Mail, Phone as PhoneIcon, MessageSquarePlus } from "lucide-react";
+import { EnquiryModal } from "@/components/enquiry/enquiry-modal";
 import { BlurredImage } from "@/components/ui/blurred-image";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -51,7 +52,7 @@ import { useGigDriverImages } from "@/hooks/use-gig-driver-images";
 import GigDriverUploadDialog from "@/components/booking/gig-driver-upload-dialog";
 import { formatCurrency, getEarthRadius, metersToUnit, getPerMonthLabel, getUnlimitedLabel, getDistanceUnitLong, getDistanceUnitShort, getMileageTierLabel, formatDistance } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
-import { getMileageTier, getTierMileage, calculateTotalMileageAllowance, isUnlimitedMileage } from "@/lib/mileage-utils";
+import { getMileageTier, getTierMileage, calculateTotalMileageAllowance, isUnlimitedMileage, getUnlimitedMileageOption } from "@/lib/mileage-utils";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown, parseDateString as parseDateStringSafe } from "@/lib/calculate-rental-price";
 interface VehiclePhoto {
@@ -81,6 +82,8 @@ interface Vehicle {
   weekly_mileage?: number | null;
   monthly_mileage?: number | null;
   excess_mileage_rate?: number | null;
+  unlimited_mileage_available?: boolean | null;
+  unlimited_mileage_price_per_day?: number | null;
 }
 interface PricingExtra {
   id: string;
@@ -152,6 +155,7 @@ const MultiStepBookingWidget = () => {
   const { data: customerDocuments } = useCustomerDocuments();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showBlockedDialog, setShowBlockedDialog] = useState(false);
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
 
   // Gig driver state (restored from localStorage)
   const [isGigDriver, setIsGigDriver] = useState(() => {
@@ -3570,31 +3574,43 @@ const MultiStepBookingWidget = () => {
 
           {/* Header */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <h3 className="text-3xl md:text-4xl font-display font-semibold text-foreground">
                 Select Your Vehicle
               </h3>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:text-destructive hover:bg-destructive/10 hover:border-destructive text-xs gap-1.5 shrink-0">
-                    <RefreshCw className="w-3 h-3" /> Start over
+              <div className="flex items-center gap-2 shrink-0">
+                {tenant?.enquiries_enabled !== false && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs gap-1.5"
+                    onClick={() => setEnquiryOpen(true)}
+                  >
+                    <MessageSquarePlus className="w-3 h-3" /> Submit enquiry
                   </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Start a new booking?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will clear all your booking details across all steps. This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleClearForm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                      Clear form
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                )}
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:text-destructive hover:bg-destructive/10 hover:border-destructive text-xs gap-1.5 shrink-0">
+                      <RefreshCw className="w-3 h-3" /> Start over
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Start a new booking?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will clear all your booking details across all steps. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleClearForm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        Clear form
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </div>
             <p className="text-muted-foreground text-base">
               Choose from our curated fleet of premium rentals.
@@ -3824,11 +3840,19 @@ const MultiStepBookingWidget = () => {
                 <Car className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-40" />
                 <p className="text-lg font-medium text-foreground mb-2">No vehicles match your filters</p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Try adjusting your dates or categories.
+                  Try adjusting your dates or categories — or send us an enquiry and our team will follow up.
                 </p>
-                <Button variant="outline" onClick={clearAllFilters} className="border-primary/30">
-                  Clear Filters
-                </Button>
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <Button variant="outline" onClick={clearAllFilters} className="border-primary/30">
+                    Clear Filters
+                  </Button>
+                  {tenant?.enquiries_enabled !== false && (
+                    <Button onClick={() => setEnquiryOpen(true)}>
+                      <MessageSquarePlus className="w-4 h-4 mr-2" />
+                      Submit an enquiry
+                    </Button>
+                  )}
+                </div>
               </Card> : <div className="max-h-[70vh] overflow-y-auto pr-2 vehicle-list-scroll" style={{ scrollbarGutter: 'stable' }}>
                 <div className={cn("grid gap-6", viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1")}>
                   {filteredVehicles.map(vehicle => {
@@ -3966,6 +3990,14 @@ const MultiStepBookingWidget = () => {
                                     <Gauge className="h-3 w-3" />
                                     <span>{getVehicleMileageDisplay(vehicle)}</span>
                                   </div>
+                                  {(() => {
+                                    const um = getUnlimitedMileageOption(vehicle as any);
+                                    return um.available ? (
+                                      <p className="text-[11px] text-accent/80 mt-1">
+                                        Unlimited mileage available · {formatCurrency(um.pricePerDay, currencyCode)}/day
+                                      </p>
+                                    ) : null;
+                                  })()}
                                 </div>
                                 {isSelected && <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
                                   <Check className="w-4 h-4 text-black" />
@@ -4376,6 +4408,7 @@ const MultiStepBookingWidget = () => {
                     }
                     const totalAllowance = calculateTotalMileageAllowance(selectedVehicle, days, tenant?.monthly_tier_days ?? 30);
                     if (totalAllowance === null) return null;
+                    const unlimitedHint = getUnlimitedMileageOption(selectedVehicle as any);
                     return (
                       <div className="text-xs space-y-1 pt-2 border-t border-border/30">
                         <div className="flex justify-between text-muted-foreground">
@@ -4387,6 +4420,11 @@ const MultiStepBookingWidget = () => {
                             <span>Excess rate</span>
                             <span>{formatCurrency(selectedVehicle.excess_mileage_rate, currencyCode, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/{getDistanceUnitShort(distanceUnit)}</span>
                           </div>
+                        )}
+                        {unlimitedHint.available && (
+                          <p className="text-[11px] text-accent/80 leading-snug">
+                            Unlimited mileage available at checkout · {formatCurrency(unlimitedHint.pricePerDay, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/day
+                          </p>
                         )}
                       </div>
                     );
@@ -5945,6 +5983,11 @@ const MultiStepBookingWidget = () => {
       open={showBlockedDialog}
       onOpenChange={setShowBlockedDialog}
     />
+
+    {/* Enquiry Modal — accessible from the vehicle-selection step */}
+    {tenant?.enquiries_enabled !== false && (
+      <EnquiryModal open={enquiryOpen} onOpenChange={setEnquiryOpen} />
+    )}
   </>;
 };
 export default MultiStepBookingWidget;

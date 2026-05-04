@@ -9,11 +9,12 @@ import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
 import { toast } from "sonner";
 import { useBookingStore } from "@/stores/booking-store";
-import { Car, Users, Briefcase, Check, ArrowLeft, Loader2 } from "lucide-react";
+import { Car, Users, Briefcase, Check, ArrowLeft, Loader2, MessageSquarePlus } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { formatInTimeZone } from "date-fns-tz";
+import { EnquiryModal } from "@/components/enquiry/enquiry-modal";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -46,6 +47,8 @@ const BookingVehiclesContent = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
+  const enquiriesEnabled = tenant?.enquiries_enabled !== false;
 
   // Extract booking context from URL
   const pickupDate = searchParams?.get("pickup") || "";
@@ -270,6 +273,16 @@ const BookingVehiclesContent = () => {
               {pickupLocation && `${pickupLocation} • `}
               {pickupDate && returnDate && `${calculateRentalDays()} days`}
             </p>
+            {enquiriesEnabled && (
+              <Button
+                variant="outline"
+                onClick={() => setEnquiryOpen(true)}
+                className="mt-6"
+              >
+                <MessageSquarePlus className="w-4 h-4 mr-2" />
+                Can't find what you need? Submit enquiry
+              </Button>
+            )}
           </div>
 
           {/* Vehicle Grid */}
@@ -281,7 +294,21 @@ const BookingVehiclesContent = () => {
           ) : vehicles.length === 0 ? (
             <Card className="p-12 text-center">
               <Car className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-lg text-muted-foreground">No vehicles available for selected dates</p>
+              <p className="text-lg text-muted-foreground mb-2">
+                No vehicles available for selected dates
+              </p>
+              {enquiriesEnabled ? (
+                <>
+                  <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+                    Submit an enquiry and our team will reach out about availability for the
+                    car and dates you'd like.
+                  </p>
+                  <Button onClick={() => setEnquiryOpen(true)}>
+                    <MessageSquarePlus className="w-4 h-4 mr-2" />
+                    Submit an enquiry
+                  </Button>
+                </>
+              ) : null}
             </Card>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -350,6 +377,10 @@ const BookingVehiclesContent = () => {
           )}
         </div>
       </div>
+
+      {enquiriesEnabled && (
+        <EnquiryModal open={enquiryOpen} onOpenChange={setEnquiryOpen} />
+      )}
 
       <Footer />
     </div>

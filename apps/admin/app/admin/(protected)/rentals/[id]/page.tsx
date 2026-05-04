@@ -49,6 +49,7 @@ import { Area, AreaChart, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { DatePicker } from '@/components/ui/date-picker';
 import { BarChart3 } from 'lucide-react';
 import { TenantCreditsTab } from '@/components/admin/tenant-credits-tab';
+import { AdminTodosTab } from '@/components/admin-todos/admin-todos-tab';
 import {
   ArrowLeft,
   Pencil,
@@ -1144,6 +1145,7 @@ export default function TenantDetailsPage() {
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="management">Management</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="todos">Todos</TabsTrigger>
         </TabsList>
 
         {/* Details Tab */}
@@ -2051,6 +2053,11 @@ export default function TenantDetailsPage() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* Todos Tab — per-tenant Kanban board (visible only on this tenant's page) */}
+        <TabsContent value="todos" className="space-y-6">
+          <AdminTodosTab tenantId={tenant.id} tenantName={tenant.company_name} />
         </TabsContent>
 
       </Tabs>

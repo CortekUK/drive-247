@@ -26,6 +26,7 @@ export const TAB_KEYS = [
   'availability',
   'customers',
   'blocked_customers',
+  'enquiries',
   'messages',
   'payments',
   'invoices',
@@ -77,6 +78,7 @@ export const TAB_GROUPS: TabGroup[] = [
     tabs: [
       { key: 'customers', label: 'Customers', group: 'Customers' },
       { key: 'blocked_customers', label: 'Blocked Customers', group: 'Customers' },
+      { key: 'enquiries', label: 'Enquiries', group: 'Customers' },
       { key: 'messages', label: 'Messages', group: 'Customers' },
     ],
   },
@@ -130,6 +132,7 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   '/blocked-dates': 'availability',
   '/customers': 'customers',
   '/blocked-customers': 'blocked_customers',
+  '/enquiries': 'enquiries',
   '/messages': 'messages',
   '/payments': 'payments',
   '/invoices': 'invoices',

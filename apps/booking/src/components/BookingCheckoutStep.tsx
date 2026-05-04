@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2, ArrowDown, CircleDot, Check } from "lucide-react";
+import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2, ArrowDown, CircleDot, Check, Infinity as InfinityIcon } from "lucide-react";
+import { getUnlimitedMileageOption } from "@/lib/mileage-utils";
 import type { PricingTier, DayBreakdown } from "@/lib/calculate-rental-price";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -108,6 +109,15 @@ export default function BookingCheckoutStep({
 
   // Bonzah policy ID - created dynamically during checkout
   const [bonzahPolicyId, setBonzahPolicyId] = useState<string | null>(null);
+
+  // Unlimited Mileage upgrade — opt-in at checkout, locked into the rental at booking time.
+  const [addUnlimitedMileage, setAddUnlimitedMileage] = useState(false);
+  const unlimitedOption = selectedVehicle ? getUnlimitedMileageOption(selectedVehicle) : { available: false, pricePerDay: 0 };
+  const unlimitedRentalDays = Math.max(1, rentalDuration?.days || 0);
+  const unlimitedMileageEffective = addUnlimitedMileage && unlimitedOption.available;
+  const unlimitedMileageTotal = unlimitedMileageEffective
+    ? Number((unlimitedOption.pricePerDay * unlimitedRentalDays).toFixed(2))
+    : 0;
 
   // Checkout progress overlay
   const [checkoutProgress, setCheckoutProgress] = useState(0);
@@ -242,9 +252,9 @@ export default function BookingCheckoutStep({
   };
 
   const calculateGrandTotal = () => {
-    // Grand total = discounted vehicle price + delivery fees + extras + tax + service fee + insurance
+    // Grand total = discounted vehicle price + delivery fees + extras + tax + service fee + insurance + unlimited mileage upgrade
     // NOTE: Security deposit is NOT included — it's placed as a card hold at key handover, not charged at booking
-    return calculateDiscountedVehicleTotal() + calculateDeliveryFees() + calculateExtrasTotal() + calculateTaxAmount() + calculateServiceFee() + bonzahPremium;
+    return calculateDiscountedVehicleTotal() + calculateDeliveryFees() + calculateExtrasTotal() + calculateTaxAmount() + calculateServiceFee() + bonzahPremium + unlimitedMileageTotal;
   };
 
   // Check if this is an enquiry-based tenant (e.g., Kedic Services)
@@ -741,6 +751,19 @@ export default function BookingCheckoutStep({
       // Step 1: Find existing customer by email for this tenant first, then globally
       console.log('📝 Checking for existing customer by email...');
 
+      // Helper for empty `{}` errors that supabase-js sometimes produces — surfaces
+      // the actual message/code/details/hint so failures aren't silent.
+      const describeErr = (e: any) => {
+        if (!e) return 'unknown error';
+        const parts = [e.message, e.code, e.details, e.hint].filter(Boolean);
+        return parts.length > 0 ? parts.join(' · ') : (typeof e === 'object' ? JSON.stringify(e) : String(e));
+      };
+
+      // Normalize the email — the DB stores it lowercased; mismatched casing was
+      // letting the lookup miss and the INSERT then trip the (email, tenant_id)
+      // unique index, which surfaced as a hard-to-debug `{}` error.
+      const normalizedEmail = (formData.customerEmail || '').trim().toLowerCase();
+
       let existingCustomer = null;
 
       // First: check within this tenant (matches the unique constraint)
@@ -748,7 +771,7 @@ export default function BookingCheckoutStep({
         const { data: tenantCustomer } = await supabase
           .from("customers")
           .select("*")
-          .eq("email", formData.customerEmail)
+          .ilike("email", normalizedEmail)
           .eq("tenant_id", tenant.id)
           .maybeSingle();
         existingCustomer = tenantCustomer;
@@ -759,7 +782,7 @@ export default function BookingCheckoutStep({
         const { data: globalCustomer } = await supabase
           .from("customers")
           .select("*")
-          .eq("email", formData.customerEmail)
+          .ilike("email", normalizedEmail)
           .is("tenant_id", null)
           .maybeSingle();
         existingCustomer = globalCustomer;
@@ -790,8 +813,8 @@ export default function BookingCheckoutStep({
           .single();
 
         if (updateError) {
-          console.error('❌ Customer update error:', updateError);
-          throw updateError;
+          console.error('❌ Customer update error:', describeErr(updateError), updateError);
+          throw new Error(`Customer update failed: ${describeErr(updateError)}`);
         }
         customer = updatedCustomer;
       } else {
@@ -800,9 +823,10 @@ export default function BookingCheckoutStep({
 
         const customerData: Record<string, unknown> = {
           name: formData.customerName,
-          email: formData.customerEmail,
+          email: normalizedEmail,
           phone: formData.customerPhone,
           type: "Individual",
+          customer_type: "Individual",
           status: "Active",
           is_blocked: false,
         };
@@ -818,10 +842,33 @@ export default function BookingCheckoutStep({
           .single();
 
         if (createError) {
-          console.error('❌ Customer create error:', createError);
-          throw createError;
+          // 23505 = unique_violation on (email, tenant_id). Could happen if the
+          // SELECT above was blocked by RLS or raced with a concurrent insert.
+          // Recover by selecting the row that already exists.
+          const code = (createError as any)?.code;
+          const msg = (createError as any)?.message || '';
+          const looksLikeDup = code === '23505' || /duplicate key|unique constraint|already exists/i.test(msg);
+          if (looksLikeDup) {
+            console.warn('Customer already exists — re-fetching by email/tenant', describeErr(createError));
+            const { data: refound } = await supabase
+              .from("customers")
+              .select("*")
+              .ilike("email", normalizedEmail)
+              .eq("tenant_id", tenant?.id ?? '')
+              .maybeSingle();
+            if (refound) {
+              customer = refound;
+            } else {
+              console.error('❌ Customer create error (no recovery):', describeErr(createError), createError);
+              throw new Error(`Customer create failed: ${describeErr(createError)}`);
+            }
+          } else {
+            console.error('❌ Customer create error:', describeErr(createError), createError);
+            throw new Error(`Customer create failed: ${describeErr(createError)}`);
+          }
+        } else {
+          customer = newCustomer;
         }
-        customer = newCustomer;
       }
 
       console.log('✅ Customer ready:', customer.id);
@@ -970,6 +1017,10 @@ export default function BookingCheckoutStep({
         delivery_fee: pickupDeliveryFee || 0,
         collection_fee: returnDeliveryFee || 0,
         is_gig_driver: (bookingContext as any)?.isGigDriver === true,
+        // Unlimited mileage upgrade — locked at booking time
+        is_unlimited_mileage: unlimitedMileageEffective,
+        unlimited_mileage_price_per_day: unlimitedMileageEffective ? unlimitedOption.pricePerDay : null,
+        unlimited_mileage_total: unlimitedMileageEffective ? unlimitedMileageTotal : null,
       };
 
       if (tenant?.id) {
@@ -1011,6 +1062,27 @@ export default function BookingCheckoutStep({
           );
         }
         throw rentalError;
+      }
+
+      // Insert ledger entry for the unlimited-mileage upgrade so payments and P&L pick it up.
+      // Non-fatal — booking completes even if this fails; the rental row carries the data.
+      if (unlimitedMileageEffective && unlimitedMileageTotal > 0) {
+        const { error: umLedgerError } = await supabase.from("ledger_entries").insert({
+          customer_id: customer.id,
+          rental_id: rental.id,
+          vehicle_id: selectedVehicle.id,
+          tenant_id: tenant?.id,
+          entry_date: formData.pickupDate,
+          due_date: formData.pickupDate,
+          type: "Charge",
+          category: "Unlimited Mileage",
+          amount: unlimitedMileageTotal,
+          remaining_amount: unlimitedMileageTotal,
+          reference: `Unlimited mileage: ${fmt(unlimitedOption.pricePerDay)}/day × ${unlimitedRentalDays} day${unlimitedRentalDays === 1 ? "" : "s"}`,
+        });
+        if (umLedgerError) {
+          console.error("Failed to insert Unlimited Mileage ledger entry:", umLedgerError);
+        }
       }
 
       // Save selected extras to rental_extras_selections
@@ -1465,6 +1537,68 @@ export default function BookingCheckoutStep({
             </div>
           </Card>
 
+          {/* Unlimited Mileage Upgrade — only when the vehicle exposes it.
+              Placed right after Rental Summary so the customer sees the option
+              before they reach the price total — and can decide both ways. */}
+          {unlimitedOption.available && (
+            <Card
+              id="unlimited-mileage-card"
+              className={cn(
+                "p-6 transition-all",
+                addUnlimitedMileage
+                  ? "bg-accent/10 border-2 border-accent shadow-glow"
+                  : "bg-card border-accent/30"
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <div className="shrink-0 rounded-md bg-accent/15 p-2">
+                  <InfinityIcon className="w-5 h-5 text-accent" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-semibold">Add Unlimited Mileage</h3>
+                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/15 text-accent">
+                          Optional
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                        Drive as far as you'd like — no per-day limit, no excess charges.
+                        {selectedVehicle?.excess_mileage_rate && (
+                          <>
+                            {" "}Without it, you pay{" "}
+                            <span className="font-medium text-foreground">
+                              {fmt(selectedVehicle.excess_mileage_rate)}/{(tenant as any)?.distance_unit === 'km' ? 'km' : 'mile'}
+                            </span>{" "}
+                            for every mile over your allowance.
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <Checkbox
+                      id="checkout-unlimited-mileage"
+                      checked={addUnlimitedMileage}
+                      onCheckedChange={(checked) => setAddUnlimitedMileage(checked === true)}
+                      className="mt-1 shrink-0"
+                    />
+                  </div>
+                  <div className="mt-4 flex items-baseline justify-between gap-3 pt-3 border-t border-border/50">
+                    <span className="text-xs text-muted-foreground">
+                      {fmt(unlimitedOption.pricePerDay)}/day × {unlimitedRentalDays} day{unlimitedRentalDays === 1 ? "" : "s"}
+                    </span>
+                    <span className={cn(
+                      "text-lg font-bold",
+                      addUnlimitedMileage ? "text-accent" : "text-foreground"
+                    )}>
+                      {addUnlimitedMileage ? "+" : ""}{fmt(unlimitedMileageTotal || unlimitedOption.pricePerDay * unlimitedRentalDays)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
           {/* Selected Extras Card */}
           {Object.keys(selectedExtras).length > 0 && (
             <Card className="p-6 bg-card border-accent/20">
@@ -1783,6 +1917,45 @@ export default function BookingCheckoutStep({
                       </span>
                       <span className="font-medium">{fmt(bonzahPremium)}</span>
                     </div>
+                  )}
+
+                  {/* Unlimited Mileage line item — only show when opted in */}
+                  {unlimitedMileageEffective && unlimitedMileageTotal > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <InfinityIcon className="w-3 h-3" />
+                        Unlimited Mileage
+                        <span className="text-xs text-muted-foreground/70 ml-1">
+                          ({fmt(unlimitedOption.pricePerDay)}/day × {unlimitedRentalDays}d)
+                        </span>
+                      </span>
+                      <span className="font-medium">{fmt(unlimitedMileageTotal)}</span>
+                    </div>
+                  )}
+
+                  {/* Available add-on hint — when the option exists but isn't opted in,
+                      surface it in the Price Summary so customers can discover and toggle
+                      it without scrolling back up. */}
+                  {unlimitedOption.available && !unlimitedMileageEffective && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddUnlimitedMileage(true);
+                        if (typeof document !== 'undefined') {
+                          const card = document.getElementById('unlimited-mileage-card');
+                          card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                      }}
+                      className="w-full flex items-center justify-between rounded-md border border-dashed border-accent/40 hover:border-accent hover:bg-accent/5 transition px-3 py-2 text-left"
+                    >
+                      <span className="flex items-center gap-1.5 text-sm text-accent">
+                        <InfinityIcon className="w-3.5 h-3.5" />
+                        Add Unlimited Mileage
+                      </span>
+                      <span className="text-sm font-semibold text-accent">
+                        +{fmt(unlimitedOption.pricePerDay * unlimitedRentalDays)}
+                      </span>
+                    </button>
                   )}
 
                   {/* Grand Total - Highlighted Section */}

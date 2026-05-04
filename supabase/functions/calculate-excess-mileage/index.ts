@@ -92,12 +92,20 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, noCharge: true, reason: "Missing mileage readings" });
     }
 
-    // Fetch rental details including mileage overrides
+    // Fetch rental details including mileage overrides + unlimited-mileage flag
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
-      .select("vehicle_id, customer_id, tenant_id, start_date, end_date, daily_mileage_override, weekly_mileage_override, monthly_mileage_override, excess_mileage_rate_override")
+      .select("vehicle_id, customer_id, tenant_id, start_date, end_date, daily_mileage_override, weekly_mileage_override, monthly_mileage_override, excess_mileage_rate_override, is_unlimited_mileage")
       .eq("id", rentalId)
       .single();
+
+    // Unlimited-mileage upgrade short-circuits the calculation entirely.
+    // Also clean up any stale excess-mileage charge from a prior calculation.
+    if (rental?.is_unlimited_mileage) {
+      await deleteExistingCharge();
+      console.log("[EXCESS-MILEAGE] Skipped — rental has unlimited mileage upgrade.");
+      return jsonResponse({ success: true, skipped: true, reason: "unlimited_mileage" });
+    }
 
     if (rentalError || !rental) {
       return errorResponse("Rental not found", 404);

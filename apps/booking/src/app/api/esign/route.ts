@@ -142,6 +142,8 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         vehicle_weekly_mileage: vehicle?.weekly_mileage?.toString() || '',
         vehicle_monthly_mileage: vehicle?.monthly_mileage?.toString() || '',
         vehicle_allowed_mileage: (() => {
+            // Unlimited-mileage upgrade purchased on this rental → render as Unlimited.
+            if (rental?.is_unlimited_mileage) return 'Unlimited';
             if (!vehicle?.daily_mileage && !vehicle?.weekly_mileage && !vehicle?.monthly_mileage) return 'Unlimited';
             if (rental?.start_date && rental?.end_date) {
                 const days = Math.max(1, Math.ceil((new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
@@ -154,6 +156,15 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
             }
             return vehicle?.monthly_mileage?.toString() || '';
         })(),
+        // Unlimited-mileage upgrade — true/false strings for {{is_unlimited_mileage}} conditionals,
+        // plus the per-day rate and total upcharge for breakdown rendering.
+        is_unlimited_mileage: rental?.is_unlimited_mileage ? 'true' : 'false',
+        unlimited_mileage_total: rental?.is_unlimited_mileage
+            ? formatCurrency(rental?.unlimited_mileage_total, cc)
+            : '',
+        unlimited_mileage_price_per_day: rental?.is_unlimited_mileage
+            ? formatCurrency(rental?.unlimited_mileage_price_per_day, cc)
+            : '',
 
         // Rental
         rental_number: rental?.rental_number || rental?.id?.substring(0, 8)?.toUpperCase() || '',

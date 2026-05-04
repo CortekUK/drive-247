@@ -45,3 +45,31 @@ export function calculateTotalMileageAllowance(vehicle: VehicleMileage, rentalDa
 export function isUnlimitedMileage(vehicle: VehicleMileage): boolean {
   return vehicle.daily_mileage == null && vehicle.weekly_mileage == null && vehicle.monthly_mileage == null;
 }
+
+interface UnlimitedUpgradeVehicle extends VehicleMileage {
+  unlimited_mileage_available?: boolean | null;
+  unlimited_mileage_price_per_day?: number | string | null;
+}
+
+export interface UnlimitedMileageOption {
+  /** Should the customer be shown the opt-in at checkout? */
+  available: boolean;
+  /** Per-day upcharge (0 when not available). */
+  pricePerDay: number;
+}
+
+/**
+ * Decide whether the unlimited-mileage upgrade should be exposed to the
+ * customer for this vehicle. Vehicles that are inherently unlimited (no tier
+ * limits set) skip the upgrade — it would be redundant.
+ */
+export function getUnlimitedMileageOption(vehicle: UnlimitedUpgradeVehicle): UnlimitedMileageOption {
+  if (isUnlimitedMileage(vehicle)) return { available: false, pricePerDay: 0 };
+  const enabled = vehicle.unlimited_mileage_available === true;
+  const raw = vehicle.unlimited_mileage_price_per_day;
+  const price = typeof raw === 'number' ? raw : raw != null ? Number(raw) : 0;
+  if (!enabled || !Number.isFinite(price) || price <= 0) {
+    return { available: false, pricePerDay: 0 };
+  }
+  return { available: true, pricePerDay: price };
+}
