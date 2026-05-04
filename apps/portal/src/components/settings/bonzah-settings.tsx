@@ -16,6 +16,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { useBonzahBalance } from '@/hooks/use-bonzah-balance';
 import { useBonzahAlertConfig } from '@/hooks/use-bonzah-alert-config';
 import { useBonzahRetryAll } from '@/hooks/use-bonzah-retry-all';
+import { BonzahOnboardingForm } from './bonzah-onboarding';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -354,36 +355,8 @@ export function BonzahSettings() {
         </CardContent>
       </Card>}
 
-      {/* Card 3: Onboarding (shown when not yet connected) */}
-      {!isConnected && <Card>
-        <CardHeader>
-          <CardTitle>Bonzah Onboarding</CardTitle>
-          <CardDescription>
-            Complete this form to register your rental company with Bonzah and get your credentials
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-lg overflow-hidden border">
-            <iframe
-              src="https://api.leadconnectorhq.com/widget/form/3nsZvu171vvOOj7A58WX"
-              style={{ width: '100%', height: '800px', border: 'none' }}
-              title="Bonzah Onboarding Form"
-              allow="clipboard-write"
-            />
-          </div>
-          <p className="text-sm text-muted-foreground mt-3">
-            Having trouble with the form?{' '}
-            <a
-              href="https://api.leadconnectorhq.com/widget/form/3nsZvu171vvOOj7A58WX"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline dark:text-blue-400"
-            >
-              Open in a new tab
-            </a>
-          </p>
-        </CardContent>
-      </Card>}
+      {/* Card 3: Onboarding multi-step form (shown when not yet connected) */}
+      {!isConnected && <BonzahOnboardingForm />}
 
       {/* Card 4: Credentials */}
       <Card>

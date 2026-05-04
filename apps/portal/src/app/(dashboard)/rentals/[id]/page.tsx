@@ -26,10 +26,12 @@ import { useTenant } from "@/contexts/TenantContext";
 // integration_bonzah controls Bonzah-specific features only; insurance document upload is always available
 import { useRentalTotals, useRentalCharges } from "@/hooks/use-rental-ledger-data";
 import { useRentalInvoice, useRentalPaymentBreakdown, useRentalRefundBreakdown } from "@/hooks/use-rental-invoice";
+import { useRentalManualPaidBreakdown } from "@/hooks/use-rental-manual-paid-breakdown";
 import { usePaygLedger } from "@/hooks/use-payg-ledger";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
 import { KeyHandoverActionBanner } from "@/components/rentals/key-handover-action-banner";
+import { DamageAnalysisCard } from "@/components/rentals/damage-analysis-card";
 import { MileageSummaryCard } from "@/components/rentals/mileage-summary-card";
 import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
 import { AddFineDialog } from "@/components/fines/add-fine-dialog";
@@ -269,6 +271,12 @@ const RentalDetail = () => {
   const [refundPaidAmount, setRefundPaidAmount] = useState(0);
   const [refundExtensionId, setRefundExtensionId] = useState<string | undefined>();
 
+  // Undo manual payment dialog state
+  const [showUndoDialog, setShowUndoDialog] = useState(false);
+  const [undoCategory, setUndoCategory] = useState<string>("");
+  const [undoAmount, setUndoAmount] = useState(0);
+  const [isUndoing, setIsUndoing] = useState(false);
+
   // Extension dialog state
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
   const [showAdminExtendDialog, setShowAdminExtendDialog] = useState(false);
@@ -367,6 +375,7 @@ const RentalDetail = () => {
   const refundBreakdown = refundData?.categoryRefunds || null;
   const chargeRefunds = refundData?.chargeRefunds || {};
   const extensionCategoryRefunds = refundData?.extensionCategoryRefunds || {};
+  const { data: manualPaidByCategory } = useRentalManualPaidBreakdown(id);
 
   // PAYG daily ledger
   const { ledger: paygLedger, isLoading: isPaygLedgerLoading } = usePaygLedger(id, rental?.is_pay_as_you_go === true);
@@ -3073,20 +3082,41 @@ const RentalDetail = () => {
                           const wouldShowRefund = applied && !fullyRefunded && categoryHasBeenPaid && canRefund && !isDepositUsed;
                           return wouldShowRefund;
                         })() ? (
-                          <button
-                            className="text-xs font-medium text-orange-500 hover:text-orange-400 hover:underline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setRefundCategory(category);
-                              setRefundTotalAmount(amount);
-                              const alreadyRefunded = refundBreakdown?.[category] ?? 0;
-                              setRefundPaidAmount(Math.max(0, amount - alreadyRefunded));
-                              setRefundExtensionId(undefined);
-                              setShowRefundDialog(true);
-                            }}
-                          >
-                            {category === 'Security Deposit' ? (refunded > 0 ? 'Release More' : 'Release') : (refunded > 0 ? 'Refund More' : 'Refund')}
-                          </button>
+                          <>
+                            {(() => {
+                              const manualPaid = manualPaidByCategory?.[category] ?? 0;
+                              const refundedForCat = refundBreakdown?.[category] ?? 0;
+                              const showUndo = manualPaid > 0 && refundedForCat === 0 && category !== 'Security Deposit';
+                              if (!showUndo) return null;
+                              return (
+                                <button
+                                  className="text-xs font-medium text-slate-500 hover:text-slate-700 hover:underline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setUndoCategory(category);
+                                    setUndoAmount(manualPaid);
+                                    setShowUndoDialog(true);
+                                  }}
+                                >
+                                  Undo
+                                </button>
+                              );
+                            })()}
+                            <button
+                              className="text-xs font-medium text-orange-500 hover:text-orange-400 hover:underline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRefundCategory(category);
+                                setRefundTotalAmount(amount);
+                                const alreadyRefunded = refundBreakdown?.[category] ?? 0;
+                                setRefundPaidAmount(Math.max(0, amount - alreadyRefunded));
+                                setRefundExtensionId(undefined);
+                                setShowRefundDialog(true);
+                              }}
+                            >
+                              {category === 'Security Deposit' ? (refunded > 0 ? 'Release More' : 'Release') : (refunded > 0 ? 'Refund More' : 'Refund')}
+                            </button>
+                          </>
                         ) : applied && fullyRefunded ? (
                           <Check className="h-4 w-4 text-green-500 inline-block" />
                         ) : (() => {
@@ -4075,6 +4105,9 @@ const RentalDetail = () => {
           startDate={rental?.start_date || null}
         />
       )}
+
+      {/* AI Damage Analysis — compares handover vs return photos */}
+      {id && <DamageAnalysisCard rentalId={id} />}
 
       {/* Deposit Hold Status — removed separate card; pre-auth info is shown in Payment Breakdown */}
 
@@ -5269,6 +5302,69 @@ const RentalDetail = () => {
             }
           }}
         />
+      )}
+
+      {/* Undo Manual Payment Confirmation Dialog */}
+      {rental && (
+        <AlertDialog open={showUndoDialog} onOpenChange={setShowUndoDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Undo manual payment?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will reverse {formatCurrencyUtil(undoAmount, tenant?.currency_code || 'USD')} of manually-recorded payments against{' '}
+                <strong>{undoCategory}</strong> and remove the payment record. The charge will return to unpaid. This action does not refund any money — use it only when the original payment was recorded in error.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isUndoing}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isUndoing}
+                onClick={async (e) => {
+                  e.preventDefault();
+                  if (!rental || !tenant?.id) return;
+                  setIsUndoing(true);
+                  try {
+                    const { data, error } = await supabase.functions.invoke('undo-manual-payment', {
+                      body: {
+                        rentalId: rental.id,
+                        category: undoCategory,
+                        tenantId: tenant.id,
+                      },
+                    });
+                    if (error) throw error;
+                    if (!data?.success) throw new Error(data?.error || 'Failed to undo payment');
+
+                    toast({
+                      title: 'Payment undone',
+                      description: `Reversed ${data.details?.allocationsReversed || 0} allocation(s) for ${undoCategory}.`,
+                    });
+
+                    await Promise.all([
+                      queryClient.invalidateQueries({ queryKey: ['rental', rental.id] }),
+                      queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] }),
+                      queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
+                      queryClient.invalidateQueries({ queryKey: ['rental-manual-paid-breakdown'] }),
+                      queryClient.invalidateQueries({ queryKey: ['rental-totals'] }),
+                      queryClient.invalidateQueries({ queryKey: ['customer-balance'] }),
+                      queryClient.invalidateQueries({ queryKey: ['customer-balance-status'] }),
+                    ]);
+                    setShowUndoDialog(false);
+                  } catch (err: any) {
+                    toast({
+                      title: 'Error',
+                      description: err?.message || 'Failed to undo payment',
+                      variant: 'destructive',
+                    });
+                  } finally {
+                    setIsUndoing(false);
+                  }
+                }}
+              >
+                {isUndoing ? 'Undoing…' : 'Undo Payment'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
 
       {/* Deduct from Deposit Confirmation Dialog */}

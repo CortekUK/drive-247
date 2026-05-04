@@ -1,12 +1,13 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, Download, ExternalLink, X, Loader2, Search, BarChart3 } from "lucide-react";
+import { ShieldCheck, Download, ExternalLink, X, Loader2, Search, BarChart3, Plus } from "lucide-react";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
+import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useState, useCallback } from "react";
@@ -16,6 +17,9 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
+import { GenerateInsuranceDialog } from "@/components/insurance/generate-insurance-dialog";
+import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
+import { DollarSign } from "lucide-react";
 
 interface InsuranceDoc {
   id: string;
@@ -32,7 +36,15 @@ interface InsuranceDoc {
   status?: string;
   bonzah_policy_id?: string | null;
   bonzah_pdf_ids?: Record<string, number> | null;
+  /** Bonzah-only: db row id (used to look up linked ledger entry) */
+  bonzah_db_id?: string | null;
+  premium_amount?: number | null;
+  payment_status?: "paid" | "partial" | "unpaid" | null;
+  remaining_amount?: number | null;
+  policy_type?: string | null;
 }
+
+type PaymentState = "paid" | "partial" | "unpaid";
 
 export default function InsurancesList() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -40,9 +52,12 @@ export default function InsurancesList() {
   const [pageSize] = useState(25);
   const [bonzahFilter, setBonzahFilter] = useState(false);
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
   const router = useRouter();
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const [downloadingBonzahPdf, setDownloadingBonzahPdf] = useState<string | null>(null);
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [paymentDoc, setPaymentDoc] = useState<InsuranceDoc | null>(null);
 
   // Fetch insurance documents from customer_documents table
   const { data: insuranceDocuments = [], isLoading: isLoadingDocs } = useQuery({
@@ -98,7 +113,37 @@ export default function InsurancesList() {
     enabled: !!tenant,
   });
 
-  const isLoading = isLoadingDocs || isLoadingBonzah;
+  // Fetch insurance ledger entries to derive payment status per Bonzah policy
+  const { data: insuranceLedger = [], isLoading: isLoadingLedger } = useQuery({
+    queryKey: ["insurance-ledger", tenant?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ledger_entries")
+        .select("reference, amount, remaining_amount")
+        .eq("tenant_id", tenant!.id)
+        .in("category", ["Insurance", "Extension Insurance"])
+        .eq("type", "Charge")
+        .like("reference", "BONZAH-%");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenant,
+  });
+
+  // Map BONZAH-{policy_db_id} → { state, remaining }
+  const paymentByBonzahId = new Map<string, { state: PaymentState; remaining: number }>();
+  for (const entry of insuranceLedger) {
+    const ref = entry.reference || "";
+    const policyDbId = ref.replace(/^BONZAH-/, "");
+    if (!policyDbId) continue;
+    const amount = Number(entry.amount || 0);
+    const remaining = Number(entry.remaining_amount || 0);
+    const state: PaymentState =
+      remaining <= 0 ? "paid" : remaining < amount ? "partial" : "unpaid";
+    paymentByBonzahId.set(policyDbId, { state, remaining: Math.max(remaining, 0) });
+  }
+
+  const isLoading = isLoadingDocs || isLoadingBonzah || isLoadingLedger;
 
   // Combine all insurance documents
   const allInsurances: InsuranceDoc[] = [
@@ -106,20 +151,28 @@ export default function InsurancesList() {
       ...doc,
       isBonzah: doc.insurance_provider?.toLowerCase().includes('bonzah') || false,
     })),
-    ...bonzahPolicies.map((policy: any) => ({
-      id: `bonzah-${policy.id}`,
-      document_name: `Bonzah Insurance${policy.policy_no ? ` - Policy #${policy.policy_no}` : policy.quote_no ? ` - Quote #${policy.quote_no}` : ''}`,
-      created_at: policy.created_at,
-      document_type: 'Insurance',
-      status: policy.status,
-      customer_id: policy.customer_id,
-      customers: policy.customers,
-      file_url: null,
-      isBonzah: true,
-      rental_id: policy.rental_id,
-      bonzah_policy_id: policy.policy_id,
-      bonzah_pdf_ids: policy.coverage_types?.pdf_ids || null,
-    })),
+    ...bonzahPolicies.map((policy: any) => {
+      const payment = paymentByBonzahId.get(policy.id);
+      return {
+        id: `bonzah-${policy.id}`,
+        document_name: `Bonzah Insurance${policy.policy_no ? ` - Policy #${policy.policy_no}` : policy.quote_no ? ` - Quote #${policy.quote_no}` : ''}`,
+        created_at: policy.created_at,
+        document_type: 'Insurance',
+        status: policy.status,
+        customer_id: policy.customer_id,
+        customers: policy.customers,
+        file_url: null,
+        isBonzah: true,
+        rental_id: policy.rental_id,
+        bonzah_policy_id: policy.policy_id,
+        bonzah_db_id: policy.id,
+        bonzah_pdf_ids: policy.coverage_types?.pdf_ids || null,
+        premium_amount: policy.premium_amount != null ? Number(policy.premium_amount) : null,
+        payment_status: payment?.state || null,
+        remaining_amount: payment?.remaining ?? null,
+        policy_type: policy.policy_type || null,
+      };
+    }),
   ];
 
   const filteredInsurances = allInsurances.filter((doc) => {
@@ -436,7 +489,7 @@ export default function InsurancesList() {
           <Button
             onClick={handleDownloadAll}
             disabled={isDownloadingAll || allInsurances.length === 0}
-            className="bg-gradient-primary"
+            variant="outline"
           >
             {isDownloadingAll ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -444,6 +497,10 @@ export default function InsurancesList() {
               <Download className="h-4 w-4 mr-2" />
             )}
             Export PDFs
+          </Button>
+          <Button onClick={() => setGenerateOpen(true)} className="bg-gradient-primary">
+            <Plus className="h-4 w-4 mr-2" />
+            Generate Insurance
           </Button>
         </div>
       </div>
@@ -537,6 +594,9 @@ export default function InsurancesList() {
                   <TableRow>
                     <TableHead>Document Name</TableHead>
                     <TableHead>Customer</TableHead>
+                    <TableHead className="text-right">Premium</TableHead>
+                    <TableHead>Policy Status</TableHead>
+                    <TableHead>Payment</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -560,6 +620,25 @@ export default function InsurancesList() {
                       </TableCell>
                       <TableCell className="font-medium text-foreground">
                         {doc.customers?.name || "—"}
+                      </TableCell>
+                      <TableCell className="text-right text-sm font-mono">
+                        {doc.premium_amount != null
+                          ? `$${doc.premium_amount.toFixed(2)}`
+                          : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell>
+                        {doc.isBonzah ? (
+                          <PolicyStatusBadge status={doc.status} />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">{doc.document_type || "—"}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {doc.isBonzah ? (
+                          <PaymentBadge state={doc.payment_status} />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm">
                         {format(new Date(doc.created_at), "MMM dd, yyyy HH:mm")}
@@ -585,6 +664,16 @@ export default function InsurancesList() {
                             </>
                           ) : doc.isBonzah ? (
                             <div className="flex items-center gap-2">
+                              {(doc.payment_status === "unpaid" || doc.payment_status === "partial") && doc.rental_id && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => setPaymentDoc(doc)}
+                                  className="text-xs"
+                                >
+                                  <DollarSign className="h-4 w-4 mr-1" />
+                                  Add Payment
+                                </Button>
+                              )}
                               {doc.bonzah_pdf_ids && Object.keys(doc.bonzah_pdf_ids).length > 0 && (
                                 <Button
                                   variant="outline"
@@ -655,6 +744,62 @@ export default function InsurancesList() {
           </div>
         </>
       )}
+
+      <GenerateInsuranceDialog
+        open={generateOpen}
+        onOpenChange={setGenerateOpen}
+        onPurchaseComplete={() => {
+          queryClient.invalidateQueries({ queryKey: ["bonzah-policies-insurances", tenant?.id] });
+          queryClient.invalidateQueries({ queryKey: ["insurance-documents", tenant?.id] });
+          queryClient.invalidateQueries({ queryKey: ["insurance-ledger", tenant?.id] });
+        }}
+      />
+
+      {paymentDoc && paymentDoc.rental_id && paymentDoc.customer_id && (
+        <AddPaymentDialog
+          open={!!paymentDoc}
+          onOpenChange={(next) => { if (!next) setPaymentDoc(null); }}
+          customer_id={paymentDoc.customer_id}
+          rental_id={paymentDoc.rental_id}
+          defaultAmount={paymentDoc.remaining_amount ?? undefined}
+          targetCategories={[paymentDoc.policy_type === "extension" ? "Extension Insurance" : "Insurance"]}
+          insuranceChargeMode
+          onPaymentSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["insurance-ledger", tenant?.id] });
+            queryClient.invalidateQueries({ queryKey: ["bonzah-policies-insurances", tenant?.id] });
+            setPaymentDoc(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function PolicyStatusBadge({ status }: { status?: string | null }) {
+  if (!status) return <span className="text-xs text-muted-foreground">—</span>;
+  const variant: "default" | "secondary" | "outline" | "destructive" =
+    status === "active"
+      ? "default"
+      : status === "quoted" || status === "payment_pending"
+      ? "secondary"
+      : status === "cancelled" || status === "failed"
+      ? "destructive"
+      : "outline";
+  const label = status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return <Badge variant={variant} className="text-[10px] px-1.5 py-0 h-5">{label}</Badge>;
+}
+
+function PaymentBadge({ state }: { state?: PaymentState | null }) {
+  if (!state) return <span className="text-xs text-muted-foreground">—</span>;
+  const map: Record<PaymentState, { label: string; className: string }> = {
+    paid: { label: "Paid", className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30" },
+    partial: { label: "Partial", className: "bg-amber-500/10 text-amber-600 border-amber-500/30" },
+    unpaid: { label: "Unpaid", className: "bg-red-500/10 text-red-600 border-red-500/30" },
+  };
+  const { label, className } = map[state];
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[10px] font-medium ${className}`}>
+      {label}
+    </span>
   );
 }

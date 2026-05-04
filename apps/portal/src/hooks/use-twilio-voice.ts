@@ -24,6 +24,7 @@ export interface VoiceStatus {
   forwardingNumber: string | null;
   forwardingUsers: ForwardingUser[];
   callRecordingEnabled: boolean;
+  forwardingCallerIdMode: 'caller' | 'business_line';
 }
 
 async function invokeManageVoice(action: string, params: Record<string, any> = {}) {
@@ -76,6 +77,7 @@ export function useTwilioVoice() {
         forwardingNumber: data.forwardingNumber ?? null,
         forwardingUsers: data.forwardingUsers ?? [],
         callRecordingEnabled: data.callRecordingEnabled ?? false,
+        forwardingCallerIdMode: (data.forwardingCallerIdMode as 'caller' | 'business_line') ?? 'caller',
       } as VoiceStatus;
     },
     enabled: !!tenant?.id,
@@ -124,6 +126,7 @@ export function useTwilioVoice() {
       voicemailGreetingUrl?: string | null;
       forwardingNumber?: string | null;
       callRecordingEnabled?: boolean;
+      forwardingCallerIdMode?: 'caller' | 'business_line';
     }) => invoke('update-forwarding', params),
     onSuccess: (_data, variables) => {
       invalidateStatus();

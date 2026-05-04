@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
 
     const { data: directMatch } = await supabase
       .from('tenants')
-      .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled')
+      .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled, forwarding_caller_id_mode')
       .eq('twilio_phone_number', to)
       .eq('twilio_voice_enabled', true)
       .single();
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
       const altTo = to.startsWith('+') ? to.substring(1) : `+${to}`;
       const { data: altMatch } = await supabase
         .from('tenants')
-        .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled')
+        .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled, forwarding_caller_id_mode')
         .eq('twilio_phone_number', altTo)
         .eq('twilio_voice_enabled', true)
         .single();
@@ -213,10 +213,17 @@ Deno.serve(async (req) => {
         });
 
       if (allNumbers.length > 0) {
+        // If the tenant wants forwarded calls to display the business line on staff
+        // phones (so they know it's a business call before answering), set callerId
+        // to the Twilio number. Otherwise let Twilio pass through the original caller.
+        const callerIdAttr = tenant.forwarding_caller_id_mode === 'business_line'
+          ? ` callerId="${to}"`
+          : '';
+
         numberElements = '\n' + allNumbers
-          .map((num) => `    <Number statusCallback="${supabaseUrl}/functions/v1/twilio-voice-status">${num}</Number>`)
+          .map((num) => `    <Number${callerIdAttr} statusCallback="${supabaseUrl}/functions/v1/twilio-voice-status">${num}</Number>`)
           .join('\n');
-        console.log(`[twilio-voice-inbound] Forwarding to ${allNumbers.length} phone numbers`);
+        console.log(`[twilio-voice-inbound] Forwarding to ${allNumbers.length} phone numbers (callerIdMode=${tenant.forwarding_caller_id_mode || 'caller'})`);
       }
     }
 

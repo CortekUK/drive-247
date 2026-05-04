@@ -1,0 +1,792 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { toast } from '@/components/ui/sonner';
+import { cn } from '@/lib/utils';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Search,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  ShieldCheck,
+  FileText,
+  Building2,
+  ScrollText,
+  User,
+  Banknote,
+  Shield,
+  ClipboardCheck,
+  ShieldAlert,
+  PenLine,
+  Loader2,
+  Download,
+} from 'lucide-react';
+
+interface FileRef {
+  url: string;
+  path: string;
+  name: string;
+  size: number;
+}
+
+interface Submission {
+  id: string;
+  tenant_id: string;
+  submitted_by: string | null;
+  business_trade_name: string;
+  business_legal_name: string;
+  primary_contact_first_name: string | null;
+  primary_contact_last_name: string | null;
+  primary_contact_email: string;
+  primary_contact_phone: string | null;
+  ein: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  admin_note: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  data: Record<string, any>;
+  file_urls: Record<string, FileRef[]>;
+  submitted_at: string;
+  created_at: string;
+  updated_at: string;
+  tenant_name?: string;
+  tenant_slug?: string;
+}
+
+type FilterStatus = 'all' | 'pending' | 'approved' | 'rejected';
+
+const formatDate = (iso: string | null) =>
+  iso
+    ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    : '—';
+
+const formatBytes = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const statusBadgeClass: Record<Submission['status'], string> = {
+  pending: 'text-warning',
+  approved: 'text-success',
+  rejected: 'text-destructive',
+};
+
+const statusLabel: Record<Submission['status'], string> = {
+  pending: 'Pending Review',
+  approved: 'Approved',
+  rejected: 'Rejected',
+};
+
+const statusIcon: Record<Submission['status'], React.ElementType> = {
+  pending: Clock,
+  approved: CheckCircle2,
+  rejected: XCircle,
+};
+
+export default function BonzahOnboardingPage() {
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<FilterStatus>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selected, setSelected] = useState<Submission | null>(null);
+
+  const loadSubmissions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('bonzah_onboarding_submissions')
+        .select('*, tenants:tenant_id (company_name, slug)')
+        .order('submitted_at', { ascending: false });
+      if (error) throw error;
+      const mapped = (data || []).map((r: any) => ({
+        ...r,
+        tenant_name: r.tenants?.company_name || 'Unknown',
+        tenant_slug: r.tenants?.slug,
+      }));
+      setSubmissions(mapped);
+    } catch (err: any) {
+      toast.error('Failed to load submissions: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadSubmissions();
+
+    // Realtime subscription for new submissions
+    const channel = supabase
+      .channel('bonzah-onboarding-admin')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bonzah_onboarding_submissions' },
+        () => {
+          void loadSubmissions();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const filteredSubmissions = useMemo(() => {
+    return submissions.filter((s) => {
+      if (filter !== 'all' && s.status !== filter) return false;
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        s.business_trade_name?.toLowerCase().includes(q) ||
+        s.business_legal_name?.toLowerCase().includes(q) ||
+        s.primary_contact_email?.toLowerCase().includes(q) ||
+        s.tenant_name?.toLowerCase().includes(q) ||
+        s.ein?.toLowerCase().includes(q)
+      );
+    });
+  }, [submissions, filter, searchQuery]);
+
+  const counts = useMemo(
+    () => ({
+      pending: submissions.filter((s) => s.status === 'pending').length,
+      approved: submissions.filter((s) => s.status === 'approved').length,
+      rejected: submissions.filter((s) => s.status === 'rejected').length,
+    }),
+    [submissions],
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center h-10 w-10 rounded-xl bg-primary/15 glow-purple-sm">
+            <ShieldCheck className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Bonzah Onboarding</h1>
+            <p className="text-sm text-muted-foreground">
+              Review tenant Bonzah Business Partner applications ·{' '}
+              <span className="tabular-nums">{submissions.length}</span> total
+              {counts.pending > 0 && (
+                <span className="text-warning"> · {counts.pending} pending</span>
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Stat cards (clickable filters) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {(
+          [
+            { key: 'pending', icon: Clock, label: 'Pending', count: counts.pending, accent: 'warning' },
+            { key: 'approved', icon: CheckCircle2, label: 'Approved', count: counts.approved, accent: 'success' },
+            { key: 'rejected', icon: XCircle, label: 'Rejected', count: counts.rejected, accent: 'destructive' },
+          ] as const
+        ).map(({ key, icon: Icon, label, count, accent }) => (
+          <Card
+            key={key}
+            className={cn(
+              'cursor-pointer transition-all',
+              filter === key && `border-${accent}/40 bg-${accent}/5`,
+            )}
+            onClick={() => setFilter(filter === key ? 'all' : key)}
+          >
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">{label}</p>
+                  <p className="text-2xl font-bold tabular-nums">{count}</p>
+                </div>
+                <div className={cn('flex items-center justify-center h-10 w-10 rounded-lg', `bg-${accent}/15`)}>
+                  <Icon className={cn('h-5 w-5', `text-${accent}`)} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Search & Filters */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by business name, contact email, EIN, or tenant..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setFilter(status)}
+                  className={cn(
+                    'px-3 py-2 rounded-md text-xs font-semibold transition-all capitalize border',
+                    filter === status
+                      ? status === 'pending'
+                        ? 'bg-warning/15 text-amber-400 border-warning/30'
+                        : status === 'approved'
+                        ? 'bg-success/15 text-success border-success/30'
+                        : status === 'rejected'
+                        ? 'bg-destructive/15 text-destructive border-destructive/30'
+                        : 'bg-primary/15 text-primary border-primary/30'
+                      : 'bg-transparent text-muted-foreground border-border hover:text-foreground',
+                  )}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Table */}
+      <Card>
+        <CardContent className="pt-6">
+          {loading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : filteredSubmissions.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="mx-auto h-12 w-12 rounded-full bg-muted/40 flex items-center justify-center mb-3">
+                <FileText className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium">No submissions found</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {filter === 'all'
+                  ? 'Tenants will appear here once they submit their Bonzah onboarding form.'
+                  : `No ${filter} submissions match your filters.`}
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Business</TableHead>
+                  <TableHead>Tenant</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Submitted</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredSubmissions.map((s) => {
+                  const StatusIcon = statusIcon[s.status];
+                  return (
+                    <TableRow
+                      key={s.id}
+                      className="cursor-pointer hover:bg-muted/40"
+                      onClick={() => setSelected(s)}
+                    >
+                      <TableCell>
+                        <div className="font-medium">{s.business_trade_name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {s.business_legal_name}
+                          {s.ein && <span className="ml-2">EIN: {s.ein}</span>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">{s.tenant_name}</div>
+                        {s.tenant_slug && (
+                          <div className="text-xs text-muted-foreground">{s.tenant_slug}</div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {s.primary_contact_first_name} {s.primary_contact_last_name}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{s.primary_contact_email}</div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDate(s.submitted_at)}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1.5 text-sm font-medium',
+                            statusBadgeClass[s.status],
+                          )}
+                        >
+                          <StatusIcon className="h-3.5 w-3.5" />
+                          {statusLabel[s.status]}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelected(s);
+                          }}
+                        >
+                          Review
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <SubmissionDetailDialog
+        submission={selected}
+        onClose={() => setSelected(null)}
+        onUpdated={loadSubmissions}
+      />
+    </div>
+  );
+}
+
+// ── Detail Dialog ────────────────────────────────────────────────────────────
+
+const sectionTabs = [
+  { key: 'business', label: 'Business', icon: Building2 },
+  { key: 'operations', label: 'Operations', icon: ScrollText },
+  { key: 'contacts', label: 'Contacts', icon: User },
+  { key: 'banking', label: 'Banking', icon: Banknote },
+  { key: 'insurance', label: 'Insurance', icon: Shield },
+  { key: 'policies', label: 'Policies', icon: ClipboardCheck },
+  { key: 'underwriting', label: 'Underwriting', icon: ShieldAlert },
+  { key: 'sign', label: 'Signature', icon: PenLine },
+] as const;
+
+function SubmissionDetailDialog({
+  submission,
+  onClose,
+  onUpdated,
+}: {
+  submission: Submission | null;
+  onClose: () => void;
+  onUpdated: () => void;
+}) {
+  const [adminNote, setAdminNote] = useState('');
+  const [updating, setUpdating] = useState<'approve' | 'reject' | null>(null);
+
+  useEffect(() => {
+    setAdminNote(submission?.admin_note || '');
+  }, [submission?.id, submission?.admin_note]);
+
+  if (!submission) return null;
+
+  const data = submission.data || {};
+  const files = submission.file_urls || {};
+
+  const handleStatusChange = async (newStatus: 'approved' | 'rejected') => {
+    setUpdating(newStatus === 'approved' ? 'approve' : 'reject');
+    try {
+      const { error } = await supabase
+        .from('bonzah_onboarding_submissions')
+        .update({
+          status: newStatus,
+          admin_note: adminNote || null,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', submission.id);
+      if (error) throw error;
+      toast.success(`Submission ${newStatus}`);
+      onUpdated();
+      onClose();
+    } catch (err: any) {
+      toast.error(`Failed: ${err.message}`);
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const StatusIcon = statusIcon[submission.status];
+
+  return (
+    <Dialog open={!!submission} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-primary/15 flex items-center justify-center">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-base font-semibold truncate">
+                {submission.business_trade_name}
+              </div>
+              <div className="text-xs text-muted-foreground font-normal">
+                {submission.business_legal_name}
+              </div>
+            </div>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border shrink-0',
+                submission.status === 'pending' &&
+                  'bg-warning/10 text-warning border-warning/30',
+                submission.status === 'approved' &&
+                  'bg-success/10 text-success border-success/30',
+                submission.status === 'rejected' &&
+                  'bg-destructive/10 text-destructive border-destructive/30',
+              )}
+            >
+              <StatusIcon className="h-3 w-3" />
+              {statusLabel[submission.status]}
+            </span>
+          </DialogTitle>
+          <DialogDescription>
+            Submitted {formatDate(submission.submitted_at)}
+            {submission.reviewed_at && ` · Reviewed ${formatDate(submission.reviewed_at)}`}
+          </DialogDescription>
+        </DialogHeader>
+
+        <Tabs defaultValue="business" className="mt-2">
+          <TabsList className="grid grid-cols-4 lg:grid-cols-8 gap-1 h-auto p-1 mb-4">
+            {sectionTabs.map(({ key, label, icon: Icon }) => (
+              <TabsTrigger
+                key={key}
+                value={key}
+                className="flex flex-col gap-1 h-auto py-2 text-[11px]"
+              >
+                <Icon className="h-3.5 w-3.5" />
+                <span>{label}</span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          <TabsContent value="business" className="space-y-3">
+            <FieldGrid
+              entries={[
+                ['Trade Name', data.business_trade_name],
+                ['Legal Name', data.business_legal_name],
+                ['Business Address', data.business_address],
+                ['City / State', `${data.city || ''} ${data.state || ''}`.trim()],
+                ['Country / Postal', `${data.country || ''} ${data.postal_code || ''}`.trim()],
+                ['Business Phone', data.business_phone],
+                ['Alt. Phone', data.alternative_business_phone],
+                ['EIN / Tax ID', data.ein],
+                ['Company Type', data.company_type],
+                ['Start Date', data.business_start_date],
+                ['Website', data.company_website],
+              ]}
+            />
+            <FilesBlock title="Business Logo" files={files.business_logo} />
+          </TabsContent>
+
+          <TabsContent value="operations" className="space-y-3">
+            <FieldGrid
+              entries={[
+                ['States Served', data.states_where_you_do_business],
+                ['Licensed Everywhere', data.licensed_in_all_locations],
+                ['Adheres to Auto Licensing', data.adhering_to_license_requirements],
+                ['Years in Auto Rental', data.years_in_private_auto_rental],
+                ['Years on Turo', data.years_on_turo],
+              ]}
+            />
+            <LongText title="Business Owners" value={data.business_owners} />
+          </TabsContent>
+
+          <TabsContent value="contacts" className="space-y-3">
+            <FieldGrid
+              entries={[
+                ['Primary Name', `${data.primary_first_name || ''} ${data.primary_last_name || ''}`.trim()],
+                ['Primary Email', data.primary_email],
+                ['Primary Phone', data.primary_phone],
+                ['Primary DOB', data.primary_date_of_birth],
+                ['Primary Years Driving', data.primary_years_driving],
+                ['Primary Marital Status', data.primary_marital_status],
+              ]}
+            />
+            {Array.isArray(data.additional_users) && data.additional_users.length > 0 && (
+              <div className="space-y-2 mt-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Additional Drivers ({data.additional_users.length})
+                </h4>
+                {data.additional_users.map((u: any, i: number) => (
+                  <div key={i} className="rounded-md border p-3 bg-muted/30">
+                    <FieldGrid
+                      compact
+                      entries={[
+                        ['Name', u.full_name],
+                        ['Email', u.email],
+                        ['Phone', u.phone],
+                        ['DOB', u.date_of_birth],
+                        ['Years Driving', u.years_driving],
+                        ['Marital Status', u.marital_status],
+                      ]}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+            <FilesBlock title="Driver's Licenses" files={files.driver_licenses} />
+            <FilesBlock title="Additional Users Spreadsheet" files={files.additional_users_spreadsheet} />
+          </TabsContent>
+
+          <TabsContent value="banking" className="space-y-3">
+            <FieldGrid
+              entries={[
+                ['Account Holder', data.bank_account_name],
+                ['Account Type', data.bank_account_type],
+                ['Bank', data.bank_name],
+                ['Routing #', data.routing_number],
+                ['Account #', data.account_number],
+                ['Bank Address', data.bank_account_address],
+                ['Card Number', data.credit_card_number],
+                ['Card Expiry', data.card_expiration_date],
+                ['Card CVC', data.card_security_code],
+                ['Name on Card', data.card_name],
+                ['Card Billing Address', data.card_billing_address],
+                ['Starting Balance', data.desired_starting_balance],
+                ['RMS', data.rental_management_system],
+                ['Embed Bonzah on Site', data.explore_embedding_bonzah],
+              ]}
+            />
+          </TabsContent>
+
+          <TabsContent value="insurance" className="space-y-3">
+            <FieldGrid
+              entries={[
+                ['Current Carrier', data.current_insurance_carrier],
+                ['Rental Agreement Timestamp', data.rental_agreement_has_timestamp],
+                ['Vehicles Have GPS', data.vehicles_have_gps],
+                ['GPS Brand', data.gps_brand],
+                ['Vehicles in Company Name', data.vehicles_registered_in_company_name],
+                ['Salvage Vehicles', data.any_vehicles_salvage],
+                ['For Hire / TNC', data.rent_for_hire],
+                ['Used Outside Rentals', data.vehicles_used_outside_rentals],
+                ['Had Commercial Auto Losses', data.had_commercial_auto_losses],
+                ['Has Loss Summary', data.has_loss_summary],
+              ]}
+            />
+            <LongText title="What can we help you with?" value={data.what_can_we_help_with} />
+            <FilesBlock title="Fleet Insurance Policy" files={files.fleet_insurance_policy} />
+            <FilesBlock title="Rental Agreement" files={files.rental_agreement_file} />
+            <FilesBlock title="Loss Runs" files={files.loss_runs_file} />
+            <FilesBlock title="Vehicle Schedule" files={files.vehicle_schedule_file} />
+            <FilesBlock title="Loss History" files={files.loss_history_file} />
+          </TabsContent>
+
+          <TabsContent value="policies" className="space-y-3">
+            <FieldGrid
+              entries={[
+                ['Drivers Need Valid License', data.require_drivers_valid_license],
+                ['Check Employee Driving Records', data.check_employee_driving_records],
+                ['Storage Security', data.vehicle_storage_security],
+                ['Delivers / Picks Up', data.deliver_or_pickup],
+                ['Min Age Renters', data.minimum_age_renters],
+                ['Rents > 30 Days', data.rent_more_than_30_days],
+                ['Avg Rental Duration', data.average_rental_duration],
+                ['Photocopy Driver IDs', data.photocopy_driver_ids],
+                ['Require Renter Insurance', data.require_renters_primary_insurance],
+                ['Verify Renter Insurance', data.verify_renter_insurance],
+                ['% Renters w/ Insurance', data.pct_renters_with_insurance],
+                ['Retain Insurance Proof', data.retain_renter_insurance_proof],
+              ]}
+            />
+            <LongText title="Renter Screening Process" value={data.renter_screening_process} />
+            <LongText title="Stolen / Converted Vehicle" value={data.renter_stolen_vehicle} />
+            <LongText title="Payment Methods" value={data.payment_methods} />
+            <LongText title="Cash / App + Card on File" value={data.cash_app_card_on_file} />
+            <LongText title="OTC Insurance Products" value={data.offers_otc_insurance} />
+            <LongText title="Maintenance Program" value={data.vehicle_maintenance_program} />
+            <LongText title="Inspection Process" value={data.inspect_vehicles} />
+            <LongText title="Other Businesses" value={data.own_other_businesses} />
+            <LongText title="What Else?" value={data.what_else_should_we_know} />
+            <FilesBlock title="Additional Information" files={files.additional_information_file} />
+          </TabsContent>
+
+          <TabsContent value="underwriting" className="space-y-3">
+            <FieldGrid
+              entries={[
+                ['Accidents/Claims (3 yrs)', data.uw_accidents_past_3_years],
+                ['Canceled Policy', data.uw_canceled_policy],
+                ['Insurance Fraud Conviction', data.uw_insurance_fraud],
+                ['DUI / Reckless / Multiple Violations', data.uw_dui_violations],
+                ['Invalid License Drivers', data.uw_invalid_license_drivers],
+                ['Salvage Title', data.uw_salvage_title],
+                ['Performance Modified', data.uw_modified_for_performance],
+                ['Used for Other Purposes', data.uw_other_use],
+              ]}
+            />
+          </TabsContent>
+
+          <TabsContent value="sign" className="space-y-3">
+            <FieldGrid
+              entries={[
+                ['Confirms Accuracy', data.declare_complete_accurate ? 'Yes' : '—'],
+                ['Confirms Authorization', data.declare_authorized ? 'Yes' : '—'],
+                ['Authorizes Bonzah', data.declare_authorize_bonzah ? 'Yes' : '—'],
+                ['Agrees to User Agreement', data.agree_user_agreement ? 'Yes' : '—'],
+              ]}
+            />
+            {data.signature_data_url && (
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  Signature
+                </h4>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={data.signature_data_url}
+                  alt="Preparer signature"
+                  className="border rounded-lg bg-white max-w-full"
+                />
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+
+        {/* Review actions */}
+        <div className="border-t pt-4 mt-4 space-y-3">
+          <div>
+            <label className="text-sm font-medium">Note for tenant (optional)</label>
+            <Textarea
+              value={adminNote}
+              onChange={(e) => setAdminNote(e.target.value)}
+              rows={2}
+              placeholder="Add a note that the tenant will see in their portal — e.g. credentials emailed separately, or what's missing."
+              className="mt-1.5"
+              disabled={!!updating}
+            />
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button variant="outline" onClick={onClose} disabled={!!updating}>
+              Close
+            </Button>
+            {submission.status !== 'rejected' && (
+              <Button
+                variant="outline"
+                className="text-destructive hover:bg-destructive/10 border-destructive/40"
+                onClick={() => handleStatusChange('rejected')}
+                disabled={!!updating}
+              >
+                {updating === 'reject' ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <XCircle className="h-4 w-4 mr-1.5" />
+                )}
+                Reject
+              </Button>
+            )}
+            {submission.status !== 'approved' && (
+              <Button onClick={() => handleStatusChange('approved')} disabled={!!updating}>
+                {updating === 'approve' ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                )}
+                Approve
+              </Button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FieldGrid({
+  entries,
+  compact,
+}: {
+  entries: [string, any][];
+  compact?: boolean;
+}) {
+  return (
+    <div className={cn('grid grid-cols-1 md:grid-cols-2 gap-x-6', compact ? 'gap-y-1.5' : 'gap-y-2.5')}>
+      {entries.map(([label, value]) => {
+        const display =
+          value === undefined || value === null || value === ''
+            ? '—'
+            : String(value);
+        return (
+          <div key={label} className={cn('flex justify-between gap-3 border-b last:border-0', compact ? 'py-1' : 'py-1.5')}>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider truncate">
+              {label}
+            </span>
+            <span className="text-sm font-medium text-right max-w-[60%] truncate">
+              {display}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LongText({ title, value }: { title: string; value?: string }) {
+  if (!value) return null;
+  return (
+    <div className="rounded-md border bg-muted/20 p-3">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+        {title}
+      </h4>
+      <p className="text-sm whitespace-pre-wrap">{value}</p>
+    </div>
+  );
+}
+
+function FilesBlock({ title, files }: { title: string; files?: FileRef[] }) {
+  if (!files || files.length === 0) return null;
+  return (
+    <div className="rounded-md border bg-muted/20 p-3">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+        {title}
+      </h4>
+      <ul className="space-y-1.5">
+        {files.map((f) => (
+          <li
+            key={f.path}
+            className="flex items-center justify-between gap-3 rounded-md bg-background border px-2.5 py-1.5"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{f.name}</p>
+                <p className="text-[11px] text-muted-foreground">{formatBytes(f.size)}</p>
+              </div>
+            </div>
+            {f.url && (
+              <Button variant="ghost" size="sm" asChild className="shrink-0 h-7 px-2 text-xs">
+                <a href={f.url} target="_blank" rel="noopener noreferrer">
+                  <Download className="h-3.5 w-3.5 mr-1" />
+                  Open
+                </a>
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

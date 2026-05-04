@@ -631,56 +631,243 @@ export const DEFAULT_PROMOTIONS_SEO: SEOContent = {
 export const DEFAULT_PRIVACY_POLICY: PrivacyPolicyContent = {
   title: "Privacy Policy",
   last_updated: new Date().toISOString().split('T')[0],
-  content: `<h2>Introduction</h2>
-<p>Drive 247 ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website or use our services.</p>
+  content: `<h2>1. Introduction</h2>
+<p>Drive 247 ("we," "our," or "us") respects your privacy and is committed to protecting the personal information you share with us. This Privacy Policy explains what information we collect, how we use it, who we share it with, and the rights you have over your information when you visit our website, create an account, or rent a vehicle from us.</p>
+<p>By using our website or services, you agree to the collection and use of information in accordance with this Policy. If you do not agree with our practices, please do not use our services.</p>
 
-<h2>Information We Collect</h2>
-<p>We collect information that you provide directly to us, such as:</p>
+<h2>2. Information We Collect</h2>
+<p>We collect several categories of information to provide and improve our services:</p>
+
+<h3>Personal Information You Provide</h3>
 <ul>
-<li>Name, email address, and phone number</li>
-<li>Driver's license information</li>
-<li>Payment information</li>
-<li>Rental history and preferences</li>
+<li>Full name, date of birth, and contact details (email address, phone number, mailing address)</li>
+<li>Driver's license number, issuing authority, expiration date, and a copy of the license</li>
+<li>Government-issued identification (passport, national ID) where required</li>
+<li>Payment information including credit/debit card details, billing address, and bank account details (processed securely through our payment partners)</li>
+<li>Insurance policy details, where applicable</li>
+<li>Emergency contact information</li>
 </ul>
 
-<h2>How We Use Your Information</h2>
-<p>We use the information we collect to:</p>
+<h3>Rental & Transaction Information</h3>
 <ul>
-<li>Process rental reservations and payments</li>
-<li>Communicate with you about your rentals</li>
-<li>Send promotional communications (with your consent)</li>
-<li>Improve our services</li>
+<li>Booking details, pickup and return locations, rental dates, and vehicle preferences</li>
+<li>Rental history, extensions, modifications, and cancellations</li>
+<li>Photographs and videos of vehicle condition at pickup and return</li>
+<li>Toll, fuel, mileage, and damage records</li>
+<li>Communications with our customer service team (chat, email, phone)</li>
 </ul>
 
-<h2>Contact Us</h2>
-<p>If you have questions about this Privacy Policy, please contact us at info@drive247.com.</p>`,
+<h3>Identity Verification & Compliance Data</h3>
+<ul>
+<li>Selfie photographs and biometric data used for identity verification</li>
+<li>Results of fraud, sanctions, and driving record checks</li>
+<li>Records collected to comply with applicable anti-money laundering and "know your customer" obligations</li>
+</ul>
+
+<h3>Vehicle & Telematics Data</h3>
+<ul>
+<li>GPS location data when permitted by law and authorized for the rental</li>
+<li>Vehicle telemetry such as speed, mileage, fuel/charge level, and diagnostic information</li>
+<li>Toll, parking, and traffic violation records associated with the vehicle during your rental</li>
+</ul>
+
+<h3>Information We Collect Automatically</h3>
+<ul>
+<li>Device information (IP address, browser type, operating system, device identifiers)</li>
+<li>Usage data (pages viewed, links clicked, referring URLs, time spent on pages)</li>
+<li>Cookies, pixels, and similar tracking technologies (see "Cookies & Tracking" below)</li>
+</ul>
+
+<h2>3. How We Use Your Information</h2>
+<p>We use the information we collect for the following purposes:</p>
+<ul>
+<li><strong>Service delivery:</strong> Process reservations, payments, deposits, refunds, extensions, and damage claims</li>
+<li><strong>Identity & eligibility verification:</strong> Confirm your identity, validate your driver's license, and assess rental eligibility</li>
+<li><strong>Communication:</strong> Send booking confirmations, reminders, receipts, contract documents, and customer service responses</li>
+<li><strong>Safety & security:</strong> Locate vehicles, prevent fraud, investigate accidents, recover lost or stolen vehicles, and protect our customers, employees, and property</li>
+<li><strong>Legal compliance:</strong> Meet our regulatory, tax, accounting, and reporting obligations, and respond to lawful requests from authorities</li>
+<li><strong>Marketing:</strong> Send promotional offers, newsletters, and product updates where you have consented or where permitted by law (you can opt out at any time)</li>
+<li><strong>Analytics & improvement:</strong> Understand how customers use our services and improve the website, fleet, pricing, and customer experience</li>
+</ul>
+
+<h2>4. Legal Bases for Processing</h2>
+<p>Where applicable law (including the EU/UK GDPR and similar regulations) requires it, we rely on one or more of the following legal bases when processing your personal information:</p>
+<ul>
+<li><strong>Contract:</strong> Processing necessary to provide the rental services you requested</li>
+<li><strong>Legal obligation:</strong> Processing required by laws and regulations applicable to us</li>
+<li><strong>Legitimate interests:</strong> Operating, securing, and improving our business in a way that does not override your rights</li>
+<li><strong>Consent:</strong> Where you have given explicit consent (for example, to receive marketing communications)</li>
+</ul>
+
+<h2>5. How We Share Your Information</h2>
+<p>We do not sell your personal information. We share your information only with the following categories of recipients:</p>
+<ul>
+<li><strong>Service providers:</strong> Payment processors, identity verification providers, telematics providers, email and SMS delivery services, e-signature services, customer support tools, and cloud hosting providers</li>
+<li><strong>Insurance partners:</strong> When you purchase optional insurance coverage or in the event of a claim</li>
+<li><strong>Tolling and traffic authorities:</strong> When tolls, fines, or violations are incurred during your rental</li>
+<li><strong>Law enforcement and regulators:</strong> Where required by law, court order, or to protect our legal rights</li>
+<li><strong>Business transfers:</strong> In connection with a merger, acquisition, financing, or sale of all or part of our business</li>
+<li><strong>With your consent:</strong> For any other purpose disclosed to you at the point of collection</li>
+</ul>
+
+<h2>6. Cookies & Tracking Technologies</h2>
+<p>We use cookies and similar technologies to operate our website, remember your preferences, analyze traffic, and personalize content and advertising. Categories include:</p>
+<ul>
+<li><strong>Strictly necessary cookies:</strong> Required for core site functions such as login and booking</li>
+<li><strong>Performance & analytics cookies:</strong> Help us understand how visitors use the site</li>
+<li><strong>Functional cookies:</strong> Remember your preferences such as language and currency</li>
+<li><strong>Marketing cookies:</strong> Used to deliver relevant ads and measure campaign performance</li>
+</ul>
+<p>You can manage cookie preferences through your browser settings or our cookie banner where available. Disabling some cookies may limit site functionality.</p>
+
+<h2>7. Data Retention</h2>
+<p>We retain personal information only for as long as necessary to fulfill the purposes outlined in this Policy, unless a longer retention period is required by law (for example, tax, accounting, or contract-related obligations). When information is no longer needed, we securely delete or anonymize it.</p>
+
+<h2>8. Data Security</h2>
+<p>We implement administrative, technical, and physical safeguards designed to protect your information against unauthorized access, disclosure, alteration, or destruction. These include encryption in transit, access controls, and regular security assessments. However, no method of transmission or storage is 100% secure, and we cannot guarantee absolute security.</p>
+
+<h2>9. International Data Transfers</h2>
+<p>Your information may be transferred to and processed in countries other than the one in which you reside. Where such transfers occur, we put appropriate safeguards in place (such as standard contractual clauses) to ensure your information remains protected.</p>
+
+<h2>10. Your Rights</h2>
+<p>Depending on your jurisdiction, you may have the following rights regarding your personal information:</p>
+<ul>
+<li><strong>Access:</strong> Request a copy of the personal information we hold about you</li>
+<li><strong>Correction:</strong> Request that we correct inaccurate or incomplete information</li>
+<li><strong>Deletion:</strong> Request that we delete your personal information, subject to legal exceptions</li>
+<li><strong>Restriction & objection:</strong> Restrict or object to certain processing activities</li>
+<li><strong>Portability:</strong> Receive your information in a structured, machine-readable format</li>
+<li><strong>Withdraw consent:</strong> Withdraw any consent you previously provided</li>
+<li><strong>Lodge a complaint:</strong> Contact your local data protection authority</li>
+</ul>
+<p>To exercise any of these rights, please contact us using the details below. We may need to verify your identity before fulfilling your request.</p>
+
+<h2>11. Children's Privacy</h2>
+<p>Our services are not directed to individuals under the age of 18. We do not knowingly collect personal information from children. If you believe a child has provided us with personal information, please contact us and we will take appropriate steps to delete it.</p>
+
+<h2>12. Third-Party Links</h2>
+<p>Our website may contain links to third-party websites or services that are not operated by us. We are not responsible for the privacy practices of those third parties and encourage you to review their privacy policies before providing any personal information.</p>
+
+<h2>13. Changes to This Privacy Policy</h2>
+<p>We may update this Privacy Policy from time to time to reflect changes in our practices, technology, legal requirements, or other factors. When we make material changes, we will notify you by updating the "Last updated" date at the top of this page and, where appropriate, by sending a notice through our services or by email.</p>
+
+<h2>14. Contact Us</h2>
+<p>If you have any questions, concerns, or requests regarding this Privacy Policy or our handling of your personal information, please contact us at:</p>
+<ul>
+<li><strong>Email:</strong> info@drive247.com</li>
+<li><strong>Mail:</strong> Drive 247, Privacy Office</li>
+</ul>
+<p>We will respond to your inquiry within a reasonable timeframe and in accordance with applicable law.</p>`,
 };
 
 export const DEFAULT_TERMS_OF_SERVICE: TermsOfServiceContent = {
   title: "Terms of Service",
   last_updated: new Date().toISOString().split('T')[0],
-  content: `<h2>Agreement to Terms</h2>
-<p>By accessing or using Drive 247's services, you agree to be bound by these Terms of Service and all applicable laws and regulations.</p>
+  content: `<h2>1. Agreement to Terms</h2>
+<p>These Terms of Service ("Terms") govern your access to and use of Drive 247's website, mobile services, and vehicle rental services (collectively, the "Services"). By creating an account, making a reservation, or renting a vehicle from us, you agree to be bound by these Terms, our Privacy Policy, and any rental agreement signed at the time of pickup. If you do not agree to these Terms, please do not use our Services.</p>
 
-<h2>Rental Requirements</h2>
+<h2>2. Eligibility & Rental Requirements</h2>
+<p>To rent a vehicle from Drive 247, you must:</p>
 <ul>
-<li>You must be at least 21 years of age to rent a vehicle</li>
-<li>A valid driver's license is required</li>
-<li>A valid credit card in the renter's name is required</li>
-<li>Proof of insurance may be required</li>
+<li>Be at least 21 years of age (some vehicle classes may require a higher minimum age)</li>
+<li>Hold a valid, unexpired driver's license that you have held for at least one year</li>
+<li>Present a valid government-issued photo ID</li>
+<li>Provide a valid credit card in the renter's name to cover the rental charges and security deposit</li>
+<li>Pass our identity verification, fraud, and driving record checks</li>
+<li>Meet any additional eligibility requirements that may apply to specific vehicles or locations</li>
+</ul>
+<p>Drivers under 25 may be subject to a young driver surcharge and additional restrictions. International renters must present a valid driver's license from their country of residence and, where required, an International Driving Permit.</p>
+
+<h2>3. Reservations, Modifications & Cancellations</h2>
+<p>All reservations are subject to vehicle availability and confirmation. We make every reasonable effort to honor confirmed reservations, but we reserve the right to substitute a vehicle of similar or higher class if the specific vehicle reserved is unavailable.</p>
+<p>You may modify or cancel your reservation in accordance with the cancellation policy displayed at the time of booking. Cancellation fees may apply depending on how close to the pickup date the cancellation is made and the type of rate selected.</p>
+
+<h2>4. Pricing, Fees & Payment</h2>
+<p>Rental rates are quoted at the time of booking and may include a base rate, taxes, surcharges, and optional add-ons. The total amount payable will be presented to you before you confirm your reservation. Additional charges that may apply include:</p>
+<ul>
+<li>Late return fees</li>
+<li>Mileage overage charges (where applicable)</li>
+<li>Fuel or charging fees if the vehicle is returned with less fuel/charge than at pickup</li>
+<li>Cleaning fees for excessive dirt, smoke, or odor</li>
+<li>Tolls, parking fines, traffic violations, and related administrative fees</li>
+<li>Damage charges, including loss of use, diminished value, and administrative fees</li>
+<li>Lost key, lost remote, or lost document replacement fees</li>
+</ul>
+<p>You authorize us to charge your payment method for all amounts due under your rental agreement, including charges discovered or assessed after the vehicle is returned.</p>
+
+<h2>5. Security Deposit</h2>
+<p>A security deposit (or pre-authorization hold) is required at the start of your rental. The amount will be communicated to you in advance and held against potential damage, fines, or other charges. The deposit (or any unused portion) is released or refunded after the vehicle is returned and inspected, typically within 5–14 business days, subject to the policies of your card issuer or bank.</p>
+
+<h2>6. Insurance & Liability</h2>
+<p>Basic liability coverage may be included with your rental as required by applicable law. Optional coverage products (collision damage waiver, supplemental liability, personal accident, etc.) may be available for purchase at the time of booking or pickup. You are responsible for understanding the scope and limitations of any coverage, including deductibles and exclusions.</p>
+<p>You agree to be financially responsible for any damage to the vehicle or third-party property, and any injury caused, that is not covered by insurance, including damage caused by negligent or unauthorized use.</p>
+
+<h2>7. Authorized Drivers & Vehicle Use</h2>
+<p>Only the renter and additional drivers listed on the rental agreement are authorized to operate the vehicle. Allowing an unauthorized person to drive the vehicle voids any insurance coverage and is a material breach of these Terms.</p>
+<p>You agree that the vehicle will not be used:</p>
+<ul>
+<li>For any illegal purpose or in violation of any law or regulation</li>
+<li>To carry passengers or property for hire</li>
+<li>For racing, speed testing, off-roading (unless the vehicle is designated for off-road use), or any motorsport activity</li>
+<li>To tow or push another vehicle, trailer, or object</li>
+<li>To transport hazardous, flammable, toxic, or contraband materials</li>
+<li>While the driver is under the influence of alcohol, drugs, or any substance that impairs driving ability</li>
+<li>Outside of the geographic area authorized in the rental agreement</li>
+<li>By anyone other than an authorized driver</li>
 </ul>
 
-<h2>Vehicle Use</h2>
-<p>Rented vehicles may only be operated by authorized drivers listed on the rental agreement. Vehicles may not be used for:</p>
-<ul>
-<li>Any illegal purpose</li>
-<li>Racing or speed testing</li>
-<li>Towing or pushing other vehicles</li>
-<li>Transportation of hazardous materials</li>
-</ul>
+<h2>8. Fuel, Charging & Mileage</h2>
+<p>The vehicle must be returned with the same fuel level (or charge level for electric vehicles) as at the time of pickup, unless you have purchased a fuel/charging package. If returned with less, you will be charged a refueling/recharging fee plus an administrative fee at our then-current rate.</p>
+<p>Mileage allowances, if any, are stated in your rental agreement. Excess mileage charges apply per mile/kilometer over the included allowance.</p>
 
-<h2>Contact Us</h2>
-<p>For questions about these Terms, please contact us at info@drive247.com.</p>`,
+<h2>9. Vehicle Condition, Maintenance & Return</h2>
+<p>You agree to inspect the vehicle at pickup and report any pre-existing damage before driving away. You are expected to operate the vehicle responsibly, maintain proper tire pressure and fluid levels during long rentals, and respond to any warning lights promptly.</p>
+<p>The vehicle must be returned to the agreed location, on the agreed date and time, in the same condition as at pickup (normal wear and tear excepted). Late returns are subject to additional charges and may be treated as unauthorized use if not communicated in advance.</p>
+
+<h2>10. Accidents, Damage & Theft</h2>
+<p>In the event of an accident, theft, vandalism, fire, or any other incident involving the vehicle, you must:</p>
+<ul>
+<li>Notify the local police and obtain a written report</li>
+<li>Notify Drive 247 immediately and follow our instructions</li>
+<li>Not admit liability or release any party from responsibility on our behalf</li>
+<li>Cooperate fully in any investigation, claim, or legal proceeding</li>
+</ul>
+<p>Failure to report an incident promptly or follow these procedures may result in loss of insurance coverage and full personal liability for damages.</p>
+
+<h2>11. Tolls, Fines & Traffic Violations</h2>
+<p>You are responsible for all tolls, congestion charges, parking fines, traffic violations, and other charges incurred during your rental. We may pay these on your behalf and recover the amount from your payment method, together with an administrative fee.</p>
+
+<h2>12. Roadside Assistance</h2>
+<p>Roadside assistance may be available either as a standard inclusion or as an optional add-on. Charges may apply for service calls caused by negligence (e.g. lost keys, fuel run-out, lockouts, or driver error). Details are provided in your rental agreement.</p>
+
+<h2>13. Indemnification</h2>
+<p>You agree to indemnify, defend, and hold harmless Drive 247, its officers, directors, employees, agents, affiliates, and partners from and against any and all claims, damages, losses, liabilities, costs, and expenses (including reasonable attorneys' fees) arising out of or related to your use of the Services, your breach of these Terms, your operation of the rental vehicle, or your violation of any law or third-party right.</p>
+
+<h2>14. Limitation of Liability</h2>
+<p>To the maximum extent permitted by law, Drive 247 will not be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of profits, data, use, goodwill, or other intangible losses, arising out of or related to your use of the Services. Our aggregate liability for any direct damages will not exceed the total amount paid by you for the rental giving rise to the claim.</p>
+<p>Nothing in these Terms excludes or limits liability that cannot be excluded under applicable law (such as liability for death or personal injury caused by negligence, or for fraud).</p>
+
+<h2>15. Termination</h2>
+<p>We may suspend or terminate your account, refuse a rental, or repossess a vehicle (at your expense) if you breach these Terms, misuse the vehicle, provide false information, or engage in any conduct that we reasonably believe is fraudulent, dangerous, or harmful to us or others.</p>
+
+<h2>16. Privacy</h2>
+<p>Your use of the Services is also governed by our Privacy Policy, which describes how we collect, use, and disclose your personal information. By using the Services, you consent to our processing of your information in accordance with the Privacy Policy.</p>
+
+<h2>17. Intellectual Property</h2>
+<p>All content on our website and within our Services, including logos, trademarks, text, images, and software, is owned by Drive 247 or its licensors and is protected by copyright, trademark, and other intellectual property laws. You may not copy, reproduce, modify, or distribute any of our content without our prior written permission.</p>
+
+<h2>18. Governing Law & Dispute Resolution</h2>
+<p>These Terms are governed by the laws of the jurisdiction in which the rental originates, without regard to its conflict-of-laws principles. Any dispute arising out of or related to these Terms or the Services will first be addressed through good-faith negotiation. If unresolved, disputes may be submitted to binding arbitration or to the competent courts of that jurisdiction, except where prohibited by law.</p>
+
+<h2>19. Changes to These Terms</h2>
+<p>We may update these Terms from time to time to reflect changes in our Services, legal requirements, or business practices. When we make material changes, we will update the "Last updated" date and, where appropriate, notify you through the Services or by email. Your continued use of the Services after the updated Terms take effect constitutes acceptance of the changes.</p>
+
+<h2>20. Contact Us</h2>
+<p>If you have any questions about these Terms or your rental, please contact us at:</p>
+<ul>
+<li><strong>Email:</strong> info@drive247.com</li>
+<li><strong>Mail:</strong> Drive 247, Customer Service</li>
+</ul>`,
 };
 
 // ============================================

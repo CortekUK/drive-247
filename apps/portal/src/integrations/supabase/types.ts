@@ -71,6 +71,118 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_todo_comments: {
+        Row: {
+          author_id: string | null
+          body: string
+          created_at: string
+          id: string
+          todo_id: string
+        }
+        Insert: {
+          author_id?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          todo_id: string
+        }
+        Update: {
+          author_id?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          todo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_todo_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_todo_comments_todo_id_fkey"
+            columns: ["todo_id"]
+            isOneToOne: false
+            referencedRelation: "admin_todos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_todos: {
+        Row: {
+          assignee_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          image_path: string | null
+          image_url: string | null
+          position: number
+          priority: string
+          status: string
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          image_path?: string | null
+          image_url?: string | null
+          position?: number
+          priority?: string
+          status?: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          image_path?: string | null
+          image_url?: string | null
+          position?: number
+          priority?: string
+          status?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_todos_assignee_id_fkey"
+            columns: ["assignee_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_todos_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_todos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agreement_templates: {
         Row: {
           created_at: string | null
@@ -114,7 +226,7 @@ export type Database = {
       }
       app_users: {
         Row: {
-          auth_user_id: string
+          auth_user_id: string | null
           avatar_url: string | null
           created_at: string
           email: string
@@ -130,7 +242,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          auth_user_id: string
+          auth_user_id?: string | null
           avatar_url?: string | null
           created_at?: string
           email: string
@@ -146,7 +258,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          auth_user_id?: string
+          auth_user_id?: string | null
           avatar_url?: string | null
           created_at?: string
           email?: string
@@ -758,6 +870,94 @@ export type Database = {
           },
           {
             foreignKeyName: "bonzah_insurance_policies_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bonzah_onboarding_submissions: {
+        Row: {
+          admin_note: string | null
+          business_legal_name: string
+          business_trade_name: string
+          created_at: string
+          data: Json
+          ein: string | null
+          file_urls: Json
+          id: string
+          primary_contact_email: string
+          primary_contact_first_name: string | null
+          primary_contact_last_name: string | null
+          primary_contact_phone: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submitted_at: string
+          submitted_by: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          admin_note?: string | null
+          business_legal_name: string
+          business_trade_name: string
+          created_at?: string
+          data?: Json
+          ein?: string | null
+          file_urls?: Json
+          id?: string
+          primary_contact_email: string
+          primary_contact_first_name?: string | null
+          primary_contact_last_name?: string | null
+          primary_contact_phone?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string
+          submitted_by?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          admin_note?: string | null
+          business_legal_name?: string
+          business_trade_name?: string
+          created_at?: string
+          data?: Json
+          ein?: string | null
+          file_urls?: Json
+          id?: string
+          primary_contact_email?: string
+          primary_contact_first_name?: string | null
+          primary_contact_last_name?: string | null
+          primary_contact_phone?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string
+          submitted_by?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonzah_onboarding_submissions_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_onboarding_submissions_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_onboarding_submissions_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -2496,6 +2696,143 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      enquiries: {
+        Row: {
+          created_at: string
+          customer_email: string
+          customer_id: string | null
+          customer_name: string
+          customer_phone: string
+          description: string
+          end_date: string
+          id: string
+          ip_address: unknown
+          is_read: boolean
+          read_at: string | null
+          read_by: string | null
+          source: string
+          start_date: string
+          status: string
+          tenant_id: string
+          updated_at: string
+          user_agent: string | null
+          vehicle_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_email: string
+          customer_id?: string | null
+          customer_name: string
+          customer_phone: string
+          description: string
+          end_date: string
+          id?: string
+          ip_address?: unknown
+          is_read?: boolean
+          read_at?: string | null
+          read_by?: string | null
+          source?: string
+          start_date: string
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          user_agent?: string | null
+          vehicle_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_email?: string
+          customer_id?: string | null
+          customer_name?: string
+          customer_phone?: string
+          description?: string
+          end_date?: string
+          id?: string
+          ip_address?: unknown
+          is_read?: boolean
+          read_at?: string | null
+          read_by?: string | null
+          source?: string
+          start_date?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          user_agent?: string | null
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enquiries_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enquiries_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "enquiries_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "enquiries_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "enquiries_read_by_fkey"
+            columns: ["read_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enquiries_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enquiries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "enquiries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enquiries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "enquiries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
           },
         ]
       }
@@ -4926,6 +5263,8 @@ export type Database = {
           reminder_number: number
           rental_id: string
           sent_at: string
+          stripe_checkout_session_id: string | null
+          stripe_session_expired_at: string | null
           success: boolean
           tenant_id: string
         }
@@ -4942,6 +5281,8 @@ export type Database = {
           reminder_number: number
           rental_id: string
           sent_at?: string
+          stripe_checkout_session_id?: string | null
+          stripe_session_expired_at?: string | null
           success?: boolean
           tenant_id: string
         }
@@ -4958,6 +5299,8 @@ export type Database = {
           reminder_number?: number
           rental_id?: string
           sent_at?: string
+          stripe_checkout_session_id?: string | null
+          stripe_session_expired_at?: string | null
           success?: boolean
           tenant_id?: string
         }
@@ -6396,6 +6739,109 @@ export type Database = {
           },
         ]
       }
+      rental_damage_reports: {
+        Row: {
+          created_at: string | null
+          findings: Json | null
+          generated_at: string | null
+          generated_by: string | null
+          giving_photo_count: number | null
+          has_new_damage: boolean | null
+          id: string
+          model: string | null
+          overall_severity: string | null
+          receiving_photo_count: number | null
+          rental_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewer_notes: string | null
+          summary: string | null
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          findings?: Json | null
+          generated_at?: string | null
+          generated_by?: string | null
+          giving_photo_count?: number | null
+          has_new_damage?: boolean | null
+          id?: string
+          model?: string | null
+          overall_severity?: string | null
+          receiving_photo_count?: number | null
+          rental_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_notes?: string | null
+          summary?: string | null
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          findings?: Json | null
+          generated_at?: string | null
+          generated_by?: string | null
+          giving_photo_count?: number | null
+          has_new_damage?: boolean | null
+          id?: string
+          model?: string | null
+          overall_severity?: string | null
+          receiving_photo_count?: number | null
+          rental_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_notes?: string | null
+          summary?: string | null
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_damage_reports_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_damage_reports_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: true
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_damage_reports_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: true
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "rental_damage_reports_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: true
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "rental_damage_reports_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_damage_reports_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rental_extensions: {
         Row: {
           approved_at: string | null
@@ -7083,6 +7529,7 @@ export type Database = {
           is_extended: boolean | null
           is_gig_driver: boolean | null
           is_pay_as_you_go: boolean
+          is_unlimited_mileage: boolean
           lockbox_sent_at: string | null
           monthly_amount: number
           monthly_mileage_override: number | null
@@ -7118,6 +7565,8 @@ export type Database = {
           start_date: string
           status: string | null
           tenant_id: string | null
+          unlimited_mileage_price_per_day: number | null
+          unlimited_mileage_total: number | null
           updated_at: string
           uses_delivery_service: boolean | null
           vehicle_id: string | null
@@ -7167,6 +7616,7 @@ export type Database = {
           is_extended?: boolean | null
           is_gig_driver?: boolean | null
           is_pay_as_you_go?: boolean
+          is_unlimited_mileage?: boolean
           lockbox_sent_at?: string | null
           monthly_amount: number
           monthly_mileage_override?: number | null
@@ -7202,6 +7652,8 @@ export type Database = {
           start_date: string
           status?: string | null
           tenant_id?: string | null
+          unlimited_mileage_price_per_day?: number | null
+          unlimited_mileage_total?: number | null
           updated_at?: string
           uses_delivery_service?: boolean | null
           vehicle_id?: string | null
@@ -7251,6 +7703,7 @@ export type Database = {
           is_extended?: boolean | null
           is_gig_driver?: boolean | null
           is_pay_as_you_go?: boolean
+          is_unlimited_mileage?: boolean
           lockbox_sent_at?: string | null
           monthly_amount?: number
           monthly_mileage_override?: number | null
@@ -7286,6 +7739,8 @@ export type Database = {
           start_date?: string
           status?: string | null
           tenant_id?: string | null
+          unlimited_mileage_price_per_day?: number | null
+          unlimited_mileage_total?: number | null
           updated_at?: string
           uses_delivery_service?: boolean | null
           vehicle_id?: string | null
@@ -8328,11 +8783,13 @@ export type Database = {
           delivery_enabled: boolean | null
           deposit_mode: string | null
           distance_unit: string | null
+          enquiries_enabled: boolean
           facebook_url: string | null
           favicon_url: string | null
           fixed_address_enabled: boolean | null
           fixed_pickup_address: string | null
           fixed_return_address: string | null
+          forwarding_caller_id_mode: string
           forwarding_number: string | null
           friday_close: string | null
           friday_enabled: boolean | null
@@ -8518,11 +8975,13 @@ export type Database = {
           delivery_enabled?: boolean | null
           deposit_mode?: string | null
           distance_unit?: string | null
+          enquiries_enabled?: boolean
           facebook_url?: string | null
           favicon_url?: string | null
           fixed_address_enabled?: boolean | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
+          forwarding_caller_id_mode?: string
           forwarding_number?: string | null
           friday_close?: string | null
           friday_enabled?: boolean | null
@@ -8708,11 +9167,13 @@ export type Database = {
           delivery_enabled?: boolean | null
           deposit_mode?: string | null
           distance_unit?: string | null
+          enquiries_enabled?: boolean
           facebook_url?: string | null
           favicon_url?: string | null
           fixed_address_enabled?: boolean | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
+          forwarding_caller_id_mode?: string
           forwarding_number?: string | null
           friday_close?: string | null
           friday_enabled?: boolean | null
@@ -9446,6 +9907,8 @@ export type Database = {
           term_months: number | null
           tesla_fleet_enabled: boolean | null
           tesla_fleet_vehicle_id: string | null
+          unlimited_mileage_available: boolean
+          unlimited_mileage_price_per_day: number | null
           updated_at: string
           vin: string | null
           warranty_end_date: string | null
@@ -9511,6 +9974,8 @@ export type Database = {
           term_months?: number | null
           tesla_fleet_enabled?: boolean | null
           tesla_fleet_vehicle_id?: string | null
+          unlimited_mileage_available?: boolean
+          unlimited_mileage_price_per_day?: number | null
           updated_at?: string
           vin?: string | null
           warranty_end_date?: string | null
@@ -9576,6 +10041,8 @@ export type Database = {
           term_months?: number | null
           tesla_fleet_enabled?: boolean | null
           tesla_fleet_vehicle_id?: string | null
+          unlimited_mileage_available?: boolean
+          unlimited_mileage_price_per_day?: number | null
           updated_at?: string
           vin?: string | null
           warranty_end_date?: string | null

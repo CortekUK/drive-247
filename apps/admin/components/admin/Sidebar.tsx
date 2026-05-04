@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useSidebar } from './SidebarContext';
+import { useBonzahPendingCount } from '@/lib/use-bonzah-pending-count';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -22,12 +23,14 @@ import {
   ArrowUpCircle,
   Megaphone,
   Sparkles,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface NavItem {
   name: string;
   href: string;
   icon: React.ElementType;
+  badgeCount?: number;
 }
 
 interface NavGroup {
@@ -37,6 +40,7 @@ interface NavGroup {
 
 function useNavigation() {
   const { user } = useAuthStore();
+  const bonzahPendingCount = useBonzahPendingCount();
 
   const groups: NavGroup[] = [
     {
@@ -52,6 +56,12 @@ function useNavigation() {
         { name: 'Global Blacklist', href: '/admin/blacklist', icon: Ban },
         { name: 'Contact Requests', href: '/admin/contacts', icon: Mail },
         { name: 'Mode Requests', href: '/admin/requests', icon: ArrowUpCircle },
+        {
+          name: 'Bonzah Onboarding',
+          href: '/admin/bonzah-onboarding',
+          icon: ShieldCheck,
+          badgeCount: bonzahPendingCount,
+        },
         { name: 'Announcements', href: '/admin/announcements', icon: Megaphone },
         { name: 'Audit Logs', href: '/admin/audit-logs', icon: ScrollText },
         { name: 'OpenAI Usage', href: '/admin/openai-usage', icon: Sparkles },
@@ -101,6 +111,7 @@ function NavGroupComponent({
           {group.items.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
+            const showBadge = (item.badgeCount ?? 0) > 0;
             return (
               <Link
                 key={item.name}
@@ -114,7 +125,19 @@ function NavGroupComponent({
                 )}
               >
                 <Icon className={cn("h-4 w-4", active && "text-primary")} />
-                {item.name}
+                <span className="flex-1">{item.name}</span>
+                {showBadge && (
+                  <span
+                    className={cn(
+                      'inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold tabular-nums',
+                      active
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40'
+                    )}
+                  >
+                    {item.badgeCount! > 99 ? '99+' : item.badgeCount}
+                  </span>
+                )}
               </Link>
             );
           })}

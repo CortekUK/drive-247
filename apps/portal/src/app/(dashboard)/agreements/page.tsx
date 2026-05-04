@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { FileSignature, Download, ExternalLink, Loader2, Search, BarChart3, Eye, PenLine } from "lucide-react";
+import { FileSignature, Download, ExternalLink, Loader2, Search, BarChart3, Eye, PenLine, Plus, Send, Ban } from "lucide-react";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { format } from "date-fns";
 import { useState, useMemo, useCallback, useRef } from "react";
@@ -18,9 +18,12 @@ import { jsPDF } from "jspdf";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { GenerateAgreementDialog } from "@/components/agreements/generate-agreement-dialog";
 
 interface AgreementDoc {
   id: string;
@@ -30,6 +33,7 @@ interface AgreementDoc {
   file_url?: string | null;
   document_id?: string | null;
   created_at: string;
+  signed_at?: string | null;
   document_type?: string;
   customer_id?: string;
   customers?: { name: string };
@@ -57,6 +61,10 @@ export default function AgreementsList() {
   const signingIframeLoadCount = useRef(0);
   // Track IDs that were just signed so UI can optimistically show "Signed"
   const [justSignedIds, setJustSignedIds] = useState<Set<string>>(new Set());
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+  const [voidConfirmDoc, setVoidConfirmDoc] = useState<AgreementDoc | null>(null);
 
   // Fetch signed agreements from customer_documents
   const { data: signedAgreements = [], isLoading: isLoadingSigned, refetch: refetchSigned } = useQuery({
@@ -90,7 +98,8 @@ export default function AgreementsList() {
           document_status,
           signed_document_id,
           docusign_envelope_id,
-          customers!rentals_customer_id_fkey(name),
+          envelope_completed_at,
+          customers!rentals_customer_id_fkey(name, email),
           vehicles!rentals_vehicle_id_fkey(reg, make, model)
         `)
         .eq("tenant_id", tenant!.id)
@@ -112,6 +121,7 @@ export default function AgreementsList() {
         .select(`
           id,
           created_at,
+          envelope_completed_at,
           document_status,
           signed_document_id,
           document_id,
@@ -119,7 +129,7 @@ export default function AgreementsList() {
           rental_id,
           rentals!rental_agreements_rental_id_fkey(
             id,
-            customers!rentals_customer_id_fkey(name),
+            customers!rentals_customer_id_fkey(name, email),
             vehicles!rentals_vehicle_id_fkey(reg, make, model)
           )
         `)
@@ -143,6 +153,7 @@ export default function AgreementsList() {
       rental_id: rental.id,
       document_name: `Rental Agreement - ${rental.vehicles?.reg || 'Vehicle'}`,
       created_at: rental.created_at,
+      signed_at: rental.envelope_completed_at || null,
       document_type: 'Agreement',
       status: rental.document_status || 'pending',
       document_id: rental.docusign_envelope_id || null,
@@ -157,6 +168,7 @@ export default function AgreementsList() {
       rental_id: agreement.rental_id,
       document_name: `Extension Agreement - ${agreement.rentals?.vehicles?.reg || 'Vehicle'}`,
       created_at: agreement.created_at,
+      signed_at: agreement.envelope_completed_at || null,
       document_type: 'Agreement',
       status: agreement.document_status || 'pending',
       document_id: agreement.document_id || null,
@@ -168,6 +180,7 @@ export default function AgreementsList() {
     })),
     ...signedAgreements.map((doc: any) => ({
       ...doc,
+      signed_at: doc.created_at,
       agreementType: "signed" as const,
     })),
   ];
@@ -411,6 +424,67 @@ export default function AgreementsList() {
     }
   }, [signingDoc]);
 
+  const handleResend = async (doc: AgreementDoc) => {
+    if (!doc.rental_id || !tenant?.id) return;
+    setResendingId(doc.id);
+    try {
+      const body: Record<string, unknown> = {
+        rentalId: doc.rental_id,
+        customerEmail: (doc.customers as any)?.email,
+        customerName: doc.customers?.name,
+        tenantId: tenant.id,
+        agreementType: doc.agreementType === "extension" ? "extension" : "original",
+      };
+      const response = await fetch("/api/esign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.ok) {
+        toast.error(data?.detail || data?.error || "Failed to resend agreement");
+      } else {
+        toast.success("Signing notification resent");
+        await Promise.all([refetchSigned(), refetchRentals(), refetchExtensions()]);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to resend agreement");
+    } finally {
+      setResendingId(null);
+    }
+  };
+
+  const handleVoid = async (doc: AgreementDoc) => {
+    if (!doc.document_id) return;
+    setVoidingId(doc.id);
+    try {
+      const body: Record<string, unknown> = {};
+      if (doc.agreementType === "extension") {
+        body.agreementId = doc.id;
+      } else {
+        body.rentalId = doc.rental_id || doc.id;
+      }
+
+      const response = await fetch("/api/esign/void", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.ok) {
+        toast.error(data?.detail || data?.error || "Failed to void agreement");
+      } else {
+        toast.success("Agreement voided");
+        await Promise.all([refetchSigned(), refetchRentals(), refetchExtensions()]);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to void agreement");
+    } finally {
+      setVoidingId(null);
+      setVoidConfirmDoc(null);
+    }
+  };
+
   const generateAgreementPdf = (doc: AgreementDoc, index: number): { blob: Blob; fileName: string } => {
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -593,7 +667,7 @@ export default function AgreementsList() {
           <Button
             onClick={handleDownloadAll}
             disabled={isDownloadingAll || allAgreements.length === 0}
-            className="bg-gradient-primary"
+            variant="outline"
           >
             {isDownloadingAll ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -601,6 +675,10 @@ export default function AgreementsList() {
               <Download className="h-4 w-4 mr-2" />
             )}
             Export PDFs
+          </Button>
+          <Button onClick={() => setGenerateOpen(true)} className="bg-gradient-primary">
+            <Plus className="h-4 w-4 mr-2" />
+            Generate Agreement
           </Button>
         </div>
       </div>
@@ -670,7 +748,8 @@ export default function AgreementsList() {
                     <TableHead>Agreement Name</TableHead>
                     <TableHead>Customer</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
+                    <TableHead>Sent</TableHead>
+                    <TableHead>Signed</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -694,6 +773,11 @@ export default function AgreementsList() {
                       </TableCell>
                       <TableCell className="text-sm">
                         {format(new Date(doc.created_at), "MMM dd, yyyy HH:mm")}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {doc.signed_at
+                          ? format(new Date(doc.signed_at), "MMM dd, yyyy HH:mm")
+                          : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -760,6 +844,37 @@ export default function AgreementsList() {
                                   <Download className="h-4 w-4" />
                                 )}
                               </Button>
+                              {!justSignedIds.has(doc.id) && doc.status !== "completed" && doc.status !== "signed" && doc.status !== "voided" && (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleResend(doc)}
+                                    disabled={resendingId === doc.id}
+                                    title="Resend signing notification"
+                                  >
+                                    {resendingId === doc.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Send className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setVoidConfirmDoc(doc)}
+                                    disabled={voidingId === doc.id}
+                                    title="Void agreement"
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                                  >
+                                    {voidingId === doc.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Ban className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </>
+                              )}
                             </>
                           ) : (
                             <span className="text-sm text-muted-foreground">No document</span>
@@ -914,6 +1029,49 @@ export default function AgreementsList() {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Generate Agreement */}
+      <GenerateAgreementDialog open={generateOpen} onOpenChange={setGenerateOpen} />
+
+      {/* Void Confirmation */}
+      <Dialog open={!!voidConfirmDoc} onOpenChange={(open) => { if (!open) setVoidConfirmDoc(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Void Agreement?</DialogTitle>
+            <DialogDescription>
+              This will revoke the BoldSign envelope and mark the agreement as voided.
+              The customer will no longer be able to sign it.
+            </DialogDescription>
+          </DialogHeader>
+          {voidConfirmDoc && (
+            <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+              <div className="font-medium">{voidConfirmDoc.document_name}</div>
+              <div className="text-muted-foreground text-xs mt-0.5">
+                {voidConfirmDoc.customers?.name}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setVoidConfirmDoc(null)} disabled={voidingId !== null}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => voidConfirmDoc && handleVoid(voidConfirmDoc)}
+              disabled={voidingId !== null}
+            >
+              {voidingId !== null ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Voiding…
+                </>
+              ) : (
+                "Yes, Void Agreement"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

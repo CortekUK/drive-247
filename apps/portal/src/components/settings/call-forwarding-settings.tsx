@@ -180,6 +180,56 @@ export function CallForwardingSettings() {
 
             {/* Team forwarding numbers removed — use main forwarding number only */}
 
+            {/* Caller ID mode for forwarded calls */}
+            <div className="space-y-2 pt-2 border-t">
+              <Label className="text-sm font-medium">Caller ID on Your Phone</Label>
+              <p className="text-xs text-muted-foreground">
+                Choose what number is shown when a forwarded call rings on your phone.
+              </p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => updateForwarding.mutate({ forwardingCallerIdMode: 'caller' })}
+                  disabled={updateForwarding.isPending}
+                  className={`text-left p-3 rounded-lg border transition-colors ${
+                    status.forwardingCallerIdMode === 'caller'
+                      ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/30'
+                      : 'border-border hover:border-blue-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium">Show caller's number</p>
+                    {status.forwardingCallerIdMode === 'caller' && (
+                      <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    See who's calling — useful for screening by contact.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateForwarding.mutate({ forwardingCallerIdMode: 'business_line' })}
+                  disabled={updateForwarding.isPending}
+                  className={`text-left p-3 rounded-lg border transition-colors ${
+                    status.forwardingCallerIdMode === 'business_line'
+                      ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/30'
+                      : 'border-border hover:border-blue-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium">Show business line</p>
+                    {status.forwardingCallerIdMode === 'business_line' && (
+                      <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Display your business number so you know it's a work call.
+                  </p>
+                </button>
+              </div>
+            </div>
+
             <p className="text-xs text-muted-foreground">
               When a customer calls, their call will ring on both the browser and all configured phone numbers at the same time. The first person to answer gets connected.
             </p>
