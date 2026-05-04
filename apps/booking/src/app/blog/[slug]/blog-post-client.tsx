@@ -147,10 +147,10 @@ export default function BlogPostClient({ slug }: { slug: string }) {
       />
 
       {/* Hero / Header */}
-      <section className="pt-32 pb-12">
+      <section className="pt-20 sm:pt-24 md:pt-32 pb-8 sm:pb-10 md:pb-12">
         <div className="container mx-auto px-4 max-w-4xl animate-fade-in">
           {/* Breadcrumb */}
-          <nav className="flex items-center gap-2 text-sm text-muted-foreground/60 mb-10">
+          <nav className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground/60 mb-6 md:mb-10">
             <Link
               href="/"
               className="hover:text-accent transition-colors duration-300"
@@ -173,19 +173,19 @@ export default function BlogPostClient({ slug }: { slug: string }) {
           {/* Category */}
           {post.category && (
             <Link href={`/blog?category=${post.category.slug}`}>
-              <span className="inline-block text-xs uppercase tracking-widest font-medium text-accent border border-accent/30 rounded-full px-4 py-1.5 mb-6 hover:bg-accent/10 transition-colors duration-300">
+              <span className="inline-block text-[10px] sm:text-xs uppercase tracking-widest font-medium text-accent border border-accent/30 rounded-full px-3 sm:px-4 py-1 sm:py-1.5 mb-4 sm:mb-6 hover:bg-accent/10 transition-colors duration-300">
                 {post.category.name}
               </span>
             </Link>
           )}
 
           {/* Title */}
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-bold text-gradient-metal leading-tight mb-6">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-display font-bold text-gradient-metal leading-tight mb-4 sm:mb-6 break-words">
             {post.title}
           </h1>
 
           {/* Meta */}
-          <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground/60">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-6 text-xs sm:text-sm text-muted-foreground/60">
             {post.author_name && (
               <span className="flex items-center gap-2">
                 <div className="p-1.5 rounded-full bg-accent/10">
@@ -253,13 +253,13 @@ export default function BlogPostClient({ slug }: { slug: string }) {
       </div>
 
       {/* Footer */}
-      <section className="container mx-auto px-4 max-w-4xl py-12">
-        <div className="flex items-center justify-between">
-          <Link href="/blog">
+      <section className="container mx-auto px-4 max-w-4xl py-8 sm:py-10 md:py-12">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          <Link href="/blog" className="w-full sm:w-auto">
             <Button
               variant="outline"
               size="lg"
-              className="border-accent/30 hover:bg-accent/10 transition-all duration-300"
+              className="w-full sm:w-auto border-accent/30 hover:bg-accent/10 transition-all duration-300"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Blog
@@ -267,10 +267,10 @@ export default function BlogPostClient({ slug }: { slug: string }) {
           </Link>
 
           {post.category && (
-            <Link href={`/blog?category=${post.category.slug}`}>
+            <Link href={`/blog?category=${post.category.slug}`} className="w-full sm:w-auto">
               <Button
                 variant="ghost"
-                className="text-muted-foreground hover:text-accent"
+                className="w-full sm:w-auto text-muted-foreground hover:text-accent"
               >
                 More in {post.category.name}
                 <ChevronRight className="h-4 w-4 ml-1" />

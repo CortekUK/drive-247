@@ -56,12 +56,12 @@ function StatCard({
 }) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
+        <CardTitle className="text-xs sm:text-sm font-medium min-w-0 truncate">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+      <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+        <div className="text-xl sm:text-2xl font-bold break-words">{value}</div>
         {description && (
           <p className="text-xs text-muted-foreground">{description}</p>
         )}
@@ -118,51 +118,53 @@ function DocumentCard({
 
   return (
     <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start gap-4">
-          <div className="flex-shrink-0 w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-            <FileText className="h-6 w-6 text-primary" />
+      <CardContent className="p-3 sm:p-4">
+        <div className="flex items-start gap-3 sm:gap-4">
+          <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+            <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="font-semibold truncate">{document.document_name}</h3>
-                <p className="text-sm text-muted-foreground">
+              <div className="min-w-0">
+                <h3 className="font-semibold text-sm sm:text-base break-all">{document.document_name}</h3>
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   {document.document_type.replace(/_/g, ' ').replace(/\bid\b/gi, 'ID').replace(/\b\w/g, c => c.toUpperCase())}
                 </p>
               </div>
-              {document.document_type === 'Insurance Certificate' && getStatusBadge(status)}
+              {document.document_type === 'Insurance Certificate' && (
+                <div className="shrink-0">{getStatusBadge(status)}</div>
+              )}
             </div>
 
-            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <div className="mt-2 grid grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-1 text-xs sm:text-sm">
               {document.insurance_provider && (
-                <div>
+                <div className="min-w-0">
                   <span className="text-muted-foreground">Provider:</span>{' '}
-                  {document.insurance_provider}
+                  <span className="break-words">{document.insurance_provider}</span>
                 </div>
               )}
               {document.policy_number && (
-                <div>
+                <div className="min-w-0">
                   <span className="text-muted-foreground">Policy:</span>{' '}
-                  {document.policy_number}
+                  <span className="break-all">{document.policy_number}</span>
                 </div>
               )}
               {document.start_date && (
-                <div>
+                <div className="min-w-0">
                   <span className="text-muted-foreground">Start:</span>{' '}
                   {format(new Date(document.start_date), 'MMM d, yyyy')}
                 </div>
               )}
               {document.end_date && (
-                <div>
+                <div className="min-w-0">
                   <span className="text-muted-foreground">Expires:</span>{' '}
                   {format(new Date(document.end_date), 'MMM d, yyyy')}
                 </div>
               )}
             </div>
 
-            <div className="mt-3 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                 {document.verified ? (
                   <Badge variant="outline" className="text-green-600 border-green-600">
                     <FileCheck className="h-3 w-3 mr-1" />
@@ -174,13 +176,13 @@ function DocumentCard({
                     Pending Verification
                   </Badge>
                 )}
-                <span>•</span>
+                <span className="hidden sm:inline">•</span>
                 <span>
                   Uploaded {format(new Date(document.created_at), 'MMM d, yyyy')}
                 </span>
               </div>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 self-end sm:self-auto">
                 {document.file_url && (
                   <Button
                     variant="ghost"
@@ -299,50 +301,52 @@ function InsurancePolicyCard({ policy, currencyCode, tenantId }: { policy: Custo
 
   return (
     <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start gap-4">
-          <div className="flex-shrink-0 w-12 h-12 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
-            <Shield className="h-6 w-6 text-green-600 dark:text-green-400" />
+      <CardContent className="p-3 sm:p-4">
+        <div className="flex items-start gap-3 sm:gap-4">
+          <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
+            <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-green-600 dark:text-green-400" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="font-semibold">
+              <div className="min-w-0">
+                <h3 className="font-semibold text-sm sm:text-base">
                   {isExtension ? 'Extension Insurance' : 'Bonzah Insurance'}
                 </h3>
                 {vehicleName && (
-                  <p className="text-sm text-muted-foreground flex items-center gap-1">
-                    <Car className="h-3 w-3" />
-                    {vehicleName}
-                    {rental?.rental_number && ` · ${rental.rental_number}`}
+                  <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1">
+                    <Car className="h-3 w-3 shrink-0" />
+                    <span className="truncate">
+                      {vehicleName}
+                      {rental?.rental_number && ` · ${rental.rental_number}`}
+                    </span>
                   </p>
                 )}
               </div>
-              {getPolicyStatusBadge(policy.status)}
+              <div className="shrink-0">{getPolicyStatusBadge(policy.status)}</div>
             </div>
 
-            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-              <div>
+            <div className="mt-2 grid grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-1 text-xs sm:text-sm">
+              <div className="min-w-0">
                 <span className="text-muted-foreground">Start:</span>{' '}
                 {format(new Date(policy.trip_start_date), 'MMM d, yyyy')}
               </div>
-              <div>
+              <div className="min-w-0">
                 <span className="text-muted-foreground">End:</span>{' '}
                 {format(new Date(policy.trip_end_date), 'MMM d, yyyy')}
               </div>
-              <div>
+              <div className="min-w-0">
                 <span className="text-muted-foreground">Premium:</span>{' '}
                 <span className="font-medium">{formatCurrency(policy.premium_amount, currencyCode)}</span>
               </div>
               {policy.policy_no && (
-                <div>
+                <div className="min-w-0">
                   <span className="text-muted-foreground">Policy #:</span>{' '}
-                  {policy.policy_no}
+                  <span className="break-all">{policy.policy_no}</span>
                 </div>
               )}
             </div>
 
-            <div className="mt-3 flex items-center justify-between">
+            <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div className="flex items-center gap-1.5 flex-wrap">
                 {activeCoverages.map(([key, label]) => (
                   <Badge key={key} variant="secondary" className="text-xs">
@@ -358,7 +362,7 @@ function InsurancePolicyCard({ policy, currencyCode, tenantId }: { policy: Custo
 
               {/* PDF download buttons */}
               {pdfIds && Object.keys(pdfIds).length > 0 && (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-wrap">
                   {Object.entries(pdfIds).map(([type, pdfId]) => (
                     <Button
                       key={type}
@@ -416,23 +420,23 @@ export default function DocumentsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">My Insurance</h1>
-          <p className="text-muted-foreground">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold">My Insurance</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Manage your insurance documents
           </p>
         </div>
-        <Button onClick={() => setUploadDialogOpen(true)}>
+        <Button onClick={() => setUploadDialogOpen(true)} className="w-full sm:w-auto">
           <Upload className="h-4 w-4 mr-2" />
           Upload Insurance
         </Button>
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
         <StatCard
           title="Active Policies"
           value={insurancePolicies?.filter(p => p.status === 'active').length || 0}
@@ -444,12 +448,14 @@ export default function DocumentsPage() {
           value={insurancePolicies?.length || 0}
           icon={FileText}
         />
-        <StatCard
-          title="Uploaded Documents"
-          value={stats?.totalDocuments || 0}
-          icon={FileCheck}
-          description="Insurance certificates"
-        />
+        <div className="col-span-2 md:col-span-1">
+          <StatCard
+            title="Uploaded Documents"
+            value={stats?.totalDocuments || 0}
+            icon={FileCheck}
+            description="Insurance certificates"
+          />
+        </div>
       </div>
 
       {/* Bonzah Insurance Policies */}

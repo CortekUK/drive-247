@@ -381,14 +381,14 @@ export function ExtrasSettings() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="min-w-0">
               <CardTitle>Rental Extras</CardTitle>
               <CardDescription>
                 Manage optional add-ons customers can select during booking (GPS, baby seats, drinks, etc.)
               </CardDescription>
             </div>
-            <Button onClick={handleOpenAdd}>
+            <Button onClick={handleOpenAdd} className="w-full sm:w-auto shrink-0">
               <Plus className="h-4 w-4 mr-2" />
               Add Extra
             </Button>

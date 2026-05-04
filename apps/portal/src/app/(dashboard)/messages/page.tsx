@@ -71,7 +71,7 @@ export default function MessagesPage() {
 
         {/* Chat window - right panel: hidden on mobile when no chat is selected */}
         <div className={cn(
-          "flex-1 bg-background/50",
+          "flex-1 min-w-0 bg-background/50",
           selectedChannel ? "block" : "hidden md:block"
         )}>
           <ChatWindow

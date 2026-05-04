@@ -149,22 +149,22 @@ export default function DashboardPage() {
 
 
   return (
-    <div className="container mx-auto py-4 space-y-4">
+    <div className="container mx-auto py-4 space-y-4 px-3 sm:px-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold">
             {getGreeting()}{getFirstName() ? `, ${getFirstName()}` : ""}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Here's what's happening with your business today
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {canView('rentals') && (
             <Dialog>
               <DialogTrigger asChild>
-                <Button variant="outline">
+                <Button variant="outline" className="flex-1 sm:flex-none">
                   <CalendarDays className="h-4 w-4 mr-2" />
                   Today's Schedule
                 </Button>
@@ -178,7 +178,7 @@ export default function DashboardPage() {
             </Dialog>
           )}
           {canEdit('rentals') && (
-            <Button onClick={() => router.push("/rentals/new")}>
+            <Button onClick={() => router.push("/rentals/new")} className="flex-1 sm:flex-none">
               <Plus className="h-4 w-4 mr-2" />
               New Rental
             </Button>

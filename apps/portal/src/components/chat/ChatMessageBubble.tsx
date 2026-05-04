@@ -83,7 +83,7 @@ export function ChatMessageBubble({
   return (
     <div
       className={cn(
-        'flex w-full group',
+        'flex w-full min-w-0 group',
         isOwnMessage ? 'justify-end' : 'justify-start',
         isFirstInGroup ? 'mt-4' : 'mt-3'
       )}
@@ -102,7 +102,7 @@ export function ChatMessageBubble({
 
       <div
         className={cn(
-          'max-w-[65%] relative',
+          'max-w-[75%] sm:max-w-[65%] min-w-0 relative',
           isOwnMessage ? 'mr-1' : 'ml-0'
         )}
       >
@@ -158,7 +158,7 @@ export function ChatMessageBubble({
 
           {/* Message content */}
           {displayContent && (
-            <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+            <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-all">
               {displayContent}
             </p>
           )}

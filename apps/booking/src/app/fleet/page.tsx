@@ -256,10 +256,10 @@ const Pricing = () => {
       <Navigation />
 
       {/* Fleet Section */}
-      <section className="pt-24 pb-16">
+      <section className="pt-16 sm:pt-20 md:pt-24 pb-10 sm:pb-16">
         <div className="container mx-auto px-4" id="fleet-section">
           {/* Filter & Sort Controls */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-12 max-w-5xl mx-auto">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-8 sm:mb-12 max-w-5xl mx-auto">
             <div className="flex-1">
               <Select value={makeFilter} onValueChange={setMakeFilter}>
                 <SelectTrigger className="w-full bg-card/50 border-accent/20">
@@ -351,13 +351,13 @@ const Pricing = () => {
                                 <Car className="w-5 h-5 text-accent" />
                               </div>
                             )}
-                            <div>
-                              <div className="flex items-center gap-3 mb-2">
-                                <h3 className="text-xl md:text-2xl font-display font-bold text-gradient-silver">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-3 mb-1.5 sm:mb-2">
+                                <h3 className="text-lg sm:text-xl md:text-2xl font-display font-bold text-gradient-silver leading-tight break-words">
                                   {vehicleName}
                                 </h3>
                               </div>
-                              <p className="text-xs uppercase tracking-widest text-accent/80 font-medium">
+                              <p className="text-[11px] sm:text-xs uppercase tracking-widest text-accent/80 font-medium">
                                 {vehicle.reg}
                               </p>
                             </div>
@@ -429,16 +429,16 @@ const Pricing = () => {
                         </div>
 
                         {/* Pricing & Actions */}
-                        <div className="flex flex-col items-end gap-2">
-                          <div className="flex items-center gap-3 text-right">
+                        <div className="flex flex-col items-start lg:items-end gap-2 w-full lg:w-auto">
+                          <div className="flex flex-wrap items-center justify-between lg:justify-end gap-2 sm:gap-3 w-full lg:w-auto text-left lg:text-right">
                             {vehicle.available_daily !== false && (
                               <div>
-                                <div className="text-lg font-bold text-gradient-metal">{formatCurrency(vehicle.daily_rent, tenant?.currency_code || 'USD')}</div>
+                                <div className="text-base sm:text-lg font-bold text-gradient-metal">{formatCurrency(vehicle.daily_rent, tenant?.currency_code || 'USD')}</div>
                                 <div className="text-[10px] text-muted-foreground">/day</div>
                               </div>
                             )}
                             {vehicle.available_daily !== false && vehicle.available_weekly !== false && (
-                              <div className="h-6 w-px bg-accent/20" />
+                              <div className="hidden sm:block h-6 w-px bg-accent/20" />
                             )}
                             {vehicle.available_weekly !== false && (
                               <div>
@@ -447,7 +447,7 @@ const Pricing = () => {
                               </div>
                             )}
                             {vehicle.available_weekly !== false && vehicle.available_monthly !== false && (
-                              <div className="h-6 w-px bg-accent/20" />
+                              <div className="hidden sm:block h-6 w-px bg-accent/20" />
                             )}
                             {vehicle.available_monthly !== false && (
                               <div>

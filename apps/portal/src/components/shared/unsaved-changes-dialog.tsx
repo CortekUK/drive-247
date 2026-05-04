@@ -27,26 +27,33 @@ export function UnsavedChangesDialog({
   isSaving = false,
 }: UnsavedChangesDialogProps) {
   return (
-    <AlertDialog open={open}>
-      <AlertDialogContent>
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        // Escape / backdrop should behave like Cancel
+        if (!next && !isSaving) onCancel();
+      }}
+    >
+      <AlertDialogContent className="max-w-[calc(100vw-24px)] sm:max-w-lg p-4 sm:p-6 gap-3 sm:gap-4">
         <AlertDialogHeader>
-          <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-          <AlertDialogDescription>
+          <AlertDialogTitle className="text-base sm:text-lg">Unsaved Changes</AlertDialogTitle>
+          <AlertDialogDescription className="text-xs sm:text-sm">
             You have unsaved changes that will be lost if you leave this page.
             What would you like to do?
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+        <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-2">
           <Button
             variant="outline"
             onClick={onCancel}
             disabled={isSaving}
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
           <Button
             variant="outline"
-            className="text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/10"
+            className="w-full sm:w-auto text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/10"
             onClick={onDiscard}
             disabled={isSaving}
           >
@@ -56,6 +63,7 @@ export function UnsavedChangesDialog({
             <Button
               onClick={onSave}
               disabled={isSaving}
+              className="w-full sm:w-auto"
             >
               {isSaving ? (
                 <>

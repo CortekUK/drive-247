@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -1206,13 +1206,24 @@ const Settings = () => {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Configure your fleet management system
-        </p>
+      <div className="flex items-start gap-2 sm:gap-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => window.history.back()}
+          className="lg:hidden shrink-0 h-9 px-2 -ml-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span className="sr-only">Back</span>
+        </Button>
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-semibold">Settings</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            Configure your fleet management system
+          </p>
+        </div>
       </div>
 
       {/* Settings Tabs */}
@@ -1220,7 +1231,7 @@ const Settings = () => {
         <div className="space-y-6">
           {/* Mobile: Horizontal scrollable nav (sidebar handles desktop nav) */}
           <div className="lg:hidden">
-            <TabsList className="flex w-full overflow-x-auto gap-1 bg-muted/50 p-1 rounded-lg">
+            <TabsList className="flex w-full overflow-x-auto gap-1 bg-muted/50 p-1 rounded-lg scrollbar-thin h-auto justify-start">
               {([
                 { value: 'general', icon: Building2, label: 'General' },
                 { value: 'locations', icon: MapPin, label: 'Locations' },
@@ -2058,7 +2069,7 @@ const Settings = () => {
                     }
                   }}
                   disabled={isUpdatingRentalSettings}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 w-full sm:w-auto"
                 >
                   {isUpdatingRentalSettings ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -2114,7 +2125,7 @@ const Settings = () => {
                     }
                   }}
                   disabled={isUpdatingRentalSettings || rentalForm.verification_document_type === ((rentalSettings as any).verification_document_type ?? 'driving_license')}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 w-full sm:w-auto"
                 >
                   {isUpdatingRentalSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Save
@@ -2139,7 +2150,7 @@ const Settings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <Input
                   type="text"
                   inputMode="numeric"
@@ -2225,7 +2236,7 @@ const Settings = () => {
                       : rentalForm.booking_lead_time_value;
                     return isUpdatingRentalSettings || totalHours < 1;
                   })()}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 w-full sm:w-auto"
                 >
                   {isUpdatingRentalSettings ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -2382,7 +2393,7 @@ const Settings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <Label className="text-sm">Monthly tier starts at</Label>
                 <Select
                   value={String(rentalForm.monthly_tier_days)}
@@ -2434,7 +2445,7 @@ const Settings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <Label className="text-sm">Buffer time</Label>
                 <Input
                   type="text"
@@ -2467,7 +2478,7 @@ const Settings = () => {
                     }
                   }}
                   disabled={isUpdatingRentalSettings}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 w-full sm:w-auto"
                 >
                   {isUpdatingRentalSettings ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -2483,17 +2494,17 @@ const Settings = () => {
           {/* Return Reminder Card */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div className="min-w-0">
                   <CardTitle className="flex items-center gap-2">
-                    <Bell className="h-5 w-5 text-primary" />
+                    <Bell className="h-5 w-5 text-primary shrink-0" />
                     Return Reminder
                   </CardTitle>
                   <CardDescription className="mt-1.5">
                     Automatically notify customers before their rental return date
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <Label htmlFor="return-reminder-toggle" className="text-sm">
                     {rentalForm.return_reminder_enabled ? 'Enabled' : 'Disabled'}
                   </Label>
@@ -2511,7 +2522,7 @@ const Settings = () => {
             <CardContent className="space-y-4">
               {rentalForm.return_reminder_enabled ? (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     <Label className="text-sm">Send reminder</Label>
                     <Input
                       type="number"
@@ -2565,7 +2576,7 @@ const Settings = () => {
                     }
                   }}
                   disabled={isUpdatingRentalSettings}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 w-full sm:w-auto"
                 >
                   {isUpdatingRentalSettings ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -2594,7 +2605,7 @@ const Settings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="flex items-start justify-between gap-3 p-4 border rounded-lg">
                 <div className="space-y-1">
                   <h4 className="font-medium">Enable Tax</h4>
                   <p className="text-sm text-muted-foreground">
@@ -2654,7 +2665,7 @@ const Settings = () => {
                     }
                   }}
                   disabled={isUpdatingRentalSettings}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 w-full sm:w-auto"
                 >
                   {isUpdatingRentalSettings ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -2679,7 +2690,7 @@ const Settings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="flex items-start justify-between gap-3 p-4 border rounded-lg">
                 <div className="space-y-1">
                   <h4 className="font-medium">Enable Service Fee</h4>
                   <p className="text-sm text-muted-foreground">
@@ -2787,7 +2798,7 @@ const Settings = () => {
                     }
                   }}
                   disabled={isUpdatingRentalSettings}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 w-full sm:w-auto"
                 >
                   {isUpdatingRentalSettings ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -2808,14 +2819,14 @@ const Settings = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" />
+                <Shield className="h-5 w-5 text-primary shrink-0" />
                 Pre-Authorization
               </CardTitle>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <CardDescription>
                   Configure pre-authorization hold for customer bookings
                 </CardDescription>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <Label htmlFor="security-deposit-toggle" className="text-sm text-muted-foreground">
                     {rentalForm.security_deposit_enabled ? 'Enabled' : 'Disabled'}
                   </Label>
@@ -2920,7 +2931,7 @@ const Settings = () => {
                     }
                   }}
                   disabled={isUpdatingRentalSettings}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 w-full sm:w-auto"
                 >
                   {isUpdatingRentalSettings ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -2948,14 +2959,15 @@ const Settings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="space-y-1">
+              <div className="flex items-start justify-between gap-3 p-4 border rounded-lg">
+                <div className="space-y-1 min-w-0">
                   <h4 className="font-medium">Enable Pay As You Go</h4>
                   <p className="text-sm text-muted-foreground">
                     Rental amount, tax, and percentage-based service fees are paid incrementally
                   </p>
                 </div>
                 <Switch
+                  className="shrink-0 mt-0.5"
                   checked={rentalForm.pay_as_you_go_enabled ?? false}
                   onCheckedChange={async (checked) => {
                     setRentalForm(prev => ({ ...prev, pay_as_you_go_enabled: checked }));
@@ -3460,7 +3472,7 @@ const Settings = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Enable Toggle */}
-              <div className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="flex items-start justify-between gap-3 p-4 border rounded-lg">
                 <div className="space-y-1">
                   <h4 className="font-medium">Enable Lockbox</h4>
                   <p className="text-sm text-muted-foreground">
@@ -3610,7 +3622,7 @@ const Settings = () => {
                     }
                   }}
                   disabled={isUpdatingRentalSettings}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 w-full sm:w-auto"
                 >
                   {isUpdatingRentalSettings ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -3635,7 +3647,7 @@ const Settings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="flex items-start justify-between gap-3 p-4 border rounded-lg">
                 <div className="space-y-1">
                   <h4 className="font-medium">Enable Blog</h4>
                   <p className="text-sm text-muted-foreground">
@@ -3662,7 +3674,7 @@ const Settings = () => {
                     }
                   }}
                   disabled={isUpdatingRentalSettings}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 w-full sm:w-auto"
                 >
                   {isUpdatingRentalSettings ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -3839,7 +3851,7 @@ const Settings = () => {
               </p>
               <Button
                 onClick={() => router.push('/settings/email-templates')}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 w-full sm:w-auto"
               >
                 <Mail className="h-4 w-4" />
                 Manage Email Templates
@@ -3865,7 +3877,7 @@ const Settings = () => {
               </p>
               <Button
                 onClick={() => router.push('/settings/agreement-templates')}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 w-full sm:w-auto"
               >
                 <FileText className="h-4 w-4" />
                 Manage Agreement Templates
@@ -3917,7 +3929,7 @@ const Settings = () => {
               </p>
               <Button
                 onClick={() => router.push('/settings/blacklist')}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 w-full sm:w-auto"
               >
                 <ShieldX className="h-4 w-4" />
                 View Global Blacklist

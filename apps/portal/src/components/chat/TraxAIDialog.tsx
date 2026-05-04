@@ -126,17 +126,17 @@ function EmptyState({
   userName?: string;
 }) {
   return (
-    <div className="flex flex-col items-center px-6 py-10">
+    <div className="flex flex-col items-center px-4 py-6 sm:px-6 sm:py-10">
       {/* Hero section */}
-      <div className="relative mb-8">
+      <div className="relative mb-6 sm:mb-8">
         <div
-          className="flex h-14 w-14 items-center justify-center rounded-2xl"
+          className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl"
           style={{
             background: `linear-gradient(135deg, ${accentColor}20, ${accentColor}08)`,
             border: `1px solid ${accentColor}25`,
           }}
         >
-          <TraxIcon size={32} color={accentColor} />
+          <TraxIcon size={28} color={accentColor} />
         </div>
         {/* Ambient glow */}
         <div
@@ -145,7 +145,7 @@ function EmptyState({
         />
       </div>
 
-      <h3 className="text-xl font-semibold tracking-tight text-foreground">
+      <h3 className="text-lg sm:text-xl font-semibold tracking-tight text-foreground text-center">
         {userName ? `Hey ${userName}, how can I help?` : 'How can I help?'}
       </h3>
       <p className="mt-2 max-w-[360px] text-[13px] text-muted-foreground text-center leading-relaxed">
@@ -154,8 +154,8 @@ function EmptyState({
           : 'Navigate the portal, learn how features work, or check your business data.'}
       </p>
 
-      {/* Three-column category grid */}
-      <div className="mt-10 w-full max-w-[720px] grid grid-cols-3 gap-3">
+      {/* Category grid — stacks on mobile, 3 cols on larger screens */}
+      <div className="mt-6 sm:mt-10 w-full max-w-[720px] grid grid-cols-1 sm:grid-cols-3 gap-3">
         {SUGGESTION_CATEGORIES.map((category) => {
           const Icon = category.icon;
 
@@ -250,7 +250,7 @@ function TraxInput({
   };
 
   return (
-    <div className="border-t border-border/50 bg-background/80 backdrop-blur-sm px-5 py-4">
+    <div className="border-t border-border/50 bg-background/80 backdrop-blur-sm px-3 py-3 sm:px-5 sm:py-4">
       <div
         className={cn(
           'relative flex items-end gap-2 rounded-xl',
@@ -272,7 +272,7 @@ function TraxInput({
           disabled={isLoading}
           rows={1}
           className={cn(
-            'flex-1 resize-none bg-transparent px-4 py-3',
+            'flex-1 resize-none bg-transparent px-3 py-3 sm:px-4',
             'text-sm placeholder:text-muted-foreground/50',
             'focus:outline-none disabled:opacity-50',
             'min-h-[44px] max-h-[120px]'
@@ -307,8 +307,13 @@ function TraxInput({
           </Button>
         </div>
       </div>
-      <p className="mt-2 text-center text-[11px] text-muted-foreground/35">
-        Trax AI is in beta and can make mistakes. Please double-check important information. · Enter to send · Shift+Enter for new line
+      <p className="mt-2 text-center text-[10px] sm:text-[11px] text-muted-foreground/35 px-2">
+        <span className="hidden sm:inline">
+          Trax AI is in beta and can make mistakes. Please double-check important information. · Enter to send · Shift+Enter for new line
+        </span>
+        <span className="sm:hidden">
+          Trax AI is in beta. Please double-check important info.
+        </span>
       </p>
     </div>
   );
@@ -384,10 +389,10 @@ function TraxAIDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: 
       <div
         className={cn(
           'fixed z-[9999] flex flex-col',
-          'bg-background border border-border/50 rounded-2xl shadow-2xl',
+          'bg-background border border-border/50 rounded-xl sm:rounded-2xl shadow-2xl',
           'animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-4 duration-300',
-          'w-[calc(100vw-32px)] max-w-[960px]',
-          'h-[calc(100vh-32px)] max-h-[920px]',
+          'w-[calc(100vw-16px)] sm:w-[calc(100vw-32px)] max-w-[960px]',
+          'h-[calc(100dvh-16px)] sm:h-[calc(100vh-32px)] max-h-[920px]',
           'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
         )}
         style={{
@@ -395,7 +400,7 @@ function TraxAIDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: 
         }}
       >
         {/* Header */}
-        <div className="relative flex items-center justify-between px-5 py-4 border-b border-border/50 shrink-0">
+        <div className="relative flex items-center justify-between px-3 py-3 sm:px-5 sm:py-4 border-b border-border/50 shrink-0">
           <div
             className="absolute inset-x-0 top-0 h-px rounded-t-2xl"
             style={{
@@ -443,7 +448,7 @@ function TraxAIDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: 
 
         {/* Messages area */}
         <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0">
-          <div className="flex flex-col gap-1 px-5 py-2">
+          <div className="flex flex-col gap-1 px-3 py-2 sm:px-5">
             {messages.length === 0 ? (
               <EmptyState
                 onSuggestionClick={(msg) => {

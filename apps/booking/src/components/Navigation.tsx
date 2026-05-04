@@ -187,8 +187,30 @@ const Navigation = () => {
             </a>
           </div>
 
-          {/* Mobile Menu Button */}
-          <div className="flex xl:hidden items-center gap-2">
+          {/* Mobile Header Actions */}
+          <div className="flex xl:hidden items-center gap-1 sm:gap-2">
+            {!authLoading && (
+              isAuthenticated ? (
+                <Link href="/portal" aria-label="My Portal">
+                  <Avatar className="h-8 w-8 border border-accent/40">
+                    <AvatarImage src={customerUser?.customer?.profile_photo_url || undefined} />
+                    <AvatarFallback className="text-xs bg-accent/20 text-foreground">
+                      {getInitials(customerUser?.customer?.name || 'U')}
+                    </AvatarFallback>
+                  </Avatar>
+                </Link>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAuthDialog(true)}
+                  className="h-8 px-2.5 text-xs font-medium border-accent/50 hover:bg-accent hover:text-accent-foreground text-foreground"
+                >
+                  <LogIn className="w-3.5 h-3.5 sm:mr-1.5" />
+                  <span className="hidden sm:inline">Login</span>
+                </Button>
+              )
+            )}
             <ThemeToggle />
             <button
               onClick={() => setIsOpen(!isOpen)}
@@ -217,62 +239,42 @@ const Navigation = () => {
                 {link.label}
               </Link>
             ))}
-            <div className="pt-4 space-y-3">
-              {/* Auth Buttons in Mobile Menu */}
-              {!authLoading && (
-                isAuthenticated ? (
-                  <>
-                    <div className="flex items-center gap-3 px-2 py-2 rounded-md bg-muted/50">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={customerUser?.customer?.profile_photo_url || undefined} />
-                        <AvatarFallback className="text-xs bg-accent/20 text-foreground">
-                          {getInitials(customerUser?.customer?.name || 'U')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate text-foreground">{customerUser?.customer?.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{customerUser?.customer?.email}</p>
-                      </div>
-                    </div>
-                    <Link href="/portal" onClick={() => setIsOpen(false)}>
-                      <Button variant="outline" className="w-full">
-                        <LayoutDashboard className="w-4 h-4 mr-2" />
-                        My Portal
-                      </Button>
-                    </Link>
-                    <Button
-                      variant="outline"
-                      className="w-full text-destructive hover:text-destructive border-destructive/50 hover:bg-destructive/10"
-                      onClick={() => {
-                        setIsOpen(false);
-                        handleSignOut();
-                      }}
-                    >
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Sign Out
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      setIsOpen(false);
-                      setShowAuthDialog(true);
-                    }}
-                  >
-                    <LogIn className="w-4 h-4 mr-2" />
-                    Login / Sign Up
+            {/* Authenticated-only: keep account access in mobile menu. */}
+            {/* Login/Sign Up and phone CTA intentionally hidden on mobile — */}
+            {/* they live in the header/hero instead to keep the drawer focused on navigation. */}
+            {!authLoading && isAuthenticated && (
+              <div className="pt-4 space-y-3">
+                <div className="flex items-center gap-3 px-2 py-2 rounded-md bg-muted/50">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={customerUser?.customer?.profile_photo_url || undefined} />
+                    <AvatarFallback className="text-xs bg-accent/20 text-foreground">
+                      {getInitials(customerUser?.customer?.name || 'U')}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate text-foreground">{customerUser?.customer?.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{customerUser?.customer?.email}</p>
+                  </div>
+                </div>
+                <Link href="/portal" onClick={() => setIsOpen(false)}>
+                  <Button variant="outline" className="w-full">
+                    <LayoutDashboard className="w-4 h-4 mr-2" />
+                    My Portal
                   </Button>
-                )
-              )}
-              <a href={`tel:${phoneLink}`}>
-                <Button className="w-full gradient-accent shadow-glow">
-                  <Phone className="w-4 h-4 mr-2" />
-                  {phoneDisplay}
+                </Link>
+                <Button
+                  variant="outline"
+                  className="w-full text-destructive hover:text-destructive border-destructive/50 hover:bg-destructive/10"
+                  onClick={() => {
+                    setIsOpen(false);
+                    handleSignOut();
+                  }}
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
                 </Button>
-              </a>
-            </div>
+              </div>
+            )}
           </div>
         )}
       </div>

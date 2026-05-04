@@ -200,27 +200,27 @@ const Contact = () => {
       <Navigation />
 
       {/* Hero Section with Texture */}
-      <section className="pt-32 pb-24 relative">
+      <section className="pt-20 sm:pt-24 md:pt-32 pb-12 sm:pb-16 md:pb-24 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-muted/40 to-background pointer-events-none" />
         <div className="container mx-auto px-4 relative">
-          <div className="max-w-4xl mx-auto text-center mb-20 animate-fade-in">
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-bold mb-6 text-gradient-metal leading-tight">
+          <div className="max-w-4xl mx-auto text-center mb-10 sm:mb-14 md:mb-20 animate-fade-in">
+            <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-display font-bold mb-4 sm:mb-6 text-gradient-metal leading-tight break-words">
               {content.hero?.title ? replaceCompanyName(content.hero.title) : `Contact ${appName}`}
             </h1>
-            <div className="flex items-center justify-center mb-8">
-              <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
+            <div className="flex items-center justify-center mb-4 sm:mb-6 md:mb-8">
+              <div className="h-[1px] w-20 sm:w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
             </div>
-            <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+            <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
               {content.hero?.subtitle || "Get in touch for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles."}
             </p>
           </div>
 
           {/* Two Column Layout */}
-          <div className="grid lg:grid-cols-2 gap-12 max-w-7xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-6 sm:gap-8 md:gap-12 max-w-7xl mx-auto">
             {/* Left Column - Contact Info */}
-            <div className="space-y-6 animate-fade-in animation-delay-200">
+            <div className="space-y-4 sm:space-y-6 animate-fade-in animation-delay-200">
               {/* Phone Card */}
-              <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
+              <Card className="group p-4 sm:p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
                 <div className="flex items-start gap-4">
                   <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
                     <Phone className="w-6 h-6 text-accent" />
@@ -241,7 +241,7 @@ const Contact = () => {
               </Card>
 
               {/* Email Card */}
-              <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
+              <Card className="group p-4 sm:p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
                 <div className="flex items-start gap-4">
                   <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
                     <Mail className="w-6 h-6 text-accent" />
@@ -262,7 +262,7 @@ const Contact = () => {
               </Card>
 
               {/* Office Card */}
-              <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
+              <Card className="group p-4 sm:p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
                 <div className="flex items-start gap-4">
                   <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
                     <MapPin className="w-6 h-6 text-accent" />
@@ -277,7 +277,7 @@ const Contact = () => {
               </Card>
 
               {/* Availability Card */}
-              <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
+              <Card className="group p-4 sm:p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
                 <div className="flex items-start gap-4">
                   <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
                     <Clock className="w-6 h-6 text-accent" />
@@ -292,7 +292,7 @@ const Contact = () => {
               </Card>
 
               {/* WhatsApp Button */}
-              <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
+              <Card className="group p-4 sm:p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
                 <div className="flex items-start gap-4">
                   <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
                     <MessageCircle className="w-6 h-6 text-accent" />
@@ -316,7 +316,7 @@ const Contact = () => {
 
               {/* Trust Badges */}
               <TooltipProvider>
-                <Card className="p-6 shadow-metal bg-gradient-to-br from-card via-secondary/20 to-card backdrop-blur border-accent/20">
+                <Card className="p-4 sm:p-6 shadow-metal bg-gradient-to-br from-card via-secondary/20 to-card backdrop-blur border-accent/20">
                   <div className="flex items-center justify-around text-center gap-4">
                     {(content.trust_badges?.badges || [
                       { icon: "shield", label: "Secure", tooltip: "Your data and booking details are encrypted and secure" },
@@ -348,7 +348,7 @@ const Contact = () => {
             </div>
 
             {/* Right Column - Contact Form */}
-            <Card className="p-8 lg:p-10 shadow-metal bg-card/50 backdrop-blur border-accent/20 animate-fade-in animation-delay-400">
+            <Card className="p-5 sm:p-8 lg:p-10 shadow-metal bg-card/50 backdrop-blur border-accent/20 animate-fade-in animation-delay-400">
               <h3 className="text-3xl font-display font-bold mb-2 dark:text-gradient-silver text-gradient-black">
                 {content.contact_form?.title || "Send Us a Message"}
               </h3>

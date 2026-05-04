@@ -104,16 +104,16 @@ export default function CMSReviewsEditor() {
   };
 
   return (
-    <div className="space-y-6 pt-6">
+    <div className="space-y-6 pt-4 sm:pt-6 px-3 sm:px-0">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => router.push("/cms")}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-start sm:items-center gap-2 sm:gap-4 min-w-0">
+          <Button variant="ghost" size="sm" onClick={() => router.push("/cms")} className="shrink-0 h-9 px-2 sm:px-3">
+            <ArrowLeft className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Back</span>
           </Button>
-          <div>
-            <h1 className="text-2xl font-display font-bold flex items-center gap-2">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-display font-bold flex flex-wrap items-center gap-2">
               {page.name}
               <Badge
                 variant={page.status === "published" ? "default" : "secondary"}
@@ -131,18 +131,20 @@ export default function CMSReviewsEditor() {
                 {page.status === "published" ? "Published" : "Draft"}
               </Badge>
             </h1>
-            <p className="text-sm text-muted-foreground">{page.description}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">{page.description}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setVersionHistoryOpen(true)}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setVersionHistoryOpen(true)} className="flex-1 sm:flex-none">
             <History className="h-4 w-4 mr-2" />
             History
           </Button>
           {canEdit('cms') && (
             <Button
+              size="sm"
               onClick={handlePublish}
               disabled={isPublishing || page.status === "published"}
+              className="flex-1 sm:flex-none"
             >
               {isPublishing ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

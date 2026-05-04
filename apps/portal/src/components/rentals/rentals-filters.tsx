@@ -67,7 +67,7 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
   return (
     <div>
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-[200px] sm:max-w-[400px]">
+        <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-[400px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             placeholder="Search customer, reg, rental #..."
@@ -133,8 +133,12 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
                 <Calendar className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-3" align="end">
-            <div className="flex gap-4">
+            <PopoverContent
+              className="w-auto max-w-[95vw] max-h-[min(80vh,600px)] overflow-y-auto p-3"
+              align="end"
+              collisionPadding={8}
+            >
+            <div className="flex flex-col sm:flex-row gap-4">
               <div className="space-y-1">
                 <p className="text-xs font-medium text-muted-foreground">From</p>
                 <CalendarComponent
@@ -144,7 +148,7 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
                   className="p-0 pointer-events-auto"
                 />
               </div>
-              <div className="space-y-1 border-l pl-4">
+              <div className="space-y-1 sm:border-l sm:pl-4 pt-3 border-t sm:pt-0 sm:border-t-0">
                 <p className="text-xs font-medium text-muted-foreground">To</p>
                 <CalendarComponent
                   mode="single"

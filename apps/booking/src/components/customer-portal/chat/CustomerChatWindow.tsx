@@ -73,29 +73,29 @@ export function CustomerChatWindow() {
   return (
     <div className="flex flex-col h-full border rounded-lg bg-card overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b bg-background flex items-center gap-3">
-        <MessageSquare className="h-5 w-5 text-primary" />
-        <div>
-          <h2 className="font-semibold">Chat with {tenantName}</h2>
+      <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b bg-background flex items-center gap-2 sm:gap-3">
+        <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 text-primary shrink-0" />
+        <div className="min-w-0">
+          <h2 className="font-semibold text-sm sm:text-base truncate">Chat with {tenantName}</h2>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {isTyping ? (
               <span className="text-primary animate-pulse">typing...</span>
             ) : isTenantOnline ? (
               <>
-                <Circle className="h-2 w-2 fill-green-500 text-green-500" />
+                <Circle className="h-2 w-2 fill-green-500 text-green-500 shrink-0" />
                 <span>Online</span>
               </>
             ) : tenantLastSeen ? (
-              <span>Last seen {formatDistanceToNow(new Date(tenantLastSeen), { addSuffix: true })}</span>
+              <span className="truncate">Last seen {formatDistanceToNow(new Date(tenantLastSeen), { addSuffix: true })}</span>
             ) : (
-              <span>{channel ? 'Send us a message anytime' : 'Start a conversation'}</span>
+              <span className="truncate">{channel ? 'Send us a message anytime' : 'Start a conversation'}</span>
             )}
           </div>
         </div>
       </div>
 
       {/* Messages area */}
-      <ScrollArea className="flex-1 px-4">
+      <ScrollArea className="flex-1 px-3 sm:px-4">
         {/* Load more button */}
         {hasMore && (
           <div className="flex justify-center py-4">

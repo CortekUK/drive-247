@@ -302,7 +302,7 @@ export function CommandCenter({
       {/* Header — always visible */}
       <button
         onClick={toggleCollapsed}
-        className="w-full px-5 py-3.5 flex items-center justify-between gap-4 hover:bg-muted/10 transition-colors cursor-pointer"
+        className="w-full px-3 sm:px-5 py-3.5 flex items-center justify-between gap-3 sm:gap-4 hover:bg-muted/10 transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-4 min-w-0">
           {allComplete ? (
@@ -364,13 +364,13 @@ export function CommandCenter({
           opacity: collapsed ? 0 : 1,
         }}
       >
-        <div className="px-5 pb-5">
+        <div className="px-3 sm:px-5 pb-5">
           {/* Active checklist items */}
           <div className="space-y-1">
             {sortedActive.map((item) => (
               <div
                 key={item.id}
-                className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors ${
+                className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-3 py-2.5 rounded-lg transition-colors ${
                   !item.isComplete ? "bg-muted/30" : ""
                 }`}
               >
@@ -434,7 +434,7 @@ export function CommandCenter({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0 ml-3">
+                <div className="flex flex-wrap items-center gap-2 shrink-0 sm:ml-3 pl-[30px] sm:pl-0">
                   {/* Mode switch request button */}
                   {item.goLiveStatus === "pending" ? (
                     <span className="inline-flex items-center text-[11px] px-2.5 h-7 font-medium rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
@@ -518,7 +518,7 @@ export function CommandCenter({
                   return (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between px-3 py-2.5 rounded-lg opacity-75"
+                      className="flex items-start sm:items-center justify-between gap-3 px-3 py-2.5 rounded-lg opacity-75"
                     >
                       <div className="flex items-start gap-3 min-w-0 flex-1">
                         <Circle className="h-[18px] w-[18px] text-muted-foreground/25 shrink-0 mt-0.5" />

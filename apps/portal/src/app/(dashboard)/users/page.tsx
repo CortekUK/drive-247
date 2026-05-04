@@ -31,7 +31,8 @@ import {
   Plus,
   Users,
   Settings2,
-  Search
+  Search,
+  ArrowLeft
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -382,18 +383,29 @@ export default function UsersManagement() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Users className="h-8 w-8" />
-            Manage Users
-          </h1>
-          <p className="text-muted-foreground">Create and manage user accounts for your team</p>
+    <div className="p-4 sm:p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-start sm:items-center gap-2 sm:gap-4 min-w-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => window.history.back()}
+            className="shrink-0 h-9 px-2 sm:px-3"
+          >
+            <ArrowLeft className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Back</span>
+          </Button>
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+              <Users className="h-6 w-6 sm:h-8 sm:w-8 shrink-0" />
+              Manage Users
+            </h1>
+            <p className="text-muted-foreground text-sm sm:text-base">Create and manage user accounts for your team</p>
+          </div>
         </div>
         <Button
           onClick={() => setShowAddDialog(true)}
-          className="bg-gradient-primary text-primary-foreground"
+          className="bg-gradient-primary text-primary-foreground w-full sm:w-auto"
         >
           <Plus className="mr-2 h-4 w-4" />
           Add User

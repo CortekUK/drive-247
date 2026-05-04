@@ -207,21 +207,21 @@ export default function CreditsPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* ── Header ── */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Credits</h1>
-          <p className="text-muted-foreground">Buy and manage credits for platform services</p>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold">Credits</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Buy and manage credits for platform services</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => refetch()}>
+          <Button variant="outline" size="icon" onClick={() => refetch()} className="shrink-0">
             <RefreshCw className="h-4 w-4" />
           </Button>
           <Button
             onClick={() => buyCredits.mutate(liveBuyAmount)}
             disabled={buyCredits.isPending}
-            className="bg-gradient-primary"
+            className="bg-gradient-primary flex-1 sm:flex-none"
           >
             {buyCredits.isPending ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -392,14 +392,14 @@ export default function CreditsPage() {
       {/* ── Usage History Chart (live only) ── */}
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="min-w-0">
               <CardTitle className="text-sm font-medium">Usage History</CardTitle>
-              <CardDescription>Live credit usage over time</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">Live credit usage over time</CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Select value={integrationFilter} onValueChange={(v) => setIntegrationFilter(v as IntegrationFilter)}>
-                <SelectTrigger className="w-[140px] h-8 text-xs">
+                <SelectTrigger className="flex-1 sm:flex-none sm:w-[140px] h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -410,7 +410,7 @@ export default function CreditsPage() {
                 </SelectContent>
               </Select>
               <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
-                <SelectTrigger className="w-[110px] h-8 text-xs">
+                <SelectTrigger className="flex-1 sm:flex-none sm:w-[110px] h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -424,12 +424,12 @@ export default function CreditsPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-hidden">
           <ChartContainer config={chartConfig} className="h-[280px] w-full">
-            <BarChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+            <BarChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-              <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} allowDecimals={false} />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} interval="preserveStartEnd" minTickGap={32} />
+              <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} allowDecimals={false} width={28} />
               <ChartTooltip content={<ChartTooltipContent />} />
               <Bar dataKey="usage" fill="var(--color-usage)" radius={[4, 4, 0, 0]} maxBarSize={48} />
             </BarChart>

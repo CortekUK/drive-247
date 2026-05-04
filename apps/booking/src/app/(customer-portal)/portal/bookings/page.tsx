@@ -39,12 +39,12 @@ function StatCard({
 }) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
+        <CardTitle className="text-xs sm:text-sm font-medium min-w-0 truncate">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+      <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+        <div className="text-xl sm:text-2xl font-bold break-words">{value}</div>
         {description && (
           <p className="text-xs text-muted-foreground">{description}</p>
         )}
@@ -147,15 +147,15 @@ export default function BookingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">My Bookings</h1>
-          <p className="text-muted-foreground">View and manage your rentals</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold">My Bookings</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">View and manage your rentals</p>
         </div>
-        <Link href="/">
-          <Button>
+        <Link href="/" className="w-full sm:w-auto">
+          <Button className="w-full sm:w-auto">
             <Car className="h-4 w-4 mr-2" />
             Book a Vehicle
           </Button>
@@ -163,7 +163,7 @@ export default function BookingsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard title="Active Rentals" value={stats?.currentRentals || 0} icon={Car} />
         <StatCard title="Total Rentals" value={stats?.totalRentals || 0} icon={CalendarCheck} />
         <StatCard title="Past Rentals" value={stats?.pastRentals || 0} icon={History} />

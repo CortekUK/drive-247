@@ -20,7 +20,6 @@ import {
   format,
   subDays,
   eachDayOfInterval,
-  differenceInDays,
 } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -186,9 +185,8 @@ export function DashboardCharts() {
   const axisStyle = { fontSize: 11, fill: 'hsl(159 15% 50%)' };
   const gridStyle = { strokeDasharray: '4 8', stroke: 'hsl(159 15% 85%)', strokeOpacity: 0.5 };
 
-  // Determine tick interval based on range length
-  const dayCount = differenceInDays(dateRange.to, dateRange.from) + 1;
-  const tickInterval = dayCount <= 14 ? 0 : dayCount <= 31 ? 2 : Math.floor(dayCount / 12);
+  // Let Recharts auto-drop overlapping ticks via minTickGap
+  // (explicit tickInterval removed — caused heavy overlap on mobile)
 
   return (
     <div className="space-y-4">
@@ -206,10 +204,10 @@ export function DashboardCharts() {
                       <CalendarIcon className="h-4 w-4" />
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+                  <PopoverContent className="w-auto max-w-[95vw] p-0" align="start">
                     <div className="p-4 space-y-4">
                       <div className="text-sm font-medium">Select Date Range</div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className="text-xs text-muted-foreground">From</label>
                           <Calendar
@@ -244,18 +242,18 @@ export function DashboardCharts() {
             </div>
 
             {/* Stats */}
-            <div className="flex items-center gap-3">
-              <div className="text-right">
+            <div className="flex items-center gap-4 sm:gap-3 sm:text-right">
+              <div className="sm:text-right">
                 <p className="text-[10px] text-muted-foreground">Revenue</p>
                 <span className="text-sm font-bold tabular-nums">
                   {formatCurrency(totalRevenue, currencyCode, { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
                 </span>
               </div>
-              <div className="text-right">
+              <div className="sm:text-right">
                 <p className="text-[10px] text-muted-foreground">Bookings</p>
                 <span className="text-sm font-bold tabular-nums">{totalRentals}</span>
               </div>
-              <div className="text-right">
+              <div className="sm:text-right">
                 <p className="text-[10px] text-muted-foreground">Customers</p>
                 <span className="text-sm font-bold tabular-nums">{totalCustomers}</span>
               </div>
@@ -263,7 +261,7 @@ export function DashboardCharts() {
           </div>
 
           {/* Legend */}
-          <div className="flex items-center gap-5 mt-3 text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mt-3 text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <span className="h-[3px] w-4 rounded-full" style={{ background: CHART.gold }} />
               Revenue
@@ -307,8 +305,8 @@ export function DashboardCharts() {
                   tick={axisStyle}
                   axisLine={false}
                   tickLine={false}
-                  interval={tickInterval}
-                  minTickGap={30}
+                  interval="preserveStartEnd"
+                  minTickGap={48}
                 />
                 <YAxis
                   yAxisId="left"

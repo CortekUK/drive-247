@@ -208,26 +208,23 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
                 <Calendar className="h-3.5 w-3.5" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-3" align="start">
-              <div className="flex gap-4">
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground">From</p>
-                  <CalendarComponent
-                    mode="single"
-                    selected={filters.issueDateFrom}
-                    onSelect={(date) => updateFilter("issueDateFrom", normalizeDate(date))}
-                    className="p-0 pointer-events-auto"
-                  />
-                </div>
-                <div className="space-y-1 border-l pl-4">
-                  <p className="text-xs font-medium text-muted-foreground">To</p>
-                  <CalendarComponent
-                    mode="single"
-                    selected={filters.issueDateTo}
-                    onSelect={(date) => updateFilter("issueDateTo", normalizeDate(date))}
-                    className="p-0 pointer-events-auto"
-                  />
-                </div>
+            <PopoverContent
+              className="w-auto max-w-[95vw] max-h-[calc(100dvh-80px)] overflow-y-auto p-3"
+              align="start"
+              collisionPadding={8}
+            >
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Select issue date range</p>
+                <CalendarComponent
+                  mode="range"
+                  selected={{ from: filters.issueDateFrom, to: filters.issueDateTo }}
+                  onSelect={(range) => {
+                    updateFilter("issueDateFrom", normalizeDate(range?.from));
+                    updateFilter("issueDateTo", normalizeDate(range?.to));
+                  }}
+                  numberOfMonths={1}
+                  className="p-0 pointer-events-auto"
+                />
               </div>
               {hasIssueDateFilter && (
                 <Button
@@ -262,26 +259,23 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
                 <Calendar className="h-3.5 w-3.5" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-3" align="end">
-              <div className="flex gap-4">
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground">From</p>
-                  <CalendarComponent
-                    mode="single"
-                    selected={filters.dueDateFrom}
-                    onSelect={(date) => updateFilter("dueDateFrom", normalizeDate(date))}
-                    className="p-0 pointer-events-auto"
-                  />
-                </div>
-                <div className="space-y-1 border-l pl-4">
-                  <p className="text-xs font-medium text-muted-foreground">To</p>
-                  <CalendarComponent
-                    mode="single"
-                    selected={filters.dueDateTo}
-                    onSelect={(date) => updateFilter("dueDateTo", normalizeDate(date))}
-                    className="p-0 pointer-events-auto"
-                  />
-                </div>
+            <PopoverContent
+              className="w-auto max-w-[95vw] max-h-[calc(100dvh-80px)] overflow-y-auto p-3"
+              align="end"
+              collisionPadding={8}
+            >
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Select due date range</p>
+                <CalendarComponent
+                  mode="range"
+                  selected={{ from: filters.dueDateFrom, to: filters.dueDateTo }}
+                  onSelect={(range) => {
+                    updateFilter("dueDateFrom", normalizeDate(range?.from));
+                    updateFilter("dueDateTo", normalizeDate(range?.to));
+                  }}
+                  numberOfMonths={1}
+                  className="p-0 pointer-events-auto"
+                />
               </div>
               {hasDueDateFilter && (
                 <Button

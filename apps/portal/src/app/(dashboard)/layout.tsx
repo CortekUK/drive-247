@@ -113,15 +113,17 @@ export default function DashboardLayout({
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="overflow-x-hidden">
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-2 sm:px-4">
+          <header className="flex h-16 shrink-0 items-center gap-1 sm:gap-2 border-b px-2 sm:px-4">
             <SidebarTrigger className="-ml-1 flex-shrink-0" />
-            <div className="min-w-0 w-48 sm:w-56 lg:w-64">
+            <div className="min-w-0 w-auto sm:w-56 lg:w-64 shrink-0 sm:shrink">
               <HeaderSearch />
             </div>
             <TraxAIDialog />
-            <div className="ml-auto flex items-center gap-1 sm:gap-2 flex-shrink-0">
-              <BonzahBalance />
-              <CreditBalance />
+            <div className="ml-auto flex items-center gap-0.5 sm:gap-2 flex-shrink-0">
+              <div className="hidden min-[420px]:flex items-center gap-1 sm:gap-2">
+                <BonzahBalance />
+                <CreditBalance />
+              </div>
               <NotificationBell />
               <ThemeToggle />
               <UserMenu />

@@ -25,11 +25,30 @@ export function useUnsavedChangesWarning({
   const [isSaving, setIsSaving] = useState(false);
   const pendingUrl = useRef<string | null>(null);
   const isBypassing = useRef(false);
+  // Ref mirror of isDialogOpen for sync checks inside non-React handlers
+  // (capture-phase click listener, pushState override) so we never re-trigger
+  // while a dialog is already showing or within a short cooldown after close.
+  const dialogOpenRef = useRef(false);
+  const cooldownUntil = useRef(0);
   const currentUrl = useRef(
     typeof window !== 'undefined'
       ? window.location.pathname + window.location.search
       : '',
   );
+
+  const openDialog = useCallback(() => {
+    dialogOpenRef.current = true;
+    setIsDialogOpen(true);
+  }, []);
+
+  const closeDialog = useCallback(() => {
+    dialogOpenRef.current = false;
+    cooldownUntil.current = Date.now() + 350;
+    setIsDialogOpen(false);
+  }, []);
+
+  const shouldBlock = () =>
+    !dialogOpenRef.current && Date.now() >= cooldownUntil.current;
 
   // Keep track of the current URL
   useEffect(() => {
@@ -54,6 +73,7 @@ export function useUnsavedChangesWarning({
 
     const handler = (e: MouseEvent) => {
       if (isBypassing.current) return;
+      if (!shouldBlock()) return;
 
       const anchor = (e.target as Element).closest('a');
       if (!anchor || !anchor.href) return;
@@ -84,7 +104,7 @@ export function useUnsavedChangesWarning({
         e.preventDefault();
         e.stopPropagation();
         pendingUrl.current = url.pathname + url.search;
-        setIsDialogOpen(true);
+        openDialog();
       }
     };
 
@@ -108,16 +128,16 @@ export function useUnsavedChangesWarning({
         return originalPushState(data, unused, url);
       }
 
-      if (url) {
+      if (url && shouldBlock()) {
         const targetUrl = url.toString();
         const current = window.location.pathname + window.location.search;
 
         // Only intercept if actually navigating to a different path
         if (targetUrl !== current && !targetUrl.startsWith('#')) {
           pendingUrl.current = targetUrl;
-          // Defer state update — pushState may be called synchronously from
-          // useInsertionEffect (Next.js router internals), where setState is forbidden.
-          queueMicrotask(() => setIsDialogOpen(true));
+          // Defer state update — Next.js 16's router calls pushState inside
+          // useInsertionEffect, where scheduling updates is forbidden.
+          queueMicrotask(openDialog);
           return; // Block navigation
         }
       }
@@ -136,6 +156,7 @@ export function useUnsavedChangesWarning({
 
     const handler = () => {
       if (isBypassing.current) return;
+      if (!shouldBlock()) return;
 
       // When popstate fires, window.location has ALREADY changed to the target
       const targetUrl = window.location.pathname + window.location.search;
@@ -147,7 +168,7 @@ export function useUnsavedChangesWarning({
       isBypassing.current = false;
 
       pendingUrl.current = targetUrl;
-      setIsDialogOpen(true);
+      openDialog();
     };
 
     window.addEventListener('popstate', handler);
@@ -159,16 +180,16 @@ export function useUnsavedChangesWarning({
     if (url) {
       isBypassing.current = true;
       pendingUrl.current = null;
-      setIsDialogOpen(false);
+      closeDialog();
       router.push(url);
       // Reset bypass after navigation settles
       setTimeout(() => {
         isBypassing.current = false;
       }, 500);
     } else {
-      setIsDialogOpen(false);
+      closeDialog();
     }
-  }, [router]);
+  }, [router, closeDialog]);
 
   const confirmLeave = useCallback(() => {
     navigateAway();
@@ -191,8 +212,8 @@ export function useUnsavedChangesWarning({
 
   const cancelLeave = useCallback(() => {
     pendingUrl.current = null;
-    setIsDialogOpen(false);
-  }, []);
+    closeDialog();
+  }, [closeDialog]);
 
   return {
     isDialogOpen,

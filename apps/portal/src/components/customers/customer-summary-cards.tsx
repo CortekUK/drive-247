@@ -48,7 +48,7 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
       {cards.map((card) => {
         const getCardClassName = () => {
           let baseClasses = "transition-all duration-200 cursor-pointer hover:shadow-md ";
@@ -65,14 +65,14 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
 
         return (
           <Card key={card.title} className={getCardClassName()}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
+              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">
                 {card.title}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{card.value}</div>
-              <p className="text-xs text-muted-foreground">
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <div className="text-xl sm:text-2xl font-bold">{card.value}</div>
+              <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">
                 {card.description}
               </p>
             </CardContent>

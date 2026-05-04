@@ -371,12 +371,12 @@ export function SubscriptionSettings() {
       )}
 
       {/* Plan Section */}
-      <div className="flex items-start justify-between rounded-lg border bg-card p-6">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between rounded-lg border bg-card p-4 sm:p-6 gap-3 sm:gap-4">
+        <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 shrink-0">
             <Crown className="h-6 w-6 text-primary" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h3 className="text-lg font-semibold capitalize">
               {subscription?.plan_name || "Pro"} plan
             </h3>
@@ -389,7 +389,7 @@ export function SubscriptionSettings() {
             </p>
           </div>
         </div>
-        <Button variant="outline" disabled>
+        <Button variant="outline" disabled className="w-full sm:w-auto shrink-0">
           Adjust plan
         </Button>
       </div>
@@ -399,9 +399,9 @@ export function SubscriptionSettings() {
       {/* Payment Section */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">Payment</h3>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <CreditCard className="h-5 w-5 text-muted-foreground" />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <CreditCard className="h-5 w-5 text-muted-foreground shrink-0" />
             {subscription?.card_last4 ? (
               <span className="text-sm">
                 <span className="capitalize">{subscription.card_brand || "Card"}</span>
@@ -416,6 +416,7 @@ export function SubscriptionSettings() {
             variant="outline"
             onClick={handleManagePayment}
             disabled={createPortalSession.isPending}
+            className="w-full sm:w-auto shrink-0"
           >
             {createPortalSession.isPending ? (
               <>
