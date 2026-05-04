@@ -8,11 +8,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run dev",
-    "dev:booking": "turbo run dev --filter=booking",
-    "dev:portal": "turbo run dev --filter=portal",
-    "dev:web": "turbo run dev --filter=web",
-    "dev:admin": "turbo run dev --filter=admin",
+    "dev": "node scripts/kill-dev-ports.mjs && turbo run dev",
+    "dev:booking": "node scripts/kill-dev-ports.mjs && turbo run dev --filter=booking",
+    "dev:portal": "node scripts/kill-dev-ports.mjs && turbo run dev --filter=portal",
+    "dev:web": "node scripts/kill-dev-ports.mjs && turbo run dev --filter=web",
+    "dev:admin": "node scripts/kill-dev-ports.mjs && turbo run dev --filter=admin",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "update-branding": "node scripts/bulk-update-branding.js",

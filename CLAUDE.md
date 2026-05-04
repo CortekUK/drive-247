@@ -4,8 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Development Commands
 
+**Always use these npm scripts to run the dev server.** Each one automatically kills anything holding ports 3000–3005 (via `scripts/kill-dev-ports.mjs`) before starting, so you never need to manually kill stuck processes or pick alternative ports. Do NOT run `next dev`, `turbo run dev`, or any per-app dev command directly — go through the root scripts.
+
 ```bash
-# Development (all apps)
+# Development (all apps — runs in parallel via Turborepo)
 npm run dev
 
 # Development (specific app)
