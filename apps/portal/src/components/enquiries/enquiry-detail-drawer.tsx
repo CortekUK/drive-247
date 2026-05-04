@@ -77,13 +77,26 @@ export function EnquiryDetailDrawer({ enquiryId, open, onOpenChange }: EnquiryDe
   const { canEdit } = useManagerPermissions();
   const editable = canEdit("enquiries");
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  // Cache the enquiry being deleted so the dialog can keep showing the
+  // customer name even after we've closed the sheet (which unmounts the
+  // sheet content and clears `enquiry`).
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+
+  const requestDelete = () => {
+    if (!enquiry) return;
+    setPendingDelete({ id: enquiry.id, name: enquiry.customer_name });
+    // Close the sheet first so the AlertDialog isn't stacked behind it.
+    onOpenChange(false);
+    // Open the dialog after the sheet's close animation (~200ms) finishes.
+    setTimeout(() => setConfirmDeleteOpen(true), 220);
+  };
 
   const handleDelete = () => {
-    if (!enquiry) return;
-    deleteEnquiry.mutate(enquiry.id, {
+    if (!pendingDelete) return;
+    deleteEnquiry.mutate(pendingDelete.id, {
       onSuccess: () => {
         setConfirmDeleteOpen(false);
-        onOpenChange(false);
+        setPendingDelete(null);
       },
     });
   };
@@ -117,6 +130,7 @@ export function EnquiryDetailDrawer({ enquiryId, open, onOpenChange }: EnquiryDe
       : "Any vehicle";
 
   return (
+    <>
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl p-0 flex flex-col gap-0">
         {isLoading || !enquiry ? (
@@ -229,15 +243,11 @@ export function EnquiryDetailDrawer({ enquiryId, open, onOpenChange }: EnquiryDe
             <div className="px-6 py-4 border-t border-border/60 bg-muted/30 flex items-center justify-between gap-2">
               <Button
                 variant="ghost"
-                onClick={() => setConfirmDeleteOpen(true)}
+                onClick={requestDelete}
                 disabled={!editable || deleteEnquiry.isPending}
                 className="text-destructive hover:text-destructive hover:bg-destructive/10"
               >
-                {deleteEnquiry.isPending ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Trash2 className="w-4 h-4 mr-2" />
-                )}
+                <Trash2 className="w-4 h-4 mr-2" />
                 Delete
               </Button>
               <div className="flex items-center gap-2">
@@ -257,39 +267,41 @@ export function EnquiryDetailDrawer({ enquiryId, open, onOpenChange }: EnquiryDe
                 </Button>
               </div>
             </div>
-
-            <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete this enquiry?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This permanently removes the enquiry from {enquiry.customer_name}.
-                    This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={deleteEnquiry.isPending}>
-                    Cancel
-                  </AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleDelete();
-                    }}
-                    disabled={deleteEnquiry.isPending}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    {deleteEnquiry.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : null}
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           </>
         )}
       </SheetContent>
     </Sheet>
+
+    <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this enquiry?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This permanently removes the enquiry
+            {pendingDelete?.name ? ` from ${pendingDelete.name}` : ""}.
+            This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleteEnquiry.isPending}>
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              handleDelete();
+            }}
+            disabled={deleteEnquiry.isPending}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {deleteEnquiry.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : null}
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
