@@ -28,6 +28,7 @@ import { useRentalTotals, useRentalCharges } from "@/hooks/use-rental-ledger-dat
 import { useRentalInvoice, useRentalPaymentBreakdown, useRentalRefundBreakdown } from "@/hooks/use-rental-invoice";
 import { useRentalManualPaidBreakdown } from "@/hooks/use-rental-manual-paid-breakdown";
 import { usePaygLedger } from "@/hooks/use-payg-ledger";
+import { usePaygInvoices } from "@/hooks/use-payg-invoices";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
 import { KeyHandoverActionBanner } from "@/components/rentals/key-handover-action-banner";
@@ -59,7 +60,6 @@ import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-
 import { useRentalAgreements } from "@/hooks/use-rental-agreements";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
-import { PaygTestPanel } from "@/components/rentals/payg-test-panel";
 import { PaygSection } from "@/components/rentals/payg-section";
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
@@ -379,6 +379,11 @@ const RentalDetail = () => {
 
   // PAYG daily ledger
   const { ledger: paygLedger, isLoading: isPaygLedgerLoading } = usePaygLedger(id, rental?.is_pay_as_you_go === true);
+
+  // PAYG rolling invoice totals (Collected / Balance Due / Refunded / Net Received).
+  // Driven by the same hook that powers the PAYG section below — Realtime + 5s polling
+  // mean the four header cards stay in sync with the latest accrual / payment.
+  const { data: paygInvoiceData } = usePaygInvoices(id, rental?.is_pay_as_you_go === true);
 
   // PAYG rentals have no upfront invoice — synthesise an invoice-shaped object from the
   // ledger-entry sums so the regular Payment Breakdown card can render (with all the same
@@ -752,6 +757,106 @@ const RentalDetail = () => {
       }
     })();
   }, [searchParams, id, tenant?.id, holdSynced, queryClient, toast, router]);
+
+  // PAYG: poll for pending reminder-link Stripe payment completion.
+  // Mirrors the regular Email-Stripe-Link polling below — same cadence, same
+  // process-pending-payment fallback, same query invalidation. Difference: the
+  // session id source is `payg_reminder_log.stripe_checkout_session_id`
+  // (stamped by the send-payg-reminders cron) instead of `localStorage`
+  // (stamped by AddPaymentDialog when admin clicks Email Stripe Link).
+  // Re-runs on each new reminder (Realtime postgres_changes on payg_reminder_log).
+  useEffect(() => {
+    if (!id || !tenant?.id || !rental?.is_pay_as_you_go) return;
+    let pollInterval: any = null;
+    let cancelled = false;
+
+    const startPolling = async () => {
+      if (cancelled) return;
+      const { data: latestReminder } = await supabase
+        .from('payg_reminder_log')
+        .select('id, stripe_checkout_session_id')
+        .eq('rental_id', id)
+        .eq('tenant_id', tenant.id)
+        .not('stripe_checkout_session_id', 'is', null)
+        .is('stripe_session_expired_at', null)
+        .order('sent_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const sessionId = latestReminder?.stripe_checkout_session_id;
+      if (!sessionId) return;
+
+      // Don't stack poll loops if a previous one is still running
+      if (pollInterval) clearInterval(pollInterval);
+
+      let attempts = 0;
+      const maxAttempts = 60; // 5 min × 12 ticks/min
+      pollInterval = setInterval(async () => {
+        attempts++;
+        if (attempts > maxAttempts) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+          return;
+        }
+        // Fast path: payment row already moved off Pending (booking-success page,
+        // portal redirect, or our own poll committed it on a prior tick).
+        const { data: payment } = await supabase
+          .from('payments')
+          .select('id, status')
+          .eq('stripe_checkout_session_id', sessionId)
+          .maybeSingle();
+        if (payment?.status && payment.status !== 'Pending') {
+          clearInterval(pollInterval);
+          pollInterval = null;
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['payg-invoices'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental-totals'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental', id] }),
+          ]);
+          setPaymentResult({ status: 'success', message: 'Customer has completed the payment.' });
+          return;
+        }
+        // Active fallback: poll Stripe via process-pending-payment, same as regular flow.
+        try {
+          const { data: result } = await supabase.functions.invoke('process-pending-payment', {
+            body: { checkoutSessionId: sessionId },
+          });
+          if (result?.ok && !result?.alreadyProcessed) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ['payg-invoices'] }),
+              queryClient.invalidateQueries({ queryKey: ['rental-totals'] }),
+              queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] }),
+              queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
+              queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
+              queryClient.invalidateQueries({ queryKey: ['rental', id] }),
+            ]);
+            setPaymentResult({ status: 'success', message: 'Customer has completed the payment.' });
+          }
+        } catch { /* ignore transient errors, retry next tick */ }
+      }, 5000);
+    };
+
+    // Kick off immediately on mount (covers reminders sent before the page loaded)
+    startPolling();
+
+    // Restart whenever a new reminder lands so we pick up the freshest session id
+    const channel = supabase
+      .channel(`payg-poll:${id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payg_reminder_log', filter: `rental_id=eq.${id}` }, () => {
+        startPolling();
+      })
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      if (pollInterval) clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+    };
+  }, [id, tenant?.id, rental?.is_pay_as_you_go, queryClient]);
 
   // Poll for pending email payment completion (when admin sent Stripe link via email)
   useEffect(() => {
@@ -2276,13 +2381,25 @@ const RentalDetail = () => {
       {(() => {
         // Exclude Security Deposit deductions applied to Excess Mileage — not a customer refund
         const hasExcessMileageCharge = (rentalCharges || []).some(c => c.category === 'Excess Mileage');
-        const totalRefunded = refundBreakdown
+        const legacyRefunded = refundBreakdown
           ? Object.entries(refundBreakdown).reduce((sum, [cat, val]) => {
               if (cat === 'Security Deposit' && hasExcessMileageCharge) return sum; // deducted, not refunded
               return sum + val;
             }, 0)
           : 0;
-        const netReceived = totalPayments - totalRefunded;
+        // For PAYG rentals, the four cards must reflect the rolling-invoice
+        // state (sum of OPEN accrual day-totals), not the legacy ledger-based
+        // outstandingBalance. usePaygInvoices polls every 5s + Realtime-subscribes
+        // to payg_accruals / payments / payg_reminder_log so the values rerender
+        // the moment the accrual cron posts a new day or admin records a payment.
+        const isPaygSummary = rental?.is_pay_as_you_go === true;
+        const paygTotals = paygInvoiceData?.totals;
+        const collectedDisplay = isPaygSummary ? (paygTotals?.collected ?? 0) : totalPayments;
+        const balanceDueDisplay = isPaygSummary ? (paygTotals?.balanceDue ?? 0) : outstandingBalance;
+        const refundedDisplay = isPaygSummary ? (paygTotals?.refunded ?? 0) : legacyRefunded;
+        const netReceivedDisplay = isPaygSummary
+          ? (paygTotals?.netReceived ?? 0)
+          : (totalPayments - legacyRefunded);
         const cur = tenant?.currency_code || 'USD';
         return (
           <div className={`grid gap-4 grid-cols-2 lg:grid-cols-4 ${isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -2311,17 +2428,17 @@ const RentalDetail = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${totalPayments > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
-                  {formatCurrencyUtil(totalPayments, cur)}
+                <div className={`text-2xl font-bold ${collectedDisplay > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+                  {formatCurrencyUtil(collectedDisplay, cur)}
                 </div>
               </CardContent>
             </Card>
 
             {/* Balance Due */}
-            <Card className={outstandingBalance > 0 ? "border-red-500/20 bg-red-500/5" : "border-blue-500/20 bg-blue-500/5"}>
+            <Card className={balanceDueDisplay > 0 ? "border-red-500/20 bg-red-500/5" : "border-blue-500/20 bg-blue-500/5"}>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
-                  <CardTitle className={`text-sm font-medium ${outstandingBalance > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>Balance Due</CardTitle>
+                  <CardTitle className={`text-sm font-medium ${balanceDueDisplay > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>Balance Due</CardTitle>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -2342,20 +2459,20 @@ const RentalDetail = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${outstandingBalance > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>
-                  {formatCurrencyUtil(outstandingBalance, cur)}
+                <div className={`text-2xl font-bold ${balanceDueDisplay > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>
+                  {formatCurrencyUtil(balanceDueDisplay, cur)}
                 </div>
-                {outstandingBalance === 0 && totalPayments > 0 && (
+                {balanceDueDisplay === 0 && collectedDisplay > 0 && (
                   <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Fully settled</p>
                 )}
               </CardContent>
             </Card>
 
             {/* Refunded */}
-            <Card className={totalRefunded > 0 ? "border-amber-500/20 bg-amber-500/5" : ""}>
+            <Card className={refundedDisplay > 0 ? "border-amber-500/20 bg-amber-500/5" : ""}>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
-                  <CardTitle className={`text-sm font-medium ${totalRefunded > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>Refunded</CardTitle>
+                  <CardTitle className={`text-sm font-medium ${refundedDisplay > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>Refunded</CardTitle>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -2376,10 +2493,10 @@ const RentalDetail = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${totalRefunded > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
-                  {formatCurrencyUtil(totalRefunded, cur)}
+                <div className={`text-2xl font-bold ${refundedDisplay > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
+                  {formatCurrencyUtil(refundedDisplay, cur)}
                 </div>
-                {totalRefunded === 0 && (
+                {refundedDisplay === 0 && (
                   <p className="text-xs text-muted-foreground mt-1">No refunds</p>
                 )}
               </CardContent>
@@ -2401,9 +2518,9 @@ const RentalDetail = () => {
                         <p className="font-medium mb-1">Net Received = Collected − Refunded</p>
                         <p className="text-muted-foreground mb-2">The actual amount you kept from this rental. This is your real revenue after all refunds.</p>
                         <div className="font-mono text-[11px] bg-muted/50 rounded p-2 space-y-0.5">
-                          <div className="flex justify-between"><span>Collected</span><span>{formatCurrencyUtil(totalPayments, cur)}</span></div>
-                          <div className="flex justify-between text-orange-500"><span>Refunded</span><span>−{formatCurrencyUtil(totalRefunded, cur)}</span></div>
-                          <div className="flex justify-between font-bold border-t border-border pt-0.5 mt-0.5"><span>Net</span><span>{formatCurrencyUtil(netReceived, cur)}</span></div>
+                          <div className="flex justify-between"><span>Collected</span><span>{formatCurrencyUtil(collectedDisplay, cur)}</span></div>
+                          <div className="flex justify-between text-orange-500"><span>Refunded</span><span>−{formatCurrencyUtil(refundedDisplay, cur)}</span></div>
+                          <div className="flex justify-between font-bold border-t border-border pt-0.5 mt-0.5"><span>Net</span><span>{formatCurrencyUtil(netReceivedDisplay, cur)}</span></div>
                         </div>
                       </TooltipContent>
                     </Tooltip>
@@ -2411,12 +2528,12 @@ const RentalDetail = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${netReceived > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-muted-foreground'}`}>
-                  {formatCurrencyUtil(netReceived, cur)}
+                <div className={`text-2xl font-bold ${netReceivedDisplay > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-muted-foreground'}`}>
+                  {formatCurrencyUtil(netReceivedDisplay, cur)}
                 </div>
-                {totalRefunded > 0 && (
+                {refundedDisplay > 0 && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    After {formatCurrencyUtil(totalRefunded, cur)} refunded
+                    After {formatCurrencyUtil(refundedDisplay, cur)} refunded
                   </p>
                 )}
               </CardContent>
@@ -2424,25 +2541,6 @@ const RentalDetail = () => {
           </div>
         );
       })()}
-
-      {/* PAYG Test Panel — only on localhost/dev */}
-      {rental.is_pay_as_you_go && typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
-        <PaygTestPanel
-          rentalId={rental.id}
-          currencyCode={tenant?.currency_code || 'USD'}
-          currentDay={(rental as any).payg_accrual_day_count || 0}
-          isPaused={(rental as any).payg_paused === true}
-          isClosed={!!(rental as any).payg_closed_at}
-          status={rental.status}
-          onRefresh={() => {
-            queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
-            queryClient.invalidateQueries({ queryKey: ['payg-ledger'] });
-            queryClient.invalidateQueries({ queryKey: ['payg-invoices'] });
-            queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
-            queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
-          }}
-        />
-      )}
 
       {/* PAYG section — inline rolling-invoice view, above the fixed-charges Payment Breakdown. */}
       {rental && (rental as any).is_pay_as_you_go && (
@@ -2452,6 +2550,9 @@ const RentalDetail = () => {
           showAdminActions
           customerName={rental.customers?.name || ''}
           customerEmail={rental.customers?.email || undefined}
+          customerPhone={(rental.customers as any)?.phone || undefined}
+          customerId={rental.customers?.id}
+          vehicleId={(rental as any).vehicle_id ?? rental.vehicles?.id}
           vehicle={{
             reg: rental.vehicles?.reg,
             make: rental.vehicles?.make,
@@ -2461,6 +2562,8 @@ const RentalDetail = () => {
             start_date: rental.start_date,
             end_date: rental.end_date,
             monthly_amount: rental.monthly_amount,
+            rental_number: (rental as any).rental_number ?? null,
+            payg_closed_at: (rental as any).payg_closed_at ?? null,
           }}
           currencyCode={tenant?.currency_code || 'USD'}
           onTakePayment={async ({ amount, paygAccrualId }) => {

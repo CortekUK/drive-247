@@ -1,16 +1,22 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { format, parseISO } from "date-fns";
-import { BellRing, Loader2, RotateCcw, FileText } from "lucide-react";
+import { format, formatDistanceToNowStrict, parseISO } from "date-fns";
+import { BellOff, BellRing, Download, Loader2, RotateCcw, RefreshCw, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/format-utils";
-import { usePaygInvoices, type PaygInvoiceRow } from "@/hooks/use-payg-invoices";
+import {
+  usePaygInvoices,
+  type PaygInvoiceRow,
+  type PaygReminderStatus,
+} from "@/hooks/use-payg-invoices";
 import { InvoiceDialog } from "@/components/shared/dialogs/invoice-dialog";
+import { PaygStatementDialog } from "@/components/rentals/payg-statement-dialog";
+import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 
 interface PaygSectionProps {
   rentalId: string;
@@ -18,14 +24,24 @@ interface PaygSectionProps {
   currencyCode: string;
   customerName: string;
   customerEmail?: string;
+  customerPhone?: string;
+  /** Required for the admin Record-Payment dialog so the payment is correctly attributed. */
+  customerId?: string;
+  vehicleId?: string;
   vehicle: { reg?: string; make?: string; model?: string };
   rental: {
     start_date?: string | null;
     end_date?: string | null;
     monthly_amount?: number | null;
+    rental_number?: string | null;
+    payg_closed_at?: string | null;
   };
   /** Admin-only actions. Hide in customer portal. */
   showAdminActions?: boolean;
+  /**
+   * Customer flow: clicking Pay opens Stripe Checkout. Admin flow ignores this
+   * and uses the in-section Record-Payment dialog instead (see showAdminActions).
+   */
   onTakePayment?: (args: {
     categories: string[];
     amount: number;
@@ -45,6 +61,9 @@ export function PaygSection({
   currencyCode,
   customerName,
   customerEmail,
+  customerPhone,
+  customerId,
+  vehicleId,
   vehicle,
   rental,
   showAdminActions = false,
@@ -56,6 +75,13 @@ export function PaygSection({
   const { data, isLoading, refetch } = usePaygInvoices(rentalId, isPayg);
   const [remindLoading, setRemindLoading] = useState(false);
   const [invoicePreview, setInvoicePreview] = useState<PaygInvoiceRow | null>(null);
+  const [statementOpen, setStatementOpen] = useState(false);
+  // Admin "Record Payment" dialog target — set when an admin clicks Pay on a PAYG row.
+  // Holds the locked amount AND the accrual id so the dialog can:
+  //   - pre-fill amount via defaultAmount (auto-locks the input)
+  //   - forward accrualId to create-checkout-session for the Charge-via-Stripe /
+  //     Email-Stripe-Link paths, so the Stripe webhook can settle this exact invoice.
+  const [recordPaymentTarget, setRecordPaymentTarget] = useState<{ amount: number; paygAccrualId: string } | null>(null);
 
   const displayInvoices = useMemo(
     () => [...data.invoices].reverse(),
@@ -69,12 +95,30 @@ export function PaygSection({
         "send-payg-manual-reminder",
         { body: { rental_id: rentalId } },
       );
+      // Network / function-crash level error
       if (error) throw error;
-      if (!res?.success) throw new Error(res?.error || "Reminder failed");
-      toast({
-        title: "Reminder sent",
-        description: `Invoice ${res.invoice} · ${formatCurrency(res.outstanding, currencyCode)} outstanding`,
-      });
+
+      // Function ran but reported a client error (no open invoice, no email, etc.)
+      if (res && res.success === false && !res.logged) {
+        throw new Error(res.error || "Reminder failed");
+      }
+
+      // Function logged the attempt; differentiate "sent" vs "logged-but-email-failed"
+      if (res?.email_sent) {
+        toast({
+          title: "Reminder sent",
+          description: `Invoice ${res.invoice} · ${formatCurrency(res.outstanding, currencyCode)} outstanding · sent to ${res.recipient}`,
+        });
+      } else {
+        toast({
+          title: "Reminder logged, email failed",
+          description:
+            (res?.error ? `${res.error}. ` : "") +
+            "The attempt is recorded in the reminder log; email delivery failed downstream (check AWS SES).",
+          variant: "destructive",
+        });
+      }
+
       await refetch();
       onRefresh?.();
     } catch (err: any) {
@@ -91,9 +135,23 @@ export function PaygSection({
   const handlePayLatest = () => {
     const latest = data.latestOpenInvoice;
     if (!latest) return;
+    // Round defensively: cumulativeAmount can carry FP noise (e.g. 59785.4999...).
+    const amount = Math.round(latest.cumulativeAmount * 100) / 100;
+
+    // Admin path: open the Record-Payment dialog with the amount locked.
+    // Pass the accrual id so the dialog's Charge-via-Stripe / Email-Stripe-Link
+    // paths can stamp it on the Checkout session metadata. The Stripe webhook
+    // then settles THIS invoice (not just FIFO-applies the payment) so the
+    // invoice flips to Paid the moment the customer completes checkout.
+    if (showAdminActions) {
+      setRecordPaymentTarget({ amount, paygAccrualId: latest.id });
+      return;
+    }
+
+    // Customer path: kick off Stripe Checkout via the parent-supplied callback.
     onTakePayment?.({
       categories: ["Rental", "Tax", "Service Fee"],
-      amount: latest.cumulativeAmount,
+      amount,
       paygAccrualId: latest.id,
     });
   };
@@ -113,51 +171,76 @@ export function PaygSection({
             </div>
           ) : (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border">
-                <div className="flex flex-wrap items-center gap-6 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Daily charge: </span>
-                    <span className="font-medium">
-                      {formatCurrency(data.dailyRate, currencyCode)} / day
-                    </span>
+              <div className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-border">
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-wrap items-center gap-6 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Daily charge: </span>
+                      <span className="font-medium">
+                        {formatCurrency(data.dailyRate, currencyCode)} / day
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Last updated: </span>
+                      <span className="font-medium">
+                        {data.lastUpdatedAt
+                          ? format(parseISO(data.lastUpdatedAt), "dd MMM yyyy, HH:mm")
+                          : "—"}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Last updated: </span>
-                    <span className="font-medium">
-                      {data.lastUpdatedAt
-                        ? format(parseISO(data.lastUpdatedAt), "dd MMM yyyy, HH:mm")
-                        : "—"}
-                    </span>
-                  </div>
+                  <ReminderStatusLine status={data.reminderStatus} />
                 </div>
 
-                {showAdminActions && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={sendManualReminder}
-                      disabled={remindLoading || !data.latestOpenInvoice}
-                    >
-                      {remindLoading ? (
-                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      ) : (
-                        <BellRing className="h-3.5 w-3.5 mr-1.5" />
-                      )}
-                      Send reminder
-                    </Button>
-                    {onRefund && data.totals.collected > 0 && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => refetch()}
+                    title="Refresh — pulls newly accrued invoices and any payment status changes"
+                    aria-label="Refresh PAYG data"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setStatementOpen(true)}
+                    disabled={data.invoices.length === 0}
+                    title={data.invoices.length === 0 ? "No charges to download yet" : "Download a complete statement of account"}
+                  >
+                    <Download className="h-3.5 w-3.5 mr-1.5" />
+                    Download Statement
+                  </Button>
+
+                  {showAdminActions && (
+                    <>
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={onRefund}
+                        onClick={sendManualReminder}
+                        disabled={remindLoading || !data.latestOpenInvoice}
                       >
-                        <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                        Refund
+                        {remindLoading ? (
+                          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                        ) : (
+                          <BellRing className="h-3.5 w-3.5 mr-1.5" />
+                        )}
+                        Send reminder
                       </Button>
-                    )}
-                  </div>
-                )}
+                      {onRefund && data.totals.collected > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={onRefund}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                          Refund
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -299,7 +382,172 @@ export function PaygSection({
           currencyCode={currencyCode}
         />
       )}
+
+      <PaygStatementDialog
+        open={statementOpen}
+        onOpenChange={setStatementOpen}
+        data={data}
+        customer={{ name: customerName, email: customerEmail, phone: customerPhone }}
+        vehicle={vehicle}
+        rental={{
+          rentalNumber: rental.rental_number || rentalId.slice(0, 8).toUpperCase(),
+          startDate: rental.start_date ?? null,
+          endDate: rental.end_date ?? null,
+          isClosed: !!rental.payg_closed_at,
+        }}
+      />
+
+      {/* Admin-only Record-Payment dialog. Opened from the Pay button on a PAYG row.
+          Amount field is auto-locked because defaultAmount is supplied (existing behavior). */}
+      {showAdminActions && recordPaymentTarget && (
+        <AddPaymentDialog
+          open={!!recordPaymentTarget}
+          onOpenChange={(o) => !o && setRecordPaymentTarget(null)}
+          rental_id={rentalId}
+          customer_id={customerId}
+          vehicle_id={vehicleId}
+          defaultAmount={recordPaymentTarget.amount}
+          targetCategories={["Rental", "Tax", "Service Fee"]}
+          paygAccrualId={recordPaymentTarget.paygAccrualId}
+          onPaymentSuccess={async (kind) => {
+            // ONLY settle when the dialog actually committed a payment (manual Record
+            // Payment). For 'pending' (Charge-via-Stripe / Email-Stripe-Link) the
+            // Stripe webhook will commit + settle when the customer pays — flipping
+            // anything to 'paid' here would be a false positive.
+            if (kind === 'recorded') {
+              try {
+                const latestOpen = data.latestOpenInvoice;
+                if (latestOpen) {
+                  // Look up the most recent payment for this rental — the one we just
+                  // created. Race-window < 1s so created_at DESC LIMIT 1 picks ours.
+                  const { data: latestPayment } = await supabase
+                    .from("payments")
+                    .select("id")
+                    .eq("rental_id", rentalId)
+                    .order("created_at", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                  if (latestPayment?.id) {
+                    // RPC name not yet in the generated types — cast to bypass.
+                    const { error: rpcErr } = await (supabase as any).rpc("payg_settle_invoice", {
+                      p_payment_id: latestPayment.id,
+                      p_accrual_id: latestOpen.id,
+                    });
+                    if (rpcErr) {
+                      console.error("payg_settle_invoice failed:", rpcErr.message);
+                      toast({
+                        title: "Payment recorded",
+                        description: "Payment saved, but invoice status could not be updated automatically. Refresh in a moment.",
+                      });
+                    }
+                  }
+                }
+              } catch (err: any) {
+                console.error("Settlement post-process failed:", err?.message ?? err);
+                // Non-fatal — payment itself succeeded.
+              }
+            }
+            // For 'pending', settlement is the Stripe webhook's job — we just close
+            // the dialog and let the 5s polling pick up the eventual status flip.
+
+            // Always refetch + invalidate parent queries so the UI shows the most
+            // up-to-date state regardless of which path was taken.
+            await refetch();
+            onRefresh?.();
+            setRecordPaymentTarget(null);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function ReminderStatusLine({ status }: { status: PaygReminderStatus }) {
+  // Off at the tenant level — gray bell
+  if (!status.autoEnabled) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <BellOff className="h-3.5 w-3.5" />
+        <span>
+          Automated reminders are <span className="font-medium">off</span>
+          {" · "}
+          <span>Use Send reminder to nudge manually</span>
+        </span>
+      </div>
+    );
+  }
+
+  // Hard-paused states (rental closed/paused/inactive) — gray bell, "paused" copy.
+  // `no_open_invoice` is intentionally NOT here: it's a normal pre-billing state,
+  // not a halt — reminders are still ON, there's just nothing to send yet.
+  if (
+    status.blockReason === "rental_closed" ||
+    status.blockReason === "rental_paused" ||
+    status.blockReason === "rental_inactive"
+  ) {
+    const reasonText: Record<"rental_closed" | "rental_paused" | "rental_inactive", string> = {
+      rental_closed: "rental is closed",
+      rental_paused: "billing is paused",
+      rental_inactive: "rental is not active",
+    };
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <BellOff className="h-3.5 w-3.5" />
+        <span>
+          Automated reminders <span className="font-medium">paused</span> — {reasonText[status.blockReason]}
+        </span>
+      </div>
+    );
+  }
+
+  // Auto on, no invoice has accrued yet — green bell, "on · idle" copy
+  if (status.blockReason === "no_open_invoice") {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <BellRing className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+        <span>
+          Automated reminders <span className="font-medium text-foreground">on</span>
+          {" · "}
+          No unpaid invoice yet — reminders start once charges accrue
+        </span>
+      </div>
+    );
+  }
+
+  // Auto on and unblocked, but no anchor yet (rental just activated, no last_sent / no start_ts)
+  if (!status.nextReminderAt) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <BellRing className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+        <span>
+          Automated reminders <span className="font-medium text-foreground">on</span> · 24-hour cadence
+        </span>
+      </div>
+    );
+  }
+
+  // Auto on, all clear — show next scheduled time
+  const next = parseISO(status.nextReminderAt);
+  const isPast = next.getTime() <= Date.now();
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <BellRing className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+      <span>
+        Automated reminders <span className="font-medium text-foreground">on</span>
+        {" · "}
+        {isPast ? (
+          <>Next reminder due now (cron runs every hour)</>
+        ) : (
+          <>
+            Next reminder{" "}
+            <span className="font-medium text-foreground">
+              {format(next, "dd MMM yyyy, HH:mm")}
+            </span>{" "}
+            (in {formatDistanceToNowStrict(next)})
+          </>
+        )}
+      </span>
+    </div>
   );
 }
 

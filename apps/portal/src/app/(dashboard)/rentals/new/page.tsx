@@ -1222,8 +1222,14 @@ const CreateRental = () => {
       // R1 design: payg_next_accrual_at is the START timestamp of the day-window currently due
       // to be accrued (NOT start_ts + 24h). So day 1 accrues at start_ts itself (1pm 10 Apr →
       // $30). The cron loops while next_accrual_at <= now() and advances by 24h after each post.
-      // This gates day 1 on the rental becoming Active (cron only picks status='Active' rows),
-      // and naturally handles backdated rentals via R2's catch-up loop.
+      // This gates day 1 on the rental becoming Active (cron only picks status='Active' rows).
+      //
+      // CLAMP TO NOW: if the admin enters a backdated start (yesterday's date / past pickup_time),
+      // we floor the anchor to the rental creation moment. Otherwise the cron's R2 catch-up loop
+      // would post one accrual per missed window since the historical start_ts — fine in 24h prod
+      // mode (a day or two of catch-up) but disastrous in 5-min test mode (hundreds of accruals
+      // for a rental that was just created). Customers should never be billed for time before the
+      // rental record existed; if back-billing is needed, admin records a manual charge instead.
       let paygStartTs: string | null = null;
       let paygNextAccrualAt: string | null = null;
       if (isPayAsYouGo && data.pickup_time) {
@@ -1241,9 +1247,12 @@ const CreateRental = () => {
         const p = (type: string) => parts.find(p => p.type === type)?.value || '00';
         const tzLocal = new Date(`${p('year')}-${p('month')}-${p('day')}T${p('hour')}:${p('minute')}:${p('second')}Z`);
         const offsetMs = tzLocal.getTime() - tentative.getTime();
-        const anchor = new Date(tentative.getTime() - offsetMs);
+        const computedAnchor = new Date(tentative.getTime() - offsetMs);
+        // Floor to "now" — backdated input never produces backdated accrual catch-up.
+        const nowMs = Date.now();
+        const anchor = new Date(Math.max(computedAnchor.getTime(), nowMs));
         paygStartTs = anchor.toISOString();
-        // Day 1 is due at the rental start time (not +24h).
+        // Day 1 is due at the (clamped) rental start time.
         paygNextAccrualAt = anchor.toISOString();
       }
 

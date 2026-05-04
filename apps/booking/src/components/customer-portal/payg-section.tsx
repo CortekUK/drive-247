@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
-import { Loader2, FileText } from "lucide-react";
+import { Loader2, FileText, Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/format-utils";
 import { usePaygInvoices, type PaygInvoiceRow } from "@/hooks/use-payg-invoices";
 import { InvoiceDialog } from "@/components/InvoiceDialog";
+import { PaygStatementDialog } from "@/components/customer-portal/payg-statement-dialog";
 
 interface PaygSectionProps {
   rentalId: string;
@@ -16,11 +17,14 @@ interface PaygSectionProps {
   currencyCode: string;
   customerName: string;
   customerEmail?: string;
+  customerPhone?: string;
   vehicle: { reg?: string; make?: string; model?: string };
   rental: {
     start_date?: string | null;
     end_date?: string | null;
     monthly_amount?: number | null;
+    rental_number?: string | null;
+    payg_closed_at?: string | null;
   };
   onTakePayment?: (args: {
     categories: string[];
@@ -35,12 +39,14 @@ export function PaygSection({
   currencyCode,
   customerName,
   customerEmail,
+  customerPhone,
   vehicle,
   rental,
   onTakePayment,
 }: PaygSectionProps) {
-  const { data, isLoading } = usePaygInvoices(rentalId, isPayg);
+  const { data, isLoading, refetch } = usePaygInvoices(rentalId, isPayg);
   const [invoicePreview, setInvoicePreview] = useState<PaygInvoiceRow | null>(null);
+  const [statementOpen, setStatementOpen] = useState(false);
 
   const displayInvoices = useMemo(
     () => [...data.invoices].reverse(),
@@ -70,18 +76,41 @@ export function PaygSection({
             </div>
           ) : (
             <>
-              <div className="flex flex-wrap items-center gap-6 pb-3 border-b border-border text-sm">
-                <div>
-                  <span className="text-muted-foreground">Daily charge: </span>
-                  <span className="font-medium">{formatCurrency(data.dailyRate, currencyCode)} / day</span>
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border">
+                <div className="flex flex-wrap items-center gap-6 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Daily charge: </span>
+                    <span className="font-medium">{formatCurrency(data.dailyRate, currencyCode)} / day</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Last updated: </span>
+                    <span className="font-medium">
+                      {data.lastUpdatedAt
+                        ? format(parseISO(data.lastUpdatedAt), "dd MMM yyyy, HH:mm")
+                        : "—"}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Last updated: </span>
-                  <span className="font-medium">
-                    {data.lastUpdatedAt
-                      ? format(parseISO(data.lastUpdatedAt), "dd MMM yyyy, HH:mm")
-                      : "—"}
-                  </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => refetch()}
+                    title="Refresh"
+                    aria-label="Refresh PAYG data"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setStatementOpen(true)}
+                    disabled={data.invoices.length === 0}
+                    title={data.invoices.length === 0 ? "No charges to download yet" : "Download a complete statement of account"}
+                  >
+                    <Download className="h-3.5 w-3.5 mr-1.5" />
+                    Download Statement
+                  </Button>
                 </div>
               </div>
 
@@ -206,6 +235,20 @@ export function PaygSection({
           }}
         />
       )}
+
+      <PaygStatementDialog
+        open={statementOpen}
+        onOpenChange={setStatementOpen}
+        data={data}
+        customer={{ name: customerName, email: customerEmail, phone: customerPhone }}
+        vehicle={vehicle}
+        rental={{
+          rentalNumber: rental.rental_number || rentalId.slice(0, 8).toUpperCase(),
+          startDate: rental.start_date ?? null,
+          endDate: rental.end_date ?? null,
+          isClosed: !!rental.payg_closed_at,
+        }}
+      />
     </>
   );
 }

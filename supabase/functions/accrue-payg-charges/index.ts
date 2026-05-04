@@ -4,9 +4,9 @@ import { corsHeaders } from "../_shared/cors.ts";
 /**
  * Pay-As-You-Go accrual cron.
  *
- * Runs every 15 minutes. For each active PAYG rental whose `payg_next_accrual_at`
+ * Runs every minute. For each active PAYG rental whose `payg_next_accrual_at`
  * has arrived, this function posts a new day's charges (rental + tax + % service fee)
- * and advances the accrual pointer by 24 hours.
+ * and advances the accrual pointer by 5 MINUTES (test mode — was 24h in production).
  *
  * Idempotency is enforced by a UNIQUE constraint on `payg_accruals (rental_id, accrual_day_index)`.
  * Safe to re-run without creating duplicate ledger entries.
@@ -191,10 +191,11 @@ Deno.serve(async (req) => {
           }
 
           // R1 design: currentNextAccrual is the START of the window we're posting now.
-          // window_start = currentNextAccrual, window_end = currentNextAccrual + 24h.
+          // TEST MODE: window length is 5 MINUTES instead of 24h so a "day" cycles fast
+          // for end-to-end QA. Revert to `24 * 60 * 60 * 1000` for production.
           const windowStartDt = new Date(currentNextAccrual);
           const windowEndDt = new Date(
-            currentNextAccrual.getTime() + 24 * 60 * 60 * 1000,
+            currentNextAccrual.getTime() + 5 * 60 * 1000,
           );
 
           // Compute rates for this specific day.

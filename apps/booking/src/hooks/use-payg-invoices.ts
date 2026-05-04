@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { supabaseUntyped } from "@/integrations/supabase/client";
+import { useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 
 export type PaygInvoiceStatus = "open" | "paid" | "superseded";
@@ -9,7 +10,12 @@ export interface PaygInvoiceRow {
   dayIndex: number;
   invoiceRef: string;
   createdAt: string;
+  /** Sum of dailyRate + taxAmount + serviceFeeAmount for this day. */
   dayTotal: number;
+  /** Per-day breakdown — exposed for the statement view. */
+  dailyRate: number;
+  taxAmount: number;
+  serviceFeeAmount: number;
   cumulativeAmount: number;
   status: PaygInvoiceStatus;
   paidAt: string | null;
@@ -73,9 +79,34 @@ function invoiceRefFor(dayIndex: number): string {
 
 export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) => {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
+  const queryKey = useMemo(
+    () => ["payg-invoices", tenant?.id, rentalId] as const,
+    [tenant?.id, rentalId],
+  );
+
+  // Realtime: subscribe to changes on the 3 tables this hook reads. Any
+  // INSERT/UPDATE/DELETE for THIS rental triggers a query invalidation, so
+  // the customer's view updates the instant an admin records a payment / cron
+  // creates an invoice / a reminder is logged (and vice versa). Polling stays
+  // on as a backup if the websocket drops.
+  useEffect(() => {
+    if (!rentalId || !tenant?.id || !enabled) return;
+    const filter = `rental_id=eq.${rentalId}`;
+    const channel = supabase
+      .channel(`payg:${rentalId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "payg_accruals", filter },
+        () => queryClient.invalidateQueries({ queryKey }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "payments", filter },
+        () => queryClient.invalidateQueries({ queryKey }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "payg_reminder_log", filter },
+        () => queryClient.invalidateQueries({ queryKey }))
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [rentalId, tenant?.id, enabled, queryClient, queryKey]);
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["payg-invoices", tenant?.id, rentalId],
+    queryKey,
     queryFn: async (): Promise<PaygInvoiceData> => {
       if (!rentalId || !tenant?.id) return EMPTY;
 
@@ -120,9 +151,10 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
       const invoices: PaygInvoiceRow[] = [];
       let running = 0;
       for (const a of accruals) {
-        const dayTotal = round2(
-          Number(a.daily_rate || 0) + Number(a.tax_amount || 0) + Number(a.service_fee_amount || 0),
-        );
+        const dailyRate = round2(Number(a.daily_rate || 0));
+        const taxAmount = round2(Number(a.tax_amount || 0));
+        const serviceFeeAmount = round2(Number(a.service_fee_amount || 0));
+        const dayTotal = round2(dailyRate + taxAmount + serviceFeeAmount);
         running = round2(running + dayTotal);
 
         let supersededBy: string | null = null;
@@ -137,6 +169,9 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
           invoiceRef: invoiceRefFor(a.accrual_day_index),
           createdAt: a.accrual_window_start || a.created_at,
           dayTotal,
+          dailyRate,
+          taxAmount,
+          serviceFeeAmount,
           cumulativeAmount: running,
           status: (a.invoice_status as PaygInvoiceStatus) || "open",
           paidAt: a.paid_at || null,
@@ -203,7 +238,12 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
       };
     },
     enabled: !!rentalId && !!tenant?.id && enabled,
-    staleTime: 15_000,
+    // TEST MODE: poll fast so the customer view catches new 5-min "days" without
+    // waiting on Realtime. Revert to staleTime 30_000 / refetchInterval 60_000 for prod.
+    staleTime: 2_000,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 
   return { data: data || EMPTY, isLoading, error, refetch };

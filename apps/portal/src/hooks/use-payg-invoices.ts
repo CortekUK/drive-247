@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { supabaseUntyped } from "@/integrations/supabase/client";
+import { useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 
 export type PaygInvoiceStatus = "open" | "paid" | "superseded";
@@ -10,6 +11,10 @@ export interface PaygInvoiceRow {
   invoiceRef: string; // pg-001
   createdAt: string; // accrual_window_start
   dayTotal: number; // this invoice's own day charge (rental + tax + service_fee)
+  /** Per-day breakdown — exposed for the statement view. */
+  dailyRate: number;
+  taxAmount: number;
+  serviceFeeAmount: number;
   cumulativeAmount: number; // rolling total at creation time
   status: PaygInvoiceStatus;
   paidAt: string | null;
@@ -38,6 +43,31 @@ export interface PaygReminderRow {
   success: boolean;
 }
 
+/**
+ * Why automated reminders are not currently sending.
+ * Mirrors the gates inside `send-payg-reminders` so the UI can explain itself.
+ */
+export type PaygReminderBlockReason =
+  | "tenant_disabled" // tenant.payg_auto_reminders_enabled === false
+  | "rental_inactive" // rental.status !== 'Active'
+  | "rental_paused" // rental.payg_paused === true
+  | "rental_closed" // rental.payg_closed_at !== null
+  | "no_open_invoice" // no PAYG accrual with invoice_status='open'
+  | null;
+
+export interface PaygReminderStatus {
+  /** Master tenant toggle. */
+  autoEnabled: boolean;
+  /**
+   * When the next automated reminder is scheduled to fire (or `null` when not
+   * applicable). Always max(last_sent_at, payg_start_ts) + 24h, ignoring blockers
+   * — the cron will skip past it when blockers clear.
+   */
+  nextReminderAt: string | null;
+  /** Why the cron will skip this rental right now (null = will fire on schedule). */
+  blockReason: PaygReminderBlockReason;
+}
+
 export interface PaygInvoiceData {
   invoices: PaygInvoiceRow[]; // ascending by dayIndex (the caller reverses for display)
   payments: PaygPaymentRow[];
@@ -51,6 +81,7 @@ export interface PaygInvoiceData {
     netReceived: number;
   };
   latestOpenInvoice: PaygInvoiceRow | null;
+  reminderStatus: PaygReminderStatus;
 }
 
 const EMPTY: PaygInvoiceData = {
@@ -61,7 +92,10 @@ const EMPTY: PaygInvoiceData = {
   lastUpdatedAt: null,
   totals: { collected: 0, balanceDue: 0, refunded: 0, netReceived: 0 },
   latestOpenInvoice: null,
+  reminderStatus: { autoEnabled: false, nextReminderAt: null, blockReason: null },
 };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
@@ -73,13 +107,38 @@ function invoiceRefFor(dayIndex: number): string {
 
 export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) => {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
+  const queryKey = useMemo(
+    () => ["payg-invoices", tenant?.id, rentalId] as const,
+    [tenant?.id, rentalId],
+  );
+
+  // Realtime: subscribe to changes on the 3 tables this hook reads. Any
+  // INSERT/UPDATE/DELETE for THIS rental triggers a query invalidation, so
+  // the admin's view updates the instant a Stripe webhook settles a payment /
+  // cron creates an invoice / a reminder is logged (and vice versa). Polling
+  // stays on as a backup if the websocket drops.
+  useEffect(() => {
+    if (!rentalId || !tenant?.id || !enabled) return;
+    const filter = `rental_id=eq.${rentalId}`;
+    const channel = supabase
+      .channel(`payg:${rentalId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "payg_accruals", filter },
+        () => queryClient.invalidateQueries({ queryKey }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "payments", filter },
+        () => queryClient.invalidateQueries({ queryKey }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "payg_reminder_log", filter },
+        () => queryClient.invalidateQueries({ queryKey }))
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [rentalId, tenant?.id, enabled, queryClient, queryKey]);
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["payg-invoices", tenant?.id, rentalId],
+    queryKey,
     queryFn: async (): Promise<PaygInvoiceData> => {
       if (!rentalId || !tenant?.id) return EMPTY;
 
-      const [accrualsRes, paymentsRes, remindersRes] = await Promise.all([
+      const [accrualsRes, paymentsRes, remindersRes, rentalRes, tenantRes] = await Promise.all([
         supabaseUntyped
           .from("payg_accruals")
           .select(
@@ -104,15 +163,32 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
           .eq("rental_id", rentalId)
           .eq("tenant_id", tenant.id)
           .order("sent_at", { ascending: false }),
+        supabaseUntyped
+          .from("rentals")
+          .select(
+            "status, payg_start_ts, payg_last_reminder_sent_at, payg_paused, payg_closed_at",
+          )
+          .eq("id", rentalId)
+          .eq("tenant_id", tenant.id)
+          .maybeSingle(),
+        supabaseUntyped
+          .from("tenants")
+          .select("payg_auto_reminders_enabled")
+          .eq("id", tenant.id)
+          .maybeSingle(),
       ]);
 
       if (accrualsRes.error) throw accrualsRes.error;
       if (paymentsRes.error) throw paymentsRes.error;
       if (remindersRes.error) throw remindersRes.error;
+      if (rentalRes.error) throw rentalRes.error;
+      if (tenantRes.error) throw tenantRes.error;
 
       const accruals = accrualsRes.data || [];
       const paymentsRaw = paymentsRes.data || [];
       const remindersRaw = remindersRes.data || [];
+      const rentalRow: any = rentalRes.data || {};
+      const tenantRow: any = tenantRes.data || {};
 
       // Walk in ascending order to compute cumulative (rolling) amount per invoice.
       // Cumulative resets immediately after an invoice status='paid'.
@@ -122,9 +198,10 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
       const invoices: PaygInvoiceRow[] = [];
       let running = 0;
       for (const a of accruals) {
-        const dayTotal = round2(
-          Number(a.daily_rate || 0) + Number(a.tax_amount || 0) + Number(a.service_fee_amount || 0),
-        );
+        const dailyRate = round2(Number(a.daily_rate || 0));
+        const taxAmount = round2(Number(a.tax_amount || 0));
+        const serviceFeeAmount = round2(Number(a.service_fee_amount || 0));
+        const dayTotal = round2(dailyRate + taxAmount + serviceFeeAmount);
         running = round2(running + dayTotal);
 
         let supersededBy: string | null = null;
@@ -139,6 +216,9 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
           invoiceRef: invoiceRefFor(a.accrual_day_index),
           createdAt: a.accrual_window_start || a.created_at,
           dayTotal,
+          dailyRate,
+          taxAmount,
+          serviceFeeAmount,
           cumulativeAmount: running,
           status: (a.invoice_status as PaygInvoiceStatus) || "open",
           paidAt: a.paid_at || null,
@@ -195,6 +275,39 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
       const openInvoices = invoices.filter((i) => i.status === "open");
       const latestOpenInvoice = openInvoices.length > 0 ? openInvoices[openInvoices.length - 1] : null;
 
+      // Mirror the gates in supabase/functions/send-payg-reminders so the UI explains itself.
+      const autoEnabled = tenantRow?.payg_auto_reminders_enabled !== false;
+      let blockReason: PaygReminderBlockReason = null;
+      if (!autoEnabled) {
+        blockReason = "tenant_disabled";
+      } else if (rentalRow?.payg_closed_at) {
+        blockReason = "rental_closed";
+      } else if (rentalRow?.payg_paused) {
+        blockReason = "rental_paused";
+      } else if (rentalRow?.status && rentalRow.status !== "Active") {
+        blockReason = "rental_inactive";
+      } else if (!latestOpenInvoice) {
+        blockReason = "no_open_invoice";
+      }
+
+      // Anchor matches cron logic: max(last_sent_at, payg_start_ts) + 24h.
+      let nextReminderAt: string | null = null;
+      const startTsStr: string | null = rentalRow?.payg_start_ts || null;
+      const lastSentStr: string | null = rentalRow?.payg_last_reminder_sent_at || null;
+      const anchorStr = lastSentStr || startTsStr;
+      if (anchorStr) {
+        const anchorMs = new Date(anchorStr).getTime();
+        if (Number.isFinite(anchorMs)) {
+          nextReminderAt = new Date(anchorMs + DAY_MS).toISOString();
+        }
+      }
+
+      const reminderStatus: PaygReminderStatus = {
+        autoEnabled,
+        nextReminderAt,
+        blockReason,
+      };
+
       return {
         invoices,
         payments,
@@ -203,10 +316,16 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
         lastUpdatedAt,
         totals: { collected, balanceDue, refunded, netReceived },
         latestOpenInvoice,
+        reminderStatus,
       };
     },
     enabled: !!rentalId && !!tenant?.id && enabled,
-    staleTime: 15_000,
+    // TEST MODE: poll fast so the UI catches new 5-min "days" without waiting
+    // on Realtime. Revert to staleTime 30_000 / refetchInterval 60_000 for prod.
+    staleTime: 2_000,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 
   return { data: data || EMPTY, isLoading, error, refetch };
