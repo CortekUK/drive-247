@@ -1,2 +1,326 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Sizes / Font scale
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --font-sizes-12: 0.75rem;
+  --font-sizes-14: 0.875rem;
+  --font-sizes-16: 1rem;
+  --font-sizes-18: 1.125rem;
+  --font-sizes-20: 1.25rem;
+  --font-sizes-24: 1.5rem;
+  --font-sizes-30: 1.875rem;
+  --font-sizes-36: 2.25rem;
+  --font-sizes-48: 3rem;
+  --font-sizes-60: 3.75rem;
+
+  --radius: 0.75rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Type System (mobile-first; desktop overrides below)
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --typeface-family: var(--font-dm-sans), system-ui, -apple-system, sans-serif;
+
+  --typeface-font-styles-display-base: var(--font-sizes-48);
+  --typeface-font-styles-heading-h1: var(--font-sizes-30);
+  --typeface-font-styles-heading-h2: var(--font-sizes-24);
+  --typeface-font-styles-heading-h3: var(--font-sizes-20);
+  --typeface-font-styles-heading-h4: var(--font-sizes-18);
+  --typeface-font-styles-heading-h5: var(--font-sizes-14);
+  --typeface-font-styles-heading-subheading: var(--font-sizes-18);
+  --typeface-font-styles-paragraph-text: var(--font-sizes-16);
+  --typeface-font-styles-paragraph-text-s: var(--font-sizes-14);
+  --typeface-font-styles-paragraph-text-xs: var(--font-sizes-12);
+}
+
+@media (min-width: 768px) {
+  :root {
+    --typeface-font-styles-display-base: var(--font-sizes-60);
+    --typeface-font-styles-heading-h1: var(--font-sizes-48);
+    --typeface-font-styles-heading-h2: var(--font-sizes-30);
+    --typeface-font-styles-heading-h3: var(--font-sizes-24);
+    --typeface-font-styles-heading-h4: var(--font-sizes-20);
+    --typeface-font-styles-heading-h5: var(--font-sizes-18);
+    --typeface-font-styles-heading-subheading: var(--font-sizes-20);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Color palette
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Extras */
+  --extra-blue-50: #eff6ff;
+  --extra-blue-400: #60a5fa;
+  --extra-blue-600: #2563eb;
+  --extra-green-50: #f0fdf4;
+  --extra-green-400: #4ade80;
+  --extra-green-600: #16a34a;
+  --extra-red-50: #fef2f2;
+  --extra-red-400: #f87171;
+  --extra-red-600: #dc2626;
+  --extra-yellow-50: #fffbeb;
+  --extra-yellow-400: #fbbf24;
+  --extra-yellow-600: #d97706;
+
+  /* Mains */
+  --main-primary: #6366f1;
+  --main-primary-subtle: #e0e7ff;
+  --main-black: #080812;
+  --main-white: #ffffff;
+  --main-white-lc: #fbfdfd;
+
+  /* Neutrals */
+  --neutral-200: #e5e5e5;
+  --neutral-400: #a3a3a3;
+  --neutral-500: #737373;
+  --neutral-700: #404040;
+  --neutral-800: #262626;
+  --neutral-900: #171717;
+
+  /* Slates */
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Semantic tokens — Light (default)
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --container-high: var(--main-primary-subtle);
+  --container-highest: var(--main-primary);
+  --container-low: var(--slate-100);
+  --container-lowest: var(--slate-50);
+  --container-inverse: var(--main-black);
+
+  --on-surface-default: var(--main-black);
+  --on-surface-inverse: var(--main-white);
+  --on-surface-primary: var(--main-primary);
+  --on-surface-primary-subtle: var(--main-primary-subtle);
+  --on-surface-subtle: var(--neutral-500);
+  --on-surface-variant: var(--neutral-700);
+
+  --outline-default: var(--slate-100);
+  --outline-dark: var(--neutral-500);
+  --outline-primary: var(--main-primary);
+  --outline-variant: var(--slate-200);
+
+  --static-on-surface: var(--main-black);
+  --static-on-surface-inverse: var(--main-white);
+  --surface-default: var(--main-white);
+  --surface-variant: var(--slate-50);
+
+  --utility-danger: var(--extra-red-600);
+  --utility-danger-subtle: var(--extra-red-400);
+  --utility-danger-subtle-2: var(--extra-red-50);
+  --utility-success: var(--extra-green-600);
+  --utility-success-light: var(--extra-green-50);
+  --utility-success-med: var(--extra-green-400);
+  --utility-warning: var(--extra-yellow-600);
+  --utility-warning-light: var(--extra-yellow-50);
+  --utility-warning-med: var(--extra-yellow-400);
+  --utility-info: var(--extra-blue-600);
+  --utility-info-light: var(--extra-blue-50);
+  --utility-info-med: var(--extra-blue-400);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Semantic tokens — Dark
+   ───────────────────────────────────────────────────────────────────────── */
+.dark {
+  --container-high: var(--main-primary-subtle);
+  --container-highest: var(--main-primary);
+  --container-low: var(--neutral-700);
+  --container-lowest: var(--neutral-800);
+  --container-inverse: var(--main-white);
+
+  --on-surface-default: var(--main-white-lc);
+  --on-surface-inverse: var(--main-black);
+  --on-surface-primary: var(--main-primary);
+  --on-surface-primary-subtle: var(--main-primary-subtle);
+  --on-surface-subtle: var(--neutral-400);
+  --on-surface-variant: var(--neutral-200);
+
+  --outline-default: var(--neutral-800);
+  --outline-dark: var(--neutral-200);
+  --outline-primary: var(--main-primary);
+  --outline-variant: var(--neutral-700);
+
+  --surface-default: var(--neutral-900);
+  --surface-variant: var(--main-black);
+
+  --utility-danger: var(--extra-red-400);
+  --utility-success: var(--extra-green-400);
+  --utility-warning: var(--extra-yellow-400);
+  --utility-info: var(--extra-blue-400);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Tailwind theme — exposes tokens as utility classes
+   bg-surface, text-on-surface, border-outline, text-h1, etc.
+   ───────────────────────────────────────────────────────────────────────── */
+@theme inline {
+  /* ── Shadcn-compatible aliases (so existing components keep working) */
+  --color-background: var(--surface-default);
+  --color-foreground: var(--on-surface-default);
+  --color-card: var(--surface-default);
+  --color-card-foreground: var(--on-surface-default);
+  --color-popover: var(--surface-default);
+  --color-popover-foreground: var(--on-surface-default);
+  --color-border: var(--outline-default);
+  --color-input: var(--outline-default);
+  --color-ring: var(--main-primary);
+  --color-muted: var(--surface-variant);
+  --color-muted-foreground: var(--on-surface-subtle);
+  --color-accent: var(--container-high);
+  --color-accent-foreground: var(--on-surface-default);
+  --color-secondary: var(--container-low);
+  --color-secondary-foreground: var(--on-surface-default);
+  --color-destructive: var(--utility-danger);
+  --color-destructive-foreground: var(--main-white);
+  --color-primary-foreground: var(--on-surface-inverse);
+  --color-surface-soft: var(--container-low);
+  --color-surface-muted: var(--surface-variant);
+
+  /* Surfaces & containers */
+  --color-surface: var(--surface-default);
+  --color-surface-variant: var(--surface-variant);
+  --color-container-high: var(--container-high);
+  --color-container-highest: var(--container-highest);
+  --color-container-low: var(--container-low);
+  --color-container-lowest: var(--container-lowest);
+  --color-container-inverse: var(--container-inverse);
+
+  /* On-surface text colors */
+  --color-on-surface: var(--on-surface-default);
+  --color-on-surface-inverse: var(--on-surface-inverse);
+  --color-on-surface-primary: var(--on-surface-primary);
+  --color-on-surface-primary-subtle: var(--on-surface-primary-subtle);
+  --color-on-surface-subtle: var(--on-surface-subtle);
+  --color-on-surface-variant: var(--on-surface-variant);
+
+  /* Outlines */
+  --color-outline: var(--outline-default);
+  --color-outline-dark: var(--outline-dark);
+  --color-outline-primary: var(--outline-primary);
+  --color-outline-variant: var(--outline-variant);
+
+  /* Brand */
+  --color-primary: var(--main-primary);
+  --color-primary-subtle: var(--main-primary-subtle);
+  --color-black: var(--main-black);
+  --color-white: var(--main-white);
+  --color-white-lc: var(--main-white-lc);
+
+  /* Neutrals (raw access) */
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-800: var(--neutral-800);
+  --color-neutral-900: var(--neutral-900);
+
+  /* Slates (raw access) */
+  --color-slate-50: var(--slate-50);
+  --color-slate-100: var(--slate-100);
+  --color-slate-200: var(--slate-200);
+
+  /* Utility palette */
+  --color-danger: var(--utility-danger);
+  --color-danger-subtle: var(--utility-danger-subtle);
+  --color-danger-light: var(--utility-danger-subtle-2);
+  --color-success: var(--utility-success);
+  --color-success-light: var(--utility-success-light);
+  --color-success-med: var(--utility-success-med);
+  --color-warning: var(--utility-warning);
+  --color-warning-light: var(--utility-warning-light);
+  --color-warning-med: var(--utility-warning-med);
+  --color-info: var(--utility-info);
+  --color-info-light: var(--utility-info-light);
+  --color-info-med: var(--utility-info-med);
+
+  /* Type scale — text-display, text-h1 … text-xs (responsive built-in) */
+  --text-display: var(--typeface-font-styles-display-base);
+  --text-h1: var(--typeface-font-styles-heading-h1);
+  --text-h2: var(--typeface-font-styles-heading-h2);
+  --text-h3: var(--typeface-font-styles-heading-h3);
+  --text-h4: var(--typeface-font-styles-heading-h4);
+  --text-h5: var(--typeface-font-styles-heading-h5);
+  --text-subheading: var(--typeface-font-styles-heading-subheading);
+  --text-body: var(--typeface-font-styles-paragraph-text);
+  --text-body-s: var(--typeface-font-styles-paragraph-text-s);
+  --text-body-xs: var(--typeface-font-styles-paragraph-text-xs);
+
+  /* Radius */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-pill: 9999px;
+
+  /* Font families */
+  --font-sans: var(--typeface-family);
+  --font-display: var(--typeface-family);
+  --font-button: var(--typeface-family);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Base layer
+   ───────────────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-outline;
+  }
+
+  html,
+  body {
+    @apply bg-surface text-on-surface;
+    font-family: var(--typeface-family);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--typeface-family);
+    letter-spacing: -0.02em;
+  }
+
+  button,
+  .font-button {
+    font-family: var(--typeface-family);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Utilities
+   ───────────────────────────────────────────────────────────────────────── */
+@layer utilities {
+  .container-page {
+    @apply mx-auto w-full max-w-7xl px-6 lg:px-10;
+  }
+
+  .marquee-track {
+    animation: marquee 28s linear infinite;
+  }
+
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+}
