@@ -15,12 +15,12 @@ export function WhyChooseUsSection() {
 
   return (
     <section className="bg-white">
-      <div className="container-page py-20 lg:py-24">
+      <div className="container-page py-12 lg:py-24">
         <header className="mx-auto max-w-2xl text-center">
-          <h2 className="text-4xl font-semibold leading-tight tracking-tight text-[#111210] sm:text-5xl sm:leading-none">
+          <h2 className="text-3xl font-semibold leading-tight tracking-tight text-brand-text sm:text-4xl lg:text-5xl lg:leading-none">
             Why Choose Us?
           </h2>
-          <p className="mx-auto mt-4 max-w-[480px] text-sm leading-relaxed text-[#4a4b48] sm:text-base">
+          <p className="mx-auto mt-4 max-w-[480px] text-sm leading-relaxed text-brand-text-soft sm:text-base">
             Experience a new standard of mobility where luxury meets absolute
             convenience.
           </p>

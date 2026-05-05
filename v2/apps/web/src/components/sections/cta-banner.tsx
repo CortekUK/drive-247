@@ -19,7 +19,7 @@ export function CtaBanner() {
       />
 
       <div className="container-page relative flex flex-col items-center gap-6 py-24 text-center lg:py-32">
-        <h2 className="max-w-3xl font-sans text-4xl font-semibold leading-tight tracking-tight text-white sm:text-5xl sm:leading-none">
+        <h2 className="max-w-3xl font-sans text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl lg:leading-none">
           Your Verified Drive is Just a Click Away
         </h2>
         <p className="max-w-xl text-sm leading-relaxed text-white/80 sm:text-base">
@@ -28,7 +28,7 @@ export function CtaBanner() {
         </p>
         <Link
           href="/booking"
-          className="inline-flex items-center justify-center rounded-full bg-[#f2c12c] px-8 py-[13px] text-sm font-semibold text-[#111210] transition-opacity hover:opacity-90"
+          className="inline-flex items-center justify-center rounded-full bg-brand-amber px-8 py-[13px] text-sm font-semibold text-brand-text transition-opacity hover:opacity-90"
         >
           Get Started
         </Link>

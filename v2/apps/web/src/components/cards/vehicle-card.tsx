@@ -14,23 +14,23 @@ export function VehicleCard({ vehicle, className }: VehicleCardProps) {
   return (
     <article
       className={cn(
-        "flex w-[210px] shrink-0 flex-col rounded-[14px] border border-[#ececec] bg-white p-4 transition-shadow hover:shadow-[0_4px_18px_rgba(0,0,0,0.06)]",
+        "flex w-[210px] shrink-0 flex-col rounded-[14px] border border-brand-border-soft bg-white p-4 transition-shadow hover:shadow-[0_4px_18px_rgba(0,0,0,0.06)]",
         className,
       )}
     >
       <header className="flex items-start justify-between gap-2">
         <div className="space-y-0.5">
-          <h3 className="text-sm font-semibold leading-tight text-[#111210]">
+          <h3 className="text-sm font-semibold leading-tight text-brand-text">
             {vehicle.name}
           </h3>
-          <p className="text-xs leading-tight text-[#8a8c88]">
+          <p className="text-xs leading-tight text-brand-text-subtle">
             {vehicle.year} · {vehicle.trim}
           </p>
         </div>
-        <BrandWingsMark className="text-[#a5a5a5]" />
+        <BrandWingsMark className="text-brand-text-subtle" />
       </header>
 
-      <ul className="mt-3 flex items-center gap-3 text-xs leading-tight text-[#4a4b48]">
+      <ul className="mt-3 flex items-center gap-3 text-xs leading-tight text-brand-text-soft">
         <li className="inline-flex items-center gap-1">
           <User className="size-3" strokeWidth={1.75} />
           {vehicle.seats}
@@ -46,7 +46,7 @@ export function VehicleCard({ vehicle, className }: VehicleCardProps) {
       </ul>
 
       {vehicle.status === "ready" && (
-        <p className="mt-2 inline-flex items-center gap-1 text-xs leading-tight text-[#111210]">
+        <p className="mt-2 inline-flex items-center gap-1 text-xs leading-tight text-brand-text">
           <Check className="size-3" strokeWidth={2.25} />
           Ready for Pickup
         </p>
@@ -64,16 +64,16 @@ export function VehicleCard({ vehicle, className }: VehicleCardProps) {
 
       <footer className="flex items-end justify-between">
         <p className="leading-tight">
-          <span className="block text-xl font-semibold leading-tight text-[#111210]">
+          <span className="block text-xl font-semibold leading-tight text-brand-text">
             ${vehicle.pricePerDay}
           </span>
-          <span className="block text-xs leading-tight text-[#8a8c88]">
+          <span className="block text-xs leading-tight text-brand-text-subtle">
             per day
           </span>
         </p>
         <Link
           href={`/booking?vehicle=${vehicle.id}`}
-          className="inline-flex items-center justify-center rounded-full bg-[#162921] px-4 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90"
+          className="inline-flex items-center justify-center rounded-full bg-brand-forest px-4 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90"
         >
           Rent Now
         </Link>

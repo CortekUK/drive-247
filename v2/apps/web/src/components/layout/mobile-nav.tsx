@@ -27,7 +27,7 @@ export function MobileNav() {
           <Menu className="size-5" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="right" className="bg-background p-6">
+      <SheetContent side="right" className="bg-brand-cream p-6">
         <SheetHeader className="px-0">
           <SheetTitle className="text-lg">Menu</SheetTitle>
         </SheetHeader>
@@ -36,7 +36,7 @@ export function MobileNav() {
             <SheetClose asChild key={link.href}>
               <Link
                 href={link.href}
-                className="border-b border-border py-4 text-base font-medium text-foreground/90 hover:text-foreground"
+                className="border-b border-border py-4 text-base font-medium text-brand-text/90 hover:text-brand-text"
               >
                 {link.label}
               </Link>

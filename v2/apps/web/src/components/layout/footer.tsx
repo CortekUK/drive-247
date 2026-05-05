@@ -12,7 +12,7 @@ const SOCIALS = [
 
 export function Footer() {
   return (
-    <footer className="bg-[#0E1B17] text-white/80">
+    <footer className="bg-brand-forest-darker text-white/80">
       <div className="container-page py-16 lg:py-20">
         <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 lg:grid-cols-5">
           {Object.entries(FOOTER_LINKS).map(([heading, links]) => (

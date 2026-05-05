@@ -26,15 +26,15 @@ export function FeatureCard({
     return (
       <article
         className={cn(
-          "relative flex h-full min-h-[420px] flex-col overflow-hidden rounded-[18px] bg-[#E0AD17] p-7",
+          "relative flex h-full min-h-[420px] flex-col overflow-hidden rounded-[18px] bg-brand-gold p-7",
           className,
         )}
       >
         <div className="space-y-3">
-          <h3 className="text-xl font-semibold leading-snug text-[#111210]">
+          <h3 className="text-xl font-semibold leading-snug text-brand-text">
             {title}
           </h3>
-          <p className="max-w-[28ch] text-sm leading-relaxed text-[#111210]/90">
+          <p className="max-w-[28ch] text-sm leading-relaxed text-brand-text/90">
             {description}
           </p>
         </div>
@@ -58,15 +58,15 @@ export function FeatureCard({
     return (
       <article
         className={cn(
-          "relative flex h-full min-h-[200px] overflow-hidden rounded-[18px] bg-[#E8E5DC] p-7",
+          "relative flex h-full min-h-[200px] overflow-hidden rounded-[18px] bg-brand-stone p-7",
           className,
         )}
       >
         <div className="relative z-10 max-w-[64%] space-y-2">
-          <h3 className="text-base font-semibold leading-snug text-[#111210]">
+          <h3 className="text-base font-semibold leading-snug text-brand-text">
             {title}
           </h3>
-          <p className="text-sm leading-relaxed text-[#4a4b48]">
+          <p className="text-sm leading-relaxed text-brand-text-soft">
             {description}
           </p>
         </div>
@@ -88,21 +88,21 @@ export function FeatureCard({
   return (
     <article
       className={cn(
-        "flex h-full flex-col gap-3 rounded-[14px] border border-[#ececec] bg-white p-6",
+        "flex h-full flex-col gap-3 rounded-[14px] border border-brand-border-soft bg-white p-6",
         className,
       )}
     >
       {Icon && (
         <Icon
-          className="size-5 text-[#111210]"
+          className="size-5 text-brand-text"
           strokeWidth={1.6}
           aria-hidden
         />
       )}
-      <h3 className="text-base font-semibold leading-snug text-[#111210]">
+      <h3 className="text-base font-semibold leading-snug text-brand-text">
         {title}
       </h3>
-      <p className="text-sm leading-relaxed text-[#4a4b48]">
+      <p className="text-sm leading-relaxed text-brand-text-soft">
         {description}
       </p>
     </article>

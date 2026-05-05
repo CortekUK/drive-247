@@ -36,7 +36,7 @@ export function ReadinessCard({ className }: ReadinessCardProps) {
   return (
     <article
       className={
-        "w-[270px] rounded-[16px] border border-white/50 bg-[#fdfffc] px-[21px] pb-[21px] pt-[25px] shadow-[0px_15px_22.5px_rgba(0,0,0,0.12)] backdrop-blur-[6px] " +
+        "w-[270px] rounded-[16px] border border-white/50 bg-brand-card px-[21px] pb-[21px] pt-[25px] shadow-[0px_15px_22.5px_rgba(0,0,0,0.12)] backdrop-blur-[6px] " +
         (className ?? "")
       }
     >
@@ -55,21 +55,21 @@ export function ReadinessCard({ className }: ReadinessCardProps) {
           />
           <path d="M15.3333 4L10 11.3333H17.3333" stroke="#6A6C66" />
         </svg>
-        <span className="inline-flex items-center gap-[2px] text-[9px] leading-[13.5px] text-[#30312f]">
+        <span className="inline-flex items-center gap-[2px] text-[9px] leading-[13.5px] text-brand-text-soft">
           <Check className="size-2.5" strokeWidth={2.5} />
           Ready for Pickup
         </span>
       </header>
 
-      <p className="mt-4 text-[12px] leading-[16px] text-[#111210]">
-        Lexus RX <span className="text-[#8a8c88]">• SUV</span>
+      <p className="mt-4 text-[12px] leading-[16px] text-brand-text">
+        Lexus RX <span className="text-brand-text-subtle">• SUV</span>
       </p>
 
       <ul className="mt-4 flex flex-col gap-[14px] pb-1">
         {METRICS.map((metric) => (
           <li key={metric.id} className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 text-[10px] leading-[15px] text-[#4a4b48]">
+              <span className="inline-flex items-center gap-1.5 text-[10px] leading-[15px] text-brand-text-soft">
                 {metric.icon}
                 {metric.label}
               </span>
@@ -79,7 +79,7 @@ export function ReadinessCard({ className }: ReadinessCardProps) {
             </div>
             <div className="h-[2.5px] w-full overflow-hidden rounded-full bg-[#e1e3df]">
               <div
-                className="h-full rounded-full bg-[#14231b]"
+                className="h-full rounded-full bg-brand-progress-fill"
                 style={{ width: `${metric.value}%` }}
               />
             </div>
@@ -90,7 +90,7 @@ export function ReadinessCard({ className }: ReadinessCardProps) {
       <div className="mt-2 border-t border-transparent pt-[9px]">
         <a
           href="#"
-          className="inline-flex items-center gap-1 text-[10.5px] leading-[15.75px] text-[#30312f] hover:underline"
+          className="inline-flex items-center gap-1 text-[10.5px] leading-[15.75px] text-brand-text-soft hover:underline"
         >
           View Details
           <ArrowRight className="size-3" strokeWidth={2} />

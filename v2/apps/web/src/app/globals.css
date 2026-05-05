@@ -88,6 +88,29 @@
   --slate-50: #f8fafc;
   --slate-100: #f1f5f9;
   --slate-200: #e2e8f0;
+
+  /* Brand (page-specific overlay on top of the design system) */
+  --brand-cream: #ebece7;
+  --brand-forest: #162921;
+  --brand-forest-deep: #0a130e;
+  --brand-forest-darker: #0e1b17;
+  --brand-stats-bg: #0f1f1a;
+  --brand-amber: #f2c12c;
+  --brand-gold: #e0ad17;
+  --brand-stone: #e8e5dc;
+  --brand-pale-yellow: #fbe99a;
+  --brand-card: #fdfffc;
+  --brand-text: #111210;
+  --brand-text-soft: #4a4b48;
+  --brand-text-muted: #4b4e47;
+  --brand-text-subtle: #8a8c88;
+  --brand-placeholder: #a0a29c;
+  --brand-border-soft: #ececec;
+  --brand-border: #e1e3df;
+  --brand-progress-fill: #14231b;
+  --brand-progress-bar: #5b6cff;
+  --brand-ring-dark: #181a17;
+  --brand-ring-red: #df232a;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -167,6 +190,29 @@
    bg-surface, text-on-surface, border-outline, text-h1, etc.
    ───────────────────────────────────────────────────────────────────────── */
 @theme inline {
+  /* ── Brand tokens (page-specific overlay used across the landing page) */
+  --color-brand-cream: var(--brand-cream);
+  --color-brand-forest: var(--brand-forest);
+  --color-brand-forest-deep: var(--brand-forest-deep);
+  --color-brand-forest-darker: var(--brand-forest-darker);
+  --color-brand-stats-bg: var(--brand-stats-bg);
+  --color-brand-amber: var(--brand-amber);
+  --color-brand-gold: var(--brand-gold);
+  --color-brand-stone: var(--brand-stone);
+  --color-brand-pale-yellow: var(--brand-pale-yellow);
+  --color-brand-card: var(--brand-card);
+  --color-brand-text: var(--brand-text);
+  --color-brand-text-soft: var(--brand-text-soft);
+  --color-brand-text-muted: var(--brand-text-muted);
+  --color-brand-text-subtle: var(--brand-text-subtle);
+  --color-brand-placeholder: var(--brand-placeholder);
+  --color-brand-border-soft: var(--brand-border-soft);
+  --color-brand-border: var(--brand-border);
+  --color-brand-progress-fill: var(--brand-progress-fill);
+  --color-brand-progress-bar: var(--brand-progress-bar);
+  --color-brand-ring-dark: var(--brand-ring-dark);
+  --color-brand-ring-red: var(--brand-ring-red);
+
   /* ── Shadcn-compatible aliases (so existing components keep working) */
   --color-background: var(--surface-default);
   --color-foreground: var(--on-surface-default);

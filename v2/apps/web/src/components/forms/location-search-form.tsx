@@ -34,7 +34,7 @@ export function LocationSearchForm({ className }: LocationSearchFormProps) {
         value={pickup}
         onChange={setPickup}
         dotColor="#181a17"
-        trailing={<MapPin className="size-4 text-[#181a17]" strokeWidth={1.5} />}
+        trailing={<MapPin className="size-4 text-brand-ring-dark" strokeWidth={1.5} />}
       />
       <Field
         id="dropoff"
@@ -46,7 +46,7 @@ export function LocationSearchForm({ className }: LocationSearchFormProps) {
       <div className="pt-4">
         <button
           type="submit"
-          className="inline-flex items-center justify-center rounded-full bg-[#162921] px-7 py-[11.5px] text-[13.5px] leading-[20.25px] text-white shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)] transition-opacity hover:opacity-90"
+          className="inline-flex items-center justify-center rounded-full bg-brand-forest px-7 py-[11.5px] text-[13.5px] leading-[20.25px] text-white shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)] transition-opacity hover:opacity-90"
         >
           Rent a Car
         </button>
@@ -69,7 +69,7 @@ function Field({ id, label, value, onChange, trailing, dotColor }: FieldProps) {
     <div className="flex flex-col gap-1.5">
       <label
         htmlFor={id}
-        className="text-[11px] leading-[16.5px] text-[#4e5249]"
+        className="text-[11px] leading-[16.5px] text-brand-text-soft"
       >
         {label}
       </label>
@@ -84,7 +84,7 @@ function Field({ id, label, value, onChange, trailing, dotColor }: FieldProps) {
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder="Enter Address"
-          className="flex-1 bg-transparent pl-3 text-[13.5px] text-[#111210] placeholder:text-[#a0a29c] focus:outline-none"
+          className="flex-1 bg-transparent pl-3 text-[13.5px] text-brand-text placeholder:text-brand-placeholder focus:outline-none"
         />
         {trailing && <span className="ml-2 shrink-0">{trailing}</span>}
       </div>

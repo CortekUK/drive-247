@@ -5,19 +5,19 @@ import Link from "next/link";
 export function SafetyVerificationSection() {
   return (
     <section className="bg-white">
-      <div className="container-page grid grid-cols-1 items-center gap-10 py-16 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] lg:gap-16 lg:py-24">
+      <div className="container-page grid grid-cols-1 items-center gap-10 py-12 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] lg:gap-16 lg:py-24">
         <div className="flex flex-col gap-6">
-          <h2 className="font-sans text-4xl font-semibold leading-tight tracking-tight text-[#111210] sm:text-5xl sm:leading-none">
+          <h2 className="font-sans text-3xl font-semibold leading-tight tracking-tight text-brand-text sm:text-4xl lg:text-5xl lg:leading-none">
             Safety Verification is Easier than Ever
           </h2>
-          <p className="max-w-[440px] text-sm leading-relaxed text-[#4a4b48] sm:text-base">
+          <p className="max-w-[440px] text-sm leading-relaxed text-brand-text-soft sm:text-base">
             With real-time diagnostic sync, we ensure every car is
             safety-certified and sanitized before you even arrive. Experience
             the certainty of a perfectly maintained fleet.
           </p>
           <Link
             href="/booking"
-            className="inline-flex w-fit items-center justify-center rounded-full bg-[#162921] px-7 py-[13px] text-sm font-medium text-white transition-opacity hover:opacity-90"
+            className="inline-flex w-fit items-center justify-center rounded-full bg-brand-forest px-7 py-[13px] text-sm font-medium text-white transition-opacity hover:opacity-90"
           >
             Rent a Car now
           </Link>
@@ -36,7 +36,7 @@ export function SafetyVerificationSection() {
 
           <DiagnosticCard
             className="absolute left-0 top-[8%] z-10 w-[260px] sm:left-[2%]"
-            icon={<Droplet className="size-3.5 text-[#dc2626]" strokeWidth={2} />}
+            icon={<Droplet className="size-3.5 text-danger" strokeWidth={2} />}
             label="Engine Oil"
             value="25% Remaining"
             barValue={25}
@@ -56,7 +56,7 @@ export function SafetyVerificationSection() {
           />
           <DiagnosticCard
             className="absolute right-0 bottom-[6%] z-10 w-[260px] sm:right-[2%]"
-            icon={<Gauge className="size-3.5 text-[#dc2626]" strokeWidth={2} />}
+            icon={<Gauge className="size-3.5 text-danger" strokeWidth={2} />}
             label="Brake Life"
             value="85% Remaining"
             barValue={85}
@@ -108,34 +108,34 @@ function DiagnosticCard({
       }
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#111210]">
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-brand-text">
           {icon}
           {label}
           {tinyHelp && (
             <span
               aria-hidden
-              className="ml-0.5 inline-flex size-3 items-center justify-center rounded-full text-[8px] text-[#8a8c88] ring-1 ring-[#ececec]"
+              className="ml-0.5 inline-flex size-3 items-center justify-center rounded-full text-[8px] text-brand-text-subtle ring-1 ring-[#ececec]"
             >
               i
             </span>
           )}
         </span>
         {!displayLarge && (
-          <span className="text-[12px] font-semibold text-[#111210]">
+          <span className="text-[12px] font-semibold text-brand-text">
             {value}
           </span>
         )}
       </div>
       {displayLarge && (
-        <p className="mt-1 text-[22px] font-semibold leading-[26px] tracking-tight text-[#111210]">
+        <p className="mt-1 text-[22px] font-semibold leading-[26px] tracking-tight text-brand-text">
           {value}
         </p>
       )}
       {barValue !== undefined && (
-        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#eef0ec]">
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
           <div
             className={`h-full rounded-full ${
-              barTone === "critical" ? "bg-[#dc2626]" : "bg-[#5b6cff]"
+              barTone === "critical" ? "bg-danger" : "bg-brand-progress-bar"
             }`}
             style={{ width: `${barValue}%` }}
           />
@@ -145,10 +145,10 @@ function DiagnosticCard({
         <span
           className={
             footnoteTone === "critical"
-              ? "text-[#dc2626]"
+              ? "text-danger"
               : footnoteTone === "success"
-                ? "text-[#16a34a]"
-                : "text-[#8a8c88]"
+                ? "text-success"
+                : "text-brand-text-subtle"
           }
         >
           {footnote}
@@ -157,8 +157,8 @@ function DiagnosticCard({
           <span
             className={
               footnoteRightTone === "critical"
-                ? "text-[#dc2626]"
-                : "text-[#16a34a]"
+                ? "text-danger"
+                : "text-success"
             }
           >
             {footnoteRight}

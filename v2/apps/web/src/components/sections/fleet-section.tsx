@@ -11,12 +11,12 @@ export function FleetSection() {
 
   return (
     <section className="bg-white">
-      <div className="container-page py-20 lg:py-24">
+      <div className="container-page py-12 lg:py-24">
         <header className="mx-auto max-w-2xl text-center">
-          <h2 className="text-4xl font-semibold leading-tight tracking-tight text-[#111210] sm:text-5xl sm:leading-none">
+          <h2 className="text-3xl font-semibold leading-tight tracking-tight text-brand-text sm:text-4xl lg:text-5xl lg:leading-none">
             Our Fleet
           </h2>
-          <p className="mx-auto mt-4 max-w-[480px] text-sm leading-relaxed text-[#4a4b48] sm:text-base">
+          <p className="mx-auto mt-4 max-w-[480px] text-sm leading-relaxed text-brand-text-soft sm:text-base">
             Browse our curated selection of premium vehicles, each maintained
             to perfection and ready for immediate pickup
           </p>
@@ -33,8 +33,8 @@ export function FleetSection() {
                 className={cn(
                   "inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm transition-all",
                   isActive
-                    ? "border border-[#ececec] bg-white text-[#111210] shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-                    : "border border-transparent text-[#8a8c88] hover:text-[#111210]",
+                    ? "border border-brand-border-soft bg-white text-brand-text shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+                    : "border border-transparent text-brand-text-subtle hover:text-brand-text",
                 )}
               >
                 <BrandIcon brandId={brand.id} active={isActive} />
@@ -148,7 +148,7 @@ function MarqueeStrip() {
   const repeated = [...items, ...items, ...items];
 
   return (
-    <div className="overflow-hidden bg-[#EBECE7] py-[16px] text-[#111210]">
+    <div className="overflow-hidden bg-brand-cream py-[16px] text-brand-text">
       <div className="marquee-track flex w-max items-center whitespace-nowrap">
         {repeated.map((item, index) => (
           <span
@@ -156,7 +156,7 @@ function MarqueeStrip() {
             className="inline-flex items-center text-sm font-semibold uppercase tracking-[0.14em]"
           >
             {item}
-            <span className="mx-6 text-[#111210]/45">•</span>
+            <span className="mx-6 text-brand-text/45">•</span>
           </span>
         ))}
       </div>
