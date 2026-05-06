@@ -1,6 +1,7 @@
 import { Mail, MapPin, Phone } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import { ContactForm } from "@/components/forms/contact-form";
 import { CONTACT_INFO } from "@/lib/constants";
 
 type DetailRow = {
@@ -68,6 +69,11 @@ export function ContactDetailsSection() {
               </li>
             ))}
           </ul>
+        </div>
+
+        {/* Mobile-only form (desktop renders the form inside the hero) */}
+        <div className="mt-10 lg:hidden">
+          <ContactForm />
         </div>
       </div>
     </section>

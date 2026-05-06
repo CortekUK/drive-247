@@ -82,11 +82,12 @@ export function ContactHeroSection() {
           </div>
         </div>
 
-        {/* RIGHT — Form. Pulled down so it splits ~50/50 between the hero and
-            the Contact Details section below (top half in hero, bottom half overlaps). */}
+        {/* RIGHT — Form (desktop only). Pulled down so it splits ~50/50 between
+            the hero and the Contact Details section below. On mobile the form
+            renders after Contact Details (see ContactDetailsSection). */}
         <div
           id="contact-form"
-          className="relative z-10 w-full self-start lg:mt-56 lg:mb-[-260px] xl:mt-64 xl:mb-[-300px]"
+          className="relative z-10 hidden w-full self-start lg:mt-56 lg:mb-[-260px] lg:block xl:mt-64 xl:mb-[-300px]"
         >
           <ContactForm />
         </div>
