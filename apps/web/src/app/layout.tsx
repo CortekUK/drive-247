@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { JsonLd } from "@/components/shared/json-ld";
 import { ThemeProvider } from "@/components/shared/theme-provider";
 import { SITE_META, SITE_URL } from "@/lib/constants";
 import "./globals.css";
+
+const META_PIXEL_ID = "2196369497442053";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -33,6 +36,11 @@ export const metadata: Metadata = {
   icons: {
     icon: "/favicon.ico",
     apple: "/apple-touch-icon.png",
+  },
+  verification: {
+    other: {
+      "facebook-domain-verification": "d8r57mrtpaj0kmrw3dhhf7nmdq76pb",
+    },
   },
 };
 
@@ -67,8 +75,29 @@ export default function RootLayout({
       <head>
         <JsonLd data={organizationLd} />
         <JsonLd data={softwareLd} />
+        <Script id="meta-pixel" strategy="afterInteractive">
+          {`!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '${META_PIXEL_ID}');
+fbq('track', 'PageView');`}
+        </Script>
       </head>
       <body className="font-sans antialiased">
+        <noscript>
+          <img
+            height="1"
+            width="1"
+            style={{ display: "none" }}
+            alt=""
+            src={`https://www.facebook.com/tr?id=${META_PIXEL_ID}&ev=PageView&noscript=1`}
+          />
+        </noscript>
         <ThemeProvider>
           <a
             href="#main"
