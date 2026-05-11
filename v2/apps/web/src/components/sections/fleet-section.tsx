@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { VehicleCard } from "@/components/cards/vehicle-card";
+import { MarqueeStrip } from "@/components/sections/marquee-strip";
 import { BRANDS, FLEET } from "@/lib/fixtures/landing";
 import { cn } from "@/lib/utils";
 
@@ -137,29 +138,3 @@ function BrandIcon({
   }
 }
 
-function MarqueeStrip() {
-  const items = [
-    "PICK UP ANYTIME",
-    "NO COUNTER LINES",
-    "NO HIDDEN FEES",
-    "100% TRANSPARENCY",
-    "DRIVING THE MOVE",
-  ];
-  const repeated = [...items, ...items, ...items];
-
-  return (
-    <div className="overflow-hidden bg-brand-cream py-[16px] text-brand-text">
-      <div className="marquee-track flex w-max items-center whitespace-nowrap">
-        {repeated.map((item, index) => (
-          <span
-            key={`${item}-${index}`}
-            className="inline-flex items-center text-sm font-semibold uppercase tracking-[0.14em]"
-          >
-            {item}
-            <span className="mx-6 text-brand-text/45">•</span>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}

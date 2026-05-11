@@ -7,7 +7,7 @@ export default function BookingLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-svh flex-col bg-brand-cream">
+    <div className="flex min-h-svh flex-col">
       <Navbar />
       <main className="flex-1">{children}</main>
       <Footer />

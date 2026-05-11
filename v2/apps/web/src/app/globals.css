@@ -328,7 +328,7 @@
 
   html,
   body {
-    @apply bg-surface text-on-surface;
+    @apply bg-brand-cream text-on-surface;
     font-family: var(--typeface-family);
     -webkit-font-smoothing: antialiased;
   }
