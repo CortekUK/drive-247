@@ -19,7 +19,7 @@ const SOCIALS = [
 
 export function ContactHeroSection() {
   return (
-    <section className="relative isolate bg-brand-cream">
+    <section className="relative isolate -mt-[88px] bg-brand-cream">
       {/* Background image clipped to its own absolute wrapper so the form can overflow the section */}
       <div className="pointer-events-none absolute inset-0 -z-20 overflow-hidden">
         <Image
@@ -36,7 +36,7 @@ export function ContactHeroSection() {
         />
       </div>
 
-      <div className="container-page relative grid grid-cols-1 gap-10 py-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-stretch lg:gap-x-16 lg:py-16">
+      <div className="container-page relative grid grid-cols-1 gap-10 pb-12 pt-[120px] lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-stretch lg:gap-x-16 lg:pb-16 lg:pt-[160px]">
         {/* LEFT — Hero text block; stretches to row height so Follow us can sit at the bottom */}
         <div className="flex flex-col gap-8 lg:h-full">
           <div className="inline-flex items-center gap-2 self-start rounded-full bg-white/90 px-4 py-2 text-[12px] leading-tight text-brand-text shadow-sm ring-1 ring-brand-border-soft backdrop-blur-sm">
