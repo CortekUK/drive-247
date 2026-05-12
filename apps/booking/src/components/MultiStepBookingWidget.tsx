@@ -4524,87 +4524,93 @@ const MultiStepBookingWidget = () => {
                   <div className="grid md:grid-cols-2 gap-6">
                     {/* YES Option */}
                     <Card
-                      className="group relative overflow-hidden border-2 border-border hover:border-primary hover:shadow-lg transition-all bg-gradient-to-br from-primary/5 to-transparent"
+                      className="group relative overflow-hidden border-2 border-border hover:border-primary hover:shadow-lg transition-all bg-gradient-to-br from-primary/5 to-transparent h-full"
                     >
-                      <div className="p-8 text-center space-y-4">
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-2">
-                          <CheckCircle className="w-8 h-8 text-primary" />
-                        </div>
-                        <div>
-                          <h5 className="text-lg font-semibold mb-2">Yes, I Have Insurance</h5>
-                          <p className="text-sm text-muted-foreground">
-                            {isAuthenticated && existingInsuranceDocuments.length > 0
-                              ? "Select from your existing documents or upload a new one"
-                              : "Upload your current insurance certificate and we'll verify it instantly"}
-                          </p>
-                        </div>
-
-                        {/* Show dropdown for logged-in users with existing documents */}
-                        {isAuthenticated && existingInsuranceDocuments.length > 0 && (
-                          <div className="space-y-3">
-                            <Select
-                              value={selectedExistingDocument || ""}
-                              onValueChange={(value) => {
-                                setSelectedExistingDocument(value);
-                              }}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select existing insurance" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {existingInsuranceDocuments.map((doc) => (
-                                  <SelectItem key={doc.id} value={doc.id}>
-                                    {doc.insurance_provider || doc.document_name}
-                                    {doc.policy_number && ` - ${doc.policy_number}`}
-                                    {doc.end_date && ` (Expires: ${new Date(doc.end_date).toLocaleDateString('en-US')})`}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Button
-                              className="w-full bg-primary hover:bg-primary/90"
-                              size="lg"
-                              disabled={!selectedExistingDocument}
-                              onClick={() => {
-                                if (selectedExistingDocument) {
-                                  setUploadedDocumentId(selectedExistingDocument);
-                                  setHasInsurance(true);
-                                  // Skip the upload success screen — existing docs are already verified
-                                  transitionToStep(4);
-                                }
-                              }}
-                            >
-                              <CheckCircle className="mr-2 h-5 w-5" />
-                              Use Selected Document
-                            </Button>
-                            <div className="relative">
-                              <div className="absolute inset-0 flex items-center">
-                                <span className="w-full border-t" />
-                              </div>
-                              <div className="relative flex justify-center text-xs uppercase">
-                                <span className="bg-card px-2 text-muted-foreground">or</span>
-                              </div>
+                      <div className="p-8 text-center flex flex-col h-full">
+                        <div className="space-y-4 flex-1 flex flex-col">
+                          <div className="flex justify-center items-center h-16">
+                            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10">
+                              <CheckCircle className="w-8 h-8 text-primary" />
                             </div>
                           </div>
-                        )}
+                          <div>
+                            <h5 className="text-lg font-semibold mb-2">Yes, I Have Insurance</h5>
+                            <p className="text-sm text-muted-foreground">
+                              {isAuthenticated && existingInsuranceDocuments.length > 0
+                                ? "Select from your existing documents or upload a new one"
+                                : "Upload your current insurance certificate and we'll verify it instantly"}
+                            </p>
+                          </div>
 
-                        <Button
-                          className="w-full bg-primary hover:bg-primary/90"
-                          size="lg"
-                          onClick={() => {
-                            setHasInsurance(true);
-                            setShowUploadDialog(true);
-                          }}
-                        >
-                          <Upload className="mr-2 h-5 w-5" />
-                          Upload New Certificate
-                        </Button>
-                        <div className="pt-4 border-t border-border/50">
-                          <p className="text-xs text-muted-foreground">
-                            ✓ Instant AI verification<br />
-                            ✓ Accepted formats: PDF, JPG, PNG<br />
-                            ✓ Max file size: 10MB
-                          </p>
+                          {/* Show dropdown for logged-in users with existing documents */}
+                          {isAuthenticated && existingInsuranceDocuments.length > 0 && (
+                            <div className="space-y-3">
+                              <Select
+                                value={selectedExistingDocument || ""}
+                                onValueChange={(value) => {
+                                  setSelectedExistingDocument(value);
+                                }}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Select existing insurance" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {existingInsuranceDocuments.map((doc) => (
+                                    <SelectItem key={doc.id} value={doc.id}>
+                                      {doc.insurance_provider || doc.document_name}
+                                      {doc.policy_number && ` - ${doc.policy_number}`}
+                                      {doc.end_date && ` (Expires: ${new Date(doc.end_date).toLocaleDateString('en-US')})`}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                className="w-full bg-primary hover:bg-primary/90"
+                                size="lg"
+                                disabled={!selectedExistingDocument}
+                                onClick={() => {
+                                  if (selectedExistingDocument) {
+                                    setUploadedDocumentId(selectedExistingDocument);
+                                    setHasInsurance(true);
+                                    // Skip the upload success screen — existing docs are already verified
+                                    transitionToStep(4);
+                                  }
+                                }}
+                              >
+                                <CheckCircle className="mr-2 h-5 w-5" />
+                                Use Selected Document
+                              </Button>
+                              <div className="relative">
+                                <div className="absolute inset-0 flex items-center">
+                                  <span className="w-full border-t" />
+                                </div>
+                                <div className="relative flex justify-center text-xs uppercase">
+                                  <span className="bg-card px-2 text-muted-foreground">or</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-4 pt-4 mt-auto">
+                          <Button
+                            className="w-full bg-primary hover:bg-primary/90"
+                            size="lg"
+                            onClick={() => {
+                              setHasInsurance(true);
+                              setShowUploadDialog(true);
+                            }}
+                          >
+                            <Upload className="mr-2 h-5 w-5" />
+                            Upload New Certificate
+                          </Button>
+                          <div className="pt-4 border-t border-border/50">
+                            <p className="text-xs text-muted-foreground">
+                              ✓ Instant AI verification<br />
+                              ✓ Accepted formats: PDF, JPG, PNG<br />
+                              ✓ Max file size: 10MB
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </Card>
@@ -4612,7 +4618,7 @@ const MultiStepBookingWidget = () => {
                     {/* NO Option */}
                     <Card
                       className={cn(
-                        "group relative overflow-hidden border-2 transition-all bg-gradient-to-br from-accent/5 to-transparent",
+                        "group relative overflow-hidden border-2 transition-all bg-gradient-to-br from-accent/5 to-transparent h-full",
                         isBonzahEligibilityLoading || !isBonzahEligible
                           ? "border-border opacity-60 cursor-not-allowed"
                           : "border-border hover:border-accent hover:shadow-lg cursor-pointer"
@@ -4623,66 +4629,71 @@ const MultiStepBookingWidget = () => {
                         }
                       }}
                     >
-                      <div className="p-8 text-center space-y-4">
-                        <div className="flex justify-center mb-2">
-                          <img src="/bonzah-logo.svg" alt="Bonzah" className="h-8 w-auto dark:hidden" />
-                          <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-8 w-auto hidden dark:block" />
-                        </div>
-                        <div>
-                          <h5 className="text-lg font-semibold mb-2">No, I Need Insurance</h5>
-                          {isBonzahEligibilityLoading ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <Loader2 className="w-4 h-4 animate-spin text-[#CC004A]" />
-                              <p className="text-sm text-muted-foreground">
-                                Checking vehicle eligibility...
-                              </p>
-                            </div>
-                          ) : !isBonzahEligible ? (
-                            <div className="space-y-3">
-                              <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 text-left">
-                                <div className="flex items-start gap-2">
-                                  <AlertCircle className="w-4 h-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
-                                  <div className="space-y-1">
-                                    <p className="text-xs font-medium text-[#CC004A]">Not covered by Bonzah</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      <span className="font-medium">{eligibilityVehicle?.make} {eligibilityVehicle?.model}</span> is not eligible for Bonzah insurance coverage.
-                                      {bonzahIneligibilityReason && <> {bonzahIneligibilityReason}</>}
-                                    </p>
+                      <div className="p-8 text-center flex flex-col h-full">
+                        <div className="space-y-4 flex-1 flex flex-col">
+                          <div className="flex justify-center items-center h-16">
+                            <img src="/bonzah-logo.svg" alt="Bonzah" className="h-8 w-auto dark:hidden" />
+                            <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-8 w-auto hidden dark:block" />
+                          </div>
+                          <div>
+                            <h5 className="text-lg font-semibold mb-2">No, I Need Insurance</h5>
+                            {isBonzahEligibilityLoading ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <Loader2 className="w-4 h-4 animate-spin text-[#CC004A]" />
+                                <p className="text-sm text-muted-foreground">
+                                  Checking vehicle eligibility...
+                                </p>
+                              </div>
+                            ) : !isBonzahEligible ? (
+                              <div className="space-y-3">
+                                <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 text-left">
+                                  <div className="flex items-start gap-2">
+                                    <AlertCircle className="w-4 h-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
+                                    <div className="space-y-1">
+                                      <p className="text-xs font-medium text-[#CC004A]">Not covered by Bonzah</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        <span className="font-medium">{eligibilityVehicle?.make} {eligibilityVehicle?.model}</span> is not eligible for Bonzah insurance coverage.
+                                        {bonzahIneligibilityReason && <> {bonzahIneligibilityReason}</>}
+                                      </p>
+                                    </div>
                                   </div>
                                 </div>
+                                <a
+                                  href="https://bonzah.com/included-and-restricted-vehicle-types"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-[#CC004A]/70 hover:text-[#CC004A] underline"
+                                >
+                                  View Bonzah vehicle restrictions
+                                </a>
                               </div>
-                              <a
-                                href="https://bonzah.com/included-and-restricted-vehicle-types"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-[#CC004A]/70 hover:text-[#CC004A] underline"
-                              >
-                                View Bonzah vehicle restrictions
-                              </a>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">
+                                Get instant coverage through our trusted partner Bonzah
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-4 pt-4 mt-auto">
+                          <Button
+                            className="w-full bg-accent hover:bg-accent/90"
+                            size="lg"
+                            disabled={isBonzahEligibilityLoading || !isBonzahEligible}
+                          >
+                            <Shield className="mr-2 h-5 w-5" />
+                            Get Insurance Now
+                          </Button>
+                          {isBonzahEligible && !isBonzahEligibilityLoading && (
+                            <div className="pt-4 border-t border-border/50">
+                              <p className="text-xs text-muted-foreground">
+                                ✓ Instant online quotes<br />
+                                ✓ Affordable rates<br />
+                                ✓ Quick 5-minute setup
+                              </p>
                             </div>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">
-                              Get instant coverage through our trusted partner Bonzah
-                            </p>
                           )}
                         </div>
-                        <Button
-                          className="w-full bg-accent hover:bg-accent/90"
-                          size="lg"
-                          disabled={isBonzahEligibilityLoading || !isBonzahEligible}
-                        >
-                          <Shield className="mr-2 h-5 w-5" />
-                          Get Insurance Now
-                        </Button>
-                        {isBonzahEligible && !isBonzahEligibilityLoading && (
-                          <div className="pt-4 border-t border-border/50">
-                            <p className="text-xs text-muted-foreground">
-                              ✓ Instant online quotes<br />
-                              ✓ Affordable rates<br />
-                              ✓ Quick 5-minute setup
-                            </p>
-                          </div>
-                        )}
                       </div>
                     </Card>
                   </div>
