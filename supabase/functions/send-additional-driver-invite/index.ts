@@ -28,19 +28,27 @@ interface VeriffSessionResult {
   sessionId: string;
 }
 
+interface VeriffOutcome {
+  ok: boolean;
+  session?: VeriffSessionResult;
+  /** Surfaced to the client so the operator sees WHY Veriff failed. */
+  errorStatus?: number;
+  errorBody?: string;
+}
+
 async function createVeriffSession(
   apiKey: string,
   baseUrl: string,
   driverName: string,
   vendorData: string,
   documentType?: string,
-): Promise<VeriffSessionResult | null> {
+): Promise<VeriffOutcome> {
+  const firstName = (driverName || "").trim().split(/\s+/)[0] || "Additional";
+  const lastName = (driverName || "").trim().split(/\s+/).slice(1).join(" ") || "Driver";
+
   const requestBody: any = {
     verification: {
-      person: {
-        firstName: driverName?.split(" ")[0] || "Additional",
-        lastName: driverName?.split(" ").slice(1).join(" ") || "Driver",
-      },
+      person: { firstName, lastName },
       vendorData,
     },
   };
@@ -55,22 +63,46 @@ async function createVeriffSession(
     }
   }
 
-  const res = await fetch(`${baseUrl}/v1/sessions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-AUTH-CLIENT": apiKey },
-    body: JSON.stringify(requestBody),
-  });
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error("[SendAdditionalDriverInvite] Veriff error:", res.status, errText);
-    return null;
+  console.log("[SendInvite] Veriff request:", JSON.stringify({ baseUrl, vendorData, firstName, lastName, documentType }));
+
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/v1/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-AUTH-CLIENT": apiKey },
+      body: JSON.stringify(requestBody),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[SendInvite] Veriff fetch threw:", msg);
+    return { ok: false, errorStatus: 0, errorBody: `fetch error: ${msg}` };
   }
-  const data = await res.json();
-  return {
-    sessionUrl: data?.verification?.url,
-    sessionToken: data?.verification?.sessionToken,
-    sessionId: data?.verification?.id,
-  };
+
+  const bodyText = await res.text();
+  if (!res.ok) {
+    console.error("[SendInvite] Veriff non-OK:", res.status, bodyText);
+    return { ok: false, errorStatus: res.status, errorBody: bodyText.slice(0, 500) };
+  }
+
+  let data: any;
+  try {
+    data = JSON.parse(bodyText);
+  } catch (err) {
+    console.error("[SendInvite] Veriff response not JSON:", bodyText.slice(0, 500));
+    return { ok: false, errorStatus: 200, errorBody: `non-JSON response: ${bodyText.slice(0, 200)}` };
+  }
+
+  const url = data?.verification?.url;
+  const sessionId = data?.verification?.id;
+  // Veriff sometimes omits sessionToken; the id works as fallback for webhook matching.
+  const sessionToken = data?.verification?.sessionToken || sessionId;
+
+  if (!url || !sessionId) {
+    console.error("[SendInvite] Veriff response missing url/id:", JSON.stringify(data));
+    return { ok: false, errorStatus: 200, errorBody: "Veriff response missing url or id" };
+  }
+
+  return { ok: true, session: { sessionUrl: url, sessionToken, sessionId } };
 }
 
 function inviteEmailHtml(driverName: string, verificationUrl: string, companyName: string): string {
@@ -157,17 +189,29 @@ serve(async (req) => {
       .single();
 
     // Create a Veriff session keyed on the driver row id (not a customer id).
-    const session = await createVeriffSession(
+    const outcome = await createVeriffSession(
       VERIFF_API_KEY,
       VERIFF_BASE_URL,
       driver.name,
       `additional_driver_${driver.id}`,
       tenant?.verification_document_type || undefined,
     );
-    if (!session) return jsonError(502, "Failed to create Veriff session");
+    if (!outcome.ok || !outcome.session) {
+      // Return 200 with success:false so the Supabase JS client surfaces our
+      // error body in `data.error` instead of throwing a generic non-2xx error.
+      const detail = `Veriff [${outcome.errorStatus ?? "?"}]: ${outcome.errorBody ?? "unknown"}`;
+      console.error("[SendInvite] Veriff session creation failed:", detail);
+      return new Response(
+        JSON.stringify({ success: false, error: `Failed to create Veriff session — ${detail}` }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const session = outcome.session;
 
     // Persist a verification record. customer_id is NULL because this is per
     // additional-driver — webhooks key off the vendorData prefix.
+    // Use 'pending' for status (matches the table default and what veriff-webhook
+    // expects on the unverified → completed transition).
     const { data: verification, error: vErr } = await supabase
       .from("identity_verifications")
       .insert({
@@ -176,16 +220,19 @@ serve(async (req) => {
         session_id: session.sessionId,
         verification_token: session.sessionToken,
         external_user_id: `additional_driver_${driver.id}`,
-        status: "init",
-        review_status: "init",
+        status: "pending",
+        review_status: "pending",
         verification_url: session.sessionUrl,
       })
       .select()
       .single();
-    if (vErr) return jsonError(500, vErr.message);
+    if (vErr) {
+      console.error("[SendInvite] identity_verifications insert failed:", vErr);
+      return jsonError(500, `Verification insert failed: ${vErr.message}`);
+    }
 
     // Stamp the driver row with the verification linkage and URL for resend.
-    await supabase
+    const { error: drvUpdErr } = await supabase
       .from("rental_additional_drivers")
       .update({
         identity_verification_id: verification.id,
@@ -193,6 +240,10 @@ serve(async (req) => {
         verification_status: "pending",
       })
       .eq("id", driver.id);
+    if (drvUpdErr) {
+      console.error("[SendInvite] driver row update failed:", drvUpdErr);
+      // Non-fatal — the verification row exists, link can still be retrieved.
+    }
 
     // Send the invite email. Non-fatal: if Resend fails the verification row
     // is still good — the operator can resend manually.
