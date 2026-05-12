@@ -442,6 +442,31 @@ async function handleVeriffWebhook(
       return { ok: false, error: updateError.message };
     }
 
+    // Additional-driver routing: when the verification was opened by
+    // send-additional-driver-invite the external_user_id is "additional_driver_<uuid>"
+    // (not a customer id). Update the rental_additional_drivers row and skip
+    // the customer-table side effects below — these drivers are not in `customers`.
+    const externalId = verification.external_user_id || payload.vendorData || '';
+    if (typeof externalId === 'string' && externalId.startsWith('additional_driver_')) {
+      const additionalDriverId = externalId.replace(/^additional_driver_/, '');
+      let driverStatus = 'pending';
+      if (payload.verification.code === 9001) driverStatus = 'verified';
+      else if (payload.verification.code === 9102) driverStatus = 'rejected';
+      const { error: driverUpdErr } = await supabaseClient
+        .from('rental_additional_drivers')
+        .update({
+          verification_status: driverStatus,
+          license_number: updateData.document_number ?? null,
+        })
+        .eq('id', additionalDriverId);
+      if (driverUpdErr) {
+        console.error('Error updating rental_additional_drivers:', driverUpdErr);
+      } else {
+        console.log('Additional driver verification routed:', additionalDriverId, driverStatus);
+      }
+      return { ok: true };
+    }
+
     // Check if the document number is in the blocked list (tenant-scoped)
     let isBlockedIdentity = false;
     let blockReason = '';

@@ -71,6 +71,12 @@ import { useVehicleBookedDates } from "@/hooks/use-vehicle-booked-dates";
 import { RentalProgressOverlay } from "@/components/rentals/rental-progress-overlay";
 import { getTimezonesByRegion, findTimezone } from "@/lib/timezones";
 import { InstallmentCalendar, type InstallmentCalendarItem } from "@/components/installments/InstallmentCalendar";
+import { PaygSchedulePreview } from "@/components/rentals/payg-schedule-preview";
+import {
+  AdditionalDriversForm,
+  validateAdditionalDrivers,
+  type AdditionalDriverInput,
+} from "@/components/rentals/additional-drivers-form";
 
 // Base schema: end_date and return_location are optional at the schema level
 // because PAYG rentals don't have a fixed end date or a return location.
@@ -137,6 +143,15 @@ const CreateRental = () => {
   const [submitError, setSubmitError] = useState<string>("");
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [conflictResult, setConflictResult] = useState<ConflictResult | null>(null);
+  // Separate state for the "you just switched vehicles and the existing dates
+  // overlap on the new vehicle" prompt. Distinct from submit-time conflict
+  // state because the UX is different (clear-or-keep, not retry-after-fix).
+  const [vehicleChangeConflict, setVehicleChangeConflict] = useState<ConflictResult | null>(null);
+  const [vehicleChangeCheckLoading, setVehicleChangeCheckLoading] = useState(false);
+  // Additional drivers — typed names/emails/phones held in component state
+  // until the rental is created, then bulk-inserted via the create-additional-drivers
+  // edge function. Each gets an ID-verification email + a separate BoldSign signing email.
+  const [additionalDrivers, setAdditionalDrivers] = useState<AdditionalDriverInput[]>([]);
   const [showDocuSignDialog, setShowDocuSignDialog] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
@@ -967,6 +982,20 @@ const CreateRental = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [perPeriodRate, selectedVehicleId, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles]);
 
+  // PAYG: monthly_amount IS the per-period billing amount (Weekly or Monthly).
+  // The duration-based effect above never fires for PAYG (no end_date), so we
+  // mirror perPeriodRate into the form's monthly_amount here. Without this,
+  // submission would fail with the "valid rental amount" Zod error because
+  // monthly_amount would stay undefined.
+  useEffect(() => {
+    if (!isPayAsYouGo) return;
+    const next = perPeriodRate ?? undefined;
+    if (next !== watchedMonthlyAmount) {
+      form.setValue("monthly_amount", next as any, { shouldValidate: false });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPayAsYouGo, perPeriodRate]);
+
   // Note: End date is no longer auto-calculated from period type since period type
   // is now auto-determined from the date range. The admin picks both start and end dates manually.
 
@@ -1186,6 +1215,15 @@ const CreateRental = () => {
         throw new Error("Monthly amount must be greater than 0");
       }
 
+      // Additional drivers (front-end pass; the edge function re-validates server-side)
+      const addlDriversValidationError = validateAdditionalDrivers(
+        additionalDrivers,
+        selectedCustomer?.email,
+      );
+      if (addlDriversValidationError) {
+        throw new Error(addlDriversValidationError);
+      }
+
       // PAYG vs regular mode validation
       // Regular rentals require end_date + return_location + return_time; PAYG does not.
       // PAYG requires pickup_time (anchor for the daily accrual window).
@@ -1207,6 +1245,9 @@ const CreateRental = () => {
         // PAYG: pickup_time is the accrual anchor and must be present
         if (!data.pickup_time || !/^\d{2}:\d{2}$/.test(data.pickup_time)) {
           throw new Error("Pickup time is required for Pay-As-You-Go rentals");
+        }
+        if (data.rental_period_type === "Daily") {
+          throw new Error("Pay-As-You-Go rentals must use Weekly or Monthly billing");
         }
       }
 
@@ -1274,7 +1315,7 @@ const CreateRental = () => {
         start_date: data.start_date.toISOString().split('T')[0],
         // Regular: use form's end_date. PAYG: null (open-ended).
         end_date: isPayAsYouGo ? null : (data.end_date ? data.end_date.toISOString().split('T')[0] : null),
-        rental_period_type: isPayAsYouGo ? "Daily" : data.rental_period_type,
+        rental_period_type: data.rental_period_type,
         monthly_amount: data.monthly_amount,
         status: "Pending",
         document_status: "pending",
@@ -1334,6 +1375,47 @@ const CreateRental = () => {
         .single();
 
       if (rentalError) throw rentalError;
+
+      // Additional drivers: bulk-insert rows + fire-and-forget Veriff invites.
+      // Non-fatal — the rental row is already saved. If any of these calls fail
+      // the operator can resend / re-add from the rental detail page. We don't
+      // gate the rental creation success on these because the rental itself
+      // is independent of the additional-driver tooling.
+      if (additionalDrivers.length > 0) {
+        try {
+          const trimmed = additionalDrivers.map((d) => ({
+            name: d.name.trim(),
+            email: d.email.trim() || undefined,
+            phone: d.phone.trim() || undefined,
+          }));
+          const { data: createdResp, error: createErr } = await supabase.functions.invoke(
+            "create-additional-drivers",
+            { body: { rental_id: rental.id, drivers: trimmed } },
+          );
+          if (createErr) throw createErr;
+          if (createdResp && (createdResp as any).success === false) {
+            throw new Error((createdResp as any).error || "Failed to create additional drivers");
+          }
+          const createdDrivers = (createdResp as any)?.drivers ?? [];
+          // Fire all invite emails in parallel — each is independent.
+          await Promise.allSettled(
+            createdDrivers
+              .filter((d: any) => d.email)
+              .map((d: any) =>
+                supabase.functions.invoke("send-additional-driver-invite", {
+                  body: { driver_id: d.id },
+                }),
+              ),
+          );
+        } catch (drvErr) {
+          console.error("[CreateRental] additional drivers error:", drvErr);
+          toast({
+            title: "Rental created, but additional drivers need attention",
+            description: drvErr instanceof Error ? drvErr.message : "Couldn't fully set up additional drivers. Add them from the rental detail page.",
+            variant: "destructive",
+          });
+        }
+      }
 
       // Insert ledger entry for the unlimited-mileage upgrade if granted at creation.
       // Non-fatal — rental row carries the data so we can recover.
@@ -2618,21 +2700,74 @@ const CreateRental = () => {
                                         <CommandItem
                                           key={vehicle.id}
                                           value={`${vehicle.reg} ${vehicle.make} ${vehicle.model}`}
-                                          onSelect={() => {
+                                          onSelect={async () => {
                                             field.onChange(vehicle.id);
                                             setVehicleOpen(false);
+                                            // Vehicle-specific overrides always reset on swap.
                                             setDailyMileageOverride(null);
                                             setWeeklyMileageOverride(null);
                                             setMonthlyMileageOverride(null);
                                             setExcessRateOverride(null);
-                                            // Reset unlimited-mileage toggle; tier-applicable price will be
-                                            // computed once dates are picked (effect below).
                                             setUnlimitedMileageEnabled(false);
                                             setUnlimitedMileageFlat(null);
                                             setLockboxCodeInput(vehicle.lockbox_code || '');
-                                            // Reset dates when vehicle changes so user picks dates valid for this vehicle
-                                            form.setValue("start_date", undefined as any);
-                                            form.setValue("end_date", undefined as any);
+
+                                            // Dates: PAYG never has a range, so leave them.
+                                            // Standard: preserve dates when they're still valid
+                                            // for the new vehicle; show conflict dialog otherwise.
+                                            // The previous behaviour (always wipe) forced the
+                                            // operator to re-pick dates after every swap, which
+                                            // also reset the period type and amount — annoying
+                                            // when the operator just wanted to compare vehicles.
+                                            if (isPayAsYouGo) return;
+                                            const start = form.getValues("start_date");
+                                            const end = form.getValues("end_date");
+                                            if (!start || !end) return; // nothing to preserve
+
+                                            // Cheap synchronous check first: blocked dates
+                                            // (global or vehicle-specific). If blocked, clear
+                                            // immediately with a toast — blocked dates aren't
+                                            // resolvable by the operator picking different
+                                            // dates would be a no-op.
+                                            const blockCheck = checkBlockedDatesOverlap(start, end, vehicle.id);
+                                            if (blockCheck.blocked) {
+                                              form.setValue("start_date", undefined as any);
+                                              form.setValue("end_date", undefined as any);
+                                              toast({
+                                                title: "Dates cleared",
+                                                description: `${blockCheck.isGlobal ? "Global blocked period" : "Vehicle blocked"}: ${blockCheck.reason}. Please pick new dates.`,
+                                                variant: "destructive",
+                                              });
+                                              return;
+                                            }
+
+                                            // Async DB check for overlapping rentals + external bookings.
+                                            if (!tenant?.id) return;
+                                            setVehicleChangeCheckLoading(true);
+                                            try {
+                                              const result = await checkRentalConflicts(
+                                                supabase,
+                                                tenant.id,
+                                                vehicle.id,
+                                                start.toISOString().split("T")[0],
+                                                end.toISOString().split("T")[0],
+                                              );
+                                              if (result.hasConflicts) {
+                                                setVehicleChangeConflict(result);
+                                                // Dates stay set; dialog asks operator to clear or keep.
+                                              }
+                                              // No conflict → dates preserved silently.
+                                            } catch (err) {
+                                              // Network/RPC failure: preserve dates, warn the operator.
+                                              // The DB trigger will still reject any genuine overlap on submit.
+                                              console.error("[VehicleChange] conflict check failed:", err);
+                                              toast({
+                                                title: "Could not verify date availability",
+                                                description: "Your dates are preserved, but please double-check before submitting.",
+                                              });
+                                            } finally {
+                                              setVehicleChangeCheckLoading(false);
+                                            }
                                           }}
                                         >
                                           <Check
@@ -2718,30 +2853,26 @@ const CreateRental = () => {
                         if (val === 'payg') {
                           setInstallmentPlanType('full');
                           setInstallmentAmountOverride(null);
-                          // R6: clear any promo state — promo codes are not used for PAYG
                           form.setValue('promo_code', '');
                           setPromoDetails(null);
                           setPromoError(null);
-                          // Clear end_date and return_time for PAYG (open-ended)
                           form.setValue('end_date', undefined as any);
                           form.setValue('return_time', undefined as any);
                           form.setValue('return_location', '');
-                          form.setValue('rental_period_type', 'Daily');
-                          // PAYG bills only the daily rental rate (+ tax/service fee on it) via the accrual cron.
-                          // Bonzah insurance, extras, delivery/collection fees, and uploaded insurance docs
-                          // do not belong on a PAYG rental — clear any state the user may have set so it
-                          // never leaks into the rental insert payload or the (skipped) invoice.
+                          // PAYG is Weekly or Monthly only (per product spec — no daily rate).
+                          // Default to Weekly; user can switch to Monthly in the period selector.
+                          form.setValue('rental_period_type', 'Weekly');
+                          // Clear the rate fields — user enters the per-period billing amount
+                          // explicitly so they confirm the rate they're billing (no silent auto-fill
+                          // from vehicle.daily_rent, which is a daily price not a weekly/monthly one).
+                          setPerPeriodRate(null);
+                          form.setValue('monthly_amount', undefined as any);
                           setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
                           setBonzahPremium(0);
                           setSelectedExtras({});
                           setDeliveryFeeOverride(0);
                           setCollectionFeeOverride(0);
                           setInsuranceDocId(null);
-                          // Auto-fill per-period rate with daily_rent from the selected vehicle
-                          const vehicle = vehicles?.find((v: any) => v.id === selectedVehicleId);
-                          if (vehicle) {
-                            setPerPeriodRate(vehicle.daily_rent || 0);
-                          }
                         }
                       }}
                       className="space-y-2"
@@ -2861,8 +2992,33 @@ const CreateRental = () => {
                         </div>
                       );
                     })()}
+
+                    {isPayAsYouGo && (
+                      <PaygSchedulePreview
+                        periodType={watchedRentalPeriodType}
+                        amount={watchedMonthlyAmount}
+                        startDate={watchedStartDate}
+                        currencyCode={tenant?.currency_code || 'USD'}
+                        tenantReminderIntervalDays={(rentalSettings as any)?.payg_reminder_interval_days ?? null}
+                        reminderIntervalOverride={paygReminderInterval}
+                        tenantGracePeriodDays={(rentalSettings as any)?.payg_grace_period_days ?? null}
+                      />
+                    )}
                   </div>
                 </div>
+              )}
+
+              {/* Additional Drivers — gated on having a selected vehicle to keep
+                  the form compact when none is picked yet. Each driver added
+                  here gets an ID-verification email and a BoldSign signing
+                  link when the rental is created. */}
+              {selectedVehicleId && (
+                <AdditionalDriversForm
+                  drivers={additionalDrivers}
+                  onChange={setAdditionalDrivers}
+                  primaryCustomerEmail={selectedCustomer?.email}
+                  disabled={loading}
+                />
               )}
 
               {/* ── Section 2: Rental Period & Pricing ────────────── */}
@@ -2970,26 +3126,52 @@ const CreateRental = () => {
                     />}
                   </div>
 
-                  {/* Rental Period Type — auto-determined, read-only display */}
+                  {/* Rental Period Type
+                      Standard rentals: read-only, auto-determined from date range.
+                      PAYG rentals: editable selector limited to Weekly/Monthly (no Daily). */}
                   <div className="grid grid-cols-1 gap-4">
                     <FormField
                       control={form.control}
                       name="rental_period_type"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Rental Period Type</FormLabel>
+                          <FormLabel>Rental Period Type{isPayAsYouGo && <span className="text-red-500"> *</span>}</FormLabel>
                           <FormControl>
-                            <div className={cn(
-                              "flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm cursor-not-allowed",
-                            )}>
-                              <Badge variant="outline" className="font-medium">
-                                {field.value}
-                              </Badge>
-                              <span className="ml-2 text-muted-foreground text-xs">
-                                Auto-determined from date range
-                              </span>
-                            </div>
+                            {isPayAsYouGo ? (
+                              <Select
+                                value={field.value === "Daily" ? "Weekly" : field.value}
+                                onValueChange={(val) => {
+                                  field.onChange(val);
+                                  // Per-period rate is bound to the period unit. Switching
+                                  // Weekly ↔ Monthly invalidates the previously-entered rate,
+                                  // so clear both inputs and force the user to re-enter at
+                                  // the new period's value.
+                                  setPerPeriodRate(null);
+                                  form.setValue("monthly_amount", undefined as any);
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select billing period" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Weekly">Weekly</SelectItem>
+                                  <SelectItem value="Monthly">Monthly</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <div className={cn(
+                                "flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm cursor-not-allowed",
+                              )}>
+                                <Badge variant="outline" className="font-medium">
+                                  {field.value}
+                                </Badge>
+                                <span className="ml-2 text-muted-foreground text-xs">
+                                  Auto-determined from date range
+                                </span>
+                              </div>
+                            )}
                           </FormControl>
+                          <FormMessage />
                         </FormItem>
                       )}
                     />
@@ -3063,14 +3245,16 @@ const CreateRental = () => {
 
                           return (
                           <FormItem className="space-y-3">
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className={isPayAsYouGo ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
                             <FormItem>
                               <FormLabel>{rateLabel} <span className="text-red-500">*</span></FormLabel>
                               <FormControl>
                                 <CurrencyInput
                                   value={perPeriodRate ?? 0}
                                   onChange={(val: number) => setPerPeriodRate(val)}
-                                  placeholder="Rate per period"
+                                  placeholder={isPayAsYouGo
+                                    ? `Amount charged per ${periodType.toLowerCase()}`
+                                    : "Rate per period"}
                                   min={0.01}
                                   step={0.01}
                                   error={!!form.formState.errors.monthly_amount}
@@ -3079,26 +3263,30 @@ const CreateRental = () => {
                                 />
                               </FormControl>
                               <FormDescription>
-                                Auto-filled from vehicle rates.
+                                {isPayAsYouGo
+                                  ? `Customer is billed this amount every ${periodType.toLowerCase().replace(/ly$/, '')} on a rolling basis.`
+                                  : "Auto-filled from vehicle rates."}
                               </FormDescription>
                             </FormItem>
-                            <div>
-                              <label className="text-sm font-medium leading-none">
-                                Total Amount
-                              </label>
-                              <div className="mt-2">
-                                <CurrencyInput
-                                  value={watchedMonthlyAmount || 0}
-                                  onChange={() => {}}
-                                  placeholder="Total amount"
-                                  currencySymbol={currencySymbol}
-                                  disabled={true}
-                                />
+                            {!isPayAsYouGo && (
+                              <div>
+                                <label className="text-sm font-medium leading-none">
+                                  Total Amount
+                                </label>
+                                <div className="mt-2">
+                                  <CurrencyInput
+                                    value={watchedMonthlyAmount || 0}
+                                    onChange={() => {}}
+                                    placeholder="Total amount"
+                                    currencySymbol={currencySymbol}
+                                    disabled={true}
+                                  />
+                                </div>
+                                <p className="text-[0.8rem] text-muted-foreground mt-1.5">
+                                  {rateLabel.toLowerCase()} &times; duration
+                                </p>
                               </div>
-                              <p className="text-[0.8rem] text-muted-foreground mt-1.5">
-                                {rateLabel.toLowerCase()} &times; duration
-                              </p>
-                            </div>
+                            )}
                           </div>
                           {vehicle && days > 0 && (
                             <button
@@ -5166,6 +5354,24 @@ const CreateRental = () => {
           form.handleSubmit(onSubmit)();
         }}
         isRetrying={loading}
+      />
+
+      {/* Vehicle-change conflict prompt: clear dates or keep them anyway? */}
+      <VehicleConflictDialog
+        open={vehicleChangeConflict !== null}
+        onOpenChange={(open) => { if (!open) setVehicleChangeConflict(null); }}
+        rentalConflicts={vehicleChangeConflict?.rentalConflicts || []}
+        externalConflicts={vehicleChangeConflict?.externalConflicts || []}
+        title="Date Conflicts with New Vehicle"
+        description="Your selected dates overlap with rentals on the new vehicle. Clear the dates so you can pick new ones, or keep them and adjust manually."
+        primaryLabel="Clear Dates"
+        secondaryLabel="Keep Anyway"
+        onRetry={() => {
+          form.setValue("start_date", undefined as any);
+          form.setValue("end_date", undefined as any);
+          setVehicleChangeConflict(null);
+        }}
+        isRetrying={vehicleChangeCheckLoading}
       />
 
       {/* Cancel/Restart verification confirmation */}

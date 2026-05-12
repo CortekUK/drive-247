@@ -236,6 +236,42 @@ async function handleBoldSignWebhook(supabaseClient: ReturnType<typeof createCli
     }
     // For extension agreements: do NOT change rental status or vehicle status
 
+    // Sync additional driver signing status. BoldSign sends one webhook per
+    // signer event AND a final "Completed" event when all signers have
+    // signed. We match each signerDetails[i] back to a rental_additional_drivers
+    // row by email and update its signing_status accordingly. We only act on
+    // signers other than the primary customer (whose status is captured by
+    // the rental-level document_status above).
+    try {
+      const signerDetails = (payload as any)?.document?.signerDetails as Array<{
+        signerEmail?: string;
+        signerName?: string;
+        status?: string;
+      }> | undefined;
+      const primaryEmail = (rental as any).customers?.email?.toLowerCase();
+      if (Array.isArray(signerDetails) && signerDetails.length > 1) {
+        for (const s of signerDetails) {
+          const email = s.signerEmail?.toLowerCase();
+          if (!email || email === primaryEmail) continue;
+          let driverStatus: 'sent' | 'signed' | 'declined' | null = null;
+          const sigStatus = (s.status || '').toLowerCase();
+          if (sigStatus.includes('signed') || sigStatus.includes('completed')) driverStatus = 'signed';
+          else if (sigStatus.includes('declined') || sigStatus.includes('revoked')) driverStatus = 'declined';
+          else if (sigStatus.includes('sent') || sigStatus.includes('viewed')) driverStatus = 'sent';
+          if (!driverStatus) continue;
+          const update: Record<string, unknown> = { signing_status: driverStatus };
+          if (driverStatus === 'signed') update.signed_at = new Date().toISOString();
+          await supabaseClient
+            .from('rental_additional_drivers')
+            .update(update)
+            .eq('rental_id', rental.id)
+            .eq('boldsign_signer_email', s.signerEmail);
+        }
+      }
+    } catch (signerSyncErr) {
+      console.warn('Additional driver signing status sync failed:', signerSyncErr);
+    }
+
     // Send customer notification when agreement is signed or completed
     if (mappedStatus === 'signed' || mappedStatus === 'completed') {
       try {

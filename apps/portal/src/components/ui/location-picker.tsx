@@ -85,14 +85,18 @@ export function LocationPicker({
     ? locationSettings.pickup_area_radius_km || 25
     : locationSettings.return_area_radius_km || 25;
 
-  // Auto-set fixed address when fixed method is active
+  // Auto-set fixed address when fixed method is active. For the 'location'
+  // method we only auto-pick when there is exactly ONE location configured —
+  // when multiple exist the operator must choose explicitly. Auto-filling
+  // locations[0] silently overwrote whatever the operator was about to type
+  // and shipped the wrong address to the rental insert payload (May 8 bug).
   useEffect(() => {
     if (method === 'fixed' && fixedAddress && !value) {
       onChange(fixedAddress, undefined, 0);
     }
-    if (method === 'location' && !value && !locationId && locations.length > 0) {
-      const first = locations[0];
-      onChange(first.address, first.id, first.delivery_fee || 0);
+    if (method === 'location' && !value && !locationId && locations.length === 1) {
+      const only = locations[0];
+      onChange(only.address, only.id, only.delivery_fee || 0);
     }
   }, [method, fixedAddress, locations.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -141,11 +145,15 @@ export function LocationPicker({
                 onMethodChange(key);
                 if (key === 'fixed') {
                   onChange(fixedAddress || '', undefined, 0);
-                } else if (key === 'location' && locations.length > 0) {
-                  const first = locations[0];
-                  onChange(first.address, first.id, first.delivery_fee || 0);
+                } else if (key === 'location' && locations.length === 1) {
+                  // Single configured location → auto-pick it. When multiple
+                  // exist the operator must choose explicitly (otherwise we
+                  // silently ship the wrong address to the rental).
+                  const only = locations[0];
+                  onChange(only.address, only.id, only.delivery_fee || 0);
                 } else {
-                  // Area or location with no locations — clear address silently, parent handles clearErrors
+                  // Area, or location with 0 / 2+ entries — clear address so
+                  // the dropdown / area input is empty until the user picks.
                   onChange('', undefined, key === 'area' ? areaFee : undefined);
                 }
               }}

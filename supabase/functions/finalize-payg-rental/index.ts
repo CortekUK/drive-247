@@ -405,6 +405,26 @@ Deno.serve(async (req) => {
 
     if (closeErr) throw closeErr;
 
+    // Reset the vehicle's status to Available so it returns to the public
+    // booking site immediately. The DB rental-overlap trigger guarantees a
+    // vehicle can have at most one non-terminal rental at a time, so it's
+    // safe to flip back to Available the moment this rental closes — there
+    // cannot be a second active rental still holding the vehicle. Non-fatal:
+    // if this fails the rental is still closed and an operator can re-sync
+    // vehicle status manually, so we log and continue.
+    const { error: vehicleErr } = await supabase
+      .from("vehicles")
+      .update({ status: "Available" })
+      .eq("id", rental.vehicle_id)
+      .eq("tenant_id", rental.tenant_id);
+
+    if (vehicleErr) {
+      console.error(
+        `[FinalizePayg] Failed to reset vehicle ${rental.vehicle_id} to Available:`,
+        vehicleErr,
+      );
+    }
+
     console.log(
       `[FinalizePayg] Closed rental ${rental.id} (partial_day_posted=${partialDayPosted})`,
     );

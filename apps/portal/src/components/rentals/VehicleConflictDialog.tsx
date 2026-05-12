@@ -21,6 +21,15 @@ interface VehicleConflictDialogProps {
   externalConflicts?: ExternalConflict[];
   onRetry: () => void;
   isRetrying?: boolean;
+  /**
+   * Optional copy overrides. Default copy is for the submit-time
+   * "must resolve before saving" flow. The vehicle-change flow passes
+   * different labels because the user has a real choice (clear / keep).
+   */
+  title?: string;
+  description?: string;
+  primaryLabel?: string;   // primary action button (default "Check Again")
+  secondaryLabel?: string; // secondary action button (default "Cancel")
 }
 
 export function VehicleConflictDialog({
@@ -30,6 +39,10 @@ export function VehicleConflictDialog({
   externalConflicts = [],
   onRetry,
   isRetrying,
+  title = 'Vehicle Has Scheduling Conflicts',
+  description = 'Resolve these conflicts before creating the rental.',
+  primaryLabel = 'Check Again',
+  secondaryLabel = 'Cancel',
 }: VehicleConflictDialogProps) {
   const formatDate = (dateStr: string) => {
     try {
@@ -49,10 +62,10 @@ export function VehicleConflictDialog({
             </div>
             <div>
               <DialogTitle className="text-base font-medium text-[#080812]">
-                Vehicle Has Scheduling Conflicts
+                {title}
               </DialogTitle>
               <DialogDescription className="text-sm text-[#737373]">
-                Resolve these conflicts before creating the rental.
+                {description}
               </DialogDescription>
             </div>
           </div>
@@ -133,14 +146,11 @@ export function VehicleConflictDialog({
             </div>
           )}
 
-          <p className="text-xs text-[#737373] pt-1">
-            Open conflicting rentals in a new tab to cancel or reject them, then click "Check Again" to proceed.
-          </p>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isRetrying}>
-            Cancel
+            {secondaryLabel}
           </Button>
           <Button onClick={onRetry} disabled={isRetrying}>
             {isRetrying ? (
@@ -149,7 +159,7 @@ export function VehicleConflictDialog({
                 Checking...
               </>
             ) : (
-              'Check Again'
+              primaryLabel
             )}
           </Button>
         </DialogFooter>

@@ -21,7 +21,16 @@ export const DEFAULT_AGREEMENT_TEMPLATE = `<h1>RENTAL AGREEMENT</h1>
 <tr><td><strong>Email</strong></td><td>{{customer_email}}</td></tr>
 <tr><td><strong>Phone</strong></td><td>{{customer_phone}}</td></tr>
 <tr><td><strong>License Number</strong></td><td>{{customer_license_number}}</td></tr>
+<tr><td><strong>Gig Driver</strong></td><td>{{is_gig_driver}}</td></tr>
 </table>
+
+{{#if is_gig_driver}}
+<h3>Gig Driver Acknowledgement</h3>
+<p>The Renter has declared that this vehicle will be used for ride-hailing or delivery work (e.g., Uber, Lyft, DoorDash). The Renter confirms that they hold any additional permits or rideshare endorsements required by their platform of choice and by local law, and that their personal insurance (or rideshare insurance add-on) provides cover for commercial use where applicable.</p>
+{{/if}}
+
+<p><strong>Additional Authorised Drivers:</strong> {{additional_drivers_list}}</p>
+<p>Each additional driver listed above is authorised to operate the rented vehicle under the same terms as the primary Renter. Each must complete the identity-verification step and sign this agreement before driving.</p>
 
 <h2>Rental Period</h2>
 <table>

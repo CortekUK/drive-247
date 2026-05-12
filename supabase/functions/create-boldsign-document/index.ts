@@ -174,6 +174,18 @@ function processTemplate(
     nok_address: (customer?.nok_address as string) || '',
     nok_relationship: (customer?.nok_relationship as string) || '',
 
+    // Gig driver: prefer per-rental snapshot, fall back to customer's current flag.
+    // Stays in sync with the portal-side template-variables.ts resolver — both must
+    // produce the same "Yes"/"No" value so the editor preview matches what BoldSign
+    // actually sends.
+    is_gig_driver: (rental?.is_gig_driver ?? customer?.is_gig_driver) ? 'Yes' : 'No',
+
+    // Pre-formatted list of additional drivers, e.g.
+    // "Jane Doe (jane@example.com), John Doe (john@example.com)".
+    // Populated by generateDocument from rental_additional_drivers; empty string
+    // when the rental has none so the template line collapses naturally.
+    additional_drivers_list: (rental?.additional_drivers_list as string) || '',
+
     // Vehicle
     vehicle_make: (vehicle?.make as string) || '',
     vehicle_model: (vehicle?.model as string) || '',
@@ -283,6 +295,17 @@ function processTemplate(
   };
 
   let result = template;
+
+  // Conditional pre-pass: strip / keep `{{#if is_gig_driver}}...{{/if}}`
+  // blocks so tenants can hide gig-worker-specific terms for non-gig-drivers.
+  // Only `is_gig_driver` is conditioned here; nested blocks and {{else}} are
+  // intentionally unsupported. MUST match apps/portal/src/lib/template-variables.ts
+  // (replaceVariables) — if you add a conditional there, mirror it here.
+  result = result.replace(
+    /\{\{#if is_gig_driver\}\}([\s\S]*?)\{\{\/if\}\}/g,
+    (_match, inner) => (variables.is_gig_driver === 'Yes' ? inner : ''),
+  );
+
   for (const [key, value] of Object.entries(variables)) {
     const placeholder = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi');
     result = result.replace(placeholder, value);
@@ -413,7 +436,8 @@ async function generateDocument(
   customer: Record<string, unknown>,
   vehicle: Record<string, unknown>,
   tenantId: string,
-  verification?: Record<string, unknown> | null
+  verification?: Record<string, unknown> | null,
+  additionalDriversList?: string,
 ): Promise<string> {
   const { data: tenant } = await supabase
     .from('tenants')
@@ -431,19 +455,31 @@ async function generateDocument(
   const templateCategory = (rental as Record<string, unknown>)?.is_pay_as_you_go ? 'payg' : 'standard';
   const template = await getActiveTemplate(supabase, tenantId, templateCategory);
 
+  // Inject the additional drivers list as a synthetic rental field so it
+  // flows through processTemplate's variables map without changing the
+  // function signature for every caller.
+  const rentalWithExtras = { ...rental, additional_drivers_list: additionalDriversList || '' };
+
   if (template) {
     console.log('Using custom template from portal');
-    const processedContent = processTemplate(template, rental, customer, vehicle, tenant || {}, verification, installment);
+    const processedContent = processTemplate(template, rentalWithExtras, customer, vehicle, tenant || {}, verification, installment);
     return htmlToText(processedContent);
   }
 
   console.log('Using default template');
-  return generateDefaultTemplate(rental, customer, vehicle, tenant, installment);
+  return generateDefaultTemplate(rentalWithExtras, customer, vehicle, tenant, installment);
 }
 
 // ============================================================================
 // BOLDSIGN DOCUMENT CREATION
 // ============================================================================
+
+interface AdditionalSigner {
+  /** rental_additional_drivers.id — echoed back to the webhook for status routing. */
+  driverId: string;
+  name: string;
+  email: string;
+}
 
 async function sendBoldSignDocument(
   apiKey: string,
@@ -452,7 +488,8 @@ async function sendBoldSignDocument(
   customerEmail: string,
   customerName: string,
   rentalId: string,
-  brandId?: string
+  brandId?: string,
+  additionalSigners: AdditionalSigner[] = [],
 ): Promise<{ documentId: string } | null> {
   try {
     console.log('Creating BoldSign document...');
@@ -470,6 +507,17 @@ async function sendBoldSignDocument(
       }
     }
 
+    // For each additional signer, ensure a {{@sigN}} tag exists. If the
+    // operator already placed one in the template (e.g., {{@sig2}}) we leave
+    // it; otherwise append a default signature line at the bottom.
+    additionalSigners.forEach((signer, i) => {
+      const tagNum = i + 2; // primary signer is 1
+      const tagPattern = new RegExp(`\\{\\{@sig${tagNum}\\}\\}`);
+      if (!tagPattern.test(taggedText)) {
+        taggedText += `\n\nAdditional Driver Signature (${signer.name}): {{@sig${tagNum}}}`;
+      }
+    });
+
     const encoder = new TextEncoder();
     const fileBytes = encoder.encode(taggedText);
 
@@ -483,6 +531,16 @@ async function sendBoldSignDocument(
     formData.append('Signers[0][Name]', customerName);
     formData.append('Signers[0][EmailAddress]', customerEmail);
     formData.append('Signers[0][SignerType]', 'Signer');
+
+    // Additional signers (rental's authorised additional drivers). SignerIndex
+    // is 1-based in TextTagDefinitions but 0-based in the Signers[] array, so
+    // signer at array index N becomes SignerIndex N+1 below.
+    additionalSigners.forEach((signer, i) => {
+      const idx = i + 1; // array index for the Signers[] map
+      formData.append(`Signers[${idx}][Name]`, signer.name);
+      formData.append(`Signers[${idx}][EmailAddress]`, signer.email);
+      formData.append(`Signers[${idx}][SignerType]`, 'Signer');
+    });
     // Use text tags: BoldSign finds {{@sig1}}, {{@date1}}, {{@init1}} and places fields there
     formData.append('UseTextTags', 'true');
 
@@ -521,6 +579,21 @@ async function sendBoldSignDocument(
       formData.append(`TextTagDefinitions[${tagIdx}][Size][Height]`, '40');
       tagIdx++;
     }
+
+    // Additional signers: one Signature field per driver, anchored to {{@sigN}}
+    // tags we inserted earlier. SignerIndex matches the Signers[] order
+    // (primary = 1, first additional = 2, second additional = 3, ...).
+    additionalSigners.forEach((_signer, i) => {
+      const tagNum = i + 2;
+      const signerIndex = i + 2; // 1-based: primary=1, additional starts at 2
+      formData.append(`TextTagDefinitions[${tagIdx}][DefinitionId]`, `sig${tagNum}`);
+      formData.append(`TextTagDefinitions[${tagIdx}][Type]`, 'Signature');
+      formData.append(`TextTagDefinitions[${tagIdx}][SignerIndex]`, signerIndex.toString());
+      formData.append(`TextTagDefinitions[${tagIdx}][IsRequired]`, 'true');
+      formData.append(`TextTagDefinitions[${tagIdx}][Size][Width]`, '250');
+      formData.append(`TextTagDefinitions[${tagIdx}][Size][Height]`, '50');
+      tagIdx++;
+    });
 
     formData.append('EnableSigningOrder', 'false');
     formData.append('DisableEmails', 'true');
@@ -672,10 +745,32 @@ Deno.serve(async (req) => {
     const BOLDSIGN_BASE_URL = getBoldSignBaseUrl();
     console.log('BoldSign mode:', boldsignMode);
 
+    // Fetch additional drivers on this rental — they become secondary BoldSign
+    // signers AND get merged into the {{additional_drivers_list}} template var.
+    // Drivers with no email are skipped for signing (BoldSign requires email)
+    // but still appear in the agreement text for record-keeping.
+    let additionalDrivers: Array<{ id: string; name: string; email: string | null; license_number: string | null }> = [];
+    if (rentalId) {
+      const { data: addlRows } = await supabase
+        .from('rental_additional_drivers')
+        .select('id, name, email, license_number')
+        .eq('rental_id', rentalId);
+      additionalDrivers = (addlRows || []) as typeof additionalDrivers;
+    }
+    const additionalDriversList = additionalDrivers
+      .map((d) => {
+        const detail = d.license_number ? `DL: ${d.license_number}` : (d.email || '');
+        return detail ? `${d.name} (${detail})` : d.name;
+      })
+      .join(', ');
+    const additionalSignersForBoldSign = additionalDrivers
+      .filter((d) => d.email)
+      .map((d) => ({ driverId: d.id, name: d.name, email: d.email as string }));
+
     // Generate document content
     let doc: string;
     if (tenantId) {
-      doc = await generateDocument(supabase, rental, customer, vehicle, tenantId, verification);
+      doc = await generateDocument(supabase, rental, customer, vehicle, tenantId, verification, additionalDriversList);
     } else {
       doc = generateDefaultTemplate(rental || {}, customer, vehicle, null);
     }
@@ -707,7 +802,7 @@ Deno.serve(async (req) => {
       console.log(`Credits deducted: ${deductResult.amount_deducted} (test: ${isTestMode}, balance: ${deductResult.balance_after})`);
     }
 
-    // Send via BoldSign
+    // Send via BoldSign — including additional drivers as secondary signers.
     const result = await sendBoldSignDocument(
       BOLDSIGN_API_KEY,
       BOLDSIGN_BASE_URL,
@@ -715,7 +810,8 @@ Deno.serve(async (req) => {
       email,
       name,
       rentalId,
-      tenantBrandId
+      tenantBrandId,
+      additionalSignersForBoldSign,
     );
 
     if (!result) {
@@ -748,6 +844,24 @@ Deno.serve(async (req) => {
       } catch (refillErr) {
         console.warn('Auto-refill trigger failed:', refillErr);
       }
+    }
+
+    // Mark each additional driver as 'sent' for signing so the rental detail
+    // page reflects the live BoldSign state. The Veriff webhook updates
+    // verification_status separately; the BoldSign webhook will flip to
+    // 'signed' once each driver completes signing.
+    if (additionalSignersForBoldSign.length > 0) {
+      const driverIds = additionalSignersForBoldSign.map((s) => s.driverId);
+      for (const signer of additionalSignersForBoldSign) {
+        await supabase
+          .from('rental_additional_drivers')
+          .update({
+            signing_status: 'sent',
+            boldsign_signer_email: signer.email,
+          })
+          .eq('id', signer.driverId);
+      }
+      console.log('Stamped additional drivers as signing_status=sent:', driverIds.length);
     }
 
     console.log('='.repeat(60));

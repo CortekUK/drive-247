@@ -61,6 +61,8 @@ import { useRentalAgreements } from "@/hooks/use-rental-agreements";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
 import { PaygSection } from "@/components/rentals/payg-section";
+import { PaygSchedulePreview } from "@/components/rentals/payg-schedule-preview";
+import { AdditionalDriversCard } from "@/components/rentals/additional-drivers-card";
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 import { InsuranceTimeline } from "@/components/rentals/InsuranceTimeline";
@@ -2541,6 +2543,32 @@ const RentalDetail = () => {
           </div>
         );
       })()}
+
+      {/* PAYG billing summary — recap of what the customer is being charged,
+          shown above the rolling-invoice ledger so anyone opening the rental
+          sees the high-level "$X per week/month" framing first. */}
+      {rental && (rental as any).is_pay_as_you_go && (
+        <div className="mb-4">
+          <PaygSchedulePreview
+            periodType={(rental as any).rental_period_type}
+            amount={rental.monthly_amount}
+            startDate={rental.start_date}
+            currencyCode={tenant?.currency_code || 'USD'}
+            tenantReminderIntervalDays={(rentalSettings as any)?.payg_reminder_interval_days ?? null}
+            reminderIntervalOverride={(rental as any).payg_reminder_interval_days ?? null}
+            tenantGracePeriodDays={(rentalSettings as any)?.payg_grace_period_days ?? null}
+          />
+        </div>
+      )}
+
+      {/* Additional drivers — only renders when the rental actually has any.
+          Card auto-hides on rentals with zero additional drivers so it
+          doesn't clutter the layout for the common single-driver case. */}
+      {rental && (
+        <div className="mb-4">
+          <AdditionalDriversCard rentalId={rental.id} />
+        </div>
+      )}
 
       {/* PAYG section — inline rolling-invoice view, above the fixed-charges Payment Breakdown. */}
       {rental && (rental as any).is_pay_as_you_go && (

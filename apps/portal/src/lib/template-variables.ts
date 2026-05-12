@@ -104,6 +104,20 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
     sample: '+1 234 567 8901',
     category: 'customer',
   },
+  {
+    key: 'is_gig_driver',
+    label: 'Gig Driver',
+    description: 'Whether the customer declared themselves a gig driver (Uber/Lyft/etc). Resolves to "Yes" or "No". You can also wrap an agreement section in {{#if is_gig_driver}}...{{/if}} to make it appear only for gig drivers.',
+    sample: 'Yes',
+    category: 'customer',
+  },
+  {
+    key: 'additional_drivers_list',
+    label: 'Additional Drivers',
+    description: 'Comma-separated list of additional drivers attached to this rental, formatted as "Name (DL: licence)" when a licence number is available, else "Name (email)". Empty string when there are no additional drivers — the surrounding line in the template will collapse naturally.',
+    sample: 'Jane Doe (DL: ABC123), John Doe (DL: XYZ789)',
+    category: 'rental',
+  },
 
   // Vehicle variables
   {
@@ -509,12 +523,27 @@ export function getSampleData(): Record<string, string> {
   }, {} as Record<string, string>);
 }
 
-// Replace variables in template with actual data
+// Replace variables in template with actual data.
+//
+// First pass: strip / keep `{{#if is_gig_driver}}...{{/if}}` blocks based on
+// the resolved gig-driver value so tenants can hide gig-worker-specific terms
+// for non-gig-drivers. Only `is_gig_driver` is conditioned for now; nested
+// blocks and `{{else}}` are intentionally unsupported in v1 — keep the surface
+// area small until more conditionals are actually needed.
+//
+// Second pass: simple `{{key}}` substitution against TEMPLATE_VARIABLES.
 export function replaceVariables(
   template: string,
   data: Record<string, string | number | null | undefined>
 ): string {
   let result = template;
+
+  // Conditional block pass (must run before simple substitution so the inner
+  // content's variables can still be replaced in the surviving branch).
+  result = result.replace(
+    /\{\{#if is_gig_driver\}\}([\s\S]*?)\{\{\/if\}\}/g,
+    (_match, inner) => (data.is_gig_driver === 'Yes' ? inner : ''),
+  );
 
   for (const variable of TEMPLATE_VARIABLES) {
     const placeholder = `{{${variable.key}}}`;
@@ -581,6 +610,12 @@ export function buildTemplateData(
     nok_name: customer?.nok_full_name || '',
     nok_phone: customer?.nok_phone || '',
 
+    // Gig driver: prefer the rental's snapshot (captured at booking/checkout
+    // time) over the customer's current flag. Falls back to customer when the
+    // rental row hasn't been populated (e.g., portal-created rentals before
+    // is_gig_driver was wired into the form).
+    is_gig_driver: (rental?.is_gig_driver ?? customer?.is_gig_driver) ? 'Yes' : 'No',
+
     // Vehicle
     vehicle_make: vehicle?.make || '',
     vehicle_model: vehicle?.model || '',
@@ -608,6 +643,11 @@ export function buildTemplateData(
     pickup_location: rental?.pickup_location || '',
     return_location: rental?.return_location || '',
     delivery_address: rental?.delivery_address || '',
+    // Pre-formatted by the BoldSign edge function when sending; in the
+    // template editor preview the rental row doesn't carry this so it
+    // resolves to an empty string (acceptable — operators see the sample
+    // value via the variable catalogue instead).
+    additional_drivers_list: (rental as any)?.additional_drivers_list || '',
 
     // Company
     company_name: tenant?.company_name || '',

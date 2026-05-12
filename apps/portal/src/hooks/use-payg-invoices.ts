@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { computePaygDailyRate } from "@/lib/payg-rate";
 
 export type PaygInvoiceStatus = "open" | "paid" | "superseded";
 
@@ -166,7 +167,7 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
         supabaseUntyped
           .from("rentals")
           .select(
-            "status, payg_start_ts, payg_last_reminder_sent_at, payg_paused, payg_closed_at",
+            "status, payg_start_ts, payg_last_reminder_sent_at, payg_paused, payg_closed_at, monthly_amount, rental_period_type",
           )
           .eq("id", rentalId)
           .eq("tenant_id", tenant.id)
@@ -267,7 +268,14 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
       );
       const netReceived = round2(collected - refunded);
 
-      const dailyRate = accruals.length > 0 ? Number(accruals[accruals.length - 1].daily_rate || 0) : 0;
+      // Prefer the last accrued daily_rate (what the cron actually billed). If the
+      // rental has no accruals yet (just created, cron hasn't fired), fall back to
+      // the derived rate from monthly_amount/rental_period_type — same formula as
+      // the cron uses, so the displayed "Daily charge" lines up with the first
+      // accrual the moment it lands.
+      const dailyRate = accruals.length > 0
+        ? Number(accruals[accruals.length - 1].daily_rate || 0)
+        : round2(computePaygDailyRate(rentalRow?.monthly_amount, rentalRow?.rental_period_type));
       const lastUpdatedAt = accruals.length > 0
         ? accruals[accruals.length - 1].accrual_window_end || accruals[accruals.length - 1].created_at
         : null;

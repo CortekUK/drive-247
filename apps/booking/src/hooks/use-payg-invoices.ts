@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { computePaygDailyRate } from "@/lib/payg-rate";
 
 export type PaygInvoiceStatus = "open" | "paid" | "superseded";
 
@@ -110,7 +111,7 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
     queryFn: async (): Promise<PaygInvoiceData> => {
       if (!rentalId || !tenant?.id) return EMPTY;
 
-      const [accrualsRes, paymentsRes, remindersRes] = await Promise.all([
+      const [accrualsRes, paymentsRes, remindersRes, rentalRes] = await Promise.all([
         supabaseUntyped
           .from("payg_accruals")
           .select(
@@ -135,6 +136,15 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
           .eq("rental_id", rentalId)
           .eq("tenant_id", tenant.id)
           .order("sent_at", { ascending: false }),
+        // Fetch rental terms so we can compute a fallback daily rate before
+        // the first accrual posts (otherwise customers see "Daily charge: $0.00"
+        // on a freshly-created PAYG rental until the cron fires).
+        supabaseUntyped
+          .from("rentals")
+          .select("monthly_amount, rental_period_type")
+          .eq("id", rentalId)
+          .eq("tenant_id", tenant.id)
+          .maybeSingle(),
       ]);
 
       if (accrualsRes.error) throw accrualsRes.error;
@@ -219,7 +229,14 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
       );
       const netReceived = round2(collected - refunded);
 
-      const dailyRate = accruals.length > 0 ? Number(accruals[accruals.length - 1].daily_rate || 0) : 0;
+      // Prefer the last accrued daily_rate (what the cron actually billed). If the
+      // rental has no accruals yet (just created, cron hasn't fired), fall back to
+      // the derived rate from monthly_amount/rental_period_type — same formula as
+      // the cron uses, so the customer sees the real daily figure immediately.
+      const rentalRow = (rentalRes.data || null) as { monthly_amount?: number | null; rental_period_type?: string | null } | null;
+      const dailyRate = accruals.length > 0
+        ? Number(accruals[accruals.length - 1].daily_rate || 0)
+        : round2(computePaygDailyRate(rentalRow?.monthly_amount, rentalRow?.rental_period_type));
       const lastUpdatedAt = accruals.length > 0
         ? accruals[accruals.length - 1].accrual_window_end || accruals[accruals.length - 1].created_at
         : null;

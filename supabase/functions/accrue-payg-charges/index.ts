@@ -44,10 +44,11 @@ interface Tenant {
 }
 
 function computeDailyRate(rental: Rental): number {
-  // PAYG rentals are stored with `rental_period_type = 'Daily'` and `monthly_amount`
-  // holding the daily rate (the form pushes the daily-tab value here for PAYG).
-  // For robustness against future cases where a tenant configured weekly/monthly
-  // pricing into a PAYG rental, fall back to dividing the period amount evenly.
+  // PAYG rentals store the per-period billing amount in `monthly_amount` and the
+  // unit (Weekly/Monthly) in `rental_period_type`. Daily is preserved here as a
+  // pre-2026-05 legacy path; new PAYG rentals only use Weekly or Monthly.
+  // This formula MUST stay in lockstep with `computePaygDailyRate()` in
+  // apps/portal/src/lib/payg-rate.ts (the UI fallback before the first accrual).
   if (rental.rental_period_type === "Daily") {
     return Number(rental.monthly_amount) || 0;
   }

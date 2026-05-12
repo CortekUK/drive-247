@@ -38,13 +38,17 @@ export const useVehicleBookedDates = (vehicleId: string | undefined, excludeRent
     queryFn: async () => {
       if (!tenant?.id || !vehicleId) return [];
 
+      // PAYG rentals have NULL end_date (open-ended). They MUST appear on the
+      // occupancy calendar — otherwise customers see an available date picker
+      // for dates that will fail at checkout (the DB trigger blocks the
+      // overlap). We render them as booked from start_date forward; the loops
+      // below cap the rendered range at +365 days for calendar performance.
       const { data, error } = await (supabase as any)
         .from("rentals")
         .select("id, rental_number, start_date, end_date, status")
         .eq("vehicle_id", vehicleId)
         .eq("tenant_id", tenant.id)
-        .in("status", ["Pending", "Active", "Upcoming", "Confirmed", "Started"])
-        .not("end_date", "is", null);
+        .in("status", ["Pending", "Active", "Upcoming", "Confirmed", "Started"]);
 
       if (error) throw error;
       let results = (data || []) as BookedRental[];
@@ -83,31 +87,47 @@ export const useVehicleBookedDates = (vehicleId: string | undefined, excludeRent
     return "upcoming";
   };
 
+  // PAYG rentals have NULL end_date. Cap the rendered range at start + 365
+  // days so the calendar shows the vehicle as booked far enough out to be
+  // unmistakable, without trying to paint every date until the year 9999.
+  const PAYG_HORIZON_DAYS = 365;
+
+  const resolveEndDate = (rental: BookedRental): { end: Date; isOpenEnded: boolean } => {
+    if (rental.end_date) {
+      const [ey, em, ed] = rental.end_date.split("-").map(Number);
+      return { end: new Date(ey, em - 1, ed), isOpenEnded: false };
+    }
+    const [sy, sm, sd] = rental.start_date.split("-").map(Number);
+    const horizon = new Date(sy, sm - 1, sd);
+    horizon.setDate(horizon.getDate() + PAYG_HORIZON_DAYS);
+    return { end: horizon, isOpenEnded: true };
+  };
+
   const getOccupancyMap = (): Map<string, DateOccupancy[]> => {
     const map = new Map<string, DateOccupancy[]>();
 
-    const formatDateLabel = (start: string, end: string) => {
-      const s = new Date(start + "T00:00:00");
-      const e = new Date(end + "T00:00:00");
+    const formatDateLabel = (start: string, end: string | null, isOpenEnded: boolean) => {
       const fmt = (d: Date) =>
         d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const s = new Date(start + "T00:00:00");
+      if (isOpenEnded || !end) {
+        return `${fmt(s)} - ongoing`;
+      }
+      const e = new Date(end + "T00:00:00");
       return `${fmt(s)} - ${fmt(e)}`;
     };
 
     for (const rental of bookedRentals) {
-      if (!rental.end_date) continue;
-
       const type = getOccupancyType(rental.status);
       const ref = rental.rental_number || rental.id.substring(0, 8).toUpperCase();
       const typeLabel =
         type === "active" ? "Active" : type === "pending" ? "Pending" : "Upcoming";
-      const dateRange = formatDateLabel(rental.start_date, rental.end_date);
+      const { end, isOpenEnded } = resolveEndDate(rental);
+      const dateRange = formatDateLabel(rental.start_date, rental.end_date, isOpenEnded);
       const label = `${typeLabel}: ${ref} (${dateRange})`;
 
       const [sy, sm, sd] = rental.start_date.split("-").map(Number);
       const start = new Date(sy, sm - 1, sd);
-      const [ey, em, ed] = rental.end_date.split("-").map(Number);
-      const end = new Date(ey, em - 1, ed);
 
       const current = new Date(start);
       while (current <= end) {
@@ -156,12 +176,10 @@ export const useVehicleBookedDates = (vehicleId: string | undefined, excludeRent
     };
 
     for (const rental of bookedRentals) {
-      if (!rental.end_date) continue;
       const type = getOccupancyType(rental.status);
       const [sy, sm, sd] = rental.start_date.split("-").map(Number);
       const start = new Date(sy, sm - 1, sd);
-      const [ey, em, ed] = rental.end_date.split("-").map(Number);
-      const end = new Date(ey, em - 1, ed);
+      const { end } = resolveEndDate(rental);
       const current = new Date(start);
       while (current <= end) {
         mods[type].push(new Date(current));
