@@ -195,6 +195,13 @@ const CreateRental = () => {
   // Per-rental reminder interval override. null = use tenant default.
   const [paygReminderInterval, setPaygReminderInterval] = useState<number | null>(null);
 
+  // Per-rental gig-driver flag. Defaults to the selected customer's flag, but the
+  // operator can override per-rental (e.g., a customer who hasn't yet self-declared
+  // in the booking portal but verbally confirmed gig-worker status). Persisted to
+  // rentals.is_gig_driver so the agreement merge variable {{is_gig_driver}} resolves
+  // correctly from the rental snapshot rather than from the live customer flag.
+  const [isGigDriver, setIsGigDriver] = useState(false);
+
   // Lockbox / delivery method state
   const [deliveryMethod, setDeliveryMethod] = useState<'in_person' | 'lockbox'>('in_person');
   const [lockboxCodeInput, setLockboxCodeInput] = useState('');
@@ -1002,6 +1009,19 @@ const CreateRental = () => {
   const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
   const selectedVehicle = vehicles?.find(v => v.id === selectedVehicleId);
 
+  // Default the gig-driver flag from the selected customer's record whenever the
+  // selection changes. The operator can still override after picking the customer
+  // (the checkbox is editable). Re-selecting the same customer is a no-op since
+  // selectedCustomerId hasn't changed.
+  useEffect(() => {
+    if (!selectedCustomerId) {
+      setIsGigDriver(false);
+      return;
+    }
+    setIsGigDriver(Boolean((selectedCustomer as any)?.is_gig_driver));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCustomerId, selectedCustomer?.id]);
+
   // Handle creating verification session
   const handleCreateVerification = async () => {
     if (!selectedCustomerId || !tenant) return;
@@ -1357,6 +1377,10 @@ const CreateRental = () => {
           : null,
         has_installment_plan: !isPayAsYouGo && installmentPlanType !== 'full' && rentalSettings?.installments_enabled,
         is_pay_as_you_go: isPayAsYouGo,
+        // Gig-driver snapshot for this rental. Distinct from customers.is_gig_driver
+        // (which can change after this rental is signed). The agreement merge
+        // variable {{is_gig_driver}} prefers this rental-level value.
+        is_gig_driver: isGigDriver,
         // PAYG accrual state (nullable — only set when PAYG)
         payg_start_ts: paygStartTs,
         payg_next_accrual_at: paygNextAccrualAt,
@@ -2656,6 +2680,34 @@ const CreateRental = () => {
                     </div>
                   )}
 
+                  {/* Gig Driver — operator-controllable per-rental override. Defaults
+                      from the customer record so previously self-declared gig drivers
+                      auto-tick, but can be flipped on/off here without touching the
+                      customer's standing flag. Stored on rentals.is_gig_driver and
+                      surfaced via the {{is_gig_driver}} and {{#if is_gig_driver}} merge
+                      variables in the rental agreement. */}
+                  {selectedCustomerId && (
+                    <div className="mt-5">
+                      <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3">
+                        <Checkbox
+                          id="is_gig_driver"
+                          checked={isGigDriver}
+                          onCheckedChange={(checked) => setIsGigDriver(checked === true)}
+                          className="mt-0.5"
+                        />
+                        <div className="flex-1 space-y-0.5">
+                          <Label htmlFor="is_gig_driver" className="text-sm font-medium cursor-pointer">
+                            This customer is a gig driver (Uber, Lyft, DoorDash, etc.)
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            Defaults from the customer's profile. Toggle to apply gig-driver
+                            terms in the rental agreement for THIS rental only.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* ── Vehicle ───────────────────────────── */}
                   <div className="border-t mt-5 pt-5">
                     <FormField
@@ -2836,6 +2888,20 @@ const CreateRental = () => {
                 </div>
               </div>
 
+              {/* Additional Drivers — sits directly under Customer & Vehicle (per
+                  operator request) so additional drivers are added as part of the
+                  "who is on this rental" decision, not buried after pricing. Still
+                  gated on a vehicle being picked because each driver's
+                  verification + signing email is fired when the rental is created. */}
+              {selectedVehicleId && (
+                <AdditionalDriversForm
+                  drivers={additionalDrivers}
+                  onChange={setAdditionalDrivers}
+                  primaryCustomerEmail={selectedCustomer?.email}
+                  disabled={loading}
+                />
+              )}
+
               {/* ── Payment Mode: Regular vs Pay As You Go (positioned after Customer & Vehicle) ──────── */}
               {rentalSettings?.pay_as_you_go_enabled && selectedVehicleId && (
                 <div className="rounded-xl border bg-card shadow-sm">
@@ -3002,23 +3068,17 @@ const CreateRental = () => {
                         tenantReminderIntervalDays={(rentalSettings as any)?.payg_reminder_interval_days ?? null}
                         reminderIntervalOverride={paygReminderInterval}
                         tenantGracePeriodDays={(rentalSettings as any)?.payg_grace_period_days ?? null}
+                        // Pre-create edit: save just mutates local state. The value
+                        // is persisted to rentals.payg_reminder_interval_days when
+                        // the form submits (via setPaygReminderInterval being
+                        // included in the rental insert payload).
+                        onSaveReminderInterval={async (newInterval) => {
+                          setPaygReminderInterval(newInterval);
+                        }}
                       />
                     )}
                   </div>
                 </div>
-              )}
-
-              {/* Additional Drivers — gated on having a selected vehicle to keep
-                  the form compact when none is picked yet. Each driver added
-                  here gets an ID-verification email and a BoldSign signing
-                  link when the rental is created. */}
-              {selectedVehicleId && (
-                <AdditionalDriversForm
-                  drivers={additionalDrivers}
-                  onChange={setAdditionalDrivers}
-                  primaryCustomerEmail={selectedCustomer?.email}
-                  disabled={loading}
-                />
               )}
 
               {/* ── Section 2: Rental Period & Pricing ────────────── */}

@@ -61,10 +61,14 @@ export interface PaygReminderStatus {
   autoEnabled: boolean;
   /**
    * When the next automated reminder is scheduled to fire (or `null` when not
-   * applicable). Always max(last_sent_at, payg_start_ts) + 24h, ignoring blockers
-   * — the cron will skip past it when blockers clear.
+   * applicable). Computed as max(last_sent_at, payg_start_ts) + intervalDays,
+   * ignoring blockers — the cron will skip past it when blockers clear.
    */
   nextReminderAt: string | null;
+  /** Effective reminder interval in days (per-rental override, falling back to tenant default). */
+  intervalDays: number;
+  /** True when this rental uses an override different from the tenant default. */
+  isCustomInterval: boolean;
   /** Why the cron will skip this rental right now (null = will fire on schedule). */
   blockReason: PaygReminderBlockReason;
 }
@@ -93,7 +97,7 @@ const EMPTY: PaygInvoiceData = {
   lastUpdatedAt: null,
   totals: { collected: 0, balanceDue: 0, refunded: 0, netReceived: 0 },
   latestOpenInvoice: null,
-  reminderStatus: { autoEnabled: false, nextReminderAt: null, blockReason: null },
+  reminderStatus: { autoEnabled: false, nextReminderAt: null, intervalDays: 4, isCustomInterval: false, blockReason: null },
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -167,14 +171,14 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
         supabaseUntyped
           .from("rentals")
           .select(
-            "status, payg_start_ts, payg_last_reminder_sent_at, payg_paused, payg_closed_at, monthly_amount, rental_period_type",
+            "status, payg_start_ts, payg_last_reminder_sent_at, payg_paused, payg_closed_at, monthly_amount, rental_period_type, payg_reminder_interval_days",
           )
           .eq("id", rentalId)
           .eq("tenant_id", tenant.id)
           .maybeSingle(),
         supabaseUntyped
           .from("tenants")
-          .select("payg_auto_reminders_enabled")
+          .select("payg_auto_reminders_enabled, payg_reminder_interval_days")
           .eq("id", tenant.id)
           .maybeSingle(),
       ]);
@@ -298,7 +302,19 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
         blockReason = "no_open_invoice";
       }
 
-      // Anchor matches cron logic: max(last_sent_at, payg_start_ts) + 24h.
+      // Effective cadence: per-rental override → tenant default → built-in
+      // fallback. Mirrors the resolution send-payg-reminders does on the cron
+      // side so the "Next reminder" UI matches what the cron will actually do.
+      const tenantDefaultInterval = Number(tenantRow?.payg_reminder_interval_days) > 0
+        ? Number(tenantRow.payg_reminder_interval_days)
+        : 4;
+      const rentalOverrideInterval = Number(rentalRow?.payg_reminder_interval_days);
+      const intervalDays = Number.isFinite(rentalOverrideInterval) && rentalOverrideInterval > 0
+        ? rentalOverrideInterval
+        : tenantDefaultInterval;
+      const isCustomInterval = Number.isFinite(rentalOverrideInterval) && rentalOverrideInterval > 0;
+
+      // Anchor matches cron logic: max(last_sent_at, payg_start_ts) + intervalDays.
       let nextReminderAt: string | null = null;
       const startTsStr: string | null = rentalRow?.payg_start_ts || null;
       const lastSentStr: string | null = rentalRow?.payg_last_reminder_sent_at || null;
@@ -306,13 +322,15 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
       if (anchorStr) {
         const anchorMs = new Date(anchorStr).getTime();
         if (Number.isFinite(anchorMs)) {
-          nextReminderAt = new Date(anchorMs + DAY_MS).toISOString();
+          nextReminderAt = new Date(anchorMs + intervalDays * DAY_MS).toISOString();
         }
       }
 
       const reminderStatus: PaygReminderStatus = {
         autoEnabled,
         nextReminderAt,
+        intervalDays,
+        isCustomInterval,
         blockReason,
       };
 

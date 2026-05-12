@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { format, formatDistanceToNowStrict, parseISO } from "date-fns";
-import { BellOff, BellRing, Download, Loader2, RotateCcw, RefreshCw, FileText } from "lucide-react";
+import { BellOff, BellRing, Download, Loader2, PauseCircle, RotateCcw, RefreshCw, FileText, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -463,6 +463,12 @@ export function PaygSection({
 }
 
 function ReminderStatusLine({ status }: { status: PaygReminderStatus }) {
+  const cadenceText = (() => {
+    const n = status.intervalDays;
+    const suffix = status.isCustomInterval ? " (custom)" : "";
+    return `every ${n} day${n === 1 ? "" : "s"}${suffix}`;
+  })();
+
   // Off at the tenant level — gray bell
   if (!status.autoEnabled) {
     return (
@@ -477,24 +483,45 @@ function ReminderStatusLine({ status }: { status: PaygReminderStatus }) {
     );
   }
 
-  // Hard-paused states (rental closed/paused/inactive) — gray bell, "paused" copy.
-  // `no_open_invoice` is intentionally NOT here: it's a normal pre-billing state,
-  // not a halt — reminders are still ON, there's just nothing to send yet.
-  if (
-    status.blockReason === "rental_closed" ||
-    status.blockReason === "rental_paused" ||
-    status.blockReason === "rental_inactive"
-  ) {
-    const reasonText: Record<"rental_closed" | "rental_paused" | "rental_inactive", string> = {
-      rental_closed: "rental is closed",
-      rental_paused: "billing is paused",
-      rental_inactive: "rental is not active",
-    };
+  // Rental is closed — reminders permanently stopped. Different copy + icon
+  // from "paused" because the operator can't un-close a rental like they can
+  // un-pause one.
+  if (status.blockReason === "rental_closed") {
     return (
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <BellOff className="h-3.5 w-3.5" />
         <span>
-          Automated reminders <span className="font-medium">paused</span> — {reasonText[status.blockReason]}
+          Automated reminders <span className="font-medium">stopped</span> — rental is closed
+        </span>
+      </div>
+    );
+  }
+
+  // Operator manually paused billing on this rental — actual paused state.
+  if (status.blockReason === "rental_paused") {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+        <PauseCircle className="h-3.5 w-3.5" />
+        <span>
+          Automated reminders <span className="font-medium">paused</span> — billing is paused for this rental
+        </span>
+      </div>
+    );
+  }
+
+  // Rental is still Pending (not yet signed/activated). Reminders ARE on —
+  // they're just waiting for the rental to become Active before firing. This
+  // used to render as "paused" with a struck-through bell, which made it look
+  // disabled when actually it's just deferred. Show the "on" green bell + a
+  // scheduling clock to make it clear nothing is broken.
+  if (status.blockReason === "rental_inactive") {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <BellRing className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+        <span>
+          Automated reminders <span className="font-medium text-foreground">on</span> ·{" "}
+          <Clock className="inline-block h-3 w-3 -mt-0.5 mr-0.5" />
+          Will fire {cadenceText} once the rental is active
         </span>
       </div>
     );
@@ -508,7 +535,7 @@ function ReminderStatusLine({ status }: { status: PaygReminderStatus }) {
         <span>
           Automated reminders <span className="font-medium text-foreground">on</span>
           {" · "}
-          No unpaid invoice yet — reminders start once charges accrue
+          No unpaid invoice yet — reminders will fire {cadenceText} once charges accrue
         </span>
       </div>
     );
@@ -520,7 +547,7 @@ function ReminderStatusLine({ status }: { status: PaygReminderStatus }) {
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <BellRing className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
         <span>
-          Automated reminders <span className="font-medium text-foreground">on</span> · 24-hour cadence
+          Automated reminders <span className="font-medium text-foreground">on</span> · cadence: {cadenceText}
         </span>
       </div>
     );
@@ -536,14 +563,16 @@ function ReminderStatusLine({ status }: { status: PaygReminderStatus }) {
         Automated reminders <span className="font-medium text-foreground">on</span>
         {" · "}
         {isPast ? (
-          <>Next reminder due now (cron runs every hour)</>
+          <>
+            Next reminder due now — cadence {cadenceText}
+          </>
         ) : (
           <>
             Next reminder{" "}
             <span className="font-medium text-foreground">
               {format(next, "dd MMM yyyy, HH:mm")}
             </span>{" "}
-            (in {formatDistanceToNowStrict(next)})
+            (in {formatDistanceToNowStrict(next)}, cadence {cadenceText})
           </>
         )}
       </span>

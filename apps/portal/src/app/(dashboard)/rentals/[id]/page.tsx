@@ -2557,6 +2557,24 @@ const RentalDetail = () => {
             tenantReminderIntervalDays={(rentalSettings as any)?.payg_reminder_interval_days ?? null}
             reminderIntervalOverride={(rental as any).payg_reminder_interval_days ?? null}
             tenantGracePeriodDays={(rentalSettings as any)?.payg_grace_period_days ?? null}
+            // Inline edit only for users with rental edit access. NULL = revert
+            // to tenant default. send-payg-reminders reads this column on its
+            // next pass so a change here takes effect on the next reminder
+            // window without any cron restart.
+            onSaveReminderInterval={canEdit('rentals') ? async (newInterval) => {
+              const { error: updErr } = await supabase
+                .from('rentals')
+                .update({ payg_reminder_interval_days: newInterval })
+                .eq('id', rental.id);
+              if (updErr) throw updErr;
+              await queryClient.invalidateQueries({ queryKey: ['rental', id] });
+              toast({
+                title: 'Reminder cadence updated',
+                description: newInterval == null
+                  ? `Reverted to tenant default.`
+                  : `Reminders now fire every ${newInterval} day${newInterval === 1 ? '' : 's'}.`,
+              });
+            } : undefined}
           />
         </div>
       )}

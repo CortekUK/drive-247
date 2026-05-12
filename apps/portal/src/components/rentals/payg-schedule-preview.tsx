@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { addDays, format, parseISO } from "date-fns";
-import { CalendarClock, Info } from "lucide-react";
+import { CalendarClock, Check, Info, Loader2, Pencil, X } from "lucide-react";
 import { formatCurrency } from "@/lib/format-utils";
 import { computePaygDailyRate } from "@/lib/payg-rate";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface PaygSchedulePreviewProps {
   /** "Weekly" or "Monthly" — Daily is not allowed on PAYG. */
@@ -20,16 +23,22 @@ interface PaygSchedulePreviewProps {
   reminderIntervalOverride?: number | null;
   /** Tenant grace period before the first reminder fires; falls back to 2 if absent. */
   tenantGracePeriodDays?: number | null;
+  /**
+   * If provided, an inline edit button appears next to the reminder cadence.
+   * The callback receives the new interval (or null to revert to the tenant default)
+   * and should persist it. Throw / reject to keep the input open with an error toast.
+   */
+  onSaveReminderInterval?: (newInterval: number | null) => Promise<void>;
 }
 
+const REMINDER_MIN = 1;
+const REMINDER_MAX = 365;
+
 /**
- * Read-only summary card describing what a PAYG customer will be charged and when.
- *
- * Shown twice:
- *   1. In the new-rental form below the PAYG fields, so the operator can sanity-check
- *      the schedule before clicking Create (the question Kris asked for in her May 8 call).
- *   2. On the rental detail page above the rolling-invoice ledger, as a recap for
- *      anyone reviewing an active PAYG rental.
+ * Read-only (mostly) summary card describing what a PAYG customer will be charged
+ * and when. The reminder cadence is optionally editable when `onSaveReminderInterval`
+ * is provided — used on the rental detail page so operators can tune the cadence
+ * for a specific customer without leaving the page.
  *
  * The PAYG accrual model is daily under the hood (one ledger entry per day), but
  * customers and operators reason about it in the period the rental was sold on
@@ -45,14 +54,18 @@ export function PaygSchedulePreview({
   tenantReminderIntervalDays,
   reminderIntervalOverride,
   tenantGracePeriodDays,
+  onSaveReminderInterval,
 }: PaygSchedulePreviewProps) {
   const period = periodType === "Monthly" ? "Monthly" : "Weekly";
   const periodLowerNoun = period === "Monthly" ? "month" : "week";
   const periodAdjective = period.toLowerCase();
-  const numericAmount = typeof amount === "number" && Number.isFinite(amount) && amount > 0 ? amount : null;
+  const numericAmount =
+    typeof amount === "number" && Number.isFinite(amount) && amount > 0 ? amount : null;
 
-  const reminderInterval = reminderIntervalOverride ?? tenantReminderIntervalDays ?? 4;
+  const tenantDefault = tenantReminderIntervalDays ?? 4;
+  const reminderInterval = reminderIntervalOverride ?? tenantDefault;
   const gracePeriod = tenantGracePeriodDays ?? 2;
+  const isCustomCadence = reminderIntervalOverride != null;
 
   const start = (() => {
     if (!startDate) return null;
@@ -66,6 +79,68 @@ export function PaygSchedulePreview({
 
   const dailyRate = computePaygDailyRate(numericAmount, period);
   const firstReminderDate = start ? addDays(start, gracePeriod) : null;
+
+  // Inline edit state for the reminder cadence. The input string is kept
+  // separately from the saved number so partial typing (empty, "1", deletes)
+  // doesn't crash the parent. Save validates and converts.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string>(String(reminderInterval));
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Keep the draft in sync with the prop when the parent refetches after a
+  // save. Without this, the input shows the stale value the operator typed.
+  useEffect(() => {
+    if (!editing) setDraft(String(reminderInterval));
+  }, [reminderInterval, editing]);
+
+  const beginEdit = () => {
+    setDraft(String(reminderInterval));
+    setSaveError(null);
+    setEditing(true);
+  };
+  const cancelEdit = () => {
+    setEditing(false);
+    setSaveError(null);
+    setDraft(String(reminderInterval));
+  };
+  const saveEdit = async () => {
+    if (!onSaveReminderInterval) return;
+    const trimmed = draft.trim();
+    if (trimmed === "") {
+      // Empty = revert to tenant default (NULL on the rental row).
+      setSaving(true);
+      setSaveError(null);
+      try {
+        await onSaveReminderInterval(null);
+        setEditing(false);
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : "Failed to save");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || !Number.isInteger(n)) {
+      setSaveError("Enter a whole number of days");
+      return;
+    }
+    if (n < REMINDER_MIN || n > REMINDER_MAX) {
+      setSaveError(`Must be between ${REMINDER_MIN} and ${REMINDER_MAX} days`);
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSaveReminderInterval(n);
+      setEditing(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!numericAmount || !start) {
     return (
@@ -109,10 +184,94 @@ export function PaygSchedulePreview({
 
         <div>
           <div className="text-muted-foreground text-xs">Payment reminders</div>
-          <div className="font-medium">Every {reminderInterval} days</div>
-          <div className="text-xs text-muted-foreground mt-0.5">
-            Sent only while a balance is outstanding.
-          </div>
+          {editing ? (
+            <div className="space-y-1 mt-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm">Every</span>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={REMINDER_MIN}
+                  max={REMINDER_MAX}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      saveEdit();
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      cancelEdit();
+                    }
+                  }}
+                  className="h-7 w-16 text-sm"
+                  placeholder={String(tenantDefault)}
+                  disabled={saving}
+                  autoFocus
+                />
+                <span className="text-sm">days</span>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7"
+                  onClick={saveEdit}
+                  disabled={saving}
+                  aria-label="Save reminder interval"
+                >
+                  {saving ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5 text-green-600" />
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7"
+                  onClick={cancelEdit}
+                  disabled={saving}
+                  aria-label="Cancel"
+                >
+                  <X className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Leave empty to use the tenant default ({tenantDefault} days).
+              </div>
+              {saveError && (
+                <div className="text-xs text-red-600">{saveError}</div>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Every {reminderInterval} days</span>
+                {isCustomCadence && (
+                  <span className="text-[10px] uppercase tracking-wide text-primary bg-primary/10 rounded px-1.5 py-0.5">
+                    Custom
+                  </span>
+                )}
+                {onSaveReminderInterval && (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6"
+                    onClick={beginEdit}
+                    aria-label="Edit reminder interval"
+                  >
+                    <Pencil className="h-3 w-3 text-muted-foreground" />
+                  </Button>
+                )}
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Sent only while a balance is outstanding.
+                {isCustomCadence && ` (Tenant default: ${tenantDefault} days.)`}
+              </div>
+            </>
+          )}
         </div>
 
         <div>
