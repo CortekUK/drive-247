@@ -100,6 +100,9 @@ const categoryLabels: Record<string, string> = {
   vehicle: 'Vehicle',
   rental: 'Rental',
   company: 'Company',
+  payment: 'Payment / Installments',
+  extension: 'Extension',
+  additional_driver: 'Additional Drivers',
 };
 
 const ESIGN_FIELDS = [

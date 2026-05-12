@@ -9,7 +9,7 @@ export interface TemplateVariable {
   label: string;
   description: string;
   sample: string;
-  category: 'customer' | 'vehicle' | 'rental' | 'company' | 'payment' | 'extension';
+  category: 'customer' | 'vehicle' | 'rental' | 'company' | 'payment' | 'extension' | 'additional_driver';
 }
 
 export const TEMPLATE_VARIABLES: TemplateVariable[] = [
@@ -118,6 +118,166 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
     description: 'Comma-separated list of additional drivers attached to this rental, formatted as "Name (DL: licence)" when a licence number is available, else "Name (email)". Empty string when there are no additional drivers — the surrounding line in the template will collapse naturally.',
     sample: 'Jane Doe (DL: ABC123), John Doe (DL: XYZ789)',
     category: 'rental',
+  },
+
+  // ── Additional driver variables (granular) ─────────────────────────────
+  // Complement to the flat {{additional_drivers_list}}. Use these when you
+  // want explicit placement (e.g., one signature block per driver) or finer
+  // control over each driver's fields. Empty strings render naturally when
+  // a slot is unused. Supports up to 5 additional drivers.
+  {
+    key: 'additional_drivers_count',
+    label: 'Additional Drivers Count',
+    description: 'Number of additional drivers on this rental',
+    sample: '2',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_drivers',
+    label: 'Additional Drivers Block',
+    description: 'Auto-generated block listing every additional driver (name, email, phone, license). One paragraph per driver. Empty if none.',
+    sample: 'Driver 1: Jane Doe · Email: jane@example.com · Phone: +1 555 0123 · License/ID: DL-12345678',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_1_name',
+    label: 'Additional Driver 1 — Name',
+    description: 'Full name of additional driver 1',
+    sample: 'Jane Doe',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_1_email',
+    label: 'Additional Driver 1 — Email',
+    description: 'Email address of additional driver 1',
+    sample: 'jane@example.com',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_1_phone',
+    label: 'Additional Driver 1 — Phone',
+    description: 'Phone number of additional driver 1',
+    sample: '+1 555 0123',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_1_license',
+    label: 'Additional Driver 1 — License/ID',
+    description: 'License or ID number of additional driver 1 (empty until verified)',
+    sample: 'DL-12345678',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_2_name',
+    label: 'Additional Driver 2 — Name',
+    description: 'Full name of additional driver 2',
+    sample: 'John Smith',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_2_email',
+    label: 'Additional Driver 2 — Email',
+    description: 'Email address of additional driver 2',
+    sample: 'john@example.com',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_2_phone',
+    label: 'Additional Driver 2 — Phone',
+    description: 'Phone number of additional driver 2',
+    sample: '+1 555 0124',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_2_license',
+    label: 'Additional Driver 2 — License/ID',
+    description: 'License or ID number of additional driver 2 (empty until verified)',
+    sample: 'DL-87654321',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_3_name',
+    label: 'Additional Driver 3 — Name',
+    description: 'Full name of additional driver 3',
+    sample: '',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_3_email',
+    label: 'Additional Driver 3 — Email',
+    description: 'Email address of additional driver 3',
+    sample: '',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_3_phone',
+    label: 'Additional Driver 3 — Phone',
+    description: 'Phone number of additional driver 3',
+    sample: '',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_3_license',
+    label: 'Additional Driver 3 — License/ID',
+    description: 'License or ID number of additional driver 3 (empty until verified)',
+    sample: '',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_4_name',
+    label: 'Additional Driver 4 — Name',
+    description: 'Full name of additional driver 4',
+    sample: '',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_4_email',
+    label: 'Additional Driver 4 — Email',
+    description: 'Email address of additional driver 4',
+    sample: '',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_4_phone',
+    label: 'Additional Driver 4 — Phone',
+    description: 'Phone number of additional driver 4',
+    sample: '',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_4_license',
+    label: 'Additional Driver 4 — License/ID',
+    description: 'License or ID number of additional driver 4 (empty until verified)',
+    sample: '',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_5_name',
+    label: 'Additional Driver 5 — Name',
+    description: 'Full name of additional driver 5',
+    sample: '',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_5_email',
+    label: 'Additional Driver 5 — Email',
+    description: 'Email address of additional driver 5',
+    sample: '',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_5_phone',
+    label: 'Additional Driver 5 — Phone',
+    description: 'Phone number of additional driver 5',
+    sample: '',
+    category: 'additional_driver',
+  },
+  {
+    key: 'additional_driver_5_license',
+    label: 'Additional Driver 5 — License/ID',
+    description: 'License or ID number of additional driver 5 (empty until verified)',
+    sample: '',
+    category: 'additional_driver',
   },
 
   // ── PAYG-specific rate variables ───────────────────────────────────────
@@ -742,6 +902,31 @@ export function buildTemplateData(
     // resolves to an empty string (acceptable — operators see the sample
     // value via the variable catalogue instead).
     additional_drivers_list: (rental as any)?.additional_drivers_list || '',
+
+    // Granular additional driver variables — same story: populated at send
+    // time by the edge function / esign route. Empty in editor preview.
+    additional_drivers_count: '',
+    additional_drivers: '',
+    additional_driver_1_name: '',
+    additional_driver_1_email: '',
+    additional_driver_1_phone: '',
+    additional_driver_1_license: '',
+    additional_driver_2_name: '',
+    additional_driver_2_email: '',
+    additional_driver_2_phone: '',
+    additional_driver_2_license: '',
+    additional_driver_3_name: '',
+    additional_driver_3_email: '',
+    additional_driver_3_phone: '',
+    additional_driver_3_license: '',
+    additional_driver_4_name: '',
+    additional_driver_4_email: '',
+    additional_driver_4_phone: '',
+    additional_driver_4_license: '',
+    additional_driver_5_name: '',
+    additional_driver_5_email: '',
+    additional_driver_5_phone: '',
+    additional_driver_5_license: '',
 
     // Company
     company_name: tenant?.company_name || '',

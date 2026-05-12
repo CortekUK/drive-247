@@ -97,6 +97,54 @@ function buildInstallmentScheduleHtml(installment: InstallmentData, currencyCode
     return `</p><p><strong>PAYMENT SCHEDULE</strong></p><p>This rental is set up with an installment payment plan. <strong>You will NOT be charged the full amount upfront.</strong></p><table><tr><td><strong>Plan Type</strong></td><td>${installment.plan_type.charAt(0).toUpperCase() + installment.plan_type.slice(1)}</td></tr><tr><td><strong>Total Rental Amount</strong></td><td>${formatCurrency(installment.total_installable_amount, currencyCode)}</td></tr><tr><td><strong>Upfront Amount</strong></td><td>${formatCurrency(installment.upfront_amount, currencyCode)}</td></tr><tr><td><strong>Number of Installments</strong></td><td>${installment.number_of_installments}</td></tr><tr><td><strong>Per Installment</strong></td><td>${formatCurrency(installment.installment_amount, currencyCode)}</td></tr></table><p><strong>Scheduled Payments</strong></p><table><tr><th>Payment</th><th>Amount</th><th>Due Date</th></tr>${rows}</table><p`;
 }
 
+interface AdditionalDriverRow {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    license_number: string | null;
+}
+
+function buildAdditionalDriversListString(drivers: AdditionalDriverRow[]): string {
+    return drivers
+        .map((d) => {
+            const detail = d.license_number ? `DL: ${d.license_number}` : (d.email || '');
+            return detail ? `${d.name} (${detail})` : d.name;
+        })
+        .join(', ');
+}
+
+function buildAdditionalDriversBlockHtml(drivers: AdditionalDriverRow[]): string {
+    if (!drivers.length) return '';
+    return drivers.map((d, i) => {
+        const parts = [
+            `<strong>Driver ${i + 1}:</strong> ${d.name || ''}`,
+            d.email ? `Email: ${d.email}` : '',
+            d.phone ? `Phone: ${d.phone}` : '',
+            d.license_number ? `License/ID: ${d.license_number}` : '',
+        ].filter(Boolean);
+        return `<p>${parts.join(' &middot; ')}</p>`;
+    }).join('');
+}
+
+// Pre-compute per-slot synthetic fields (up to 5 drivers). Empty strings beyond.
+function buildAdditionalDriverSlotFields(drivers: AdditionalDriverRow[]): Record<string, string> {
+    const fields: Record<string, string> = {
+        additional_drivers_list: buildAdditionalDriversListString(drivers),
+        additional_drivers_count: drivers.length ? drivers.length.toString() : '',
+        additional_drivers: buildAdditionalDriversBlockHtml(drivers),
+    };
+    for (let i = 0; i < 5; i++) {
+        const slot = i + 1;
+        const d = drivers[i];
+        fields[`additional_driver_${slot}_name`] = d?.name || '';
+        fields[`additional_driver_${slot}_email`] = d?.email || '';
+        fields[`additional_driver_${slot}_phone`] = d?.phone || '';
+        fields[`additional_driver_${slot}_license`] = d?.license_number || '';
+    }
+    return fields;
+}
+
 function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number }, installment?: InstallmentData | null): string {
     // Compose full address from separate fields (DB stores street/city/state/zip separately)
     const customerAddress = [
@@ -261,6 +309,33 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         cumulative_clause: 'Where two or more scheduled payments remain outstanding, all unpaid amounts are bundled into a single cumulative charge. Settling the cumulative balance clears every prior unpaid installment in one go.',
         rental_total: installment ? formatCurrency(installment.total_installable_amount + installment.upfront_amount, currencyCode) : '',
         tenant_name: tenant?.company_name || 'Drive 247',
+
+        // Additional drivers — synthetic fields merged onto the rental object
+        // by the caller (see buildAdditionalDriverSlotFields). Empty strings
+        // when the rental has none so each template line collapses naturally.
+        additional_drivers_list: rental?.additional_drivers_list || '',
+        additional_drivers_count: rental?.additional_drivers_count || '',
+        additional_drivers: rental?.additional_drivers || '',
+        additional_driver_1_name: rental?.additional_driver_1_name || '',
+        additional_driver_1_email: rental?.additional_driver_1_email || '',
+        additional_driver_1_phone: rental?.additional_driver_1_phone || '',
+        additional_driver_1_license: rental?.additional_driver_1_license || '',
+        additional_driver_2_name: rental?.additional_driver_2_name || '',
+        additional_driver_2_email: rental?.additional_driver_2_email || '',
+        additional_driver_2_phone: rental?.additional_driver_2_phone || '',
+        additional_driver_2_license: rental?.additional_driver_2_license || '',
+        additional_driver_3_name: rental?.additional_driver_3_name || '',
+        additional_driver_3_email: rental?.additional_driver_3_email || '',
+        additional_driver_3_phone: rental?.additional_driver_3_phone || '',
+        additional_driver_3_license: rental?.additional_driver_3_license || '',
+        additional_driver_4_name: rental?.additional_driver_4_name || '',
+        additional_driver_4_email: rental?.additional_driver_4_email || '',
+        additional_driver_4_phone: rental?.additional_driver_4_phone || '',
+        additional_driver_4_license: rental?.additional_driver_4_license || '',
+        additional_driver_5_name: rental?.additional_driver_5_name || '',
+        additional_driver_5_email: rental?.additional_driver_5_email || '',
+        additional_driver_5_phone: rental?.additional_driver_5_phone || '',
+        additional_driver_5_license: rental?.additional_driver_5_license || '',
     };
 
     let result = template;
@@ -1003,6 +1078,22 @@ export async function POST(request: NextRequest) {
                 installment = { ...plan, scheduled_installments: scheduled || [] } as InstallmentData;
                 console.log(`Installment plan found: ${plan.plan_type}, ${plan.number_of_installments} payments`);
             }
+        }
+
+        // Fetch additional drivers and merge synthetic fields onto rental so
+        // they flow through processTemplate's variables map.
+        let additionalDrivers: AdditionalDriverRow[] = [];
+        if (body.rentalId) {
+            const { data: addlRows } = await supabase
+                .from('rental_additional_drivers')
+                .select('id, name, email, phone, license_number')
+                .eq('rental_id', body.rentalId)
+                .order('created_at', { ascending: true });
+            additionalDrivers = (addlRows || []) as AdditionalDriverRow[];
+            console.log(`Additional drivers: ${additionalDrivers.length}`);
+        }
+        if (rental && additionalDrivers.length >= 0) {
+            Object.assign(rental, buildAdditionalDriverSlotFields(additionalDrivers));
         }
 
         // ── Generate PDF ──

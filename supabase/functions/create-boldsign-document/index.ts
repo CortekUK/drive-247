@@ -186,6 +186,32 @@ function processTemplate(
     // when the rental has none so the template line collapses naturally.
     additional_drivers_list: (rental?.additional_drivers_list as string) || '',
 
+    // Granular additional driver variables — populated by generateDocument
+    // via buildAdditionalDriverSlotFields. Empty strings when unused so each
+    // template line collapses naturally.
+    additional_drivers_count: (rental?.additional_drivers_count as string) || '',
+    additional_drivers: (rental?.additional_drivers as string) || '',
+    additional_driver_1_name: (rental?.additional_driver_1_name as string) || '',
+    additional_driver_1_email: (rental?.additional_driver_1_email as string) || '',
+    additional_driver_1_phone: (rental?.additional_driver_1_phone as string) || '',
+    additional_driver_1_license: (rental?.additional_driver_1_license as string) || '',
+    additional_driver_2_name: (rental?.additional_driver_2_name as string) || '',
+    additional_driver_2_email: (rental?.additional_driver_2_email as string) || '',
+    additional_driver_2_phone: (rental?.additional_driver_2_phone as string) || '',
+    additional_driver_2_license: (rental?.additional_driver_2_license as string) || '',
+    additional_driver_3_name: (rental?.additional_driver_3_name as string) || '',
+    additional_driver_3_email: (rental?.additional_driver_3_email as string) || '',
+    additional_driver_3_phone: (rental?.additional_driver_3_phone as string) || '',
+    additional_driver_3_license: (rental?.additional_driver_3_license as string) || '',
+    additional_driver_4_name: (rental?.additional_driver_4_name as string) || '',
+    additional_driver_4_email: (rental?.additional_driver_4_email as string) || '',
+    additional_driver_4_phone: (rental?.additional_driver_4_phone as string) || '',
+    additional_driver_4_license: (rental?.additional_driver_4_license as string) || '',
+    additional_driver_5_name: (rental?.additional_driver_5_name as string) || '',
+    additional_driver_5_email: (rental?.additional_driver_5_email as string) || '',
+    additional_driver_5_phone: (rental?.additional_driver_5_phone as string) || '',
+    additional_driver_5_license: (rental?.additional_driver_5_license as string) || '',
+
     // PAYG period-rate framings. Mirror of apps/portal/src/lib/template-variables.ts
     // so the editor preview matches what BoldSign actually substitutes. Empty
     // strings on non-PAYG rentals → templates wrapping these in plain text
@@ -471,6 +497,44 @@ async function fetchInstallmentData(
   }
 }
 
+interface AdditionalDriverRow {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  license_number: string | null;
+}
+
+function buildAdditionalDriversBlockHtml(drivers: AdditionalDriverRow[]): string {
+  if (!drivers.length) return '';
+  return drivers.map((d, i) => {
+    const parts = [
+      `<strong>Driver ${i + 1}:</strong> ${d.name || ''}`,
+      d.email ? `Email: ${d.email}` : '',
+      d.phone ? `Phone: ${d.phone}` : '',
+      d.license_number ? `License/ID: ${d.license_number}` : '',
+    ].filter(Boolean);
+    return `<p>${parts.join(' &middot; ')}</p>`;
+  }).join('');
+}
+
+// Build the per-slot synthetic fields (up to 5 drivers). Empty strings beyond.
+function buildAdditionalDriverSlotFields(drivers: AdditionalDriverRow[]): Record<string, string> {
+  const fields: Record<string, string> = {
+    additional_drivers_count: drivers.length ? drivers.length.toString() : '',
+    additional_drivers: buildAdditionalDriversBlockHtml(drivers),
+  };
+  for (let i = 0; i < 5; i++) {
+    const slot = i + 1;
+    const d = drivers[i];
+    fields[`additional_driver_${slot}_name`] = d?.name || '';
+    fields[`additional_driver_${slot}_email`] = d?.email || '';
+    fields[`additional_driver_${slot}_phone`] = d?.phone || '';
+    fields[`additional_driver_${slot}_license`] = d?.license_number || '';
+  }
+  return fields;
+}
+
 async function generateDocument(
   supabase: ReturnType<typeof createClient>,
   rental: Record<string, unknown>,
@@ -479,6 +543,7 @@ async function generateDocument(
   tenantId: string,
   verification?: Record<string, unknown> | null,
   additionalDriversList?: string,
+  additionalDrivers: AdditionalDriverRow[] = [],
 ): Promise<string> {
   const { data: tenant } = await supabase
     .from('tenants')
@@ -496,10 +561,14 @@ async function generateDocument(
   const templateCategory = (rental as Record<string, unknown>)?.is_pay_as_you_go ? 'payg' : 'standard';
   const template = await getActiveTemplate(supabase, tenantId, templateCategory);
 
-  // Inject the additional drivers list as a synthetic rental field so it
-  // flows through processTemplate's variables map without changing the
-  // function signature for every caller.
-  const rentalWithExtras = { ...rental, additional_drivers_list: additionalDriversList || '' };
+  // Inject the additional drivers list and granular per-slot fields as
+  // synthetic rental fields so they flow through processTemplate's variables
+  // map without changing the function signature for every caller.
+  const rentalWithExtras = {
+    ...rental,
+    additional_drivers_list: additionalDriversList || '',
+    ...buildAdditionalDriverSlotFields(additionalDrivers),
+  };
 
   if (template) {
     console.log('Using custom template from portal');
@@ -790,11 +859,11 @@ Deno.serve(async (req) => {
     // signers AND get merged into the {{additional_drivers_list}} template var.
     // Drivers with no email are skipped for signing (BoldSign requires email)
     // but still appear in the agreement text for record-keeping.
-    let additionalDrivers: Array<{ id: string; name: string; email: string | null; license_number: string | null }> = [];
+    let additionalDrivers: AdditionalDriverRow[] = [];
     if (rentalId) {
       const { data: addlRows } = await supabase
         .from('rental_additional_drivers')
-        .select('id, name, email, license_number')
+        .select('id, name, email, phone, license_number')
         .eq('rental_id', rentalId);
       additionalDrivers = (addlRows || []) as typeof additionalDrivers;
     }
@@ -811,7 +880,7 @@ Deno.serve(async (req) => {
     // Generate document content
     let doc: string;
     if (tenantId) {
-      doc = await generateDocument(supabase, rental, customer, vehicle, tenantId, verification, additionalDriversList);
+      doc = await generateDocument(supabase, rental, customer, vehicle, tenantId, verification, additionalDriversList, additionalDrivers);
     } else {
       doc = generateDefaultTemplate(rental || {}, customer, vehicle, null);
     }
