@@ -83,3 +83,107 @@ describe("buildTemplateData — gig-worker resolution", () => {
     expect(data.is_gig_driver).toBe("No");
   });
 });
+
+describe("buildTemplateData — PAYG period rates", () => {
+  const baseArgs = () => ({
+    rental: { is_pay_as_you_go: true, monthly_amount: 150, rental_period_type: "Weekly" } as Record<string, any>,
+    customer: {} as Record<string, any>,
+    vehicle: {} as Record<string, any>,
+    tenant: {} as Record<string, any>,
+  });
+
+  it("computes daily/weekly/monthly framings from a Weekly rate", () => {
+    const a = baseArgs();
+    const data = buildTemplateData(a.rental, a.customer, a.vehicle, a.tenant);
+    expect(data.payg_period_label).toBe("Weekly");
+    expect(data.payg_billing_amount).toBe("$150.00");
+    // Weekly $150 → daily $150/7 = 21.42857… → formatted "$21.43"
+    expect(data.payg_daily_rate).toBe("$21.43");
+    // Weekly = (150/7) × 7 = 150 exact → "$150.00"
+    expect(data.payg_weekly_rate).toBe("$150.00");
+    // Monthly = (150/7) × 30 = 642.857… → "$642.86"
+    expect(data.payg_monthly_rate).toBe("$642.86");
+  });
+
+  it("computes framings from a Monthly rate", () => {
+    const a = baseArgs();
+    a.rental.rental_period_type = "Monthly";
+    a.rental.monthly_amount = 600;
+    const data = buildTemplateData(a.rental, a.customer, a.vehicle, a.tenant);
+    expect(data.payg_period_label).toBe("Monthly");
+    expect(data.payg_billing_amount).toBe("$600.00");
+    // Monthly $600 → daily $20 → weekly $140 → monthly back to $600
+    expect(data.payg_daily_rate).toBe("$20.00");
+    expect(data.payg_weekly_rate).toBe("$140.00");
+    expect(data.payg_monthly_rate).toBe("$600.00");
+  });
+
+  it("returns empty strings on non-PAYG rentals so the template line collapses", () => {
+    const a = baseArgs();
+    a.rental.is_pay_as_you_go = false;
+    const data = buildTemplateData(a.rental, a.customer, a.vehicle, a.tenant);
+    expect(data.payg_period_label).toBe("");
+    expect(data.payg_billing_amount).toBe("");
+    expect(data.payg_daily_rate).toBe("");
+    expect(data.payg_weekly_rate).toBe("");
+    expect(data.payg_monthly_rate).toBe("");
+    expect(data.payg_reminder_interval).toBe("");
+  });
+
+  it("formats reminder cadence from per-rental override", () => {
+    const a = baseArgs();
+    a.rental.payg_reminder_interval_days = 5;
+    const data = buildTemplateData(a.rental, a.customer, a.vehicle, a.tenant);
+    expect(data.payg_reminder_interval).toBe("every 5 days");
+  });
+
+  it("formats reminder cadence with singular form when interval is 1", () => {
+    const a = baseArgs();
+    a.rental.payg_reminder_interval_days = 1;
+    const data = buildTemplateData(a.rental, a.customer, a.vehicle, a.tenant);
+    expect(data.payg_reminder_interval).toBe("every 1 day");
+  });
+
+  it("falls back to default cadence (4 days) when no per-rental override", () => {
+    const a = baseArgs();
+    const data = buildTemplateData(a.rental, a.customer, a.vehicle, a.tenant);
+    expect(data.payg_reminder_interval).toBe("every 4 days");
+  });
+});
+
+describe("replaceVariables — {{#if is_payg}} conditional", () => {
+  const tmpl = `before
+{{#if is_payg}}PAYG section: charged {{payg_billing_amount}} per {{payg_period_label}}{{/if}}
+after`;
+
+  it("renders the PAYG block when payg_period_label is set", () => {
+    const out = replaceVariables(tmpl, {
+      payg_period_label: "Weekly",
+      payg_billing_amount: "$150.00",
+    });
+    expect(out).toContain("PAYG section: charged $150.00 per Weekly");
+  });
+
+  it("strips the PAYG block on non-PAYG rentals (empty payg_period_label)", () => {
+    const out = replaceVariables(tmpl, {
+      payg_period_label: "",
+      payg_billing_amount: "",
+    });
+    expect(out).not.toContain("PAYG section");
+    expect(out).toContain("before");
+    expect(out).toContain("after");
+  });
+
+  it("strips the PAYG block when payg_period_label is missing entirely", () => {
+    const out = replaceVariables(tmpl, {});
+    expect(out).not.toContain("PAYG section");
+  });
+
+  it("handles co-existing gig-driver and PAYG conditionals", () => {
+    const multi = `{{#if is_payg}}P{{/if}}{{#if is_gig_driver}}G{{/if}}`;
+    expect(replaceVariables(multi, { payg_period_label: "Weekly", is_gig_driver: "Yes" })).toBe("PG");
+    expect(replaceVariables(multi, { payg_period_label: "Weekly", is_gig_driver: "No" })).toBe("P");
+    expect(replaceVariables(multi, { payg_period_label: "", is_gig_driver: "Yes" })).toBe("G");
+    expect(replaceVariables(multi, { payg_period_label: "", is_gig_driver: "No" })).toBe("");
+  });
+});

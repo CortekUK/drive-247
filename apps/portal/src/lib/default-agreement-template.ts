@@ -98,19 +98,25 @@ export const PAYG_AGREEMENT_TEMPLATE = `<h1>PAY AS YOU GO RENTAL AGREEMENT</h1>
 <table>
 <tr><td><strong>Start Date</strong></td><td>{{rental_start_date}}</td></tr>
 <tr><td><strong>End Date</strong></td><td>{{rental_end_date}}</td></tr>
-<tr><td><strong>Daily Rate</strong></td><td>{{vehicle_daily_rent}}</td></tr>
+<tr><td><strong>Agreed Rate</strong></td><td>{{payg_billing_amount}} per {{payg_period_label}}</td></tr>
+<tr><td><strong>Daily Equivalent</strong></td><td>{{payg_daily_rate}} / day</td></tr>
+<tr><td><strong>Weekly Equivalent</strong></td><td>{{payg_weekly_rate}} / week</td></tr>
+<tr><td><strong>Monthly Equivalent</strong></td><td>{{payg_monthly_rate}} / month</td></tr>
+<tr><td><strong>Reminder Cadence</strong></td><td>{{payg_reminder_interval}}</td></tr>
 <tr><td><strong>Pickup Location</strong></td><td>{{pickup_location}}</td></tr>
 <tr><td><strong>Return Location</strong></td><td>{{return_location}}</td></tr>
 </table>
 <p><em>Pay As You Go rentals are open-ended. The End Date is shown as "Ongoing" because the rental continues to accrue daily charges until the Customer requests return and the Rental Company closes the rental.</em></p>
+
+<p><strong>Billing summary.</strong> The Customer agrees to pay <strong>{{payg_billing_amount}}</strong> per <strong>{{payg_period_label}}</strong> for the use of the Vehicle. For clarity, this is equivalent to <strong>{{payg_daily_rate}}</strong> per day, <strong>{{payg_weekly_rate}}</strong> per week, or <strong>{{payg_monthly_rate}}</strong> per month. The Rental Company will charge the daily equivalent automatically each 24-hour period the Vehicle remains in the Customer's possession.</p>
 
 <hr>
 
 <h2>How Pay As You Go Billing Works</h2>
 <p>This is not a fixed-term rental and there is no upfront total invoice. The Customer is billed daily, in arrears, for as long as the vehicle is in their possession.</p>
 <ol>
-<li><strong>Daily charge.</strong> Every 24 hours from the rental start time, the Customer is charged the Daily Rate above, plus any applicable tax and service fee configured by the Rental Company. The first daily charge posts at the end of the first 24-hour window.</li>
-<li><strong>Pre-authorization hold.</strong> At the start of the rental, the Rental Company places a pre-authorization hold on the Customer's payment method equal to two (2) days of the Daily Rate. This hold secures the rental and is released or captured against actual charges in accordance with the card network's rules.</li>
+<li><strong>Daily charge.</strong> Every 24 hours from the rental start time, the Customer is charged <strong>{{payg_daily_rate}}</strong> (the daily equivalent of the agreed <strong>{{payg_billing_amount}}</strong> per {{payg_period_label}}), plus any applicable tax and service fee configured by the Rental Company. The first daily charge posts at the end of the first 24-hour window.</li>
+<li><strong>Pre-authorization hold.</strong> At the start of the rental, the Rental Company places a pre-authorization hold on the Customer's payment method equal to two (2) days of {{payg_daily_rate}}. This hold secures the rental and is released or captured against actual charges in accordance with the card network's rules.</li>
 <li><strong>Payment allocation.</strong> Payments received from the Customer are applied to the oldest unpaid daily charge first (first-in, first-out). Partial payments reduce the outstanding balance but do not pause daily accrual.</li>
 <li><strong>Final day.</strong> When the Customer returns the vehicle and the Rental Company closes the rental, a final pro-rated charge is posted for the time elapsed since the most recent 24-hour accrual.</li>
 </ol>
@@ -118,7 +124,7 @@ export const PAYG_AGREEMENT_TEMPLATE = `<h1>PAY AS YOU GO RENTAL AGREEMENT</h1>
 <h2>Payment Obligations & Reminders</h2>
 <p>The Customer authorizes the Rental Company to charge the payment method on file for all amounts that accrue under this Agreement, including the daily rate, taxes, service fees, tolls, fines, damage charges, and any other amounts owed.</p>
 <ul>
-<li><strong>Reminders.</strong> The Rental Company will send periodic payment reminders by email (and, where enabled, SMS or WhatsApp) showing the outstanding balance and the number of days the rental has been active. Reminders begin after a short grace period from the rental start (typically two (2) days) and recur on a regular cadence (typically every four (4) days) until the balance is settled or a maximum reminder count is reached. Exact intervals follow the Rental Company's current configuration.</li>
+<li><strong>Reminders.</strong> The Rental Company will send payment reminders by email (and, where enabled, SMS or WhatsApp) <strong>{{payg_reminder_interval}}</strong> while a balance is outstanding, until the balance is settled or a maximum reminder count is reached. Reminders begin after a short grace period from the rental start.</li>
 <li><strong>Non-payment.</strong> If the Customer's payment method declines, expires, or is revoked, the Customer remains liable for all accrued charges. The Rental Company may suspend, terminate, or recover the vehicle, report the account for collection, and pursue all remedies available under applicable law.</li>
 <li><strong>Disputes.</strong> Any chargeback or dispute initiated against legitimate charges under this Agreement constitutes a material breach and may result in immediate termination and recovery of the vehicle.</li>
 </ul>

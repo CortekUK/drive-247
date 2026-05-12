@@ -2,6 +2,7 @@
 // These variables can be used in agreement templates and will be replaced with actual data
 
 import { formatCurrency } from "@/lib/format-utils";
+import { computePaygDailyRate } from "@/lib/payg-rate";
 
 export interface TemplateVariable {
   key: string;
@@ -117,6 +118,56 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
     description: 'Comma-separated list of additional drivers attached to this rental, formatted as "Name (DL: licence)" when a licence number is available, else "Name (email)". Empty string when there are no additional drivers — the surrounding line in the template will collapse naturally.',
     sample: 'Jane Doe (DL: ABC123), John Doe (DL: XYZ789)',
     category: 'rental',
+  },
+
+  // ── PAYG-specific rate variables ───────────────────────────────────────
+  // For Pay-As-You-Go rentals, the operator agrees ONE rate at ONE period
+  // (e.g., $150/week OR $600/month). These variables expose that rate in all
+  // three period framings (daily / weekly / monthly) so the template author
+  // can pick the wording the customer best understands. Empty strings on
+  // non-PAYG rentals so a template using them on a Standard rental collapses
+  // cleanly. Wrap PAYG-only sections in {{#if is_payg}}…{{/if}}.
+  {
+    key: 'payg_period_label',
+    label: 'PAYG Billing Period',
+    description: 'The billing period unit chosen by the operator ("Weekly" or "Monthly"). Empty on non-PAYG rentals.',
+    sample: 'Weekly',
+    category: 'payment',
+  },
+  {
+    key: 'payg_billing_amount',
+    label: 'PAYG Billing Amount',
+    description: 'The per-period billing amount the customer pays (e.g., $150 weekly OR $600 monthly). Use alongside {{payg_period_label}} for a natural phrase like "$150 per Weekly". Empty on non-PAYG.',
+    sample: '$150.00',
+    category: 'payment',
+  },
+  {
+    key: 'payg_daily_rate',
+    label: 'PAYG Daily Rate',
+    description: 'Equivalent daily rate derived from the agreed period rate (weekly ÷ 7 or monthly ÷ 30). Used in the rolling-invoice ledger. Empty on non-PAYG.',
+    sample: '$21.43',
+    category: 'payment',
+  },
+  {
+    key: 'payg_weekly_rate',
+    label: 'PAYG Weekly Rate',
+    description: 'Equivalent weekly rate (daily × 7). Useful when the operator agreed monthly but wants to show the weekly equivalent. Empty on non-PAYG.',
+    sample: '$150.00',
+    category: 'payment',
+  },
+  {
+    key: 'payg_monthly_rate',
+    label: 'PAYG Monthly Rate',
+    description: 'Equivalent monthly rate (daily × 30). Empty on non-PAYG.',
+    sample: '$642.86',
+    category: 'payment',
+  },
+  {
+    key: 'payg_reminder_interval',
+    label: 'PAYG Reminder Cadence',
+    description: 'How often the customer receives a payment reminder while a balance is outstanding (per-rental override, falling back to tenant default). Empty on non-PAYG.',
+    sample: 'every 4 days',
+    category: 'payment',
   },
 
   // Vehicle variables
@@ -544,6 +595,14 @@ export function replaceVariables(
     /\{\{#if is_gig_driver\}\}([\s\S]*?)\{\{\/if\}\}/g,
     (_match, inner) => (data.is_gig_driver === 'Yes' ? inner : ''),
   );
+  // PAYG-only conditional: render the inner block only when the rental is
+  // Pay-As-You-Go. Useful for clauses that describe per-period billing,
+  // accrual logic, or reminder cadence — irrelevant on Standard rentals.
+  // Detected via `payg_period_label` being non-empty (matches buildTemplateData).
+  result = result.replace(
+    /\{\{#if is_payg\}\}([\s\S]*?)\{\{\/if\}\}/g,
+    (_match, inner) => (data.payg_period_label ? inner : ''),
+  );
 
   for (const variable of TEMPLATE_VARIABLES) {
     const placeholder = `{{${variable.key}}}`;
@@ -615,6 +674,41 @@ export function buildTemplateData(
     // rental row hasn't been populated (e.g., portal-created rentals before
     // is_gig_driver was wired into the form).
     is_gig_driver: (rental?.is_gig_driver ?? customer?.is_gig_driver) ? 'Yes' : 'No',
+
+    // PAYG period-rate framings. Operator agreed ONE rate at ONE period
+    // (rentals.monthly_amount + rentals.rental_period_type). These derive
+    // the same money in daily/weekly/monthly framings so the template can
+    // present the figure the customer best understands. Empty strings on
+    // non-PAYG rentals so templates wrapping these in plain text don't show
+    // "$NaN" on a Standard rental.
+    ...((): Record<string, string> => {
+      if (!rental?.is_pay_as_you_go) {
+        return {
+          payg_period_label: '',
+          payg_billing_amount: '',
+          payg_daily_rate: '',
+          payg_weekly_rate: '',
+          payg_monthly_rate: '',
+          payg_reminder_interval: '',
+        };
+      }
+      const period = rental?.rental_period_type || 'Weekly';
+      const amount = Number(rental?.monthly_amount) || 0;
+      const daily = computePaygDailyRate(amount, period);
+      const weekly = daily * 7;
+      const monthly = daily * 30;
+      const interval = Number(rental?.payg_reminder_interval_days) > 0
+        ? Number(rental.payg_reminder_interval_days)
+        : 4;
+      return {
+        payg_period_label: period,
+        payg_billing_amount: formatTemplateCurrency(amount, currencyCode),
+        payg_daily_rate: formatTemplateCurrency(daily, currencyCode),
+        payg_weekly_rate: formatTemplateCurrency(weekly, currencyCode),
+        payg_monthly_rate: formatTemplateCurrency(monthly, currencyCode),
+        payg_reminder_interval: `every ${interval} day${interval === 1 ? '' : 's'}`,
+      };
+    })(),
 
     // Vehicle
     vehicle_make: vehicle?.make || '',

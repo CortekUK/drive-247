@@ -186,6 +186,40 @@ function processTemplate(
     // when the rental has none so the template line collapses naturally.
     additional_drivers_list: (rental?.additional_drivers_list as string) || '',
 
+    // PAYG period-rate framings. Mirror of apps/portal/src/lib/template-variables.ts
+    // so the editor preview matches what BoldSign actually substitutes. Empty
+    // strings on non-PAYG rentals → templates wrapping these in plain text
+    // collapse cleanly on a Standard agreement.
+    ...((): Record<string, string> => {
+      if (!rental?.is_pay_as_you_go) {
+        return {
+          payg_period_label: '',
+          payg_billing_amount: '',
+          payg_daily_rate: '',
+          payg_weekly_rate: '',
+          payg_monthly_rate: '',
+          payg_reminder_interval: '',
+        };
+      }
+      const period = (rental?.rental_period_type as string) || 'Weekly';
+      const amount = Number(rental?.monthly_amount) || 0;
+      // Same divisor table as apps/portal/src/lib/payg-rate.ts — keep them in lockstep.
+      const divisor = period === 'Monthly' ? 30 : period === 'Daily' ? 1 : 7;
+      const daily = amount > 0 ? amount / divisor : 0;
+      const weekly = daily * 7;
+      const monthly = daily * 30;
+      const intervalNum = Number(rental?.payg_reminder_interval_days);
+      const interval = Number.isFinite(intervalNum) && intervalNum > 0 ? intervalNum : 4;
+      return {
+        payg_period_label: period,
+        payg_billing_amount: formatCurrency(amount),
+        payg_daily_rate: formatCurrency(daily),
+        payg_weekly_rate: formatCurrency(weekly),
+        payg_monthly_rate: formatCurrency(monthly),
+        payg_reminder_interval: `every ${interval} day${interval === 1 ? '' : 's'}`,
+      };
+    })(),
+
     // Vehicle
     vehicle_make: (vehicle?.make as string) || '',
     vehicle_model: (vehicle?.model as string) || '',
@@ -298,12 +332,19 @@ function processTemplate(
 
   // Conditional pre-pass: strip / keep `{{#if is_gig_driver}}...{{/if}}`
   // blocks so tenants can hide gig-worker-specific terms for non-gig-drivers.
-  // Only `is_gig_driver` is conditioned here; nested blocks and {{else}} are
-  // intentionally unsupported. MUST match apps/portal/src/lib/template-variables.ts
-  // (replaceVariables) — if you add a conditional there, mirror it here.
+  // Only `is_gig_driver` and `is_payg` are conditioned here; nested blocks
+  // and {{else}} are intentionally unsupported. MUST match
+  // apps/portal/src/lib/template-variables.ts (replaceVariables) — if you
+  // add a conditional there, mirror it here.
   result = result.replace(
     /\{\{#if is_gig_driver\}\}([\s\S]*?)\{\{\/if\}\}/g,
     (_match, inner) => (variables.is_gig_driver === 'Yes' ? inner : ''),
+  );
+  // PAYG-only conditional: detected via payg_period_label being non-empty
+  // (matches buildTemplateData's "empty on non-PAYG" convention).
+  result = result.replace(
+    /\{\{#if is_payg\}\}([\s\S]*?)\{\{\/if\}\}/g,
+    (_match, inner) => (variables.payg_period_label ? inner : ''),
   );
 
   for (const [key, value] of Object.entries(variables)) {
