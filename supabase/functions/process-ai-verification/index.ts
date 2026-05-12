@@ -109,10 +109,12 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Verify the session exists and is pending (query by session_id, not id)
+    // Verify the session exists and is pending (query by session_id, not id).
+    // external_user_id is fetched too so we can detect additional-driver sessions
+    // — they have customer_id=NULL and external_user_id="additional_driver_<uuid>".
     const { data: verification, error: verificationError } = await supabaseClient
       .from('identity_verifications')
-      .select('id, customer_id, tenant_id, status')
+      .select('id, customer_id, tenant_id, status, external_user_id')
       .eq('session_id', sessionId)
       .single();
 
@@ -282,6 +284,32 @@ serve(async (req) => {
       .update(updateData)
       .eq('id', recordId);
 
+    // Additional-driver routing: when the verification was opened by
+    // send-additional-driver-invite the external_user_id is
+    // "additional_driver_<uuid>" and customer_id is NULL. Update the
+    // rental_additional_drivers row instead of the customers table so the
+    // portal badge flips to Verified/Rejected in realtime.
+    const externalId = (verification as any).external_user_id || '';
+    if (!verification.customer_id && typeof externalId === 'string' && externalId.startsWith('additional_driver_')) {
+      const driverId = externalId.replace(/^additional_driver_/, '');
+      let driverStatus: 'pending' | 'verified' | 'rejected' = 'pending';
+      if (finalResult === 'verified') driverStatus = 'verified';
+      else if (finalResult === 'rejected') driverStatus = 'rejected';
+      const driverUpdate: Record<string, unknown> = {
+        verification_status: driverStatus,
+        license_number: ocrData?.documentNumber || null,
+      };
+      const { error: drvErr } = await supabaseClient
+        .from('rental_additional_drivers')
+        .update(driverUpdate)
+        .eq('id', driverId);
+      if (drvErr) {
+        console.error('[ProcessAI] additional driver row update failed:', drvErr);
+      } else {
+        console.log('[ProcessAI] additional driver routed:', driverId, driverStatus);
+      }
+    }
+
     // Update customer status if customer_id exists
     if (verification.customer_id) {
       let customerStatus = 'pending';
@@ -337,6 +365,14 @@ serve(async (req) => {
               blocked_reason: `Blocked identity: ${blockedCheck.reason}`
             })
             .eq('id', verification.customer_id);
+        } else if (typeof externalId === 'string' && externalId.startsWith('additional_driver_')) {
+          // Additional drivers don't have a `customers` row to block, but we
+          // still need to flip their per-rental verification_status to rejected.
+          const driverId = externalId.replace(/^additional_driver_/, '');
+          await supabaseClient
+            .from('rental_additional_drivers')
+            .update({ verification_status: 'rejected' })
+            .eq('id', driverId);
         }
 
         finalResult = 'rejected';

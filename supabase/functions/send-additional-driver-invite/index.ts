@@ -2,14 +2,22 @@
 //
 // Send (or resend) the ID-verification invite to a single additional driver.
 //
-// Creates a Veriff session (vendorData = the additional-driver row ID so the
-// webhook can route the result back), persists the verification_url +
-// identity_verification_id on the row, and emails the link to the driver.
-// The agreement signing email is sent separately by the BoldSign flow when
-// the document is generated — this function only handles ID verification.
+// Uses Drive247's AI verification flow (NOT Veriff). Mirrors what
+// create-ai-verification-session does for primary customers, but:
+//   - identity_verifications.customer_id is NULL (additional drivers are not
+//     customers; they live in rental_additional_drivers).
+//   - external_user_id is "additional_driver_<driver_id>" so the completion
+//     handler in process-ai-verification can route results back to the
+//     rental_additional_drivers row.
+//
+// Flow:
+//   1. Generate a QR token + URL (https://<tenant>.drive-247.com/verify/<token>)
+//   2. Insert identity_verifications row keyed to the driver
+//   3. Stamp the driver row with verification_url + identity_verification_id
+//   4. Email the link to the driver via Resend (branded)
 //
 // Request body: { driver_id: string }
-// Response: { success: true, verification_url: string }
+// Response: { success: true, verification_url } | { success: false, error }
 //
 // Auth: requires JWT; tenant ownership enforced via app_users.tenant_id.
 
@@ -22,102 +30,20 @@ interface RequestBody {
   driver_id: string;
 }
 
-interface VeriffSessionResult {
-  sessionUrl: string;
-  sessionToken: string;
-  sessionId: string;
+// QR session lives 3 hours (matches create-ai-verification-session). Operator
+// resends from the rental detail page if the driver doesn't act in time.
+const QR_TTL_MS = 3 * 60 * 60 * 1000;
+
+function generateQRToken(): string {
+  const uuid = crypto.randomUUID();
+  const ts = Date.now().toString(36);
+  return `${uuid}-${ts}`;
 }
 
-interface VeriffOutcome {
-  ok: boolean;
-  session?: VeriffSessionResult;
-  /** Surfaced to the client so the operator sees WHY Veriff failed. */
-  errorStatus?: number;
-  errorBody?: string;
-}
-
-async function createVeriffSession(
-  apiKey: string,
-  baseUrl: string,
-  driverName: string,
-  vendorData: string,
-  documentType?: string,
-): Promise<VeriffOutcome> {
-  const firstName = (driverName || "").trim().split(/\s+/)[0] || "Additional";
-  const lastName = (driverName || "").trim().split(/\s+/).slice(1).join(" ") || "Driver";
-
-  const requestBody: any = {
-    verification: {
-      person: { firstName, lastName },
-      vendorData,
-    },
-  };
-  if (documentType) {
-    const veriffDocTypeMap: Record<string, string> = {
-      driving_license: "DRIVERS_LICENSE",
-      passport: "PASSPORT",
-      id_card: "ID_CARD",
-    };
-    if (veriffDocTypeMap[documentType]) {
-      requestBody.verification.document = { type: veriffDocTypeMap[documentType] };
-    }
-  }
-
-  console.log("[SendInvite] Veriff request:", JSON.stringify({ baseUrl, vendorData, firstName, lastName, documentType }));
-
-  let res: Response;
-  try {
-    res = await fetch(`${baseUrl}/v1/sessions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-AUTH-CLIENT": apiKey },
-      body: JSON.stringify(requestBody),
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[SendInvite] Veriff fetch threw:", msg);
-    return { ok: false, errorStatus: 0, errorBody: `fetch error: ${msg}` };
-  }
-
-  const bodyText = await res.text();
-  if (!res.ok) {
-    console.error("[SendInvite] Veriff non-OK:", res.status, bodyText);
-    return { ok: false, errorStatus: res.status, errorBody: bodyText.slice(0, 500) };
-  }
-
-  let data: any;
-  try {
-    data = JSON.parse(bodyText);
-  } catch (err) {
-    console.error("[SendInvite] Veriff response not JSON:", bodyText.slice(0, 500));
-    return { ok: false, errorStatus: 200, errorBody: `non-JSON response: ${bodyText.slice(0, 200)}` };
-  }
-
-  const url = data?.verification?.url;
-  const sessionId = data?.verification?.id;
-  // Veriff sometimes omits sessionToken; the id works as fallback for webhook matching.
-  const sessionToken = data?.verification?.sessionToken || sessionId;
-
-  if (!url || !sessionId) {
-    console.error("[SendInvite] Veriff response missing url/id:", JSON.stringify(data));
-    return { ok: false, errorStatus: 200, errorBody: "Veriff response missing url or id" };
-  }
-
-  return { ok: true, session: { sessionUrl: url, sessionToken, sessionId } };
-}
-
-function inviteEmailHtml(driverName: string, verificationUrl: string, companyName: string): string {
-  return `
-    <p>Hi ${escapeHtml(driverName)},</p>
-    <p>You have been added as an additional driver on a vehicle rental with <strong>${escapeHtml(companyName)}</strong>.</p>
-    <p>To complete the process, please verify your driving licence using the secure link below. The same link works on mobile and desktop.</p>
-    <p style="text-align:center;margin:24px 0;">
-      <a href="${verificationUrl}" style="background:#6366f1;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:500;">
-        Verify Your Licence
-      </a>
-    </p>
-    <p>You will also receive a separate email shortly to sign the rental agreement.</p>
-    <p style="color:#737373;font-size:12px;">If the button doesn't work, copy and paste this URL into your browser:<br/>${verificationUrl}</p>
-  `;
+function buildVerifyUrl(tenantSlug: string, qrToken: string): string {
+  const explicit = Deno.env.get("BOOKING_APP_URL");
+  if (explicit) return `${explicit}/verify/${qrToken}`;
+  return `https://${tenantSlug}.drive-247.com/verify/${qrToken}`;
 }
 
 function escapeHtml(s: string): string {
@@ -129,13 +55,28 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function inviteEmailHtml(driverName: string, verificationUrl: string, companyName: string): string {
+  return `
+    <p>Hi ${escapeHtml(driverName)},</p>
+    <p>You have been added as an additional driver on a vehicle rental with <strong>${escapeHtml(companyName)}</strong>.</p>
+    <p>To complete the process, please verify your driving licence using the secure link below. The link works on mobile and desktop and is valid for 3 hours — your operator can resend if it expires.</p>
+    <p style="text-align:center;margin:24px 0;">
+      <a href="${verificationUrl}" style="background:#6366f1;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:500;">
+        Verify Your Licence
+      </a>
+    </p>
+    <p>You will also receive a separate email shortly to sign the rental agreement.</p>
+    <p style="color:#737373;font-size:12px;">If the button doesn't work, copy and paste this URL into your browser:<br/>${verificationUrl}</p>
+  `;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ success: false, error: "Method not allowed" }), {
-      status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ success: false, error: "Method not allowed" }),
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -144,114 +85,104 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    // Auth
+    // Auth: resolve the caller's tenant_id from app_users via their JWT.
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.replace(/^Bearer\s+/i, "");
-    if (!token) return jsonError(401, "Missing authorization token");
+    if (!token) return softError("Missing authorization token");
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: `Bearer ${token}` } },
     });
     const { data: { user }, error: authErr } = await userClient.auth.getUser();
-    if (authErr || !user) return jsonError(401, "Invalid or expired token");
+    if (authErr || !user) return softError("Invalid or expired token");
     const { data: appUser } = await supabase
       .from("app_users")
       .select("tenant_id, is_super_admin")
       .eq("auth_user_id", user.id)
       .single();
-    if (!appUser) return jsonError(403, "User not found in app_users");
+    if (!appUser) return softError("User not found in app_users");
 
     const body = (await req.json().catch(() => ({}))) as RequestBody;
     const driverId = body?.driver_id;
-    if (!driverId) return jsonError(400, "driver_id is required");
+    if (!driverId) return softError("driver_id is required");
 
-    // Load the driver row + tenant settings
+    // Load the driver row.
     const { data: driver, error: driverErr } = await supabase
       .from("rental_additional_drivers")
       .select("id, tenant_id, name, email, rental_id")
       .eq("id", driverId)
       .single();
-    if (driverErr || !driver) return jsonError(404, "Driver not found");
+    if (driverErr || !driver) return softError("Driver not found");
     if (!appUser.is_super_admin && appUser.tenant_id !== driver.tenant_id) {
-      return jsonError(403, "Not authorized");
+      return softError("Not authorized for this driver");
     }
     if (!driver.email) {
-      return jsonError(400, "Cannot send email — driver has no email address");
+      return softError("Cannot send email — driver has no email address");
     }
 
-    const VERIFF_API_KEY = Deno.env.get("VERIFF_API_KEY") || Deno.env.get("NEXT_PUBLIC_VERIFF_API_KEY");
-    const VERIFF_BASE_URL = Deno.env.get("VERIFF_BASE_URL") || "https://stationapi.veriff.com";
-    if (!VERIFF_API_KEY) return jsonError(500, "Veriff is not configured");
-
-    const { data: tenant } = await supabase
+    // Tenant slug is needed for the verify URL; company_name + branding for
+    // the email shell.
+    const { data: tenant, error: tenantErr } = await supabase
       .from("tenants")
-      .select("verification_document_type, company_name")
+      .select("slug, company_name")
       .eq("id", driver.tenant_id)
       .single();
-
-    // Create a Veriff session keyed on the driver row id (not a customer id).
-    const outcome = await createVeriffSession(
-      VERIFF_API_KEY,
-      VERIFF_BASE_URL,
-      driver.name,
-      `additional_driver_${driver.id}`,
-      tenant?.verification_document_type || undefined,
-    );
-    if (!outcome.ok || !outcome.session) {
-      // Return 200 with success:false so the Supabase JS client surfaces our
-      // error body in `data.error` instead of throwing a generic non-2xx error.
-      const detail = `Veriff [${outcome.errorStatus ?? "?"}]: ${outcome.errorBody ?? "unknown"}`;
-      console.error("[SendInvite] Veriff session creation failed:", detail);
-      return new Response(
-        JSON.stringify({ success: false, error: `Failed to create Veriff session — ${detail}` }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    if (tenantErr || !tenant?.slug) {
+      return softError("Tenant slug not found — cannot build verification URL");
     }
-    const session = outcome.session;
 
-    // Persist a verification record. customer_id is NULL because this is per
-    // additional-driver — webhooks key off the vendorData prefix.
-    // Use 'pending' for status (matches the table default and what veriff-webhook
-    // expects on the unverified → completed transition).
+    // Build the QR session.
+    const qrToken = generateQRToken();
+    const verifyUrl = buildVerifyUrl(tenant.slug, qrToken);
+    const sessionId = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + QR_TTL_MS);
+
+    // Insert verification record. customer_id is NULL because this driver is
+    // NOT a `customers` row — they live in rental_additional_drivers. The
+    // process-ai-verification handler reads external_user_id to figure out
+    // where to route the completion.
     const { data: verification, error: vErr } = await supabase
       .from("identity_verifications")
       .insert({
         tenant_id: driver.tenant_id,
-        provider: "veriff",
-        session_id: session.sessionId,
-        verification_token: session.sessionToken,
+        provider: "ai",
+        verification_provider: "ai",
         external_user_id: `additional_driver_${driver.id}`,
+        session_id: sessionId,
         status: "pending",
         review_status: "pending",
-        verification_url: session.sessionUrl,
+        qr_session_token: qrToken,
+        qr_session_expires_at: expiresAt.toISOString(),
       })
       .select()
       .single();
     if (vErr) {
       console.error("[SendInvite] identity_verifications insert failed:", vErr);
-      return jsonError(500, `Verification insert failed: ${vErr.message}`);
+      return softError(`Verification insert failed: ${vErr.message}`);
     }
 
-    // Stamp the driver row with the verification linkage and URL for resend.
+    // Stamp the driver row with the linkage + URL so the rental detail page
+    // can show "Resend" / "Open Verification URL" buttons.
     const { error: drvUpdErr } = await supabase
       .from("rental_additional_drivers")
       .update({
         identity_verification_id: verification.id,
-        verification_url: session.sessionUrl,
+        verification_url: verifyUrl,
         verification_status: "pending",
       })
       .eq("id", driver.id);
     if (drvUpdErr) {
       console.error("[SendInvite] driver row update failed:", drvUpdErr);
-      // Non-fatal — the verification row exists, link can still be retrieved.
+      // Non-fatal — verification row exists; the URL can be retrieved by
+      // joining on identity_verification_id from another query.
     }
 
     // Send the invite email. Non-fatal: if Resend fails the verification row
-    // is still good — the operator can resend manually.
+    // is still good — operator can resend from the portal.
     try {
       const branding = await getTenantBranding(driver.tenant_id, supabase);
-      const companyName = tenant?.company_name || branding?.company_name || "Drive247";
+      const companyName = tenant.company_name || (branding as any)?.company_name || "Drive247";
       const html = wrapWithBrandedTemplate(
-        inviteEmailHtml(driver.name, session.sessionUrl, companyName),
+        inviteEmailHtml(driver.name, verifyUrl, companyName),
         branding,
       );
       await sendEmail(
@@ -262,22 +193,24 @@ serve(async (req) => {
         driver.tenant_id,
       );
     } catch (mailErr) {
-      console.error("[SendAdditionalDriverInvite] email error:", mailErr);
+      console.error("[SendInvite] email send failed (non-fatal):", mailErr);
     }
 
     return new Response(
-      JSON.stringify({ success: true, verification_url: session.sessionUrl }),
+      JSON.stringify({ success: true, verification_url: verifyUrl }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
     console.error("[SendAdditionalDriverInvite] Fatal:", error);
-    return jsonError(500, error instanceof Error ? error.message : "Unknown error");
+    return softError(error instanceof Error ? error.message : "Unknown error");
   }
 });
 
-function jsonError(status: number, message: string): Response {
+// Return 200 with success:false so the Supabase JS client surfaces the message
+// in `data.error` rather than throwing a generic "non-2xx" error.
+function softError(message: string): Response {
   return new Response(
     JSON.stringify({ success: false, error: message }),
-    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
 }
