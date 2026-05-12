@@ -211,19 +211,71 @@ export default function BonzahDetailsForm({
               </div>
             </div>
 
-            <div className="space-y-2 max-w-xs">
-              <Label htmlFor="bonzah-dob" className="font-medium">Date of Birth *</Label>
-              <Input
-                id="bonzah-dob"
-                type="date"
-                value={values.driverDOB}
-                onChange={e => {
-                  setValues(prev => ({ ...prev, driverDOB: e.target.value }));
-                  if (errors.driverDOB) setErrors(prev => ({ ...prev, driverDOB: undefined }));
-                }}
-                className={`h-12 focus-visible:ring-primary ${errors.driverDOB ? 'border-destructive' : ''}`}
-                max={new Date(new Date().setFullYear(new Date().getFullYear() - 21)).toISOString().split('T')[0]}
-              />
+            <div className="space-y-2 max-w-md">
+              <Label htmlFor="bonzah-dob-month" className="font-medium">Date of Birth *</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <Select
+                  value={values.driverDOB ? String(new Date(values.driverDOB + 'T00:00:00').getMonth() + 1).padStart(2, '0') : ""}
+                  onValueChange={(month) => {
+                    const current = values.driverDOB ? new Date(values.driverDOB + 'T00:00:00') : new Date(2000, 0, 1);
+                    const m = parseInt(month);
+                    const daysInMonth = new Date(current.getFullYear(), m, 0).getDate();
+                    const day = Math.min(current.getDate(), daysInMonth);
+                    const dateStr = `${current.getFullYear()}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    setValues(prev => ({ ...prev, driverDOB: dateStr }));
+                    if (errors.driverDOB) setErrors(prev => ({ ...prev, driverDOB: undefined }));
+                  }}
+                >
+                  <SelectTrigger id="bonzah-dob-month" className={`h-12 focus-visible:ring-primary ${errors.driverDOB ? 'border-destructive' : ''}`}>
+                    <SelectValue placeholder="Month" />
+                  </SelectTrigger>
+                  <SelectContent position="popper" sideOffset={4}>
+                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => (
+                      <SelectItem key={i} value={String(i + 1).padStart(2, '0')}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={values.driverDOB ? String(new Date(values.driverDOB + 'T00:00:00').getDate()) : ""}
+                  onValueChange={(day) => {
+                    const current = values.driverDOB ? new Date(values.driverDOB + 'T00:00:00') : new Date(2000, 0, 1);
+                    const d = parseInt(day);
+                    const dateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                    setValues(prev => ({ ...prev, driverDOB: dateStr }));
+                    if (errors.driverDOB) setErrors(prev => ({ ...prev, driverDOB: undefined }));
+                  }}
+                >
+                  <SelectTrigger className={`h-12 focus-visible:ring-primary ${errors.driverDOB ? 'border-destructive' : ''}`}>
+                    <SelectValue placeholder="Day" />
+                  </SelectTrigger>
+                  <SelectContent position="popper" sideOffset={4}>
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                      <SelectItem key={d} value={String(d)}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={values.driverDOB ? String(new Date(values.driverDOB + 'T00:00:00').getFullYear()) : ""}
+                  onValueChange={(year) => {
+                    const current = values.driverDOB ? new Date(values.driverDOB + 'T00:00:00') : new Date(2000, 0, 1);
+                    const y = parseInt(year);
+                    const daysInMonth = new Date(y, current.getMonth() + 1, 0).getDate();
+                    const day = Math.min(current.getDate(), daysInMonth);
+                    const dateStr = `${y}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    setValues(prev => ({ ...prev, driverDOB: dateStr }));
+                    if (errors.driverDOB) setErrors(prev => ({ ...prev, driverDOB: undefined }));
+                  }}
+                >
+                  <SelectTrigger className={`h-12 focus-visible:ring-primary ${errors.driverDOB ? 'border-destructive' : ''}`}>
+                    <SelectValue placeholder="Year" />
+                  </SelectTrigger>
+                  <SelectContent position="popper" sideOffset={4}>
+                    {Array.from({ length: 80 }, (_, i) => new Date().getFullYear() - 21 - i).map(y => (
+                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               {errors.driverDOB && <p className="text-xs text-destructive">{errors.driverDOB}</p>}
               <p className="text-xs text-muted-foreground">You must be at least 21 years old</p>
             </div>
