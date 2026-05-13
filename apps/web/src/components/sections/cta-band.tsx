@@ -1,8 +1,7 @@
 "use client";
 
-import { CalendarCheck, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ConsultationForm } from "@/components/forms/consultation-form";
 import { useFadeIn } from "@/hooks/use-fade-in";
 
 export function CTABand() {
@@ -34,37 +33,25 @@ export function CTABand() {
           higher-margin bookings.
         </p>
 
-        {/* Form card */}
         <div
           ref={ref}
-          className={`relative mx-auto mt-10 max-w-lg overflow-hidden rounded-lg border bg-card p-6 shadow-lg ${visible ? "fade-in-visible" : "fade-in-hidden"}`}
+          className={`mt-10 flex flex-col items-center gap-4 ${visible ? "fade-in-visible" : "fade-in-hidden"}`}
         >
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-600/20 to-transparent" />
-          <ConsultationForm />
+          <Button
+            asChild
+            size="lg"
+            className="bg-indigo-600 px-8 text-sm font-semibold text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+          >
+            <a href="/strategy-call">
+              Book your strategy call
+              <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+            </a>
+          </Button>
 
-          {/* Strategy call booking */}
-          <div className="mt-5 flex flex-col items-center gap-2 border-t pt-5">
-            <Button
-              asChild
-              variant="outline"
-              size="lg"
-              className="w-full gap-2 text-sm font-medium"
-            >
-              <a href="/strategy-call">
-                <CalendarCheck className="h-4 w-4" />
-                Book a time directly
-              </a>
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Prefer to speak directly? Choose a time that works for you.
-            </p>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground/80">
+            <CheckCircle2 className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>20-minute call. No obligation. Clear next steps.</span>
           </div>
-        </div>
-
-        {/* Reassurance */}
-        <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground/80">
-          <CheckCircle2 className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
-          <span>Clear next steps. We move fast on our side.</span>
         </div>
       </div>
     </section>
