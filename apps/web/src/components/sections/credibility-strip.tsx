@@ -1,8 +1,8 @@
 const METRICS = [
-  { value: "$2M+", label: "Bookings processed" },
-  { value: "0%", label: "Booking commissions" },
-  { value: "3-in-1", label: "Integrated platform" },
-  { value: "50+", label: "Operators onboarded" },
+  { value: "0%", label: "Booking commissions — ever" },
+  { value: "7 days", label: "From kickoff to live bookings" },
+  { value: "$2M+", label: "In direct bookings processed" },
+  { value: "100%", label: "You own your customer data" },
 ];
 
 function MetricItem({ value, label }: { value: string; label: string }) {
