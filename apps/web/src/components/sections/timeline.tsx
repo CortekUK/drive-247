@@ -121,9 +121,14 @@ export function Timeline() {
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-600/[0.08] dark:bg-indigo-400/[0.1]">
               <ShieldCheck className="h-4.5 w-4.5 text-indigo-600 dark:text-indigo-400" />
             </div>
-            <p className="text-[15px] font-semibold tracking-tight text-foreground">
-              Not live in 7 days? We don&apos;t charge you for month one.
-            </p>
+            <div className="text-center">
+              <p className="text-[15px] font-semibold tracking-tight text-foreground">
+                Not live in 7 days?
+              </p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                We don&apos;t charge you for month one.
+              </p>
+            </div>
           </div>
         </div>
 
