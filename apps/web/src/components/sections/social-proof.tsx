@@ -1,6 +1,6 @@
 "use client";
 
-import { Star } from "lucide-react";
+import { Star, ArrowRight } from "lucide-react";
 import { TESTIMONIALS } from "@/lib/constants";
 import { useFadeIn } from "@/hooks/use-fade-in";
 
@@ -117,6 +117,16 @@ export function SocialProof() {
               />
             ))}
           </div>
+        </div>
+
+        <div className="mt-10 text-center">
+          <a
+            href="/strategy-call"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          >
+            See how Drive247 works for your fleet
+            <ArrowRight className="h-3.5 w-3.5" />
+          </a>
         </div>
       </div>
     </section>

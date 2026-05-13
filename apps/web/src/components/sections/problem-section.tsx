@@ -4,6 +4,7 @@ import {
   UserX,
   DollarSign,
   EyeOff,
+  ArrowRight,
 } from "lucide-react";
 import { PROBLEM_POINTS } from "@/lib/constants";
 import { useFadeIn } from "@/hooks/use-fade-in";
@@ -95,6 +96,16 @@ export function ProblemSection() {
               delay={i * 100}
             />
           ))}
+        </div>
+
+        <div className="mt-10 text-center">
+          <a
+            href="/strategy-call"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-400 transition-colors hover:text-indigo-300"
+          >
+            Build your direct channel instead
+            <ArrowRight className="h-3.5 w-3.5" />
+          </a>
         </div>
       </div>
     </section>

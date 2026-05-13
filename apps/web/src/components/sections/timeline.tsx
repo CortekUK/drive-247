@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, ShieldCheck } from "lucide-react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 
 const STEPS = [
@@ -132,7 +132,17 @@ export function Timeline() {
           </div>
         </div>
 
-        <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
+        <div className="mt-8 text-center">
+          <a
+            href="/strategy-call"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          >
+            Book your strategy call to get started
+            <ArrowRight className="h-3.5 w-3.5" />
+          </a>
+        </div>
+
+        <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">
           Paid acquisition management is optional and runs through your own ad
           accounts — you retain ownership and data.
         </p>
