@@ -12,6 +12,7 @@ export function OperationsDashboard() {
 
   return (
     <section id="features" className="bg-muted/50 py-20 sm:py-24">
+      <span id="dashboard" />
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         {/* Section heading */}
         <div className="flex items-center justify-center gap-4">
@@ -67,17 +68,12 @@ export function OperationsDashboard() {
           {/* Intro text — takes 2 of 5 columns */}
           <div className="lg:col-span-2">
             <h3 className="text-2xl font-bold tracking-tight">
-              Your entire operation, one screen
+              Stop juggling six tools to run one business.
             </h3>
             <p className="mt-3 text-muted-foreground leading-relaxed">
-              Fleet availability, vehicle status, bookings, extensions,
-              payments, document verification, renter communication, and
-              revenue reporting — all in one place.
-            </p>
-            <p className="mt-3 text-muted-foreground leading-relaxed">
-              No more switching between spreadsheets, payment platforms, and
-              messaging apps. Every workflow an operator needs lives inside a
-              single system, purpose-built for independent rental businesses.
+              Booking management, vehicle availability, payments and deposits,
+              agreements and reminders, customer communication, and admin
+              controls — all in one dashboard, on your domain, under your brand.
             </p>
           </div>
         </div>
@@ -87,7 +83,7 @@ export function OperationsDashboard() {
           ref={tabsRow.ref}
           className={tabsRow.visible ? "fade-in-visible" : "fade-in-hidden"}
         >
-          <Tabs defaultValue="fleet" className="mt-6 sm:mt-12">
+          <Tabs defaultValue="operations" className="mt-6 sm:mt-12">
             <TabsList
               variant="line"
               className="mx-auto grid h-auto w-full grid-cols-2 gap-2 bg-transparent sm:flex sm:flex-wrap sm:justify-center"

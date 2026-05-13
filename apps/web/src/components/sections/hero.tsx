@@ -1,7 +1,6 @@
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
-import { CALENDLY_URL } from "@/lib/constants";
 import { AuroraBackground } from "@/components/shared/aurora-background";
 
 function DashboardPreview() {
@@ -84,9 +83,9 @@ export function Hero() {
               </span>
             </h1>
 
-            <p className="mt-8 text-[15px] leading-relaxed text-muted-foreground lg:max-w-[21rem]">
-              Everything you need to run direct — website, dashboard, renter
-              portal and payments — under your brand.
+            <p className="mt-8 text-[15px] leading-relaxed text-muted-foreground lg:max-w-[24rem]">
+              Launch your own direct booking system, take payments, manage
+              customers and reduce marketplace dependency with Drive247.
             </p>
 
             <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -95,24 +94,24 @@ export function Hero() {
                 size="lg"
                 className="bg-indigo-600 text-sm font-normal shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30"
               >
-                <a
-                  href={CALENDLY_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Book a strategy call
+                <a href="/strategy-call">
+                  Get your 7-day launch plan
                   <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                 </a>
               </Button>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="lg"
                 className="text-sm font-normal"
                 asChild
               >
-                <a href="#features">See how it works</a>
+                <a href="#dashboard">See how it works</a>
               </Button>
             </div>
+
+            <p className="mt-4 text-xs text-muted-foreground">
+              For operators with 5+ vehicles already taking bookings.
+            </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-2">
               {["Booking Website", "Admin Dashboard", "Renter Portal"].map(

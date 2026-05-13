@@ -38,7 +38,7 @@ serve(async (req) => {
     let accentColor = '#FFD700'
     let logoUrl = ''
     let tenantSlug = 'portal'
-    let contactEmail = 'support@drive247.com'
+    let contactEmail = 'support@drive-247.com'
 
     // Fetch tenant details for email customization
     const { data: tenant, error: tenantError } = await supabaseClient

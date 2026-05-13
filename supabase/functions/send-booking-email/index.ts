@@ -37,7 +37,7 @@ serve(async (req) => {
     let primaryColor = '#FFD700'
     let accentColor = '#FFD700'
     let logoUrl = ''
-    let tenantSupportEmail = supportEmail || 'support@drive247.com'
+    let tenantSupportEmail = supportEmail || 'support@drive-247.com'
 
     // Fetch tenant details for email customization
     if (slug) {

@@ -1,12 +1,8 @@
 const METRICS = [
-  { value: "50+", label: "Operators onboarded" },
   { value: "$2M+", label: "Bookings processed" },
-  { value: "98%", label: "Uptime SLA" },
-  { value: "4.9/5", label: "Operator satisfaction" },
   { value: "0%", label: "Booking commissions" },
-  { value: "~7 days", label: "Average go-live" },
-  { value: "24/7", label: "Platform monitoring" },
   { value: "3-in-1", label: "Integrated platform" },
+  { value: "50+", label: "Operators onboarded" },
 ];
 
 function MetricItem({ value, label }: { value: string; label: string }) {

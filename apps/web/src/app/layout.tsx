@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { Header } from "@/components/layout/header";
-import { Footer } from "@/components/layout/footer";
 import { JsonLd } from "@/components/shared/json-ld";
 import { ThemeProvider } from "@/components/shared/theme-provider";
 import { SITE_META, SITE_URL } from "@/lib/constants";
@@ -104,9 +102,7 @@ export default function RootLayout({
           >
             Skip to content
           </a>
-          <Header />
-          <main id="main" className="min-h-[calc(100vh-4rem)]">{children}</main>
-          <Footer />
+          {children}
         </ThemeProvider>
       </body>
     </html>

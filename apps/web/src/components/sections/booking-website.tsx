@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowRight } from "lucide-react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 
 const BULLETS = [
@@ -66,6 +67,35 @@ export function BookingWebsite() {
               <p className="mt-6 text-sm text-muted-foreground leading-relaxed">
                 Connected directly to your back office — no fragmented tools.
               </p>
+
+              {/* Case study callout */}
+              <div className="mt-6 rounded-xl border border-indigo-200/60 bg-indigo-50/30 p-5 dark:border-indigo-800/30 dark:bg-indigo-950/20">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white">
+                    MT
+                  </div>
+                  <div>
+                    <p className="text-[15px] leading-relaxed text-foreground">
+                      &ldquo;Went from 100% marketplace to 60% direct in 4 months —
+                      recovered{" "}
+                      <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                        $18k in fees
+                      </span>.&rdquo;
+                    </p>
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      Marcus T. &middot; 12-vehicle fleet &middot; Atlanta
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <a
+                href="/strategy-call"
+                className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+              >
+                See your direct booking site mocked up on your strategy call
+                <ArrowRight className="h-3.5 w-3.5" />
+              </a>
             </div>
 
             {/* Browser mockup with video — right on desktop, first on mobile */}

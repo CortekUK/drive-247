@@ -2,49 +2,15 @@
 
 import { getSupabase } from "@/lib/supabase/server";
 
-export type LeadCaptureState = {
+export type StrategyCallState = {
   success: boolean;
   message: string;
 } | null;
 
-export async function captureLeadAction(
-  _prev: LeadCaptureState,
+export async function submitStrategyCallAction(
+  _prev: StrategyCallState,
   formData: FormData
-): Promise<LeadCaptureState> {
-  const email = formData.get("email");
-
-  if (!email || typeof email !== "string") {
-    return { success: false, message: "Please enter an email address." };
-  }
-
-  const trimmed = email.trim().toLowerCase();
-
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-    return { success: false, message: "Please enter a valid email address." };
-  }
-
-  const { error } = await getSupabase()
-    .from("contact_requests")
-    .insert({
-      contact_name: "Email Lead",
-      company_name: "Unknown",
-      email: trimmed,
-      status: "pending",
-    });
-
-  if (error) {
-    // Log server-side only in development
-    if (process.env.NODE_ENV === "development") console.error("Lead capture error:", error);
-    return { success: false, message: "Something went wrong. Please try again." };
-  }
-
-  return { success: true, message: "Thanks! We'll be in touch soon." };
-}
-
-export async function captureConsultationAction(
-  _prev: LeadCaptureState,
-  formData: FormData
-): Promise<LeadCaptureState> {
+): Promise<StrategyCallState> {
   const name = formData.get("name");
   const email = formData.get("email");
   const phone = formData.get("phone");
@@ -59,7 +25,7 @@ export async function captureConsultationAction(
   }
 
   if (!email || typeof email !== "string") {
-    return { success: false, message: "Please enter an email address." };
+    return { success: false, message: "Please enter your email." };
   }
 
   const trimmedEmail = email.trim().toLowerCase();
@@ -72,12 +38,12 @@ export async function captureConsultationAction(
     return { success: false, message: "Please select your fleet size." };
   }
 
-  if (!currentPlatform || typeof currentPlatform !== "string" || !currentPlatform.trim()) {
+  if (
+    !currentPlatform ||
+    typeof currentPlatform !== "string" ||
+    !currentPlatform.trim()
+  ) {
     return { success: false, message: "Please select your current platform." };
-  }
-
-  if (!challenge || typeof challenge !== "string" || !challenge.trim()) {
-    return { success: false, message: "Please select your main booking source." };
   }
 
   if (!budget || typeof budget !== "string" || !budget.trim()) {
@@ -90,7 +56,10 @@ export async function captureConsultationAction(
 
   const trimmedPhone =
     typeof phone === "string" ? phone.trim() : undefined;
+  const trimmedChallenge =
+    typeof challenge === "string" ? challenge.trim() : undefined;
 
+  // Insert contact request
   const { error } = await getSupabase().from("contact_requests").insert({
     contact_name: name.trim(),
     company_name: "Unknown",
@@ -98,20 +67,50 @@ export async function captureConsultationAction(
     phone: trimmedPhone || null,
     fleet_size: fleetSize.trim(),
     current_platform: currentPlatform.trim(),
-    challenge: challenge.trim(),
+    challenge: trimmedChallenge || null,
     budget: budget.trim(),
     readiness: readiness.trim(),
-    source: "landing-page",
+    source: "strategy-call",
     status: "pending",
   });
 
   if (error) {
-    if (process.env.NODE_ENV === "development") console.error("Consultation capture error:", error);
-    return { success: false, message: "Something went wrong. Please try again." };
+    if (process.env.NODE_ENV === "development")
+      console.error("Strategy call capture error:", error);
+    return {
+      success: false,
+      message: "Something went wrong. Please try again.",
+    };
+  }
+
+  // Fire-and-forget confirmation email via edge function
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (supabaseUrl && supabaseAnonKey) {
+      fetch(`${supabaseUrl}/functions/v1/send-strategy-call-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({
+          email_type: "confirmation",
+          contact_name: name.trim(),
+          email: trimmedEmail,
+          fleet_size: fleetSize.trim(),
+          current_platform: currentPlatform.trim(),
+        }),
+      }).catch(() => {
+        // Fire and forget — don't block on email failure
+      });
+    }
+  } catch {
+    // Silently fail — email is non-blocking
   }
 
   return {
     success: true,
-    message: "Thanks! We'll review your details and be in touch within 24 hours.",
+    message: "You're in — pick a time that works.",
   };
 }

@@ -9,6 +9,49 @@ import {
   type LeadCaptureState,
 } from "@/actions/lead-capture";
 
+const FLEET_SIZE_OPTIONS = [
+  "1–4 vehicles",
+  "5–10 vehicles",
+  "11–25 vehicles",
+  "25+ vehicles",
+];
+
+const PLATFORM_OPTIONS = [
+  "Turo",
+  "Website",
+  "Instagram / Facebook",
+  "Google",
+  "Manual / WhatsApp",
+  "Other",
+];
+
+const BOOKING_SOURCE_OPTIONS = [
+  "Turo",
+  "Instagram / Facebook",
+  "Website",
+  "Referrals",
+  "Google",
+  "Other",
+];
+
+const BUDGET_OPTIONS = [
+  "Under $500",
+  "$500\u2013$1,500",
+  "$1,500\u2013$3,000",
+  "$3,000+",
+  "Not sure yet",
+];
+
+const READINESS_OPTIONS = [
+  "Ready to launch this week",
+  "Ready if the system is a good fit",
+  "Comparing options",
+  "Just researching",
+];
+
+const selectClasses =
+  "border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50";
+
 export function ConsultationForm() {
   const [state, formAction, isPending] = useActionState<
     LeadCaptureState,
@@ -66,18 +109,16 @@ export function ConsultationForm() {
 
       <div>
         <label
-          htmlFor="business"
+          htmlFor="phone"
           className="mb-1.5 block text-sm font-medium"
         >
-          Business Name
-          <span className="text-indigo-600 dark:text-indigo-400">*</span>
+          Phone
         </label>
         <Input
-          id="business"
-          name="business"
-          type="text"
-          placeholder="Your business name"
-          required
+          id="phone"
+          name="phone"
+          type="tel"
+          placeholder="(555) 123-4567"
           disabled={isPending}
           className="h-10"
         />
@@ -85,19 +126,132 @@ export function ConsultationForm() {
 
       <div>
         <label
-          htmlFor="message"
+          htmlFor="fleet_size"
           className="mb-1.5 block text-sm font-medium"
         >
-          Message
+          Fleet size<span className="text-indigo-600 dark:text-indigo-400">*</span>
         </label>
-        <textarea
-          id="message"
-          name="message"
-          placeholder="Tell us about your fleet and what you'd like to discuss..."
-          rows={3}
+        <select
+          id="fleet_size"
+          name="fleet_size"
+          required
           disabled={isPending}
-          className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-        />
+          className={selectClasses}
+          defaultValue=""
+        >
+          <option value="" disabled>
+            Select fleet size
+          </option>
+          {FLEET_SIZE_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label
+          htmlFor="current_platform"
+          className="mb-1.5 block text-sm font-medium"
+        >
+          Current platform<span className="text-indigo-600 dark:text-indigo-400">*</span>
+        </label>
+        <select
+          id="current_platform"
+          name="current_platform"
+          required
+          disabled={isPending}
+          className={selectClasses}
+          defaultValue=""
+        >
+          <option value="" disabled>
+            Where do you take bookings today?
+          </option>
+          {PLATFORM_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label
+          htmlFor="challenge"
+          className="mb-1.5 block text-sm font-medium"
+        >
+          Main booking source<span className="text-indigo-600 dark:text-indigo-400">*</span>
+        </label>
+        <select
+          id="challenge"
+          name="challenge"
+          required
+          disabled={isPending}
+          className={selectClasses}
+          defaultValue=""
+        >
+          <option value="" disabled>
+            Where do most bookings come from?
+          </option>
+          {BOOKING_SOURCE_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label
+          htmlFor="budget"
+          className="mb-1.5 block text-sm font-medium"
+        >
+          Launch budget<span className="text-indigo-600 dark:text-indigo-400">*</span>
+        </label>
+        <select
+          id="budget"
+          name="budget"
+          required
+          disabled={isPending}
+          className={selectClasses}
+          defaultValue=""
+        >
+          <option value="" disabled>
+            Select launch budget
+          </option>
+          {BUDGET_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label
+          htmlFor="readiness"
+          className="mb-1.5 block text-sm font-medium"
+        >
+          Launch readiness<span className="text-indigo-600 dark:text-indigo-400">*</span>
+        </label>
+        <select
+          id="readiness"
+          name="readiness"
+          required
+          disabled={isPending}
+          className={selectClasses}
+          defaultValue=""
+        >
+          <option value="" disabled>
+            How ready are you to launch?
+          </option>
+          {READINESS_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
       </div>
 
       {state && !state.success && (
@@ -109,7 +263,7 @@ export function ConsultationForm() {
         disabled={isPending}
         className="h-11 w-full bg-indigo-600 text-sm font-semibold text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
       >
-        {isPending ? "Sending..." : "Request a strategy review"}
+        {isPending ? "Sending..." : "Get your 7-day launch plan"}
       </Button>
 
       <p className="text-center text-xs text-muted-foreground">

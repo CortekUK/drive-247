@@ -1,6 +1,5 @@
 import Link from "next/link";
 import Image from "next/image";
-import { CALENDLY_URL } from "@/lib/constants";
 
 export function Footer() {
   return (
@@ -104,9 +103,7 @@ export function Footer() {
             <ul className="mt-4 space-y-3">
               <li>
                 <a
-                  href={CALENDLY_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="/strategy-call"
                   className="text-sm text-indigo-600 transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
                 >
                   Book a strategy call

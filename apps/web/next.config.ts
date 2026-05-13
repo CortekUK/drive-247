@@ -1,4 +1,8 @@
 import type { NextConfig } from "next";
+import dotenv from "dotenv";
+
+// Load env vars from monorepo root .env
+dotenv.config({ path: "../../.env" });
 
 const nextConfig: NextConfig = {
   typescript: {

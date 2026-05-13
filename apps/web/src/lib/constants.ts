@@ -1,5 +1,5 @@
 export const SITE_URL = "https://drive247.co";
-export const CALENDLY_URL = "https://calendly.com/georgerclemson/strategy-call-george-clemson";
+export const GHL_BOOKING_URL = "https://api.leadconnectorhq.com/widget/booking/5IaMFcRJ2O4R589QF89C";
 
 export const SITE_META = {
   title: "Drive247 — Direct Booking Platform for Independent Car Rental Operators",
@@ -11,92 +11,52 @@ export const SITE_META = {
 export const NAV_LINKS = [
   { label: "Features", href: "#features" },
   { label: "How it works", href: "#timeline" },
-  { label: "Platform", href: "#pricing" },
+  { label: "Pricing", href: "#pricing" },
   { label: "FAQ", href: "#faq" },
 ];
 
 export const PROBLEM_POINTS = [
   {
+    icon: "UserX",
+    title: "You don't own the customer",
+    description:
+      "Every booking goes through the marketplace. The renter belongs to them — not you. You can't build loyalty, follow up, or retain customers on your own terms.",
+  },
+  {
     icon: "DollarSign",
-    title: "High platform fees",
+    title: "You pay for every booking",
     description:
-      "Marketplace commissions cut into your margin — often 15–30% before payment processing.",
+      "15–30% commissions on every transaction. No volume discount. No graduation. The more you grow, the more you hand over.",
   },
   {
-    icon: "Palette",
-    title: "Limited brand control",
+    icon: "EyeOff",
+    title: "Your brand stays hidden",
     description:
-      "Your fleet sits beside competitors with no differentiation or long-term brand equity.",
-  },
-  {
-    icon: "Users",
-    title: "You don't own the customer relationship",
-    description:
-      "The platform controls communication, limiting retention and repeat bookings.",
-  },
-  {
-    icon: "ShieldAlert",
-    title: "Policy and algorithm changes",
-    description:
-      "Marketplace rules, pricing limits, and search rankings can shift overnight — without your input or consent.",
-  },
-  {
-    icon: "TrendingDown",
-    title: "Traffic concentration risk",
-    description:
-      "One algorithm change can cut your visibility overnight. Relying on a single channel puts your entire business at risk.",
+      "Renters see the marketplace, not your business. You can't build a reputation, run your own ads, or create a direct relationship with the people driving your cars.",
   },
 ];
 
 
 export const DASHBOARD_SLIDES = [
   {
-    id: "fleet",
-    trigger: "Fleet Management",
-    title: "Fleet Management",
-    description: "Real-time visibility across your entire fleet.",
+    id: "operations",
+    trigger: "Run your operation",
+    title: "Fleet, bookings, and payments in one view",
+    description: "Stop switching between six tools. Manage your entire fleet, process bookings, collect payments, and verify renter documents — all from a single dashboard.",
     bullets: [
-      "Availability calendar and blackout controls",
-      "Vehicle status tracking (available, rented, maintenance)",
-      "Add and manage vehicles with photos, pricing, and rules",
-      "Location and working-hour configuration",
+      "Availability calendar with blackout controls and vehicle status tracking",
+      "View, approve, and manage bookings and extension requests in one queue",
+      "Collect deposits and rental payments with full transaction history",
+      "Upload, verify, and store renter documents and agreements securely",
     ],
     image: "/fleet-management-v3.png",
     imageDark: "/fleet-management-v3-dark.png",
   },
   {
-    id: "bookings",
-    trigger: "Bookings & Extensions",
-    title: "Bookings & Extensions",
-    description: "Control every booking from creation to completion.",
-    bullets: [
-      "View, edit, and approve bookings in one queue",
-      "Process extension requests and automatically calculate differences",
-      "Booking timeline with full renter activity history",
-      "Direct renter communication inside the booking",
-    ],
-    image: "/bookings-management-v2.png",
-    imageDark: "/bookings-management-v2-dark.png",
-  },
-  {
-    id: "payments",
-    trigger: "Payments & Documents",
-    title: "Payments & Documents",
-    description: "Centralised payment processing and document management.",
-    bullets: [
-      "Collect deposits and rental payments",
-      "Track payment status and transaction history",
-      "Upload and verify renter documents",
-      "Store agreements and booking files securely",
-    ],
-    image: "/payments-management-v2.png",
-    imageDark: "/payments-management-v2-dark.png",
-  },
-  {
     id: "revenue",
-    trigger: "Revenue & Analytics",
-    title: "Revenue & Analytics",
-    description: "Understand performance across your fleet.",
+    trigger: "Reviews & Analytics",
+    title: "Know exactly how your fleet is performing",
+    description: "Revenue tracking, utilisation trends, and P&L visibility — so you make decisions with data, not guesswork.",
     bullets: [
       "Revenue tracking by vehicle and date range",
       "Utilisation and booking trends",
@@ -109,9 +69,9 @@ export const DASHBOARD_SLIDES = [
   {
     id: "ai",
     trigger: "AI Copilot",
-    title: "AI Copilot",
+    title: "Ask your dashboard anything",
     description:
-      "Ask your dashboard anything — revenue trends, occupancy gaps, booking anomalies — and get answers in plain English.",
+      "Revenue trends, occupancy gaps, booking anomalies — get answers in plain English instead of digging through reports.",
     body: "Drive247's AI Copilot analyses live booking, revenue, and fleet data to surface what matters. No more digging through reports — just ask.",
     bullets: [
       "\"What was my utilisation last week?\" — instant answers",
@@ -130,69 +90,77 @@ export const TESTIMONIALS = [
     before: "We went from juggling spreadsheets and three different apps to running everything from one dashboard. We finally have a system that matches how we actually operate. ",
     bold: "Bookings doubled within the first quarter.",
     after: "",
-    name: "Marcus T.",
+    name: "Marcus Thompson",
     initials: "MT",
     role: "Owner",
-    fleet: "12-vehicle fleet, Atlanta",
+    fleetSize: "12-vehicle fleet",
+    location: "Atlanta",
     stars: 5,
   },
   {
     before: "",
     bold: "The branded website alone paid for itself.",
     after: " Customers trust us more when they book on our own site instead of a marketplace listing.",
-    name: "Sarah K.",
-    initials: "SK",
+    name: "Sarah Alvarez",
+    initials: "SA",
     role: "Operations Manager",
-    fleet: "28-vehicle fleet, Miami",
+    fleetSize: "28-vehicle fleet",
+    location: "Miami",
     stars: 5,
   },
   {
     before: "Setup was painless — ",
     bold: "we were live in five days.",
     after: " The team actually understands what independent operators need.",
-    name: "James R.",
+    name: "James Reilly",
     initials: "JR",
     role: "Founder",
-    fleet: "8-vehicle fleet, Phoenix",
+    fleetSize: "8-vehicle fleet",
+    location: "Phoenix",
     stars: 5,
   },
 ];
 
 export const FAQ_ITEMS = [
   {
-    question: "Do you generate demand like Turo?",
+    question: "Do you generate bookings like Turo?",
     answer:
-      "No — Drive247 gives you the tools to run direct, but you bring your own traffic. The upside: every customer is yours. No commissions, no shared listings, full brand control. Most operators already have repeat customers, social media, and referrals — Drive247 makes it easy to convert that traffic into bookings.",
+      "Drive247 is not a marketplace, so bookings don\u2019t come from shared listings like Turo. Instead, we help you build your own direct booking system and support your launch with Meta ads guidance, so traffic is driven into your own brand, website and customer flow.",
   },
   {
     question: "Do you help with marketing and paid traffic?",
     answer:
-      "Drive247 provides the infrastructure to own your bookings. For operators ready to scale, we offer optional paid acquisition management — structured through your own ad accounts, ensuring you retain control and ownership.",
-  },
-  {
-    question: "What about insurance and claims?",
-    answer:
-      "Drive247 is integration-ready for Bonzah, a rental-specific insurance provider. You can offer coverage at checkout and manage claims through their platform. We help you get set up, but the insurance relationship is between you and the provider. Timeline depends on partner onboarding.",
-  },
-  {
-    question: "How quickly can I go live?",
-    answer:
-      "Most operators are live within a week of kickoff. The biggest variable is third-party setup — insurance (Bonzah) and ID verification (CheckMyDriver) have their own onboarding timelines. We move fast on our side.",
+      "Yes. Drive247 includes Meta ads support to help you attract customers into your own booking flow. The goal is not just to give you software, but to help you build a private rental operation that can generate and retain its own customers.",
   },
   {
     question: "Can I keep my current domain?",
     answer:
-      "Absolutely. You point your domain to us, and your booking site runs on your own URL. Your brand, your domain, your customer experience.",
+      "Yes. Your booking site can run on your own domain or a dedicated booking subdomain. Your brand stays front and centre, and customers book through your own rental experience.",
   },
   {
-    question: "Do I own my data and can I leave anytime?",
+    question: "How quickly can we go live?",
     answer:
-      "Drive247 is a SaaS platform — you subscribe and use it, but the code isn't yours to take. However, your data is always yours. You can export customer data, booking history, and documents at any time. No lock-in tricks.",
+      "Most operators can be set up within 7 days once we have the core details \u2014 branding, fleet information and payment setup. On the call, we\u2019ll map out what\u2019s needed for your specific launch.",
   },
   {
-    question: "How much does Drive247 cost?",
+    question: "What do I need before getting started?",
     answer:
-      "Pricing is tailored to your fleet size and needs. Every plan is a flat monthly fee — no commissions, no per-booking charges, no hidden costs. Book a strategy call and we'll walk you through the right plan for your operation.",
+      "You don\u2019t need everything ready before booking a call. We\u2019ll review your current setup, fleet size, booking process and payment requirements, then show you the clearest route to launch.",
+  },
+  {
+    question: "Is Drive247 only for Turo hosts?",
+    answer:
+      "No. Drive247 is built for independent rental operators \u2014 whether you currently use Turo, take bookings through social media, manage rentals manually, or already have a website.",
+  },
+  {
+    question: "Will I still own my customers?",
+    answer:
+      "Yes. Your customer details, booking history, payments, agreements and communication stay within your own rental operation instead of sitting inside a marketplace.",
+  },
+  {
+    question: "What happens on the strategy call?",
+    answer:
+      "We review your current setup, understand how your bookings work today, explain what your direct booking system could look like, and give you a tailored 7-day launch plan.",
   },
 ];
 

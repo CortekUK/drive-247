@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
-import { NAV_LINKS, CALENDLY_URL } from "@/lib/constants";
+import { NAV_LINKS } from "@/lib/constants";
 import { useActiveSection } from "@/hooks/use-active-section";
 
 export function Header() {
@@ -82,7 +82,7 @@ export function Header() {
             size="sm"
             className="bg-indigo-600 px-5 text-sm font-normal text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
           >
-            <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer">
+            <a href="/strategy-call">
               Book a strategy call
             </a>
           </Button>
@@ -144,7 +144,7 @@ export function Header() {
             size="sm"
             className="mt-3 w-full bg-indigo-600 text-sm font-normal text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
           >
-            <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer">
+            <a href="/strategy-call">
               Book a strategy call
             </a>
           </Button>

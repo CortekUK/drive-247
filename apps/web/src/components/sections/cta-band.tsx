@@ -3,7 +3,6 @@
 import { CalendarCheck, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConsultationForm } from "@/components/forms/consultation-form";
-import { CALENDLY_URL } from "@/lib/constants";
 import { useFadeIn } from "@/hooks/use-fade-in";
 
 export function CTABand() {
@@ -42,37 +41,30 @@ export function CTABand() {
         >
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-600/20 to-transparent" />
           <ConsultationForm />
+
+          {/* Strategy call booking */}
+          <div className="mt-5 flex flex-col items-center gap-2 border-t pt-5">
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="w-full gap-2 text-sm font-medium"
+            >
+              <a href="/strategy-call">
+                <CalendarCheck className="h-4 w-4" />
+                Book a time directly
+              </a>
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Prefer to speak directly? Choose a time that works for you.
+            </p>
+          </div>
         </div>
 
         {/* Reassurance */}
         <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground/80">
           <CheckCircle2 className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
           <span>Clear next steps. We move fast on our side.</span>
-        </div>
-
-        {/* Divider */}
-        <div className="mx-auto mt-6 flex max-w-lg items-center gap-4">
-          <div className="h-px flex-1 bg-border" />
-          <span className="text-xs text-muted-foreground">or</span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
-
-        {/* Instant booking */}
-        <div className="mt-6 flex flex-col items-center gap-2">
-          <Button
-            asChild
-            variant="outline"
-            size="lg"
-            className="gap-2 px-8 text-sm font-medium"
-          >
-            <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer">
-              <CalendarCheck className="h-4 w-4" />
-              Book a time directly
-            </a>
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Prefer to speak directly? Choose a time that works for you.
-          </p>
         </div>
       </div>
     </section>

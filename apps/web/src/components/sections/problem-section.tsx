@@ -1,21 +1,17 @@
 "use client";
 
 import {
+  UserX,
   DollarSign,
-  Palette,
-  Users,
-  ShieldAlert,
-  TrendingDown,
+  EyeOff,
 } from "lucide-react";
 import { PROBLEM_POINTS } from "@/lib/constants";
 import { useFadeIn } from "@/hooks/use-fade-in";
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  UserX,
   DollarSign,
-  Palette,
-  Users,
-  ShieldAlert,
-  TrendingDown,
+  EyeOff,
 };
 
 function ProblemCard({
@@ -88,48 +84,17 @@ export function ProblemSection() {
           <span className="text-indigo-400">They also take control.</span>
         </h2>
 
-        {/* Bento-style grid */}
-        <div ref={ref} className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-          {/* Card 1 — 2 cols */}
-          <ProblemCard
-            point={PROBLEM_POINTS[0]}
-            index={0}
-            className="lg:col-span-2"
-            visible={visible}
-            delay={0}
-          />
-          {/* Card 2 — 2 cols */}
-          <ProblemCard
-            point={PROBLEM_POINTS[1]}
-            index={1}
-            className="lg:col-span-2"
-            visible={visible}
-            delay={100}
-          />
-          {/* Card 3 — 2 cols */}
-          <ProblemCard
-            point={PROBLEM_POINTS[2]}
-            index={2}
-            className="lg:col-span-2"
-            visible={visible}
-            delay={200}
-          />
-          {/* Card 4 — 3 cols (wider) */}
-          <ProblemCard
-            point={PROBLEM_POINTS[3]}
-            index={3}
-            className="lg:col-span-3"
-            visible={visible}
-            delay={300}
-          />
-          {/* Card 5 — 3 cols (wider) */}
-          <ProblemCard
-            point={PROBLEM_POINTS[4]}
-            index={4}
-            className="lg:col-span-3"
-            visible={visible}
-            delay={400}
-          />
+        {/* Card grid */}
+        <div ref={ref} className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {PROBLEM_POINTS.map((point, i) => (
+            <ProblemCard
+              key={i}
+              point={point}
+              index={i}
+              visible={visible}
+              delay={i * 100}
+            />
+          ))}
         </div>
       </div>
     </section>

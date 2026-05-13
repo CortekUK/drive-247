@@ -17,13 +17,21 @@ function Stars({ count }: { count: number }) {
   );
 }
 
+const AVATAR_COLORS = [
+  "bg-indigo-600 text-white",
+  "bg-emerald-600 text-white",
+  "bg-amber-600 text-white",
+];
+
 function TestimonialCard({
   t,
+  index,
   featured = false,
   visible,
   delay,
 }: {
   t: (typeof TESTIMONIALS)[number];
+  index: number;
   featured?: boolean;
   visible: boolean;
   delay: number;
@@ -49,13 +57,13 @@ function TestimonialCard({
       </blockquote>
 
       <div className="mt-6 flex items-center gap-3 border-t pt-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600/[0.08] text-xs font-bold text-indigo-600 dark:bg-indigo-400/[0.1] dark:text-indigo-400">
+        <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold ${AVATAR_COLORS[index % AVATAR_COLORS.length]}`}>
           {t.initials}
         </div>
         <div>
           <p className="text-sm font-semibold">{t.name}</p>
           <p className="text-xs text-muted-foreground">
-            {t.role} &middot; {t.fleet}
+            {t.role} &middot; {t.fleetSize} &middot; {t.location}
           </p>
         </div>
       </div>
@@ -91,6 +99,7 @@ export function SocialProof() {
           {/* Featured testimonial — full width */}
           <TestimonialCard
             t={featured}
+            index={0}
             featured
             visible={visible}
             delay={0}
@@ -102,6 +111,7 @@ export function SocialProof() {
               <TestimonialCard
                 key={t.name}
                 t={t}
+                index={i + 1}
                 visible={visible}
                 delay={(i + 1) * 100}
               />

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check, ShieldCheck } from "lucide-react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 
 const STEPS = [
@@ -115,7 +115,19 @@ export function Timeline() {
           </div>
         </div>
 
-        <p className="mt-8 text-center text-xs leading-relaxed text-muted-foreground">
+        {/* Guarantee callout */}
+        <div className="mx-auto mt-10 max-w-lg rounded-xl border border-indigo-200/60 bg-indigo-50/30 px-6 py-5 dark:border-indigo-800/30 dark:bg-indigo-950/20">
+          <div className="flex items-center justify-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-600/[0.08] dark:bg-indigo-400/[0.1]">
+              <ShieldCheck className="h-4.5 w-4.5 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <p className="text-[15px] font-semibold tracking-tight text-foreground">
+              Not live in 7 days? We don&apos;t charge you for month one.
+            </p>
+          </div>
+        </div>
+
+        <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
           Paid acquisition management is optional and runs through your own ad
           accounts — you retain ownership and data.
         </p>
