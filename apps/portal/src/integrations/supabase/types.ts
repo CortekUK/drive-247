@@ -463,6 +463,13 @@ export type Database = {
             foreignKeyName: "blocked_dates_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "blocked_dates_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
           },
@@ -1450,6 +1457,56 @@ export type Database = {
           },
         ]
       }
+      cmd_webhook_events: {
+        Row: {
+          error: string | null
+          event_name: string | null
+          external_uuid: string | null
+          id: string
+          identity_verification_id: string | null
+          object_type: string | null
+          payload: Json
+          processed: boolean
+          received_at: string
+          signature_header: string | null
+          signature_valid: boolean
+        }
+        Insert: {
+          error?: string | null
+          event_name?: string | null
+          external_uuid?: string | null
+          id?: string
+          identity_verification_id?: string | null
+          object_type?: string | null
+          payload: Json
+          processed?: boolean
+          received_at?: string
+          signature_header?: string | null
+          signature_valid?: boolean
+        }
+        Update: {
+          error?: string | null
+          event_name?: string | null
+          external_uuid?: string | null
+          id?: string
+          identity_verification_id?: string | null
+          object_type?: string | null
+          payload?: Json
+          processed?: boolean
+          received_at?: string
+          signature_header?: string | null
+          signature_valid?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cmd_webhook_events_identity_verification_id_fkey"
+            columns: ["identity_verification_id"]
+            isOneToOne: false
+            referencedRelation: "identity_verifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cms_media: {
         Row: {
           alt_text: string | null
@@ -1666,38 +1723,56 @@ export type Database = {
       }
       contact_requests: {
         Row: {
+          budget: string | null
+          challenge: string | null
           company_name: string
           contact_name: string
           created_at: string | null
+          current_platform: string | null
           email: string
+          fleet_size: string | null
           id: string
           message: string | null
           notes: string | null
           phone: string | null
+          readiness: string | null
+          source: string | null
           status: string | null
           tenant_id: string | null
         }
         Insert: {
+          budget?: string | null
+          challenge?: string | null
           company_name: string
           contact_name: string
           created_at?: string | null
+          current_platform?: string | null
           email: string
+          fleet_size?: string | null
           id?: string
           message?: string | null
           notes?: string | null
           phone?: string | null
+          readiness?: string | null
+          source?: string | null
           status?: string | null
           tenant_id?: string | null
         }
         Update: {
+          budget?: string | null
+          challenge?: string | null
           company_name?: string
           contact_name?: string
           created_at?: string | null
+          current_platform?: string | null
           email?: string
+          fleet_size?: string | null
           id?: string
           message?: string | null
           notes?: string | null
           phone?: string | null
+          readiness?: string | null
+          source?: string | null
           status?: string | null
           tenant_id?: string | null
         }
@@ -2111,6 +2186,13 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "customer_documents_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -2831,6 +2913,13 @@ export type Database = {
             foreignKeyName: "enquiries_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "enquiries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
           },
@@ -2999,6 +3088,13 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "external_bookings_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -3317,6 +3413,13 @@ export type Database = {
             foreignKeyName: "fines_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "fines_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
           },
@@ -3533,6 +3636,14 @@ export type Database = {
           ai_face_match_score: number | null
           ai_ocr_data: Json | null
           client_comment: string | null
+          cmd_applicant_verification_id: string | null
+          cmd_delivery_channels: string[] | null
+          cmd_last_event_at: string | null
+          cmd_license_status: string | null
+          cmd_magic_link: string | null
+          cmd_magic_link_expires_at: string | null
+          cmd_status: string | null
+          cmd_verification_id: string | null
           created_at: string | null
           customer_email: string | null
           customer_id: string | null
@@ -3577,6 +3688,14 @@ export type Database = {
           ai_face_match_score?: number | null
           ai_ocr_data?: Json | null
           client_comment?: string | null
+          cmd_applicant_verification_id?: string | null
+          cmd_delivery_channels?: string[] | null
+          cmd_last_event_at?: string | null
+          cmd_license_status?: string | null
+          cmd_magic_link?: string | null
+          cmd_magic_link_expires_at?: string | null
+          cmd_status?: string | null
+          cmd_verification_id?: string | null
           created_at?: string | null
           customer_email?: string | null
           customer_id?: string | null
@@ -3621,6 +3740,14 @@ export type Database = {
           ai_face_match_score?: number | null
           ai_ocr_data?: Json | null
           client_comment?: string | null
+          cmd_applicant_verification_id?: string | null
+          cmd_delivery_channels?: string[] | null
+          cmd_last_event_at?: string | null
+          cmd_license_status?: string | null
+          cmd_magic_link?: string | null
+          cmd_magic_link_expires_at?: string | null
+          cmd_status?: string | null
+          cmd_verification_id?: string | null
           created_at?: string | null
           customer_email?: string | null
           customer_id?: string | null
@@ -3767,6 +3894,13 @@ export type Database = {
             columns: ["payment_id"]
             isOneToOne: false
             referencedRelation: "v_payment_remaining"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "installment_notifications_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["payment_id"]
           },
           {
@@ -3993,6 +4127,13 @@ export type Database = {
             foreignKeyName: "installment_plans_upfront_payment_id_fkey"
             columns: ["upfront_payment_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "installment_plans_upfront_payment_id_fkey"
+            columns: ["upfront_payment_id"]
+            isOneToOne: false
             referencedRelation: "view_payments_export"
             referencedColumns: ["payment_id"]
           },
@@ -4144,6 +4285,13 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "insurance_policies_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -4304,6 +4452,13 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "invoices_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -4529,6 +4684,13 @@ export type Database = {
             foreignKeyName: "fk_ledger_entries_payment_id"
             columns: ["payment_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "fk_ledger_entries_payment_id"
+            columns: ["payment_id"]
+            isOneToOne: false
             referencedRelation: "view_payments_export"
             referencedColumns: ["payment_id"]
           },
@@ -4621,6 +4783,13 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "ledger_entries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -4863,6 +5032,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      modives_config: {
+        Row: {
+          created_at: string
+          dealer_guid: string | null
+          environment: string
+          id: string
+          location_guid: string | null
+          notes: string | null
+          terms_accepted_at: string | null
+          terms_version: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dealer_guid?: string | null
+          environment?: string
+          id?: string
+          location_guid?: string | null
+          notes?: string | null
+          terms_accepted_at?: string | null
+          terms_version?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dealer_guid?: string | null
+          environment?: string
+          id?: string
+          location_guid?: string | null
+          notes?: string | null
+          terms_accepted_at?: string | null
+          terms_version?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       notifications: {
         Row: {
@@ -5132,6 +5337,207 @@ export type Database = {
           },
         ]
       }
+      owner_payout_lines: {
+        Row: {
+          commission_amount: number
+          commission_type: string
+          commission_value: number
+          created_at: string
+          id: string
+          net_to_owner: number
+          paid_revenue: number
+          payout_id: string
+          rental_id: string | null
+          tenant_id: string
+          vehicle_id: string
+          vehicle_reg: string
+        }
+        Insert: {
+          commission_amount: number
+          commission_type: string
+          commission_value: number
+          created_at?: string
+          id?: string
+          net_to_owner: number
+          paid_revenue: number
+          payout_id: string
+          rental_id?: string | null
+          tenant_id: string
+          vehicle_id: string
+          vehicle_reg: string
+        }
+        Update: {
+          commission_amount?: number
+          commission_type?: string
+          commission_value?: number
+          created_at?: string
+          id?: string
+          net_to_owner?: number
+          paid_revenue?: number
+          payout_id?: string
+          rental_id?: string | null
+          tenant_id?: string
+          vehicle_id?: string
+          vehicle_reg?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "owner_payout_lines_payout_id_fkey"
+            columns: ["payout_id"]
+            isOneToOne: false
+            referencedRelation: "owner_payouts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "owner_payout_lines_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "owner_payout_lines_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "owner_payout_lines_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "owner_payout_lines_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "owner_payout_lines_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "owner_payout_lines_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "owner_payout_lines_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "owner_payout_lines_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "owner_payout_lines_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      owner_payouts: {
+        Row: {
+          amount_paid: number
+          commission_amount: number
+          created_at: string
+          gross_revenue: number
+          id: string
+          net_owed: number
+          notes: string | null
+          owner_id: string
+          paid_at: string | null
+          payment_method: string | null
+          payment_reference: string | null
+          period_end: string
+          period_start: string
+          recorded_by: string | null
+          refund_adjustments: number
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount_paid?: number
+          commission_amount?: number
+          created_at?: string
+          gross_revenue?: number
+          id?: string
+          net_owed?: number
+          notes?: string | null
+          owner_id: string
+          paid_at?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          period_end: string
+          period_start: string
+          recorded_by?: string | null
+          refund_adjustments?: number
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount_paid?: number
+          commission_amount?: number
+          created_at?: string
+          gross_revenue?: number
+          id?: string
+          net_owed?: number
+          notes?: string | null
+          owner_id?: string
+          paid_at?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          period_end?: string
+          period_start?: string
+          recorded_by?: string | null
+          refund_adjustments?: number
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "owner_payouts_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_owners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "owner_payouts_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "owner_payouts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payg_accruals: {
         Row: {
           accrual_day_index: number
@@ -5224,6 +5630,13 @@ export type Database = {
             columns: ["settling_payment_id"]
             isOneToOne: false
             referencedRelation: "v_payment_remaining"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "payg_accruals_settling_payment_id_fkey"
+            columns: ["settling_payment_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["payment_id"]
           },
           {
@@ -5391,6 +5804,13 @@ export type Database = {
             columns: ["payment_id"]
             isOneToOne: false
             referencedRelation: "v_payment_remaining"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "payment_applications_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["payment_id"]
           },
           {
@@ -5621,6 +6041,13 @@ export type Database = {
             foreignKeyName: "payments_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "payments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
           },
@@ -5764,6 +6191,13 @@ export type Database = {
             foreignKeyName: "plates_assigned_vehicle_id_fkey"
             columns: ["assigned_vehicle_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "plates_assigned_vehicle_id_fkey"
+            columns: ["assigned_vehicle_id"]
+            isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
           },
@@ -5793,6 +6227,13 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "plates_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -5874,6 +6315,13 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "pnl_entries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -6390,6 +6838,13 @@ export type Database = {
             foreignKeyName: "reminder_events_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "reminder_events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
           },
@@ -6591,6 +7046,96 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "reminders_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rental_additional_drivers: {
+        Row: {
+          boldsign_signer_email: string | null
+          created_at: string
+          email: string | null
+          id: string
+          identity_verification_id: string | null
+          license_number: string | null
+          name: string
+          phone: string | null
+          rental_id: string
+          signed_at: string | null
+          signing_status: string
+          tenant_id: string
+          updated_at: string
+          verification_status: string
+          verification_url: string | null
+        }
+        Insert: {
+          boldsign_signer_email?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          identity_verification_id?: string | null
+          license_number?: string | null
+          name: string
+          phone?: string | null
+          rental_id: string
+          signed_at?: string | null
+          signing_status?: string
+          tenant_id: string
+          updated_at?: string
+          verification_status?: string
+          verification_url?: string | null
+        }
+        Update: {
+          boldsign_signer_email?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          identity_verification_id?: string | null
+          license_number?: string | null
+          name?: string
+          phone?: string | null
+          rental_id?: string
+          signed_at?: string | null
+          signing_status?: string
+          tenant_id?: string
+          updated_at?: string
+          verification_status?: string
+          verification_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_additional_drivers_identity_verification_id_fkey"
+            columns: ["identity_verification_id"]
+            isOneToOne: false
+            referencedRelation: "identity_verifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_additional_drivers_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_additional_drivers_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "rental_additional_drivers_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "rental_additional_drivers_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -7126,6 +7671,13 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "rental_extras_vehicle_pricing_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -7877,6 +8429,13 @@ export type Database = {
             foreignKeyName: "rentals_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "rentals_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
           },
@@ -8052,6 +8611,13 @@ export type Database = {
             foreignKeyName: "scheduled_installments_payment_id_fkey"
             columns: ["payment_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
             referencedRelation: "view_payments_export"
             referencedColumns: ["payment_id"]
           },
@@ -8088,6 +8654,13 @@ export type Database = {
             columns: ["settling_payment_id"]
             isOneToOne: false
             referencedRelation: "v_payment_remaining"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_settling_payment_id_fkey"
+            columns: ["settling_payment_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["payment_id"]
           },
           {
@@ -8174,6 +8747,13 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "service_records_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -8379,6 +8959,47 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      strategy_call_emails: {
+        Row: {
+          call_status: string | null
+          call_time: string | null
+          contact_request_id: string
+          created_at: string | null
+          email_type: string
+          id: string
+          scheduled_at: string
+          sent_at: string | null
+        }
+        Insert: {
+          call_status?: string | null
+          call_time?: string | null
+          contact_request_id: string
+          created_at?: string | null
+          email_type: string
+          id?: string
+          scheduled_at: string
+          sent_at?: string | null
+        }
+        Update: {
+          call_status?: string | null
+          call_time?: string | null
+          contact_request_id?: string
+          created_at?: string | null
+          email_type?: string
+          id?: string
+          scheduled_at?: string
+          sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strategy_call_emails_contact_request_id_fkey"
+            columns: ["contact_request_id"]
+            isOneToOne: false
+            referencedRelation: "contact_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -9437,6 +10058,13 @@ export type Database = {
             foreignKeyName: "tesla_supercharger_charges_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "tesla_supercharger_charges_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
           },
@@ -9553,6 +10181,13 @@ export type Database = {
             foreignKeyName: "vehicle_events_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
           },
@@ -9625,6 +10260,13 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_expenses_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -9706,8 +10348,77 @@ export type Database = {
             foreignKeyName: "vehicle_files_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_files_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      vehicle_owners: {
+        Row: {
+          address: string | null
+          archived_at: string | null
+          commission_type: string
+          commission_value: number
+          created_at: string
+          email: string | null
+          flat_fee_period: string | null
+          full_name: string
+          id: string
+          is_active: boolean
+          notes: string | null
+          payout_frequency: string
+          phone: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          archived_at?: string | null
+          commission_type?: string
+          commission_value?: number
+          created_at?: string
+          email?: string | null
+          flat_fee_period?: string | null
+          full_name: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          payout_frequency?: string
+          phone?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          archived_at?: string | null
+          commission_type?: string
+          commission_value?: number
+          created_at?: string
+          email?: string | null
+          flat_fee_period?: string | null
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          payout_frequency?: string
+          phone?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_owners_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -9766,6 +10477,13 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_photos_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -9844,6 +10562,13 @@ export type Database = {
             foreignKeyName: "vehicle_pricing_overrides_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_pricing_overrides_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
           },
@@ -9859,6 +10584,8 @@ export type Database = {
           balloon: number | null
           color: string | null
           colour: string | null
+          commission_type_override: string | null
+          commission_value_override: number | null
           created_at: string | null
           current_mileage: number | null
           daily_mileage: number | null
@@ -9874,6 +10601,7 @@ export type Database = {
           external_ical_source: string | null
           external_ical_url: string | null
           finance_start_date: string | null
+          flat_fee_period_override: string | null
           fuel_type: string | null
           has_logbook: boolean
           has_remote_immobiliser: boolean | null
@@ -9893,6 +10621,8 @@ export type Database = {
           monthly_payment: number | null
           monthly_rent: number | null
           mot_due_date: string | null
+          owner_id: string | null
+          ownership_assigned_at: string | null
           photo_url: string | null
           purchase_price: number | null
           reg: string
@@ -9928,6 +10658,8 @@ export type Database = {
           balloon?: number | null
           color?: string | null
           colour?: string | null
+          commission_type_override?: string | null
+          commission_value_override?: number | null
           created_at?: string | null
           current_mileage?: number | null
           daily_mileage?: number | null
@@ -9943,6 +10675,7 @@ export type Database = {
           external_ical_source?: string | null
           external_ical_url?: string | null
           finance_start_date?: string | null
+          flat_fee_period_override?: string | null
           fuel_type?: string | null
           has_logbook?: boolean
           has_remote_immobiliser?: boolean | null
@@ -9962,6 +10695,8 @@ export type Database = {
           monthly_payment?: number | null
           monthly_rent?: number | null
           mot_due_date?: string | null
+          owner_id?: string | null
+          ownership_assigned_at?: string | null
           photo_url?: string | null
           purchase_price?: number | null
           reg: string
@@ -9997,6 +10732,8 @@ export type Database = {
           balloon?: number | null
           color?: string | null
           colour?: string | null
+          commission_type_override?: string | null
+          commission_value_override?: number | null
           created_at?: string | null
           current_mileage?: number | null
           daily_mileage?: number | null
@@ -10012,6 +10749,7 @@ export type Database = {
           external_ical_source?: string | null
           external_ical_url?: string | null
           finance_start_date?: string | null
+          flat_fee_period_override?: string | null
           fuel_type?: string | null
           has_logbook?: boolean
           has_remote_immobiliser?: boolean | null
@@ -10031,6 +10769,8 @@ export type Database = {
           monthly_payment?: number | null
           monthly_rent?: number | null
           mot_due_date?: string | null
+          owner_id?: string | null
+          ownership_assigned_at?: string | null
           photo_url?: string | null
           purchase_price?: number | null
           reg?: string
@@ -10058,6 +10798,13 @@ export type Database = {
           year?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "vehicles_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_owners"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "vehicles_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -10618,6 +11365,13 @@ export type Database = {
             foreignKeyName: "ledger_entries_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "ledger_entries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
           },
@@ -10649,6 +11403,55 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "fines_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      view_owner_revenue: {
+        Row: {
+          owner_id: string | null
+          paid_amount: number | null
+          payment_id: string | null
+          rental_id: string | null
+          revenue_date: string | null
+          tenant_id: string | null
+          vehicle_id: string | null
+          vehicle_reg: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ledger_entries_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ledger_entries_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "ledger_entries_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "vehicles_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_owners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -10753,6 +11556,13 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "payments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -10895,6 +11705,13 @@ export type Database = {
             foreignKeyName: "rentals_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "rentals_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
           },
@@ -10972,6 +11789,20 @@ export type Database = {
       block_customer: {
         Args: { p_blocked_by?: string; p_customer_id: string; p_reason: string }
         Returns: Json
+      }
+      calculate_owner_owed: {
+        Args: { p_from_date: string; p_owner_id: string; p_to_date: string }
+        Returns: {
+          commission_amount: number
+          commission_type: string
+          commission_value: number
+          flat_fee_period: string
+          net_to_owner: number
+          paid_revenue: number
+          rental_count: number
+          vehicle_id: string
+          vehicle_reg: string
+        }[]
       }
       calculate_vehicle_book_cost: {
         Args: { p_vehicle_id: string }
@@ -11683,3 +12514,5 @@ export const Constants = {
     },
   },
 } as const
+A new version of Supabase CLI is available: v2.98.2 (currently installed v2.90.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

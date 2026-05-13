@@ -185,6 +185,24 @@ export interface AuditLogParams {
   details?: Record<string, any>;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// entity_id is a UUID column; dialog-shown events fire before a real row exists
+// and historically pass sentinels like "new" or "unknown" which Postgres rejects
+// with 22P02. Coerce non-UUID values to null and preserve the sentinel in details.
+function normalizeEntityId(
+  entityId: string | null | undefined,
+  details: Record<string, any>,
+): { id: string | null; details: Record<string, any> } {
+  if (entityId && UUID_RE.test(entityId)) {
+    return { id: entityId, details };
+  }
+  return {
+    id: null,
+    details: entityId ? { ...details, entity_ref: entityId } : details,
+  };
+}
+
 export function useAuditLog() {
   const { appUser } = useAuth();
   const { tenant } = useTenant();
@@ -198,18 +216,25 @@ export function useAuditLog() {
   }: AuditLogParams) => {
     if (!tenant?.id || !appUser?.id) return;
 
+    const { id, details: mergedDetails } = normalizeEntityId(entityId, details);
+
     try {
       const { error } = await supabase.from("audit_logs").insert({
         action,
         actor_id: appUser.id,
         entity_type: entityType,
-        entity_id: entityId,
-        details,
+        entity_id: id,
+        details: mergedDetails,
         tenant_id: tenant.id,
       });
 
       if (error) {
-        console.error(`[AuditLog] Failed: "${action}"`, error);
+        console.error(`[AuditLog] Failed: "${action}"`, {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
       } else {
         queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
         queryClient.invalidateQueries({ queryKey: ["audit-log-actions"] });
@@ -233,18 +258,25 @@ export async function createAuditLog(params: {
 }) {
   const { action, entityType, entityId, details = {}, actorId, tenantId } = params;
 
+  const { id, details: mergedDetails } = normalizeEntityId(entityId, details);
+
   try {
     const { error } = await supabase.from("audit_logs").insert({
       action,
       actor_id: actorId || null,
       entity_type: entityType,
-      entity_id: entityId,
-      details,
+      entity_id: id,
+      details: mergedDetails,
       tenant_id: tenantId,
     });
 
     if (error) {
-      console.error("Failed to create audit log:", error);
+      console.error("Failed to create audit log:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
     }
   } catch (err) {
     console.error("Error creating audit log:", err);
