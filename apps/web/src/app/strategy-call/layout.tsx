@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { SITE_URL } from "@/lib/constants";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 
 export const metadata: Metadata = {
   title: "Book a Strategy Call — Drive247",
@@ -30,7 +31,7 @@ export default function StrategyCallLayout({
     <div className="min-h-screen bg-background">
       {/* Minimal header — logo only */}
       <header className="border-b border-border/40">
-        <div className="mx-auto flex h-16 max-w-6xl items-center px-4 sm:px-6">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link href="/">
             <Image
               src="/logo-light.png"
@@ -49,6 +50,7 @@ export default function StrategyCallLayout({
               priority
             />
           </Link>
+          <ThemeToggle />
         </div>
       </header>
 
