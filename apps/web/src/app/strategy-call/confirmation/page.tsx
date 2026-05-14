@@ -65,10 +65,6 @@ export default function ConfirmationPage() {
             <CheckCircle2 className="h-7 w-7 text-indigo-600 dark:text-indigo-400" />
           </div>
 
-          <span className="inline-flex items-center rounded-full border border-indigo-200/60 bg-indigo-50/50 px-3 py-1 text-xs font-semibold text-indigo-600 dark:border-indigo-800/30 dark:bg-indigo-950/30 dark:text-indigo-400">
-            Call booked
-          </span>
-
           <h1 className="mt-4 text-3xl font-extrabold tracking-tighter sm:text-4xl">
             Your 7-day direct booking launch call is booked
           </h1>
