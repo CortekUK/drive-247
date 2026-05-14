@@ -3958,10 +3958,12 @@ const RentalDetail = () => {
                 // Calculate expected amount from vehicle rate.
                 // PAYG rentals have no end_date — render the daily rate without a units multiplier.
                 if ((rental as any).is_pay_as_you_go) {
+                  const paygUnitLabel = periodType === 'weekly' ? 'week' : periodType === 'monthly' ? 'month' : 'day';
+                  const paygRateLabel = `${rental.rental_period_type || 'Daily'} Rate`;
                   return (
                     <>
-                      <p className="text-xs uppercase tracking-wider text-muted-foreground">Daily Rate</p>
-                      <p className="text-lg font-semibold">{formatCurrencyUtil(rental.monthly_amount, currCode)}<span className="text-sm font-normal text-muted-foreground">/day</span></p>
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground">{paygRateLabel}</p>
+                      <p className="text-lg font-semibold">{formatCurrencyUtil(rental.monthly_amount, currCode)}<span className="text-sm font-normal text-muted-foreground">/{paygUnitLabel}</span></p>
                       <p className="text-xs text-muted-foreground">Pay-As-You-Go — accrued daily by the cron</p>
                     </>
                   );
