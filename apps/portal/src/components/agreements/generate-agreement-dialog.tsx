@@ -38,6 +38,13 @@ interface ExtensionRow {
   new_end_date: string | null;
 }
 
+interface RentalFlags {
+  is_pay_as_you_go: boolean;
+  has_installment_plan: boolean;
+}
+
+type AgreementType = "original" | "payg" | "installment" | "extension";
+
 export function GenerateAgreementDialog({
   open,
   onOpenChange,
@@ -46,7 +53,7 @@ export function GenerateAgreementDialog({
   const queryClient = useQueryClient();
 
   const [rental, setRental] = useState<PickerRental | null>(null);
-  const [agreementType, setAgreementType] = useState<"original" | "extension">("original");
+  const [agreementType, setAgreementType] = useState<AgreementType>("original");
   const [extensionId, setExtensionId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -66,7 +73,28 @@ export function GenerateAgreementDialog({
     enabled: !!rental?.id,
   });
 
+  // Fetch rental flags (PAYG / installment) so we can enable the right dropdown options
+  const { data: rentalFlags } = useQuery({
+    queryKey: ["rental-flags-for-agreement", rental?.id],
+    queryFn: async (): Promise<RentalFlags | null> => {
+      if (!rental?.id) return null;
+      const { data, error } = await supabase
+        .from("rentals")
+        .select("is_pay_as_you_go, has_installment_plan")
+        .eq("id", rental.id)
+        .single();
+      if (error) throw error;
+      return {
+        is_pay_as_you_go: !!data?.is_pay_as_you_go,
+        has_installment_plan: !!data?.has_installment_plan,
+      };
+    },
+    enabled: !!rental?.id,
+  });
+
   const hasExtensions = extensions.length > 0;
+  const isPayg = !!rentalFlags?.is_pay_as_you_go;
+  const hasInstallment = !!rentalFlags?.has_installment_plan;
 
   // Reset transient state when the configure dialog closes
   useEffect(() => {
@@ -75,6 +103,14 @@ export function GenerateAgreementDialog({
       setExtensionId("");
     }
   }, [rental]);
+
+  // Pre-select the most appropriate type once rental flags load
+  useEffect(() => {
+    if (!rentalFlags) return;
+    if (hasInstallment) setAgreementType("installment");
+    else if (isPayg) setAgreementType("payg");
+    else setAgreementType("original");
+  }, [rentalFlags, hasInstallment, isPayg]);
 
   // If user picks Extension but only one exists, auto-select it
   useEffect(() => {
@@ -138,11 +174,15 @@ export function GenerateAgreementDialog({
             : detail
         );
       } else {
-        toast.success(
+        const successMessage =
           agreementType === "extension"
             ? `Extension #${selectedExtension?.sequence_number} agreement sent for signing`
-            : "Rental agreement sent for signing"
-        );
+            : agreementType === "payg"
+            ? "PAYG rental agreement sent for signing"
+            : agreementType === "installment"
+            ? "Installment rental agreement sent for signing"
+            : "Rental agreement sent for signing";
+        toast.success(successMessage);
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["signed-agreements"] }),
           queryClient.invalidateQueries({ queryKey: ["rental-agreements-page"] }),
@@ -193,7 +233,7 @@ export function GenerateAgreementDialog({
               <Label>Agreement Type</Label>
               <Select
                 value={agreementType}
-                onValueChange={(v) => setAgreementType(v as "original" | "extension")}
+                onValueChange={(v) => setAgreementType(v as AgreementType)}
                 disabled={submitting}
               >
                 <SelectTrigger>
@@ -201,6 +241,12 @@ export function GenerateAgreementDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="original">Original Rental Agreement</SelectItem>
+                  <SelectItem value="payg" disabled={!isPayg}>
+                    PAYG Rental Agreement{!isPayg ? " (rental is not PAYG)" : ""}
+                  </SelectItem>
+                  <SelectItem value="installment" disabled={!hasInstallment}>
+                    Installment Rental Agreement{!hasInstallment ? " (no installment plan)" : ""}
+                  </SelectItem>
                   <SelectItem value="extension" disabled={!hasExtensions}>
                     Extension Agreement{!hasExtensions && extensionsLoading ? " (loading…)" : !hasExtensions ? " (no extensions)" : ""}
                   </SelectItem>

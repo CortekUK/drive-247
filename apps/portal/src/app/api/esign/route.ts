@@ -20,7 +20,7 @@ interface ESignRequest {
     customerEmail: string;
     customerName: string;
     tenantId: string;
-    agreementType?: 'original' | 'extension';
+    agreementType?: 'original' | 'extension' | 'payg' | 'installment';
     extensionPreviousEndDate?: string;
     extensionNewEndDate?: string;
     extensionNumber?: number;
@@ -1112,7 +1112,11 @@ export async function POST(request: NextRequest) {
         const isExtensionAgreement = body.agreementType === 'extension' && body.extensionNumber;
         const agreementTypeLabel = isExtensionAgreement
             ? `EXTENSION AGREEMENT #${body.extensionNumber}`
-            : 'ORIGINAL RENTAL AGREEMENT';
+            : body.agreementType === 'payg'
+                ? 'PAYG RENTAL AGREEMENT'
+                : body.agreementType === 'installment'
+                    ? 'INSTALLMENT RENTAL AGREEMENT'
+                    : 'ORIGINAL RENTAL AGREEMENT';
         // Draw a visible banner box
         const bannerHeight = 32;
         const bannerY = ctx.y - bannerHeight;
@@ -1137,11 +1141,20 @@ export async function POST(request: NextRequest) {
         ctx.y = bannerY - 16; // spacing after banner
 
         if (body.tenantId) {
-            // Pick template category: extension > installment > payg > standard
-            const templateCategory = body.agreementType === 'extension'
+            // Honor the explicit agreementType picked in the dialog. When the caller
+            // passed 'original' (or nothing), fall back to the auto-detect chain so
+            // older callers and PDFs without an explicit pick still resolve correctly.
+            // PAYG / installment are TEMPLATE variants of the original — we still
+            // store agreement_type='original' downstream (see normalizedAgreementType).
+            const explicit = body.agreementType;
+            const templateCategory = explicit === 'extension'
                 ? 'extension'
-                : (rental?.has_installment_plan && installment) ? 'installment'
-                : rental?.is_pay_as_you_go ? 'payg' : 'standard';
+                : explicit === 'installment'
+                    ? 'installment'
+                    : explicit === 'payg'
+                        ? 'payg'
+                        : (rental?.has_installment_plan && installment) ? 'installment'
+                            : rental?.is_pay_as_you_go ? 'payg' : 'standard';
             let { data: templateData } = await supabase
                 .from('agreement_templates')
                 .select('template_content')
@@ -1338,8 +1351,11 @@ export async function POST(request: NextRequest) {
 
             if (deductResult?.success === false) {
                 console.warn('Insufficient credits for esign:', deductResult);
-                // Record the failed agreement
-                const agreementType = body.agreementType || 'original';
+                // Record the failed agreement. PAYG and installment are template
+                // variants of the original — normalize so the DB CHECK constraint
+                // (agreement_type IN ('original','extension')) holds.
+                const rawType = body.agreementType || 'original';
+                const agreementType = rawType === 'extension' ? 'extension' : 'original';
                 await supabase.from('rental_agreements').insert({
                     rental_id: body.rentalId,
                     tenant_id: body.tenantId,
@@ -1403,7 +1419,11 @@ export async function POST(request: NextRequest) {
 
         const boldSignResult = await boldSignResponse.json();
         const documentId = boldSignResult.documentId;
-        const agreementType = body.agreementType || 'original';
+        // PAYG and installment are template variants of the original — they share
+        // the same downstream lifecycle (one per rental, tracked on rentals.document_status),
+        // so we collapse them to 'original' for storage. Only 'extension' is distinct.
+        const rawType = body.agreementType || 'original';
+        const agreementType = rawType === 'extension' ? 'extension' : 'original';
         const now = new Date().toISOString();
 
         // Insert into rental_agreements table
