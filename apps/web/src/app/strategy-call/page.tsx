@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   ClipboardCheck,
@@ -141,6 +142,18 @@ function CalendarEmbed({
   prefillEmail: string;
 }) {
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const router = useRouter();
+
+  // Listen for GHL booking completion and redirect to confirmation page
+  useEffect(() => {
+    function handleMessage(event: MessageEvent) {
+      if (Array.isArray(event.data) && event.data[0] === "msgsndr-booking-complete") {
+        router.push("/strategy-call/confirmation");
+      }
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [router]);
 
   const src = (() => {
     const params = new URLSearchParams();
