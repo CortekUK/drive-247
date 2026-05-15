@@ -638,7 +638,19 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
       }
 
       console.log(`Targeted allocation complete: ${formatCurrency(totalAllocated, currencyCode)} allocated, ${formatCurrency(remainingAmount, currencyCode)} remaining`);
-      
+
+      // DIAGNOSTIC: when the caller explicitly targeted categories but we
+      // failed to allocate any new amount (e.g. the targeted ledger entry
+      // doesn't exist and auto-create was blocked, or customer/rental ids
+      // don't match the existing charge), surface it loudly. The payment
+      // would otherwise become a silent 'Credit', and the user would stare
+      // at "Tax: Not Paid" with no clue why. This warning is the breadcrumb
+      // that turns a 30-minute hunt into a 30-second log lookup.
+      const newlyAllocated = totalAllocated - alreadyAllocated;
+      if (targetCategories && targetCategories.length > 0 && newlyAllocated === 0) {
+        console.warn(`[APPLY-PAYMENT] CRITICAL: payment ${paymentId} (amount=${formatCurrency(payment.amount, currencyCode)}) was targeted to categories [${targetCategories.join(', ')}] but ZERO new allocation happened. Possible causes: (a) target category has no outstanding ledger charge AND auto-create was blocked by duplicate guard or missing invoice field; (b) ledger charge customer_id/rental_id does not match payment; (c) extension_id leaked onto payment and stripped the original-rental targets. Inspect ledger_entries for rental ${payment.rental_id} category ${targetCategories.join('/')} and payment ${paymentId} (extension_id=${payment.extension_id ?? 'null'}).`);
+      }
+
       // Update payment status based on allocation
       let paymentStatus = 'Applied';
       if (remainingAmount > 0) {
@@ -799,20 +811,30 @@ serve(async (req) => {
       });
     }
 
-    // Installment self-heal — runs for EVERY successful payment allocation,
-    // regardless of which entry path called us (Stripe webhook, polling cron,
-    // booking-success page, rental-detail-page Charge-via-Stripe handler,
-    // or admin Record Payment). This is the single chokepoint where every
-    // Stripe + manual payment funnels through, so settling the matching
-    // installment slot here is the most reliable place. The RPC is idempotent;
-    // re-applying for an already-paid slot is a no-op.
+    // Installment self-heal — runs for payments that are intended to settle a
+    // Rental installment slot. The RPC is idempotent; re-applying for an
+    // already-paid slot is a no-op.
+    //
+    // CRITICAL GUARD: when a payment is category-targeted to fees only
+    // (Tax, Service Fee, Insurance, Delivery Fee, Collection Fee, Extras, etc.),
+    // we MUST NOT settle an installment slot with it. Doing so corrupts the
+    // installment plan (e.g. flips `upfront_paid=true` and stamps
+    // `upfront_payment_id` with a Tax payment id), and worse, leaves the user
+    // staring at "Tax: Not Paid" because the money went toward an installment
+    // settlement record while the actual Tax ledger entry stays untouched. The
+    // self-heal is only allowed when the payment is NOT category-targeted, or
+    // when its targets explicitly include 'Rental'.
     try {
       const { data: payment } = await supabase
         .from('payments')
-        .select('id, rental_id, extension_id')
+        .select('id, rental_id, extension_id, target_categories')
         .eq('id', paymentId)
         .maybeSingle();
-      if (payment?.rental_id && !payment.extension_id) {
+      const targets: string[] | null = (payment as any)?.target_categories ?? null;
+      const isCategoryTargeted = Array.isArray(targets) && targets.length > 0;
+      const targetsIncludeRental = isCategoryTargeted && targets!.includes('Rental');
+      const allowSelfHeal = !isCategoryTargeted || targetsIncludeRental;
+      if (payment?.rental_id && !payment.extension_id && allowSelfHeal) {
         const todayStr = new Date().toISOString().split('T')[0];
         // Latest open overdue/due-today slot. installment_settle_invoice
         // cumulatively supersedes earlier opens, so picking the highest
@@ -845,6 +867,8 @@ serve(async (req) => {
               .neq('status', 'active');
           }
         }
+      } else if (payment?.rental_id && isCategoryTargeted && !targetsIncludeRental) {
+        console.log(`[APPLY-PAYMENT] Skipping installment self-heal: payment ${paymentId} is targeted to non-Rental categories (${targets!.join(', ')}). Installment plan untouched.`);
       }
     } catch (instErr) {
       console.error('[APPLY-PAYMENT] installment self-heal (non-fatal):', instErr);

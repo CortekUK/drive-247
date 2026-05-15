@@ -810,10 +810,25 @@ serve(async (req) => {
             // supersedes earlier opens, so this matches the
             // PAYG-style "pay the latest invoice and earlier ones clear"
             // behavior that's already wired for paygAccrualId.
+            //
+            // CRITICAL GUARD: skip self-heal when this payment is
+            // category-targeted to fees only (Tax, Service Fee, etc.). A
+            // Tax payment must never settle an installment slot — that
+            // corrupts the plan (flips upfront_paid=true, stamps
+            // upfront_payment_id with the wrong payment) and leaves the
+            // Tax ledger entry untouched, so the UI shows "Tax: Not Paid"
+            // while the installment side records the money. The explicit
+            // case (installmentId stamped by the dialog) is unaffected.
             const rentalIdFromMeta = session.metadata?.rental_id;
             const hasExtensionId = !!session.metadata?.extension_id;
             const hasBonzahId = !!session.metadata?.bonzah_policy_id;
-            if (!installmentId && finalPaymentId && rentalIdFromMeta && !hasExtensionId && !hasBonzahId) {
+            const targetCategoriesMeta: string[] | null = session.metadata?.target_categories
+              ? (() => { try { return JSON.parse(session.metadata!.target_categories!); } catch { return null; } })()
+              : null;
+            const isCategoryTargeted = Array.isArray(targetCategoriesMeta) && targetCategoriesMeta.length > 0;
+            const targetsIncludeRental = isCategoryTargeted && targetCategoriesMeta!.includes("Rental");
+            const allowInstallmentSelfHeal = !isCategoryTargeted || targetsIncludeRental;
+            if (!installmentId && finalPaymentId && rentalIdFromMeta && !hasExtensionId && !hasBonzahId && allowInstallmentSelfHeal) {
               try {
                 const todayStr = new Date().toISOString().split("T")[0];
                 // Find the latest overdue/due-today open installment for
@@ -836,6 +851,8 @@ serve(async (req) => {
               } catch (fbErr) {
                 console.error("Installment self-heal lookup failed:", fbErr);
               }
+            } else if (!installmentId && finalPaymentId && rentalIdFromMeta && !hasExtensionId && !hasBonzahId && !allowInstallmentSelfHeal) {
+              console.log(`[TEST MODE] Skipping installment self-heal: payment is targeted to non-Rental categories (${targetCategoriesMeta!.join(", ")}). Installment plan untouched.`);
             }
 
             if (installmentId && finalPaymentId) {

@@ -4,16 +4,35 @@ import { corsHeaders } from "../_shared/cors.ts";
 /**
  * Pay-As-You-Go accrual cron.
  *
- * Runs every minute. For each active PAYG rental whose `payg_next_accrual_at`
- * has arrived, this function posts a new day's charges (rental + tax + % service fee)
- * and advances the accrual pointer by 5 MINUTES (test mode — was 24h in production).
+ * Scheduled every 5 minutes (cron jobid 32 — schedule "<slash>5 * * * *"). For each active
+ * PAYG rental whose `payg_next_accrual_at` has arrived, this function posts a
+ * new accrual + ledger charges (rental + tax + % service fee) and advances the
+ * accrual pointer by the rental's tenant accrual window.
  *
- * Idempotency is enforced by a UNIQUE constraint on `payg_accruals (rental_id, accrual_day_index)`.
- * Safe to re-run without creating duplicate ledger entries.
+ * Each tenant configures its accrual window via
+ * `tenants.payg_accrual_window_seconds` (default 86400 = 24h). Production
+ * tenants stay at 24h so they only get one accrual per day even though the
+ * cron fires every 5 minutes (the `payg_next_accrual_at <= now()` filter
+ * makes the in-between ticks cheap no-ops). The `test` tenant runs at 300s
+ * (5 min) so QA can watch PAYG cycles in real time.
  *
- * Max-duration safety cap: if a rental exceeds `tenants.payg_max_duration_days`,
- * accrual stops and `rentals.payg_max_duration_alerted` flips to true so the
- * admin reminder path can raise a critical alert.
+ * HISTORICAL BUG: this file shipped with a hardcoded 5-minute window
+ * (`5 * 60 * 1000`) applied to ALL tenants — combined with the 30-day per-
+ * rental catch-up cap, every active PAYG rental was getting ~30 days of
+ * charges posted in a single 2-second burst every night. Symptom: customers
+ * received reminders for $1,000+ outstanding 2 days after signing up. Fixed
+ * by making the window per-tenant and moving the test-mode behavior behind
+ * an explicit tenant config flag. See data-repair migration
+ * `repair_jeffery_martin_payg_overaccrual_2026_05_15` for the customer
+ * cleanup that accompanied this fix.
+ *
+ * Idempotency is enforced by a UNIQUE constraint on
+ * `payg_accruals (rental_id, accrual_day_index)`. Safe to re-run.
+ *
+ * Max-duration safety cap: if a rental exceeds
+ * `tenants.payg_max_duration_days`, accrual stops and
+ * `rentals.payg_max_duration_alerted` flips to true so the admin reminder
+ * path can raise a critical alert.
  */
 
 interface Rental {
@@ -41,6 +60,11 @@ interface Tenant {
   service_fee_type: string | null;
   service_fee_value: number | null;
   payg_max_duration_days: number | null;
+  // Width of one PAYG accrual "day" in seconds. Production tenants are 86400
+  // (24h); the `test` tenant is 300 (5 min) for rapid QA cycles. The cron
+  // schedule (every-5-min) is the floor — a tenant set to 60s would still
+  // only get one accrual per cron tick.
+  payg_accrual_window_seconds: number;
 }
 
 function computeDailyRate(rental: Rental): number {
@@ -84,7 +108,7 @@ Deno.serve(async (req) => {
     const { data: tenants, error: tenantErr } = await supabase
       .from("tenants")
       .select(
-        "id, tax_enabled, tax_percentage, service_fee_enabled, service_fee_type, service_fee_value, payg_max_duration_days",
+        "id, tax_enabled, tax_percentage, service_fee_enabled, service_fee_type, service_fee_value, payg_max_duration_days, payg_accrual_window_seconds",
       );
 
     if (tenantErr) {
@@ -127,9 +151,26 @@ Deno.serve(async (req) => {
     let failed = 0;
     let capped = 0;
 
-    // Per-rental catch-up cap (R2) — prevents a single backdated rental from monopolizing
-    // the run. Most rentals will accrue 1 day per run; backdated rentals catch up over time.
-    const MAX_DAYS_PER_RENTAL_PER_RUN = 30;
+    // Per-rental catch-up cap (R2) — prevents a single backdated rental from
+    // monopolizing the run. The cap is tenant-aware: it scales with the tenant's
+    // accrual window so a 24h-window rental can catch up ~7 days of outage, while
+    // a 5-min-window test rental can catch up ~6 hours of test-time before
+    // tapping out and resuming on the next cron tick. Hardcoded 7 was the right
+    // value when everyone was 24h; with mixed windows we derive it from the
+    // tenant config.
+    //
+    //   24h tenants: floor(86400 / 86400) * 7 = 7 days catch-up (unchanged)
+    //   5-min test : floor(86400 / 300)   * 1 = 288 windows catch-up (one full
+    //                 simulated day in a single tick — handy when admin pauses
+    //                 then resumes a test rental)
+    // For safety, we always cap absolute count at 300 to bound cron run time.
+    function maxDaysFor(tenant: Tenant): number {
+      const windowS = tenant.payg_accrual_window_seconds ?? 86400;
+      // 24h tenants get a 7-day outage budget; faster windows get 1×day worth.
+      const ratio = Math.max(1, Math.floor(86400 / windowS));
+      const cap = windowS >= 86400 ? 7 : ratio;
+      return Math.min(cap, 300);
+    }
 
     for (const r of rentals as Rental[]) {
       try {
@@ -142,6 +183,13 @@ Deno.serve(async (req) => {
         }
 
         const maxDuration = tenant.payg_max_duration_days ?? 90;
+        // Per-tenant accrual window. Production tenants = 86400s (24h);
+        // `test` tenant = 300s (5 min) for rapid QA. Falls back to 24h if the
+        // column ever returns null (shouldn't, the column is NOT NULL with a
+        // default — but defensive coding for old cached schemas).
+        const windowSeconds = tenant.payg_accrual_window_seconds ?? 86400;
+        const accrualWindowMs = windowSeconds * 1000;
+        const maxDaysThisRun = maxDaysFor(tenant);
 
         // Mutable state — advances each iteration of the catch-up loop
         let currentNextAccrual = new Date(r.payg_next_accrual_at);
@@ -152,7 +200,7 @@ Deno.serve(async (req) => {
         // capped per rental + per max-duration safety cap.
         while (
           currentNextAccrual.getTime() <= now.getTime() &&
-          daysPostedThisRental < MAX_DAYS_PER_RENTAL_PER_RUN
+          daysPostedThisRental < maxDaysThisRun
         ) {
           const nextDayIndex = currentDayCount + 1;
 
@@ -192,11 +240,13 @@ Deno.serve(async (req) => {
           }
 
           // R1 design: currentNextAccrual is the START of the window we're posting now.
-          // TEST MODE: window length is 5 MINUTES instead of 24h so a "day" cycles fast
-          // for end-to-end QA. Revert to `24 * 60 * 60 * 1000` for production.
+          // Window length is per-tenant (computed above as `accrualWindowMs`).
+          // Production tenants run on 24h (86_400_000ms). The `test` tenant runs on
+          // 5 min (300_000ms) so QA can watch rapid PAYG cycles. To change this,
+          // update `tenants.payg_accrual_window_seconds` — never hardcode here.
           const windowStartDt = new Date(currentNextAccrual);
           const windowEndDt = new Date(
-            currentNextAccrual.getTime() + 5 * 60 * 1000,
+            currentNextAccrual.getTime() + accrualWindowMs,
           );
 
           // Compute rates for this specific day.
@@ -214,7 +264,11 @@ Deno.serve(async (req) => {
             }
           }
 
-          // Claim this accrual day via unique constraint
+          // Claim this accrual day via unique constraint.
+          // `hours_covered` reports the real width of the window so audits
+          // don't lie. For production this is 24; for the 5-min test tenant
+          // this is 0.083h. Stored as a numeric so fractional values fit.
+          const hoursCovered = round2(windowSeconds / 3600);
           const { data: accrualRow, error: accrualErr } = await supabase
             .from("payg_accruals")
             .insert({
@@ -227,7 +281,7 @@ Deno.serve(async (req) => {
               tax_amount: taxAmt,
               service_fee_amount: sfAmt,
               is_partial: false,
-              hours_covered: 24,
+              hours_covered: hoursCovered,
               ledger_entry_ids: [],
             })
             .select()
@@ -353,9 +407,9 @@ Deno.serve(async (req) => {
           );
         }
 
-        if (daysPostedThisRental >= MAX_DAYS_PER_RENTAL_PER_RUN) {
+        if (daysPostedThisRental >= maxDaysThisRun) {
           console.log(
-            `[PaygAccrualCron] Hit per-rental catch-up cap (${MAX_DAYS_PER_RENTAL_PER_RUN}) for rental ${r.id}; remaining days will accrue on next runs`,
+            `[PaygAccrualCron] Hit per-rental catch-up cap (${maxDaysThisRun}) for rental ${r.id}; remaining days will accrue on next runs`,
           );
         }
       } catch (rentalErr: any) {

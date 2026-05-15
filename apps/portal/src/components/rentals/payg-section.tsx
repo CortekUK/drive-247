@@ -6,6 +6,14 @@ import { BellOff, BellRing, Download, Loader2, PauseCircle, RotateCcw, RefreshCw
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/format-utils";
@@ -74,6 +82,38 @@ export function PaygSection({
   const { toast } = useToast();
   const { data, isLoading, refetch } = usePaygInvoices(rentalId, isPayg);
   const [remindLoading, setRemindLoading] = useState(false);
+  const [autoTogglePending, setAutoTogglePending] = useState(false);
+
+  // Per-rental auto-reminders toggle. Flipping this writes to
+  // rentals.payg_auto_reminders_enabled — the send-payg-reminders cron
+  // skips rentals where it's false. The manual "Send reminder" button
+  // below ignores the flag, so operators always have the escape hatch.
+  const handleToggleAutoReminders = async (nextValue: boolean) => {
+    if (autoTogglePending) return;
+    setAutoTogglePending(true);
+    try {
+      const { error } = await (supabase as any)
+        .from("rentals")
+        .update({ payg_auto_reminders_enabled: nextValue })
+        .eq("id", rentalId);
+      if (error) throw error;
+      toast({
+        title: nextValue ? "Auto-reminders enabled" : "Auto-reminders disabled",
+        description: nextValue
+          ? "The reminder cron will resume firing on this rental's schedule."
+          : "The cron will skip this rental. Use Send reminder to nudge manually.",
+      });
+      await refetch();
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err?.message || "Failed to update auto-reminders setting",
+        variant: "destructive",
+      });
+    } finally {
+      setAutoTogglePending(false);
+    }
+  };
   const [invoicePreview, setInvoicePreview] = useState<PaygInvoiceRow | null>(null);
   const [statementOpen, setStatementOpen] = useState(false);
   // Admin "Record Payment" dialog target — set when an admin clicks Pay on a PAYG row.
@@ -215,6 +255,43 @@ export function PaygSection({
 
                   {showAdminActions && (
                     <>
+                      {/* Per-rental auto-reminders toggle. Defaults to ON for new
+                          rentals; operator flips it OFF for trusted customers who
+                          pay on time and don't want automated nags. The cron
+                          (send-payg-reminders) reads this flag; the manual
+                          "Send reminder" button below ignores it on purpose. */}
+                      <TooltipProvider delayDuration={150}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-1.5 h-9 px-2 rounded-md border bg-background">
+                              {data.reminderStatus.rentalAutoEnabled ? (
+                                <BellRing className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                              ) : (
+                                <BellOff className="h-3.5 w-3.5 text-muted-foreground" />
+                              )}
+                              <Label
+                                htmlFor={`auto-reminders-${rentalId}`}
+                                className="text-xs font-medium select-none cursor-pointer"
+                              >
+                                Auto-reminders
+                              </Label>
+                              <Switch
+                                id={`auto-reminders-${rentalId}`}
+                                checked={data.reminderStatus.rentalAutoEnabled}
+                                disabled={autoTogglePending}
+                                onCheckedChange={handleToggleAutoReminders}
+                                aria-label="Toggle automatic PAYG reminders for this rental"
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-[260px] text-xs leading-relaxed">
+                            {data.reminderStatus.rentalAutoEnabled
+                              ? "ON — the cron will send PAYG reminders on the normal cadence while a balance is outstanding. Flip off for trusted customers who don't want automated nags."
+                              : "OFF — the cron will skip this rental. You can still send a payment link manually with the Send reminder button on the right."}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+
                       <Button
                         size="sm"
                         variant="outline"
@@ -476,6 +553,22 @@ function ReminderStatusLine({ status }: { status: PaygReminderStatus }) {
         <BellOff className="h-3.5 w-3.5" />
         <span>
           Automated reminders are <span className="font-medium">off</span>
+          {" · "}
+          <span>Use Send reminder to nudge manually</span>
+        </span>
+      </div>
+    );
+  }
+
+  // Off at the rental level — operator flipped the per-rental toggle
+  // for a trusted customer who pays on time and doesn't want auto-nags.
+  // Manual "Send reminder" still works (it ignores all flags).
+  if (status.blockReason === "rental_reminders_disabled") {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <BellOff className="h-3.5 w-3.5" />
+        <span>
+          Automated reminders <span className="font-medium">off for this rental</span>
           {" · "}
           <span>Use Send reminder to nudge manually</span>
         </span>

@@ -470,6 +470,7 @@ Deno.serve(async (req) => {
         payg_last_reminder_sent_at,
         payg_reminder_count,
         payg_paused,
+        payg_auto_reminders_enabled,
         is_pay_as_you_go,
         status,
         payg_closed_at,
@@ -479,6 +480,7 @@ Deno.serve(async (req) => {
       .eq("is_pay_as_you_go", true)
       .eq("status", "Active")
       .eq("payg_paused", false)
+      .eq("payg_auto_reminders_enabled", true)
       .is("payg_closed_at", null)
       .not("payg_start_ts", "is", null);
 
@@ -503,7 +505,10 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Respect the tenant toggle
+        // Respect the tenant toggle. (Per-rental toggle
+        // `rentals.payg_auto_reminders_enabled = true` is already enforced
+        // by the SQL filter on the rentals select above — no need to
+        // re-check it here.)
         if (tenant.payg_auto_reminders_enabled === false) {
           skipped++;
           continue;

@@ -53,7 +53,18 @@ Deno.serve(async (req) => {
       // so revisiting the success page (or the rental detail polling) will
       // retroactively settle. The RPC is idempotent: a second call on an
       // already-paid slot is a no-op.
-      if (payment.rental_id && !payment.extension_id) {
+      //
+      // CRITICAL GUARD (mirrors apply-payment + stripe-webhook-test/live):
+      // skip this retroactive self-heal when the payment is category-targeted
+      // to fees only (Tax, Service Fee, etc.). Settling an installment slot
+      // with a Tax payment corrupts the plan and is the root cause of the
+      // "Tax: Not Paid but Collected = Tax amount" symptom on installment
+      // rentals.
+      const targets: string[] | null = (payment as any)?.target_categories ?? null;
+      const isCategoryTargeted = Array.isArray(targets) && targets.length > 0;
+      const targetsIncludeRental = isCategoryTargeted && targets!.includes('Rental');
+      const allowRetroactiveSelfHeal = !isCategoryTargeted || targetsIncludeRental;
+      if (payment.rental_id && !payment.extension_id && allowRetroactiveSelfHeal) {
         try {
           const todayStr = new Date().toISOString().split('T')[0];
           const { data: targetSlot } = await supabase
@@ -84,6 +95,8 @@ Deno.serve(async (req) => {
         } catch (instErr) {
           console.error('[PROCESS-PENDING] retroactive self-heal error:', instErr);
         }
+      } else if (payment.rental_id && isCategoryTargeted && !targetsIncludeRental) {
+        console.log(`[PROCESS-PENDING] Skipping retroactive installment self-heal: payment ${payment.id} is targeted to non-Rental categories (${targets!.join(', ')}). Installment plan untouched.`);
       }
       return new Response(JSON.stringify({ ok: true, status: payment.status, alreadyProcessed: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -145,9 +158,17 @@ Deno.serve(async (req) => {
       })
       .eq('id', payment.id);
 
-    // Apply payment to ledger
+    // Apply payment to ledger. Pass target_categories explicitly when present
+    // (defense in depth — apply-payment also reads from the payment record, but
+    // an explicit pass guards against any path where the read might miss). This
+    // is critical for "Add Payment on Tax row" flows: without target_categories
+    // apply-payment runs universal FIFO and lands the money on Rental first.
+    const targets: string[] | null = (payment as any)?.target_categories ?? null;
     const { data: applyResult, error: applyError } = await supabase.functions.invoke('apply-payment', {
-      body: { paymentId: payment.id },
+      body: {
+        paymentId: payment.id,
+        ...(Array.isArray(targets) && targets.length > 0 ? { targetCategories: targets } : {}),
+      },
     });
 
     if (applyError) {
@@ -181,7 +202,16 @@ Deno.serve(async (req) => {
     // so it works regardless of what create-checkout-session stamped.
     // Skips when the payment is for a different concern (extension or
     // bonzah) so we don't accidentally settle installments on those.
-    if (payment.rental_id && !payment.extension_id) {
+    //
+    // CRITICAL GUARD: also skip for category-targeted payments that don't
+    // include 'Rental'. A Tax payment must never settle an installment slot.
+    // The DB-level installment_settle_invoice RPC also enforces this, but
+    // gating at the call site avoids an extra round trip + audit-log noise.
+    const targetsForSelfHeal: string[] | null = (payment as any)?.target_categories ?? null;
+    const isCatTargeted = Array.isArray(targetsForSelfHeal) && targetsForSelfHeal.length > 0;
+    const targetsHaveRental = isCatTargeted && targetsForSelfHeal!.includes('Rental');
+    const allowSelfHealHere = !isCatTargeted || targetsHaveRental;
+    if (payment.rental_id && !payment.extension_id && allowSelfHealHere) {
       try {
         const todayStr = new Date().toISOString().split('T')[0];
         // Latest overdue or due-today open slot for this rental.

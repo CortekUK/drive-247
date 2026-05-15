@@ -49,16 +49,19 @@ export interface PaygReminderRow {
  * Mirrors the gates inside `send-payg-reminders` so the UI can explain itself.
  */
 export type PaygReminderBlockReason =
-  | "tenant_disabled" // tenant.payg_auto_reminders_enabled === false
-  | "rental_inactive" // rental.status !== 'Active'
-  | "rental_paused" // rental.payg_paused === true
-  | "rental_closed" // rental.payg_closed_at !== null
-  | "no_open_invoice" // no PAYG accrual with invoice_status='open'
+  | "tenant_disabled"            // tenant.payg_auto_reminders_enabled === false
+  | "rental_reminders_disabled"  // rental.payg_auto_reminders_enabled === false (operator flipped this rental's toggle off)
+  | "rental_inactive"            // rental.status !== 'Active'
+  | "rental_paused"              // rental.payg_paused === true
+  | "rental_closed"              // rental.payg_closed_at !== null
+  | "no_open_invoice"            // no PAYG accrual with invoice_status='open'
   | null;
 
 export interface PaygReminderStatus {
   /** Master tenant toggle. */
   autoEnabled: boolean;
+  /** Per-rental toggle. Defaults to true; operator flips it from the PAYG section. */
+  rentalAutoEnabled: boolean;
   /**
    * When the next automated reminder is scheduled to fire (or `null` when not
    * applicable). Computed as max(last_sent_at, payg_start_ts) + intervalDays,
@@ -97,7 +100,7 @@ const EMPTY: PaygInvoiceData = {
   lastUpdatedAt: null,
   totals: { collected: 0, balanceDue: 0, refunded: 0, netReceived: 0 },
   latestOpenInvoice: null,
-  reminderStatus: { autoEnabled: false, nextReminderAt: null, intervalDays: 4, isCustomInterval: false, blockReason: null },
+  reminderStatus: { autoEnabled: false, rentalAutoEnabled: true, nextReminderAt: null, intervalDays: 4, isCustomInterval: false, blockReason: null },
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -171,7 +174,7 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
         supabaseUntyped
           .from("rentals")
           .select(
-            "status, payg_start_ts, payg_last_reminder_sent_at, payg_paused, payg_closed_at, monthly_amount, rental_period_type, payg_reminder_interval_days",
+            "status, payg_start_ts, payg_last_reminder_sent_at, payg_paused, payg_closed_at, monthly_amount, rental_period_type, payg_reminder_interval_days, payg_auto_reminders_enabled",
           )
           .eq("id", rentalId)
           .eq("tenant_id", tenant.id)
@@ -289,9 +292,15 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
 
       // Mirror the gates in supabase/functions/send-payg-reminders so the UI explains itself.
       const autoEnabled = tenantRow?.payg_auto_reminders_enabled !== false;
+      // Per-rental toggle: operators flip this off from the rental detail page
+      // for trusted customers who pay reliably and don't want automated nags.
+      // Mirror order matches the cron — tenant gate first, then per-rental.
+      const rentalAutoEnabled = rentalRow?.payg_auto_reminders_enabled !== false;
       let blockReason: PaygReminderBlockReason = null;
       if (!autoEnabled) {
         blockReason = "tenant_disabled";
+      } else if (!rentalAutoEnabled) {
+        blockReason = "rental_reminders_disabled";
       } else if (rentalRow?.payg_closed_at) {
         blockReason = "rental_closed";
       } else if (rentalRow?.payg_paused) {
@@ -328,6 +337,7 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
 
       const reminderStatus: PaygReminderStatus = {
         autoEnabled,
+        rentalAutoEnabled,
         nextReminderAt,
         intervalDays,
         isCustomInterval,

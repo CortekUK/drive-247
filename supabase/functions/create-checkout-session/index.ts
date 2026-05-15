@@ -213,6 +213,14 @@ serve(async (req) => {
     // CRITICAL FIX: Save stripe_checkout_session_id to payment record
     // This allows the webhook to find and update the payment when checkout completes
     if (referenceId) {
+      // Category-targeted and extension flows MUST get their own dedicated
+      // payment record — never reuse a generic Pending row. Reusing would
+      // overwrite amount, hijack target_categories/extension_id, and is the
+      // root cause of "I paid for Tax but Tax shows Not Paid": the payment
+      // ends up tied to whatever Pending row was sitting around (potentially
+      // for a different category or extension), and apply-payment then either
+      // allocates to the wrong place or stamps the wrong installment slot.
+      const isTargetedFlow = !!(targetCategories && targetCategories.length > 0) || !!extensionId
       // First try to update existing PENDING payment record (portal flow)
       // Only update payments that match status=Pending to avoid corrupting existing paid records
       const updateData: any = {
@@ -226,13 +234,27 @@ serve(async (req) => {
       if (extensionId) {
         updateData.extension_id = extensionId
       }
-      const { data: updatedPayment, error: updateError } = await supabaseClient
-        .from('payments')
-        .update(updateData)
-        .eq('rental_id', referenceId)
-        .is('stripe_checkout_session_id', null)
-        .eq('status', 'Pending')
-        .select('id')
+      // For targeted flows, skip UPDATE entirely so we always INSERT a fresh
+      // payment with the exact amount and target_categories the caller asked for.
+      let updatedPayment: { id: string }[] | null = null
+      let updateError: any = null
+      if (!isTargetedFlow) {
+        const updateResult = await supabaseClient
+          .from('payments')
+          .update(updateData)
+          .eq('rental_id', referenceId)
+          .is('stripe_checkout_session_id', null)
+          .eq('status', 'Pending')
+          .is('target_categories', null)
+          .is('extension_id', null)
+          .select('id')
+        updatedPayment = updateResult.data
+        updateError = updateResult.error
+      } else {
+        console.log('Targeted/extension flow — skipping payment UPDATE, will INSERT a dedicated row',
+          targetCategories ? `(categories: ${targetCategories.join(', ')})` : '',
+          extensionId ? `(extension: ${extensionId})` : '')
+      }
 
       if (updateError) {
         console.error('Failed to update payment with session ID:', updateError)
