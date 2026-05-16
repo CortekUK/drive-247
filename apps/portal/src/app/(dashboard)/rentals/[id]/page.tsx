@@ -2804,11 +2804,29 @@ const RentalDetail = () => {
         // Compute which rows have unpaid charges (selectable for targeted payment)
         // Don't allow payments on cancelled/rejected rentals
         const isCancelledOrRejected = rental.status === 'Cancelled' || rental.approval_status === 'rejected';
+
+        // Installment "virtual paid" categories: when the rental has an active
+        // installment plan AND the upfront has been collected, the fee-side
+        // ledger entries (Tax, Service Fee, Delivery Fee, Security Deposit) are
+        // intentionally NOT decremented — the upfront payment lands entirely on
+        // the Rental charge, with the understanding that those fees are bundled
+        // into that single Rental amount. The Paid badge already reflects this
+        // (see line ~3074), and Action/selectable logic below must mirror it:
+        //   * NOT selectable for further payment (their balance is conceptually 0)
+        //   * Refundable, just like a category whose ledger entry actually paid down
+        const isInstallmentVirtualPaid = (category: string, amount: number): boolean =>
+          !!hasInstallmentPlan
+          && !!installmentPlan?.upfront_paid
+          && ['Security Deposit', 'Service Fee', 'Tax', 'Delivery Fee'].includes(category)
+          && amount > 0;
+
         const selectableCategories = rows
           .filter(({ category, amount }) => {
             if (amount <= 0) return false;
             const refunded = refundBreakdown?.[category] ?? 0;
             if (refunded >= amount) return false;
+            // Installment fees are virtually paid via the upfront — not selectable.
+            if (isInstallmentVirtualPaid(category, amount)) return false;
             // Selectable if there's a remaining amount (from ledger or invoice)
             return (categoryRemainingAmounts[category] ?? 0) > 0;
           })
@@ -3225,7 +3243,14 @@ const RentalDetail = () => {
                         })() : (() => {
                           // Show Refund if category has been paid (via ledger or total payment coverage)
                           const catPayment = paymentBreakdown?.[category];
-                          const categoryHasBeenPaid = catPayment ? catPayment.paid > 0 : false;
+                          // Installment rentals bundle Tax/Service Fee/etc. into the
+                          // upfront Rental payment — those fee ledger entries stay
+                          // un-decremented but the Paid badge fires (see line ~3074).
+                          // Mirror that here so the Action column shows Refund, not
+                          // Add Payment, for those rows.
+                          const categoryHasBeenPaid =
+                            (catPayment ? catPayment.paid > 0 : false)
+                            || isInstallmentVirtualPaid(category, amount);
                           // Security Deposit: disable refund if deposit was already used (deducted for excess mileage — remaining=0 and refunded)
                           const isDepositUsed = category === 'Security Deposit' && (refundBreakdown?.['Security Deposit'] ?? 0) > 0;
                           const wouldShowRefund = applied && !fullyRefunded && categoryHasBeenPaid && canRefund && !isDepositUsed;
@@ -3269,7 +3294,12 @@ const RentalDetail = () => {
                         ) : applied && fullyRefunded ? (
                           <Check className="h-4 w-4 text-green-500 inline-block" />
                         ) : (() => {
-                          // Show Add Payment if category has remaining amount AND is NOT covered by total payments
+                          // Show Add Payment if category has remaining amount AND is NOT covered by total payments.
+                          // Installment-virtually-paid fees (Tax/Service Fee/Delivery/Deposit on a rental
+                          // whose upfront installment has been paid) are conceptually settled even though
+                          // their ledger Charge rows show full remaining — exclude them so the row falls
+                          // through to the matching Refund branch above on the next render or the dash here.
+                          if (isInstallmentVirtualPaid(category, amount)) return false;
                           const catRemaining = categoryRemainingAmounts[category] ?? 0;
                           const wouldBeSelectable = (isSelectable || (applied && !fullyRefunded && catRemaining > 0)) && !isCancelledOrRejected;
                           return wouldBeSelectable;
