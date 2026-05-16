@@ -2557,6 +2557,15 @@ const RentalDetail = () => {
             tenantReminderIntervalDays={(rentalSettings as any)?.payg_reminder_interval_days ?? null}
             reminderIntervalOverride={(rental as any).payg_reminder_interval_days ?? null}
             tenantGracePeriodDays={(rentalSettings as any)?.payg_grace_period_days ?? null}
+            // Pricing config drives the "Daily breakdown" math. These come
+            // straight from the tenant row via useRentalSettings — same source
+            // the accrue-payg-charges cron reads to bill the customer, so the
+            // UI and the cron stay in lockstep.
+            taxEnabled={(rentalSettings as any)?.tax_enabled ?? null}
+            taxPercentage={(rentalSettings as any)?.tax_percentage ?? null}
+            serviceFeeEnabled={(rentalSettings as any)?.service_fee_enabled ?? null}
+            serviceFeeType={(rentalSettings as any)?.service_fee_type ?? null}
+            serviceFeeValue={(rentalSettings as any)?.service_fee_value ?? null}
             // Inline edit only for users with rental edit access. NULL = revert
             // to tenant default. send-payg-reminders reads this column on its
             // next pass so a change here takes effect on the next reminder

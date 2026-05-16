@@ -29,6 +29,18 @@ interface PaygSchedulePreviewProps {
    * and should persist it. Throw / reject to keep the input open with an error toast.
    */
   onSaveReminderInterval?: (newInterval: number | null) => Promise<void>;
+  /**
+   * Tenant pricing config used to render the "per day" math breakdown so the
+   * operator can see how the daily total is built from the base rental rate +
+   * tax + service fee. These values mirror the columns on `tenants` and are
+   * applied with the SAME rounding rules as the `accrue-payg-charges` cron —
+   * if you change the formula in one place, change it in the other.
+   */
+  taxEnabled?: boolean | null;
+  taxPercentage?: number | null;
+  serviceFeeEnabled?: boolean | null;
+  serviceFeeType?: 'percentage' | 'fixed_amount' | null;
+  serviceFeeValue?: number | null;
 }
 
 const REMINDER_MIN = 1;
@@ -55,6 +67,11 @@ export function PaygSchedulePreview({
   reminderIntervalOverride,
   tenantGracePeriodDays,
   onSaveReminderInterval,
+  taxEnabled,
+  taxPercentage,
+  serviceFeeEnabled,
+  serviceFeeType,
+  serviceFeeValue,
 }: PaygSchedulePreviewProps) {
   const period = periodType === "Monthly" ? "Monthly" : "Weekly";
   const periodLowerNoun = period === "Monthly" ? "month" : "week";
@@ -79,6 +96,36 @@ export function PaygSchedulePreview({
 
   const dailyRate = computePaygDailyRate(numericAmount, period);
   const firstReminderDate = start ? addDays(start, gracePeriod) : null;
+
+  // Math breakdown for the per-day total. MIRRORS accrue-payg-charges EXACTLY
+  // so the UI never lies about what the customer will be billed:
+  //   taxAmt = tax_enabled ? round2(dailyRate * tax_percentage / 100) : 0
+  //   sfAmt  = service_fee_enabled
+  //             ? type === 'percentage'   ? round2(dailyRate * value / 100)
+  //               : type === 'fixed_amount' ? round2(value)
+  //               : 0
+  //             : 0
+  //   dayTotal = dailyRate + taxAmt + sfAmt
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const taxPct = taxEnabled ? Number(taxPercentage) || 0 : 0;
+  const taxAmt = round2(dailyRate * (taxPct / 100));
+  let sfAmt = 0;
+  let sfLabel: string | null = null;
+  if (serviceFeeEnabled) {
+    if (serviceFeeType === 'percentage') {
+      const pct = Number(serviceFeeValue) || 0;
+      sfAmt = round2(dailyRate * (pct / 100));
+      sfLabel = `Service Fee (${pct}%)`;
+    } else if (serviceFeeType === 'fixed_amount') {
+      sfAmt = round2(Number(serviceFeeValue) || 0);
+      sfLabel = 'Service Fee (flat)';
+    }
+  }
+  const dayTotal = round2(dailyRate + taxAmt + sfAmt);
+  // Show the breakdown only when there's something interesting beyond the base
+  // rate — for a tenant with both tax and service fee disabled, the math is
+  // trivial (base = total) so we keep the card compact.
+  const hasExtras = taxAmt > 0 || sfAmt > 0;
 
   // Inline edit state for the reminder cadence. The input string is kept
   // separately from the saved number so partial typing (empty, "1", deletes)
@@ -169,8 +216,58 @@ export function PaygSchedulePreview({
               per {periodLowerNoun}
             </span>
           </div>
-          <div className="text-xs text-muted-foreground mt-0.5">
-            Accrued as {formatCurrency(dailyRate, currencyCode)}/day in the rolling invoice ledger.
+
+          {hasExtras ? (
+            <div className="mt-2 rounded-md border border-primary/15 bg-background/60 p-2.5 text-xs">
+              <div className="text-muted-foreground mb-1.5 font-medium">
+                Daily breakdown
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Base rate</span>
+                <span className="font-medium tabular-nums">
+                  {formatCurrency(dailyRate, currencyCode)}
+                </span>
+              </div>
+              {taxAmt > 0 && (
+                <div className="flex items-center justify-between mt-0.5">
+                  <span className="text-muted-foreground">
+                    + Tax ({taxPct}%)
+                  </span>
+                  <span className="font-medium tabular-nums text-muted-foreground">
+                    {formatCurrency(taxAmt, currencyCode)}
+                  </span>
+                </div>
+              )}
+              {sfAmt > 0 && sfLabel && (
+                <div className="flex items-center justify-between mt-0.5">
+                  <span className="text-muted-foreground">+ {sfLabel}</span>
+                  <span className="font-medium tabular-nums text-muted-foreground">
+                    {formatCurrency(sfAmt, currencyCode)}
+                  </span>
+                </div>
+              )}
+              <div className="mt-1.5 pt-1.5 border-t border-dashed border-primary/20 flex items-center justify-between">
+                <span className="font-semibold">Total per day</span>
+                <span className="font-semibold tabular-nums">
+                  {formatCurrency(dayTotal, currencyCode)}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="text-xs text-muted-foreground mt-1.5">
+            {hasExtras ? (
+              <>
+                Accrued at {formatCurrency(dayTotal, currencyCode)}/day to the
+                rolling invoice ledger ({formatCurrency(dailyRate, currencyCode)}{" "}
+                rental
+                {taxAmt > 0 ? ` + ${formatCurrency(taxAmt, currencyCode)} tax` : ""}
+                {sfAmt > 0 ? ` + ${formatCurrency(sfAmt, currencyCode)} fee` : ""}
+                ).
+              </>
+            ) : (
+              <>Accrued as {formatCurrency(dailyRate, currencyCode)}/day in the rolling invoice ledger.</>
+            )}
           </div>
         </div>
 

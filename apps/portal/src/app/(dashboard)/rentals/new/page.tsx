@@ -3068,6 +3068,15 @@ const CreateRental = () => {
                         tenantReminderIntervalDays={(rentalSettings as any)?.payg_reminder_interval_days ?? null}
                         reminderIntervalOverride={paygReminderInterval}
                         tenantGracePeriodDays={(rentalSettings as any)?.payg_grace_period_days ?? null}
+                        // Pricing config drives the "Daily breakdown" math.
+                        // Same source the accrue-payg-charges cron reads, so
+                        // the preview before submit matches what the cron will
+                        // actually bill once the rental starts accruing.
+                        taxEnabled={(rentalSettings as any)?.tax_enabled ?? null}
+                        taxPercentage={(rentalSettings as any)?.tax_percentage ?? null}
+                        serviceFeeEnabled={(rentalSettings as any)?.service_fee_enabled ?? null}
+                        serviceFeeType={(rentalSettings as any)?.service_fee_type ?? null}
+                        serviceFeeValue={(rentalSettings as any)?.service_fee_value ?? null}
                         // Pre-create edit: save just mutates local state. The value
                         // is persisted to rentals.payg_reminder_interval_days when
                         // the form submits (via setPaygReminderInterval being
