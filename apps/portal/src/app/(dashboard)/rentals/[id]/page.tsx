@@ -2807,12 +2807,10 @@ const RentalDetail = () => {
         }
 
         // Payment Breakdown card renders unconditionally for every rental.
-        // Previously the card was hidden for pure-PAYG rentals when every
-        // upfront row was $0 — but that also hid the "Pay As You Go Balance"
-        // footer + the "Add PAYG Payment" button, which are useful as long
-        // as the rental has outstanding PAYG charges. All-zero upfront rows
-        // already render dimmed ("$0.00 · Not applied"), so the card is not
-        // cluttered when there's genuinely nothing to bill up-front.
+        // All-zero upfront rows render dimmed ("$0.00 · Not applied") so the
+        // card is not cluttered when there's genuinely nothing to bill
+        // up-front. The PAYG section above this card is the canonical home
+        // for PAYG balance + payment actions on PAYG rentals.
 
         // Compute which rows have unpaid charges (selectable for targeted payment)
         // Don't allow payments on cancelled/rejected rentals
@@ -3352,33 +3350,13 @@ const RentalDetail = () => {
               </TableBody>
             </Table>
 
-            {/* PAYG cumulative payment button */}
-            {isPayg && (() => {
-              const paygWithRemaining = paygCategories.filter(c => (categoryRemainingAmounts[c] ?? 0) > 0);
-              const paygTotal = paygWithRemaining.reduce((sum, c) => sum + (categoryRemainingAmounts[c] ?? 0), 0);
-              if (paygTotal <= 0) return null;
-              return (
-                <div className="border-t bg-indigo-50/50 dark:bg-indigo-950/10 px-6 py-3 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Pay As You Go Balance</p>
-                    <p className="text-xs text-muted-foreground">
-                      {paygWithRemaining.join(', ')} &mdash; {formatCurrencyUtil(paygTotal, tenant?.currency_code || 'USD')} remaining
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                    onClick={() => {
-                      setSelectedCategories(new Set(paygWithRemaining));
-                      setShowTargetedPayment(true);
-                    }}
-                  >
-                    <DollarSign className="h-3.5 w-3.5 mr-1.5" />
-                    Add PAYG Payment
-                  </Button>
-                </div>
-              );
-            })()}
+            {/* PAYG cumulative payment footer + "Add PAYG Payment" button —
+                removed per operator request. The PAYG section above already
+                surfaces the rolling balance (Balance Due card) and exposes a
+                Pay button on each rolling invoice row in its own timeline, so
+                duplicating the same Add Payment affordance inside the Payment
+                Breakdown was redundant. Keep the operator's workflow anchored
+                on the PAYG section. */}
 
             {/* Selection footer for targeted payment */}
             {selectedCategories.size > 0 && (
