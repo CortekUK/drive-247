@@ -2797,9 +2797,13 @@ const RentalDetail = () => {
           }
         }
 
-        // If nothing left to bill up-front (pure PAYG rental with no extras), hide the card entirely.
-        const hasNonZeroRow = rows.some(r => r.amount > 0);
-        if (isPayg && !hasNonZeroRow) return null;
+        // Payment Breakdown card renders unconditionally for every rental.
+        // Previously the card was hidden for pure-PAYG rentals when every
+        // upfront row was $0 — but that also hid the "Pay As You Go Balance"
+        // footer + the "Add PAYG Payment" button, which are useful as long
+        // as the rental has outstanding PAYG charges. All-zero upfront rows
+        // already render dimmed ("$0.00 · Not applied"), so the card is not
+        // cluttered when there's genuinely nothing to bill up-front.
 
         // Compute which rows have unpaid charges (selectable for targeted payment)
         // Don't allow payments on cancelled/rejected rentals
