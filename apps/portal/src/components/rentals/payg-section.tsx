@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { format, formatDistanceToNowStrict, parseISO } from "date-fns";
-import { BellOff, BellRing, Download, Loader2, PauseCircle, RotateCcw, RefreshCw, FileText, Clock } from "lucide-react";
+import { BellOff, BellRing, Download, Loader2, PauseCircle, RotateCcw, RefreshCw, FileText, Clock, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -351,7 +351,57 @@ export function PaygSection({
                               <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">#{inv.invoiceRef}</td>
                               <td className="px-3 py-2.5 text-sm">{format(parseISO(inv.createdAt), "dd MMM · HH:mm")}</td>
                               <td className="px-3 py-2.5 text-right font-medium tabular-nums">
-                                {formatCurrency(inv.cumulativeAmount, currencyCode)}
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <span>{formatCurrency(inv.cumulativeAmount, currencyCode)}</span>
+                                  <TooltipProvider delayDuration={150}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          type="button"
+                                          className="text-muted-foreground/60 hover:text-foreground transition-colors"
+                                          aria-label="Show amount breakdown"
+                                        >
+                                          <Info className="h-3.5 w-3.5" />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="left" className="min-w-[200px] p-2.5">
+                                        <div className="text-[10px] font-semibold mb-1.5 uppercase tracking-wider text-muted-foreground">
+                                          Breakdown {showBreakdown ? "(cumulative)" : ""}
+                                        </div>
+                                        <div className="space-y-0.5 text-xs">
+                                          <div className="flex justify-between gap-4">
+                                            <span>Rental</span>
+                                            <span className="font-medium tabular-nums">
+                                              {formatCurrency(inv.cumulativeRental, currencyCode)}
+                                            </span>
+                                          </div>
+                                          {inv.cumulativeTax > 0 && (
+                                            <div className="flex justify-between gap-4">
+                                              <span>Tax</span>
+                                              <span className="font-medium tabular-nums">
+                                                {formatCurrency(inv.cumulativeTax, currencyCode)}
+                                              </span>
+                                            </div>
+                                          )}
+                                          {inv.cumulativeServiceFee > 0 && (
+                                            <div className="flex justify-between gap-4">
+                                              <span>Service Fee</span>
+                                              <span className="font-medium tabular-nums">
+                                                {formatCurrency(inv.cumulativeServiceFee, currencyCode)}
+                                              </span>
+                                            </div>
+                                          )}
+                                          <div className="border-t border-border/60 pt-1 mt-1 flex justify-between gap-4">
+                                            <span className="font-semibold">Total</span>
+                                            <span className="font-semibold tabular-nums">
+                                              {formatCurrency(inv.cumulativeAmount, currencyCode)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </div>
                                 {showBreakdown && (
                                   <span className="block text-xs text-muted-foreground font-normal">incl. prior</span>
                                 )}
@@ -439,8 +489,13 @@ export function PaygSection({
           invoice={{
             invoice_number: invoicePreview.invoiceRef,
             invoice_date: invoicePreview.createdAt.split("T")[0],
-            subtotal: invoicePreview.cumulativeAmount,
-            tax_amount: 0,
+            // Split the cumulative total into its real components instead of
+            // collapsing everything into subtotal with tax=0. InvoiceDialog
+            // already renders separate lines for Tax (line ~203) and Service
+            // Fee (line ~209), and these three numbers sum to total_amount.
+            subtotal: invoicePreview.cumulativeRental,
+            tax_amount: invoicePreview.cumulativeTax,
+            service_fee: invoicePreview.cumulativeServiceFee,
             total_amount: invoicePreview.cumulativeAmount,
           }}
           customer={{ name: customerName, email: customerEmail }}

@@ -17,6 +17,18 @@ export interface PaygInvoiceRow {
   taxAmount: number;
   serviceFeeAmount: number;
   cumulativeAmount: number; // rolling total at creation time
+  /**
+   * Per-category cumulative totals from the last reset (last 'paid' invoice or
+   * start of the rental) up to and including this row. Sum equals
+   * `cumulativeAmount`. These are what the invoice dialog uses to show the
+   * customer "you owe $X rental + $Y tax + $Z service fee" instead of dumping
+   * the whole cumulative into one line. Numbers stay aligned with the actual
+   * ledger because they're computed from the same fields the cron wrote into
+   * `payg_accruals`.
+   */
+  cumulativeRental: number;
+  cumulativeTax: number;
+  cumulativeServiceFee: number;
   status: PaygInvoiceStatus;
   paidAt: string | null;
   settlingPaymentId: string | null;
@@ -204,13 +216,24 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
       for (const a of accruals) accrualById.set(a.id, a);
 
       const invoices: PaygInvoiceRow[] = [];
+      // Rolling totals. They all reset to 0 immediately after we record an
+      // invoice whose status is 'paid', so each unpaid streak's cumulative
+      // amount is independent. Keep all four counters in lockstep: their sum
+      // must always equal `running` (the total cumulativeAmount) to within
+      // float rounding tolerance.
       let running = 0;
+      let runRental = 0;
+      let runTax = 0;
+      let runServiceFee = 0;
       for (const a of accruals) {
         const dailyRate = round2(Number(a.daily_rate || 0));
         const taxAmount = round2(Number(a.tax_amount || 0));
         const serviceFeeAmount = round2(Number(a.service_fee_amount || 0));
         const dayTotal = round2(dailyRate + taxAmount + serviceFeeAmount);
         running = round2(running + dayTotal);
+        runRental = round2(runRental + dailyRate);
+        runTax = round2(runTax + taxAmount);
+        runServiceFee = round2(runServiceFee + serviceFeeAmount);
 
         let supersededBy: string | null = null;
         if (a.superseded_by_accrual_id) {
@@ -228,6 +251,9 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
           taxAmount,
           serviceFeeAmount,
           cumulativeAmount: running,
+          cumulativeRental: runRental,
+          cumulativeTax: runTax,
+          cumulativeServiceFee: runServiceFee,
           status: (a.invoice_status as PaygInvoiceStatus) || "open",
           paidAt: a.paid_at || null,
           settlingPaymentId: a.settling_payment_id || null,
@@ -236,6 +262,9 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
 
         if (a.invoice_status === "paid") {
           running = 0;
+          runRental = 0;
+          runTax = 0;
+          runServiceFee = 0;
         }
       }
 
