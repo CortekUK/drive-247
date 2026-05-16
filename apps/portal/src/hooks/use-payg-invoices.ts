@@ -356,10 +356,14 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
       };
     },
     enabled: !!rentalId && !!tenant?.id && enabled,
-    // TEST MODE: poll fast so the UI catches new 5-min "days" without waiting
-    // on Realtime. Revert to staleTime 30_000 / refetchInterval 60_000 for prod.
-    staleTime: 2_000,
-    refetchInterval: 5_000,
+    // Production polling cadence. Realtime subscriptions above handle the
+    // hot path (instant updates on new accrual/payment/reminder rows), so
+    // this polling is just a safety-net for tabs that lose the websocket.
+    // Lower numbers here were a leftover from when a test "day" was 5 min;
+    // restored to sane production values to cut Supabase query load ~12x
+    // without sacrificing UI freshness.
+    staleTime: 30_000,
+    refetchInterval: 60_000,
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });

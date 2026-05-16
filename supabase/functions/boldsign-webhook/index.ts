@@ -186,21 +186,16 @@ async function handleBoldSignWebhook(supabaseClient: ReturnType<typeof createCli
       };
 
       if (mappedStatus === 'completed') {
-        rentalUpdate.status = 'Active';
-
-        // Update vehicle status to Rented
-        if (rental.vehicle_id) {
-          const { error: vehicleUpdateError } = await supabaseClient
-            .from('vehicles')
-            .update({ status: 'Rented' })
-            .eq('id', rental.vehicle_id);
-
-          if (vehicleUpdateError) {
-            console.error('Error updating vehicle status:', vehicleUpdateError);
-          } else {
-            console.log('Vehicle status updated to Rented:', rental.vehicle_id);
-          }
-        }
+        // IMPORTANT: do NOT flip rental.status to 'Active' or vehicle.status
+        // to 'Rented' here. Signing the agreement is not the same as the
+        // customer taking possession of the keys. The rental remains
+        // 'Pending' (and the vehicle stays 'Available') until the operator
+        // marks the key handover complete via the rental detail page, which
+        // is what `use-key-handover.ts → markKeyHanded("giving")` (and the
+        // `syncStatusToActive` useEffect in rentals/[id]/page.tsx) are wired
+        // to do. Activating on signed-only caused PAYG rentals to start
+        // accruing daily charges before the customer had the car — billing
+        // the customer for days they didn't possess the vehicle.
 
         // Download signed doc if not already done via agreement path
         if (!agreementId) {

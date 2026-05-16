@@ -342,6 +342,7 @@ interface Rental {
   payg_last_reminder_sent_at: string | null;
   payg_reminder_count: number;
   payg_paused: boolean;
+  payg_reminder_interval_days: number | null;
   is_pay_as_you_go: boolean;
   status: string;
   payg_closed_at: string | null;
@@ -353,15 +354,21 @@ interface Tenant {
   id: string;
   slug: string | null;
   payg_auto_reminders_enabled: boolean | null;
+  payg_reminder_interval_days: number | null;
   currency_code: string | null;
   company_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
 }
 
-// TEST MODE: a "day" is compressed to 5 minutes so the reminder cron fires
-// rapidly during end-to-end QA. Revert to `24 * 60 * 60 * 1000` for production.
-const DAY_MS = 5 * 60 * 1000;
+// One real day. Used to compute the minimum-gap between successive reminders.
+// HISTORICAL BUG: previously hardcoded to `5 * 60 * 1000` (5 minutes) with a
+// "TEST MODE — Revert for production" comment that was never reverted. That
+// gate was so trivial every daily cron tick passed it, so customers received
+// a reminder every day even when the tenant configured every 4 days. Fixed by
+// (a) using a real 24h value here, and (b) multiplying by the resolved
+// interval (rental override → tenant setting → 4-day default).
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 function fmtCurrency(amount: number, code: string | null): string {
   try {
@@ -385,7 +392,7 @@ function escapeHtml(input: unknown): string {
 }
 
 function daysBetween(later: Date, earlier: Date): number {
-  return Math.floor((later.getTime() - earlier.getTime()) / DAY_MS);
+  return Math.floor((later.getTime() - earlier.getTime()) / ONE_DAY_MS);
 }
 
 function buildEmailHtml(args: {
@@ -448,7 +455,7 @@ Deno.serve(async (req) => {
 
     const { data: tenants, error: tenantErr } = await supabase
       .from("tenants")
-      .select("id, slug, payg_auto_reminders_enabled, currency_code, company_name, contact_email, contact_phone");
+      .select("id, slug, payg_auto_reminders_enabled, payg_reminder_interval_days, currency_code, company_name, contact_email, contact_phone");
 
     if (tenantErr) throw tenantErr;
 
@@ -471,6 +478,7 @@ Deno.serve(async (req) => {
         payg_reminder_count,
         payg_paused,
         payg_auto_reminders_enabled,
+        payg_reminder_interval_days,
         is_pay_as_you_go,
         status,
         payg_closed_at,
@@ -514,12 +522,24 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Daily cadence anchored to rental activation (or last send)
+        // Cadence anchored to rental activation (or last send). The
+        // effective interval is per-rental override → tenant default → 4-day
+        // fallback. This mirrors what use-payg-invoices.ts displays in the UI
+        // so the "next reminder at" text matches what the cron will actually
+        // do. Previously the gate used a hardcoded 5-minute test constant
+        // which every daily cron tick trivially passed — customers got
+        // reminders daily instead of on the configured cadence.
         const startTs = new Date(r.payg_start_ts);
         const anchor = r.payg_last_reminder_sent_at
           ? new Date(r.payg_last_reminder_sent_at)
           : startTs;
-        if (nowMs < anchor.getTime() + DAY_MS) {
+        const rentalOverride = Number(r.payg_reminder_interval_days);
+        const tenantDefault = Number(tenant.payg_reminder_interval_days);
+        const intervalDays = Number.isFinite(rentalOverride) && rentalOverride > 0
+          ? rentalOverride
+          : (Number.isFinite(tenantDefault) && tenantDefault > 0 ? tenantDefault : 4);
+        const cadenceGapMs = intervalDays * ONE_DAY_MS;
+        if (nowMs < anchor.getTime() + cadenceGapMs) {
           skipped++;
           continue;
         }
