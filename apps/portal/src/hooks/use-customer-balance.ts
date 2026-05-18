@@ -240,6 +240,13 @@ export const useRentalBalance = (rentalId: string | undefined, customerId: strin
 // even though the corresponding payg_accruals row is still 'open'. So we
 // supplement the ledger sum with the PAYG accrual day-totals for any rows
 // whose invoice_status is still 'open' on this rental.
+//
+// For extensions, the rental page reads outstanding from `rental_extension_totals`
+// because some extension charges (e.g. Bonzah insurance) don't always have a
+// ledger entry yet. We mirror that here so the Add Payment dialog's
+// "outstanding balance" matches the Balance Due tile shown on the rental page.
+// Without this, an unpaid extension would show $0 in the dialog and the
+// operator would see "No outstanding balance" even though Balance Due > 0.
 export const useRentalChargesAndPayments = (rentalId: string | undefined) => {
   const { tenant } = useTenant();
 
@@ -251,14 +258,17 @@ export const useRentalChargesAndPayments = (rentalId: string | undefined) => {
 
       const { data, error } = await supabase
         .from("ledger_entries")
-        .select("type, amount, remaining_amount")
+        .select("type, amount, remaining_amount, category")
         .eq("tenant_id", tenant.id)
         .eq("rental_id", rentalId);
 
       if (error) throw error;
 
+      const isExtensionCategory = (cat: string | null | undefined) =>
+        typeof cat === 'string' && cat.startsWith('Extension');
+
       const charges = data
-        .filter(entry => entry.type === 'Charge')
+        .filter(entry => entry.type === 'Charge' && !isExtensionCategory(entry.category))
         .reduce((sum, entry) => sum + entry.amount, 0);
 
       const payments = Math.abs(data
@@ -266,7 +276,7 @@ export const useRentalChargesAndPayments = (rentalId: string | undefined) => {
         .reduce((sum, entry) => sum + entry.amount, 0));
 
       const ledgerOutstanding = data
-        .filter(entry => entry.type === 'Charge')
+        .filter(entry => entry.type === 'Charge' && !isExtensionCategory(entry.category))
         .reduce((sum, entry) => sum + entry.remaining_amount, 0);
 
       // Add open PAYG accrual day-totals for this rental, if any.
@@ -283,10 +293,33 @@ export const useRentalChargesAndPayments = (rentalId: string | undefined) => {
         0,
       );
 
+      // Add extension outstanding from the authoritative view. The rental page
+      // uses this same source for its Balance Due tile — we mirror it here so
+      // the dialog never tells the operator "No outstanding balance" while
+      // an extension is unpaid.
+      const { data: extensionTotals } = await supabase
+        .from("rental_extension_totals")
+        .select("display_status, outstanding_amount, total_charged")
+        .eq("rental_id", rentalId);
+
+      const billableExtensions = (extensionTotals ?? []).filter((re: any) =>
+        re.display_status !== 'pending_approval' &&
+        re.display_status !== 'cancelled' &&
+        re.display_status !== 'refunded'
+      );
+      const extensionOutstanding = billableExtensions.reduce(
+        (sum: number, re: any) => sum + Number(re.outstanding_amount || 0),
+        0,
+      );
+      const extensionCharges = billableExtensions.reduce(
+        (sum: number, re: any) => sum + Number(re.total_charged || 0),
+        0,
+      );
+
       return {
-        charges: charges + paygOutstanding,
+        charges: charges + paygOutstanding + extensionCharges,
         payments,
-        outstanding: ledgerOutstanding + paygOutstanding,
+        outstanding: ledgerOutstanding + paygOutstanding + extensionOutstanding,
       };
     },
     enabled: !!tenant && !!rentalId,
