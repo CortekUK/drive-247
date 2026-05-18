@@ -80,3 +80,6 @@ verify_jwt = false
 
 [functions.submit-enquiry]
 verify_jwt = false
+
+[functions.cmd-webhook]
+verify_jwt = false

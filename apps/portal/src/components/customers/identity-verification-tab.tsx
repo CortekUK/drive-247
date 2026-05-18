@@ -28,7 +28,7 @@ interface IdentityVerification {
   rejection_reason: string | null;
   created_at: string;
   updated_at: string;
-  verification_provider: 'veriff' | 'ai' | null;
+  verification_provider: 'veriff' | 'ai' | 'cmd' | null;
   ai_face_match_score: number | null;
 }
 
@@ -59,7 +59,7 @@ export function IdentityVerificationTab({ customerId }: IdentityVerificationTabP
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setVerifications(data || []);
+      setVerifications((data || []) as unknown as IdentityVerification[]);
     } catch (error) {
       console.error('Error fetching verifications:', error);
       toast.error('Failed to load identity verifications');

@@ -1450,6 +1450,56 @@ export type Database = {
           },
         ]
       }
+      cmd_webhook_events: {
+        Row: {
+          error: string | null
+          event_name: string | null
+          external_uuid: string | null
+          id: string
+          identity_verification_id: string | null
+          object_type: string | null
+          payload: Json
+          processed: boolean
+          received_at: string
+          signature_header: string | null
+          signature_valid: boolean
+        }
+        Insert: {
+          error?: string | null
+          event_name?: string | null
+          external_uuid?: string | null
+          id?: string
+          identity_verification_id?: string | null
+          object_type?: string | null
+          payload: Json
+          processed?: boolean
+          received_at?: string
+          signature_header?: string | null
+          signature_valid?: boolean
+        }
+        Update: {
+          error?: string | null
+          event_name?: string | null
+          external_uuid?: string | null
+          id?: string
+          identity_verification_id?: string | null
+          object_type?: string | null
+          payload?: Json
+          processed?: boolean
+          received_at?: string
+          signature_header?: string | null
+          signature_valid?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cmd_webhook_events_identity_verification_id_fkey"
+            columns: ["identity_verification_id"]
+            isOneToOne: false
+            referencedRelation: "identity_verifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cms_media: {
         Row: {
           alt_text: string | null
@@ -3533,6 +3583,14 @@ export type Database = {
           ai_face_match_score: number | null
           ai_ocr_data: Json | null
           client_comment: string | null
+          cmd_applicant_verification_id: string | null
+          cmd_delivery_channels: string[] | null
+          cmd_last_event_at: string | null
+          cmd_license_status: string | null
+          cmd_magic_link: string | null
+          cmd_magic_link_expires_at: string | null
+          cmd_status: string | null
+          cmd_verification_id: string | null
           created_at: string | null
           customer_email: string | null
           customer_id: string | null
@@ -3577,6 +3635,14 @@ export type Database = {
           ai_face_match_score?: number | null
           ai_ocr_data?: Json | null
           client_comment?: string | null
+          cmd_applicant_verification_id?: string | null
+          cmd_delivery_channels?: string[] | null
+          cmd_last_event_at?: string | null
+          cmd_license_status?: string | null
+          cmd_magic_link?: string | null
+          cmd_magic_link_expires_at?: string | null
+          cmd_status?: string | null
+          cmd_verification_id?: string | null
           created_at?: string | null
           customer_email?: string | null
           customer_id?: string | null
@@ -3621,6 +3687,14 @@ export type Database = {
           ai_face_match_score?: number | null
           ai_ocr_data?: Json | null
           client_comment?: string | null
+          cmd_applicant_verification_id?: string | null
+          cmd_delivery_channels?: string[] | null
+          cmd_last_event_at?: string | null
+          cmd_license_status?: string | null
+          cmd_magic_link?: string | null
+          cmd_magic_link_expires_at?: string | null
+          cmd_status?: string | null
+          cmd_verification_id?: string | null
           created_at?: string | null
           customer_email?: string | null
           customer_id?: string | null
@@ -4863,6 +4937,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      modives_config: {
+        Row: {
+          created_at: string
+          dealer_guid: string | null
+          environment: string
+          id: string
+          location_guid: string | null
+          notes: string | null
+          terms_accepted_at: string | null
+          terms_version: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dealer_guid?: string | null
+          environment?: string
+          id?: string
+          location_guid?: string | null
+          notes?: string | null
+          terms_accepted_at?: string | null
+          terms_version?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dealer_guid?: string | null
+          environment?: string
+          id?: string
+          location_guid?: string | null
+          notes?: string | null
+          terms_accepted_at?: string | null
+          terms_version?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       notifications: {
         Row: {
@@ -6591,6 +6701,96 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "reminders_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rental_additional_drivers: {
+        Row: {
+          boldsign_signer_email: string | null
+          created_at: string
+          email: string | null
+          id: string
+          identity_verification_id: string | null
+          license_number: string | null
+          name: string
+          phone: string | null
+          rental_id: string
+          signed_at: string | null
+          signing_status: string
+          tenant_id: string
+          updated_at: string
+          verification_status: string
+          verification_url: string | null
+        }
+        Insert: {
+          boldsign_signer_email?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          identity_verification_id?: string | null
+          license_number?: string | null
+          name: string
+          phone?: string | null
+          rental_id: string
+          signed_at?: string | null
+          signing_status?: string
+          tenant_id: string
+          updated_at?: string
+          verification_status?: string
+          verification_url?: string | null
+        }
+        Update: {
+          boldsign_signer_email?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          identity_verification_id?: string | null
+          license_number?: string | null
+          name?: string
+          phone?: string | null
+          rental_id?: string
+          signed_at?: string | null
+          signing_status?: string
+          tenant_id?: string
+          updated_at?: string
+          verification_status?: string
+          verification_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_additional_drivers_identity_verification_id_fkey"
+            columns: ["identity_verification_id"]
+            isOneToOne: false
+            referencedRelation: "identity_verifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_additional_drivers_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_additional_drivers_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "rental_additional_drivers_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "rental_additional_drivers_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
