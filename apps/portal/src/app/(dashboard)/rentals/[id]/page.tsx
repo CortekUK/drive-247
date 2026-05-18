@@ -5286,6 +5286,7 @@ const RentalDetail = () => {
           customer_id={rental.customers?.id}
           vehicle_id={rental.vehicles?.id}
           rental_id={rental.id}
+          outstandingBalanceOverride={outstandingBalance}
         />
       )}
 

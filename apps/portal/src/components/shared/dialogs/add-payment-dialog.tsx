@@ -87,6 +87,15 @@ interface AddPaymentDialogProps {
    */
   onPaymentSuccess?: (kind?: 'recorded' | 'pending') => void;
   breakdownItems?: BreakdownItem[];
+  /**
+   * Authoritative outstanding balance computed by the caller. Use when the
+   * parent has already calculated the rental's true outstanding (e.g. the
+   * rental detail page composes ledger + invoice-fill + extension_totals to
+   * get the same number as its Balance Due tile). Passing this avoids the
+   * dialog's internal hooks under-counting cases where extension charges or
+   * invoice fill-ins haven't yet landed in the ledger.
+   */
+  outstandingBalanceOverride?: number;
 }
 
 const PAYMENT_METHODS = [
@@ -111,7 +120,8 @@ export const AddPaymentDialog = ({
   paygAccrualId,
   installmentId,
   onPaymentSuccess,
-  breakdownItems
+  breakdownItems,
+  outstandingBalanceOverride,
 }: AddPaymentDialogProps) => {
   const [loading, setLoading] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
@@ -192,7 +202,13 @@ export const AddPaymentDialog = ({
   const customerOutstanding = customerBalanceData?.status === 'In Debt' ? customerBalanceData.balance : 0;
   const rentalOutstanding = rentalChargesData?.outstanding || 0;
   // Use the higher of rental-specific or customer-wide outstanding (rental charges may have future due dates filtered out in customer balance)
-  const outstandingBalance = rentalId ? Math.max(rentalOutstanding, customerOutstanding) : customerOutstanding;
+  const computedOutstanding = rentalId ? Math.max(rentalOutstanding, customerOutstanding) : customerOutstanding;
+  // When the parent passes an override (e.g. rental detail page), trust it — it
+  // composes ledger + invoice-fill + extension_totals which the dialog's hooks
+  // can't see on their own. Falls back to the internal computation otherwise.
+  const outstandingBalance = (typeof outstandingBalanceOverride === 'number' && outstandingBalanceOverride > 0)
+    ? outstandingBalanceOverride
+    : computedOutstanding;
 
   // Auto-fill amount with outstanding balance when it loads (and no defaultAmount was provided)
   useEffect(() => {
