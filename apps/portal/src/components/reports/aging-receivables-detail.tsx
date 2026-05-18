@@ -5,24 +5,28 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import { useTenant } from '@/contexts/TenantContext';
 
 interface AgingReceivablesDetailProps {
   isOpen: boolean;
 }
 
 export const AgingReceivablesDetail: React.FC<AgingReceivablesDetailProps> = ({ isOpen }) => {
+  const { tenant } = useTenant();
+
   const { data: agingData, isLoading } = useQuery({
-    queryKey: ['aging-receivables-detail'],
+    queryKey: ['aging-receivables-detail', tenant?.id],
+    enabled: isOpen && !!tenant?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('view_aging_receivables')
         .select('*')
+        .eq('tenant_id', tenant!.id)
         .order('total_due', { ascending: false });
-      
+
       if (error) throw error;
       return data || [];
-    },
-    enabled: isOpen
+    }
   });
 
   const formatCurrency = (value: number) => {

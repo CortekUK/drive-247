@@ -102,6 +102,7 @@ const Reports = () => {
       const exportData = {
         reportType,
         exportType: exportFormat,
+        tenantId: tenant?.id,
         filters: {
           ...filters,
           fromDate: format(filters.fromDate, 'yyyy-MM-dd'),
@@ -172,15 +173,18 @@ const Reports = () => {
 
   // Fetch summary statistics for report cards
   const { data: reportStats, isLoading } = useQuery({
-    queryKey: ['report-stats', filters],
+    queryKey: ['report-stats', tenant?.id, filters],
+    enabled: !!tenant?.id,
     queryFn: async () => {
       const fromDate = format(filters.fromDate, 'yyyy-MM-dd');
       const toDate = format(filters.toDate, 'yyyy-MM-dd');
+      const tenantId = tenant!.id;
 
       // Get payments count and total with filters
       let paymentsQuery = supabase
         .from('view_payments_export')
         .select('amount, applied_amount, unapplied_amount, customer_id, payment_type')
+        .eq('tenant_id', tenantId)
         .gte('payment_date', fromDate)
         .lte('payment_date', toDate);
 
@@ -190,27 +194,21 @@ const Reports = () => {
       if (filters.paymentTypes.length > 0) {
         paymentsQuery = paymentsQuery.in('payment_type', filters.paymentTypes);
       }
-      if (tenant?.id) {
-        paymentsQuery = paymentsQuery.eq('tenant_id', tenant.id);
-      }
 
       const { data: payments } = await paymentsQuery;
 
       // Get P&L totals
-      let plQuery = supabase
+      const { data: plData } = await supabase
         .from('view_pl_consolidated')
-        .select('*');
-
-      if (tenant?.id) {
-        plQuery = plQuery.eq('tenant_id', tenant.id);
-      }
-
-      const { data: plData } = await plQuery.single();
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
 
       // Get rentals count with filters
       let rentalsQuery: any = (supabase as any)
         .from('view_rentals_export')
         .select('rental_id, balance, customer_id, vehicle_id')
+        .eq('tenant_id', tenantId)
         .gte('start_date', fromDate)
         .lte('start_date', toDate);
 
@@ -220,22 +218,17 @@ const Reports = () => {
       if (filters.vehicles.length > 0) {
         rentalsQuery = rentalsQuery.in('vehicle_id', filters.vehicles);
       }
-      if (tenant?.id) {
-        rentalsQuery = rentalsQuery.eq('tenant_id', tenant.id);
-      }
 
       const { data: rentals } = await rentalsQuery;
 
       // Get aging receivables with filters
       let agingQuery: any = (supabase as any)
         .from('view_aging_receivables')
-        .select('*');
+        .select('*')
+        .eq('tenant_id', tenantId);
 
       if (filters.customers.length > 0) {
         agingQuery = agingQuery.in('customer_id', filters.customers);
-      }
-      if (tenant?.id) {
-        agingQuery = agingQuery.eq('tenant_id', tenant.id);
       }
 
       const { data: aging } = await agingQuery;
@@ -244,6 +237,7 @@ const Reports = () => {
       let finesQuery: any = (supabase as any)
         .from('view_fines_export')
         .select('fine_id, amount, remaining_amount, customer_id, vehicle_id')
+        .eq('tenant_id', tenantId)
         .gte('issue_date', fromDate)
         .lte('issue_date', toDate);
 
@@ -252,9 +246,6 @@ const Reports = () => {
       }
       if (filters.vehicles.length > 0) {
         finesQuery = finesQuery.in('vehicle_id', filters.vehicles);
-      }
-      if (tenant?.id) {
-        finesQuery = finesQuery.eq('tenant_id', tenant.id);
       }
 
       const { data: fines } = await finesQuery;

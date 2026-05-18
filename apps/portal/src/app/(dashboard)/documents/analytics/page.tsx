@@ -52,47 +52,44 @@ export default function DocumentsAnalyticsPage() {
 
   const { data: completedDocuments = [], isLoading: isLoadingCompleted } = useQuery({
     queryKey: ["completed-documents", tenant?.id],
+    enabled: !!tenant?.id,
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from("customer_documents")
         .select(`*, customers!customer_documents_customer_id_fkey(name)`)
+        .eq("tenant_id", tenant!.id)
         .order("created_at", { ascending: false });
-      if (tenant?.id) query = query.eq("tenant_id", tenant.id);
-      const { data, error } = await query;
       if (error) throw error;
       return data as any[];
     },
-    enabled: !!tenant,
   });
 
   const { data: rentalAgreements = [], isLoading: isLoadingRentals } = useQuery({
     queryKey: ["rental-agreements", tenant?.id],
+    enabled: !!tenant?.id,
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from("rentals")
         .select(`id, created_at, document_status, signed_document_id, customers!rentals_customer_id_fkey(name), vehicles!rentals_vehicle_id_fkey(reg, make, model)`)
+        .eq("tenant_id", tenant!.id)
         .order("created_at", { ascending: false });
-      if (tenant?.id) query = query.eq("tenant_id", tenant.id);
-      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
-    enabled: !!tenant,
   });
 
   const { data: bonzahPolicies = [], isLoading: isLoadingBonzah } = useQuery({
     queryKey: ["bonzah-policies-docs", tenant?.id],
+    enabled: !!tenant?.id,
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from("bonzah_insurance_policies")
         .select(`id, policy_no, quote_no, status, created_at, customer_id, customers!bonzah_insurance_policies_customer_id_fkey(name)`)
+        .eq("tenant_id", tenant!.id)
         .order("created_at", { ascending: false });
-      if (tenant?.id) query = query.eq("tenant_id", tenant.id);
-      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
-    enabled: !!tenant,
   });
 
   const isLoading = isLoadingCompleted || isLoadingRentals || isLoadingBonzah;

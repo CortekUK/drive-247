@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Settings2 } from 'lucide-react';
+import { useTenant } from '@/contexts/TenantContext';
 import type { ReportFilters } from '@/pages/Reports';
 
 interface DataTableProps {
@@ -17,21 +18,25 @@ interface DataTableProps {
 const ROWS_PER_PAGE = 50;
 
 export const DataTable: React.FC<DataTableProps> = ({ reportType, filters }) => {
+  const { tenant } = useTenant();
   const [currentPage, setCurrentPage] = useState(1);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['report-data', reportType, filters, currentPage],
+    queryKey: ['report-data', tenant?.id, reportType, filters, currentPage],
+    enabled: !!tenant?.id,
     queryFn: async () => {
       const fromDate = format(filters.fromDate, 'yyyy-MM-dd');
       const toDate = format(filters.toDate, 'yyyy-MM-dd');
       const offset = (currentPage - 1) * ROWS_PER_PAGE;
+      const tenantId = tenant!.id;
 
       switch (reportType) {
         case 'payments': {
           let query = supabase
             .from('view_payments_export')
             .select('*')
+            .eq('tenant_id', tenantId)
             .gte('payment_date', fromDate)
             .lte('payment_date', toDate)
             .range(offset, offset + ROWS_PER_PAGE - 1);
@@ -55,6 +60,7 @@ export const DataTable: React.FC<DataTableProps> = ({ reportType, filters }) => 
           const { data, error } = await supabase
             .from('view_pl_by_vehicle')
             .select('*')
+            .eq('tenant_id', tenantId)
             .range(offset, offset + ROWS_PER_PAGE - 1);
           if (error) throw error;
           return data;
@@ -64,12 +70,16 @@ export const DataTable: React.FC<DataTableProps> = ({ reportType, filters }) => 
           let query = supabase
             .from('view_rentals_export')
             .select('*')
+            .eq('tenant_id', tenantId)
             .gte('start_date', fromDate)
             .lte('start_date', toDate)
             .range(offset, offset + ROWS_PER_PAGE - 1);
 
           if (filters.customers.length > 0) {
-            // Note: would need to join on customer name for this filter
+            query = query.in('customer_id', filters.customers);
+          }
+          if (filters.vehicles.length > 0) {
+            query = query.in('vehicle_id', filters.vehicles);
           }
 
           const { data, error } = await query;
@@ -78,9 +88,13 @@ export const DataTable: React.FC<DataTableProps> = ({ reportType, filters }) => 
         }
 
         case 'customer-statements': {
-          let query = supabase
+          // tenant_id is added to view_customer_statements by migration
+          // 20260518143816_add_tenant_id_to_view_customer_statements.sql.
+          // Cast until generated types are refreshed.
+          let query: any = (supabase as any)
             .from('view_customer_statements')
             .select('*')
+            .eq('tenant_id', tenantId)
             .gte('entry_date', fromDate)
             .lte('entry_date', toDate)
             .range(offset, offset + ROWS_PER_PAGE - 1);
@@ -98,12 +112,16 @@ export const DataTable: React.FC<DataTableProps> = ({ reportType, filters }) => 
           let query = supabase
             .from('view_fines_export')
             .select('*')
+            .eq('tenant_id', tenantId)
             .gte('issue_date', fromDate)
             .lte('issue_date', toDate)
             .range(offset, offset + ROWS_PER_PAGE - 1);
 
           if (filters.customers.length > 0) {
-            // Filtering will need to be done by customer_name for this view
+            query = query.in('customer_id', filters.customers);
+          }
+          if (filters.vehicles.length > 0) {
+            query = query.in('vehicle_id', filters.vehicles);
           }
 
           const { data, error } = await query;
@@ -112,10 +130,17 @@ export const DataTable: React.FC<DataTableProps> = ({ reportType, filters }) => 
         }
 
         case 'aging': {
-          const { data, error } = await supabase
+          let query = supabase
             .from('view_aging_receivables')
             .select('*')
+            .eq('tenant_id', tenantId)
             .range(offset, offset + ROWS_PER_PAGE - 1);
+
+          if (filters.customers.length > 0) {
+            query = query.in('customer_id', filters.customers);
+          }
+
+          const { data, error } = await query;
           if (error) throw error;
           return data;
         }

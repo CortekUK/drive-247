@@ -50,32 +50,31 @@ export default function CustomersAnalyticsPage() {
 
   const { data: customers, isLoading } = useQuery({
     queryKey: ["customers-list", tenant?.id],
+    enabled: !!tenant?.id,
     queryFn: async () => {
       const { data, error } = await supabase.from("customers").select("*").eq("tenant_id", tenant!.id).order("created_at", { ascending: false });
       if (error) throw error;
       const customerIds = data?.map(c => c.id) || [];
       if (customerIds.length > 0) {
+        // customer_id is already tenant-scoped via the customerIds list above
         const { data: customerUsers } = await supabase.from("customer_users").select("customer_id").in("customer_id", customerIds);
         const authSet = new Set(customerUsers?.map(cu => cu.customer_id) || []);
         return data?.map(c => ({ ...c, user_type: authSet.has(c.id) ? "Authenticated" : "Guest" })) || [];
       }
       return data?.map(c => ({ ...c, user_type: "Guest" })) || [];
     },
-    enabled: !!tenant,
   });
 
   const { data: customerBalances = {} } = useQuery({
-    queryKey: ["customer-balances-enhanced", tenant?.id],
+    queryKey: ["customer-balances-enhanced", tenant?.id, customers?.length ?? 0],
+    enabled: !!tenant?.id && !!customers?.length,
     queryFn: async () => {
       if (!customers?.length) return {};
+      const tenantId = tenant!.id;
       const customerIds = customers.map((c: any) => c.id);
-      let excludedRentalsQuery = supabase.from("rentals").select("id, customer_id").in("customer_id", customerIds).or("status.eq.Cancelled,approval_status.eq.rejected");
-      if (tenant?.id) excludedRentalsQuery = excludedRentalsQuery.eq("tenant_id", tenant.id);
-      const { data: excludedRentals } = await excludedRentalsQuery;
+      const { data: excludedRentals } = await supabase.from("rentals").select("id, customer_id").eq("tenant_id", tenantId).in("customer_id", customerIds).or("status.eq.Cancelled,approval_status.eq.rejected");
       const excludedRentalIds = new Set(excludedRentals?.map(r => r.id) || []);
-      let ledgerQuery = supabase.from("ledger_entries").select("customer_id, type, amount, remaining_amount, due_date, category, rental_id").in("customer_id", customerIds);
-      if (tenant?.id) ledgerQuery = ledgerQuery.eq("tenant_id", tenant.id);
-      const { data: allEntries } = await ledgerQuery;
+      const { data: allEntries } = await supabase.from("ledger_entries").select("customer_id, type, amount, remaining_amount, due_date, category, rental_id").eq("tenant_id", tenantId).in("customer_id", customerIds);
       const entriesByCustomer: Record<string, any[]> = {};
       allEntries?.forEach(entry => { if (!entriesByCustomer[entry.customer_id]) entriesByCustomer[entry.customer_id] = []; entriesByCustomer[entry.customer_id].push(entry); });
       const balanceMap: Record<string, any> = {};
@@ -97,7 +96,6 @@ export default function CustomersAnalyticsPage() {
       }
       return balanceMap;
     },
-    enabled: !!customers?.length,
   });
 
   const nonBlockedCustomers = useMemo(() => customers?.filter((c: any) => !c.is_blocked) || [], [customers]);

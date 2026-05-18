@@ -55,6 +55,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-summary-card";
 import { StartVerificationDialog } from "@/components/customers/start-verification-dialog";
+import { StartCmdVerificationDialog } from "@/components/customers/start-cmd-verification-dialog";
+import { useCmdVerification, useCmdResults, useResendCmdLink, type CmdLicenseStatus } from "@/hooks/use-cmd-verification";
 import { useToast } from "@/hooks/use-toast";
 
 interface Customer {
@@ -100,6 +102,8 @@ const CustomerDetail = () => {
   const dobInputRef = useRef<HTMLInputElement>(null);
   const [editingName, setEditingName] = useState(false);
   const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
+  const [cmdDialogOpen, setCmdDialogOpen] = useState(false);
+  const [verificationTab, setVerificationTab] = useState<"cmd" | "ai">("cmd");
   const [nameValue, setNameValue] = useState("");
   const [savingName, setSavingName] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -120,21 +124,24 @@ const CustomerDetail = () => {
   const { data: latestVerification } = useQuery({
     queryKey: ["customer-verification", id],
     queryFn: async () => {
-      // Prefer completed verifications over init/pending ones
+      // Prefer completed verifications over init/pending ones.
+      // Scope to AI/Veriff only — CMD has its own dedicated tab + query.
       const { data: completedData } = await (supabase as any)
         .from("identity_verifications")
         .select("date_of_birth, document_expiry_date, face_image_url, selfie_image_url, document_front_url, document_back_url, status, provider, verification_completed_at")
         .eq("customer_id", id)
         .eq("status", "completed")
+        .in("provider", ["ai", "veriff"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (completedData) return completedData;
-      // Fallback to latest record if no completed verification exists
+      // Fallback to latest AI/Veriff record if no completed one exists.
       const { data, error } = await (supabase as any)
         .from("identity_verifications")
         .select("date_of_birth, document_expiry_date, face_image_url, selfie_image_url, document_front_url, document_back_url, status, provider, verification_completed_at")
         .eq("customer_id", id)
+        .in("provider", ["ai", "veriff"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -153,6 +160,12 @@ const CustomerDetail = () => {
     },
     enabled: !!id,
   });
+
+  // CMD (Modives CheckMyDriver) verification — runs in parallel to the AI flow above.
+  const { data: cmdVerification } = useCmdVerification(id);
+  const { data: cmdResults } = useCmdResults(cmdVerification?.cmd_applicant_verification_id);
+  const resendCmdMutation = useResendCmdLink();
+  const hasCmd = !!cmdVerification;
 
   const [previewImage, setPreviewImage] = useState<{ url: string; label: string } | null>(null);
 
@@ -593,13 +606,13 @@ const CustomerDetail = () => {
           </CardContent>
         </Card>
 
-        {/* Right: Verification Photos */}
+        {/* Right: Verification (CMD + AI) */}
         <Card className="shadow-card rounded-lg">
           <CardHeader className="pb-2 pt-4 px-5">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-base font-semibold">Verification</CardTitle>
-              <div className="flex items-center gap-2">
-                {latestVerification?.status && (
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {!hasCmd && latestVerification?.status && (
                   <Badge
                     variant="outline"
                     className={
@@ -613,6 +626,15 @@ const CustomerDetail = () => {
                     {latestVerification.status === 'approved' ? 'Verified' : latestVerification.status === 'declined' ? 'Declined' : 'Pending'}
                   </Badge>
                 )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800 dark:border-indigo-500/30 dark:text-indigo-300 dark:hover:bg-indigo-500/10"
+                  onClick={() => setCmdDialogOpen(true)}
+                >
+                  <ShieldCheck className="h-3 w-3" />
+                  Verify with CMD
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -635,57 +657,130 @@ const CustomerDetail = () => {
             </div>
           </CardHeader>
           <CardContent className="pt-3 pb-4 px-5">
-            {latestVerification && (latestVerification.face_image_url || latestVerification.selfie_image_url || latestVerification.document_front_url || latestVerification.document_back_url) ? (
-              <div className="grid grid-cols-2 gap-3">
-                {latestVerification.face_image_url && (
-                  <button
-                    onClick={() => setPreviewImage({ url: latestVerification.face_image_url!, label: "Face Photo" })}
-                    className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
-                  >
-                    <BlurredImage src={latestVerification.face_image_url} alt="Face photo" label="Face" />
-                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center z-10">Face</span>
-                  </button>
-                )}
-                {latestVerification.selfie_image_url && (
-                  <button
-                    onClick={() => setPreviewImage({ url: latestVerification.selfie_image_url!, label: "Selfie" })}
-                    className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
-                  >
-                    <BlurredImage src={latestVerification.selfie_image_url} alt="Selfie" label="Selfie" />
-                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center z-10">Selfie</span>
-                  </button>
-                )}
-                {latestVerification.document_front_url && (
-                  <button
-                    onClick={() => setPreviewImage({ url: latestVerification.document_front_url!, label: "Document Front" })}
-                    className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
-                  >
-                    <BlurredImage src={latestVerification.document_front_url} alt="Document front" label="Doc Front" />
-                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center z-10">Doc Front</span>
-                  </button>
-                )}
-                {latestVerification.document_back_url && (
-                  <button
-                    onClick={() => setPreviewImage({ url: latestVerification.document_back_url!, label: "Document Back" })}
-                    className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
-                  >
-                    <BlurredImage src={latestVerification.document_back_url} alt="Document back" label="Doc Back" />
-                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center z-10">Doc Back</span>
-                  </button>
-                )}
-              </div>
+            {hasCmd ? (
+              <Tabs value={verificationTab} onValueChange={(v) => setVerificationTab(v as "cmd" | "ai")} className="space-y-3">
+                <TabsList className="grid grid-cols-2 h-8 p-0.5">
+                  <TabsTrigger value="cmd" className="text-xs gap-1.5 h-7">
+                    <ShieldCheck className="h-3 w-3" />
+                    CMD
+                    {cmdVerification?.cmd_license_status === 'Valid' && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    )}
+                    {(cmdVerification?.cmd_license_status === 'Invalid' || cmdVerification?.cmd_license_status === 'Expired') && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="ai" className="text-xs gap-1.5 h-7">
+                    <Shield className="h-3 w-3" />
+                    AI
+                    {latestVerification?.status === 'approved' && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    )}
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="cmd" className="mt-3 space-y-3">
+                  <CmdLicensePill status={cmdVerification?.cmd_license_status as CmdLicenseStatus} />
+
+                  {cmdResults?.license && (cmdResults.license.licenseNumber || cmdResults.license.licenseHolderFullName) ? (
+                    <div className="rounded-md border border-border bg-muted/20 p-3 space-y-1.5">
+                      {cmdResults.license.licenseHolderFullName && (
+                        <DetailRow label="Holder" value={cmdResults.license.licenseHolderFullName} />
+                      )}
+                      {cmdResults.license.licenseNumber && (
+                        <DetailRow label="License #" value={cmdResults.license.licenseNumber} mono />
+                      )}
+                      {cmdResults.license.licenseExpiryDate && (
+                        <DetailRow
+                          label="Expires"
+                          value={format(new Date(cmdResults.license.licenseExpiryDate), 'MMM d, yyyy')}
+                        />
+                      )}
+                      {cmdResults.license.licenseState && (
+                        <DetailRow
+                          label="State"
+                          value={`${cmdResults.license.licenseState}${cmdResults.license.licenseCity ? ' · ' + cmdResults.license.licenseCity : ''}`}
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    cmdVerification?.cmd_license_status === 'Pending' && (
+                      <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-border py-6 text-center">
+                        <Loader2 className="h-5 w-5 text-muted-foreground/50 animate-spin mb-2" />
+                        <p className="text-xs text-muted-foreground">Waiting for the customer to complete verification</p>
+                        <p className="text-[11px] text-muted-foreground/60 mt-0.5">This page will update automatically</p>
+                      </div>
+                    )
+                  )}
+
+                  {cmdResults?.license?.documentURLs && cmdResults.license.documentURLs.length > 0 && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {cmdResults.license.documentURLs.slice(0, 2).map((url, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setPreviewImage({ url, label: `License Doc ${i + 1}` })}
+                          className="relative aspect-[3/2] rounded-lg overflow-hidden border border-border hover:border-indigo-300 transition-colors"
+                        >
+                          <BlurredImage src={url} alt={`License doc ${i + 1}`} label={`Doc ${i + 1}`} />
+                          <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center z-10">
+                            Doc {i + 1}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <div className="text-[11px] text-muted-foreground">
+                      {cmdVerification?.cmd_last_event_at
+                        ? `Last update ${format(new Date(cmdVerification.cmd_last_event_at), 'MMM d, h:mm a')}`
+                        : 'No events yet'}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-[11px] gap-1 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-500/10"
+                      disabled={!cmdVerification || resendCmdMutation.isPending}
+                      onClick={() =>
+                        cmdVerification &&
+                        resendCmdMutation.mutate({
+                          verificationId: cmdVerification.id,
+                          customerId: id,
+                          channels: (cmdVerification.cmd_delivery_channels as ("email"|"sms"|"whatsapp")[]) ?? ["email"],
+                        })
+                      }
+                    >
+                      {resendCmdMutation.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                      Resend link
+                    </Button>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="ai" className="mt-3">
+                  <AiVerificationGrid
+                    verification={latestVerification}
+                    onPreview={(p) => setPreviewImage(p)}
+                  />
+                </TabsContent>
+              </Tabs>
             ) : (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <ImageIcon className="h-10 w-10 text-muted-foreground/40 mb-2" />
-                <p className="text-sm text-muted-foreground">No verification photos</p>
-                <p className="text-xs text-muted-foreground/60 mt-0.5">Photos will appear here once the customer completes ID verification</p>
-              </div>
-            )}
-            {latestVerification?.verification_completed_at && (
-              <p className="text-[11px] text-muted-foreground mt-3 text-center">
-                Verified on {format(new Date(latestVerification.verification_completed_at), 'MMM d, yyyy')}
-                {latestVerification.provider && ` via ${latestVerification.provider}`}
-              </p>
+              <>
+                <AiVerificationGrid
+                  verification={latestVerification}
+                  onPreview={(p) => setPreviewImage(p)}
+                />
+                {latestVerification?.verification_completed_at && (
+                  <p className="text-[11px] text-muted-foreground mt-3 text-center">
+                    Verified on {format(new Date(latestVerification.verification_completed_at), 'MMM d, yyyy')}
+                    {latestVerification.provider && ` via ${latestVerification.provider}`}
+                  </p>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -1504,8 +1599,124 @@ const CustomerDetail = () => {
           customerName={customer.name}
         />
       )}
+
+      {/* Start CMD (Modives) Verification Dialog */}
+      {customer && (
+        <StartCmdVerificationDialog
+          open={cmdDialogOpen}
+          onOpenChange={setCmdDialogOpen}
+          customerId={id}
+          customer={{
+            name: customer.name,
+            email: customer.email ?? null,
+            phone: customer.phone ?? null,
+            date_of_birth: customer.date_of_birth ?? null,
+          }}
+        />
+      )}
     </div>
   );
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Small helper components scoped to this page only — not extracted to avoid
+// premature abstraction.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CmdLicensePill({ status }: { status: CmdLicenseStatus }) {
+  const map: Record<string, { label: string; classes: string; icon: React.ReactNode }> = {
+    Valid: {
+      label: 'License valid',
+      classes:
+        'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30',
+      icon: <CheckCircle className="h-3 w-3" />,
+    },
+    Invalid: {
+      label: 'License invalid',
+      classes:
+        'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30',
+      icon: <Ban className="h-3 w-3" />,
+    },
+    Expired: {
+      label: 'License expired',
+      classes:
+        'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30',
+      icon: <AlertTriangle className="h-3 w-3" />,
+    },
+    Pending: {
+      label: 'Waiting for customer',
+      classes:
+        'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/30',
+      icon: <Loader2 className="h-3 w-3 animate-spin" />,
+    },
+  };
+  const config = (status && map[status]) || map.Pending;
+  return (
+    <Badge variant="outline" className={`gap-1.5 h-6 px-2.5 text-[11px] font-medium ${config.classes}`}>
+      {config.icon}
+      {config.label}
+    </Badge>
+  );
+}
+
+function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className={`text-[13px] text-foreground/90 ${mono ? 'font-mono' : ''}`}>{value}</span>
+    </div>
+  );
+}
+
+function AiVerificationGrid({
+  verification,
+  onPreview,
+}: {
+  verification: {
+    face_image_url?: string | null;
+    selfie_image_url?: string | null;
+    document_front_url?: string | null;
+    document_back_url?: string | null;
+  } | null | undefined;
+  onPreview: (p: { url: string; label: string }) => void;
+}) {
+  const photos = verification
+    ? [
+        { url: verification.face_image_url, label: 'Face Photo', short: 'Face' },
+        { url: verification.selfie_image_url, label: 'Selfie', short: 'Selfie' },
+        { url: verification.document_front_url, label: 'Document Front', short: 'Doc Front' },
+        { url: verification.document_back_url, label: 'Document Back', short: 'Doc Back' },
+      ].filter((p) => p.url)
+    : [];
+
+  if (photos.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 text-center">
+        <ImageIcon className="h-10 w-10 text-muted-foreground/40 mb-2" />
+        <p className="text-sm text-muted-foreground">No verification photos</p>
+        <p className="text-xs text-muted-foreground/60 mt-0.5">
+          Photos will appear here once the customer completes ID verification
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {photos.map((p) => (
+        <button
+          key={p.short}
+          onClick={() => onPreview({ url: p.url!, label: p.label })}
+          className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
+        >
+          <BlurredImage src={p.url!} alt={p.label} label={p.short} />
+          <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center z-10">
+            {p.short}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default CustomerDetail;

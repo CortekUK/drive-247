@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useTenant } from '@/contexts/TenantContext';
 import type { ReportFilters } from '@/pages/Reports';
 
 interface FilterSidebarProps {
@@ -23,35 +24,43 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
   filters,
   onFiltersChange
 }) => {
-  // Fetch filter options
+  const { tenant } = useTenant();
+
+  // Fetch filter options scoped to the current tenant
   const { data: customers } = useQuery({
-    queryKey: ['customers-filter'],
+    queryKey: ['customers-filter', tenant?.id],
+    enabled: !!tenant?.id,
     queryFn: async () => {
       const { data } = await supabase
         .from('customers')
         .select('id, name')
+        .eq('tenant_id', tenant!.id)
         .order('name');
       return data || [];
     }
   });
 
   const { data: vehicles } = useQuery({
-    queryKey: ['vehicles-filter'],
+    queryKey: ['vehicles-filter', tenant?.id],
+    enabled: !!tenant?.id,
     queryFn: async () => {
       const { data } = await supabase
         .from('vehicles')
         .select('id, reg, make, model')
+        .eq('tenant_id', tenant!.id)
         .order('reg');
       return data || [];
     }
   });
 
   const { data: rentals } = useQuery({
-    queryKey: ['rentals-filter'],
+    queryKey: ['rentals-filter', tenant?.id],
+    enabled: !!tenant?.id,
     queryFn: async () => {
       const { data } = await supabase
         .from('rentals')
         .select('id, customer_id, vehicle_id')
+        .eq('tenant_id', tenant!.id)
         .order('created_at', { ascending: false });
       return data || [];
     }

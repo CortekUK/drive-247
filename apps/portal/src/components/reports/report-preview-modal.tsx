@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useTenant } from '@/contexts/TenantContext';
 import type { ReportFilters } from '@/pages/Reports';
 
 interface ReportPreviewModalProps {
@@ -27,65 +28,78 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
   filters,
   onExport
 }) => {
+  const { tenant } = useTenant();
+
   const { data: previewData, isLoading } = useQuery({
-    queryKey: ['report-preview', reportId, filters],
+    queryKey: ['report-preview', tenant?.id, reportId, filters],
+    enabled: isOpen && !!tenant?.id,
     queryFn: async () => {
       const fromDate = format(filters.fromDate, 'yyyy-MM-dd');
       const toDate = format(filters.toDate, 'yyyy-MM-dd');
+      const tenantId = tenant!.id;
 
       let query;
-      
+
       switch (reportId) {
         case 'payments':
           query = supabase
             .from('view_payments_export')
             .select('*')
+            .eq('tenant_id', tenantId)
             .gte('payment_date', fromDate)
             .lte('payment_date', toDate)
             .limit(10);
           break;
-        
+
         case 'pl-report':
           query = supabase
             .from('view_pl_by_vehicle')
             .select('*')
+            .eq('tenant_id', tenantId)
             .limit(10);
           break;
-        
+
         case 'rentals':
           query = supabase
             .from('view_rentals_export')
             .select('*')
+            .eq('tenant_id', tenantId)
             .gte('start_date', fromDate)
             .lte('start_date', toDate)
             .limit(10);
           break;
-        
+
         case 'fines':
           query = supabase
             .from('view_fines_export')
             .select('*')
+            .eq('tenant_id', tenantId)
             .gte('issue_date', fromDate)
             .lte('issue_date', toDate)
             .limit(10);
           break;
-        
+
         case 'customer-statements':
-          query = supabase
+          // tenant_id is added to view_customer_statements by migration
+          // 20260518143816_add_tenant_id_to_view_customer_statements.sql.
+          // Cast until generated types are refreshed.
+          query = (supabase as any)
             .from('view_customer_statements')
             .select('*')
+            .eq('tenant_id', tenantId)
             .gte('entry_date', fromDate)
             .lte('entry_date', toDate)
             .limit(10);
           break;
-        
+
         case 'aging':
           query = supabase
             .from('view_aging_receivables')
             .select('*')
+            .eq('tenant_id', tenantId)
             .limit(10);
           break;
-        
+
         default:
           return { data: [], count: 0 };
       }
@@ -93,8 +107,7 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
       const { data, error, count } = await query;
       if (error) throw error;
       return { data: data || [], count: count || 0 };
-    },
-    enabled: isOpen
+    }
   });
 
   const getColumns = () => {
