@@ -194,7 +194,8 @@ serve(async (req) => {
     const faceResult = await callFaceMatch(documentFrontUrl, selfieUrl);
 
     if (!faceResult.ok) {
-      console.error('Face match failed:', faceResult.error);
+      const faceErrorDetail = faceResult.detail || faceResult.error || 'Unknown error';
+      console.error('Face match failed:', faceResult.error, faceErrorDetail);
 
       await supabaseClient
         .from('identity_verifications')
@@ -202,7 +203,7 @@ serve(async (req) => {
           status: 'completed',
           review_status: 'completed',
           review_result: 'RED',
-          rejection_reason: `Face matching failed: ${faceResult.error}`,
+          rejection_reason: `Face matching failed: ${faceErrorDetail}`,
           ai_ocr_data: ocrData,
           ai_face_match_result: 'error',
           document_front_url: documentFrontUrl,
@@ -217,7 +218,7 @@ serve(async (req) => {
           ok: false,
           result: 'rejected',
           error: 'Face verification failed',
-          detail: faceResult.error
+          detail: faceErrorDetail
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

@@ -194,7 +194,7 @@ async function compareFaces(
   const region = Deno.env.get('AWS_REGION') || 'us-east-1';
 
   if (!accessKeyId || !secretAccessKey) {
-    throw new Error('AWS credentials not configured');
+    throw new Error('AWS credentials not configured — set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in Supabase secrets');
   }
 
   const endpoint = `https://rekognition.${region}.amazonaws.com`;
@@ -241,12 +241,22 @@ async function compareFaces(
     const errorText = await response.text();
     console.error('AWS Rekognition error:', response.status, errorText);
 
-    // Check for specific errors
     if (errorText.includes('InvalidParameterException')) {
-      throw new Error('Invalid image format or no face detected in one of the images');
+      throw new Error('No face detected in one of the images — ensure document photo and selfie are clear');
+    }
+    if (
+      errorText.includes('InvalidClientTokenId') ||
+      errorText.includes('InvalidSignatureException') ||
+      errorText.includes('UnrecognizedClientException') ||
+      errorText.includes('ExpiredTokenException')
+    ) {
+      throw new Error('AWS credentials are invalid or expired — update AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in Supabase secrets');
+    }
+    if (errorText.includes('AccessDeniedException')) {
+      throw new Error('AWS IAM user lacks rekognition:CompareFaces permission');
     }
 
-    throw new Error(`AWS Rekognition error: ${response.status}`);
+    throw new Error(`AWS Rekognition error ${response.status}: ${errorText.slice(0, 200)}`);
   }
 
   const data = await response.json();

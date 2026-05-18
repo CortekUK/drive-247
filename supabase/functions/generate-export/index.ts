@@ -29,25 +29,75 @@ serve(async (req) => {
   }
 
   try {
+    // Authenticate the caller and resolve their tenant. We never trust a
+    // tenantId from the client without verifying the user belongs to it,
+    // otherwise this function (running with service_role) would leak data
+    // across tenants.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabaseAuth = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(token);
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
-    const { reportType, exportType, filters, tenantId }: ExportRequest = await req.json();
+    const { reportType, exportType, filters, tenantId: requestedTenantId }: ExportRequest = await req.json();
 
-    console.log(`Generating ${reportType} export as ${exportType}`, { filters });
+    const { data: appUser } = await supabaseClient
+      .from('app_users')
+      .select('tenant_id, is_super_admin')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (!appUser) {
+      return new Response(
+        JSON.stringify({ error: 'User not found' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Super admins may export any tenant by passing tenantId; everyone else is
+    // pinned to the tenant on their app_users row.
+    const tenantId: string | null = appUser.is_super_admin
+      ? (requestedTenantId ?? appUser.tenant_id ?? null)
+      : appUser.tenant_id;
+
+    if (!tenantId) {
+      return new Response(
+        JSON.stringify({ error: 'No tenant scope available for this user' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Generating ${reportType} export as ${exportType} for tenant ${tenantId}`, { filters });
 
     // Get tenant currency symbol for column headers
     let currSym = '$';
-    if (tenantId) {
-      const { data: tenant } = await supabaseClient
-        .from('tenants')
-        .select('currency_code')
-        .eq('id', tenantId)
-        .single();
-      if (tenant?.currency_code) currSym = getCurrencySymbol(tenant.currency_code);
-    }
+    const { data: tenant } = await supabaseClient
+      .from('tenants')
+      .select('currency_code')
+      .eq('id', tenantId)
+      .single();
+    if (tenant?.currency_code) currSym = getCurrencySymbol(tenant.currency_code);
 
     // Generate timestamp for filename
     const timestamp = new Date().toISOString().replace(/[:.]/g, '').slice(0, 13);
@@ -62,6 +112,7 @@ serve(async (req) => {
         let query = supabaseClient
           .from('view_payments_export')
           .select('*')
+          .eq('tenant_id', tenantId)
           .gte('payment_date', filters.fromDate)
           .lte('payment_date', filters.toDate);
 
@@ -89,7 +140,8 @@ serve(async (req) => {
       case 'pl-report': {
         const { data: plData, error } = await supabaseClient
           .from('view_pl_by_vehicle')
-          .select('*');
+          .select('*')
+          .eq('tenant_id', tenantId);
         if (error) throw error;
 
         data = plData || [];
@@ -105,8 +157,16 @@ serve(async (req) => {
         let query = supabaseClient
           .from('view_rentals_export')
           .select('*')
+          .eq('tenant_id', tenantId)
           .gte('start_date', filters.fromDate)
           .lte('start_date', filters.toDate);
+
+        if (filters.customers.length > 0) {
+          query = query.in('customer_id', filters.customers);
+        }
+        if (filters.vehicles.length > 0) {
+          query = query.in('vehicle_id', filters.vehicles);
+        }
 
         const { data: rentalsData, error } = await query;
         if (error) throw error;
@@ -123,6 +183,7 @@ serve(async (req) => {
         let query = supabaseClient
           .from('view_customer_statements')
           .select('*')
+          .eq('tenant_id', tenantId)
           .gte('entry_date', filters.fromDate)
           .lte('entry_date', filters.toDate);
 
@@ -145,8 +206,16 @@ serve(async (req) => {
         let query = supabaseClient
           .from('view_fines_export')
           .select('*')
+          .eq('tenant_id', tenantId)
           .gte('issue_date', filters.fromDate)
           .lte('issue_date', filters.toDate);
+
+        if (filters.customers.length > 0) {
+          query = query.in('customer_id', filters.customers);
+        }
+        if (filters.vehicles.length > 0) {
+          query = query.in('vehicle_id', filters.vehicles);
+        }
 
         const { data: finesData, error } = await query;
         if (error) throw error;
@@ -160,9 +229,16 @@ serve(async (req) => {
       }
 
       case 'aging': {
-        const { data: agingData, error } = await supabaseClient
+        let query = supabaseClient
           .from('view_aging_receivables')
-          .select('*');
+          .select('*')
+          .eq('tenant_id', tenantId);
+
+        if (filters.customers.length > 0) {
+          query = query.in('customer_id', filters.customers);
+        }
+
+        const { data: agingData, error } = await query;
         if (error) throw error;
 
         data = agingData || [];
