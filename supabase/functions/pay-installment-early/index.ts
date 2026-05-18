@@ -110,14 +110,13 @@ serve(async (req) => {
       }
 
       const plan = installment.installment_plans as any
-      const paymentMethodId = plan.stripe_payment_method_id
-
-      if (!paymentMethodId) {
-        throw new Error('No payment method on file for this plan')
-      }
 
       // Use plan's stripe_customer_id, fall back to customer table
       const stripeCustomerId = plan.stripe_customer_id || customer.stripe_customer_id
+
+      if (!stripeCustomerId) {
+        throw new Error('No Stripe customer record found. Please add a card first.')
+      }
 
       // Backfill plan if missing
       if (!plan.stripe_customer_id && customer.stripe_customer_id) {
@@ -126,6 +125,35 @@ serve(async (req) => {
           .update({ stripe_customer_id: customer.stripe_customer_id })
           .eq('id', installment.installment_plan_id)
         console.log('Backfilled stripe_customer_id on plan:', installment.installment_plan_id)
+      }
+
+      // Resolve payment method — prefer the plan's stored PM, otherwise look it up
+      // on the Stripe customer (handles cases where activate-installment-plan
+      // failed to retrieve the PM from the PaymentIntent).
+      let paymentMethodId: string | null = plan.stripe_payment_method_id || null
+
+      if (!paymentMethodId) {
+        try {
+          const pmList = await stripe.paymentMethods.list(
+            { customer: stripeCustomerId, type: 'card', limit: 5 },
+            stripeOptions
+          )
+          if (pmList.data.length > 0) {
+            paymentMethodId = pmList.data[0].id
+            console.log('[PAY-EARLY] Recovered PM from customer:', paymentMethodId)
+            // Backfill onto the plan so next time we don't pay this round-trip
+            await supabase
+              .from('installment_plans')
+              .update({ stripe_payment_method_id: paymentMethodId })
+              .eq('id', installment.installment_plan_id)
+          }
+        } catch (pmErr) {
+          console.error('[PAY-EARLY] Error listing payment methods:', pmErr)
+        }
+      }
+
+      if (!paymentMethodId) {
+        throw new Error('No payment method on file. Please update your card in the customer portal, then try again.')
       }
 
       // Mark as processing
@@ -332,12 +360,12 @@ serve(async (req) => {
         throw new Error('Installment plan not found or already completed')
       }
 
-      if (!plan.stripe_payment_method_id) {
-        throw new Error('No payment method on file')
-      }
-
       // Use plan's stripe_customer_id, fall back to customer table
       const remainingStripeCustomerId = plan.stripe_customer_id || customer.stripe_customer_id
+
+      if (!remainingStripeCustomerId) {
+        throw new Error('No Stripe customer record found. Please add a card first.')
+      }
 
       // Backfill plan if missing
       if (!plan.stripe_customer_id && customer.stripe_customer_id) {
@@ -346,6 +374,31 @@ serve(async (req) => {
           .update({ stripe_customer_id: customer.stripe_customer_id })
           .eq('id', installmentPlanId)
         console.log('Backfilled stripe_customer_id on plan:', installmentPlanId)
+      }
+
+      // Resolve PM with same fallback as pay-single
+      let remainingPaymentMethodId: string | null = plan.stripe_payment_method_id || null
+      if (!remainingPaymentMethodId) {
+        try {
+          const pmList = await stripe.paymentMethods.list(
+            { customer: remainingStripeCustomerId, type: 'card', limit: 5 },
+            stripeOptions
+          )
+          if (pmList.data.length > 0) {
+            remainingPaymentMethodId = pmList.data[0].id
+            console.log('[PAY-OFF] Recovered PM from customer:', remainingPaymentMethodId)
+            await supabase
+              .from('installment_plans')
+              .update({ stripe_payment_method_id: remainingPaymentMethodId })
+              .eq('id', installmentPlanId)
+          }
+        } catch (pmErr) {
+          console.error('[PAY-OFF] Error listing payment methods:', pmErr)
+        }
+      }
+
+      if (!remainingPaymentMethodId) {
+        throw new Error('No payment method on file. Please update your card in the customer portal, then try again.')
       }
 
       // Get remaining installments
@@ -378,7 +431,7 @@ serve(async (req) => {
           amount: Math.round(totalAmount * 100),
           currency: currencyCode,
           customer: remainingStripeCustomerId,
-          payment_method: plan.stripe_payment_method_id,
+          payment_method: remainingPaymentMethodId,
           off_session: true,
           confirm: true,
           description: `Pay Off Remaining - ${remainingInstallments.length} installments`,

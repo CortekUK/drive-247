@@ -326,6 +326,24 @@ export const AddPaymentDialog = ({
       const finalCustomerId = data.customer_id || customer_id;
       const finalVehicleId = data.vehicle_id || vehicle_id;
 
+      // Block submit if we couldn't resolve a rental for this payment. Without a
+      // rental_id the payment row is inserted unlinked and `apply-payment` either
+      // FIFOs across the customer's charges (lands on the wrong rental) or
+      // becomes a Credit with zero applications — invisible to the intended
+      // rental's "Collected" tile. Operator must pick the vehicle (= rental).
+      if (!rentalId) {
+        toast({
+          title: "Select a rental",
+          description: customerVehicles.length === 0
+            ? "This customer has no active rental to apply the payment to."
+            : "Pick the vehicle of the rental this payment applies to.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        submitInFlight.current = false;
+        return;
+      }
+
       // Skip overpayment/zero-balance checks when defaultAmount is provided (extension payments, targeted payments)
       // The caller already calculated the correct amount
       if (!defaultAmount) {
@@ -408,6 +426,16 @@ export const AddPaymentDialog = ({
     if (stripeInFlight.current) return;
     const finalCustomerId = selectedCustomerId || customer_id;
     if (!finalCustomerId) { toast({ title: "Error", description: "Please select a customer first.", variant: "destructive" }); return; }
+    if (!rentalId) {
+      toast({
+        title: "Select a rental",
+        description: customerVehicles.length === 0
+          ? "This customer has no active rental to apply the payment to."
+          : "Pick the vehicle of the rental this payment applies to.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const amount = form.getValues("amount") || breakdownTotal || defaultAmount || outstandingBalance || rentalDetails?.monthly_amount || latestInvoice?.total_amount || 0;
     if (amount <= 0) { toast({ title: "Error", description: "No outstanding amount to charge.", variant: "destructive" }); return; }
@@ -594,9 +622,11 @@ export const AddPaymentDialog = ({
               </div>
             )}
 
-            {!vehicle_id && (
+            {!vehicle_id && !propRentalId && (
               <div>
-                <Label className="text-sm font-medium">Vehicle</Label>
+                <Label className="text-sm font-medium">
+                  Vehicle <span className="text-red-500">*</span>
+                </Label>
                 <Select onValueChange={(val) => form.setValue("vehicle_id", val)} value={form.watch("vehicle_id")}>
                   <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select Vehicle" /></SelectTrigger>
                   <SelectContent>

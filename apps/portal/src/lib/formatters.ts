@@ -36,6 +36,18 @@ export const formatCurrency = (
   return `${symbol}${formatter.format(Math.abs(amount))}`;
 };
 
+// Parse a date string as local time when it's a bare YYYY-MM-DD (Postgres DATE).
+// `new Date("2026-05-20")` is parsed as UTC midnight, which renders as the
+// previous day in any timezone west of UTC. Forcing local-time parse keeps
+// the displayed date in sync with the stored DATE value.
+const parseDateInput = (date: Date | string): Date => {
+  if (date instanceof Date) return date;
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return new Date(`${date}T00:00:00`);
+  }
+  return new Date(date);
+};
+
 // Date formatting
 export const formatDate = (
   date: Date | string | null | undefined,
@@ -43,7 +55,7 @@ export const formatDate = (
 ): string => {
   if (!date) return '';
 
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  const dateObj = parseDateInput(date);
   if (isNaN(dateObj.getTime())) return '';
 
   // Convert our format tokens to date-fns format
@@ -71,7 +83,7 @@ export const formatDateTime = (
 ): string => {
   if (!date) return '';
 
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  const dateObj = parseDateInput(date);
   if (isNaN(dateObj.getTime())) return '';
 
   const formatMap: Record<string, string> = {
@@ -95,7 +107,7 @@ export const formatDateTime = (
 export const formatRelativeDate = (date: Date | string | null | undefined): string => {
   if (!date) return '';
 
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  const dateObj = parseDateInput(date);
   if (isNaN(dateObj.getTime())) return '';
 
   const now = new Date();

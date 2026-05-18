@@ -71,6 +71,15 @@ import { TeslaLogo } from "@/components/icons/tesla-logo";
 import { useTeslaSuperchargerCharges } from "@/hooks/use-tesla-supercharger-charges";
 import { SuperchargerChargesDialog } from "@/components/rentals/supercharger-charges-dialog";
 
+// Parse a Postgres DATE string ("YYYY-MM-DD") as local midnight. `new Date("2026-05-20")`
+// is parsed as UTC midnight, which renders as the previous day in any timezone
+// west of UTC — making extended end-dates appear "1 day short" on the rental page.
+const parseLocalDate = (value: string | null | undefined): Date => {
+  if (!value) return new Date(NaN);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(`${value}T00:00:00`);
+  return new Date(value);
+};
+
 interface Rental {
   id: string;
   start_date: string;
@@ -3990,8 +3999,8 @@ const RentalDetail = () => {
                   );
                 }
 
-                const startDate = new Date(rental.start_date);
-                const endDate = new Date(rental.end_date);
+                const startDate = parseLocalDate(rental.start_date);
+                const endDate = parseLocalDate(rental.end_date);
                 const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
                 let units = 1;
                 if (unitLabel === 'day') units = totalDays;
@@ -4071,7 +4080,7 @@ const RentalDetail = () => {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
               <div>
                 <p className="text-sm text-muted-foreground">Start Date</p>
-                <p className="text-base font-medium">{new Date(rental.start_date).toLocaleDateString('en-US')}</p>
+                <p className="text-base font-medium">{parseLocalDate(rental.start_date).toLocaleDateString('en-US')}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">End Date</p>
@@ -4079,11 +4088,11 @@ const RentalDetail = () => {
                   <p className="text-base font-medium text-muted-foreground italic">Open-ended (PAYG)</p>
                 ) : (
                   <>
-                    <p className="text-base font-medium">{rental.end_date ? new Date(rental.end_date).toLocaleDateString('en-US') : '—'}</p>
+                    <p className="text-base font-medium">{rental.end_date ? parseLocalDate(rental.end_date).toLocaleDateString('en-US') : '—'}</p>
                     {/* Show original end date if rental has been extended */}
                     {(rental.original_end_date || (!rental.is_extended && rental.previous_end_date)) && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        Originally: {new Date(rental.original_end_date || rental.previous_end_date!).toLocaleDateString('en-US')}
+                        Originally: {parseLocalDate(rental.original_end_date || rental.previous_end_date!).toLocaleDateString('en-US')}
                       </p>
                     )}
                   </>
@@ -4122,7 +4131,7 @@ const RentalDetail = () => {
                 <CalendarPlus className="h-4 w-4 text-amber-600" />
                 <AlertDescription className="text-amber-800 dark:text-amber-200">
                   <span className="font-medium">Extension Requested:</span> Customer wants to extend until{' '}
-                  <strong>{new Date(rental.previous_end_date).toLocaleDateString('en-US')}</strong>
+                  <strong>{parseLocalDate(rental.previous_end_date).toLocaleDateString('en-US')}</strong>
                   <Button
                     variant="link"
                     className="ml-2 h-auto p-0 text-amber-700 dark:text-amber-300"

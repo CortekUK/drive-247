@@ -24,6 +24,26 @@ interface PaymentResult {
   amount?: number;
   message?: string;
   error?: string;
+  checkoutUrl?: string;
+  requiresCheckout?: boolean;
+}
+
+// supabase-js's invoke() throws a FunctionsHttpError on non-2xx with the generic
+// message "Edge Function returned a non-2xx status code", swallowing the actual
+// `{ error: "..." }` JSON body. This helper unwraps the response and surfaces
+// the real message.
+async function extractInvokeError(err: unknown): Promise<string> {
+  const e = err as { context?: Response; message?: string };
+  try {
+    const body = await e?.context?.clone().json();
+    if (body && typeof body === 'object') {
+      if (typeof body.error === 'string') return body.error;
+      if (typeof body.message === 'string') return body.message;
+    }
+  } catch {
+    // body wasn't JSON or context unavailable — fall through
+  }
+  return e?.message ?? 'Unknown error';
 }
 
 // Hook to get current card on file
@@ -155,12 +175,17 @@ export function usePayInstallmentEarly() {
         },
       });
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await extractInvokeError(error));
       if (data?.error) throw new Error(data.error);
 
       return data as PaymentResult;
     },
     onSuccess: (data) => {
+      if (data?.checkoutUrl) {
+        toast.info('Redirecting to secure checkout…');
+        window.location.href = data.checkoutUrl;
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ['customer-installment-plans'] });
       queryClient.invalidateQueries({ queryKey: ['customer-payment-history'] });
       queryClient.invalidateQueries({ queryKey: ['customer-rentals'] });
@@ -190,12 +215,17 @@ export function usePayRemainingInstallments() {
         },
       });
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await extractInvokeError(error));
       if (data?.error) throw new Error(data.error);
 
       return data as PaymentResult;
     },
     onSuccess: (data) => {
+      if (data?.checkoutUrl) {
+        toast.info('Redirecting to secure checkout…');
+        window.location.href = data.checkoutUrl;
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ['customer-installment-plans'] });
       queryClient.invalidateQueries({ queryKey: ['customer-payment-history'] });
       queryClient.invalidateQueries({ queryKey: ['customer-rentals'] });
@@ -226,12 +256,17 @@ export function useRetryPayment() {
         },
       });
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await extractInvokeError(error));
       if (data?.error) throw new Error(data.error);
 
       return data as PaymentResult;
     },
     onSuccess: (data) => {
+      if (data?.checkoutUrl) {
+        toast.info('Redirecting to secure checkout…');
+        window.location.href = data.checkoutUrl;
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ['customer-installment-plans'] });
       queryClient.invalidateQueries({ queryKey: ['customer-payment-history'] });
       queryClient.invalidateQueries({ queryKey: ['customer-rentals'] });

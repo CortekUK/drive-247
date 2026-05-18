@@ -214,10 +214,14 @@ export function AdminExtendRentalDialog({
   });
 
   const hasBonzahCoverage = extensionInsuranceType === 'bonzah' && (extensionCoverage.cdw || extensionCoverage.rcli || extensionCoverage.sli || extensionCoverage.pai);
+  // Insurance must cover the same window the rental charge covers — from the
+  // rental's existing end date (snapshotEndDate) through newEndDate. Clamping
+  // this to "today" when the rental was already past its end caused the
+  // insurance day count to be SHORTER than the rental day count, leaving the
+  // balance short by one day's premium for every late extension.
   const extensionStartForInsurance = (() => {
-    const d = (rental.end_date || new Date().toISOString()).split('T')[0];
-    const today = new Date().toISOString().split('T')[0];
-    return d < today ? today : d;
+    const raw = (snapshotEndDate || rental.end_date || new Date().toISOString()).toString();
+    return raw.split('T')[0];
   })();
   const insurancePremium = extensionInsuranceType === 'bonzah' ? bonzahPremiumAmount : 0;
 
