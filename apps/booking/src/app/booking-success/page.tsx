@@ -81,22 +81,63 @@ const InvoicePaymentSuccess = () => {
 
         console.log('[INVOICE-SUCCESS] Processing session:', checkoutSessionId);
 
-        // Call the edge function which uses service role (bypasses RLS)
-        const { data: result, error: fnError } = await supabase.functions.invoke('process-pending-payment', {
-          body: { checkoutSessionId },
-        });
+        // Retry process-pending-payment with backoff. Stripe sometimes hasn't
+        // propagated payment_status='paid' by the time the customer is
+        // redirected to this page (race between Stripe's HTTP response to the
+        // customer and Stripe's internal state). Without retry, we'd ask once,
+        // hit notPaidYet, and silently leave the payment row stuck in 'Pending'
+        // while showing the customer "Payment Received" — which is exactly the
+        // bug Kris's customer hit on R-66a928. Now we retry until the edge
+        // function confirms the allocation OR we hit a hard timeout.
+        const attempts = [1500, 2500, 4000, 6000, 8000, 12000]; // ~34s total + initial 2s delay
+        let lastResult: any = null;
+        let lastFnError: any = null;
+        let confirmed = false;
 
-        if (fnError) {
-          console.error('[INVOICE-SUCCESS] Error:', fnError);
-          setError(fnError.message);
+        for (let i = 0; i < attempts.length; i++) {
+          const { data: result, error: fnError } = await supabase.functions.invoke('process-pending-payment', {
+            body: { checkoutSessionId },
+          });
+          lastResult = result;
+          lastFnError = fnError;
+
+          // Allocation confirmed = payment row landed in a post-FIFO state.
+          // 'Applied' = fully allocated. 'Partial' / 'Credit' also mean Stripe
+          // captured the money (Credit just means there were no matching
+          // outstanding charges to apply against — money is on file).
+          // 'alreadyProcessed' from the early-return branch is also success.
+          if (
+            !fnError &&
+            result?.ok &&
+            (result?.alreadyProcessed === true || ['Applied', 'Partial', 'Credit', 'Completed'].includes(result?.status))
+          ) {
+            confirmed = true;
+            console.log(`[INVOICE-SUCCESS] Confirmed on attempt ${i + 1}: status=${result.status}`);
+            break;
+          }
+
+          if (i < attempts.length - 1) {
+            console.log(`[INVOICE-SUCCESS] Attempt ${i + 1}: notPaidYet — retrying in ${attempts[i]}ms`);
+            await new Promise(r => setTimeout(r, attempts[i]));
+          }
+        }
+
+        if (lastFnError) {
+          console.error('[INVOICE-SUCCESS] Error:', lastFnError);
+          setError(lastFnError.message);
+        } else if (!confirmed) {
+          // Stripe didn't confirm within ~34s. Don't lie to the customer.
+          // Their card may have been authorised; the webhook will land soon.
+          console.warn('[INVOICE-SUCCESS] Could not confirm capture within retry window:', lastResult);
+          setError('Your payment is still being verified by Stripe. You\'ll see it reflect on your account shortly. If you don\'t see it within a few minutes, please contact support.');
         } else {
-          console.log('[INVOICE-SUCCESS] Result:', result);
+          console.log('[INVOICE-SUCCESS] Final result:', lastResult);
 
           // Place Stripe deposit hold on the saved card (non-blocking).
-          if (result?.rentalId) {
+          if (lastResult?.rentalId) {
             try {
               const { data: holdData, error: holdError } = await supabase.functions.invoke('place-deposit-hold', {
-                body: { rentalId: result.rentalId },
+                body: { rentalId: lastResult.rentalId },
               });
               if (holdError) {
                 console.warn('[INVOICE-SUCCESS] Deposit hold failed:', holdError);

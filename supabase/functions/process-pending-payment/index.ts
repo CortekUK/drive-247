@@ -147,8 +147,16 @@ Deno.serve(async (req) => {
 
     console.log("[PROCESS-PENDING] Session is paid! Processing payment:", payment.id);
 
-    // Update to Completed
-    await supabase
+    // Update to Completed. CHECK the error — historically we didn't, which
+    // masked a long-standing bug where this UPDATE silently failed (the
+    // payments.paid_at column didn't exist for a while, the chk_pnl_category_valid
+    // constraint didn't allow Extension* categories, and payment_apply_fifo_v2
+    // didn't honor target_categories — all three triggered constraint errors
+    // that rolled back this UPDATE without ever surfacing). Now if the UPDATE
+    // fails, we return an explicit error so the caller (booking-success page,
+    // rental-detail polling) doesn't show "Payment Received" while the row
+    // is stuck in Pending.
+    const { error: updateError } = await supabase
       .from('payments')
       .update({
         status: 'Completed',
@@ -157,6 +165,19 @@ Deno.serve(async (req) => {
         stripe_payment_intent_id: paymentIntentId,
       })
       .eq('id', payment.id);
+
+    if (updateError) {
+      console.error("[PROCESS-PENDING] CRITICAL: failed to update payment to Completed:", updateError);
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: 'Stripe captured the payment but our DB update failed',
+          detail: updateError.message,
+          paymentId: payment.id,
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
 
     // Apply payment to ledger. Pass target_categories explicitly when present
     // (defense in depth — apply-payment also reads from the payment record, but
