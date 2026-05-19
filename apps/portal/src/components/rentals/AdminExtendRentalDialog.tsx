@@ -38,6 +38,17 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 
+// Parse a Postgres DATE string ("YYYY-MM-DD") as local midnight. `new Date("2026-05-20")`
+// is parsed as UTC midnight, which when formatted in any timezone west of UTC renders
+// as the previous day — that's why extension references were showing "May 19 → May 20"
+// when the actual extension was "May 20 → May 21".
+const parseLocalDate = (value: string | null | undefined): Date => {
+  if (!value) return new Date(NaN);
+  const s = String(value).split('T')[0];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T00:00:00`);
+  return new Date(value);
+};
+
 interface AdminExtendRentalDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -200,7 +211,7 @@ export function AdminExtendRentalDialog({
     setCoverageInitialized(true);
   }
 
-  const currentEndDate = new Date(snapshotEndDate);
+  const currentEndDate = parseLocalDate(snapshotEndDate);
   const minDate = format(
     new Date(currentEndDate.getTime() + 24 * 60 * 60 * 1000),
     'yyyy-MM-dd'
@@ -393,7 +404,7 @@ export function AdminExtendRentalDialog({
       //    stamp on every row — keeping numbering and grouping in sync.
       const extNum = createdSequenceNumber ?? ((existingExtensionCount || 0) + 1);
       const promoSuffix = extensionDiscount > 0 && promoDetails?.code ? ` — promo ${promoDetails.code}` : '';
-      const extRef = `Extension #${extNum}: ${extensionDays} day${extensionDays !== 1 ? 's' : ''} (${format(currentEndDate, 'MMM dd')} → ${format(new Date(newEndDate), 'MMM dd, yyyy')})${promoSuffix}`;
+      const extRef = `Extension #${extNum}: ${extensionDays} day${extensionDays !== 1 ? 's' : ''} (${format(currentEndDate, 'MMM dd')} → ${format(parseLocalDate(newEndDate), 'MMM dd, yyyy')})${promoSuffix}`;
       const today = new Date().toISOString().split('T')[0];
       const baseLedger = {
         rental_id: rental.id,
@@ -506,7 +517,7 @@ export function AdminExtendRentalDialog({
               vehicleReg: rental.vehicles?.reg || '',
               bookingRef: rental.id.substring(0, 8).toUpperCase(),
               previousEndDate: format(currentEndDate, 'MMM dd, yyyy'),
-              newEndDate: format(new Date(newEndDate), 'MMM dd, yyyy'),
+              newEndDate: format(parseLocalDate(newEndDate), 'MMM dd, yyyy'),
               extensionDays,
               extensionAmount: extensionTotalAmount,
               paymentUrl: checkoutUrl,
@@ -542,7 +553,7 @@ export function AdminExtendRentalDialog({
             customer_user_id: customerUser.id,
             tenant_id: tenant.id,
             title: 'Rental Extended',
-            message: `Your rental for ${rental.vehicles?.make} ${rental.vehicles?.model} has been extended to ${format(new Date(newEndDate), 'MMM dd, yyyy')}.${extensionTotalAmount > 0 ? ` Extension fee: ${tenant?.currency_code || '$'}${extensionTotalAmount.toFixed(2)}. A payment link has been sent to your email.` : ''}${mileageImpact?.newAllowance ? ` Your new mileage allowance is ${mileageImpact.newAllowance.toLocaleString()} ${tenant?.distance_unit || 'miles'}.` : ''}`,
+            message: `Your rental for ${rental.vehicles?.make} ${rental.vehicles?.model} has been extended to ${format(parseLocalDate(newEndDate), 'MMM dd, yyyy')}.${extensionTotalAmount > 0 ? ` Extension fee: ${tenant?.currency_code || '$'}${extensionTotalAmount.toFixed(2)}. A payment link has been sent to your email.` : ''}${mileageImpact?.newAllowance ? ` Your new mileage allowance is ${mileageImpact.newAllowance.toLocaleString()} ${tenant?.distance_unit || 'miles'}.` : ''}`,
             type: 'success',
             link: '/portal/bookings',
           });
@@ -655,8 +666,8 @@ export function AdminExtendRentalDialog({
       toast({
         title: agreementSent ? 'Rental Extended — Agreement Sent' : 'Rental Extended — Agreement Pending',
         description: agreementSent
-          ? `Rental extended to ${format(new Date(newEndDate), 'MMMM dd, yyyy')}.${extensionTotalAmount > 0 ? ` Extension charge of ${tenant?.currency_code || '$'}${extensionTotalAmount.toFixed(2)} created.` : ''} Agreement sent to customer for signing.`
-          : `Rental extended to ${format(new Date(newEndDate), 'MMMM dd, yyyy')}.${extensionTotalAmount > 0 ? ` Extension charge of ${tenant?.currency_code || '$'}${extensionTotalAmount.toFixed(2)} created.` : ''} Agreement failed to send — you can retry from the rental details page.`,
+          ? `Rental extended to ${format(parseLocalDate(newEndDate), 'MMMM dd, yyyy')}.${extensionTotalAmount > 0 ? ` Extension charge of ${tenant?.currency_code || '$'}${extensionTotalAmount.toFixed(2)} created.` : ''} Agreement sent to customer for signing.`
+          : `Rental extended to ${format(parseLocalDate(newEndDate), 'MMMM dd, yyyy')}.${extensionTotalAmount > 0 ? ` Extension charge of ${tenant?.currency_code || '$'}${extensionTotalAmount.toFixed(2)} created.` : ''} Agreement failed to send — you can retry from the rental details page.`,
         variant: agreementSent ? 'default' : 'default',
       });
 
@@ -1163,7 +1174,7 @@ export function AdminExtendRentalDialog({
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">New End Date</span>
-                  <span className="font-medium text-primary">{format(new Date(newEndDate), 'MMM dd, yyyy')}</span>
+                  <span className="font-medium text-primary">{format(parseLocalDate(newEndDate), 'MMM dd, yyyy')}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Extension</span>
