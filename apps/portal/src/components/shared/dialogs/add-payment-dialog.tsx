@@ -568,16 +568,25 @@ export const AddPaymentDialog = ({
       }
 
       // Step 2: Send email with payment link (works with or without an existing invoice)
+      // ALWAYS pass overrideAmount so the email's headline + Pay Now button match
+      // the amount Stripe will actually charge. Without this, when the operator
+      // is paying down a partial outstanding balance against a rental that has
+      // an existing invoice on file, the email would default to showing the
+      // INVOICE's total_amount (the full original invoice) instead of the
+      // remaining balance the customer actually owes today — confusing the
+      // customer with two different numbers (email vs Stripe Checkout).
       const { data, error } = await supabase.functions.invoke('send-invoice-email', {
         body: {
           ...(invoiceToSend ? { invoiceId: invoiceToSend.id } : { rentalId, customerName, amount }),
           tenantId: tenant?.id,
           recipientEmail: customerEmail,
           paymentUrl: checkoutData.url,
-          ...(targetCategories && targetCategories.length > 0 ? {
-            overrideAmount: amount,
-            overrideDescription: `Payment for: ${targetCategories.join(', ')}`,
-          } : {}),
+          overrideAmount: amount,
+          ...(targetCategories && targetCategories.length > 0
+            ? { overrideDescription: `Payment for: ${targetCategories.join(', ')}` }
+            : invoiceToSend && Math.abs(amount - (invoiceToSend.total_amount ?? amount)) > 0.01
+              ? { overrideDescription: 'Outstanding balance' }
+              : {}),
         },
       });
       if (error) throw new Error(error.message || 'Failed to send payment email');
