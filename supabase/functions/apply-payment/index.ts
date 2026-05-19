@@ -38,6 +38,32 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
       };
     }
 
+    // CAPTURE GUARD: refuse to allocate a Stripe-checkout payment that was never
+    // actually captured. A payment row that has a checkout session but no
+    // PaymentIntent ID and capture_status='requires_capture' means the customer
+    // never completed the Stripe Checkout — there is no real money. Allocating
+    // it inflates Collected, masks the true Balance Due, and creates phantom
+    // payment_applications that have to be hand-reversed later. The legitimate
+    // post-capture path (stripe-webhook-test/live + process-pending-payment)
+    // always updates capture_status='captured' and stamps the PaymentIntent
+    // ID BEFORE calling us, so this guard is invisible to good callers.
+    if (
+      payment.payment_type === 'Payment'
+      && payment.stripe_checkout_session_id
+      && !payment.stripe_payment_intent_id
+      && payment.capture_status === 'requires_capture'
+      && payment.status !== 'Applied'
+      && payment.status !== 'Completed'
+      && payment.status !== 'Partial'
+    ) {
+      console.warn(`[APPLY-PAYMENT] Refusing to allocate uncaptured Stripe payment ${paymentId} (session=${payment.stripe_checkout_session_id}). The customer has not completed checkout yet.`);
+      return {
+        ok: false,
+        error: 'Payment not yet captured by Stripe',
+        detail: `Payment ${paymentId} has a Stripe Checkout session but no captured PaymentIntent. Wait for the customer to complete checkout (Stripe webhook will trigger allocation once captured).`,
+      };
+    }
+
     // If targetCategories not provided by caller, read from payment record (stored by create-checkout-session)
     if (!targetCategories && payment.target_categories) {
       targetCategories = payment.target_categories;
@@ -461,39 +487,58 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
 
           // Collection Fee comes from the rental record, not the invoice
           if (category === 'Collection Fee') {
-            const { data: rental } = await supabase
-              .from('rentals')
-              .select('collection_fee')
-              .eq('id', payment.rental_id)
-              .single();
+            // Duplicate guard: if ANY Collection Fee charge already exists for
+            // this rental (even one with remaining_amount=0 because it was
+            // already paid down by the original booking payment), do NOT
+            // auto-create another. Re-creating it produced phantom duplicate
+            // $20 Collection Fee rows that got "settled" by uncaptured Stripe
+            // checkouts, inflating Collected by $20 every extension.
+            // Matches the same guard used for all other categories below.
+            const { data: existingCollectionCharge } = await supabase
+              .from('ledger_entries')
+              .select('id')
+              .eq('rental_id', payment.rental_id)
+              .eq('type', 'Charge')
+              .eq('category', 'Collection Fee')
+              .limit(1);
 
-            const collectionAmount = Number(rental?.collection_fee) || 0;
-            if (collectionAmount > 0) {
-              console.log(`Auto-creating Collection Fee charge from rental: ${formatCurrency(collectionAmount, currencyCode)}`);
-              const chargeData: any = {
-                customer_id: payment.customer_id,
-                rental_id: payment.rental_id,
-                vehicle_id: payment.vehicle_id,
-                entry_date: entryDate,
-                type: 'Charge',
-                category: 'Collection Fee',
-                amount: collectionAmount,
-                remaining_amount: collectionAmount,
-                due_date: entryDate,
-              };
-              if (payment.tenant_id) chargeData.tenant_id = payment.tenant_id;
-
-              const { data: newCharge, error: chargeCreateError } = await supabase
-                .from('ledger_entries')
-                .insert(chargeData)
-                .select()
+            if (existingCollectionCharge && existingCollectionCharge.length > 0) {
+              console.log(`Skipping auto-create for Collection Fee: rental ${payment.rental_id} already has a charge in this category`);
+            } else {
+              const { data: rental } = await supabase
+                .from('rentals')
+                .select('collection_fee')
+                .eq('id', payment.rental_id)
                 .single();
 
-              if (!chargeCreateError && newCharge) {
-                console.log(`Created Collection Fee charge: ${newCharge.id}`);
-                outstandingCharges = [newCharge];
-              } else if (chargeCreateError) {
-                console.error('Failed to create Collection Fee charge:', chargeCreateError);
+              const collectionAmount = Number(rental?.collection_fee) || 0;
+              if (collectionAmount > 0) {
+                console.log(`Auto-creating Collection Fee charge from rental: ${formatCurrency(collectionAmount, currencyCode)}`);
+                const chargeData: any = {
+                  customer_id: payment.customer_id,
+                  rental_id: payment.rental_id,
+                  vehicle_id: payment.vehicle_id,
+                  entry_date: entryDate,
+                  type: 'Charge',
+                  category: 'Collection Fee',
+                  amount: collectionAmount,
+                  remaining_amount: collectionAmount,
+                  due_date: entryDate,
+                };
+                if (payment.tenant_id) chargeData.tenant_id = payment.tenant_id;
+
+                const { data: newCharge, error: chargeCreateError } = await supabase
+                  .from('ledger_entries')
+                  .insert(chargeData)
+                  .select()
+                  .single();
+
+                if (!chargeCreateError && newCharge) {
+                  console.log(`Created Collection Fee charge: ${newCharge.id}`);
+                  outstandingCharges = [newCharge];
+                } else if (chargeCreateError) {
+                  console.error('Failed to create Collection Fee charge:', chargeCreateError);
+                }
               }
             }
           } else if (invoiceField) {
