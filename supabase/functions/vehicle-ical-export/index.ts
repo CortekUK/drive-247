@@ -25,7 +25,7 @@ function buildIcs(params: {
   events: Array<{
     uid: string;
     start: string;
-    end: string; // exclusive; caller handles +1 day
+    end: string; // inclusive (matches Turo's display behavior)
     summary: string;
   }>;
 }): string {
@@ -102,14 +102,14 @@ Deno.serve(async (req) => {
     const events = (rentals ?? [])
       .filter((r: any) => r.start_date)
       .map((r: any) => {
-        // iCal DTEND is exclusive for all-day events; rental end_date is inclusive
-        const end = r.end_date ?? r.start_date;
-        const endExclusive = new Date(end + "T00:00:00Z");
-        endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+        // Turo's calendar import treats DTEND inclusively (the day-after is
+        // visibly blocked), so an RFC-correct exclusive DTEND produces a
+        // one-day-too-long block on the host's Turo calendar. Emit the
+        // inclusive end_date directly to match what hosts actually see.
         return {
           uid: `drive247-rental-${r.id}@drive-247.com`,
           start: r.start_date,
-          end: endExclusive.toISOString().slice(0, 10),
+          end: r.end_date ?? r.start_date,
           summary: `Drive247 ${r.rental_number ?? r.id.slice(0, 8)}`,
         };
       });
