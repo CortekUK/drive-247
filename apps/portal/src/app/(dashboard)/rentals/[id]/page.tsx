@@ -2428,11 +2428,20 @@ const RentalDetail = () => {
         // the moment the accrual cron posts a new day or admin records a payment.
         const isPaygSummary = rental?.is_pay_as_you_go === true;
         const paygTotals = paygInvoiceData?.totals;
-        const collectedDisplay = isPaygSummary ? (paygTotals?.collected ?? 0) : totalPayments;
+        // For PAYG, paygTotals.collected is allocation-based — it misses
+        // unallocated prepayments (status='Credit') that land before the cron
+        // has created any charges (e.g. PAYG upfront payment). Take the larger
+        // of paygTotals.collected and the raw payments-table sum so prepayments
+        // show as Collected immediately, and the two converge once the cron
+        // starts allocating from the Credit balance.
+        const paygCollectedRaw = paygTotals?.collected ?? 0;
+        const collectedDisplay = isPaygSummary
+          ? Math.max(paygCollectedRaw, rentalPaymentsTotal)
+          : totalPayments;
         const balanceDueDisplay = isPaygSummary ? (paygTotals?.balanceDue ?? 0) : outstandingBalance;
         const refundedDisplay = isPaygSummary ? (paygTotals?.refunded ?? 0) : legacyRefunded;
         const netReceivedDisplay = isPaygSummary
-          ? (paygTotals?.netReceived ?? 0)
+          ? Math.max(paygTotals?.netReceived ?? 0, rentalPaymentsTotal - refundedDisplay)
           : (totalPayments - legacyRefunded);
         const cur = tenant?.currency_code || 'USD';
         return (
