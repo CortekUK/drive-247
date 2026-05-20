@@ -9520,9 +9520,8 @@ export type Database = {
           tax_percentage: number | null
           tenant_type: string | null
           terms_version: string | null
-          tesla_fleet_api_token: string | null
-          tesla_fleet_mode: string | null
-          tesla_fleet_refresh_token: string | null
+          tesla_fleet_api_token_secret_id: string | null
+          tesla_fleet_refresh_token_secret_id: string | null
           tesla_fleet_token_expires_at: string | null
           thursday_close: string | null
           thursday_enabled: boolean | null
@@ -9714,9 +9713,8 @@ export type Database = {
           tax_percentage?: number | null
           tenant_type?: string | null
           terms_version?: string | null
-          tesla_fleet_api_token?: string | null
-          tesla_fleet_mode?: string | null
-          tesla_fleet_refresh_token?: string | null
+          tesla_fleet_api_token_secret_id?: string | null
+          tesla_fleet_refresh_token_secret_id?: string | null
           tesla_fleet_token_expires_at?: string | null
           thursday_close?: string | null
           thursday_enabled?: boolean | null
@@ -9908,9 +9906,8 @@ export type Database = {
           tax_percentage?: number | null
           tenant_type?: string | null
           terms_version?: string | null
-          tesla_fleet_api_token?: string | null
-          tesla_fleet_mode?: string | null
-          tesla_fleet_refresh_token?: string | null
+          tesla_fleet_api_token_secret_id?: string | null
+          tesla_fleet_refresh_token_secret_id?: string | null
           tesla_fleet_token_expires_at?: string | null
           thursday_close?: string | null
           thursday_enabled?: boolean | null
@@ -12256,6 +12253,24 @@ export type Database = {
       rental_create_charge: {
         Args: { amt: number; due: string; r_id: string }
         Returns: string
+      }
+      tesla_clear_tokens: { Args: { p_tenant_id: string }; Returns: undefined }
+      tesla_get_tokens: {
+        Args: { p_tenant_id: string }
+        Returns: {
+          access_token: string
+          expires_at: string
+          refresh_token: string
+        }[]
+      }
+      tesla_store_tokens: {
+        Args: {
+          p_access_token: string
+          p_expires_at: string
+          p_refresh_token: string
+          p_tenant_id: string
+        }
+        Returns: undefined
       }
       unblock_customer: { Args: { p_customer_id: string }; Returns: Json }
       undo_vehicle_disposal: { Args: { p_vehicle_id: string }; Returns: Json }

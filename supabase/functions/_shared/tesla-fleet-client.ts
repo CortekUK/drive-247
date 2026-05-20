@@ -1,45 +1,81 @@
 // Shared Tesla Fleet API client helper
-// Mirrors stripe-client.ts pattern: per-tenant mode support, token management, sandbox/prod URLs
+// Single production endpoint (Tesla has no usable sandbox).
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 
-export type TeslaFleetMode = 'test' | 'live';
-
-// Tesla Fleet API base URLs
-const TESLA_API_BASE = {
-  test: 'https://fleet-api.prd.na.vn.cloud.tesla.com', // Tesla sandbox/test
-  live: 'https://fleet-api.prd.na.vn.cloud.tesla.com', // Production (same URL, different auth)
-};
-
+const TESLA_API_BASE = 'https://fleet-api.prd.na.vn.cloud.tesla.com';
 const TESLA_AUTH_BASE = 'https://auth.tesla.com';
 
-/**
- * Get Tesla Fleet API base URL for given mode
- */
-export function getTeslaApiBase(mode: TeslaFleetMode): string {
-  return TESLA_API_BASE[mode];
+// ─── HMAC-signed OAuth state ──────────────────────────────────────
+// The OAuth `state` parameter MUST be authenticated; otherwise an attacker
+// can craft a state pointing at another tenant and steal tokens.
+
+const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+function getStateSecret(): string {
+  // Prefer a dedicated secret; fall back to Supabase's JWT secret which is
+  // always present in the edge function runtime and is high-entropy.
+  const secret = Deno.env.get('TESLA_STATE_SECRET') || Deno.env.get('SUPABASE_JWT_SECRET');
+  if (!secret) throw new Error('Missing TESLA_STATE_SECRET / SUPABASE_JWT_SECRET');
+  return secret;
 }
 
-/**
- * Fetch tenant's Tesla Fleet mode from database
- */
-export async function getTenantTeslaFleetMode(
-  supabase: SupabaseClient,
-  tenantId: string
-): Promise<TeslaFleetMode> {
-  const { data, error } = await supabase
-    .from('tenants')
-    .select('tesla_fleet_mode')
-    .eq('id', tenantId)
-    .single();
-
-  if (error) throw new Error(`Failed to fetch tenant Tesla mode: ${error.message}`);
-  return (data?.tesla_fleet_mode as TeslaFleetMode) || 'test';
+function b64urlEncode(bytes: Uint8Array): string {
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-/**
- * Get Tesla Fleet API credentials for a tenant
- */
+function b64urlDecode(s: string): Uint8Array {
+  const pad = s.length % 4 === 0 ? '' : '='.repeat(4 - (s.length % 4));
+  const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/') + pad);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function hmacSha256(secret: string, message: string): Promise<Uint8Array> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+  return new Uint8Array(sig);
+}
+
+function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) mismatch |= a[i] ^ b[i];
+  return mismatch === 0;
+}
+
+export async function signState(payload: Record<string, unknown>): Promise<string> {
+  const body = { ...payload, iat: Date.now() };
+  const bodyB64 = b64urlEncode(new TextEncoder().encode(JSON.stringify(body)));
+  const sig = await hmacSha256(getStateSecret(), bodyB64);
+  return `${bodyB64}.${b64urlEncode(sig)}`;
+}
+
+export async function verifyState<T = Record<string, unknown>>(state: string): Promise<T> {
+  const dot = state.indexOf('.');
+  if (dot < 0) throw new Error('Malformed state');
+  const bodyB64 = state.slice(0, dot);
+  const sigB64 = state.slice(dot + 1);
+  const expected = await hmacSha256(getStateSecret(), bodyB64);
+  const provided = b64urlDecode(sigB64);
+  if (!constantTimeEqual(expected, provided)) throw new Error('Invalid state signature');
+  const body = JSON.parse(new TextDecoder().decode(b64urlDecode(bodyB64)));
+  if (typeof body.iat !== 'number' || Date.now() - body.iat > STATE_TTL_MS) {
+    throw new Error('State expired');
+  }
+  return body as T;
+}
+
 export async function getTenantTeslaCredentials(
   supabase: SupabaseClient,
   tenantId: string
@@ -47,39 +83,54 @@ export async function getTenantTeslaCredentials(
   apiToken: string;
   refreshToken: string | null;
   tokenExpiresAt: string | null;
-  mode: TeslaFleetMode;
 }> {
-  const { data, error } = await supabase
-    .from('tenants')
-    .select('tesla_fleet_api_token, tesla_fleet_refresh_token, tesla_fleet_token_expires_at, tesla_fleet_mode')
-    .eq('id', tenantId)
-    .single();
+  // Tokens live in Supabase Vault; tesla_get_tokens is a SECURITY DEFINER RPC
+  // granted to service_role only.
+  const { data, error } = await supabase.rpc('tesla_get_tokens', { p_tenant_id: tenantId });
 
   if (error) throw new Error(`Failed to fetch tenant Tesla credentials: ${error.message}`);
-  if (!data?.tesla_fleet_api_token) throw new Error('Tesla Fleet API not configured for this tenant');
+  const row = Array.isArray(data) ? data[0] : null;
+  if (!row?.access_token) throw new Error('Tesla Fleet API not configured for this tenant');
 
   return {
-    apiToken: data.tesla_fleet_api_token,
-    refreshToken: data.tesla_fleet_refresh_token,
-    tokenExpiresAt: data.tesla_fleet_token_expires_at,
-    mode: (data.tesla_fleet_mode as TeslaFleetMode) || 'test',
+    apiToken: row.access_token,
+    refreshToken: row.refresh_token ?? null,
+    tokenExpiresAt: row.expires_at ?? null,
   };
 }
 
-/**
- * Check if the Tesla API token needs refresh (expired or within 5 min of expiry)
- */
+export async function storeTeslaTokens(
+  supabase: SupabaseClient,
+  tenantId: string,
+  accessToken: string,
+  refreshToken: string | null,
+  expiresAt: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('tesla_store_tokens', {
+    p_tenant_id: tenantId,
+    p_access_token: accessToken,
+    p_refresh_token: refreshToken,
+    p_expires_at: expiresAt,
+  });
+  if (error) throw new Error(`Failed to store Tesla tokens: ${error.message}`);
+}
+
+export async function clearTeslaTokens(
+  supabase: SupabaseClient,
+  tenantId: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('tesla_clear_tokens', { p_tenant_id: tenantId });
+  if (error) throw new Error(`Failed to clear Tesla tokens: ${error.message}`);
+}
+
 export function isTokenExpired(expiresAt: string | null): boolean {
   if (!expiresAt) return true;
   const expiry = new Date(expiresAt).getTime();
   const now = Date.now();
-  const bufferMs = 5 * 60 * 1000; // 5 minutes buffer
+  const bufferMs = 5 * 60 * 1000;
   return now >= expiry - bufferMs;
 }
 
-/**
- * Refresh the Tesla OAuth token
- */
 export async function refreshTeslaToken(
   supabase: SupabaseClient,
   tenantId: string,
@@ -111,22 +162,17 @@ export async function refreshTeslaToken(
   const data = await resp.json();
   const expiresAt = new Date(Date.now() + data.expires_in * 1000).toISOString();
 
-  // Update tenant with new tokens
-  await supabase
-    .from('tenants')
-    .update({
-      tesla_fleet_api_token: data.access_token,
-      tesla_fleet_refresh_token: data.refresh_token || refreshToken,
-      tesla_fleet_token_expires_at: expiresAt,
-    })
-    .eq('id', tenantId);
+  await storeTeslaTokens(
+    supabase,
+    tenantId,
+    data.access_token,
+    data.refresh_token || refreshToken,
+    expiresAt,
+  );
 
   return { accessToken: data.access_token, expiresAt };
 }
 
-/**
- * Get a valid Tesla API token, refreshing if needed
- */
 export async function getValidTeslaToken(
   supabase: SupabaseClient,
   tenantId: string
@@ -138,26 +184,19 @@ export async function getValidTeslaToken(
   }
 
   if (!creds.refreshToken) {
-    throw new Error('Tesla token expired and no refresh token available. Please reconnect.');
+    throw new Error('Tesla token expired and no refresh token available. Please reconnect Tesla in Settings.');
   }
 
   const { accessToken } = await refreshTeslaToken(supabase, tenantId, creds.refreshToken);
   return accessToken;
 }
 
-/**
- * Make an authenticated request to the Tesla Fleet API
- */
-export async function teslaApiRequest(
+async function teslaApiRequest(
   token: string,
-  mode: TeslaFleetMode,
   path: string,
   options: RequestInit = {}
 ): Promise<any> {
-  const base = getTeslaApiBase(mode);
-  const url = `${base}${path}`;
-
-  const resp = await fetch(url, {
+  const resp = await fetch(`${TESLA_API_BASE}${path}`, {
     ...options,
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -174,23 +213,13 @@ export async function teslaApiRequest(
   return resp.json();
 }
 
-/**
- * List all vehicles accessible by the Tesla account
- */
-export async function listTeslaVehicles(
-  token: string,
-  mode: TeslaFleetMode
-): Promise<any[]> {
-  const data = await teslaApiRequest(token, mode, '/api/1/vehicles');
+export async function listTeslaVehicles(token: string): Promise<any[]> {
+  const data = await teslaApiRequest(token, '/api/1/vehicles');
   return data.response || [];
 }
 
-/**
- * Get charging history for a vehicle
- */
 export async function getChargingHistory(
   token: string,
-  mode: TeslaFleetMode,
   vehicleId: string,
   startDate?: string,
   endDate?: string
@@ -202,19 +231,15 @@ export async function getChargingHistory(
   const qs = params.toString();
   if (qs) path += `?${qs}`;
 
-  const data = await teslaApiRequest(token, mode, path);
+  const data = await teslaApiRequest(token, path);
   return data.response?.charging_history || [];
 }
 
-/**
- * Check if a VIN belongs to a Tesla vehicle accessible by the account
- */
 export async function checkVehicleByVin(
   token: string,
-  mode: TeslaFleetMode,
   vin: string
 ): Promise<{ compatible: boolean; vehicleId?: string; vehicleName?: string }> {
-  const vehicles = await listTeslaVehicles(token, mode);
+  const vehicles = await listTeslaVehicles(token);
   const match = vehicles.find((v: any) => v.vin?.toUpperCase() === vin.toUpperCase());
 
   if (match) {
@@ -228,9 +253,6 @@ export async function checkVehicleByVin(
   return { compatible: false };
 }
 
-/**
- * Generate Tesla OAuth authorization URL
- */
 export function getTeslaAuthUrl(redirectUri: string, state: string): string {
   const clientId = Deno.env.get('TESLA_CLIENT_ID');
   if (!clientId) throw new Error('Missing TESLA_CLIENT_ID');
@@ -239,16 +261,14 @@ export function getTeslaAuthUrl(redirectUri: string, state: string): string {
     response_type: 'code',
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: 'openid vehicle_device_data vehicle_charging_cmds',
+    // offline_access is required for Tesla to return a refresh_token.
+    scope: 'openid offline_access vehicle_device_data vehicle_charging_cmds',
     state,
   });
 
   return `${TESLA_AUTH_BASE}/oauth2/v3/authorize?${params.toString()}`;
 }
 
-/**
- * Exchange authorization code for tokens
- */
 export async function exchangeTeslaAuthCode(
   code: string,
   redirectUri: string

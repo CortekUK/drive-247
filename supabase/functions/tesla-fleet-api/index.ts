@@ -1,18 +1,43 @@
 // Tesla Fleet API management edge function
-// Actions: get_auth_url, check_vehicle, disconnect, get_status, update_mode, list_vehicles
+// Actions: get_auth_url, check_vehicle, disconnect, get_status, list_vehicles
 // Also handles GET for OAuth callback redirect from Tesla
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
-import { handleCors, jsonResponse, errorResponse, corsHeaders } from '../_shared/cors.ts';
+import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import {
   getTeslaAuthUrl,
   exchangeTeslaAuthCode,
   getValidTeslaToken,
-  getTenantTeslaCredentials,
-  getTenantTeslaFleetMode,
   checkVehicleByVin,
   listTeslaVehicles,
+  signState,
+  verifyState,
+  storeTeslaTokens,
+  clearTeslaTokens,
 } from '../_shared/tesla-fleet-client.ts';
+
+// Reject cross-tenant tenantId overrides unless the caller is a super admin.
+// Returns the resolved tenantId, or a Response if forbidden.
+function resolveTenantId(
+  paramsTenantId: string | undefined,
+  appUser: { tenant_id: string | null; is_super_admin: boolean | null },
+): string | Response {
+  const requested = paramsTenantId;
+  if (requested && requested !== appUser.tenant_id && !appUser.is_super_admin) {
+    return new Response(
+      JSON.stringify({ error: 'Forbidden: cannot act on another tenant' }),
+      { status: 403, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+  const resolved = requested || appUser.tenant_id;
+  if (!resolved) {
+    return new Response(
+      JSON.stringify({ error: 'No tenant ID' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+  return resolved;
+}
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -33,12 +58,14 @@ Deno.serve(async (req) => {
         return new Response('Missing code or state parameter', { status: 400 });
       }
 
-      // Decode state to get tenantId and returnUrl
+      // Verify the HMAC-signed state. This is the gate that prevents an
+      // attacker from forging a state that points at another tenant.
       let state: { tenantId: string; returnUrl?: string };
       try {
-        state = JSON.parse(atob(stateParam));
-      } catch {
-        return new Response('Invalid state parameter', { status: 400 });
+        state = await verifyState<{ tenantId: string; returnUrl?: string }>(stateParam);
+      } catch (err: any) {
+        console.error('[tesla-fleet-api] State verification failed:', err.message);
+        return new Response('Invalid or expired state', { status: 400 });
       }
 
       const tenantId = state.tenantId;
@@ -51,16 +78,8 @@ Deno.serve(async (req) => {
       const tokens = await exchangeTeslaAuthCode(code, redirectUri);
       const expiresAt = new Date(Date.now() + tokens.expiresIn * 1000).toISOString();
 
-      // Store tokens on tenant
-      await supabase
-        .from('tenants')
-        .update({
-          integration_tesla_fleet: true,
-          tesla_fleet_api_token: tokens.accessToken,
-          tesla_fleet_refresh_token: tokens.refreshToken,
-          tesla_fleet_token_expires_at: expiresAt,
-        })
-        .eq('id', tenantId);
+      // Tokens are stored in Supabase Vault; the RPC also flips integration_tesla_fleet to true.
+      await storeTeslaTokens(supabase, tenantId, tokens.accessToken, tokens.refreshToken, expiresAt);
 
       // Redirect back to the tenant's settings page
       const returnUrl = state.returnUrl || 'https://portal.drive-247.com/settings';
@@ -101,31 +120,32 @@ Deno.serve(async (req) => {
     switch (action) {
       // ─── GET AUTH URL ──────────────────────────────────────────
       case 'get_auth_url': {
-        const tenantId = params.tenantId || appUser.tenant_id;
-        if (!tenantId) return errorResponse('No tenant ID', 400);
+        const t = resolveTenantId(params.tenantId, appUser);
+        if (t instanceof Response) return t;
+        const tenantId = t;
 
         // Always redirect to this edge function (generic, works for all tenants)
         const redirectUri = `${supabaseUrl}/functions/v1/tesla-fleet-api`;
 
-        // Encode tenantId + returnUrl in state so the callback knows where to redirect
+        // HMAC-signed state — the callback verifies signature + 10 min TTL.
         const returnUrl = params.returnUrl || params.redirectUri || `${params.origin || 'https://portal.drive-247.com'}/settings`;
-        const state = JSON.stringify({ tenantId, returnUrl });
-        const authUrl = getTeslaAuthUrl(redirectUri, btoa(state));
+        const state = await signState({ tenantId, returnUrl });
+        const authUrl = getTeslaAuthUrl(redirectUri, state);
 
         return jsonResponse({ authUrl });
       }
 
       // ─── CHECK VEHICLE COMPATIBILITY ───────────────────────────
       case 'check_vehicle': {
-        const tenantId = params.tenantId || appUser.tenant_id;
-        if (!tenantId) return errorResponse('No tenant ID', 400);
+        const t = resolveTenantId(params.tenantId, appUser);
+        if (t instanceof Response) return t;
+        const tenantId = t;
 
         const { vehicleId, vin } = params;
         if (!vehicleId || !vin) return errorResponse('Missing vehicleId or vin', 400);
 
-        const mode = await getTenantTeslaFleetMode(supabase, tenantId);
         const apiToken = await getValidTeslaToken(supabase, tenantId);
-        const result = await checkVehicleByVin(apiToken, mode, vin);
+        const result = await checkVehicleByVin(apiToken, vin);
 
         if (result.compatible) {
           await supabase
@@ -134,7 +154,8 @@ Deno.serve(async (req) => {
               tesla_fleet_enabled: true,
               tesla_fleet_vehicle_id: result.vehicleId,
             })
-            .eq('id', vehicleId);
+            .eq('id', vehicleId)
+            .eq('tenant_id', tenantId);
 
           return jsonResponse({
             compatible: true,
@@ -152,24 +173,25 @@ Deno.serve(async (req) => {
 
       // ─── LIST TESLA VEHICLES ───────────────────────────────────
       case 'list_vehicles': {
-        const tenantId = params.tenantId || appUser.tenant_id;
-        if (!tenantId) return errorResponse('No tenant ID', 400);
+        const t = resolveTenantId(params.tenantId, appUser);
+        if (t instanceof Response) return t;
+        const tenantId = t;
 
-        const mode = await getTenantTeslaFleetMode(supabase, tenantId);
         const apiToken = await getValidTeslaToken(supabase, tenantId);
-        const vehicles = await listTeslaVehicles(apiToken, mode);
+        const vehicles = await listTeslaVehicles(apiToken);
 
         return jsonResponse({ vehicles });
       }
 
       // ─── GET STATUS ────────────────────────────────────────────
       case 'get_status': {
-        const tenantId = params.tenantId || appUser.tenant_id;
-        if (!tenantId) return errorResponse('No tenant ID', 400);
+        const t = resolveTenantId(params.tenantId, appUser);
+        if (t instanceof Response) return t;
+        const tenantId = t;
 
         const { data: tenant } = await supabase
           .from('tenants')
-          .select('integration_tesla_fleet, tesla_fleet_mode, tesla_fleet_token_expires_at')
+          .select('integration_tesla_fleet, tesla_fleet_token_expires_at')
           .eq('id', tenantId)
           .single();
 
@@ -181,7 +203,6 @@ Deno.serve(async (req) => {
 
         return jsonResponse({
           connected: tenant?.integration_tesla_fleet || false,
-          mode: tenant?.tesla_fleet_mode || 'test',
           tokenExpiresAt: tenant?.tesla_fleet_token_expires_at,
           enabledVehicleCount: count || 0,
         });
@@ -189,18 +210,12 @@ Deno.serve(async (req) => {
 
       // ─── DISCONNECT ────────────────────────────────────────────
       case 'disconnect': {
-        const tenantId = params.tenantId || appUser.tenant_id;
-        if (!tenantId) return errorResponse('No tenant ID', 400);
+        const t = resolveTenantId(params.tenantId, appUser);
+        if (t instanceof Response) return t;
+        const tenantId = t;
 
-        await supabase
-          .from('tenants')
-          .update({
-            integration_tesla_fleet: false,
-            tesla_fleet_api_token: null,
-            tesla_fleet_refresh_token: null,
-            tesla_fleet_token_expires_at: null,
-          })
-          .eq('id', tenantId);
+        // Clears tenant token columns + deletes vault secrets.
+        await clearTeslaTokens(supabase, tenantId);
 
         await supabase
           .from('vehicles')
@@ -211,24 +226,6 @@ Deno.serve(async (req) => {
           .eq('tenant_id', tenantId);
 
         return jsonResponse({ success: true, message: 'Tesla Fleet API disconnected' });
-      }
-
-      // ─── UPDATE MODE ───────────────────────────────────────────
-      case 'update_mode': {
-        const tenantId = params.tenantId || appUser.tenant_id;
-        if (!tenantId) return errorResponse('No tenant ID', 400);
-
-        const { mode } = params;
-        if (!mode || !['test', 'live'].includes(mode)) {
-          return errorResponse('Invalid mode. Must be "test" or "live"', 400);
-        }
-
-        await supabase
-          .from('tenants')
-          .update({ tesla_fleet_mode: mode })
-          .eq('id', tenantId);
-
-        return jsonResponse({ success: true, mode });
       }
 
       default:

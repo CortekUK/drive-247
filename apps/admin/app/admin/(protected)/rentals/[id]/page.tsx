@@ -101,7 +101,6 @@ interface Tenant {
   bonzah_username: string | null;
   boldsign_mode: string;
   integration_tesla_fleet: boolean;
-  tesla_fleet_mode: string | null;
 }
 
 interface TenantSubscription {
@@ -335,7 +334,7 @@ export default function TenantDetailsPage() {
   // Integration mode state
   const [modeUpdating, setModeUpdating] = useState(false);
   const [showModeConfirm, setShowModeConfirm] = useState(false);
-  const [pendingModeChange, setPendingModeChange] = useState<{ type: 'stripe' | 'bonzah' | 'boldsign' | 'subscription_stripe' | 'tesla_fleet'; newMode: 'test' | 'live' } | null>(null);
+  const [pendingModeChange, setPendingModeChange] = useState<{ type: 'stripe' | 'bonzah' | 'boldsign' | 'subscription_stripe'; newMode: 'test' | 'live' } | null>(null);
   const [showSubscriptionDetail, setShowSubscriptionDetail] = useState(false);
   const [showCreditsDetail, setShowCreditsDetail] = useState(false);
   const [showBannerDialog, setShowBannerDialog] = useState(false);
@@ -828,7 +827,7 @@ export default function TenantDetailsPage() {
     }
   };
 
-  const handleModeToggle = (type: 'stripe' | 'bonzah' | 'boldsign' | 'subscription_stripe' | 'tesla_fleet', newMode: 'test' | 'live') => {
+  const handleModeToggle = (type: 'stripe' | 'bonzah' | 'boldsign' | 'subscription_stripe', newMode: 'test' | 'live') => {
     if (newMode === 'live') {
       setPendingModeChange({ type, newMode });
       setShowModeConfirm(true);
@@ -837,7 +836,7 @@ export default function TenantDetailsPage() {
     }
   };
 
-  const executeModeChange = async (type: 'stripe' | 'bonzah' | 'boldsign' | 'subscription_stripe' | 'tesla_fleet', newMode: 'test' | 'live') => {
+  const executeModeChange = async (type: 'stripe' | 'bonzah' | 'boldsign' | 'subscription_stripe', newMode: 'test' | 'live') => {
     if (!tenant) return;
     setModeUpdating(true);
     try {
@@ -846,7 +845,6 @@ export default function TenantDetailsPage() {
         bonzah: 'bonzah_mode',
         boldsign: 'boldsign_mode',
         subscription_stripe: 'subscription_stripe_mode',
-        tesla_fleet: 'tesla_fleet_mode',
       };
       const field = fieldMap[type];
       const { error } = await supabase
@@ -862,7 +860,6 @@ export default function TenantDetailsPage() {
         bonzah: 'Bonzah API',
         boldsign: 'BoldSign',
         subscription_stripe: 'Subscription Stripe',
-        tesla_fleet: 'Tesla Fleet API',
       };
       toast.success(`${labels[type]} switched to ${newMode} mode`);
     } catch (error: any) {
