@@ -57,8 +57,8 @@ export default function OwnerPayoutsPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-medium text-[#080812]">Owner Payouts</h1>
-          <p className="text-sm text-[#737373] mt-1">Record and track payments to third-party vehicle owners.</p>
+          <h1 className="text-3xl font-medium text-foreground">Owner Payouts</h1>
+          <p className="text-sm text-muted-foreground mt-1">Record and track payments to third-party vehicle owners.</p>
         </div>
         <Button onClick={() => setShowCreate(true)}>
           <Plus className="h-4 w-4 mr-2" /> Create Payout
@@ -66,10 +66,10 @@ export default function OwnerPayoutsPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon={<Clock className="h-5 w-5 text-blue-600" />} label="Pending" value={String(stats.pending)} />
-        <StatCard icon={<CircleAlert className="h-5 w-5 text-orange-600" />} label="Partially Paid" value={String(stats.partial)} />
-        <StatCard icon={<CheckCircle2 className="h-5 w-5 text-green-600" />} label="Paid" value={String(stats.paid)} />
-        <StatCard icon={<Wallet className="h-5 w-5 text-indigo-600" />} label="Outstanding" value={formatCurrency(stats.outstanding, currency)} />
+        <StatCard icon={<Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />} label="Pending" value={String(stats.pending)} />
+        <StatCard icon={<CircleAlert className="h-5 w-5 text-orange-600 dark:text-orange-400" />} label="Partially Paid" value={String(stats.partial)} />
+        <StatCard icon={<CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />} label="Paid" value={String(stats.paid)} />
+        <StatCard icon={<Wallet className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />} label="Outstanding" value={formatCurrency(stats.outstanding, currency)} />
       </div>
 
       <Card>
@@ -114,7 +114,7 @@ export default function OwnerPayoutsPage() {
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="bg-[#eef2ff] hover:bg-[#eef2ff]">
+              <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
                 <TableHead>Owner</TableHead>
                 <TableHead>Period</TableHead>
                 <TableHead className="text-right">Gross</TableHead>
@@ -132,14 +132,14 @@ export default function OwnerPayoutsPage() {
                   <TableRow key={i}><TableCell colSpan={9}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
                 ))
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-12 text-[#737373]">No payouts match the current filters.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">No payouts match the current filters.</TableCell></TableRow>
               ) : (
                 filtered.map((p) => {
                   const remaining = Number(p.net_owed) - Number(p.amount_paid);
                   return (
                     <TableRow key={p.id}>
                       <TableCell>
-                        <Link href={`/vehicle-owners/${p.owner_id}`} className="font-medium text-[#6366f1] hover:underline">
+                        <Link href={`/vehicle-owners/${p.owner_id}`} className="font-medium text-[#6366f1] dark:text-indigo-400 hover:underline">
                           {p.owner_full_name ?? "—"}
                         </Link>
                       </TableCell>
@@ -187,10 +187,10 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-[#737373]">{label}</p>
-            <p className="text-2xl font-medium text-[#080812] mt-1">{value}</p>
+            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className="text-2xl font-medium text-foreground mt-1">{value}</p>
           </div>
-          <div className="h-10 w-10 rounded-md bg-[#eef2ff] flex items-center justify-center">{icon}</div>
+          <div className="h-10 w-10 rounded-md bg-[#eef2ff] dark:bg-muted flex items-center justify-center">{icon}</div>
         </div>
       </CardContent>
     </Card>
@@ -199,9 +199,9 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
 
 function statusColor(status: string) {
   switch (status) {
-    case "paid": return "border-green-300 text-green-700";
-    case "partially_paid": return "border-orange-300 text-orange-700";
-    case "cancelled": return "border-gray-300 text-[#737373]";
-    default: return "border-blue-300 text-blue-700";
+    case "paid": return "border-green-300 text-green-700 dark:border-green-800 dark:text-green-400";
+    case "partially_paid": return "border-orange-300 text-orange-700 dark:border-orange-800 dark:text-orange-400";
+    case "cancelled": return "border-gray-300 text-muted-foreground dark:border-gray-700";
+    default: return "border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-400";
   }
 }

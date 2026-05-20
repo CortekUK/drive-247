@@ -81,8 +81,8 @@ export default function VehicleOwnersPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-medium text-[#080812]">Vehicle Owners</h1>
-          <p className="text-sm text-[#737373] mt-1">
+          <h1 className="text-3xl font-medium text-foreground">Vehicle Owners</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Third-party owners whose vehicles you manage on consignment.
           </p>
         </div>
@@ -93,10 +93,10 @@ export default function VehicleOwnersPage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard icon={<Users className="h-5 w-5 text-indigo-600" />} label="Active Owners" value={String(totalActive)} />
-        <StatCard icon={<Car className="h-5 w-5 text-indigo-600" />} label="Managed Vehicles" value={String(totalManagedVehicles)} />
+        <StatCard icon={<Users className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />} label="Active Owners" value={String(totalActive)} />
+        <StatCard icon={<Car className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />} label="Managed Vehicles" value={String(totalManagedVehicles)} />
         <StatCard
-          icon={<Wallet className="h-5 w-5 text-indigo-600" />}
+          icon={<Wallet className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
           label="Outstanding Owed"
           value={formatCurrency(totalOutstanding, currency)}
         />
@@ -105,7 +105,7 @@ export default function VehicleOwnersPage() {
       {/* Filter bar */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#737373]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by name, email, phone..."
             value={search}
@@ -124,7 +124,7 @@ export default function VehicleOwnersPage() {
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="bg-[#eef2ff] hover:bg-[#eef2ff]">
+              <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
                 <TableHead>Name</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Vehicles</TableHead>
@@ -144,7 +144,7 @@ export default function VehicleOwnersPage() {
                 ))
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-[#737373]">
+                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                     {owners.length === 0
                       ? "No vehicle owners yet. Click “Add Owner” to get started."
                       : "No owners match your search."}
@@ -154,10 +154,10 @@ export default function VehicleOwnersPage() {
                 filtered.map((o) => (
                   <TableRow key={o.id}>
                     <TableCell className="font-medium">{o.full_name}</TableCell>
-                    <TableCell className="text-sm text-[#404040]">
+                    <TableCell className="text-sm text-foreground/80">
                       {o.email && <div>{o.email}</div>}
-                      {o.phone && <div className="text-[#737373]">{o.phone}</div>}
-                      {!o.email && !o.phone && <span className="text-[#737373]">—</span>}
+                      {o.phone && <div className="text-muted-foreground">{o.phone}</div>}
+                      {!o.email && !o.phone && <span className="text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell>{vehicleCounts[o.id] ?? 0}</TableCell>
                     <TableCell>
@@ -168,13 +168,13 @@ export default function VehicleOwnersPage() {
                     <TableCell className="capitalize">{o.payout_frequency.replace("_", " ")}</TableCell>
                     <TableCell className="text-right">
                       {(outstandingPerOwner[o.id] ?? 0) > 0
-                        ? <span className="text-orange-700">{formatCurrency(outstandingPerOwner[o.id], currency)}</span>
-                        : <span className="text-[#737373]">{formatCurrency(0, currency)}</span>}
+                        ? <span className="text-orange-700 dark:text-orange-400">{formatCurrency(outstandingPerOwner[o.id], currency)}</span>
+                        : <span className="text-muted-foreground">{formatCurrency(0, currency)}</span>}
                     </TableCell>
                     <TableCell>
                       {o.is_active
-                        ? <Badge variant="outline" className="border-green-300 text-green-700">Active</Badge>
-                        : <Badge variant="outline" className="border-gray-300 text-[#737373]">Inactive</Badge>}
+                        ? <Badge variant="outline" className="border-green-300 text-green-700 dark:border-green-800 dark:text-green-400">Active</Badge>
+                        : <Badge variant="outline" className="border-gray-300 text-muted-foreground dark:border-gray-700">Inactive</Badge>}
                     </TableCell>
                     <TableCell>
                       <Link href={`/vehicle-owners/${o.id}`}>
@@ -200,10 +200,10 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-[#737373]">{label}</p>
-            <p className="text-2xl font-medium text-[#080812] mt-1">{value}</p>
+            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className="text-2xl font-medium text-foreground mt-1">{value}</p>
           </div>
-          <div className="h-10 w-10 rounded-md bg-[#eef2ff] flex items-center justify-center">{icon}</div>
+          <div className="h-10 w-10 rounded-md bg-[#eef2ff] dark:bg-muted flex items-center justify-center">{icon}</div>
         </div>
       </CardContent>
     </Card>

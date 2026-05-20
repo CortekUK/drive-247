@@ -66,8 +66,8 @@ export default function VehicleOwnerDetailPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-3xl font-medium text-[#080812]">{owner.full_name}</h1>
-            <p className="text-sm text-[#737373] mt-1">
+            <h1 className="text-3xl font-medium text-foreground">{owner.full_name}</h1>
+            <p className="text-sm text-muted-foreground mt-1">
               {owner.is_active ? "Active owner" : "Inactive — payout history preserved"}
               {" · "}{vehicles.length} vehicle{vehicles.length === 1 ? "" : "s"}
               {" · "}Outstanding {formatCurrency(totalOwed, currency)}
@@ -129,7 +129,7 @@ export default function VehicleOwnerDetailPage() {
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-[#eef2ff] hover:bg-[#eef2ff]">
+                  <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
                     <TableHead>Reg</TableHead>
                     <TableHead>Make / Model</TableHead>
                     <TableHead>Year</TableHead>
@@ -141,7 +141,7 @@ export default function VehicleOwnerDetailPage() {
                 </TableHeader>
                 <TableBody>
                   {vehicles.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-[#737373]">No vehicles assigned.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No vehicles assigned.</TableCell></TableRow>
                   ) : (
                     vehicles.map((v) => (
                       <VehicleRow key={v.id} vehicle={v} ownerId={owner.id} currency={currency} />
@@ -162,7 +162,7 @@ export default function VehicleOwnerDetailPage() {
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-[#eef2ff] hover:bg-[#eef2ff]">
+                  <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
                     <TableHead>Period</TableHead>
                     <TableHead className="text-right">Gross</TableHead>
                     <TableHead className="text-right">Commission</TableHead>
@@ -175,7 +175,7 @@ export default function VehicleOwnerDetailPage() {
                 </TableHeader>
                 <TableBody>
                   {payouts.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-[#737373]">No payouts yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No payouts yet.</TableCell></TableRow>
                   ) : (
                     payouts.map((p) => (
                       <PayoutRow key={p.id} payout={p} currency={currency} onRecord={() => setRecordPaymentFor(p)} />
@@ -205,8 +205,8 @@ export default function VehicleOwnerDetailPage() {
 function Field({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
     <div className={className}>
-      <div className="text-xs text-[#737373]">{label}</div>
-      <div className="text-sm text-[#080812] mt-0.5 whitespace-pre-wrap">{value}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-sm text-foreground mt-0.5 whitespace-pre-wrap">{value}</div>
     </div>
   );
 }
@@ -272,10 +272,10 @@ function PayoutRow({ payout, currency, onRecord }: { payout: any; currency: stri
 
 function statusColor(status: string) {
   switch (status) {
-    case "paid": return "border-green-300 text-green-700";
-    case "partially_paid": return "border-orange-300 text-orange-700";
-    case "cancelled": return "border-gray-300 text-[#737373]";
-    default: return "border-blue-300 text-blue-700";
+    case "paid": return "border-green-300 text-green-700 dark:border-green-800 dark:text-green-400";
+    case "partially_paid": return "border-orange-300 text-orange-700 dark:border-orange-800 dark:text-orange-400";
+    case "cancelled": return "border-gray-300 text-muted-foreground dark:border-gray-700";
+    default: return "border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-400";
   }
 }
 
@@ -299,15 +299,15 @@ function RevenueTab({ ownerId, currency }: { ownerId: string; currency: string }
           <Input id="rev-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
         <div className="ml-auto text-right">
-          <div className="text-xs text-[#737373]">Total Paid Revenue</div>
-          <div className="text-xl font-medium text-[#080812]">{formatCurrency(total, currency)}</div>
+          <div className="text-xs text-muted-foreground">Total Paid Revenue</div>
+          <div className="text-xl font-medium text-foreground">{formatCurrency(total, currency)}</div>
         </div>
       </div>
       <Card>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="bg-[#eef2ff] hover:bg-[#eef2ff]">
+              <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
                 <TableHead>Date</TableHead>
                 <TableHead>Vehicle</TableHead>
                 <TableHead className="text-right">Paid Amount</TableHead>
@@ -319,7 +319,7 @@ function RevenueTab({ ownerId, currency }: { ownerId: string; currency: string }
                   <TableRow key={i}><TableCell colSpan={3}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
                 ))
               ) : rows.length === 0 ? (
-                <TableRow><TableCell colSpan={3} className="text-center py-8 text-[#737373]">No paid revenue in this range.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">No paid revenue in this range.</TableCell></TableRow>
               ) : (
                 rows.map((r) => (
                   <TableRow key={r.payment_id}>

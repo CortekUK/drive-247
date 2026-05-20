@@ -80,16 +80,16 @@ export function AssignVehicleDialog({ open, onOpenChange, ownerId }: AssignVehic
                 {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
               </div>
             ) : filtered.length === 0 ? (
-              <p className="text-sm text-center py-8 text-[#737373]">
+              <p className="text-sm text-center py-8 text-muted-foreground">
                 {vehicles.length === 0 ? "No unassigned vehicles available." : "No vehicles match your search."}
               </p>
             ) : (
               <ul className="divide-y">
                 {filtered.map((v) => (
-                  <li key={v.id} className="flex items-center justify-between p-3 hover:bg-[#f8fafc]">
+                  <li key={v.id} className="flex items-center justify-between p-3 hover:bg-[#f8fafc] dark:hover:bg-muted/40">
                     <div>
                       <div className="font-medium">{v.reg}</div>
-                      <div className="text-xs text-[#737373]">
+                      <div className="text-xs text-muted-foreground">
                         {[v.make, v.model, v.year].filter(Boolean).join(" • ")}
                       </div>
                     </div>

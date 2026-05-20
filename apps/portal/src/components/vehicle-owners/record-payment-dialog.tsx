@@ -90,7 +90,7 @@ export function RecordPaymentDialog({ open, onOpenChange, payout }: RecordPaymen
                 value={amountPaid}
                 onChange={(e) => setAmountPaid(e.target.value)}
               />
-              <p className="text-xs text-[#737373] mt-1">Remaining: {formatCurrency(remaining, currency)}</p>
+              <p className="text-xs text-muted-foreground mt-1">Remaining: {formatCurrency(remaining, currency)}</p>
             </div>
             <div>
               <Label htmlFor="paid-at">Paid On</Label>
