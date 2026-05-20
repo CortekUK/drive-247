@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, ShieldX, Bolt, Search, X, Inbox } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, ShieldX, Bolt, CalendarSync, Search, X, Inbox } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -118,6 +118,7 @@ const settingsTabGroups = [
       { value: 'insurance', icon: Shield, label: 'Insurance' },
       { value: 'esign', icon: FileSignature, label: 'E-Signatures' },
       { value: 'tesla', icon: Bolt, label: 'Tesla Fleet' },
+      { value: 'calendar-sync', icon: CalendarSync, label: 'Calendar Sync' },
       { value: 'blacklist', icon: ShieldX, label: 'Blacklist' },
     ],
   },

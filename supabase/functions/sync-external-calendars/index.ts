@@ -1,18 +1,35 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import { corsHeaders, jsonResponse, errorResponse, handleCors } from "../_shared/cors.ts";
+import { jsonResponse, errorResponse, handleCors } from "../_shared/cors.ts";
 
 /**
- * Poll every vehicle with external_ical_enabled=true, fetch its iCal feed
- * (Turo / Airbnb / Vrbo / Booking.com all speak the same RFC 5545 format),
- * parse VEVENT blocks, and upsert them into external_bookings. Runs on a
- * 15-minute cron. Idempotent via UNIQUE(vehicle_id, external_uid).
+ * Pull external calendars on a 15-min cron and write blocks into
+ * external_bookings so the rentals calendar / conflict checks don't double-book.
+ *
+ * Two modes:
+ *
+ *  - TENANT-LEVEL (Turo): Turo gives hosts ONE account-wide iCal feed at
+ *      https://turo.com/reservations/subscribe/ical.ics?driverId=...&key=...
+ *    containing reservations for every car they own. We fetch once per
+ *    tenant, then match each VEVENT to a Drive247 vehicle by parsing its
+ *    SUMMARY (reg substring → make+model substring → otherwise skipped).
+ *
+ *  - PER-VEHICLE (Airbnb, Vrbo, Booking.com, etc.): these platforms expose
+ *    one feed per listing. We keep the original behavior here for that path.
  */
 
 interface VehicleRow {
   id: string;
   tenant_id: string;
-  external_ical_url: string;
+  reg: string | null;
+  make: string | null;
+  model: string | null;
+  external_ical_url: string | null;
   external_ical_source: string | null;
+}
+
+interface TenantRow {
+  id: string;
+  turo_ical_url: string | null;
 }
 
 interface ParsedEvent {
@@ -32,7 +49,6 @@ function parseICalDate(value: string): string | null {
 }
 
 function unfoldLines(text: string): string[] {
-  // RFC 5545 line folding: continuation lines start with a space or tab
   const raw = text.replace(/\r\n/g, "\n").split("\n");
   const out: string[] = [];
   for (const line of raw) {
@@ -87,12 +103,144 @@ function parseICal(text: string): ParsedEvent[] {
   return events;
 }
 
+/**
+ * Match a Turo VEVENT SUMMARY to one of the tenant's vehicles.
+ * Strategy (in order):
+ *   1. Exact reg substring (case-insensitive) — most specific
+ *   2. make AND model both appear in the summary
+ * Returns null if no confident match.
+ */
+function matchVehicleFromSummary(
+  summary: string | null,
+  vehicles: VehicleRow[],
+): VehicleRow | null {
+  if (!summary) return null;
+  const hay = summary.toLowerCase();
+
+  for (const v of vehicles) {
+    if (v.reg && v.reg.length >= 3 && hay.includes(v.reg.toLowerCase())) {
+      return v;
+    }
+  }
+  for (const v of vehicles) {
+    const make = v.make?.toLowerCase();
+    const model = v.model?.toLowerCase();
+    if (make && model && hay.includes(make) && hay.includes(model)) {
+      return v;
+    }
+  }
+  return null;
+}
+
+function inclusiveEndDate(end: string, start: string): string {
+  // iCal DTEND is exclusive for all-day events — subtract one day so our
+  // inclusive end_date matches what a human would call the last booked night.
+  const endDate = new Date(end + "T00:00:00Z");
+  endDate.setUTCDate(endDate.getUTCDate() - 1);
+  const inclusive = endDate.toISOString().slice(0, 10);
+  return inclusive < start ? start : inclusive;
+}
+
+async function syncTenantTuro(
+  supabase: ReturnType<typeof createClient>,
+  tenant: TenantRow,
+): Promise<{
+  ok: boolean;
+  total: number;
+  matched: number;
+  unmatched: number;
+  error?: string;
+}> {
+  try {
+    const resp = await fetch(tenant.turo_ical_url!, {
+      headers: { Accept: "text/calendar" },
+    });
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status} from Turo iCal feed`);
+    }
+    const text = await resp.text();
+    const events = parseICal(text);
+
+    const { data: vehicleData, error: vErr } = await supabase
+      .from("vehicles")
+      .select("id, tenant_id, reg, make, model")
+      .eq("tenant_id", tenant.id);
+    if (vErr) throw vErr;
+    const vehicles = (vehicleData ?? []) as unknown as VehicleRow[];
+
+    let matched = 0;
+    let unmatched = 0;
+    const rowsByVehicle = new Map<string, any[]>();
+
+    for (const ev of events) {
+      const v = matchVehicleFromSummary(ev.summary, vehicles);
+      if (!v) {
+        unmatched++;
+        continue;
+      }
+      matched++;
+      const list = rowsByVehicle.get(v.id) ?? [];
+      list.push({
+        tenant_id: tenant.id,
+        vehicle_id: v.id,
+        source: "turo",
+        external_uid: ev.uid,
+        summary: ev.summary,
+        start_date: ev.start,
+        end_date: inclusiveEndDate(ev.end, ev.start),
+        raw: { summary: ev.summary, dtstart: ev.start, dtend: ev.end },
+      });
+      rowsByVehicle.set(v.id, list);
+    }
+
+    // Replace strategy per (tenant, source=turo): drop all existing turo rows
+    // for this tenant first, then insert fresh. Bookings can disappear from
+    // Turo (cancellations) and we don't want stale blocks.
+    const { error: delErr } = await supabase
+      .from("external_bookings")
+      .delete()
+      .eq("tenant_id", tenant.id)
+      .eq("source", "turo");
+    if (delErr) throw delErr;
+
+    const allRows = Array.from(rowsByVehicle.values()).flat();
+    if (allRows.length > 0) {
+      const { error: insErr } = await supabase
+        .from("external_bookings")
+        .insert(allRows);
+      if (insErr) throw insErr;
+    }
+
+    await supabase
+      .from("tenants")
+      .update({
+        turo_ical_last_synced_at: new Date().toISOString(),
+        turo_ical_last_error: unmatched > 0
+          ? `${unmatched} of ${events.length} reservations could not be matched to a vehicle by name — check that vehicle reg / make / model appears in Turo's listing title`
+          : null,
+      })
+      .eq("id", tenant.id);
+
+    return { ok: true, total: events.length, matched, unmatched };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await supabase
+      .from("tenants")
+      .update({
+        turo_ical_last_synced_at: new Date().toISOString(),
+        turo_ical_last_error: msg.slice(0, 500),
+      })
+      .eq("id", tenant.id);
+    return { ok: false, total: 0, matched: 0, unmatched: 0, error: msg };
+  }
+}
+
 async function syncVehicle(
   supabase: ReturnType<typeof createClient>,
   vehicle: VehicleRow,
 ): Promise<{ ok: boolean; count: number; error?: string }> {
   try {
-    const resp = await fetch(vehicle.external_ical_url, {
+    const resp = await fetch(vehicle.external_ical_url!, {
       headers: { Accept: "text/calendar" },
     });
     if (!resp.ok) {
@@ -100,34 +248,26 @@ async function syncVehicle(
     }
     const text = await resp.text();
     const events = parseICal(text);
-    const source = vehicle.external_ical_source ?? "turo";
+    const source = vehicle.external_ical_source ?? "airbnb";
 
-    // Replace strategy: delete existing rows for this vehicle, insert fresh.
-    // Bookings in iCal can disappear when canceled — we don't want stale blocks.
     const { error: delErr } = await supabase
       .from("external_bookings")
       .delete()
-      .eq("vehicle_id", vehicle.id);
+      .eq("vehicle_id", vehicle.id)
+      .neq("source", "turo"); // Turo blocks are managed at the tenant level
     if (delErr) throw delErr;
 
     if (events.length > 0) {
-      const rows = events.map((e) => {
-        // iCal DTEND is exclusive for all-day events — subtract one day so our
-        // inclusive end_date matches what a human would call the last booked night.
-        const endDate = new Date(e.end + "T00:00:00Z");
-        endDate.setUTCDate(endDate.getUTCDate() - 1);
-        const inclusiveEnd = endDate.toISOString().slice(0, 10);
-        return {
-          tenant_id: vehicle.tenant_id,
-          vehicle_id: vehicle.id,
-          source,
-          external_uid: e.uid,
-          summary: e.summary,
-          start_date: e.start,
-          end_date: inclusiveEnd < e.start ? e.start : inclusiveEnd,
-          raw: { summary: e.summary, dtstart: e.start, dtend: e.end },
-        };
-      });
+      const rows = events.map((e) => ({
+        tenant_id: vehicle.tenant_id,
+        vehicle_id: vehicle.id,
+        source,
+        external_uid: e.uid,
+        summary: e.summary,
+        start_date: e.start,
+        end_date: inclusiveEndDate(e.end, e.start),
+        raw: { summary: e.summary, dtstart: e.start, dtend: e.end },
+      }));
 
       const { error: insErr } = await supabase
         .from("external_bookings")
@@ -167,40 +307,74 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Allow POST {vehicle_id} for one-off manual syncs (e.g. "Sync now" button).
+    // Allow targeted sync via POST { tenant_id } or { vehicle_id }.
+    let tenantIdFilter: string | null = null;
     let vehicleIdFilter: string | null = null;
     if (req.method === "POST") {
       try {
         const body = await req.json();
+        if (body?.tenant_id) tenantIdFilter = body.tenant_id;
         if (body?.vehicle_id) vehicleIdFilter = body.vehicle_id;
       } catch {
         // no body — treat as cron invocation
       }
     }
 
-    let query = supabase
-      .from("vehicles")
-      .select("id, tenant_id, external_ical_url, external_ical_source")
-      .eq("external_ical_enabled", true)
-      .not("external_ical_url", "is", null);
-    if (vehicleIdFilter) query = query.eq("id", vehicleIdFilter);
+    // 1. Tenant-level Turo sync
+    let tenantResults: Awaited<ReturnType<typeof syncTenantTuro>>[] = [];
+    if (!vehicleIdFilter) {
+      let tenantQuery = supabase
+        .from("tenants")
+        .select("id, turo_ical_url")
+        .not("turo_ical_url", "is", null);
+      if (tenantIdFilter) tenantQuery = tenantQuery.eq("id", tenantIdFilter);
 
-    const { data, error } = await query;
-    if (error) throw error;
+      const { data: tenantData, error: tenantErr } = await tenantQuery;
+      if (tenantErr) throw tenantErr;
+      const tenants = (tenantData ?? []) as unknown as TenantRow[];
 
-    const vehicles = (data ?? []) as unknown as VehicleRow[];
-    const results = await Promise.all(
-      vehicles.map((v) => syncVehicle(supabase, v)),
-    );
+      tenantResults = await Promise.all(
+        tenants.map((t) => syncTenantTuro(supabase, t)),
+      );
+    }
 
-    const summary = {
-      total: vehicles.length,
-      succeeded: results.filter((r) => r.ok).length,
-      failed: results.filter((r) => !r.ok).length,
-      events: results.reduce((s, r) => s + r.count, 0),
-    };
+    // 2. Per-vehicle sync (Airbnb / Vrbo / Booking.com / other)
+    let vehicleResults: Awaited<ReturnType<typeof syncVehicle>>[] = [];
+    if (!tenantIdFilter) {
+      let vehicleQuery = supabase
+        .from("vehicles")
+        .select("id, tenant_id, reg, make, model, external_ical_url, external_ical_source")
+        .eq("external_ical_enabled", true)
+        .not("external_ical_url", "is", null)
+        .neq("external_ical_source", "turo");
+      if (vehicleIdFilter) vehicleQuery = vehicleQuery.eq("id", vehicleIdFilter);
 
-    return jsonResponse({ success: true, ...summary });
+      const { data: vehicleData, error: vehicleErr } = await vehicleQuery;
+      if (vehicleErr) throw vehicleErr;
+      const vehicles = (vehicleData ?? []) as unknown as VehicleRow[];
+
+      vehicleResults = await Promise.all(
+        vehicles.map((v) => syncVehicle(supabase, v)),
+      );
+    }
+
+    return jsonResponse({
+      success: true,
+      tenants: {
+        total: tenantResults.length,
+        succeeded: tenantResults.filter((r) => r.ok).length,
+        failed: tenantResults.filter((r) => !r.ok).length,
+        events: tenantResults.reduce((s, r) => s + r.total, 0),
+        matched: tenantResults.reduce((s, r) => s + r.matched, 0),
+        unmatched: tenantResults.reduce((s, r) => s + r.unmatched, 0),
+      },
+      vehicles: {
+        total: vehicleResults.length,
+        succeeded: vehicleResults.filter((r) => r.ok).length,
+        failed: vehicleResults.filter((r) => !r.ok).length,
+        events: vehicleResults.reduce((s, r) => s + r.count, 0),
+      },
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return errorResponse(msg, 500);
