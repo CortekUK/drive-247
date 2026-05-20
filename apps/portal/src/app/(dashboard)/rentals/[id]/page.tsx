@@ -380,6 +380,28 @@ const RentalDetail = () => {
   });
 
   const { data: rentalTotals } = useRentalTotals(id);
+  // Direct payments-table sum — counts received money regardless of allocation.
+  // Needed for the PAYG upfront banner: a fresh PAYG rental has no charges yet
+  // (cron hasn't fired), so allocation-based totals would stay at $0 even after
+  // a successful prepayment. This catches that case.
+  const { data: rentalPaymentsTotal = 0 } = useQuery({
+    queryKey: ['rental-payments-total', tenant?.id, id],
+    queryFn: async () => {
+      if (!id) return 0;
+      // Count only money actually received. 'Credit' = unallocated prepayment
+      // (the PAYG upfront case — no charges yet to allocate against).
+      // 'Pending' = Stripe checkout created but not paid, do NOT count.
+      const { data, error } = await supabase
+        .from('payments')
+        .select('amount, status')
+        .eq('rental_id', id)
+        .in('status', ['Applied', 'Credit', 'Partial']);
+      if (error) throw error;
+      return (data || []).reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    },
+    enabled: !!id && !!tenant?.id,
+    staleTime: 5000,
+  });
   const { data: rentalCharges } = useRentalCharges(id);
   const { data: rawInvoiceBreakdown } = useRentalInvoice(id);
   const { data: paymentBreakdown, isLoading: isPaymentBreakdownLoading } = useRentalPaymentBreakdown(id);
@@ -2564,22 +2586,22 @@ const RentalDetail = () => {
         const svcPct = (rentalSettings as any)?.service_fee_enabled && (rentalSettings as any)?.service_fee_type === 'percentage'
           ? Number((rentalSettings as any)?.service_fee_value || 0) : 0;
         const upfrontAmount = Math.round((firstPeriodRental + firstPeriodRental * (taxPct + svcPct) / 100) * 100) / 100;
-        const upfrontSatisfied = totalPayments >= upfrontAmount - 0.01;
+        const upfrontSatisfied = rentalPaymentsTotal >= upfrontAmount - 0.01;
         const currency = tenant?.currency_code || 'USD';
         return (
           <div className="mb-4">
-            <div className={`rounded-lg border p-4 flex items-start justify-between gap-4 ${upfrontSatisfied ? 'bg-green-50 border-green-200' : 'bg-indigo-50 border-indigo-200'}`}>
+            <div className={`rounded-lg border p-4 flex items-start justify-between gap-4 ${upfrontSatisfied ? 'bg-green-50 border-green-200 dark:bg-green-950/40 dark:border-green-900' : 'bg-indigo-50 border-indigo-200 dark:bg-indigo-950/40 dark:border-indigo-900'}`}>
               <div className="flex items-start gap-3 min-w-0">
                 {upfrontSatisfied ? (
-                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
+                  <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
                 ) : (
-                  <AlertCircle className="h-5 w-5 text-indigo-600 mt-0.5 shrink-0" />
+                  <AlertCircle className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mt-0.5 shrink-0" />
                 )}
                 <div className="min-w-0">
-                  <p className={`font-medium text-sm ${upfrontSatisfied ? 'text-green-900' : 'text-indigo-900'}`}>
+                  <p className={`font-medium text-sm ${upfrontSatisfied ? 'text-green-900 dark:text-green-200' : 'text-indigo-900 dark:text-indigo-200'}`}>
                     {upfrontSatisfied ? `First ${periodLabel} prepaid — keys ready to release` : `Upfront payment required — ${formatCurrency(upfrontAmount, currency)} due before key handover`}
                   </p>
-                  <p className={`text-xs mt-0.5 ${upfrontSatisfied ? 'text-green-700' : 'text-indigo-700'}`}>
+                  <p className={`text-xs mt-0.5 ${upfrontSatisfied ? 'text-green-700 dark:text-green-300' : 'text-indigo-700 dark:text-indigo-300'}`}>
                     {upfrontSatisfied
                       ? `Daily PAYG charges will draw down from the upfront payment. Standard PAYG billing resumes once the first ${periodLabel} is consumed.`
                       : `Customer must pay the first ${periodLabel} (${formatCurrency(firstPeriodRental, currency)} rental${taxPct + svcPct > 0 ? ` + ${(taxPct + svcPct).toFixed(1)}% tax/fees` : ''}) before keys are handed over.`}
@@ -4324,7 +4346,7 @@ const RentalDetail = () => {
         const svcPct = (rentalSettings as any)?.service_fee_enabled && (rentalSettings as any)?.service_fee_type === 'percentage'
           ? Number((rentalSettings as any)?.service_fee_value || 0) : 0;
         const upfrontAmount = Math.round((firstPeriodRental + firstPeriodRental * (taxPct + svcPct) / 100) * 100) / 100;
-        const paygUpfrontBlocked = paygUpfrontEnabled && totalPayments < upfrontAmount - 0.01;
+        const paygUpfrontBlocked = paygUpfrontEnabled && rentalPaymentsTotal < upfrontAmount - 0.01;
         const paygUpfrontMessage = paygUpfrontBlocked
           ? `First ${periodLabel} (${formatCurrency(upfrontAmount, tenant?.currency_code || 'USD')}) must be paid before key handover.`
           : '';
@@ -5378,6 +5400,9 @@ const RentalDetail = () => {
             onPaymentSuccess={() => {
               queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
               queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+              queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
+              queryClient.invalidateQueries({ queryKey: ['rental-payments'] });
+              queryClient.invalidateQueries({ queryKey: ['rental-payments-total'] });
               queryClient.invalidateQueries({ queryKey: ['payments'] });
             }}
           />

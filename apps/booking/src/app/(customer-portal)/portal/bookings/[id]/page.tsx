@@ -514,6 +514,24 @@ export default function BookingDetailPage() {
     enabled: !!id,
   });
 
+  // Direct payments-table sum (Applied + Credit + Partial) for the PAYG
+  // upfront banner. A fresh PAYG prepayment lands as 'Credit' (no charges yet
+  // to allocate against), so the Applied-only `payments` query above misses it.
+  const { data: rentalPaymentsTotal = 0 } = useQuery({
+    queryKey: ['customer-rental-payments-total', id],
+    queryFn: async () => {
+      if (!id) return 0;
+      const { data } = await supabase
+        .from('payments')
+        .select('amount, status')
+        .eq('rental_id', id)
+        .in('status', ['Applied', 'Credit', 'Partial']);
+      return (data || []).reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    },
+    enabled: !!id,
+    staleTime: 5000,
+  });
+
   const queryClient = useQueryClient();
   useEffect(() => {
     if (!id) return;
@@ -529,6 +547,7 @@ export default function BookingDetailPage() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: `rental_id=eq.${id}` }, () => {
         queryClient.invalidateQueries({ queryKey: ['customer-rental-payments', id] });
+        queryClient.invalidateQueries({ queryKey: ['customer-rental-payments-total', id] });
         queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
         queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
       })
@@ -979,7 +998,7 @@ export default function BookingDetailPage() {
         const svcPct = tenant?.service_fee_enabled && tenant?.service_fee_type === 'percentage'
           ? Number(tenant?.service_fee_value || 0) : 0;
         const upfrontAmount = Math.round((firstPeriodRental + firstPeriodRental * (taxPct + svcPct) / 100) * 100) / 100;
-        const upfrontSatisfied = totalPaid >= upfrontAmount - 0.01;
+        const upfrontSatisfied = rentalPaymentsTotal >= upfrontAmount - 0.01;
 
         const handlePayUpfront = async () => {
           if (!tenant?.id || upfrontAmount <= 0) return;
