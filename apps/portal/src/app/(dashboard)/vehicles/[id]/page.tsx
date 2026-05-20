@@ -41,6 +41,7 @@ import { VehiclePhotoGallery } from "@/components/vehicles/vehicle-photo-gallery
 import { BlockedDatesManager } from "@/components/blocked-dates/blocked-dates-manager";
 import { VehicleExtrasManager } from "@/components/vehicles/vehicle-extras-manager";
 import { VehicleDynamicPricing } from "@/components/vehicles/vehicle-dynamic-pricing";
+import { VehicleOwnershipPanel } from "@/components/vehicles/vehicle-ownership-panel";
 import { VehicleCalendarSync } from "@/components/vehicles/vehicle-calendar-sync";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
 import { Package, Loader2 as SpinnerIcon, Zap } from "lucide-react";
@@ -730,6 +731,11 @@ export default function VehicleDetail() {
               </Card>
             </div>
           )}
+
+          {/* Ownership Section */}
+          <div className="mt-6">
+            <VehicleOwnershipPanel vehicleId={vehicle.id} />
+          </div>
 
           {/* Vehicle Details Section */}
           <div className="mt-6">

@@ -15,6 +15,7 @@ import { ExportButtons } from '@/components/reports/export-buttons';
 import { ReportPreviewModal } from '@/components/reports/report-preview-modal';
 import { AgingReceivablesDetail } from '@/components/reports/aging-receivables-detail';
 import { EmptyStateIllustration } from '@/components/reports/empty-state-illustration';
+import { OwnerPayoutsExportCard } from '@/components/reports/owner-payouts-export-card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart';
 import {
@@ -627,6 +628,7 @@ const Reports = () => {
                         exportingReport={exportingReport}
                       />
                     ))}
+                    <OwnerPayoutsExportCard />
                   </div>
                 </>
               )}

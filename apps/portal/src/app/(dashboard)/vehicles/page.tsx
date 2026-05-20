@@ -24,6 +24,7 @@ import { VehicleStatus, VehiclePLData } from "@/lib/vehicle-utils";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -54,6 +55,8 @@ interface Vehicle {
   spare_key_holder?: string | null;
   spare_key_notes?: string | null;
   description?: string;
+  owner_id?: string | null;
+  vehicle_owners?: { full_name: string } | null;
 }
 
 type SortField = 'reg' | 'make_model' | 'year' | 'status';
@@ -68,6 +71,7 @@ interface FiltersState {
   performance: PerformanceFilter;
   servicePlan: string;
   spareKey: string;
+  ownership: string; // 'all' | 'own' | 'managed' | <owner_id>
 }
 
 function VehicleFilterPopover({
@@ -128,6 +132,7 @@ export default function VehiclesListEnhanced() {
   const { toast } = useToast();
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
+  const { data: vehicleOwnersList = [] } = useVehicleOwners({ includeInactive: false });
 
   // State from URL params
   const [filters, setFilters] = useState<FiltersState>({
@@ -138,6 +143,7 @@ export default function VehiclesListEnhanced() {
     performance: (searchParams.get('performance') as PerformanceFilter) || 'all',
     servicePlan: searchParams.get('servicePlan') || 'all',
     spareKey: searchParams.get('spareKey') || 'all',
+    ownership: searchParams.get('ownership') || 'all',
   });
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -184,7 +190,8 @@ export default function VehiclesListEnhanced() {
           vehicle_photos (
             photo_url,
             display_order
-          )
+          ),
+          vehicle_owners ( full_name )
         `);
 
       if (tenant?.id) {
@@ -205,7 +212,7 @@ export default function VehiclesListEnhanced() {
           .slice(0, 1) || []
       })) || [];
 
-      return transformedData as Vehicle[];
+      return transformedData as unknown as Vehicle[];
     },
     enabled: !!tenant,
   });
@@ -308,6 +315,16 @@ export default function VehiclesListEnhanced() {
         if (filters.spareKey === 'company') return hasSpareKey && vehicle.spare_key_holder === 'Company';
         if (filters.spareKey === 'customer') return hasSpareKey && vehicle.spare_key_holder === 'Customer';
         return true;
+      });
+    }
+
+    // Ownership filter
+    if (filters.ownership !== 'all') {
+      filtered = filtered.filter(vehicle => {
+        if (filters.ownership === 'own') return !vehicle.owner_id;
+        if (filters.ownership === 'managed') return !!vehicle.owner_id;
+        // specific owner_id
+        return vehicle.owner_id === filters.ownership;
       });
     }
 
@@ -511,11 +528,32 @@ export default function VehiclesListEnhanced() {
               />
             </div>
 
-            {hasAnyFilter && (
+            {(() => {
+              const ownershipOptions = [
+                { value: 'all', label: 'All vehicles' },
+                { value: 'own', label: 'Own fleet' },
+                { value: 'managed', label: 'All managed' },
+                ...vehicleOwnersList.map(o => ({ value: o.id, label: o.full_name })),
+              ];
+              const activeOwnershipLabel = ownershipOptions.find(o => o.value === filters.ownership)?.label;
+              return (
+                <VehicleFilterPopover
+                  label="Ownership"
+                  active={filters.ownership !== 'all'}
+                  activeLabel={filters.ownership !== 'all' ? activeOwnershipLabel : undefined}
+                  options={ownershipOptions}
+                  value={filters.ownership}
+                  onChange={(v) => updateFilters({ ownership: v })}
+                  className="w-full sm:w-auto"
+                />
+              );
+            })()}
+
+            {(hasAnyFilter || filters.ownership !== 'all') && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => updateFilters({ search: '', status: 'all', make: 'all', year: 'all', performance: 'all' })}
+                onClick={() => updateFilters({ search: '', status: 'all', make: 'all', year: 'all', performance: 'all', ownership: 'all' })}
                 className="h-8 gap-1 text-muted-foreground hover:text-foreground self-start"
               >
                 <X className="h-3.5 w-3.5" />
@@ -551,6 +589,7 @@ export default function VehiclesListEnhanced() {
                   <TableHead>Make/Model</TableHead>
                   <TableHead>Year</TableHead>
                   <TableHead>Color</TableHead>
+                  <TableHead>Owner</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -591,6 +630,19 @@ export default function VehiclesListEnhanced() {
                     </TableCell>
                     <TableCell>{vehicle.year || '—'}</TableCell>
                     <TableCell>{vehicle.colour}</TableCell>
+                    <TableCell>
+                      {vehicle.owner_id ? (
+                        <Link
+                          href={`/vehicle-owners/${vehicle.owner_id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-sm text-[#6366f1] hover:underline"
+                        >
+                          {vehicle.vehicle_owners?.full_name ?? "Owner"}
+                        </Link>
+                      ) : (
+                        <Badge variant="outline" className="text-xs border-gray-300 text-[#737373]">Own fleet</Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-center">
                       <VehicleStatusBadge status={vehicle.status} />
                     </TableCell>
