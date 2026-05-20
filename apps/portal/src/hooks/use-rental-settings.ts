@@ -76,6 +76,7 @@ export interface RentalSettings {
   payg_max_reminders: number | null;
   payg_preauth_days: number | null;
   payg_max_duration_days: number | null;
+  payg_upfront_required: boolean | null;
   // Blog
   blog_enabled: boolean | null;
 }
@@ -144,6 +145,7 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   payg_max_reminders: 10,
   payg_preauth_days: 2,
   payg_max_duration_days: 90,
+  payg_upfront_required: false,
   // Blog
   blog_enabled: false,
 };

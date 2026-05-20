@@ -13,7 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase, Bell, Eye, EyeOff, Pencil } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, AlertCircle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase, Bell, Eye, EyeOff, Pencil } from "lucide-react";
 import { BlurredImage } from "@/components/ui/blurred-image";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
@@ -259,6 +259,7 @@ const RentalDetail = () => {
   const { data: extensionTotals = [] } = useRentalExtensionTotals(id);
   // skipInsurance removed — insurance doc upload is always visible; only Bonzah selector is gated on integration_bonzah
   const [showAddPayment, setShowAddPayment] = useState(false);
+  const [showPaygUpfrontDialog, setShowPaygUpfrontDialog] = useState(false);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
   const [checkingDocuSignStatus, setCheckingDocuSignStatus] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -2553,6 +2554,52 @@ const RentalDetail = () => {
         );
       })()}
 
+      {/* PAYG Upfront Payment banner — gates key handover until the first period
+          (week or month) is paid. Tenant must opt in via Settings → PAYG. */}
+      {rental && (rental as any).is_pay_as_you_go && (rentalSettings as any)?.payg_upfront_required && !isKeyHandoverCompleted && (() => {
+        const periodType = String((rental as any).rental_period_type || 'Weekly');
+        const periodLabel = periodType === 'Monthly' ? 'month' : periodType === 'Daily' ? 'day' : 'week';
+        const firstPeriodRental = Number(rental.monthly_amount) || 0;
+        const taxPct = (rentalSettings as any)?.tax_enabled ? Number((rentalSettings as any)?.tax_percentage || 0) : 0;
+        const svcPct = (rentalSettings as any)?.service_fee_enabled && (rentalSettings as any)?.service_fee_type === 'percentage'
+          ? Number((rentalSettings as any)?.service_fee_value || 0) : 0;
+        const upfrontAmount = Math.round((firstPeriodRental + firstPeriodRental * (taxPct + svcPct) / 100) * 100) / 100;
+        const upfrontSatisfied = totalPayments >= upfrontAmount - 0.01;
+        const currency = tenant?.currency_code || 'USD';
+        return (
+          <div className="mb-4">
+            <div className={`rounded-lg border p-4 flex items-start justify-between gap-4 ${upfrontSatisfied ? 'bg-green-50 border-green-200' : 'bg-indigo-50 border-indigo-200'}`}>
+              <div className="flex items-start gap-3 min-w-0">
+                {upfrontSatisfied ? (
+                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-indigo-600 mt-0.5 shrink-0" />
+                )}
+                <div className="min-w-0">
+                  <p className={`font-medium text-sm ${upfrontSatisfied ? 'text-green-900' : 'text-indigo-900'}`}>
+                    {upfrontSatisfied ? `First ${periodLabel} prepaid — keys ready to release` : `Upfront payment required — ${formatCurrency(upfrontAmount, currency)} due before key handover`}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${upfrontSatisfied ? 'text-green-700' : 'text-indigo-700'}`}>
+                    {upfrontSatisfied
+                      ? `Daily PAYG charges will draw down from the upfront payment. Standard PAYG billing resumes once the first ${periodLabel} is consumed.`
+                      : `Customer must pay the first ${periodLabel} (${formatCurrency(firstPeriodRental, currency)} rental${taxPct + svcPct > 0 ? ` + ${(taxPct + svcPct).toFixed(1)}% tax/fees` : ''}) before keys are handed over.`}
+                  </p>
+                </div>
+              </div>
+              {!upfrontSatisfied && canEdit('rentals') && (
+                <Button
+                  size="sm"
+                  onClick={() => setShowPaygUpfrontDialog(true)}
+                  className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  Collect Now
+                </Button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* PAYG billing summary — recap of what the customer is being charged,
           shown above the rolling-invoice ledger so anyone opening the rental
           sees the high-level "$X per week/month" framing first. */}
@@ -4265,27 +4312,46 @@ const RentalDetail = () => {
       </Card>
 
       {/* Key Handover Section - Operations */}
-      {id && (
-        <KeyHandoverSection
-          rentalId={id}
-          rentalStatus={displayStatus}
-          needsAction={needsKeyHandover}
-          isDeliveryRental={!!(rental?.delivery_address || rental?.delivery_fee)}
-          vehicleId={rental?.vehicles?.id}
-          vehicleLockboxCode={rental?.vehicles?.lockbox_code || null}
-          vehicleLockboxInstructions={rental?.vehicles?.lockbox_instructions || null}
-          deliveryMethod={rental?.delivery_method || null}
-          customerEmail={rental?.customers?.email || null}
-          customerPhone={rental?.customers?.phone || null}
-          customerName={rental?.customers?.name || ''}
-          vehicleName={rental?.vehicles ? `${rental.vehicles.make} ${rental.vehicles.model}` : ''}
-          vehicleReg={rental?.vehicles?.reg || ''}
-          deliveryAddress={rental?.delivery_address || rental?.pickup_location || null}
-          bookingRef={rental?.id?.slice(0, 8)?.toUpperCase() || ''}
-          approvalStatus={rental?.approval_status || null}
-          startDate={rental?.start_date || null}
-        />
-      )}
+      {id && (() => {
+        // PAYG upfront-payment gate. Blocks "Confirm Collection" until the first
+        // period (week/month) is paid. Tenant must opt in via Settings → PAYG.
+        const paygUpfrontEnabled = (rental as any)?.is_pay_as_you_go === true
+          && (rentalSettings as any)?.payg_upfront_required === true;
+        const periodType = String((rental as any)?.rental_period_type || 'Weekly');
+        const periodLabel = periodType === 'Monthly' ? 'month' : periodType === 'Daily' ? 'day' : 'week';
+        const firstPeriodRental = Number(rental?.monthly_amount || 0);
+        const taxPct = (rentalSettings as any)?.tax_enabled ? Number((rentalSettings as any)?.tax_percentage || 0) : 0;
+        const svcPct = (rentalSettings as any)?.service_fee_enabled && (rentalSettings as any)?.service_fee_type === 'percentage'
+          ? Number((rentalSettings as any)?.service_fee_value || 0) : 0;
+        const upfrontAmount = Math.round((firstPeriodRental + firstPeriodRental * (taxPct + svcPct) / 100) * 100) / 100;
+        const paygUpfrontBlocked = paygUpfrontEnabled && totalPayments < upfrontAmount - 0.01;
+        const paygUpfrontMessage = paygUpfrontBlocked
+          ? `First ${periodLabel} (${formatCurrency(upfrontAmount, tenant?.currency_code || 'USD')}) must be paid before key handover.`
+          : '';
+        return (
+          <KeyHandoverSection
+            rentalId={id}
+            rentalStatus={displayStatus}
+            needsAction={needsKeyHandover}
+            isDeliveryRental={!!(rental?.delivery_address || rental?.delivery_fee)}
+            vehicleId={rental?.vehicles?.id}
+            vehicleLockboxCode={rental?.vehicles?.lockbox_code || null}
+            vehicleLockboxInstructions={rental?.vehicles?.lockbox_instructions || null}
+            deliveryMethod={rental?.delivery_method || null}
+            customerEmail={rental?.customers?.email || null}
+            customerPhone={rental?.customers?.phone || null}
+            customerName={rental?.customers?.name || ''}
+            vehicleName={rental?.vehicles ? `${rental.vehicles.make} ${rental.vehicles.model}` : ''}
+            vehicleReg={rental?.vehicles?.reg || ''}
+            deliveryAddress={rental?.delivery_address || rental?.pickup_location || null}
+            bookingRef={rental?.id?.slice(0, 8)?.toUpperCase() || ''}
+            approvalStatus={rental?.approval_status || null}
+            startDate={rental?.start_date || null}
+            paygUpfrontBlocked={paygUpfrontBlocked}
+            paygUpfrontMessage={paygUpfrontMessage}
+          />
+        );
+      })()}
 
       {/* AI Damage Analysis — compares handover vs return photos */}
       {id && <DamageAnalysisCard rentalId={id} />}
@@ -5289,6 +5355,34 @@ const RentalDetail = () => {
           outstandingBalanceOverride={outstandingBalance}
         />
       )}
+
+      {/* PAYG Upfront Payment Dialog — pre-fills first period amount + targets PAYG categories.
+          Same dialog (manual / Stripe / email link), just opened with a different default. */}
+      {rental && (rental as any).is_pay_as_you_go && (() => {
+        const periodType = String((rental as any).rental_period_type || 'Weekly');
+        const firstPeriodRental = Number(rental.monthly_amount) || 0;
+        const taxPct = (rentalSettings as any)?.tax_enabled ? Number((rentalSettings as any)?.tax_percentage || 0) : 0;
+        const svcPct = (rentalSettings as any)?.service_fee_enabled && (rentalSettings as any)?.service_fee_type === 'percentage'
+          ? Number((rentalSettings as any)?.service_fee_value || 0) : 0;
+        const upfrontAmount = Math.round((firstPeriodRental + firstPeriodRental * (taxPct + svcPct) / 100) * 100) / 100;
+        return (
+          <AddPaymentDialog
+            open={showPaygUpfrontDialog}
+            onOpenChange={setShowPaygUpfrontDialog}
+            customer_id={rental.customers?.id}
+            vehicle_id={rental.vehicles?.id}
+            rental_id={rental.id}
+            defaultAmount={upfrontAmount}
+            outstandingBalanceOverride={upfrontAmount}
+            targetCategories={['Rental', 'Tax', 'Service Fee']}
+            onPaymentSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+              queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+              queryClient.invalidateQueries({ queryKey: ['payments'] });
+            }}
+          />
+        );
+      })()}
 
       {/* Targeted Payment Dialog (Pay Selected categories) */}
       {rental && (

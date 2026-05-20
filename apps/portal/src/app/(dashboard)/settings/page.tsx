@@ -170,6 +170,7 @@ const Settings = () => {
     payg_max_reminders: number;
     payg_preauth_days: number;
     payg_max_duration_days: number;
+    payg_upfront_required: boolean;
     blog_enabled: boolean;
   }>({
     minimum_rental_age: '',
@@ -238,6 +239,7 @@ const Settings = () => {
     payg_max_reminders: 10,
     payg_preauth_days: 2,
     payg_max_duration_days: 90,
+    payg_upfront_required: false,
     // Blog
     blog_enabled: false,
   });
@@ -302,6 +304,7 @@ const Settings = () => {
         payg_max_reminders: (rentalSettings as any).payg_max_reminders ?? 10,
         payg_preauth_days: (rentalSettings as any).payg_preauth_days ?? 2,
         payg_max_duration_days: (rentalSettings as any).payg_max_duration_days ?? 90,
+        payg_upfront_required: (rentalSettings as any).payg_upfront_required ?? false,
         blog_enabled: (rentalSettings as any).blog_enabled ?? false,
       });
     }
@@ -2995,6 +2998,49 @@ const Settings = () => {
               )}
             </CardContent>
           </Card>
+
+          {/* Upfront Payment toggle — gates key handover until first period (week/month) is paid. */}
+          {rentalForm.pay_as_you_go_enabled && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-primary" />
+                  Upfront Payment
+                </CardTitle>
+                <CardDescription>
+                  Collect the first rental period (week or month) before handing over keys. Daily PAYG charges automatically draw down from the upfront payment.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-start justify-between gap-3 p-4 border rounded-lg">
+                  <div className="space-y-1 min-w-0">
+                    <h4 className="font-medium">Require upfront payment</h4>
+                    <p className="text-sm text-muted-foreground">
+                      When on, PAYG rentals must have the first {`{week|month}`} paid before the "Confirm Collection" button unlocks.
+                    </p>
+                  </div>
+                  <Switch
+                    className="shrink-0 mt-0.5"
+                    checked={rentalForm.payg_upfront_required ?? false}
+                    onCheckedChange={async (checked) => {
+                      setRentalForm(prev => ({ ...prev, payg_upfront_required: checked }));
+                      try {
+                        await updateRentalSettings({ payg_upfront_required: checked } as any);
+                      } catch (error: any) {
+                        console.error('Failed to update PAYG upfront toggle:', error);
+                        toast({
+                          title: 'Save failed',
+                          description: error?.message || 'Could not update upfront setting',
+                          variant: 'destructive',
+                        });
+                      }
+                    }}
+                    disabled={isUpdatingRentalSettings}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* PAYG Reminder toggle — everything else is hardcoded (daily cadence, open-ended). */}
           {rentalForm.pay_as_you_go_enabled && (

@@ -5842,6 +5842,7 @@ export type Database = {
           is_early: boolean
           is_manual_mode: boolean | null
           method: string | null
+          paid_at: string | null
           payment_date: string
           payment_type: string
           preauth_expires_at: string | null
@@ -5878,6 +5879,7 @@ export type Database = {
           is_early?: boolean
           is_manual_mode?: boolean | null
           method?: string | null
+          paid_at?: string | null
           payment_date?: string
           payment_type?: string
           preauth_expires_at?: string | null
@@ -5914,6 +5916,7 @@ export type Database = {
           is_early?: boolean
           is_manual_mode?: boolean | null
           method?: string | null
+          paid_at?: string | null
           payment_date?: string
           payment_type?: string
           preauth_expires_at?: string | null
@@ -8087,6 +8090,7 @@ export type Database = {
           monthly_mileage_override: number | null
           original_end_date: string | null
           payg_accrual_day_count: number
+          payg_auto_reminders_enabled: boolean
           payg_closed_at: string | null
           payg_last_accrual_at: string | null
           payg_last_reminder_sent_at: string | null
@@ -8174,6 +8178,7 @@ export type Database = {
           monthly_mileage_override?: number | null
           original_end_date?: string | null
           payg_accrual_day_count?: number
+          payg_auto_reminders_enabled?: boolean
           payg_closed_at?: string | null
           payg_last_accrual_at?: string | null
           payg_last_reminder_sent_at?: string | null
@@ -8261,6 +8266,7 @@ export type Database = {
           monthly_mileage_override?: number | null
           original_end_date?: string | null
           payg_accrual_day_count?: number
+          payg_auto_reminders_enabled?: boolean
           payg_closed_at?: string | null
           payg_last_accrual_at?: string | null
           payg_last_reminder_sent_at?: string | null
@@ -9461,12 +9467,14 @@ export type Database = {
           multiple_locations_enabled: boolean | null
           og_image_url: string | null
           pay_as_you_go_enabled: boolean
+          payg_accrual_window_seconds: number
           payg_auto_reminders_enabled: boolean
           payg_grace_period_days: number
           payg_max_duration_days: number
           payg_max_reminders: number
           payg_preauth_days: number
           payg_reminder_interval_days: number
+          payg_upfront_required: boolean
           payment_mode: string | null
           phone: string | null
           pickup_area_enabled: boolean | null
@@ -9653,12 +9661,14 @@ export type Database = {
           multiple_locations_enabled?: boolean | null
           og_image_url?: string | null
           pay_as_you_go_enabled?: boolean
+          payg_accrual_window_seconds?: number
           payg_auto_reminders_enabled?: boolean
           payg_grace_period_days?: number
           payg_max_duration_days?: number
           payg_max_reminders?: number
           payg_preauth_days?: number
           payg_reminder_interval_days?: number
+          payg_upfront_required?: boolean
           payment_mode?: string | null
           phone?: string | null
           pickup_area_enabled?: boolean | null
@@ -9845,12 +9855,14 @@ export type Database = {
           multiple_locations_enabled?: boolean | null
           og_image_url?: string | null
           pay_as_you_go_enabled?: boolean
+          payg_accrual_window_seconds?: number
           payg_auto_reminders_enabled?: boolean
           payg_grace_period_days?: number
           payg_max_duration_days?: number
           payg_max_reminders?: number
           payg_preauth_days?: number
           payg_reminder_interval_days?: number
+          payg_upfront_required?: boolean
           payment_mode?: string | null
           phone?: string | null
           pickup_area_enabled?: boolean | null

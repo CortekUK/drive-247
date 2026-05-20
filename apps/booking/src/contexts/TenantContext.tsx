@@ -164,6 +164,9 @@ export interface Tenant {
 
   // Lead capture
   enquiries_enabled: boolean | null;
+
+  // PAYG upfront payment gate
+  payg_upfront_required: boolean | null;
 }
 
 interface TenantContextType {
@@ -437,7 +440,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           maintenance_banner_enabled,
           maintenance_banner_message,
           buffer_time_minutes,
-          enquiries_enabled
+          enquiries_enabled,
+          payg_upfront_required
         `)
         .eq('slug', slug)
         .eq('status', 'active')

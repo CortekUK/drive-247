@@ -65,6 +65,10 @@ interface KeyHandoverSectionProps {
   bookingRef?: string;
   approvalStatus?: string | null;
   startDate?: string | null;
+  /** PAYG upfront-payment gate. When true, "Confirm Collection" is disabled until
+      the first period (week/month) is paid. Message is shown next to the button. */
+  paygUpfrontBlocked?: boolean;
+  paygUpfrontMessage?: string;
 }
 
 export const KeyHandoverSection = ({
@@ -85,6 +89,8 @@ export const KeyHandoverSection = ({
   bookingRef = '',
   approvalStatus = null,
   startDate = null,
+  paygUpfrontBlocked = false,
+  paygUpfrontMessage = '',
 }: KeyHandoverSectionProps) => {
   const {
     givingHandover,
@@ -645,9 +651,10 @@ export const KeyHandoverSection = ({
               <div className="sticky bottom-0 pt-3 pb-1 bg-inherit space-y-2 border-t mt-2 -mx-4 px-4">
                 <Button
                   onClick={() => givingCompleted ? setConfirmUndo("giving") : handleRequestHandover("giving")}
-                  disabled={isMarkingHanded || isUnmarkingHanded || isSendingLockbox || isSendingWhatsApp}
+                  disabled={isMarkingHanded || isUnmarkingHanded || isSendingLockbox || isSendingWhatsApp || (!givingCompleted && paygUpfrontBlocked)}
                   variant={givingCompleted ? "outline" : "default"}
                   className="w-full"
+                  title={!givingCompleted && paygUpfrontBlocked ? paygUpfrontMessage : undefined}
                 >
                   {(isSendingLockbox || isSendingWhatsApp) ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -666,6 +673,14 @@ export const KeyHandoverSection = ({
                             ? "Confirm Collection & Send Code"
                             : "Confirm Collection"}
                 </Button>
+
+                {/* PAYG upfront-payment gate */}
+                {!givingCompleted && paygUpfrontBlocked && (
+                  <div className="flex items-start gap-2 text-indigo-700 text-sm bg-indigo-50 border border-indigo-200 rounded-md p-2">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                    <span>{paygUpfrontMessage || 'Collect upfront payment before handing over keys.'}</span>
+                  </div>
+                )}
 
                 {/* Warning if no photos */}
                 {!givingCompleted && (givingHandover?.photos?.length || 0) === 0 && (
