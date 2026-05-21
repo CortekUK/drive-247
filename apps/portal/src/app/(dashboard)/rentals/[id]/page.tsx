@@ -66,6 +66,7 @@ import { AdditionalDriversCard } from "@/components/rentals/additional-drivers-c
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 import { InsuranceTimeline } from "@/components/rentals/InsuranceTimeline";
+import { RentalInsuranceVerificationsCard } from "@/components/insurance/rental-insurance-verifications-card";
 import { AddReminderDialog } from "@/components/reminders/add-reminder-dialog";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
 import { useTeslaSuperchargerCharges } from "@/hooks/use-tesla-supercharger-charges";
@@ -4459,6 +4460,9 @@ const RentalDetail = () => {
           onUploadExtensionInsuranceFor={(extId) => uploadInsuranceDoc({ extensionId: extId })}
         />
       )}
+
+      {/* AI-verified insurance documents attached to this rental */}
+      <RentalInsuranceVerificationsCard rentalId={id} />
 
       {/* Insurance Verification Card - Compact when no documents, full when documents exist.
           Hidden for PAYG: per spec, PAYG does not offer Bonzah and does not require upfront docs. */}

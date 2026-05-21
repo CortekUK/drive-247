@@ -4303,6 +4303,140 @@ export type Database = {
           },
         ]
       }
+      insurance_verifications: {
+        Row: {
+          ai_error: string | null
+          ai_findings: Json | null
+          ai_score: number | null
+          attached_at: string | null
+          attached_by: string | null
+          created_at: string
+          customer_id: string | null
+          extracted_fields: Json | null
+          file_name: string
+          file_size: number | null
+          file_url: string
+          id: string
+          mime_type: string | null
+          rental_id: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          ai_error?: string | null
+          ai_findings?: Json | null
+          ai_score?: number | null
+          attached_at?: string | null
+          attached_by?: string | null
+          created_at?: string
+          customer_id?: string | null
+          extracted_fields?: Json | null
+          file_name: string
+          file_size?: number | null
+          file_url: string
+          id?: string
+          mime_type?: string | null
+          rental_id?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          ai_error?: string | null
+          ai_findings?: Json | null
+          ai_score?: number | null
+          attached_at?: string | null
+          attached_by?: string | null
+          created_at?: string
+          customer_id?: string | null
+          extracted_fields?: Json | null
+          file_name?: string
+          file_size?: number | null
+          file_url?: string
+          id?: string
+          mime_type?: string | null
+          rental_id?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insurance_verifications_attached_by_fkey"
+            columns: ["attached_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insurance_verifications_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insurance_verifications_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "insurance_verifications_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "insurance_verifications_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "insurance_verifications_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insurance_verifications_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "insurance_verifications_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "insurance_verifications_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insurance_verifications_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           created_at: string | null
@@ -9531,6 +9665,9 @@ export type Database = {
           tuesday_close: string | null
           tuesday_enabled: boolean | null
           tuesday_open: string | null
+          turo_ical_last_error: string | null
+          turo_ical_last_synced_at: string | null
+          turo_ical_url: string | null
           twilio_account_sid: string | null
           twilio_api_key_secret: string | null
           twilio_api_key_sid: string | null
@@ -9724,6 +9861,9 @@ export type Database = {
           tuesday_close?: string | null
           tuesday_enabled?: boolean | null
           tuesday_open?: string | null
+          turo_ical_last_error?: string | null
+          turo_ical_last_synced_at?: string | null
+          turo_ical_url?: string | null
           twilio_account_sid?: string | null
           twilio_api_key_secret?: string | null
           twilio_api_key_sid?: string | null
@@ -9917,6 +10057,9 @@ export type Database = {
           tuesday_close?: string | null
           tuesday_enabled?: boolean | null
           tuesday_open?: string | null
+          turo_ical_last_error?: string | null
+          turo_ical_last_synced_at?: string | null
+          turo_ical_url?: string | null
           twilio_account_sid?: string | null
           twilio_api_key_secret?: string | null
           twilio_api_key_sid?: string | null

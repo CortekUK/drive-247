@@ -19,7 +19,9 @@ import JSZip from "jszip";
 import { jsPDF } from "jspdf";
 import { GenerateInsuranceDialog } from "@/components/insurance/generate-insurance-dialog";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
-import { DollarSign } from "lucide-react";
+import { DollarSign, Sparkles } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { VerificationsTab } from "@/components/insurance/verifications-tab";
 
 interface InsuranceDoc {
   id: string;
@@ -538,6 +540,19 @@ export default function InsurancesList() {
         </Card>
       </div>
 
+      <Tabs defaultValue="policies" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="policies" className="gap-1.5">
+            <ShieldCheck className="h-4 w-4" />
+            Policies
+          </TabsTrigger>
+          <TabsTrigger value="verifications" className="gap-1.5">
+            <Sparkles className="h-4 w-4" />
+            AI Verifications
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="policies" className="space-y-4">
       {/* Search + Bonzah Filter */}
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[200px]">
@@ -745,6 +760,13 @@ export default function InsurancesList() {
           </div>
         </>
       )}
+
+        </TabsContent>
+
+        <TabsContent value="verifications">
+          <VerificationsTab />
+        </TabsContent>
+      </Tabs>
 
       <GenerateInsuranceDialog
         open={generateOpen}
