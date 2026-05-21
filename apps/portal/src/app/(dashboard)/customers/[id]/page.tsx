@@ -629,15 +629,6 @@ const CustomerDetail = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 text-xs gap-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800 dark:border-indigo-500/30 dark:text-indigo-300 dark:hover:bg-indigo-500/10"
-                  onClick={() => setCmdDialogOpen(true)}
-                >
-                  <ShieldCheck className="h-3 w-3" />
-                  Verify with CMD
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
                   className="h-7 text-xs gap-1"
                   onClick={() => setVerificationDialogOpen(true)}
                 >
