@@ -82,6 +82,21 @@ const parseLocalDate = (value: string | null | undefined): Date => {
   return new Date(value);
 };
 
+// Format a Postgres TIME value ("HH:MM" or "HH:MM:SS") into 12-hour clock
+// notation ("10:30 AM"). Returns null when the value is missing so callers
+// can decide whether to render the line at all.
+const formatTimeOfDay = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const match = /^(\d{1,2}):(\d{2})/.exec(value);
+  if (!match) return null;
+  const hour24 = Number(match[1]);
+  const minutes = match[2];
+  if (Number.isNaN(hour24) || hour24 < 0 || hour24 > 23) return null;
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = ((hour24 + 11) % 12) + 1;
+  return `${hour12}:${minutes} ${period}`;
+};
+
 interface Rental {
   id: string;
   start_date: string;
@@ -4261,16 +4276,28 @@ const RentalDetail = () => {
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">Rental Period</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
               <div>
-                <p className="text-sm text-muted-foreground">Start Date</p>
+                <p className="text-sm text-muted-foreground">Pickup</p>
                 <p className="text-base font-medium">{parseLocalDate(rental.start_date).toLocaleDateString('en-US')}</p>
+                {formatTimeOfDay(rental.pickup_time) && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    <Clock className="inline-block h-3 w-3 mr-1 -mt-0.5" />
+                    {formatTimeOfDay(rental.pickup_time)}
+                  </p>
+                )}
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">End Date</p>
+                <p className="text-sm text-muted-foreground">Return</p>
                 {(rental as any).is_pay_as_you_go ? (
                   <p className="text-base font-medium text-muted-foreground italic">Open-ended (PAYG)</p>
                 ) : (
                   <>
                     <p className="text-base font-medium">{rental.end_date ? parseLocalDate(rental.end_date).toLocaleDateString('en-US') : '—'}</p>
+                    {formatTimeOfDay(rental.return_time) && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        <Clock className="inline-block h-3 w-3 mr-1 -mt-0.5" />
+                        {formatTimeOfDay(rental.return_time)}
+                      </p>
+                    )}
                     {/* Show original end date if rental has been extended */}
                     {(rental.original_end_date || (!rental.is_extended && rental.previous_end_date)) && (
                       <p className="text-xs text-muted-foreground mt-1">
