@@ -1,54 +1,79 @@
-"use client";
-
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ThemeProvider } from "next-themes";
-import NextTopLoader from "nextjs-toploader";
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { useEffect, useState } from "react";
-import { useAuthStore } from "@/stores/auth-store";
-import { TenantProvider } from "@/contexts/TenantContext";
-import { RealtimeChatProvider } from "@/contexts/RealtimeChatContext";
-import DevPanel from "@/components/shared/DevPanel";
+import type { Metadata } from "next";
+import { headers } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
+import { Providers } from "./providers";
 import "@/global.css";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60 * 1000,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+export const dynamic = "force-dynamic";
 
-function AuthInitializer({ children }: { children: React.ReactNode }) {
-  const initialize = useAuthStore((state) => state.initialize);
+const defaultMetadata: Metadata = {
+  title: "Drive247 Portal",
+  description: "Multi-tenant fleet management portal",
+};
 
-  useEffect(() => {
-    initialize();
-  }, [initialize]);
+export async function generateMetadata(): Promise<Metadata> {
+  try {
+    const headersList = await headers();
+    const tenantSlug = headersList.get("x-tenant-slug");
 
-  return <>{children}</>;
-}
+    if (!tenantSlug) return defaultMetadata;
 
-function GlobalKeyboardShortcuts({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        window.dispatchEvent(new CustomEvent("open-global-search"));
-      }
+    if (
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ) {
+      return defaultMetadata;
+    }
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
+
+    const { data: tenant } = await supabase
+      .from("tenants")
+      .select(
+        "app_name, company_name, meta_title, meta_description, favicon_url, og_image_url"
+      )
+      .eq("slug", tenantSlug)
+      .single();
+
+    if (!tenant) return defaultMetadata;
+
+    const brandName =
+      tenant.app_name || tenant.company_name || "Drive247";
+    const title =
+      tenant.meta_title || `${brandName} - Portal`;
+    const description =
+      tenant.meta_description ||
+      `${brandName} fleet management portal`;
+
+    return {
+      title,
+      description,
+      openGraph: {
+        title,
+        description,
+        siteName: brandName,
+        type: "website",
+        images: tenant.og_image_url ? [tenant.og_image_url] : undefined,
+      },
+      twitter: {
+        card: "summary_large_image",
+        title,
+        description,
+        images: tenant.og_image_url ? [tenant.og_image_url] : undefined,
+      },
+      icons: tenant.favicon_url
+        ? { icon: tenant.favicon_url, shortcut: tenant.favicon_url }
+        : undefined,
     };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  return <>{children}</>;
+  } catch (error) {
+    console.error("Error generating portal metadata:", error);
+    return defaultMetadata;
+  }
 }
 
-// Inline script to apply cached branding BEFORE React hydrates
 const brandingScript = `
 (function() {
   try {
@@ -73,9 +98,6 @@ export default function RootLayout({
       <head>
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Drive 917 - Portal</title>
-        <link rel="icon" href="/favicon.ico" type="image/x-icon" />
-        <meta name="description" content="Drive 917 - Portal" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
@@ -84,30 +106,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: brandingScript }} />
       </head>
       <body suppressHydrationWarning>
-        <NextTopLoader color="hsl(var(--primary))" height={2} showSpinner={false} />
-        <QueryClientProvider client={queryClient}>
-          <TenantProvider>
-            <RealtimeChatProvider>
-            <AuthInitializer>
-              <ThemeProvider
-                attribute="class"
-                defaultTheme="system"
-                enableSystem
-                disableTransitionOnChange
-              >
-                <TooltipProvider>
-                  <GlobalKeyboardShortcuts>
-                    <Toaster />
-                    <Sonner />
-                    {children}
-                    <DevPanel />
-                  </GlobalKeyboardShortcuts>
-                </TooltipProvider>
-              </ThemeProvider>
-            </AuthInitializer>
-            </RealtimeChatProvider>
-          </TenantProvider>
-        </QueryClientProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
