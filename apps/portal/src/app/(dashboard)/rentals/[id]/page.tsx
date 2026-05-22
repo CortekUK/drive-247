@@ -62,6 +62,7 @@ import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
 import { PaygSection } from "@/components/rentals/payg-section";
 import { PaygSchedulePreview } from "@/components/rentals/payg-schedule-preview";
+import { PaygUpfrontCollectPopover, type PaygUpfrontLineItem } from "@/components/rentals/payg-upfront-collect-popover";
 import { AdditionalDriversCard } from "@/components/rentals/additional-drivers-card";
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
@@ -261,6 +262,14 @@ const RentalDetail = () => {
   // skipInsurance removed — insurance doc upload is always visible; only Bonzah selector is gated on integration_bonzah
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [showPaygUpfrontDialog, setShowPaygUpfrontDialog] = useState(false);
+  // Bundle the staff member picks in the Collect Now popover (first period +
+  // delivery/collection/insurance/extras). Set when they hit "Continue to
+  // payment", consumed by the AddPaymentDialog instance further down the tree.
+  const [paygUpfrontBundle, setPaygUpfrontBundle] = useState<{
+    amount: number;
+    targetCategories: string[];
+    paygAccrualId?: string;
+  } | null>(null);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
   const [checkingDocuSignStatus, setCheckingDocuSignStatus] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -2587,17 +2596,106 @@ const RentalDetail = () => {
       })()}
 
       {/* PAYG Upfront Payment banner — gates key handover until the first period
-          (week or month) is paid. Tenant must opt in via Settings → PAYG. */}
+          (week or month) is paid. Tenant must opt in via Settings → PAYG.
+          The Collect Now popover lets staff bundle the first-period rental
+          (+ tax + service fee) with one-off upfront items (delivery, collection,
+          insurance, extras) into a single payment, addressing the long-standing
+          gap where one-time fees fell through the cracks for PAYG rentals. */}
       {rental && (rental as any).is_pay_as_you_go && (rentalSettings as any)?.payg_upfront_required && !isKeyHandoverCompleted && (() => {
         const periodType = String((rental as any).rental_period_type || 'Weekly');
         const periodLabel = periodType === 'Monthly' ? 'month' : periodType === 'Daily' ? 'day' : 'week';
+        const currency = tenant?.currency_code || 'USD';
         const firstPeriodRental = Number(rental.monthly_amount) || 0;
         const taxPct = (rentalSettings as any)?.tax_enabled ? Number((rentalSettings as any)?.tax_percentage || 0) : 0;
-        const svcPct = (rentalSettings as any)?.service_fee_enabled && (rentalSettings as any)?.service_fee_type === 'percentage'
-          ? Number((rentalSettings as any)?.service_fee_value || 0) : 0;
-        const upfrontAmount = Math.round((firstPeriodRental + firstPeriodRental * (taxPct + svcPct) / 100) * 100) / 100;
-        const upfrontSatisfied = rentalPaymentsTotal >= upfrontAmount - 0.01;
-        const currency = tenant?.currency_code || 'USD';
+        const svcEnabled = !!(rentalSettings as any)?.service_fee_enabled;
+        const svcType = (rentalSettings as any)?.service_fee_type as 'percentage' | 'fixed_amount' | undefined;
+        const svcValue = Number((rentalSettings as any)?.service_fee_value || 0);
+        const svcPct = svcEnabled && svcType === 'percentage' ? svcValue : 0;
+        // Fixed-amount service fee is collected as its own line item (so staff
+        // can see and tick/untick it independently of the percentage-based one
+        // that's baked into the first-period rental total).
+        const svcFixedAmount = svcEnabled && svcType === 'fixed_amount' ? svcValue : 0;
+        const firstPeriodTax = Math.round(firstPeriodRental * taxPct) / 100;
+        const firstPeriodSvc = Math.round(firstPeriodRental * svcPct) / 100;
+        const firstPeriodTotal = Math.round((firstPeriodRental + firstPeriodTax + firstPeriodSvc) * 100) / 100;
+        const upfrontSatisfied = rentalPaymentsTotal >= firstPeriodTotal - 0.01;
+
+        // Description suffix for the first-period line item — only mentions
+        // the components that actually apply, so a tax-only tenant sees
+        // "+ 7.0% tax" instead of the misleading "+ 7.0% tax/fees".
+        const firstPeriodDescriptionParts: string[] = [];
+        if (taxPct > 0) firstPeriodDescriptionParts.push(`${taxPct.toFixed(1)}% tax`);
+        if (svcPct > 0) firstPeriodDescriptionParts.push(`${svcPct.toFixed(1)}% service fee`);
+        const firstPeriodDescription = firstPeriodDescriptionParts.length > 0
+          ? `${formatCurrency(firstPeriodRental, currency)} rental + ${firstPeriodDescriptionParts.join(' + ')}`
+          : `${formatCurrency(firstPeriodRental, currency)} rental`;
+
+        // Build the line items the popover offers. Only items with amount > 0
+        // are pre-checked; zero-amount rows still render so the staff member
+        // can see at a glance "no delivery fee on this rental".
+        const insuranceLedgerCharge = (rentalCharges || []).find(c => c.category === 'Insurance');
+        const insuranceUpfrontAmount = insuranceLedgerCharge ? Number(insuranceLedgerCharge.amount) : (invoiceBreakdown?.insurancePremium ?? 0);
+        const deliveryUpfrontAmount = Number(rental.delivery_fee) || Number(invoiceBreakdown?.deliveryFee) || 0;
+        const collectionUpfrontAmount = Number((rental as any).collection_fee) || 0;
+        const extrasUpfrontAmount = Number(extrasTotal) || 0;
+
+        const upfrontLineItems: PaygUpfrontLineItem[] = [
+          {
+            key: 'first_period',
+            label: `First ${periodLabel} rental`,
+            description: firstPeriodDescription,
+            amount: firstPeriodTotal,
+            categories: ['Rental', ...(taxPct > 0 ? ['Tax'] : []), ...(svcPct > 0 ? ['Service Fee'] : [])],
+            defaultChecked: true,
+          },
+          // Only render the fixed-amount service-fee row when the tenant has
+          // actually configured one. Percentage-based service fees are already
+          // baked into the first-period total above, and tenants with service
+          // fee disabled shouldn't see a confusing $0.00 placeholder.
+          ...(svcFixedAmount > 0 ? [{
+            key: 'service_fee_fixed',
+            label: 'Service fee',
+            description: 'Platform fee (flat amount)',
+            amount: svcFixedAmount,
+            categories: ['Service Fee'],
+            defaultChecked: true,
+          }] : []),
+          {
+            key: 'delivery_fee',
+            label: 'Delivery fee',
+            description: 'Vehicle delivery to customer',
+            amount: deliveryUpfrontAmount,
+            categories: ['Delivery Fee'],
+            defaultChecked: true,
+          },
+          {
+            key: 'collection_fee',
+            label: 'Collection fee',
+            description: 'Vehicle collection from customer',
+            amount: collectionUpfrontAmount,
+            categories: ['Collection Fee'],
+            defaultChecked: true,
+          },
+          {
+            key: 'insurance',
+            label: 'Insurance',
+            description: bonzahPolicy ? 'Bonzah policy premium' : 'Insurance coverage',
+            amount: insuranceUpfrontAmount,
+            categories: ['Insurance'],
+            defaultChecked: true,
+          },
+          {
+            key: 'extras',
+            label: 'Extras',
+            description: (extrasDetails?.length || 0) > 0
+              ? `${extrasDetails!.length} item${extrasDetails!.length > 1 ? 's' : ''}`
+              : 'Add-ons',
+            amount: extrasUpfrontAmount,
+            categories: ['Extras'],
+            defaultChecked: true,
+          },
+        ];
+
         return (
           <div className="mb-4">
             <div className={`rounded-lg border p-4 flex items-start justify-between gap-4 ${upfrontSatisfied ? 'bg-green-50 border-green-200 dark:bg-green-950/40 dark:border-green-900' : 'bg-indigo-50 border-indigo-200 dark:bg-indigo-950/40 dark:border-indigo-900'}`}>
@@ -2609,23 +2707,28 @@ const RentalDetail = () => {
                 )}
                 <div className="min-w-0">
                   <p className={`font-medium text-sm ${upfrontSatisfied ? 'text-green-900 dark:text-green-200' : 'text-indigo-900 dark:text-indigo-200'}`}>
-                    {upfrontSatisfied ? `First ${periodLabel} prepaid — keys ready to release` : `Upfront payment required — ${formatCurrency(upfrontAmount, currency)} due before key handover`}
+                    {upfrontSatisfied ? `First ${periodLabel} prepaid — keys ready to release` : `Upfront payment required — at least ${formatCurrency(firstPeriodTotal, currency)} due before key handover`}
                   </p>
                   <p className={`text-xs mt-0.5 ${upfrontSatisfied ? 'text-green-700 dark:text-green-300' : 'text-indigo-700 dark:text-indigo-300'}`}>
                     {upfrontSatisfied
                       ? `Daily PAYG charges will draw down from the upfront payment. Standard PAYG billing resumes once the first ${periodLabel} is consumed.`
-                      : `Customer must pay the first ${periodLabel} (${formatCurrency(firstPeriodRental, currency)} rental${taxPct + svcPct > 0 ? ` + ${(taxPct + svcPct).toFixed(1)}% tax/fees` : ''}) before keys are handed over.`}
+                      : `Bundle the first ${periodLabel} with any delivery, collection, insurance, or extras due upfront — pick what to include in the Collect Now popover.`}
                   </p>
                 </div>
               </div>
               {!upfrontSatisfied && canEdit('rentals') && (
-                <Button
-                  size="sm"
-                  onClick={() => setShowPaygUpfrontDialog(true)}
-                  className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white"
-                >
-                  Collect Now
-                </Button>
+                <PaygUpfrontCollectPopover
+                  currencyCode={currency}
+                  lineItems={upfrontLineItems}
+                  onConfirm={({ amount, targetCategories }) => {
+                    setPaygUpfrontBundle({
+                      amount,
+                      targetCategories,
+                      paygAccrualId: paygInvoiceData?.latestOpenInvoice?.id,
+                    });
+                    setShowPaygUpfrontDialog(true);
+                  }}
+                />
               )}
             </div>
           </div>
@@ -5391,36 +5494,38 @@ const RentalDetail = () => {
         />
       )}
 
-      {/* PAYG Upfront Payment Dialog — pre-fills first period amount + targets PAYG categories.
-          Same dialog (manual / Stripe / email link), just opened with a different default. */}
-      {rental && (rental as any).is_pay_as_you_go && (() => {
-        const periodType = String((rental as any).rental_period_type || 'Weekly');
-        const firstPeriodRental = Number(rental.monthly_amount) || 0;
-        const taxPct = (rentalSettings as any)?.tax_enabled ? Number((rentalSettings as any)?.tax_percentage || 0) : 0;
-        const svcPct = (rentalSettings as any)?.service_fee_enabled && (rentalSettings as any)?.service_fee_type === 'percentage'
-          ? Number((rentalSettings as any)?.service_fee_value || 0) : 0;
-        const upfrontAmount = Math.round((firstPeriodRental + firstPeriodRental * (taxPct + svcPct) / 100) * 100) / 100;
-        return (
-          <AddPaymentDialog
-            open={showPaygUpfrontDialog}
-            onOpenChange={setShowPaygUpfrontDialog}
-            customer_id={rental.customers?.id}
-            vehicle_id={rental.vehicles?.id}
-            rental_id={rental.id}
-            defaultAmount={upfrontAmount}
-            outstandingBalanceOverride={upfrontAmount}
-            targetCategories={['Rental', 'Tax', 'Service Fee']}
-            onPaymentSuccess={() => {
-              queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
-              queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
-              queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
-              queryClient.invalidateQueries({ queryKey: ['rental-payments'] });
-              queryClient.invalidateQueries({ queryKey: ['rental-payments-total'] });
-              queryClient.invalidateQueries({ queryKey: ['payments'] });
-            }}
-          />
-        );
-      })()}
+      {/* PAYG Upfront Payment Dialog — consumes the bundle the staff member
+          curated in the Collect Now popover. `amount` and `targetCategories`
+          come from whichever line items they ticked (first period, delivery,
+          collection, insurance, extras). `paygAccrualId` is the latest open
+          rolling invoice if one exists, so the Stripe path settles it via
+          payg_settle_invoice once payment lands. */}
+      {rental && (rental as any).is_pay_as_you_go && paygUpfrontBundle && (
+        <AddPaymentDialog
+          open={showPaygUpfrontDialog}
+          onOpenChange={(nextOpen) => {
+            setShowPaygUpfrontDialog(nextOpen);
+            if (!nextOpen) setPaygUpfrontBundle(null);
+          }}
+          customer_id={rental.customers?.id}
+          vehicle_id={rental.vehicles?.id}
+          rental_id={rental.id}
+          defaultAmount={paygUpfrontBundle.amount}
+          outstandingBalanceOverride={paygUpfrontBundle.amount}
+          targetCategories={paygUpfrontBundle.targetCategories}
+          paygAccrualId={paygUpfrontBundle.paygAccrualId}
+          onPaymentSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+            queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+            queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
+            queryClient.invalidateQueries({ queryKey: ['rental-payments'] });
+            queryClient.invalidateQueries({ queryKey: ['rental-payments-total'] });
+            queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
+            queryClient.invalidateQueries({ queryKey: ['payg-invoices'] });
+            queryClient.invalidateQueries({ queryKey: ['payments'] });
+          }}
+        />
+      )}
 
       {/* Targeted Payment Dialog (Pay Selected categories) */}
       {rental && (
