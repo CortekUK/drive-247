@@ -360,6 +360,42 @@ export const AddPaymentDialog = ({
         return;
       }
 
+      // Duplicate-payment guard. Staff have hit this multiple times — most
+      // notably RevTek's R-1ac41d where the same $390.55 was recorded twice
+      // (once after the customer paid the Stripe link, then again two days
+      // later when no one was sure if the first entry had landed). Catch the
+      // common case: same rental, same amount, recorded within the last 14
+      // days, status not Cancelled. Applies to all entry paths (including
+      // bundled Collect Now flows) because the duplicate is defined by what
+      // hits the DB, not how staff got here.
+      const recentWindowMs = 14 * 24 * 60 * 60 * 1000;
+      const sinceIso = new Date(Date.now() - recentWindowMs).toISOString();
+      const { data: recentMatches } = await supabase
+        .from('payments')
+        .select('id, amount, payment_date, created_at, method, status, booking_source')
+        .eq('rental_id', rentalId)
+        .eq('amount', data.amount)
+        .neq('status', 'Cancelled')
+        .gte('created_at', sinceIso)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (recentMatches && recentMatches.length > 0) {
+        const m = recentMatches[0] as any;
+        const when = m.payment_date
+          ? new Date(`${m.payment_date}T00:00:00`).toLocaleDateString()
+          : new Date(m.created_at).toLocaleDateString();
+        const sourceLabel = m.booking_source === 'website' ? 'customer checkout' : (m.method ? `${m.method} payment` : 'payment');
+        const confirmDuplicate = window.confirm(
+          `A ${sourceLabel} of ${formatCurrency(Number(m.amount), tenant?.currency_code || 'USD')} was already recorded on this rental on ${when}.\n\nThis may be a duplicate. Continue anyway?`
+        );
+        if (!confirmDuplicate) {
+          setLoading(false);
+          submitInFlight.current = false;
+          return;
+        }
+      }
+
       // Skip overpayment/zero-balance checks when defaultAmount is provided (extension payments, targeted payments)
       // The caller already calculated the correct amount
       if (!defaultAmount) {
