@@ -29,6 +29,8 @@ export interface EnhancedRental {
   rental_number: string;
   start_date: string;
   end_date: string | null;
+  pickup_time?: string | null;
+  return_time?: string | null;
   rental_period_type?: string;
   monthly_amount: number;
   protection_cost: number;
@@ -127,6 +129,8 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           rental_number,
           start_date,
           end_date,
+          pickup_time,
+          return_time,
           monthly_amount,
           status,
           approval_status,
@@ -220,6 +224,8 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             rental_number: rental.rental_number,
             start_date: rental.start_date,
             end_date: rental.end_date,
+            pickup_time: rental.pickup_time ?? null,
+            return_time: rental.return_time ?? null,
             rental_period_type: periodType,
             monthly_amount: rental.monthly_amount,
             protection_cost: protectionCost,

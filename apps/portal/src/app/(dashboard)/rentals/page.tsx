@@ -29,7 +29,23 @@ import {
   CalendarDays,
   ShieldAlert,
   BarChart3,
+  Clock,
 } from "lucide-react";
+
+// Format a Postgres TIME value ("HH:MM" or "HH:MM:SS") into 12-hour clock
+// notation ("10:30 AM"). Returns null when the value is missing so callers
+// can skip rendering the line entirely.
+const formatTimeOfDay = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const match = /^(\d{1,2}):(\d{2})/.exec(value);
+  if (!match) return null;
+  const hour24 = Number(match[1]);
+  const minutes = match[2];
+  if (Number.isNaN(hour24) || hour24 < 0 || hour24 > 23) return null;
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = ((hour24 + 11) % 12) + 1;
+  return `${hour12}:${minutes} ${period}`;
+};
 import Link from "next/link";
 import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
 import { RentalsFilters } from "@/components/rentals/rentals-filters";
@@ -328,8 +344,8 @@ const RentalsList = () => {
                       <TableHead>Rental #</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead>Customer</TableHead>
-                      <TableHead>Start Date</TableHead>
-                      <TableHead>End Date</TableHead>
+                      <TableHead>Pickup</TableHead>
+                      <TableHead>Return</TableHead>
                       <TableHead>Duration</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Review</TableHead>
@@ -401,11 +417,27 @@ const RentalsList = () => {
                           {rental.customer.name.split(' ')[0]}
                         </TableCell>
                         <TableCell>
-                          {new Date(rental.start_date).toLocaleDateString('en-US')}
+                          <div>{new Date(rental.start_date).toLocaleDateString('en-US')}</div>
+                          {formatTimeOfDay(rental.pickup_time) && (
+                            <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {formatTimeOfDay(rental.pickup_time)}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           {rental.end_date
-                            ? new Date(rental.end_date).toLocaleDateString('en-US')
+                            ? (
+                              <>
+                                <div>{new Date(rental.end_date).toLocaleDateString('en-US')}</div>
+                                {formatTimeOfDay(rental.return_time) && (
+                                  <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {formatTimeOfDay(rental.return_time)}
+                                  </div>
+                                )}
+                              </>
+                            )
                             : rental.is_pay_as_you_go
                             ? <span className="text-indigo-500 text-xs font-medium">Ongoing</span>
                             : "—"}
