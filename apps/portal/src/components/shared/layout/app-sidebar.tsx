@@ -29,6 +29,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useReminderStats } from "@/hooks/use-reminders";
 import { useOrgSettings } from "@/hooks/use-org-settings";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
+import { useTenant } from "@/contexts/TenantContext";
+import { UserPlus, Workflow } from "lucide-react";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
@@ -143,6 +145,9 @@ export function AppSidebar() {
   const { data: reminderStats } = useReminderStats();
   const { settings } = useOrgSettings();
   const { branding } = useTenantBranding();
+  const { tenant } = useTenant();
+  const leadManagementEnabled = (tenant as { lead_management_enabled?: boolean } | null)?.lead_management_enabled === true;
+  const automationsEnabled = (tenant as { automations_enabled?: boolean } | null)?.automations_enabled === true;
   const { data: pendingBookingsCount } = usePendingBookingsCount();
   const { unreadCount: chatUnreadCount } = useUnreadCount();
   const { data: enquiryStats } = useEnquiryStats();
@@ -200,10 +205,26 @@ export function AppSidebar() {
       items: [
         { name: "Customers", href: "/customers", icon: AnimatedUsers },
         { name: "Blocked Customers", href: "/blocked-customers", icon: AnimatedBan },
-        { name: "Enquiries", href: "/enquiries", icon: Inbox, badge: enquiryStats?.pending || 0 },
+        ...(leadManagementEnabled
+          ? []
+          : [{ name: "Enquiries", href: "/enquiries", icon: Inbox, badge: enquiryStats?.pending || 0 }]),
         { name: "Messages", href: "/messages", icon: AnimatedMessageSquare, badge: chatUnreadCount || 0 },
       ],
     },
+    ...(leadManagementEnabled
+      ? [
+          {
+            label: "Pipeline",
+            icon: AnimatedUsers,
+            items: [
+              { name: "Leads", href: "/leads", icon: UserPlus },
+              ...(automationsEnabled
+                ? [{ name: "Automations", href: "/automations", icon: Workflow }]
+                : []),
+            ],
+          } as NavGroup,
+        ]
+      : []),
     {
       label: "Finance",
       icon: AnimatedCreditCard,
