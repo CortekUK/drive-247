@@ -110,7 +110,14 @@ Deno.serve(async (req) => {
     }
 
     const slug = tenant?.slug ?? "tenant";
-    const offerUrl = `https://${slug}.drive-247.com/offer/${offer.short_code}`;
+    // Offer URL is configurable via Supabase secret `BOOKING_BASE_URL_TEMPLATE`.
+    // The token `{slug}` is substituted with the tenant slug. Allows the same
+    // edge function to point at production, a preview, ngrok, or any test domain
+    // without code changes. Default keeps prod behavior intact.
+    const template =
+      Deno.env.get("BOOKING_BASE_URL_TEMPLATE") ?? "https://{slug}.drive-247.com";
+    const base = template.replace(/\{slug\}/g, slug).replace(/\/+$/, "");
+    const offerUrl = `${base}/offer/${offer.short_code}`;
 
     // Transition lead to vehicle_offered (DB trigger emits lead.stage_changed)
     await supabase.from("leads").update({ stage: "vehicle_offered" }).eq("id", lead.id);
@@ -133,7 +140,11 @@ Deno.serve(async (req) => {
       p_payload: { offer_id: offer.id, vehicles: body.vehicles },
     });
 
-    // Dispatch via channel
+    // Dispatch via channel — capture the outcome so the caller can show a
+    // truthful toast instead of always claiming "Offer sent".
+    let dispatchStatus: "sent" | "failed" | "skipped" = "skipped";
+    let dispatchError: string | null = null;
+
     if (body.sendMethod && body.sendMethod !== "copy") {
       const { data: conv } = await supabase
         .from("conversations")
@@ -144,18 +155,38 @@ Deno.serve(async (req) => {
         const messageBody = body.customMessage
           ? `${body.customMessage}\n\n${offerUrl}`
           : `Hi {{first_name}}, here are some options for {{start_date}} – {{end_date}}: ${offerUrl}`;
-        await supabase.functions.invoke("send-lead-message", {
-          body: {
-            tenantId: lead.tenant_id,
-            leadId: lead.id,
-            conversationId: conv.id,
-            channel: body.sendMethod,
-            body: messageBody,
-            subject: body.sendMethod === "email" ? "Your vehicle options" : undefined,
-            variables: { offer_link: offerUrl, start_date: body.defaultStartDate, end_date: body.defaultEndDate },
-            systemTriggered: true,
-          },
-        });
+        try {
+          const { data: sendResult, error: sendErr } = await supabase.functions.invoke<{
+            status?: string;
+            error?: string;
+          }>("send-lead-message", {
+            body: {
+              tenantId: lead.tenant_id,
+              leadId: lead.id,
+              conversationId: conv.id,
+              channel: body.sendMethod,
+              body: messageBody,
+              subject: body.sendMethod === "email" ? "Your vehicle options" : undefined,
+              variables: { offer_link: offerUrl, start_date: body.defaultStartDate, end_date: body.defaultEndDate },
+              systemTriggered: true,
+            },
+          });
+          if (sendErr) {
+            dispatchStatus = "failed";
+            dispatchError = sendErr instanceof Error ? sendErr.message : "Send failed";
+          } else if (sendResult?.status === "failed") {
+            dispatchStatus = "failed";
+            dispatchError = sendResult.error ?? "Send failed";
+          } else {
+            dispatchStatus = "sent";
+          }
+        } catch (err) {
+          dispatchStatus = "failed";
+          dispatchError = err instanceof Error ? err.message : "Send failed";
+        }
+      } else {
+        dispatchStatus = "failed";
+        dispatchError = "No conversation found for lead";
       }
     }
 
@@ -163,6 +194,8 @@ Deno.serve(async (req) => {
       offerId: offer.id,
       shortCode: offer.short_code,
       url: offerUrl,
+      dispatchStatus,
+      dispatchError,
     });
   } catch (err) {
     console.error("create-offer-link error:", err);

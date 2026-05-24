@@ -160,7 +160,16 @@ export function LeadWorkspace({ leadId }: Props) {
             </SelectContent>
           </Select>
 
-          <Button size="sm" disabled={!canConvert} onClick={() => setConvertOpen(true)}>
+          <Button
+            size="sm"
+            disabled={!canConvert}
+            onClick={() => setConvertOpen(true)}
+            title={
+              canConvert
+                ? "Convert this lead into a customer + rental"
+                : `Convert is available after the deposit is captured (current stage: ${lead.stage}).`
+            }
+          >
             Convert to Rental
           </Button>
           <DropdownMenu>
@@ -191,7 +200,7 @@ export function LeadWorkspace({ leadId }: Props) {
       {/* Desktop: 3 columns ≥1400px */}
       <div className="hidden flex-1 overflow-hidden 2xl:flex">
         <LeadInfoPanel lead={lead} onFocusComposer={(c) => setComposerChannel(c)} />
-        <LeadCommunicationPanel leadId={lead.id} conversation={conversation ?? null} composerChannel={composerChannel} />
+        <LeadCommunicationPanel leadId={lead.id} lead={lead} conversation={conversation ?? null} composerChannel={composerChannel} />
         <aside className="flex h-full w-[360px] shrink-0 flex-col gap-3 overflow-y-auto border-l border-[#f1f5f9] bg-[#f8fafc] p-3">
           <LeadAINextAction lead={lead} />
           <LeadMatchingEngine
@@ -215,7 +224,7 @@ export function LeadWorkspace({ leadId }: Props) {
             <LeadInfoPanel lead={lead} onFocusComposer={(c) => setComposerChannel(c)} />
           </TabsContent>
           <TabsContent value="chat" className="flex-1 overflow-hidden">
-            <LeadCommunicationPanel leadId={lead.id} conversation={conversation ?? null} composerChannel={composerChannel} />
+            <LeadCommunicationPanel leadId={lead.id} lead={lead} conversation={conversation ?? null} composerChannel={composerChannel} />
           </TabsContent>
           <TabsContent value="ai" className="flex-1 space-y-3 overflow-y-auto p-3">
             <LeadAINextAction lead={lead} />
@@ -233,6 +242,7 @@ export function LeadWorkspace({ leadId }: Props) {
         open={offerOpen}
         onOpenChange={setOfferOpen}
         leadId={lead.id}
+        lead={lead}
         defaultStartDate={lead.start_date ?? new Date().toISOString().slice(0, 10)}
         defaultEndDate={lead.end_date ?? new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)}
         selectedVehicleIds={offerVehicles}

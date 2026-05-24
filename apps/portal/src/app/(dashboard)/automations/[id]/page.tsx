@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Trash2, Send, Play, Plus, GripVertical, FlaskConical, Loader2, List, Workflow } from "lucide-react";
 import { AutomationFlowCanvas } from "@/components/automations/automation-flow-canvas";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuthStore } from "@/stores/auth-store";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -107,6 +108,14 @@ export default function AutomationBuilderPage({ params }: { params: Promise<{ id
   const [draft, setDraft] = useState<DraftStep[]>([]);
 
   const { tenant } = useTenant();
+  const { appUser } = useAuthStore();
+  // Per spec §13, only admin / head_admin / super-admin can publish automations.
+  // Surface this in the UI so the operator doesn't waste a network round-trip
+  // discovering they're not allowed.
+  const canUserPublish =
+    appUser?.is_super_admin === true ||
+    appUser?.role === "head_admin" ||
+    appUser?.role === "admin";
   const [view, setView] = useState<"list" | "canvas">("list");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [testOpen, setTestOpen] = useState(false);
@@ -158,9 +167,24 @@ export default function AutomationBuilderPage({ params }: { params: Promise<{ id
     }
   }, [automation]);
 
+  // Sync draft from server only when the underlying step set actually changes.
+  // The previous `[steps]` dep caused an infinite render loop because the
+  // `useAutomationSteps` default `= []` produced a new array reference on every
+  // render. It also wiped any unsaved local edits every time React Query refetched.
+  // Compare by step ids + updated_at — if neither moved, the operator's in-flight
+  // edits in `draft` stay intact.
+  const stepsSignature = useMemo(
+    () => steps.map((s) => `${s.id}:${s.updated_at ?? ""}`).join("|"),
+    [steps],
+  );
+  const lastSyncedSignatureRef = useRef<string>("");
   useEffect(() => {
-    setDraft(steps.map(stepToDraft));
-  }, [steps]);
+    if (stepsSignature !== lastSyncedSignatureRef.current) {
+      lastSyncedSignatureRef.current = stepsSignature;
+      setDraft(steps.map(stepToDraft));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepsSignature]);
 
   const saveMeta = async () => {
     if (!automation) return;
@@ -250,7 +274,16 @@ export default function AutomationBuilderPage({ params }: { params: Promise<{ id
           <Button size="sm" variant="outline" onClick={remove} disabled={deleteMut.isPending}>
             <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
           </Button>
-          <Button size="sm" onClick={publish} disabled={publishMut.isPending}>
+          <Button
+            size="sm"
+            onClick={publish}
+            disabled={publishMut.isPending || !canUserPublish}
+            title={
+              canUserPublish
+                ? "Snapshot the current draft and make it live"
+                : "Only admin or head_admin can publish automations (your role: " + (appUser?.role ?? "—") + "). Ask a tenant admin to publish, or switch to an admin account."
+            }
+          >
             <Send className="mr-1.5 h-3.5 w-3.5" /> Publish
           </Button>
         </div>

@@ -8,7 +8,7 @@
  *
  * Channels:
  *   sms       → aws-sns-sms (existing)
- *   email     → aws-ses-email (existing)
+ *   email     → Resend via _shared/resend-service.ts (branded with tenant template)
  *   whatsapp  → _shared/whatsapp-client.ts (Meta Graph API)
  *   note      → internal-only, no provider dispatch
  *
@@ -18,6 +18,11 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import {
+  sendResendEmail,
+  getTenantBranding,
+  wrapWithBrandedTemplate,
+} from "../_shared/resend-service.ts";
 
 type Channel = "sms" | "email" | "whatsapp" | "note";
 
@@ -183,16 +188,31 @@ Deno.serve(async (req) => {
         if (data?.messageId) channelMessageId = data.messageId;
         if (data?.success === false) dispatchError = data.error ?? "SMS send failed";
       } else if (effectiveChannel === "email") {
-        const { data } = await supabase.functions.invoke("aws-ses-email", {
-          body: {
-            to: l.email,
-            subject: renderedSubject ?? "(no subject)",
-            html: renderedBody.replace(/\n/g, "<br/>"),
-            tenantId: body.tenantId,
-          },
-        }) as { data?: { messageId?: string; success?: boolean; error?: string } };
-        if (data?.messageId) channelMessageId = data.messageId;
-        if (data?.success === false) dispatchError = data.error ?? "Email send failed";
+        // Email goes via Resend (per CLAUDE.md — AWS SES path is deprecated for
+        // tenant-facing mail). Wrap the body with the tenant's branded template
+        // so the customer gets a logo + footer instead of plain text.
+        if (!l.email) {
+          dispatchError = "Lead has no email on file";
+        } else {
+          const branding = await getTenantBranding(body.tenantId, supabase);
+          const inner = `
+            <tr><td style="padding:30px;color:#333;line-height:1.6;font-size:15px;">
+              ${renderedBody.replace(/\n/g, "<br/>")}
+            </td></tr>`;
+          const html = wrapWithBrandedTemplate(inner, branding);
+          const result = await sendResendEmail(
+            {
+              to: l.email,
+              subject: renderedSubject ?? "(no subject)",
+              html,
+              tenantId: body.tenantId,
+              replyTo: branding.contactEmail,
+            },
+            supabase,
+          );
+          if (result.messageId) channelMessageId = result.messageId;
+          if (!result.success) dispatchError = result.error ?? "Email send failed";
+        }
       } else if (effectiveChannel === "whatsapp") {
         // Reuse send-collection-whatsapp for now — generic Meta Graph send.
         // V2 will introduce a generic send-lead-whatsapp wrapper.

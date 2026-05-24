@@ -33,27 +33,42 @@ export function useUpdateLeadStage() {
       if (error) throw error;
     },
     onMutate: async ({ leadId, nextStage }) => {
-      const key = ["leads", tenant?.id];
-      await qc.cancelQueries({ queryKey: key });
-      const previous = qc.getQueriesData({ queryKey: key });
+      const listKey = ["leads", tenant?.id];
+      const singleKey = ["lead", tenant?.id, leadId];
+      await Promise.all([
+        qc.cancelQueries({ queryKey: listKey }),
+        qc.cancelQueries({ queryKey: singleKey }),
+      ]);
+      const previousList = qc.getQueriesData({ queryKey: listKey });
+      const previousSingle = qc.getQueryData(singleKey);
 
-      // Optimistically update every cached `leads` query for this tenant
-      previous.forEach(([qKey, value]) => {
+      // Optimistically update every cached `leads` list query for this tenant
+      previousList.forEach(([qKey, value]) => {
         if (!Array.isArray(value)) return;
         const next = (value as { id: string; stage: LeadStage }[]).map((l) =>
           l.id === leadId ? { ...l, stage: nextStage } : l,
         );
         qc.setQueryData(qKey, next);
       });
+      // Also update the single-lead cache so the workspace (stage dropdown,
+      // quick-action enabled-states, top bar badges) reflects the new stage
+      // immediately — not on next refetch.
+      if (previousSingle && typeof previousSingle === "object") {
+        qc.setQueryData(singleKey, { ...(previousSingle as object), stage: nextStage });
+      }
 
-      return { previous };
+      return { previousList, previousSingle, singleKey };
     },
     onError: (err, _vars, ctx) => {
-      ctx?.previous?.forEach(([qKey, value]) => qc.setQueryData(qKey, value));
+      ctx?.previousList?.forEach(([qKey, value]) => qc.setQueryData(qKey, value));
+      if (ctx?.singleKey && ctx.previousSingle !== undefined) {
+        qc.setQueryData(ctx.singleKey, ctx.previousSingle);
+      }
       toast.error(err instanceof Error ? err.message : "Failed to update stage");
     },
-    onSettled: () => {
+    onSettled: (_data, _err, vars) => {
       qc.invalidateQueries({ queryKey: ["leads", tenant?.id] });
+      qc.invalidateQueries({ queryKey: ["lead", tenant?.id, vars.leadId] });
     },
   });
 }
@@ -69,7 +84,11 @@ export function useAssignLead() {
         .eq("id", leadId);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads", tenant?.id] }),
+    onSuccess: (_data, vars) => {
+      // Same pattern — both the board list and the workspace view must refresh.
+      qc.invalidateQueries({ queryKey: ["leads", tenant?.id] });
+      qc.invalidateQueries({ queryKey: ["lead", tenant?.id, vars.leadId] });
+    },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to assign"),
   });
 }
@@ -85,7 +104,47 @@ export function useUpdateLeadTags() {
         .eq("id", leadId);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads", tenant?.id] }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["leads", tenant?.id] });
+      qc.invalidateQueries({ queryKey: ["lead", tenant?.id, vars.leadId] });
+    },
+  });
+}
+
+/**
+ * Edit a lead's contact fields (typo fixes).
+ *
+ * Caller should pre-validate format — this is a thin wrapper so the trigger
+ * normalise_lead_identifiers() can recompute phone_normalised / email_lower
+ * from the new value.
+ */
+export function useUpdateLeadContact() {
+  const { tenant } = useTenant();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      leadId,
+      patch,
+    }: {
+      leadId: string;
+      patch: { full_name?: string; phone?: string; email?: string };
+    }) => {
+      if (Object.keys(patch).length === 0) return;
+      const { error } = await supabase.from("leads").update(patch).eq("id", leadId);
+      if (error) throw error;
+    },
+    onSuccess: (_v, args) => {
+      qc.invalidateQueries({ queryKey: ["leads", tenant?.id] });
+      qc.invalidateQueries({ queryKey: ["lead", tenant?.id, args.leadId] });
+    },
+    onError: (err) => {
+      const msg = err instanceof Error
+        ? err.message
+        : typeof err === "object" && err !== null && "message" in err
+          ? String((err as { message: string }).message)
+          : "Failed to update lead";
+      toast.error(msg);
+    },
   });
 }
 
@@ -105,6 +164,9 @@ export function useMarkLeadRead() {
         .eq("is_read", false);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads", tenant?.id] }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["leads", tenant?.id] });
+      qc.invalidateQueries({ queryKey: ["lead", tenant?.id, vars.leadId] });
+    },
   });
 }

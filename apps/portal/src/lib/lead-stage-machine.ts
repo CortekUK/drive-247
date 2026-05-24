@@ -57,21 +57,26 @@ export const TERMINAL_STAGES: LeadStage[] = ["converted", "lost", "blacklisted"]
  * Allowed transitions per spec §6.1. Operator-driven moves are explicit;
  * auto transitions (BoldSign webhook, Stripe webhook, Veriff webhook, etc.)
  * are listed here too because they reuse this gate via the same mutation path.
+ *
+ * **Lost / Blacklist are universal terminations.** Per spec, an operator must be
+ * able to kill a lead from any non-terminal stage — fraud / no-show / abuse
+ * can surface late in the funnel. The previous table omitted blacklisted from
+ * most stages, leaving the buttons disabled with no explanation.
  */
 const TRANSITIONS: Record<LeadStage, LeadStage[]> = {
   new: ["contacted", "docs_requested", "waitlist", "lost", "blacklisted"],
   contacted: ["docs_requested", "approved", "waitlist", "lost", "blacklisted"],
   docs_requested: ["docs_submitted", "lost", "blacklisted"],
-  docs_submitted: ["docs_verified", "docs_failed"],
-  docs_verified: ["approved", "lost"],
+  docs_submitted: ["docs_verified", "docs_failed", "lost", "blacklisted"],
+  docs_verified: ["approved", "lost", "blacklisted"],
   docs_failed: ["docs_requested", "approved", "lost", "blacklisted"], // operator override
-  approved: ["vehicle_offered", "waitlist", "lost"],
-  vehicle_offered: ["offer_accepted", "lost"], // also auto-expires → lost
-  offer_accepted: ["agreement_sent", "lost"],
-  agreement_sent: ["agreement_signed", "lost"],
-  agreement_signed: ["deposit_paid", "lost"],
-  deposit_paid: ["pickup_scheduled", "lost"],
-  pickup_scheduled: ["converted", "lost"],
+  approved: ["vehicle_offered", "waitlist", "lost", "blacklisted"],
+  vehicle_offered: ["offer_accepted", "lost", "blacklisted"], // also auto-expires → lost
+  offer_accepted: ["agreement_sent", "lost", "blacklisted"],
+  agreement_sent: ["agreement_signed", "lost", "blacklisted"],
+  agreement_signed: ["deposit_paid", "lost", "blacklisted"],
+  deposit_paid: ["pickup_scheduled", "lost", "blacklisted"],
+  pickup_scheduled: ["converted", "lost", "blacklisted"],
   converted: [],
   waitlist: ["approved", "vehicle_offered", "lost", "blacklisted"],
   lost: ["new"], // operator can resurrect

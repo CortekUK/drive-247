@@ -39,20 +39,38 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { getOfferUrl } from "@/lib/booking-url";
+import type { LeadRow } from "@/hooks/use-leads";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   leadId: string;
+  lead: LeadRow;
   defaultStartDate: string;
   defaultEndDate: string;
   selectedVehicleIds: string[];
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+type SendMethod = "sms" | "email" | "whatsapp" | "copy";
+function offerChannelAvailable(method: SendMethod, lead: LeadRow): boolean {
+  if (method === "copy") return true;
+  if (method === "email") return !!lead.email && EMAIL_RE.test(lead.email.trim());
+  if (!lead.phone) return false;
+  return lead.phone.replace(/\D/g, "").length >= 7;
+}
+function offerDestinationLabel(method: SendMethod, lead: LeadRow): string {
+  if (method === "copy") return "Link copied — paste it wherever";
+  if (method === "email") return lead.email ? `Will email ${lead.email}` : "No email on file";
+  if (method === "whatsapp") return lead.phone ? `Will WhatsApp ${lead.phone}` : "No phone on file";
+  return lead.phone ? `Will SMS ${lead.phone}` : "No phone on file";
 }
 
 export function OfferBuilderDialog({
   open,
   onOpenChange,
   leadId,
+  lead,
   defaultStartDate,
   defaultEndDate,
   selectedVehicleIds,
@@ -65,38 +83,66 @@ export function OfferBuilderDialog({
   const [customMessage, setCustomMessage] = useState("");
   const [expiresInHours, setExpiresInHours] = useState(72);
   const [showPrices, setShowPrices] = useState(true);
-  const [sendMethod, setSendMethod] = useState<"sms" | "email" | "whatsapp" | "copy">("sms");
+  // Default to the first channel the lead can actually receive; fall back to "copy"
+  // (always available — operator just gets a URL to paste manually).
+  const defaultMethod: SendMethod =
+    (["sms", "email", "whatsapp"] as SendMethod[]).find((m) => offerChannelAvailable(m, lead)) ?? "copy";
+  const [sendMethod, setSendMethod] = useState<SendMethod>(defaultMethod);
   const [submitting, setSubmitting] = useState(false);
   const [createdUrl, setCreatedUrl] = useState<string | null>(null);
 
   const handleSubmit = async () => {
+    // Block invalid sends before the network call. Without this, create-offer-link
+    // would happily insert the offer row, then send-lead-message would silently fail
+    // because there's no destination — operator never finds out the offer was sent
+    // into the void.
+    if (!offerChannelAvailable(sendMethod, lead)) {
+      toast.error(offerDestinationLabel(sendMethod, lead));
+      return;
+    }
+    if (endDate < startDate) {
+      toast.error("End date must be on or after start date.");
+      return;
+    }
+    if (depositAmount < 0) {
+      toast.error("Deposit can't be negative.");
+      return;
+    }
     setSubmitting(true);
     try {
-      const { data, error } = await supabase.functions.invoke<{ url: string; shortCode: string }>(
-        "create-offer-link",
-        {
-          body: {
-            leadId,
-            vehicles: selectedVehicleIds.map((id) => ({ vehicleId: id })),
-            defaultStartDate: startDate,
-            defaultEndDate: endDate,
-            dateFlexDays,
-            depositAmount,
-            customMessage: customMessage.trim() || undefined,
-            expiresInHours,
-            showPrices,
-            sendMethod,
-          },
+      const { data, error } = await supabase.functions.invoke<{
+        url: string;
+        shortCode: string;
+        dispatchStatus?: "sent" | "failed" | "skipped";
+        dispatchError?: string | null;
+      }>("create-offer-link", {
+        body: {
+          leadId,
+          vehicles: selectedVehicleIds.map((id) => ({ vehicleId: id })),
+          defaultStartDate: startDate,
+          defaultEndDate: endDate,
+          dateFlexDays,
+          depositAmount,
+          customMessage: customMessage.trim() || undefined,
+          expiresInHours,
+          showPrices,
+          sendMethod,
         },
-      );
+      });
       if (error) throw error;
       if (sendMethod === "copy" && data?.shortCode) {
         // Display the dev-correct URL (localhost or prod)
         const displayUrl = getOfferUrl(tenantSlug, data.shortCode) || data.url;
         setCreatedUrl(displayUrl);
         toast.success("Offer link created. Copy it from below.");
+      } else if (data?.dispatchStatus === "failed") {
+        // The offer was created but the channel send failed — show the actual
+        // error so the operator knows to retry or fall back to copy-link.
+        toast.error(`Offer created but send failed: ${data.dispatchError ?? "Unknown error"}`);
+        // Show the link so they can copy/paste as a fallback.
+        if (data.shortCode) setCreatedUrl(getOfferUrl(tenantSlug, data.shortCode) || data.url);
       } else {
-        toast.success("Offer sent.");
+        toast.success(`Offer sent via ${sendMethod.toUpperCase()}`);
         onOpenChange(false);
       }
     } catch (err) {
@@ -185,15 +231,22 @@ export function OfferBuilderDialog({
             </div>
             <div className="space-y-1.5">
               <Label>Send via</Label>
-              <Select value={sendMethod} onValueChange={(v) => setSendMethod(v as typeof sendMethod)}>
+              <Select value={sendMethod} onValueChange={(v) => setSendMethod(v as SendMethod)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="sms">SMS</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
-                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="sms" disabled={!offerChannelAvailable("sms", lead)}>
+                    SMS {!offerChannelAvailable("sms", lead) && "(no phone)"}
+                  </SelectItem>
+                  <SelectItem value="email" disabled={!offerChannelAvailable("email", lead)}>
+                    Email {!offerChannelAvailable("email", lead) && "(no email)"}
+                  </SelectItem>
+                  <SelectItem value="whatsapp" disabled={!offerChannelAvailable("whatsapp", lead)}>
+                    WhatsApp {!offerChannelAvailable("whatsapp", lead) && "(no phone)"}
+                  </SelectItem>
                   <SelectItem value="copy">Copy link only</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-[10px] text-[#737373]">{offerDestinationLabel(sendMethod, lead)}</p>
             </div>
           </div>
 

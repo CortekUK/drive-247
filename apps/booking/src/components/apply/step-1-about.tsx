@@ -1,12 +1,20 @@
 "use client";
 
+import { useMemo } from "react";
 import { useFormContext } from "react-hook-form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { ApplyFormValues } from "@/client-schemas/apply";
+import {
+  isoMaxDateOfBirth,
+  isoMinDateOfBirth,
+  MIN_APPLICANT_AGE,
+  type ApplyFormValues,
+} from "@/client-schemas/apply";
 
 export function Step1About() {
   const { register, formState: { errors } } = useFormContext<ApplyFormValues>();
+  // Cache once per mount — date bounds don't need to update mid-session.
+  const dobBounds = useMemo(() => ({ min: isoMinDateOfBirth(), max: isoMaxDateOfBirth() }), []);
 
   return (
     <div className="space-y-5">
@@ -19,7 +27,14 @@ export function Step1About() {
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="dateOfBirth">Date of birth</Label>
-          <Input id="dateOfBirth" type="date" {...register("dateOfBirth")} />
+          <Input
+            id="dateOfBirth"
+            type="date"
+            min={dobBounds.min}
+            max={dobBounds.max}
+            {...register("dateOfBirth")}
+          />
+          <p className="text-xs text-muted-foreground">Must be at least {MIN_APPLICANT_AGE} years old.</p>
           {errors.dateOfBirth && <p className="text-xs text-destructive">{errors.dateOfBirth.message}</p>}
         </div>
         <div className="space-y-1.5">

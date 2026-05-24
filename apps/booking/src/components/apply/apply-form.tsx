@@ -183,26 +183,61 @@ export function ApplyForm() {
 
   const handleBack = () => setStep((s) => findNextVisible(s, -1));
 
-  const handleSubmit = methods.handleSubmit(async (values) => {
-    if (!tenantSlug) {
-      toast.error("We couldn't identify the rental operator. Please refresh and try again.");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("submit-application", {
-        body: { ...values, tenantSlug },
-      });
-      if (error) throw error;
-      const status = (data as { status?: string } | null)?.status ?? "received";
-      router.push(`/apply/submitted?status=${encodeURIComponent(status)}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
-      toast.error(msg);
-    } finally {
-      setSubmitting(false);
-    }
-  });
+  const handleSubmit = methods.handleSubmit(
+    async (values) => {
+      if (!tenantSlug) {
+        toast.error("We couldn't identify the rental operator. Please refresh and try again.");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("submit-application", {
+          body: { ...values, tenantSlug },
+        });
+        if (error) {
+          // `FunctionsHttpError` wraps the underlying Response. Without this read,
+          // the user only sees "Edge Function returned a non-2xx status code" instead
+          // of the actual server-side error message (e.g. "Pickup date cannot be in the past").
+          const ctx = (error as { context?: { response?: Response } }).context;
+          if (ctx?.response) {
+            try {
+              const cloned = ctx.response.clone();
+              const parsed = await cloned.json().catch(() => null);
+              const surfacedMessage =
+                (parsed && typeof parsed === "object" && parsed !== null && "error" in parsed
+                  ? (parsed as { error?: string }).error
+                  : null) ?? (await ctx.response.clone().text());
+              if (surfacedMessage) throw new Error(surfacedMessage);
+            } catch (parseErr) {
+              if (parseErr instanceof Error && parseErr.message) throw parseErr;
+            }
+          }
+          throw error;
+        }
+        const status = (data as { status?: string } | null)?.status ?? "received";
+        router.push(`/apply/submitted?status=${encodeURIComponent(status)}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+        toast.error(msg);
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    // Validation failed on submit. RHF doesn't surface the failing field — without this
+    // handler the Submit button appears to do nothing because the user is on Step 7 but
+    // the bad field is on an earlier step (e.g. a stale DOB now caught by tightened rules).
+    (errors) => {
+      const erroredFields = Object.keys(errors) as (keyof ApplyFormValues)[];
+      if (erroredFields.length === 0) return;
+      const firstBad = erroredFields[0];
+      const badStep = STEP_FIELDS.findIndex((fields) => fields.includes(firstBad));
+      if (badStep >= 0 && badStep !== step) setStep(badStep);
+      const firstMessage =
+        (errors[firstBad] as { message?: string } | undefined)?.message ??
+        "Please review the highlighted fields.";
+      toast.error(firstMessage);
+    },
+  );
 
   return (
     <FormProvider {...methods}>

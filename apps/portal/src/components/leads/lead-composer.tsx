@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useLeadTemplates } from "@/hooks/use-lead-templates";
 import { useSendLeadMessage } from "@/hooks/use-send-lead-message";
+import type { LeadRow } from "@/hooks/use-leads";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -34,8 +35,24 @@ type ComposerChannel = "sms" | "email" | "whatsapp" | "note";
 
 interface LeadComposerProps {
   leadId: string;
+  lead: LeadRow;
   conversationId: string | undefined;
   initialChannel?: ComposerChannel;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function channelAvailable(channel: ComposerChannel, lead: LeadRow): boolean {
+  if (channel === "note") return true;
+  if (channel === "email") return !!lead.email && EMAIL_RE.test(lead.email.trim());
+  // SMS + WhatsApp both rely on phone
+  if (!lead.phone) return false;
+  const digits = lead.phone.replace(/\D/g, "");
+  return digits.length >= 7;
+}
+function channelDestinationLabel(channel: ComposerChannel, lead: LeadRow): string {
+  if (channel === "note") return "Internal — only staff can see this";
+  if (channel === "email") return lead.email ? `to ${lead.email}` : "no email on file";
+  return lead.phone ? `to ${lead.phone}` : "no phone on file";
 }
 
 const CHANNEL_TABS: { value: ComposerChannel; label: string; Icon: typeof Phone }[] = [
@@ -44,6 +61,24 @@ const CHANNEL_TABS: { value: ComposerChannel; label: string; Icon: typeof Phone 
   { value: "whatsapp", label: "WhatsApp", Icon: MessageSquare },
   { value: "note", label: "Note", Icon: FileText },
 ];
+
+const KNOWN_VARIABLES = new Set([
+  "first_name", "full_name", "vehicle", "start_date", "end_date",
+  "tenant_name", "offer_link", "doc_upload_link", "agreement_link",
+  "deposit_link", "pickup_link", "lockbox_code", "lockbox_instructions",
+]);
+
+/** Extract any {{var}} tokens in the body that we don't know how to substitute.
+ *  Returned in source order, deduped. */
+function findUnknownVariables(body: string): string[] {
+  const matches = body.matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g);
+  const seen = new Set<string>();
+  for (const m of matches) {
+    const name = m[1];
+    if (!KNOWN_VARIABLES.has(name)) seen.add(name);
+  }
+  return [...seen];
+}
 
 const VARIABLE_HINTS = [
   "first_name",
@@ -59,8 +94,14 @@ const VARIABLE_HINTS = [
   "pickup_link",
 ];
 
-export function LeadComposer({ leadId, conversationId, initialChannel = "sms" }: LeadComposerProps) {
-  const [channel, setChannel] = useState<ComposerChannel>(initialChannel);
+export function LeadComposer({ leadId, lead, conversationId, initialChannel = "sms" }: LeadComposerProps) {
+  // Default to the first channel the lead can actually receive — prevents the
+  // user opening the workspace and immediately seeing SMS tab active when there's
+  // no phone on file (or vice versa).
+  const initialResolved: ComposerChannel = channelAvailable(initialChannel, lead)
+    ? initialChannel
+    : (["sms", "email", "whatsapp", "note"] as ComposerChannel[]).find((c) => channelAvailable(c, lead)) ?? "note";
+  const [channel, setChannel] = useState<ComposerChannel>(initialResolved);
   const [body, setBody] = useState("");
   const [subject, setSubject] = useState("");
   const [templateId, setTemplateId] = useState<string | undefined>(undefined);
@@ -72,6 +113,15 @@ export function LeadComposer({ leadId, conversationId, initialChannel = "sms" }:
   const [drafting, setDrafting] = useState<string | null>(null);
 
   const draftWithAI = async (intent: "welcome" | "doc_request" | "approval" | "offer" | "followup" | "decline") => {
+    // Prevent destructive overwrite — if the operator already typed something,
+    // confirm before nuking it. window.confirm is intentional: a Radix modal here
+    // would add 3 round-trips of UX state for a one-time guard.
+    if (body.trim().length > 0) {
+      const ok = window.confirm(
+        `Replace your current ${channel === "email" ? "draft" : "message"} with an AI draft?`,
+      );
+      if (!ok) return;
+    }
     setDrafting(intent);
     try {
       const { data, error } = await supabase.functions.invoke<{ subject?: string; body: string; channelHint?: string }>(
@@ -101,6 +151,25 @@ export function LeadComposer({ leadId, conversationId, initialChannel = "sms" }:
     if (!body.trim()) {
       toast.error("Type a message first.");
       return;
+    }
+    // Block before the network call — otherwise send-lead-message would either
+    // 500 (no destination) or silently drop the message.
+    if (!channelAvailable(channel, lead)) {
+      const what =
+        channel === "email" ? "an email address" :
+        channel === "whatsapp" ? "a phone number for WhatsApp" : "a phone number";
+      toast.error(`This lead has no ${what}. Update the lead or switch channel.`);
+      return;
+    }
+    // Typo guard — {{first_nam}} would be sent literally to the customer otherwise.
+    if (channel !== "note") {
+      const unknown = findUnknownVariables(body);
+      if (unknown.length > 0) {
+        const ok = window.confirm(
+          `These look like typos: ${unknown.map((v) => `{{${v}}}`).join(", ")}\n\nSend anyway? They'll appear literally in the message.`,
+        );
+        if (!ok) return;
+      }
     }
     send.mutate(
       {
@@ -139,18 +208,28 @@ export function LeadComposer({ leadId, conversationId, initialChannel = "sms" }:
 
   return (
     <div className="border-t border-[#f1f5f9] bg-white p-3">
-      {/* Channel tabs */}
-      <div className="mb-2 flex gap-1">
+      {/* Channel tabs — tabs whose destination is missing are disabled with a tooltip. */}
+      <div className="mb-1.5 flex gap-1">
         {CHANNEL_TABS.map((t) => {
           const active = channel === t.value;
+          const enabled = channelAvailable(t.value, lead);
           return (
             <button
               key={t.value}
               type="button"
-              onClick={() => setChannel(t.value)}
+              onClick={() => enabled && setChannel(t.value)}
+              disabled={!enabled}
+              title={
+                enabled
+                  ? `Send via ${t.label}`
+                  : t.value === "email"
+                    ? "No email on file"
+                    : "No phone on file"
+              }
               className={cn(
                 "flex items-center gap-1 rounded-md px-2.5 py-1 text-xs transition-colors",
                 active ? "bg-[#eef2ff] text-indigo-700" : "text-[#737373] hover:bg-[#f1f5f9]",
+                !enabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
               )}
             >
               <t.Icon className="h-3 w-3" />
@@ -159,6 +238,9 @@ export function LeadComposer({ leadId, conversationId, initialChannel = "sms" }:
           );
         })}
       </div>
+
+      {/* Destination preview — operator always knows where the message is going. */}
+      <p className="mb-2 text-[10px] text-[#737373]">{channelDestinationLabel(channel, lead)}</p>
 
       {/* Template + subject */}
       {channel !== "note" && (

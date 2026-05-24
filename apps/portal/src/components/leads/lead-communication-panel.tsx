@@ -7,16 +7,18 @@
 import { useEffect, useRef } from "react";
 import type { ConversationRow } from "@/hooks/use-conversation";
 import { useConversationMessages } from "@/hooks/use-conversation-messages";
+import type { LeadRow } from "@/hooks/use-leads";
 import { LeadMessageBubble } from "./lead-message-bubble";
 import { LeadComposer } from "./lead-composer";
 
 interface Props {
   leadId: string;
+  lead: LeadRow;
   conversation: ConversationRow | null;
   composerChannel?: "sms" | "email" | "whatsapp" | "note";
 }
 
-export function LeadCommunicationPanel({ leadId, conversation, composerChannel }: Props) {
+export function LeadCommunicationPanel({ leadId, lead, conversation, composerChannel }: Props) {
   const { data: messages = [], isLoading } = useConversationMessages(conversation?.id);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -43,6 +45,7 @@ export function LeadCommunicationPanel({ leadId, conversation, composerChannel }
       </div>
       <LeadComposer
         leadId={leadId}
+        lead={lead}
         conversationId={conversation?.id}
         initialChannel={composerChannel}
       />

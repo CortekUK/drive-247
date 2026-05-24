@@ -74,6 +74,22 @@ interface ApplyPayload {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const RATE_LIMIT_PER_HOUR = 5;
+const MIN_APPLICANT_AGE = 18;
+const MAX_APPLICANT_AGE = 100;
+
+function isoTodayUTC(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function computeAge(iso: string): number {
+  const d = new Date(iso + "T00:00:00Z");
+  if (Number.isNaN(d.getTime())) return NaN;
+  const now = new Date();
+  let age = now.getUTCFullYear() - d.getUTCFullYear();
+  const monthDiff = now.getUTCMonth() - d.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getUTCDate() < d.getUTCDate())) age--;
+  return age;
+}
 
 const NON_TERMINAL_STAGES_FOR_DEDUP = [
   "new",
@@ -140,9 +156,43 @@ Deno.serve(async (req) => {
     if (!fullName || fullName.length < 2) return errorResponse("Full name is required");
     if (!email || !EMAIL_RE.test(email)) return errorResponse("Valid email is required");
     if (!phone) return errorResponse("Phone is required");
+
+    // Date of birth — must be ISO, in the past, between MIN and MAX age
+    if (!body.dateOfBirth || !ISO_DATE_RE.test(body.dateOfBirth)) {
+      return errorResponse("Date of birth is invalid");
+    }
+    const applicantAge = computeAge(body.dateOfBirth);
+    if (!Number.isFinite(applicantAge)) return errorResponse("Date of birth is invalid");
+    if (applicantAge < MIN_APPLICANT_AGE) {
+      return errorResponse(`You must be at least ${MIN_APPLICANT_AGE} years old to apply`);
+    }
+    if (applicantAge > MAX_APPLICANT_AGE) return errorResponse("Please enter a valid date of birth");
+
+    // Licence expiry — must be ISO, today or later
+    if (body.licenceExpiry) {
+      if (!ISO_DATE_RE.test(body.licenceExpiry)) return errorResponse("Licence expiry is invalid");
+      if (body.licenceExpiry < isoTodayUTC()) return errorResponse("Licence expiry cannot be in the past");
+    }
+
+    // Years driving — sanity vs age
+    if (typeof body.yearsDriving === "number") {
+      const maxYears = Math.max(0, applicantAge - 16);
+      if (body.yearsDriving < 0 || body.yearsDriving > maxYears) {
+        return errorResponse("Years driving cannot exceed your age minus 16");
+      }
+    }
+
+    // Rental dates — today or later, end >= start
     if (!body.startDate || !ISO_DATE_RE.test(body.startDate)) return errorResponse("Start date is invalid");
     if (!body.endDate || !ISO_DATE_RE.test(body.endDate)) return errorResponse("End date is invalid");
+    const today = isoTodayUTC();
+    if (body.startDate < today) return errorResponse("Pickup date cannot be in the past");
+    if (body.endDate < today) return errorResponse("Return date cannot be in the past");
     if (body.endDate < body.startDate) return errorResponse("End date must be on or after start date");
+    if (body.neededByDate && body.neededByDate < today) {
+      return errorResponse("Needed-by date cannot be in the past");
+    }
+
     if (body.termsAccepted !== true) return errorResponse("You must accept the terms");
 
     // 4. Vehicle (if specific) must belong to tenant

@@ -160,6 +160,19 @@ Deno.serve(async (req) => {
         .join("\n")
         .slice(0, 3000);
 
+      // Pre-compute lead-specific signals — these get fed to GPT in the prompt
+      // AND used as a post-hoc multiplier so confidence reflects reality, not
+      // just the model's default certainty.
+      const now = Date.now();
+      const hoursSinceActivity = lead.last_activity_at
+        ? Math.max(0, (now - new Date(lead.last_activity_at).getTime()) / 3_600_000)
+        : 0;
+      const hoursInStage = lead.stage_updated_at
+        ? Math.max(0, (now - new Date(lead.stage_updated_at).getTime()) / 3_600_000)
+        : 0;
+      const inboundCount = ((recent ?? []) as Array<{ direction: string }>).filter((m) => m.direction === "inbound").length;
+      const outboundCount = ((recent ?? []) as Array<{ direction: string }>).filter((m) => m.direction === "outbound").length;
+
       try {
         model = "gpt-4o-mini";
         const completion = await chatCompletion(
@@ -167,20 +180,30 @@ Deno.serve(async (req) => {
             {
               role: "system",
               content:
-                "You are a rental operations assistant. Given a lead's stage, recent messages, " +
-                "and time-in-stage, propose the single most useful next action. Reply ONLY in JSON " +
-                "with keys: action (string slug e.g. send_doc_request, send_followup, run_verification, " +
-                "approve_lead, send_offer, send_agreement, send_payment_link, schedule_pickup, " +
-                "mark_lost, convert_to_rental, do_nothing), confidence (0–1), draftMessage (optional, " +
-                "concise SMS body), reasoning (one sentence).",
+                "You are a rental operations assistant. Propose the single most useful next action " +
+                "for the lead. Reply ONLY in JSON with keys: action (slug: send_welcome, send_doc_request, " +
+                "send_followup, run_verification, approve_lead, send_offer, send_agreement, send_payment_link, " +
+                "schedule_pickup, mark_lost, convert_to_rental, do_nothing), confidence (0–1), " +
+                "draftMessage (optional, concise SMS body), reasoning (one sentence).\n\n" +
+                "CONFIDENCE RULES — calibrate based on signals, do NOT default to 0.9:\n" +
+                "• 0.85–0.95 only when the next action is unambiguous and the lead is actively engaged " +
+                "(recent inbound message OR score=hot OR clear stage trigger like docs_verified).\n" +
+                "• 0.55–0.75 when stage is clear but lead is silent (no inbound for 24h+) or score is cold.\n" +
+                "• 0.30–0.50 when signals conflict (e.g., uploaded docs but explicitly said unsure) " +
+                "or the lead has been silent 48h+ — your suggestion may not work.\n" +
+                "• Below 0.30 when you genuinely think mark_lost or do_nothing is honest.",
             },
             {
               role: "user",
               content:
-                `Lead: ${lead.full_name}\nStage: ${stage}\nStage updated: ${lead.stage_updated_at}\n` +
-                `Last activity: ${lead.last_activity_at}\nScore: ${lead.lead_score ?? "—"} (${lead.score_band ?? "—"})\n` +
-                `Recent messages:\n${transcript || "(none)"}\n\n` +
-                `Stage default action: ${deterministic.action}.`,
+                `Lead: ${lead.full_name}\n` +
+                `Stage: ${stage} (in this stage for ${hoursInStage.toFixed(1)}h)\n` +
+                `Last activity: ${hoursSinceActivity.toFixed(1)}h ago\n` +
+                `Score: ${lead.lead_score ?? "—"} (${lead.score_band ?? "—"})\n` +
+                `Inbound messages in transcript: ${inboundCount}; outbound: ${outboundCount}\n` +
+                `Recent messages:\n${transcript || "(none — lead has never replied)"}\n\n` +
+                `Stage default action: ${deterministic.action}.\n\n` +
+                `Calibrate confidence honestly per the rules above. Don't be over-confident.`,
             },
           ],
           { model, max_tokens: 256, temperature: 0.5 },
@@ -192,9 +215,30 @@ Deno.serve(async (req) => {
         const jsonEnd = txt.lastIndexOf("}");
         const parsed = jsonStart >= 0 && jsonEnd >= 0 ? JSON.parse(txt.slice(jsonStart, jsonEnd + 1)) : null;
         if (parsed?.action) {
+          // Post-hoc adjustment — GPT tends to over-default to ~0.9. Apply a
+          // signal-based dampening so two leads in the same stage but different
+          // engagement levels show different confidence numbers.
+          let raw = Number(parsed.confidence ?? 0.7);
+          if (!Number.isFinite(raw)) raw = 0.7;
+          raw = Math.max(0, Math.min(1, raw));
+
+          let multiplier = 1.0;
+          // Silence penalty — every 24h of silence shaves 8% off, max −40%.
+          if (hoursSinceActivity > 24) {
+            multiplier *= Math.max(0.6, 1 - (hoursSinceActivity - 24) / 24 * 0.08);
+          }
+          // Score-band hint — risk/cold leads carry inherent uncertainty.
+          if (lead.score_band === "risk") multiplier *= 0.7;
+          else if (lead.score_band === "cold") multiplier *= 0.85;
+          else if (lead.score_band === "hot") multiplier *= 1.05;
+          // No inbound ever → operator is talking to a ghost; cap at 0.7.
+          const finalConfidence = inboundCount === 0
+            ? Math.min(0.7, raw * multiplier)
+            : Math.max(0, Math.min(1, raw * multiplier));
+
           result = {
             action: String(parsed.action),
-            confidence: Number(parsed.confidence ?? 0.7),
+            confidence: Number(finalConfidence.toFixed(2)),
             draftMessage: parsed.draftMessage ? String(parsed.draftMessage) : undefined,
             reasoning: parsed.reasoning ? String(parsed.reasoning) : undefined,
           };

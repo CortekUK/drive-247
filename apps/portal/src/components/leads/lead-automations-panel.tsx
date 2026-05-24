@@ -315,10 +315,25 @@ export function LeadAutomationsPanel({ lead }: Props) {
           size="sm"
           onClick={() => setConvertOpen(true)}
           disabled={!canConvert || busy !== null}
+          title={
+            canConvert
+              ? "Create the rental + customer rows"
+              : `Convert is available after the deposit is captured (current stage: ${lead.stage}).`
+          }
         >
           <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Convert to Rental
         </Button>
-        <Button size="sm" variant="outline" onClick={markLost} disabled={!canMarkLost || busy !== null}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={markLost}
+          disabled={!canMarkLost || busy !== null}
+          title={
+            canMarkLost
+              ? "Move lead to Lost and stop any running automations"
+              : `Mark as Lost not allowed from ${lead.stage}`
+          }
+        >
           <XCircle className="mr-1.5 h-3.5 w-3.5" /> Mark as Lost
         </Button>
         <Button
@@ -326,6 +341,11 @@ export function LeadAutomationsPanel({ lead }: Props) {
           variant="destructive"
           onClick={() => setBlacklistOpen(true)}
           disabled={!canTransition(lead.stage, "blacklisted") || busy !== null}
+          title={
+            canTransition(lead.stage, "blacklisted")
+              ? "Block this person from future applications"
+              : `Blacklist not allowed from ${lead.stage}`
+          }
         >
           <Ban className="mr-1.5 h-3.5 w-3.5" /> Add to Blacklist
         </Button>

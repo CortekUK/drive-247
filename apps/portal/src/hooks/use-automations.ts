@@ -158,7 +158,7 @@ export function useCreateAutomation() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["automations", tenant?.id] });
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to create"),
+    onError: (err) => toast.error(fmtError(err, "Failed to create")),
   });
 }
 
@@ -191,7 +191,7 @@ export function useUpdateAutomation() {
       qc.invalidateQueries({ queryKey: ["automations", tenant?.id] });
       qc.invalidateQueries({ queryKey: ["automation", tenant?.id, args.id] });
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to save"),
+    onError: (err) => toast.error(fmtError(err, "Failed to save")),
   });
 }
 
@@ -223,7 +223,20 @@ export function usePublishAutomation() {
         "automation-publish",
         { body: { automationId } },
       );
-      if (error) throw error;
+      if (error) {
+        // FunctionsHttpError keeps the original Response on .context. Without
+        // this read, every 4xx/5xx shows "non-2xx status code" instead of the
+        // actual edge-fn reason (e.g. "Only admin / head_admin can publish").
+        const ctx = (error as { context?: { response?: Response } }).context;
+        if (ctx?.response) {
+          const parsed = await ctx.response.clone().json().catch(() => null);
+          const msg = parsed && typeof parsed === "object" && "error" in parsed
+            ? String((parsed as { error: string }).error)
+            : null;
+          if (msg) throw new Error(msg);
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: (data, automationId) => {
@@ -231,7 +244,7 @@ export function usePublishAutomation() {
       qc.invalidateQueries({ queryKey: ["automation", tenant?.id, automationId] });
       toast.success(`Published v${data?.version}`);
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Publish failed"),
+    onError: (err) => toast.error(fmtError(err, "Publish failed")),
   });
 }
 

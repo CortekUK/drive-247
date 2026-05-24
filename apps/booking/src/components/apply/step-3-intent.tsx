@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useFleetList, type FleetVehicle } from "@/hooks/use-fleet-list";
-import type { ApplyFormValues } from "@/client-schemas/apply";
+import { isoToday, type ApplyFormValues } from "@/client-schemas/apply";
+import { useMemo } from "react";
 
 const PURPOSES = [
   { value: "uber", label: "Uber" },
@@ -31,7 +32,17 @@ export function Step3Intent() {
   const purpose = watch("purpose");
   const vehicleInterestType = watch("vehicleInterestType");
   const ridesharePlatforms = watch("ridesharePlatforms") || [];
+  const startDate = watch("startDate");
   const { data: fleet } = useFleetList();
+
+  // Date bounds: pickup/return can't be in the past; cap 2y out so users can't pick 2099.
+  const dateBounds = useMemo(() => {
+    const max = new Date();
+    max.setFullYear(max.getFullYear() + 2);
+    return { today: isoToday(), max: isoToday(max) };
+  }, []);
+  // Return date must be >= pickup date (if pickup chosen yet).
+  const endMin = startDate && startDate > dateBounds.today ? startDate : dateBounds.today;
 
   const togglePlatform = (p: string) => {
     const next = ridesharePlatforms.includes(p)
@@ -80,7 +91,13 @@ export function Step3Intent() {
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="neededByDate">Needed by</Label>
-          <Input id="neededByDate" type="date" {...register("neededByDate")} />
+          <Input
+            id="neededByDate"
+            type="date"
+            min={dateBounds.today}
+            max={dateBounds.max}
+            {...register("neededByDate")}
+          />
           {errors.neededByDate && <p className="text-xs text-destructive">{errors.neededByDate.message}</p>}
         </div>
         <div className="space-y-1.5">
@@ -143,12 +160,24 @@ export function Step3Intent() {
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="startDate">Pickup date</Label>
-          <Input id="startDate" type="date" {...register("startDate")} />
+          <Input
+            id="startDate"
+            type="date"
+            min={dateBounds.today}
+            max={dateBounds.max}
+            {...register("startDate")}
+          />
           {errors.startDate && <p className="text-xs text-destructive">{errors.startDate.message}</p>}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="endDate">Return date</Label>
-          <Input id="endDate" type="date" {...register("endDate")} />
+          <Input
+            id="endDate"
+            type="date"
+            min={endMin}
+            max={dateBounds.max}
+            {...register("endDate")}
+          />
           {errors.endDate && <p className="text-xs text-destructive">{errors.endDate.message}</p>}
         </div>
       </div>

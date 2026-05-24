@@ -56,6 +56,23 @@ Deno.serve(async (req) => {
       return errorResponse("Vehicle not part of this offer", 400);
     }
 
+    // Vehicle may have been deleted/retired between offer creation and acceptance.
+    // Without this guard we'd hit a FK violation on the leads update and return a
+    // confusing 500 — instead, surface a clean "vehicle_unavailable" so the
+    // customer can pick another from the same offer.
+    const { data: vehicleRow } = await supabase
+      .from("vehicles")
+      .select("id, tenant_id, status")
+      .eq("id", body.vehicleId)
+      .maybeSingle();
+    if (!vehicleRow || vehicleRow.tenant_id !== offer.tenant_id) {
+      return jsonResponse({ status: "vehicle_unavailable", reason: "removed", availableVehicles: vehiclesArr }, 409);
+    }
+    // Retired / maintenance / inactive — anything not actively rentable.
+    if (vehicleRow.status && !["Active", "active", "available"].includes(vehicleRow.status)) {
+      return jsonResponse({ status: "vehicle_unavailable", reason: "retired", availableVehicles: vehiclesArr }, 409);
+    }
+
     // Date flex check
     const flex = offer.date_flex_days ?? 0;
     const sd = Date.parse(body.startDate);

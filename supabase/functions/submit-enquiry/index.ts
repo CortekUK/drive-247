@@ -260,24 +260,31 @@ Deno.serve(async (req) => {
       },
     });
 
-    // Optional admin email (fire-and-forget)
+    // Optional admin email via Resend (fire-and-forget — never block the response)
     if (tenant.admin_email) {
       try {
-        await supabase.functions.invoke("aws-ses-email", {
-          body: {
+        const { sendResendEmail, getTenantBranding, wrapWithBrandedTemplate } = await import("../_shared/resend-service.ts");
+        const branding = await getTenantBranding(tenant.id, supabase);
+        const inner = `
+          <tr><td style="padding:30px;color:#333;line-height:1.6;font-size:15px;">
+            <p>You have received a new enquiry from your booking site.</p>
+            <p><strong>Name:</strong> ${escapeHtml(name)}<br/>
+            <strong>Email:</strong> ${escapeHtml(email)}<br/>
+            <strong>Phone:</strong> ${escapeHtml(phone)}<br/>
+            <strong>Requested dates:</strong> ${escapeHtml(startDate)} → ${escapeHtml(endDate)}</p>
+            <p><strong>Message:</strong><br/>${escapeHtml(description).replace(/\n/g, "<br/>")}</p>
+            <p>Open in the portal to respond.</p>
+          </td></tr>`;
+        const html = wrapWithBrandedTemplate(inner, branding);
+        await sendResendEmail(
+          {
             to: tenant.admin_email,
             subject: `New enquiry — ${name}`,
-            html: `
-              <p>You have received a new enquiry from your booking site.</p>
-              <p><strong>Name:</strong> ${escapeHtml(name)}<br/>
-              <strong>Email:</strong> ${escapeHtml(email)}<br/>
-              <strong>Phone:</strong> ${escapeHtml(phone)}<br/>
-              <strong>Requested dates:</strong> ${escapeHtml(startDate)} → ${escapeHtml(endDate)}</p>
-              <p><strong>Message:</strong><br/>${escapeHtml(description).replace(/\n/g, "<br/>")}</p>
-              <p>Open in the portal to respond.</p>
-            `,
+            html,
+            tenantId: tenant.id,
           },
-        });
+          supabase,
+        );
       } catch (emailErr) {
         console.error("submit-enquiry admin email failed (non-fatal):", emailErr);
       }

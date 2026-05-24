@@ -28,29 +28,56 @@ interface Props {
 
 export function ConvertToRentalDialog({ open, onOpenChange, lead }: Props) {
   const router = useRouter();
-  const [monthlyAmount, setMonthlyAmount] = useState<number>(0);
+  // Empty string lets the input render blank with its placeholder visible —
+  // operators noticed the placeholder "0" was easy to miss and required deleting
+  // before typing a real number.
+  const [monthlyAmount, setMonthlyAmount] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (monthlyAmount <= 0) {
-      toast.error("Enter a price first.");
+    const amount = Number(monthlyAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter a monthly amount greater than 0.");
       return;
     }
     setSubmitting(true);
     try {
-      const { data, error } = await supabase.functions.invoke<{ customerId: string; rentalId: string; status: string }>(
+      const { data, error } = await supabase.functions.invoke<{ customerId: string; rentalId: string | null; status: string }>(
         "convert-lead-to-rental",
         {
           body: {
             leadId: lead.id,
-            pricing: { monthlyAmount, rentalPeriodType: (lead.rental_type as "daily" | "weekly" | "monthly") ?? "weekly" },
+            pricing: { monthlyAmount: amount, rentalPeriodType: (lead.rental_type as "daily" | "weekly" | "monthly") ?? "weekly" },
           },
         },
       );
-      if (error) throw error;
-      toast.success("Rental created!");
+      if (error) {
+        // Surface the real edge-function error body (e.g. "Failed to create
+        // rental: null value in column ...") instead of "non-2xx status code".
+        const ctx = (error as { context?: { response?: Response } }).context;
+        if (ctx?.response) {
+          const parsed = await ctx.response.clone().json().catch(() => null);
+          const msg = parsed && typeof parsed === "object" && "error" in parsed
+            ? String((parsed as { error: string }).error)
+            : null;
+          if (msg) throw new Error(msg);
+        }
+        throw error;
+      }
+      // The function is idempotent. Read the actual outcome instead of always
+      // claiming success — the old "Rental created!" toast lied when the lead
+      // was already half-converted.
+      if (!data?.rentalId) {
+        toast.error("Conversion incomplete — no rental was created. Check logs.");
+        return;
+      }
+      if (data.status === "already_converted") {
+        toast.success("Already converted — opening existing rental.");
+      } else {
+        toast.success("Rental created!");
+      }
       onOpenChange(false);
-      if (data?.rentalId) router.push(`/rentals/${data.rentalId}`);
+      router.push(`/rentals/${data.rentalId}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Conversion failed");
     } finally {
@@ -91,8 +118,10 @@ export function ConvertToRentalDialog({ open, onOpenChange, lead }: Props) {
               type="number"
               min={0}
               step={1}
+              placeholder="e.g. 1200"
               value={monthlyAmount}
-              onChange={(e) => setMonthlyAmount(Number(e.target.value))}
+              onChange={(e) => setMonthlyAmount(e.target.value)}
+              autoFocus
             />
             <p className="text-[11px] text-muted-foreground">
               Per the rentals schema, monthly_amount is required. Adjust later from the rental
