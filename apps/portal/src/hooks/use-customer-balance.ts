@@ -3,13 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
 
-// Sum the outstanding PAYG accruals for a customer's rentals. The auto-allocate
-// trigger drains ledger_entries.remaining_amount when older Partial/Credit
-// payments cover newly-inserted Charges, so the ledger balance for a PAYG-only
-// customer can read 0 even though `payg_accruals.invoice_status='open'` rows
-// still exist. Source of truth for PAYG outstanding is the accruals table —
-// sum of (daily_rate + tax_amount + service_fee_amount) for open rows on
-// non-closed, non-cancelled rentals owned by the customer.
+// PAYG rentals: source of truth for outstanding is payg_accruals (the rental
+// detail page's Balance Due tile uses exactly this — sum of dayTotal on rows
+// with invoice_status='open'). Fixed-term rentals: source of truth is
+// ledger_entries.remaining_amount on Charges.
+//
+// These two sources point at the SAME money for an unpaid PAYG day: an open
+// accrual *and* a Charge row with non-zero remaining_amount both exist. Summing
+// them double-counts (used to show $223 against $111 actual owed). Callers
+// must keep the two sources disjoint by rental type — see fetchPaygRentalIds.
 async function fetchPaygOutstandingForCustomer(
   customerId: string,
   tenantId: string,
@@ -34,6 +36,27 @@ async function fetchPaygOutstandingForCustomer(
     total += Number(a.daily_rate || 0) + Number(a.tax_amount || 0) + Number(a.service_fee_amount || 0);
   });
   return total;
+}
+
+// Return the set of rental IDs flagged is_pay_as_you_go for this customer.
+// Used to exclude their ledger Charge rows from outstanding sums so the
+// authoritative payg_accruals figure isn't double-counted.
+async function fetchPaygRentalIds(
+  customerId: string,
+  tenantId: string,
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("rentals")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("customer_id", customerId)
+    .eq("is_pay_as_you_go", true);
+
+  if (error) {
+    console.error("Error fetching PAYG rental IDs:", error);
+    return new Set();
+  }
+  return new Set((data || []).map(r => r.id));
 }
 
 // Single source of truth: Customer balance calculation from ledger_entries
@@ -62,6 +85,8 @@ export const useCustomerBalance = (customerId: string | undefined) => {
       if (rentalsError) throw rentalsError;
       const excludedRentalIds = new Set(excludedRentals?.map(r => r.id) || []);
 
+      const paygRentalIds = await fetchPaygRentalIds(customerId, tenant.id);
+
       // Get all charge entries for this customer
       const { data, error } = await supabase
         .from("ledger_entries")
@@ -72,10 +97,12 @@ export const useCustomerBalance = (customerId: string | undefined) => {
 
       if (error) throw error;
 
-      // Sum remaining_amount for charges that are currently due, excluding cancelled/rejected rentals
+      // Sum remaining_amount for charges that are currently due, excluding
+      // cancelled/rejected rentals AND PAYG rentals (PAYG outstanding comes
+      // from payg_accruals — counting both double-charges open PAYG days).
       const ledgerBalance = data.reduce((sum, entry) => {
-        // Skip charges from cancelled/rejected rentals
         if (entry.rental_id && excludedRentalIds.has(entry.rental_id)) return sum;
+        if (entry.rental_id && paygRentalIds.has(entry.rental_id)) return sum;
         // For rental charges, only include if currently due (due_date <= today)
         if (entry.category === 'Rental' && entry.due_date && new Date(entry.due_date) > new Date()) {
           return sum;
@@ -118,6 +145,8 @@ export const useCustomerBalanceWithStatus = (customerId: string | undefined) => 
       if (rentalsError) throw rentalsError;
       const excludedRentalIds = new Set(excludedRentals?.map(r => r.id) || []);
 
+      const paygRentalIds = await fetchPaygRentalIds(customerId, tenant.id);
+
       // Get all entries for this customer
       const { data: ledgerData, error: ledgerError } = await supabase
         .from("ledger_entries")
@@ -148,6 +177,11 @@ export const useCustomerBalanceWithStatus = (customerId: string | undefined) => 
           if (entry.rental_id && excludedRentalIds.has(entry.rental_id)) return;
 
           totalCharges += entry.amount;
+
+          // Skip ledger contribution from PAYG rentals — payg_accruals is the
+          // authoritative source for those and gets added separately below.
+          // Including both sums the same open day twice.
+          if (entry.rental_id && paygRentalIds.has(entry.rental_id)) return;
 
           // For rental charges, only include remaining if currently due
           if (entry.category === 'Rental' && entry.due_date && new Date(entry.due_date) > new Date()) {
@@ -256,13 +290,22 @@ export const useRentalChargesAndPayments = (rentalId: string | undefined) => {
       if (!tenant) throw new Error("No tenant context available");
       if (!rentalId) return { charges: 0, payments: 0, outstanding: 0 };
 
-      const { data, error } = await supabase
-        .from("ledger_entries")
-        .select("type, amount, remaining_amount, category")
-        .eq("tenant_id", tenant.id)
-        .eq("rental_id", rentalId);
+      const [ledgerRes, rentalRes] = await Promise.all([
+        supabase
+          .from("ledger_entries")
+          .select("type, amount, remaining_amount, category")
+          .eq("tenant_id", tenant.id)
+          .eq("rental_id", rentalId),
+        supabase
+          .from("rentals")
+          .select("is_pay_as_you_go")
+          .eq("id", rentalId)
+          .maybeSingle(),
+      ]);
 
-      if (error) throw error;
+      if (ledgerRes.error) throw ledgerRes.error;
+      const data = ledgerRes.data || [];
+      const isPayg = !!(rentalRes.data as any)?.is_pay_as_you_go;
 
       const isExtensionCategory = (cat: string | null | undefined) =>
         typeof cat === 'string' && cat.startsWith('Extension');
@@ -275,9 +318,14 @@ export const useRentalChargesAndPayments = (rentalId: string | undefined) => {
         .filter(entry => entry.type === 'Payment')
         .reduce((sum, entry) => sum + entry.amount, 0));
 
-      const ledgerOutstanding = data
-        .filter(entry => entry.type === 'Charge' && !isExtensionCategory(entry.category))
-        .reduce((sum, entry) => sum + entry.remaining_amount, 0);
+      // For PAYG rentals, ignore ledger Charge.remaining — payg_accruals below
+      // is authoritative and both sources track the same open days. Summing
+      // them double-counts (e.g. days 8+9 showing $223 instead of $111).
+      const ledgerOutstanding = isPayg
+        ? 0
+        : data
+            .filter(entry => entry.type === 'Charge' && !isExtensionCategory(entry.category))
+            .reduce((sum, entry) => sum + entry.remaining_amount, 0);
 
       // Add open PAYG accrual day-totals for this rental, if any.
       const { data: paygOpen } = await supabase

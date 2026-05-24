@@ -292,44 +292,64 @@ const CustomerDetail = () => {
   const { data: gigDriverImages } = useGigDriverImages(id);
   const deleteGigDriverImage = useDeleteGigDriverImage();
 
-  // Fetch per-rental outstanding amounts.
-  // For fixed-term rentals: sum ledger Charge.remaining_amount.
-  // For PAYG rentals: ledger remaining drops to 0 as soon as the auto-allocate
-  // trigger drains older Partial/Credit payments, so add open accrual day-totals
-  // from payg_accruals to get the real outstanding shown on the rental detail page.
+  // Per-rental outstanding, matched to the rental detail page math so the same
+  // number shows in both places. Switch the source by rental type:
+  //   - PAYG rentals: sum open payg_accruals' day_total (rental detail's
+  //     `balanceDue` in use-payg-invoices.ts uses exactly this).
+  //   - Fixed-term rentals: sum ledger_entries.remaining_amount on Charges.
+  // Mixing both sources double-counts open PAYG days (the ledger Charge row
+  // and the open accrual point at the same money).
   const { data: rentalOutstandings } = useQuery({
     queryKey: ["customer-rental-outstandings", tenant?.id, id],
     queryFn: async () => {
       if (!tenant) throw new Error("No tenant context available");
 
-      const [ledgerRes, paygRes] = await Promise.all([
-        supabase
-          .from("ledger_entries")
-          .select("rental_id, remaining_amount")
-          .eq("tenant_id", tenant.id)
-          .eq("customer_id", id)
-          .eq("type", "Charge"),
-        supabase
-          .from("payg_accruals")
-          .select("rental_id, daily_rate, tax_amount, service_fee_amount, rentals!inner(customer_id, payg_closed_at)")
-          .eq("tenant_id", tenant.id)
-          .eq("rentals.customer_id", id)
-          .eq("invoice_status", "open")
-          .is("rentals.payg_closed_at", null),
+      const rentalsRes = await supabase
+        .from("rentals")
+        .select("id, is_pay_as_you_go")
+        .eq("tenant_id", tenant.id)
+        .eq("customer_id", id);
+      if (rentalsRes.error) throw rentalsRes.error;
+
+      const paygRentalIds = (rentalsRes.data || [])
+        .filter(r => r.is_pay_as_you_go)
+        .map(r => r.id);
+      const fixedRentalIds = (rentalsRes.data || [])
+        .filter(r => !r.is_pay_as_you_go)
+        .map(r => r.id);
+
+      const [paygRes, ledgerRes] = await Promise.all([
+        paygRentalIds.length > 0
+          ? supabase
+              .from("payg_accruals")
+              .select("rental_id, daily_rate, tax_amount, service_fee_amount, rentals!inner(payg_closed_at)")
+              .eq("tenant_id", tenant.id)
+              .in("rental_id", paygRentalIds)
+              .eq("invoice_status", "open")
+              .is("rentals.payg_closed_at", null)
+          : Promise.resolve({ data: [], error: null }),
+        fixedRentalIds.length > 0
+          ? supabase
+              .from("ledger_entries")
+              .select("rental_id, remaining_amount")
+              .eq("tenant_id", tenant.id)
+              .in("rental_id", fixedRentalIds)
+              .eq("type", "Charge")
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
-      if (ledgerRes.error) throw ledgerRes.error;
       if (paygRes.error) console.error("PAYG outstanding fetch failed:", paygRes.error);
+      if (ledgerRes.error) throw ledgerRes.error;
 
       const map: Record<string, number> = {};
-      ledgerRes.data?.forEach(entry => {
-        const key = entry.rental_id || "__no_rental__";
-        map[key] = (map[key] || 0) + (entry.remaining_amount || 0);
-      });
       (paygRes.data as any[])?.forEach(a => {
         const key = a.rental_id || "__no_rental__";
         const dayTotal = Number(a.daily_rate || 0) + Number(a.tax_amount || 0) + Number(a.service_fee_amount || 0);
         map[key] = (map[key] || 0) + dayTotal;
+      });
+      (ledgerRes.data as any[])?.forEach(entry => {
+        const key = entry.rental_id || "__no_rental__";
+        map[key] = (map[key] || 0) + Number(entry.remaining_amount || 0);
       });
       return map;
     },
