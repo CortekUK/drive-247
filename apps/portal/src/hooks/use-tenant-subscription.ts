@@ -188,6 +188,17 @@ export function useTenantSubscription() {
   // Only consider "loading" when actually fetching, not when errored
   const isLoading = subscriptionQuery.isLoading && !subscriptionQuery.isError;
 
+  // True once the subscription query has actually resolved at least once
+  // (even with null data). Use this for gate decisions instead of !isLoading,
+  // because isLoading is also false while the query is disabled (no tenant yet).
+  const isResolved =
+    !!tenant &&
+    (subscriptionQuery.isSuccess || subscriptionQuery.isError) &&
+    (pastSubscriptionQuery.isSuccess ||
+      pastSubscriptionQuery.isError ||
+      !pastSubscriptionQuery.fetchStatus ||
+      pastSubscriptionQuery.fetchStatus === "idle");
+
   return {
     subscription: subscriptionQuery.data,
     isSubscribed,
@@ -195,6 +206,7 @@ export function useTenantSubscription() {
     isTrialing,
     trialDaysRemaining,
     isLoading,
+    isResolved,
     invoices: invoicesQuery.data || [],
     invoicesLoading: invoicesQuery.isLoading,
     createCheckoutSession,

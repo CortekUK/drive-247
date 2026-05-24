@@ -21,7 +21,16 @@ function formatPrice(amount: number, currency: string) {
   }).format(amount / 100);
 }
 
-export function SubscriptionGateDialog() {
+interface SubscriptionGateDialogProps {
+  /**
+   * When omitted, defaults to `true` (matching the legacy always-open behavior).
+   * Prefer passing this explicitly so the dialog can stay mounted across
+   * gate-state flips without losing internal step/selection state.
+   */
+  open?: boolean;
+}
+
+export function SubscriptionGateDialog({ open = true }: SubscriptionGateDialogProps = {}) {
   const [step, setStep] = useState<"intro" | "plans">("intro");
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState(false);
@@ -56,7 +65,7 @@ export function SubscriptionGateDialog() {
   };
 
   return (
-    <Dialog open>
+    <Dialog open={open}>
       <DialogContent
         className="sm:max-w-md [&>button:last-child]:hidden"
         onPointerDownOutside={(e) => e.preventDefault()}

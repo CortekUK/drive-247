@@ -6,8 +6,10 @@ import { useAuth } from "@/stores/auth-store";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
+import { useTenantSubscriptionRealtime } from "@/hooks/use-tenant-subscription-realtime";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
+import { SubscriptionBlockScreen } from "@/components/subscription/subscription-block-screen";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { HeaderSearch } from "@/components/shared/layout/header-search";
 import { UserMenu } from "@/components/shared/layout/user-menu";
@@ -67,13 +69,46 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { user, appUser, loading } = useAuth();
-  const { tenant } = useTenant();
-  const { isSubscribed, isLoading: subscriptionLoading } = useTenantSubscription();
+  const { tenant, loading: tenantLoading } = useTenant();
+  const {
+    isSubscribed,
+    hasExpiredSubscription,
+    isResolved: subscriptionResolved,
+  } = useTenantSubscription();
   const { isManager, canAccessRoute, isLoading: permissionsLoading } = useManagerPermissions();
-  const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
-  const isSubscriptionPage = pathname === "/subscription" || pathname === "/credits" || pathname?.startsWith("/settings");
+  const { data: plans, isSuccess: plansResolved } = useSubscriptionPlans();
+
+  // Keep subscription state fresh via Supabase realtime — webhook updates
+  // invalidate the query immediately instead of waiting for a refresh.
+  useTenantSubscriptionRealtime();
+
+  // Pages where the user MUST be able to reach even without a subscription —
+  // otherwise they'd have no way to subscribe or contact us.
+  const isSubscriptionPage =
+    pathname === "/subscription" ||
+    pathname === "/credits" ||
+    pathname?.startsWith("/settings");
+
   const hasActivePlans = !!plans && plans.length > 0;
-  const showSetupGate = !subscriptionLoading && !plansLoading && !isSubscribed && hasActivePlans && !isSubscriptionPage;
+
+  // Fail-CLOSED gate: until BOTH subscription + plans queries have actually
+  // resolved (and tenant context has loaded), we treat the user as gated.
+  // This prevents the "modal sometimes doesn't appear" race where transient
+  // loading-false states briefly satisfied the negation-based check.
+  const gateStateKnown = !tenantLoading && subscriptionResolved && plansResolved;
+
+  // Expired/canceled subscription — hard full-screen block (defense in depth;
+  // middleware also redirects, but this catches state changes mid-session).
+  const showBlockScreen =
+    gateStateKnown && hasExpiredSubscription && !isSubscriptionPage;
+
+  // Never-subscribed but plans exist — show Finish Setup modal.
+  const showSetupGate =
+    gateStateKnown &&
+    !isSubscribed &&
+    !hasExpiredSubscription &&
+    hasActivePlans &&
+    !isSubscriptionPage;
 
   useEffect(() => {
     if (!loading) {
@@ -139,8 +174,18 @@ export default function DashboardLayout({
         {/* Global voice call — always listening for inbound calls */}
         <GlobalVoiceCallProvider />
 
-        {/* Hard gate — blocks access until billing setup is complete */}
-        {showSetupGate && <SubscriptionGateDialog />}
+        {/* Hard gate — never-subscribed tenants see the Finish Setup modal.
+            Dialog is always mounted; visibility is driven by the `open` prop
+            so we avoid Radix mount/unmount races that previously caused the
+            modal to fail to appear without a page refresh. */}
+        <SubscriptionGateDialog open={showSetupGate} />
+
+        {/* Expired/canceled — full-screen block, non-dismissible. */}
+        {showBlockScreen && (
+          <SubscriptionBlockScreen
+            onViewPlans={() => router.push("/subscription")}
+          />
+        )}
       </SidebarProvider>
     </DynamicThemeProvider>
   );
