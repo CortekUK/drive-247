@@ -7,77 +7,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// Server-only client used for the subscription gate. Service role is required
-// to read tenant_subscriptions / subscription_plans without a user session —
-// the middleware runs before client-side React, so we can't use the user JWT.
-const supabaseAdmin = process.env.SUPABASE_SERVICE_ROLE_KEY
-  ? createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      { auth: { persistSession: false, autoRefreshToken: false } }
-    )
-  : null;
-
-// Paths a tenant MUST be able to reach even when unsubscribed, otherwise
-// they'd have no way to subscribe, manage billing, contact support, or log in.
-const SUBSCRIPTION_EXEMPT_PATHS = [
-  '/login',
-  '/forgot-password',
-  '/reset-password',
-  '/auth',
-  '/subscription',
-  '/credits',
-  '/settings',
-];
-
-function isExemptPath(pathname: string): boolean {
-  return SUBSCRIPTION_EXEMPT_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(p + '/')
-  );
-}
-
-/**
- * Returns true if the tenant has an active/trialing/past_due subscription,
- * OR has no configured plans (in which case the gate would be unrecoverable —
- * super admin needs to set up plans before we can block them).
- *
- * Fails OPEN (returns true) on any error so we don't take everyone offline
- * during a DB hiccup. The client-side gate is still in place as a backstop.
- */
-async function tenantHasSubscriptionOrNoPlans(tenantSlug: string): Promise<boolean> {
-  if (!supabaseAdmin) return true;
-  try {
-    const { data: tenant } = await supabaseAdmin
-      .from('tenants')
-      .select('id')
-      .eq('slug', tenantSlug)
-      .eq('status', 'active')
-      .maybeSingle();
-
-    if (!tenant?.id) return true;
-
-    const { data: activeSub } = await supabaseAdmin
-      .from('tenant_subscriptions')
-      .select('id')
-      .eq('tenant_id', tenant.id)
-      .in('status', ['active', 'trialing', 'past_due'])
-      .maybeSingle();
-
-    if (activeSub) return true;
-
-    const { count: planCount } = await supabaseAdmin
-      .from('subscription_plans')
-      .select('id', { count: 'exact', head: true })
-      .eq('tenant_id', tenant.id)
-      .eq('is_active', true);
-
-    // No plans configured → can't subscribe → don't lock them out.
-    return !planCount || planCount === 0;
-  } catch (err) {
-    console.error('[middleware] subscription gate check failed:', err);
-    return true;
-  }
-}
 
 // Domains that belong to us — NOT custom tenant domains
 const PLATFORM_DOMAINS = ['drive-247.com', 'localhost', 'vercel.app'];
@@ -112,27 +41,19 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Add tenant context to headers so it's available in server components
+  // Add tenant context to headers so it's available in server components.
   const requestHeaders = new Headers(request.headers);
   if (tenantSlug) {
     requestHeaders.set('x-tenant-slug', tenantSlug);
   }
 
-  // Hard server-side subscription gate. Runs before any page renders, so a
-  // tenant without an active subscription literally cannot reach the dashboard
-  // — no client-side bypass possible. Exempt paths (/login, /subscription,
-  // /settings, etc.) are always allowed so the user can recover.
-  if (tenantSlug && !isExemptPath(request.nextUrl.pathname)) {
-    const allowed = await tenantHasSubscriptionOrNoPlans(tenantSlug);
-    if (!allowed) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = '/subscription';
-      redirectUrl.search = '';
-      return NextResponse.redirect(redirectUrl, { status: 307 });
-    }
-  }
-
-  // Continue with the request
+  // Continue with the request — we deliberately DO NOT redirect unsubscribed
+  // tenants. The dashboard layout mounts SubscriptionGateDialog as a hard,
+  // non-dismissible modal (no escape, no outside-click, no close button) that
+  // blocks all interaction with the page beneath. Redirecting would skip the
+  // modal and dump the user on the plain /subscription page, losing the
+  // in-context block. The modal + edge-function subscription-gate helper
+  // provide the hard enforcement; RLS already protects data access.
   return NextResponse.next({
     request: {
       headers: requestHeaders,
