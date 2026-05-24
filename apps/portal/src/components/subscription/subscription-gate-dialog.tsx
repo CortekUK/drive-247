@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CreditCard, Loader2, Check, Mail } from "lucide-react";
+import { CreditCard, Loader2, Check, Mail, ShieldAlert } from "lucide-react";
 
 function formatPrice(amount: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -28,9 +28,19 @@ interface SubscriptionGateDialogProps {
    * gate-state flips without losing internal step/selection state.
    */
   open?: boolean;
+  /**
+   * "setup" — never-subscribed tenant, Finish Setup copy + Complete Setup CTA.
+   * "expired" — subscription ended/canceled, harder language + Resubscribe CTA.
+   * Both are equally non-dismissible.
+   */
+  variant?: "setup" | "expired";
 }
 
-export function SubscriptionGateDialog({ open = true }: SubscriptionGateDialogProps = {}) {
+export function SubscriptionGateDialog({
+  open = true,
+  variant = "setup",
+}: SubscriptionGateDialogProps = {}) {
+  const isExpired = variant === "expired";
   const [step, setStep] = useState<"intro" | "plans">("intro");
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState(false);
@@ -74,36 +84,61 @@ export function SubscriptionGateDialog({ open = true }: SubscriptionGateDialogPr
         {step === "intro" ? (
           <>
             <DialogHeader className="text-center sm:text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <CreditCard className="h-6 w-6 text-primary" />
+              <div
+                className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full ${
+                  isExpired ? "bg-destructive/10" : "bg-primary/10"
+                }`}
+              >
+                {isExpired ? (
+                  <ShieldAlert className="h-6 w-6 text-destructive" />
+                ) : (
+                  <CreditCard className="h-6 w-6 text-primary" />
+                )}
               </div>
               <DialogTitle className="text-xl">
-                Finish Setup to Continue
+                {isExpired
+                  ? "Your subscription has ended"
+                  : "Finish Setup to Continue"}
               </DialogTitle>
             </DialogHeader>
 
             <div className="space-y-3 text-sm text-muted-foreground">
-              <p>
-                To complete your Drive247 setup, please add your billing
-                details.
-              </p>
-              {trialLabel && (
-                <p>
-                  Your subscription will begin automatically{" "}
-                  <span className="font-medium text-foreground">
-                    {trialLabel} after setup is completed
-                  </span>
-                  .
-                </p>
+              {isExpired ? (
+                <>
+                  <p>
+                    Your trial or subscription has expired. To continue using
+                    Drive247, please resubscribe to a plan.
+                  </p>
+                  <p className="font-medium text-foreground">
+                    Access to the dashboard is paused until your subscription
+                    is active.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    To complete your Drive247 setup, please add your billing
+                    details.
+                  </p>
+                  {trialLabel && (
+                    <p>
+                      Your subscription will begin automatically{" "}
+                      <span className="font-medium text-foreground">
+                        {trialLabel} after setup is completed
+                      </span>
+                      .
+                    </p>
+                  )}
+                  <p className="font-medium text-foreground">
+                    No charges are taken at this stage.
+                  </p>
+                </>
               )}
-              <p className="font-medium text-foreground">
-                No charges are taken at this stage.
-              </p>
             </div>
 
             <div className="mt-2">
               <Button onClick={() => setStep("plans")} className="w-full">
-                Complete Setup
+                {isExpired ? "Resubscribe Now" : "Complete Setup"}
               </Button>
             </div>
           </>

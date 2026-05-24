@@ -9,7 +9,6 @@ import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { useTenantSubscriptionRealtime } from "@/hooks/use-tenant-subscription-realtime";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
-import { SubscriptionBlockScreen } from "@/components/subscription/subscription-block-screen";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { HeaderSearch } from "@/components/shared/layout/header-search";
 import { UserMenu } from "@/components/shared/layout/user-menu";
@@ -97,12 +96,11 @@ export default function DashboardLayout({
   // loading-false states briefly satisfied the negation-based check.
   const gateStateKnown = !tenantLoading && subscriptionResolved && plansResolved;
 
-  // Expired/canceled subscription — hard full-screen block (defense in depth;
-  // middleware also redirects, but this catches state changes mid-session).
-  const showBlockScreen =
+  // Expired/canceled subscription — same hard modal, different copy.
+  const showExpiredGate =
     gateStateKnown && hasExpiredSubscription && !isSubscriptionPage;
 
-  // Never-subscribed but plans exist — show Finish Setup modal.
+  // Never-subscribed but plans exist — Finish Setup modal.
   const showSetupGate =
     gateStateKnown &&
     !isSubscribed &&
@@ -174,18 +172,14 @@ export default function DashboardLayout({
         {/* Global voice call — always listening for inbound calls */}
         <GlobalVoiceCallProvider />
 
-        {/* Hard gate — never-subscribed tenants see the Finish Setup modal.
-            Dialog is always mounted; visibility is driven by the `open` prop
-            so we avoid Radix mount/unmount races that previously caused the
-            modal to fail to appear without a page refresh. */}
-        <SubscriptionGateDialog open={showSetupGate} />
-
-        {/* Expired/canceled — full-screen block, non-dismissible. */}
-        {showBlockScreen && (
-          <SubscriptionBlockScreen
-            onViewPlans={() => router.push("/subscription")}
-          />
-        )}
+        {/* Hard gate modal. Same component for both states — different copy
+            via `variant`. Dialog stays mounted; visibility is driven by
+            `open` so we avoid Radix mount/unmount races that previously
+            caused the modal to fail to appear without a page refresh. */}
+        <SubscriptionGateDialog
+          open={showSetupGate || showExpiredGate}
+          variant={showExpiredGate ? "expired" : "setup"}
+        />
       </SidebarProvider>
     </DynamicThemeProvider>
   );
