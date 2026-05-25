@@ -119,7 +119,11 @@ export default function RevenueOptimiserPage() {
             Revenue Optimiser
           </div>
           <h1 className="mt-1 text-[28px] font-medium text-[#080812]">
-            {inRecommendationsMode ? "Recommendations" : "Insights"} · <span className="capitalize">{mode}</span> mode
+            {mode === "autopilot"
+              ? "Recommendations · Autopilot"
+              : mode === "recommendations"
+                ? "Recommendations"
+                : "Insights"}
           </h1>
           <p className="mt-1 text-sm text-[#737373]">
             {inRecommendationsMode
