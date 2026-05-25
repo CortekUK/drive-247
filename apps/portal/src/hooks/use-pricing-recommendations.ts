@@ -61,8 +61,19 @@ export interface PricingRecommendation {
   // Phase 4 — combined recommendation (price drop + matching leads)
   is_combined?: boolean;
   matched_lead_ids?: string[] | null;
-  // Joined vehicle metadata (when requested)
-  vehicle?: { reg: string | null; make: string | null; model: string | null; category: string | null } | null;
+  // Joined vehicle metadata (when requested). Includes live tier rents so the
+  // card can show the *current* price (not the snapshot baked into the rec
+  // at generate time, which may be stale if the operator edited the vehicle
+  // directly since 07:00 UTC).
+  vehicle?: {
+    reg: string | null;
+    make: string | null;
+    model: string | null;
+    category: string | null;
+    daily_rent?: number | null;
+    weekly_rent?: number | null;
+    monthly_rent?: number | null;
+  } | null;
 }
 
 export interface PricingOutcome {
@@ -107,7 +118,7 @@ export function usePricingRecommendations(filters: RecommendationFilters = {}) {
       const nowIso = new Date().toISOString();
       let query = supabase
         .from("pricing_recommendations")
-        .select("*, vehicle:vehicles(reg, make, model, category)")
+        .select("*, vehicle:vehicles(reg, make, model, category, daily_rent, weekly_rent, monthly_rent)")
         .eq("tenant_id", tenant.id)
         .in("status", statuses)
         .or(`snoozed_until.is.null,snoozed_until.gt.${nowIso}`);
@@ -138,7 +149,7 @@ export function usePricingRecommendation(id: string | null | undefined) {
       if (!id || !tenant?.id) return null;
       const { data, error } = await supabase
         .from("pricing_recommendations")
-        .select("*, vehicle:vehicles(reg, make, model, category)")
+        .select("*, vehicle:vehicles(reg, make, model, category, daily_rent, weekly_rent, monthly_rent)")
         .eq("id", id)
         .maybeSingle();
       if (error) throw error;

@@ -167,11 +167,14 @@ Deno.serve(async (req) => {
 
         const vehicleIds = stats.map((s) => s.vehicle_id);
 
-        // Quality gate
+        // Quality gate — pre-filter disposed at the SQL level (defence in depth).
+        // The per-row checkVehicleQuality also rejects disposed, but excluding
+        // here saves bytes + ensures we never generate a rec for a binned car.
         const { data: vehiclesRaw } = await supabase
           .from("vehicles")
           .select("id, tenant_id, daily_rent, weekly_rent, monthly_rent, is_disposed, status, category, created_at")
-          .in("id", vehicleIds);
+          .in("id", vehicleIds)
+          .or("is_disposed.is.null,is_disposed.eq.false");
         const vehicleById = new Map(
           ((vehiclesRaw ?? []) as VehicleRow[]).map((v) => [v.id, v] as const),
         );

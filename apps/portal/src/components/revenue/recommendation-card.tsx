@@ -41,12 +41,19 @@ interface Props {
 }
 
 export function RecommendationCard({ rec, onApply, onDetails, onDismiss, onSnooze, isBusy }: Props) {
-  const diff = rec.recommended_price - rec.current_price;
-  const pct = rec.current_price > 0 ? (diff / rec.current_price) * 100 : 0;
-  const goingUp = diff > 0;
   const v = rec.vehicle;
+  // Phase 3 patch — prefer the LIVE price from the joined vehicle row over
+  // the snapshot stored on the rec. If the operator edited the price on the
+  // vehicle page between this morning's generate and now, the card shows
+  // the true "from → to" delta. Falls back to rec.current_price if the
+  // join didn't run.
+  const liveCurrent = liveCurrentPriceFor(v, rec.tier) ?? rec.current_price;
+  const diff = rec.recommended_price - liveCurrent;
+  const pct = liveCurrent > 0 ? (diff / liveCurrent) * 100 : 0;
+  const goingUp = diff > 0;
   const title = [v?.make, v?.model].filter(Boolean).join(" ") || "Vehicle";
   const top3 = (rec.reasons ?? []).slice(0, 3);
+  const priceShifted = Math.abs(liveCurrent - rec.current_price) >= 1;
 
   return (
     <article className="rounded-lg border border-[#f1f5f9] bg-white p-5 transition-colors hover:border-indigo-200">
@@ -78,7 +85,7 @@ export function RecommendationCard({ rec, onApply, onDetails, onDismiss, onSnooz
           </div>
           <h3 className="mt-1 truncate text-base font-medium text-[#080812]">{title}</h3>
           <div className="mt-2 flex items-baseline gap-2 tabular-nums">
-            <span className="text-sm text-[#737373] line-through">{fmtMoney(rec.current_price)}</span>
+            <span className="text-sm text-[#737373] line-through">{fmtMoney(liveCurrent)}</span>
             <span className="text-2xl font-medium text-[#080812]">{fmtMoney(rec.recommended_price)}</span>
             <span className={`flex items-center gap-0.5 text-xs font-medium ${goingUp ? "text-emerald-600" : "text-red-600"}`}>
               {goingUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -87,6 +94,11 @@ export function RecommendationCard({ rec, onApply, onDetails, onDismiss, onSnooz
           </div>
           <div className="mt-1 text-[11px] text-[#737373]">
             Range {fmtMoney(rec.recommended_range_low)} – {fmtMoney(rec.recommended_range_high)}
+            {priceShifted && (
+              <span className="ml-1 text-amber-700">
+                · price was {fmtMoney(rec.current_price)} when generated
+              </span>
+            )}
           </div>
         </div>
 
@@ -162,4 +174,19 @@ export function RecommendationCard({ rec, onApply, onDetails, onDismiss, onSnooz
       </div>
     </article>
   );
+}
+
+/** Pull the live tier rent from the joined vehicle row. Null if the join didn't run. */
+function liveCurrentPriceFor(
+  vehicle: PricingRecommendation["vehicle"],
+  tier: PricingRecommendation["tier"],
+): number | null {
+  if (!vehicle) return null;
+  const key =
+    tier === "daily" ? "daily_rent" :
+    tier === "weekly" ? "weekly_rent" :
+    tier === "monthly" ? "monthly_rent" :
+    "daily_rent";  // weekend_daily uses the daily column
+  const raw = (vehicle as Record<string, unknown>)[key];
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
 }

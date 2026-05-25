@@ -122,17 +122,59 @@ Deno.serve(async (req) => {
     const usedCustomPrice = body.customPrice != null && Number(body.customPrice) !== Number(rec.recommended_price);
     const changeSource = usedCustomPrice ? "manual" : "ai_recommendation";
 
-    // 3. UPDATE vehicles.{tier}_rent
+    // 3. ATOMIC CLAIM (Phase 3 patch) — flip the rec to 'applied' first, only
+    //    if it's still 'pending' or 'pending_approval'. If two admins click
+    //    Apply at the same time (or the autopilot cron is mid-run), exactly
+    //    one wins this update — the other gets 0 rows back and bails before
+    //    any vehicle/audit mutation. Prevents double-apply duplicates in the
+    //    audit log.
+    const { data: applied, error: claimErr } = await supabase
+      .from("pricing_recommendations")
+      .update({
+        status: "applied",
+        applied_at: new Date().toISOString(),
+        applied_by: appUser.id,
+        applied_price: targetPrice,
+        applied_source: "manual",
+      })
+      .eq("id", rec.id)
+      .in("status", ["pending", "pending_approval"])
+      .select("*")
+      .maybeSingle();
+    if (claimErr) {
+      console.error("recommendation claim error:", claimErr);
+      return errorResponse(claimErr.message ?? "Failed to claim recommendation", 500);
+    }
+    if (!applied) {
+      // Someone else just won this race — most likely the autopilot cron or
+      // a parallel browser tab. Re-read so the operator sees the current state.
+      const { data: latest } = await supabase
+        .from("pricing_recommendations")
+        .select("status")
+        .eq("id", rec.id)
+        .maybeSingle();
+      return errorResponse(
+        `Recommendation is now ${latest?.status ?? "unknown"} — refresh to see the latest state`,
+        409,
+      );
+    }
+
+    // 4. UPDATE vehicles.{tier}_rent
     const { error: vehErr } = await supabase
       .from("vehicles")
       .update({ [tierCol]: targetPrice })
       .eq("id", rec.vehicle_id);
     if (vehErr) {
+      // Best-effort rollback of the claim so the operator can retry.
+      await supabase
+        .from("pricing_recommendations")
+        .update({ status: "pending", applied_at: null, applied_by: null, applied_price: null, applied_source: null })
+        .eq("id", rec.id);
       console.error("vehicles update error:", vehErr);
       return errorResponse(vehErr.message ?? "Failed to update vehicle price", 500);
     }
 
-    // 4. INSERT immutable audit log (Spec §13.10)
+    // 5. INSERT immutable audit log (Spec §13.10)
     await supabase.from("pricing_change_history").insert({
       tenant_id: rec.tenant_id,
       vehicle_id: rec.vehicle_id,
@@ -143,24 +185,6 @@ Deno.serve(async (req) => {
       recommendation_id: rec.id,
       changed_by: appUser.id,
     });
-
-    // 5. Mark rec as applied
-    const { data: applied, error: applyErr } = await supabase
-      .from("pricing_recommendations")
-      .update({
-        status: "applied",
-        applied_at: new Date().toISOString(),
-        applied_by: appUser.id,
-        applied_price: targetPrice,
-        applied_source: "manual",
-      })
-      .eq("id", rec.id)
-      .select("*")
-      .single();
-    if (applyErr) {
-      console.error("recommendation status update error:", applyErr);
-      return errorResponse(applyErr.message ?? "Failed to mark applied", 500);
-    }
 
     return jsonResponse({
       ok: true,

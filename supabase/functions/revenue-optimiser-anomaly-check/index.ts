@@ -233,35 +233,60 @@ async function detectUtilisationDrop(supabase: SupabaseClient, summary: Summary)
 // Helpers
 // ───────────────────────────────────────────────────────────────────────────
 
+/**
+ * Dedupe rules:
+ *   - `open` anomaly within 24h → skip (don't spam the inbox)
+ *   - `resolved` anomaly within 24h → skip (operator closed it recently)
+ *   - `acknowledged` anomaly older than ACK_REFIRE_DAYS → ALLOW re-fire (the
+ *     ack-then-ignored case where the underlying condition didn't go away)
+ *   - `acknowledged` anomaly within ACK_REFIRE_DAYS → skip
+ */
+const ACK_REFIRE_DAYS = 7;
+
 async function alreadyOpen(
   supabase: SupabaseClient, type: string, tenantId: string, recId: string,
 ): Promise<boolean> {
-  const cutoff = new Date(Date.now() - ANOMALY_DEDUPE_HOURS * 3600_000).toISOString();
+  const ackCutoff = new Date(Date.now() - ACK_REFIRE_DAYS * 86_400_000).toISOString();
+  const dedupeCutoff = new Date(Date.now() - ANOMALY_DEDUPE_HOURS * 3600_000).toISOString();
   const { data } = await supabase
     .from("revenue_optimiser_anomalies")
-    .select("id")
+    .select("id, status, acknowledged_at, created_at")
     .eq("tenant_id", tenantId)
     .eq("recommendation_id", recId)
     .eq("anomaly_type", type)
-    .gte("created_at", cutoff)
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return !!data;
+  if (!data) return false;
+  if (data.status === "open" && data.created_at >= dedupeCutoff) return true;
+  if (data.status === "resolved" && data.created_at >= dedupeCutoff) return true;
+  if (data.status === "acknowledged") {
+    // Re-fire only if the ack is stale enough to suggest "ignored, condition persists"
+    return (data.acknowledged_at ?? data.created_at) > ackCutoff;
+  }
+  return false;
 }
 
 async function alreadyOpenTenant(
   supabase: SupabaseClient, type: string, tenantId: string,
 ): Promise<boolean> {
-  const cutoff = new Date(Date.now() - ANOMALY_DEDUPE_HOURS * 3600_000).toISOString();
+  const ackCutoff = new Date(Date.now() - ACK_REFIRE_DAYS * 86_400_000).toISOString();
+  const dedupeCutoff = new Date(Date.now() - ANOMALY_DEDUPE_HOURS * 3600_000).toISOString();
   const { data } = await supabase
     .from("revenue_optimiser_anomalies")
-    .select("id")
+    .select("id, status, acknowledged_at, created_at")
     .eq("tenant_id", tenantId)
     .eq("anomaly_type", type)
-    .gte("created_at", cutoff)
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return !!data;
+  if (!data) return false;
+  if (data.status === "open" && data.created_at >= dedupeCutoff) return true;
+  if (data.status === "resolved" && data.created_at >= dedupeCutoff) return true;
+  if (data.status === "acknowledged") {
+    return (data.acknowledged_at ?? data.created_at) > ackCutoff;
+  }
+  return false;
 }
 
 function formatMoney(n: number): string {

@@ -114,6 +114,8 @@ interface Summary {
   rule_missing_skipped: number;
   ab_experiments_started: number;
   ab_control_dismissed: number;
+  ab_winners_rolled_out: number;
+  ab_rollout_vehicles_updated: number;
   clamped_to_rule: number;
   cost_floor_blocked: number;
   max_swing_blocked: number;
@@ -142,6 +144,8 @@ Deno.serve(async (req) => {
       rule_missing_skipped: 0,
       ab_experiments_started: 0,
       ab_control_dismissed: 0,
+      ab_winners_rolled_out: 0,
+      ab_rollout_vehicles_updated: 0,
       clamped_to_rule: 0,
       cost_floor_blocked: 0,
       max_swing_blocked: 0,
@@ -162,6 +166,16 @@ Deno.serve(async (req) => {
       } catch (err) {
         summary.errors.push(`${settings.tenant_id}: ${err instanceof Error ? err.message : String(err)}`);
       }
+    }
+
+    // Phase 3 patch — roll out winning A/B test prices to the full category.
+    // measure-outcomes flips experiments to status='completed' + winner='test'
+    // overnight; the next autopilot-run picks them up here and applies the
+    // test_price to all vehicles in the category that haven't already moved.
+    try {
+      await rolloutWinningExperiments(supabase, summary);
+    } catch (err) {
+      summary.errors.push(`ab-rollout: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     return jsonResponse({ runId, ...summary });
@@ -404,8 +418,8 @@ async function processTenant(
         continue;
       }
 
-      await applyOne(supabase, d, runId, experimentByDecision.get(d.rec.id) ?? null);
-      summary.applied_autopilot++;
+      const result = await applyOne(supabase, d, runId, experimentByDecision.get(d.rec.id) ?? null);
+      if (result.applied) summary.applied_autopilot++;
     } catch (err) {
       summary.errors.push(`${d.rec.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -418,16 +432,54 @@ async function applyOne(
   d: Extract<{ kind: "apply"; rec: RecRow; targetPrice: number; vehicle: VehicleRow; rule: RuleRow | null; clamped: boolean }, { kind: "apply" }>,
   runId: string,
   experiment: { experimentId: string; arm: "control" | "test" } | null,
-) {
+): Promise<{ applied: boolean }> {
   const tierCol = TIER_TO_COLUMN[d.rec.tier];
   if (!tierCol) throw new Error(`Unsupported tier ${d.rec.tier}`);
-  const oldPrice = Number((d.vehicle as Record<string, unknown>)[tierCol] ?? d.rec.current_price);
+
+  // ATOMIC CLAIM — flip the rec to 'applied' first, only if it's still pending.
+  // If another caller (operator clicking Apply in the portal, or a duplicate
+  // cron firing) already claimed it, this UPDATE returns 0 rows and we bail
+  // without touching the vehicle price or writing an audit row.
+  const { data: claimed, error: claimErr } = await supabase
+    .from("pricing_recommendations")
+    .update({
+      status: "applied",
+      applied_at: new Date().toISOString(),
+      applied_by: null,
+      applied_price: d.targetPrice,
+      applied_source: "autopilot",
+      autopilot_run_id: runId,
+      experiment_id: experiment?.experimentId ?? null,
+      experiment_arm: experiment?.arm ?? null,
+    })
+    .eq("id", d.rec.id)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
+  if (claimErr) throw new Error(`rec claim: ${claimErr.message}`);
+  if (!claimed) return { applied: false };  // Someone else won the race
+
+  // Now safe to mutate price + audit. Re-read live price for the audit's
+  // old_price (defence against external edits between generate and apply).
+  const { data: liveVeh } = await supabase
+    .from("vehicles")
+    .select(`id, ${tierCol}`)
+    .eq("id", d.vehicle.id)
+    .maybeSingle();
+  const oldPrice = Number((liveVeh as Record<string, unknown> | null)?.[tierCol] ?? d.rec.current_price);
 
   const { error: vehErr } = await supabase
     .from("vehicles")
     .update({ [tierCol]: d.targetPrice })
     .eq("id", d.vehicle.id);
-  if (vehErr) throw new Error(`vehicle update: ${vehErr.message}`);
+  if (vehErr) {
+    // Best-effort rollback of the claim so the operator can retry from the UI
+    await supabase
+      .from("pricing_recommendations")
+      .update({ status: "pending", applied_at: null, applied_by: null, applied_price: null, applied_source: null })
+      .eq("id", d.rec.id);
+    throw new Error(`vehicle update: ${vehErr.message}`);
+  }
 
   await supabase.from("pricing_change_history").insert({
     tenant_id: d.rec.tenant_id,
@@ -440,20 +492,7 @@ async function applyOne(
     changed_by: null,
     notes: d.clamped ? "Clamped to rule bounds" : null,
   });
-
-  await supabase
-    .from("pricing_recommendations")
-    .update({
-      status: "applied",
-      applied_at: new Date().toISOString(),
-      applied_by: null,
-      applied_price: d.targetPrice,
-      applied_source: "autopilot",
-      autopilot_run_id: runId,
-      experiment_id: experiment?.experimentId ?? null,
-      experiment_arm: experiment?.arm ?? null,
-    })
-    .eq("id", d.rec.id);
+  return { applied: true };
 }
 
 /** Look up the last 2 outcomes per vehicle in one round-trip. */
@@ -527,4 +566,156 @@ async function pauseVehicleRule(
   // Knowing the category is useful for the surfacing UI, but doesn't belong
   // on a vehicle-scoped rule per the schema's one_scope_only constraint.
   void vehicleCategory;
+}
+
+/**
+ * Phase 3 patch — roll out completed-winner experiments to the full category.
+ *
+ * Walks `pricing_experiments WHERE status='completed' AND winner='test' AND
+ * rolled_out_at IS NULL`. For each:
+ *   1. Resolve the category from any test-arm rec's vehicle.
+ *   2. Find vehicles in that category currently in autopilot (rule with
+ *      autopilot_enabled=true) whose current price differs from test_price.
+ *   3. For each, re-apply the safety rails (max swing, cost floor, paused),
+ *      then UPDATE the vehicle price and write a pricing_change_history row
+ *      with change_source='autopilot' and notes='A/B winner rollout'.
+ *   4. Mark the experiment rolled_out_at = NOW().
+ *
+ * Conservative: silently skip vehicles where the rollout would violate a
+ * safety rail. Operator can then act on those individually.
+ */
+async function rolloutWinningExperiments(
+  supabase: SupabaseClient,
+  summary: Summary,
+) {
+  const { data: pendingRaw } = await supabase
+    .from("pricing_experiments")
+    .select("id, tenant_id, vehicle_id, tier, test_price")
+    .eq("status", "completed")
+    .eq("winner", "test")
+    .is("rolled_out_at", null);
+  const pending = (pendingRaw ?? []) as Array<{ id: string; tenant_id: string; vehicle_id: string; tier: string; test_price: number }>;
+
+  for (const exp of pending) {
+    try {
+      // Resolve category from the experiment's representative vehicle
+      const { data: repVehicle } = await supabase
+        .from("vehicles")
+        .select("category")
+        .eq("id", exp.vehicle_id)
+        .maybeSingle();
+      const category = repVehicle?.category;
+      if (!category) {
+        // Can't roll out without a category; mark as rolled_out with 0 vehicles
+        await supabase
+          .from("pricing_experiments")
+          .update({ rolled_out_at: new Date().toISOString(), rolled_out_vehicle_count: 0 })
+          .eq("id", exp.id);
+        continue;
+      }
+
+      // Per-tenant settings for max swing + cost floor rails
+      const { data: settings } = await supabase
+        .from("revenue_optimiser_settings")
+        .select("max_swing_percent, cost_floor_enabled")
+        .eq("tenant_id", exp.tenant_id)
+        .maybeSingle();
+      const maxSwingPct = Number(settings?.max_swing_percent ?? 15);
+      const costFloorEnabled = settings?.cost_floor_enabled !== false;
+
+      // Eligible vehicles in this category (not disposed). Include cost-floor columns.
+      const { data: vehiclesRaw } = await supabase
+        .from("vehicles")
+        .select("id, daily_rent, weekly_rent, monthly_rent, cost_floor_daily, cost_floor_weekly, cost_floor_monthly")
+        .eq("tenant_id", exp.tenant_id)
+        .eq("category", category)
+        .or("is_disposed.is.null,is_disposed.eq.false");
+      const vehicles = (vehiclesRaw ?? []) as Array<{
+        id: string;
+        daily_rent: number | null; weekly_rent: number | null; monthly_rent: number | null;
+        cost_floor_daily: number | null; cost_floor_weekly: number | null; cost_floor_monthly: number | null;
+      }>;
+
+      // Category-scoped rule (must exist + be enabled + not paused for the
+      // category — same gate as the daily autopilot run).
+      const { data: rule } = await supabase
+        .from("revenue_optimiser_rules")
+        .select("autopilot_enabled, paused_until, min_price_daily, max_price_daily, min_price_weekly, max_price_weekly, min_price_monthly, max_price_monthly")
+        .eq("tenant_id", exp.tenant_id)
+        .eq("category", category)
+        .maybeSingle();
+      const isRulePaused = !!(rule?.paused_until && new Date(rule.paused_until).getTime() > Date.now());
+      if (!rule || !rule.autopilot_enabled || isRulePaused) {
+        // Operator turned autopilot off (or paused) for this category since
+        // the experiment started — don't apply, but mark rolled out so we
+        // don't keep scanning.
+        await supabase
+          .from("pricing_experiments")
+          .update({ rolled_out_at: new Date().toISOString(), rolled_out_vehicle_count: 0 })
+          .eq("id", exp.id);
+        continue;
+      }
+
+      const tierCol = TIER_TO_COLUMN[exp.tier];
+      if (!tierCol) continue;
+
+      let updated = 0;
+      for (const v of vehicles) {
+        const currentPrice = Number((v as Record<string, unknown>)[tierCol] ?? 0);
+        if (currentPrice <= 0) continue;
+
+        // Already at (or within $1 of) the test price — skip
+        let targetPrice = Number(exp.test_price);
+        if (Math.abs(currentPrice - targetPrice) < 1) continue;
+
+        // Clamp to per-rule bounds (re-applied, in case the rule changed
+        // between experiment start and rollout)
+        const minK = `min_price_${exp.tier}` as keyof typeof rule;
+        const maxK = `max_price_${exp.tier}` as keyof typeof rule;
+        const minBound = Number(rule[minK] ?? 0);
+        const maxBound = Number(rule[maxK] ?? 0);
+        if (minBound > 0 && targetPrice < minBound) targetPrice = minBound;
+        if (maxBound > 0 && targetPrice > maxBound) targetPrice = maxBound;
+
+        // Max swing rail
+        const minAllowed = currentPrice * (1 - maxSwingPct / 100);
+        const maxAllowed = currentPrice * (1 + maxSwingPct / 100);
+        if (targetPrice < minAllowed || targetPrice > maxAllowed) continue;  // Too big a move, skip silently
+
+        // Cost floor rail
+        if (costFloorEnabled) {
+          const floor = Number((v as Record<string, unknown>)[`cost_floor_${exp.tier}`] ?? 0);
+          if (floor > 0 && targetPrice < floor) continue;
+        }
+
+        const { error: vehErr } = await supabase
+          .from("vehicles")
+          .update({ [tierCol]: targetPrice })
+          .eq("id", v.id);
+        if (vehErr) continue;
+
+        await supabase.from("pricing_change_history").insert({
+          tenant_id: exp.tenant_id,
+          vehicle_id: v.id,
+          tier: exp.tier,
+          old_price: currentPrice,
+          new_price: targetPrice,
+          change_source: "autopilot",
+          recommendation_id: null,
+          changed_by: null,
+          notes: `A/B winner rollout (experiment ${exp.id})`,
+        });
+        updated++;
+      }
+
+      await supabase
+        .from("pricing_experiments")
+        .update({ rolled_out_at: new Date().toISOString(), rolled_out_vehicle_count: updated })
+        .eq("id", exp.id);
+      summary.ab_winners_rolled_out++;
+      summary.ab_rollout_vehicles_updated += updated;
+    } catch (err) {
+      summary.errors.push(`exp-rollout/${exp.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 }

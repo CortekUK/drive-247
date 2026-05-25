@@ -61,7 +61,17 @@ Deno.serve(async (req) => {
     );
     const toMeasure = candidates.filter((c) => !measuredIds.has(c.id));
 
-    const summary = { candidates: candidates.length, measured: 0, positive: 0, neutral: 0, negative: 0, errors: [] as string[] };
+    const summary = {
+      candidates: candidates.length,
+      measured: 0,
+      positive: 0,
+      neutral: 0,
+      negative: 0,
+      experiments_evaluated: 0,
+      experiments_completed: 0,
+      experiments_inconclusive: 0,
+      errors: [] as string[],
+    };
 
     for (const rec of toMeasure) {
       try {
@@ -90,14 +100,14 @@ Deno.serve(async (req) => {
           .from("ledger_entries")
           .select("amount")
           .eq("vehicle_id", rec.vehicle_id)
-          .eq("type", "Charge")
+          .ilike("type", "charge")
           .gte("entry_date", winBeforeStart.slice(0, 10))
           .lt("entry_date", rec.applied_at.slice(0, 10));
         const { data: ledgersAfterRaw } = await supabase
           .from("ledger_entries")
           .select("amount")
           .eq("vehicle_id", rec.vehicle_id)
-          .eq("type", "Charge")
+          .ilike("type", "charge")
           .gte("entry_date", rec.applied_at.slice(0, 10))
           .lte("entry_date", winAfterEnd.slice(0, 10));
         const revenueBefore = (ledgersBeforeRaw ?? []).reduce((s, l) => s + Number(l.amount ?? 0), 0);
@@ -140,9 +150,126 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Phase 3 patch — close out any running A/B experiments whose 14-day window
+    // has elapsed. We aggregate per-arm bookings + revenue across the linked
+    // recommendation outcomes, declare a winner, and mark the experiment
+    // 'completed'. The autopilot-run cron picks up winners='test' and rolls
+    // out the test_price to the rest of the category.
+    await closeExpiredExperiments(supabase, summary);
+
     return jsonResponse(summary);
   } catch (err) {
     console.error("revenue-optimiser-measure-outcomes error:", err);
     return errorResponse(err instanceof Error ? err.message : "Internal error", 500);
   }
 });
+
+/** Aggregate-then-decide for every running experiment past its end date. */
+async function closeExpiredExperiments(
+  supabase: ReturnType<typeof createClient>,
+  summary: { experiments_evaluated: number; experiments_completed: number; experiments_inconclusive: number; errors: string[] },
+) {
+  const { data: runningRaw } = await supabase
+    .from("pricing_experiments")
+    .select("id, tenant_id, vehicle_id, tier, control_price, test_price, started_at, ends_at")
+    .eq("status", "running")
+    .lt("ends_at", new Date().toISOString());
+  const running = (runningRaw ?? []) as Array<{
+    id: string; tenant_id: string; vehicle_id: string; tier: string;
+    control_price: number; test_price: number; started_at: string; ends_at: string;
+  }>;
+  if (running.length === 0) return;
+
+  for (const exp of running) {
+    summary.experiments_evaluated++;
+    try {
+      // Pull every rec linked to this experiment with its measured outcome
+      const { data: recsRaw } = await supabase
+        .from("pricing_recommendations")
+        .select("id, experiment_arm, vehicle_id")
+        .eq("experiment_id", exp.id);
+      const recs = (recsRaw ?? []) as Array<{ id: string; experiment_arm: string | null; vehicle_id: string }>;
+      if (recs.length === 0) {
+        // No recs linked — mark inconclusive so we don't churn on it forever
+        await supabase
+          .from("pricing_experiments")
+          .update({ status: "completed", winner: "inconclusive" })
+          .eq("id", exp.id);
+        summary.experiments_inconclusive++;
+        continue;
+      }
+
+      const recIds = recs.map((r) => r.id);
+      const { data: outcomesRaw } = await supabase
+        .from("pricing_recommendation_outcomes")
+        .select("recommendation_id, bookings_after, revenue_after")
+        .in("recommendation_id", recIds);
+      const outcomes = (outcomesRaw ?? []) as Array<{ recommendation_id: string; bookings_after: number | null; revenue_after: number | null }>;
+      const outcomeByRec = new Map<string, { bookings_after: number; revenue_after: number }>(
+        outcomes.map((o) => [o.recommendation_id, { bookings_after: Number(o.bookings_after ?? 0), revenue_after: Number(o.revenue_after ?? 0) }]),
+      );
+
+      let controlB = 0, controlR = 0, controlVehicles = 0;
+      let testB = 0, testR = 0, testVehicles = 0;
+      for (const rec of recs) {
+        const o = outcomeByRec.get(rec.id);
+        if (!o) continue;  // outcome not measured yet — skip this rec
+        if (rec.experiment_arm === "control") {
+          controlB += o.bookings_after;
+          controlR += o.revenue_after;
+          controlVehicles++;
+        } else if (rec.experiment_arm === "test") {
+          testB += o.bookings_after;
+          testR += o.revenue_after;
+          testVehicles++;
+        }
+      }
+
+      // Require ≥1 vehicle on each arm with a measured outcome; otherwise mark
+      // inconclusive (the test was underpowered or outcomes are still pending)
+      if (controlVehicles === 0 || testVehicles === 0) {
+        await supabase
+          .from("pricing_experiments")
+          .update({
+            status: "completed",
+            winner: "inconclusive",
+            control_bookings: controlB,
+            test_bookings: testB,
+            control_revenue: Math.round(controlR * 100) / 100,
+            test_revenue: Math.round(testR * 100) / 100,
+          })
+          .eq("id", exp.id);
+        summary.experiments_inconclusive++;
+        continue;
+      }
+
+      // Per-vehicle normalisation lets us compare arms of unequal size.
+      const controlRevPer = controlR / controlVehicles;
+      const testRevPer = testR / testVehicles;
+      const lift = controlRevPer > 0 ? (testRevPer - controlRevPer) / controlRevPer : 0;
+
+      // Winner: test if it beat control by >5% per-vehicle revenue, control
+      // if it lost by >5%, else inconclusive. We err conservative — only
+      // significant lifts roll out.
+      const winner: "control" | "test" | "inconclusive" =
+        lift > 0.05 ? "test" : lift < -0.05 ? "control" : "inconclusive";
+
+      await supabase
+        .from("pricing_experiments")
+        .update({
+          status: "completed",
+          winner,
+          control_bookings: controlB,
+          test_bookings: testB,
+          control_revenue: Math.round(controlR * 100) / 100,
+          test_revenue: Math.round(testR * 100) / 100,
+        })
+        .eq("id", exp.id);
+
+      if (winner === "inconclusive") summary.experiments_inconclusive++;
+      else summary.experiments_completed++;
+    } catch (err) {
+      summary.errors.push(`exp/${exp.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+}

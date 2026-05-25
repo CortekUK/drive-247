@@ -142,14 +142,16 @@ Deno.serve(async (req) => {
         summary.results.push({ lead_id: leadId, status: "failed", error: "lead not found" });
         continue;
       }
-      // Idempotency: skip if already dispatched
+      // Phase 4 patch — idempotency only skips if a successful send already
+      // exists. queued and failed rows are eligible for retry (UPDATE in
+      // place so we keep audit history under the same row).
       const { data: existing } = await supabase
         .from("revenue_optimiser_offer_dispatches")
         .select("id, dispatch_status")
         .eq("recommendation_id", r.id)
         .eq("lead_id", leadId)
         .maybeSingle();
-      if (existing) {
+      if (existing && existing.dispatch_status === "sent") {
         summary.already_dispatched++;
         summary.results.push({ lead_id: leadId, status: "sent" });
         continue;
@@ -167,22 +169,43 @@ Deno.serve(async (req) => {
       // Ensure conversation
       const conversationId = await ensureConversation(supabase, r.tenant_id, leadId);
 
-      // Queue dispatch row first so we can attribute conversions even if the
-      // sender fails to update us later. dispatch_status will be 'queued'.
-      const { data: queuedRow } = await supabase
-        .from("revenue_optimiser_offer_dispatches")
-        .insert({
-          recommendation_id: r.id,
-          tenant_id: r.tenant_id,
-          lead_id: leadId,
-          conversation_id: conversationId,
-          channel,
-          message_body: body.messageBody ?? null,
-          template_id: body.templateId ?? null,
-          dispatch_status: "queued",
-        })
-        .select("id")
-        .single();
+      // Either UPDATE an existing failed/queued row, or INSERT a new one.
+      // Keeping the same row id under the UNIQUE (recommendation_id, lead_id)
+      // constraint preserves audit + conversion attribution if this retry
+      // succeeds where the prior attempt failed.
+      let queuedRow: { id: string } | null = null;
+      if (existing) {
+        const { data: updated } = await supabase
+          .from("revenue_optimiser_offer_dispatches")
+          .update({
+            channel,
+            message_body: body.messageBody ?? null,
+            template_id: body.templateId ?? null,
+            dispatch_status: "queued",
+            dispatch_error: null,
+            dispatched_at: null,
+          })
+          .eq("id", existing.id)
+          .select("id")
+          .single();
+        queuedRow = updated as { id: string } | null;
+      } else {
+        const { data: inserted } = await supabase
+          .from("revenue_optimiser_offer_dispatches")
+          .insert({
+            recommendation_id: r.id,
+            tenant_id: r.tenant_id,
+            lead_id: leadId,
+            conversation_id: conversationId,
+            channel,
+            message_body: body.messageBody ?? null,
+            template_id: body.templateId ?? null,
+            dispatch_status: "queued",
+          })
+          .select("id")
+          .single();
+        queuedRow = inserted as { id: string } | null;
+      }
 
       try {
         const { error: sendErr } = await supabase.functions.invoke("send-lead-message", {
