@@ -31,6 +31,7 @@ export const TAB_KEYS = [
   'enquiries',
   'leads',
   'automations',
+  'revenue_optimiser',
   'messages',
   'payments',
   'invoices',
@@ -96,6 +97,12 @@ export const TAB_GROUPS: TabGroup[] = [
     ],
   },
   {
+    label: 'Revenue',
+    tabs: [
+      { key: 'revenue_optimiser', label: 'Revenue Optimiser', group: 'Revenue' },
+    ],
+  },
+  {
     label: 'Finance',
     tabs: [
       { key: 'payments', label: 'Payments', group: 'Finance' },
@@ -150,6 +157,11 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   '/enquiries': 'enquiries',
   '/leads': 'leads',
   '/automations': 'automations',
+  '/revenue': 'revenue_optimiser',
+  '/revenue/outcomes': 'revenue_optimiser',
+  '/revenue/settings': 'revenue_optimiser',
+  '/revenue/rules': 'revenue_optimiser',
+  '/revenue/autopilot/setup': 'revenue_optimiser',
   '/messages': 'messages',
   '/payments': 'payments',
   '/invoices': 'invoices',

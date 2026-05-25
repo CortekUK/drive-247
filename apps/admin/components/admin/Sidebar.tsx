@@ -24,6 +24,8 @@ import {
   Megaphone,
   Sparkles,
   ShieldCheck,
+  AlertTriangle,
+  TrendingUp,
 } from 'lucide-react';
 
 interface NavItem {
@@ -65,6 +67,13 @@ function useNavigation() {
         { name: 'Announcements', href: '/admin/announcements', icon: Megaphone },
         { name: 'Audit Logs', href: '/admin/audit-logs', icon: ScrollText },
         { name: 'OpenAI Usage', href: '/admin/openai-usage', icon: Sparkles },
+      ],
+    },
+    {
+      label: 'Revenue Optimiser',
+      items: [
+        { name: 'Anomaly Inbox', href: '/admin/revenue-optimiser/anomalies', icon: AlertTriangle },
+        { name: 'Tenant Performance', href: '/admin/revenue-optimiser/tenants', icon: TrendingUp },
       ],
     },
     {

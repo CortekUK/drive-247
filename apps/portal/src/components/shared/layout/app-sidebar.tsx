@@ -30,7 +30,8 @@ import { useReminderStats } from "@/hooks/use-reminders";
 import { useOrgSettings } from "@/hooks/use-org-settings";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
-import { UserPlus, Workflow } from "lucide-react";
+import { UserPlus, Workflow, LineChart } from "lucide-react";
+import { useFeatureAccess } from "@/hooks/use-feature-access";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
@@ -148,6 +149,12 @@ export function AppSidebar() {
   const { tenant } = useTenant();
   const leadManagementEnabled = (tenant as { lead_management_enabled?: boolean } | null)?.lead_management_enabled === true;
   const automationsEnabled = (tenant as { automations_enabled?: boolean } | null)?.automations_enabled === true;
+  const revenueOptimiserEnabled = (tenant as { revenue_optimiser_enabled?: boolean } | null)?.revenue_optimiser_enabled === true;
+  const { canAccess: canAccessRevenueOptimiser } = useFeatureAccess("revenue_optimiser_insights");
+  // Show Revenue group when EITHER the tenant has flipped the feature flag (so they
+  // can find their own page) OR the tenant is on a tier that supports Insights but
+  // hasn't enabled yet (so they discover the welcome/backtest screen).
+  const showRevenueOptimiserNav = canAccessRevenueOptimiser || revenueOptimiserEnabled;
   const { data: pendingBookingsCount } = usePendingBookingsCount();
   const { unreadCount: chatUnreadCount } = useUnreadCount();
   const { data: enquiryStats } = useEnquiryStats();
@@ -221,6 +228,17 @@ export function AppSidebar() {
               ...(automationsEnabled
                 ? [{ name: "Automations", href: "/automations", icon: Workflow }]
                 : []),
+            ],
+          } as NavGroup,
+        ]
+      : []),
+    ...(showRevenueOptimiserNav
+      ? [
+          {
+            label: "Revenue",
+            icon: LineChart,
+            items: [
+              { name: "Revenue Optimiser", href: "/revenue", icon: LineChart },
             ],
           } as NavGroup,
         ]
