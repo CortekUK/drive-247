@@ -212,6 +212,45 @@ Deno.serve(async (req) => {
         console.error("[PROCESS-PENDING] finalize_rental_extension error:", finalizeError);
       } else {
         console.log("[PROCESS-PENDING] Extension finalized:", finalizeResult);
+
+        // Finance Sync — enqueue extension_charge so the sync layer creates a
+        // NEW invoice in Xero/Zoho (spec §8.3 says extensions always get their
+        // own invoice with reference INV-<rental> / EXT-N). Non-fatal: a sync
+        // enqueue failure must never break the extension-finalization flow.
+        if (payment.tenant_id && payment.rental_id) {
+          try {
+            const { data: ext } = await supabase
+              .from('rental_extensions')
+              .select('id, sequence_number, total_amount, tax_amount, rental_id')
+              .eq('id', payment.extension_id)
+              .maybeSingle();
+            const { data: tenantRow } = await supabase
+              .from('tenants')
+              .select('currency_code')
+              .eq('id', payment.tenant_id)
+              .maybeSingle();
+            const totalAmount = Number(ext?.total_amount ?? payment.amount ?? 0);
+            const taxAmount = Number(ext?.tax_amount ?? 0);
+            if (ext && totalAmount > 0) {
+              await supabase.rpc('enqueue_financial_event', {
+                p_tenant_id: payment.tenant_id,
+                p_event_type: 'extension_charge',
+                p_amount_cents: Math.round(totalAmount * 100),
+                p_tax_cents: Math.round(taxAmount * 100),
+                p_currency: (tenantRow as { currency_code?: string } | null)?.currency_code ?? 'USD',
+                p_rental_id: ext.rental_id,
+                p_customer_id: payment.customer_id ?? null,
+                p_vehicle_id: payment.vehicle_id ?? null,
+                p_source_table: 'rental_extensions',
+                p_source_id: ext.id,
+                p_description: `Rental extension #${ext.sequence_number ?? 1}`,
+                p_metadata: { extension_number: ext.sequence_number, payment_id: payment.id },
+              });
+            }
+          } catch (err) {
+            console.error('[finance-sync] enqueue extension_charge failed (non-fatal):', err);
+          }
+        }
       }
     }
 

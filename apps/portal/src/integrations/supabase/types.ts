@@ -38,6 +38,255 @@ export type Database = {
         }
         Relationships: []
       }
+      accounting_account_mappings: {
+        Row: {
+          created_at: string
+          event_type: Database["public"]["Enums"]["financial_event_type"] | null
+          external_account_code: string
+          external_account_name: string | null
+          external_tax_code: string | null
+          external_tax_rate: number | null
+          id: string
+          is_default: boolean
+          is_payment_account_sentinel: boolean
+          provider: Database["public"]["Enums"]["accounting_provider"]
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          event_type?:
+            | Database["public"]["Enums"]["financial_event_type"]
+            | null
+          external_account_code: string
+          external_account_name?: string | null
+          external_tax_code?: string | null
+          external_tax_rate?: number | null
+          id?: string
+          is_default?: boolean
+          is_payment_account_sentinel?: boolean
+          provider: Database["public"]["Enums"]["accounting_provider"]
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          event_type?:
+            | Database["public"]["Enums"]["financial_event_type"]
+            | null
+          external_account_code?: string
+          external_account_name?: string | null
+          external_tax_code?: string | null
+          external_tax_rate?: number | null
+          id?: string
+          is_default?: boolean
+          is_payment_account_sentinel?: boolean
+          provider?: Database["public"]["Enums"]["accounting_provider"]
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounting_account_mappings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounting_connections: {
+        Row: {
+          access_token_secret_id: string | null
+          connected_at: string
+          connected_by: string | null
+          created_at: string
+          disconnected_at: string | null
+          external_org_id: string
+          external_org_name: string | null
+          external_region: string | null
+          id: string
+          last_error: string | null
+          last_synced_at: string | null
+          provider: Database["public"]["Enums"]["accounting_provider"]
+          refresh_token_secret_id: string | null
+          status: Database["public"]["Enums"]["accounting_connection_status"]
+          tenant_id: string
+          token_expires_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token_secret_id?: string | null
+          connected_at?: string
+          connected_by?: string | null
+          created_at?: string
+          disconnected_at?: string | null
+          external_org_id: string
+          external_org_name?: string | null
+          external_region?: string | null
+          id?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          provider: Database["public"]["Enums"]["accounting_provider"]
+          refresh_token_secret_id?: string | null
+          status?: Database["public"]["Enums"]["accounting_connection_status"]
+          tenant_id: string
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token_secret_id?: string | null
+          connected_at?: string
+          connected_by?: string | null
+          created_at?: string
+          disconnected_at?: string | null
+          external_org_id?: string
+          external_org_name?: string | null
+          external_region?: string | null
+          id?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          provider?: Database["public"]["Enums"]["accounting_provider"]
+          refresh_token_secret_id?: string | null
+          status?: Database["public"]["Enums"]["accounting_connection_status"]
+          tenant_id?: string
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounting_connections_connected_by_fkey"
+            columns: ["connected_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounting_contact_links: {
+        Row: {
+          created_at: string
+          customer_id: string
+          external_contact_id: string
+          external_contact_name: string | null
+          id: string
+          provider: Database["public"]["Enums"]["accounting_provider"]
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          external_contact_id: string
+          external_contact_name?: string | null
+          id?: string
+          provider: Database["public"]["Enums"]["accounting_provider"]
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          external_contact_id?: string
+          external_contact_name?: string | null
+          id?: string
+          provider?: Database["public"]["Enums"]["accounting_provider"]
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounting_contact_links_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_contact_links_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "accounting_contact_links_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "accounting_contact_links_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "accounting_contact_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounting_oauth_state: {
+        Row: {
+          created_at: string
+          expires_at: string
+          initiated_by: string | null
+          metadata: Json
+          nonce: string
+          provider: Database["public"]["Enums"]["accounting_provider"]
+          redirect_back: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          initiated_by?: string | null
+          metadata?: Json
+          nonce?: string
+          provider: Database["public"]["Enums"]["accounting_provider"]
+          redirect_back?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          initiated_by?: string | null
+          metadata?: Json
+          nonce?: string
+          provider?: Database["public"]["Enums"]["accounting_provider"]
+          redirect_back?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounting_oauth_state_initiated_by_fkey"
+            columns: ["initiated_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_oauth_state_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_settings: {
         Row: {
           contact_form_enabled: boolean | null
@@ -794,6 +1043,75 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      backfill_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          date_from: string | null
+          date_to: string
+          failed_events: number
+          id: string
+          last_error: string | null
+          processed_events: number
+          provider: Database["public"]["Enums"]["accounting_provider"]
+          started_at: string | null
+          status: Database["public"]["Enums"]["backfill_job_status"]
+          tenant_id: string
+          total_events: number
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          date_from?: string | null
+          date_to: string
+          failed_events?: number
+          id?: string
+          last_error?: string | null
+          processed_events?: number
+          provider: Database["public"]["Enums"]["accounting_provider"]
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["backfill_job_status"]
+          tenant_id: string
+          total_events?: number
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          date_from?: string | null
+          date_to?: string
+          failed_events?: number
+          id?: string
+          last_error?: string | null
+          processed_events?: number
+          provider?: Database["public"]["Enums"]["accounting_provider"]
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["backfill_job_status"]
+          tenant_id?: string
+          total_events?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backfill_jobs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backfill_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -3940,6 +4258,246 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      financial_event_sync_state: {
+        Row: {
+          attempts: number
+          created_at: string
+          external_contact_id: string | null
+          external_credit_note_id: string | null
+          external_invoice_id: string | null
+          external_invoice_paid_at: string | null
+          external_payment_id: string | null
+          external_status: string | null
+          financial_event_id: string
+          id: string
+          last_attempt_at: string | null
+          last_error: string | null
+          last_error_code: string | null
+          next_attempt_at: string | null
+          provider: Database["public"]["Enums"]["accounting_provider"]
+          state: Database["public"]["Enums"]["sync_state"]
+          synced_at: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          external_contact_id?: string | null
+          external_credit_note_id?: string | null
+          external_invoice_id?: string | null
+          external_invoice_paid_at?: string | null
+          external_payment_id?: string | null
+          external_status?: string | null
+          financial_event_id: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          last_error_code?: string | null
+          next_attempt_at?: string | null
+          provider: Database["public"]["Enums"]["accounting_provider"]
+          state?: Database["public"]["Enums"]["sync_state"]
+          synced_at?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          external_contact_id?: string | null
+          external_credit_note_id?: string | null
+          external_invoice_id?: string | null
+          external_invoice_paid_at?: string | null
+          external_payment_id?: string | null
+          external_status?: string | null
+          financial_event_id?: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          last_error_code?: string | null
+          next_attempt_at?: string | null
+          provider?: Database["public"]["Enums"]["accounting_provider"]
+          state?: Database["public"]["Enums"]["sync_state"]
+          synced_at?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_event_sync_state_financial_event_id_fkey"
+            columns: ["financial_event_id"]
+            isOneToOne: false
+            referencedRelation: "financial_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_event_sync_state_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financial_events: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          customer_id: string | null
+          description: string | null
+          event_type: Database["public"]["Enums"]["financial_event_type"]
+          id: string
+          metadata: Json
+          occurred_at: string
+          rental_id: string | null
+          source_id: string | null
+          source_table: string | null
+          status: Database["public"]["Enums"]["financial_event_status"]
+          tax_cents: number
+          tenant_id: string
+          updated_at: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency: string
+          customer_id?: string | null
+          description?: string | null
+          event_type: Database["public"]["Enums"]["financial_event_type"]
+          id?: string
+          metadata?: Json
+          occurred_at?: string
+          rental_id?: string | null
+          source_id?: string | null
+          source_table?: string | null
+          status?: Database["public"]["Enums"]["financial_event_status"]
+          tax_cents?: number
+          tenant_id: string
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          customer_id?: string | null
+          description?: string | null
+          event_type?: Database["public"]["Enums"]["financial_event_type"]
+          id?: string
+          metadata?: Json
+          occurred_at?: string
+          rental_id?: string | null
+          source_id?: string | null
+          source_table?: string | null
+          status?: Database["public"]["Enums"]["financial_event_status"]
+          tax_cents?: number
+          tenant_id?: string
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_events_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_events_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "financial_events_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "financial_events_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "financial_events_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_events_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "financial_events_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "financial_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "financial_events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pricing_stats"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "financial_events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "financial_events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "financial_events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
           },
         ]
       }
@@ -11874,6 +12432,8 @@ export type Database = {
           integration_twilio_whatsapp: boolean | null
           integration_veriff: boolean | null
           integration_whatsapp: boolean | null
+          integration_xero: boolean
+          integration_zoho_books: boolean
           lead_auto_lost_threshold_hours: number
           lead_management_enabled: boolean
           lead_stale_threshold_hours: number
@@ -12079,6 +12639,8 @@ export type Database = {
           integration_twilio_whatsapp?: boolean | null
           integration_veriff?: boolean | null
           integration_whatsapp?: boolean | null
+          integration_xero?: boolean
+          integration_zoho_books?: boolean
           lead_auto_lost_threshold_hours?: number
           lead_management_enabled?: boolean
           lead_stale_threshold_hours?: number
@@ -12284,6 +12846,8 @@ export type Database = {
           integration_twilio_whatsapp?: boolean | null
           integration_veriff?: boolean | null
           integration_whatsapp?: boolean | null
+          integration_xero?: boolean
+          integration_zoho_books?: boolean
           lead_auto_lost_threshold_hours?: number
           lead_management_enabled?: boolean
           lead_stale_threshold_hours?: number
@@ -13555,6 +14119,81 @@ export type Database = {
       }
     }
     Views: {
+      accounting_connections_public: {
+        Row: {
+          connected_at: string | null
+          connected_by: string | null
+          created_at: string | null
+          disconnected_at: string | null
+          external_org_id: string | null
+          external_org_name: string | null
+          external_region: string | null
+          id: string | null
+          last_error: string | null
+          last_synced_at: string | null
+          provider: Database["public"]["Enums"]["accounting_provider"] | null
+          status:
+            | Database["public"]["Enums"]["accounting_connection_status"]
+            | null
+          tenant_id: string | null
+          token_expires_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          connected_at?: string | null
+          connected_by?: string | null
+          created_at?: string | null
+          disconnected_at?: string | null
+          external_org_id?: string | null
+          external_org_name?: string | null
+          external_region?: string | null
+          id?: string | null
+          last_error?: string | null
+          last_synced_at?: string | null
+          provider?: Database["public"]["Enums"]["accounting_provider"] | null
+          status?:
+            | Database["public"]["Enums"]["accounting_connection_status"]
+            | null
+          tenant_id?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          connected_at?: string | null
+          connected_by?: string | null
+          created_at?: string | null
+          disconnected_at?: string | null
+          external_org_id?: string | null
+          external_org_name?: string | null
+          external_region?: string | null
+          id?: string | null
+          last_error?: string | null
+          last_synced_at?: string | null
+          provider?: Database["public"]["Enums"]["accounting_provider"] | null
+          status?:
+            | Database["public"]["Enums"]["accounting_connection_status"]
+            | null
+          tenant_id?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounting_connections_connected_by_fkey"
+            columns: ["connected_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feature_announcement_stats: {
         Row: {
           announcement_id: string | null
@@ -14309,6 +14948,43 @@ export type Database = {
       }
     }
     Functions: {
+      accounting_clear_tokens: {
+        Args: {
+          p_new_status?: Database["public"]["Enums"]["accounting_connection_status"]
+          p_provider: Database["public"]["Enums"]["accounting_provider"]
+          p_tenant_id: string
+        }
+        Returns: undefined
+      }
+      accounting_get_tokens: {
+        Args: {
+          p_provider: Database["public"]["Enums"]["accounting_provider"]
+          p_tenant_id: string
+        }
+        Returns: {
+          access_token: string
+          connection_id: string
+          expires_at: string
+          external_org_id: string
+          external_region: string
+          refresh_token: string
+        }[]
+      }
+      accounting_oauth_state_reap: { Args: never; Returns: number }
+      accounting_store_tokens: {
+        Args: {
+          p_access_token: string
+          p_connected_by?: string
+          p_expires_at: string
+          p_external_org_id: string
+          p_external_org_name?: string
+          p_external_region?: string
+          p_provider: Database["public"]["Enums"]["accounting_provider"]
+          p_refresh_token: string
+          p_tenant_id: string
+        }
+        Returns: string
+      }
       add_credits:
         | {
             Args: {
@@ -14475,6 +15151,24 @@ export type Database = {
           p_vehicle_id: string
         }
         Returns: Json
+      }
+      enqueue_financial_event: {
+        Args: {
+          p_amount_cents: number
+          p_currency: string
+          p_customer_id?: string
+          p_description?: string
+          p_event_type: Database["public"]["Enums"]["financial_event_type"]
+          p_metadata?: Json
+          p_occurred_at?: string
+          p_rental_id?: string
+          p_source_id?: string
+          p_source_table?: string
+          p_tax_cents?: number
+          p_tenant_id: string
+          p_vehicle_id?: string
+        }
+        Returns: string
       }
       exec_sql: { Args: { query: string }; Returns: undefined }
       finalize_rental_extension: {
@@ -14845,6 +15539,13 @@ export type Database = {
         Args: { amt: number; due: string; r_id: string }
         Returns: string
       }
+      seed_default_accounting_mappings: {
+        Args: {
+          p_provider: Database["public"]["Enums"]["accounting_provider"]
+          p_tenant_id: string
+        }
+        Returns: number
+      }
       seed_default_lead_templates: {
         Args: { p_tenant_id: string }
         Returns: undefined
@@ -14919,7 +15620,15 @@ export type Database = {
       }
     }
     Enums: {
+      accounting_connection_status: "active" | "expired" | "revoked" | "error"
+      accounting_provider: "xero" | "zoho"
       acquisition_type: "purchase" | "finance" | "lease"
+      backfill_job_status:
+        | "pending"
+        | "running"
+        | "completed"
+        | "failed"
+        | "cancelled"
       credit_transaction_type:
         | "purchase"
         | "usage"
@@ -14937,6 +15646,22 @@ export type Database = {
         | "Valet"
         | "Accessory"
         | "Other"
+      financial_event_status: "open" | "finalised" | "voided"
+      financial_event_type:
+        | "rental_charge"
+        | "payment_receipt"
+        | "deposit_capture"
+        | "security_hold_release"
+        | "insurance_charge"
+        | "late_fee"
+        | "mileage_charge"
+        | "damage_charge"
+        | "charging_cost"
+        | "extension_charge"
+        | "refund"
+        | "discount"
+        | "maintenance_expense"
+        | "partner_payout"
       installment_collection_mode: "auto" | "manual"
       installment_invoice_status: "open" | "paid" | "superseded"
       installment_unit: "week" | "month"
@@ -14945,6 +15670,7 @@ export type Database = {
       payment_status: "paid" | "due" | "overdue" | "void"
       payment_type: "initial_fee" | "monthly" | "fine" | "service" | "other"
       rental_status: "active" | "completed" | "cancelled"
+      sync_state: "pending" | "syncing" | "synced" | "failed" | "skipped"
       vehicle_event_type:
         | "acquisition_created"
         | "acquisition_updated"
@@ -15088,7 +15814,16 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      accounting_connection_status: ["active", "expired", "revoked", "error"],
+      accounting_provider: ["xero", "zoho"],
       acquisition_type: ["purchase", "finance", "lease"],
+      backfill_job_status: [
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+      ],
       credit_transaction_type: [
         "purchase",
         "usage",
@@ -15108,6 +15843,23 @@ export const Constants = {
         "Accessory",
         "Other",
       ],
+      financial_event_status: ["open", "finalised", "voided"],
+      financial_event_type: [
+        "rental_charge",
+        "payment_receipt",
+        "deposit_capture",
+        "security_hold_release",
+        "insurance_charge",
+        "late_fee",
+        "mileage_charge",
+        "damage_charge",
+        "charging_cost",
+        "extension_charge",
+        "refund",
+        "discount",
+        "maintenance_expense",
+        "partner_payout",
+      ],
       installment_collection_mode: ["auto", "manual"],
       installment_invoice_status: ["open", "paid", "superseded"],
       installment_unit: ["week", "month"],
@@ -15116,6 +15868,7 @@ export const Constants = {
       payment_status: ["paid", "due", "overdue", "void"],
       payment_type: ["initial_fee", "monthly", "fine", "service", "other"],
       rental_status: ["active", "completed", "cancelled"],
+      sync_state: ["pending", "syncing", "synced", "failed", "skipped"],
       vehicle_event_type: [
         "acquisition_created",
         "acquisition_updated",

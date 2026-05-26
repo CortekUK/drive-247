@@ -198,6 +198,30 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           detail: `${ledgerError.code}: ${ledgerError.message}`
         };
       }
+    } else {
+      // Finance Sync — enqueue a payment_receipt event (only on first successful
+      // ledger write, not on the idempotency-hit duplicate path above). The sync
+      // worker will call provider.recordPayment against the open invoice.
+      // Non-fatal: a sync enqueue failure must never break payment application.
+      if (payment.tenant_id) {
+        try {
+          await supabase.rpc('enqueue_financial_event', {
+            p_tenant_id: payment.tenant_id,
+            p_event_type: 'payment_receipt',
+            p_amount_cents: Math.round(Math.abs(Number(payment.amount)) * 100),
+            p_currency: currencyCode ?? 'USD',
+            p_rental_id: payment.rental_id ?? null,
+            p_customer_id: payment.customer_id ?? null,
+            p_vehicle_id: payment.vehicle_id ?? null,
+            p_source_table: 'payments',
+            p_source_id: payment.id,
+            p_description: `Payment ${paymentId}${isInitialFee ? ' (initial fee)' : ''}`,
+            p_metadata: { ledger_category: ledgerCategory, payment_type: payment.payment_type ?? null },
+          });
+        } catch (err) {
+          console.error('[finance-sync] enqueue payment_receipt failed (non-fatal):', err);
+        }
+      }
     }
 
     // Handle InitialFee payments - allocate to fee charges first, then rental

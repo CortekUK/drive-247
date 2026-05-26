@@ -60,6 +60,7 @@ export const SETTINGS_SUB_TAB_KEYS = [
   'settings.reminders',
   'settings.templates',
   'settings.integrations',
+  'settings.accounting',
   'settings.subscription',
 ] as const;
 
@@ -141,6 +142,7 @@ export const SETTINGS_SUB_TABS: TabDefinition[] = [
   { key: 'settings.reminders', label: 'Notifications', group: 'Settings' },
   { key: 'settings.templates', label: 'Templates', group: 'Settings' },
   { key: 'settings.integrations', label: 'Integrations', group: 'Settings' },
+  { key: 'settings.accounting', label: 'Accounting', group: 'Settings' },
   { key: 'settings.subscription', label: 'Subscription', group: 'Settings' },
 ];
 
@@ -225,6 +227,8 @@ export const SETTINGS_VALUE_TO_KEY: Record<string, string> = {
   promos: 'settings.rental',
   extras: 'settings.extras',
   payments: 'settings.payments',
+  // Finance Sync (Xero / Zoho Books) — Growth+ tier, mapped to its own key
+  accounting: 'settings.accounting',
   // Communication
   reminders: 'settings.reminders',
   templates: 'settings.templates',

@@ -301,6 +301,39 @@ async function processSinglePayment(
 
     console.log(`[Bonzah Payment] Policy ${recordId} issued: ${policyNo}`)
 
+    // Finance Sync — enqueue insurance_charge for the accounting sync layer.
+    // Only fires on successful issue (policyIssued=true) to avoid syncing
+    // policies that quoted but were never activated. Non-fatal on failure.
+    if (policyIssued && policyRecord.tenant_id) {
+      try {
+        const { data: tenantRow } = await supabase
+          .from('tenants')
+          .select('currency_code')
+          .eq('id', policyRecord.tenant_id)
+          .maybeSingle()
+        const currency = (tenantRow as { currency_code?: string } | null)?.currency_code ?? 'USD'
+        await supabase.rpc('enqueue_financial_event', {
+          p_tenant_id: policyRecord.tenant_id,
+          p_event_type: 'insurance_charge',
+          p_amount_cents: Math.round(Number(policyRecord.premium_amount ?? 0) * 100),
+          p_currency: currency,
+          p_rental_id: policyRecord.rental_id ?? null,
+          p_customer_id: policyRecord.customer_id ?? null,
+          p_vehicle_id: policyRecord.vehicle_id ?? null,
+          p_source_table: 'bonzah_insurance_policies',
+          p_source_id: recordId,
+          p_description: `Insurance policy ${policyNo ?? recordId.slice(0, 8)}`,
+          p_metadata: {
+            policy_no: policyNo,
+            policy_id: policyId,
+            premium_amount: policyRecord.premium_amount,
+          },
+        })
+      } catch (err) {
+        console.error('[finance-sync] enqueue insurance_charge failed (non-fatal):', err)
+      }
+    }
+
     return {
       success: true,
       policyRecordId: recordId,

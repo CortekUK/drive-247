@@ -24,6 +24,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { TraxAIDialog } from "@/components/chat";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
+import { AccountingConnectionExpiredBanner } from "@/components/dashboard/accounting-connection-expired-banner";
 import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
 
 function LoadingSkeleton() {
@@ -130,6 +131,7 @@ export default function DashboardLayout({
             </div>
           </header>
           <MaintenanceBanner />
+          <AccountingConnectionExpiredBanner />
 
           <main className="flex flex-1 flex-col gap-4 p-4 pt-0">
             {children}

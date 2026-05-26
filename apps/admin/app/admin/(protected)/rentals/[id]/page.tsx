@@ -50,6 +50,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { BarChart3 } from 'lucide-react';
 import { TenantCreditsTab } from '@/components/admin/tenant-credits-tab';
 import { RevenueOptimiserAdminCard } from '@/components/admin/revenue-optimiser-admin-card';
+import { FinanceEventsTab } from '@/components/admin/finance-events-tab';
 import { AdminTodosTab } from '@/components/admin-todos/admin-todos-tab';
 import {
   ArrowLeft,
@@ -1144,6 +1145,7 @@ export default function TenantDetailsPage() {
           <TabsTrigger value="management">Management</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="revenue">Revenue Optimiser</TabsTrigger>
+          <TabsTrigger value="finance">Finance Sync</TabsTrigger>
           <TabsTrigger value="todos">Todos</TabsTrigger>
         </TabsList>
 
@@ -2057,6 +2059,11 @@ export default function TenantDetailsPage() {
         {/* Revenue Optimiser Tab — super-admin backtest trigger + latest result */}
         <TabsContent value="revenue" className="space-y-6">
           <RevenueOptimiserAdminCard tenantId={tenant.id} />
+        </TabsContent>
+
+        {/* Finance Sync Tab — super-admin debug view into the financial_events ledger */}
+        <TabsContent value="finance" className="space-y-6">
+          <FinanceEventsTab tenantId={tenant.id} />
         </TabsContent>
 
         {/* Todos Tab — per-tenant Kanban board (visible only on this tenant's page) */}

@@ -310,6 +310,23 @@ Deno.serve(async (req) => {
       console.error("Error updating rental:", rentalUpdateError);
     }
 
+    // 6b. Void the rental's synced Xero / Zoho invoices (Sprint 6 patch).
+    // Fire-and-forget — if it fails, the operator can manually void in the
+    // sync log later. We don't want a Xero hiccup to block the cancel.
+    try {
+      const voidUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/void-rental-accounting`;
+      await fetch(voidUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": req.headers.get("Authorization") ?? "",
+        },
+        body: JSON.stringify({ rentalId }),
+      });
+    } catch (voidErr) {
+      console.error("[finance-sync] void-rental-accounting call failed (non-fatal):", voidErr);
+    }
+
     // 7. Release vehicle
     if (rental.vehicles?.id || rental.vehicle_id) {
       const vehicleId = rental.vehicles?.id || rental.vehicle_id;

@@ -211,6 +211,32 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Finance Sync — enqueue deposit_capture for the accounting layer.
+    // Only on capture (preauth release is a no-op per spec §8.1). Non-fatal.
+    if (chargeRow && effectiveTenantId) {
+      try {
+        const { data: tenantRow } = await supabase
+          .from("tenants")
+          .select("currency_code")
+          .eq("id", effectiveTenantId)
+          .maybeSingle();
+        await supabase.rpc("enqueue_financial_event", {
+          p_tenant_id: effectiveTenantId,
+          p_event_type: "deposit_capture",
+          p_amount_cents: Math.round(Number(amount) * 100),
+          p_currency: (tenantRow?.currency_code as string) ?? "USD",
+          p_rental_id: rentalId,
+          p_customer_id: rental.customer_id ?? null,
+          p_vehicle_id: rental.vehicle_id ?? null,
+          p_source_table: "ledger_entries",
+          p_source_id: chargeRow.id,
+          p_description: reason || "Deposit captured",
+        });
+      } catch (err) {
+        console.error("[finance-sync] enqueue deposit_capture failed (non-fatal):", err);
+      }
+    }
+
     // 4. Update rental's deposit hold state. When the capture consumed the
     //    entire hold (remainder = 0), zero out deposit_hold_amount so the UI
     //    shows $0 for the Security Deposit row and hides Release/Charge buttons.

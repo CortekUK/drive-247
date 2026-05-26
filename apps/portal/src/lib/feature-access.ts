@@ -14,7 +14,8 @@
 export type RevenueOptimiserFeature =
   | "revenue_optimiser_insights"
   | "revenue_optimiser_recommendations"
-  | "revenue_optimiser_autopilot";
+  | "revenue_optimiser_autopilot"
+  | "finance_sync";  // Xero / Zoho Books integration (Growth+)
 
 export type Tier = "basic" | "pro" | "growth";
 
@@ -38,6 +39,7 @@ const FEATURE_MIN_TIER: Record<RevenueOptimiserFeature, Tier> = {
   revenue_optimiser_insights: "pro",
   revenue_optimiser_recommendations: "growth",
   revenue_optimiser_autopilot: "growth",
+  finance_sync: "growth",
 };
 
 const TIER_RANK: Record<Tier, number> = { basic: 0, pro: 1, growth: 2 };

@@ -33,6 +33,14 @@ verify_jwt = false
 [functions.twilio-inbound-sms]
 verify_jwt = false
 
+# Xero/Zoho OAuth callbacks — provider redirects without our session JWT.
+# State nonce validation in the function itself authenticates the round-trip.
+[functions.xero-oauth-callback]
+verify_jwt = false
+
+[functions.zoho-oauth-callback]
+verify_jwt = false
+
 [functions.twilio-sms-status]
 verify_jwt = false
 

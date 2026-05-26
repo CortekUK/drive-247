@@ -381,6 +381,35 @@ Deno.serve(async (req) => {
               .from("payg_accruals")
               .update({ ledger_entry_ids: ledgerIds })
               .eq("id", (accrualRow as any).id);
+
+            // Finance Sync — enqueue a rental_charge event per inserted ledger row.
+            // Combined dailyRate + taxAmt + sfAmt rows all flow into one financial_event
+            // per logical accrual day (we pick the 'Rental' row's id as the source
+            // anchor so dedupe at retry time stays clean). Non-fatal on failure.
+            const tenant = tenantMap.get(r.tenant_id);
+            const currency = (tenant?.currency_code as string | undefined) ?? "USD";
+            const rentalChargeRow = ((inserted as any[]) ?? []).find((row) => row?.id);
+            if (rentalChargeRow && r.tenant_id) {
+              try {
+                const totalAmount = Number(dailyRate) + Number(taxAmt ?? 0) + Number(sfAmt ?? 0);
+                await supabase.rpc("enqueue_financial_event", {
+                  p_tenant_id: r.tenant_id,
+                  p_event_type: "rental_charge",
+                  p_amount_cents: Math.round(totalAmount * 100),
+                  p_tax_cents: Math.round(Number(taxAmt ?? 0) * 100),
+                  p_currency: currency,
+                  p_rental_id: r.id,
+                  p_customer_id: r.customer_id ?? null,
+                  p_vehicle_id: r.vehicle_id ?? null,
+                  p_source_table: "ledger_entries",
+                  p_source_id: rentalChargeRow.id,
+                  p_description: `PAYG daily charge ${entryDate}`,
+                  p_metadata: { ref_base: refBase, ledger_ids: ledgerIds, accrual_day: entryDate },
+                });
+              } catch (err) {
+                console.error("[finance-sync] enqueue rental_charge (PAYG) failed (non-fatal):", err);
+              }
+            }
           }
 
           // Update the rental's accrual pointer (write after each successful day so a

@@ -187,6 +187,22 @@ serve(async (req) => {
       console.error("Failed to update rental:", updateRentalError);
     }
 
+    // Void the rental's synced Xero / Zoho invoices (Sprint 6 patch).
+    // Fire-and-forget — sync log lets the operator retry if it fails.
+    try {
+      const voidUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/void-rental-accounting`;
+      await fetch(voidUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": req.headers.get("Authorization") ?? "",
+        },
+        body: JSON.stringify({ rentalId }),
+      });
+    } catch (voidErr) {
+      console.error("[finance-sync] void-rental-accounting call failed (non-fatal):", voidErr);
+    }
+
     // Cancel any associated Bonzah insurance policies
     const { data: activePolicies } = await supabase
       .from("bonzah_insurance_policies")

@@ -13,6 +13,8 @@ interface Tenant {
   admin_name: string | null;
   integration_veriff: boolean | null;
   integration_bonzah: boolean | null;
+  integration_xero: boolean | null;
+  integration_zoho_books: boolean | null;
   bonzah_brochure_url: string | null;
   bonzah_username: string | null;
   bonzah_mode: 'test' | 'live' | null;
@@ -180,7 +182,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // Query the tenants table by slug
       const { data, error: queryError } = await supabase
         .from('tenants')
-        .select('id, slug, company_name, status, contact_email, phone, admin_name, integration_veriff, integration_bonzah, bonzah_brochure_url, bonzah_username, bonzah_mode, boldsign_mode, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number, integration_twilio_whatsapp, twilio_whatsapp_number, twilio_whatsapp_lockbox_template_sid, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, integration_tesla_fleet, security_deposit_enabled, global_deposit_amount, deposit_mode, lead_management_enabled, automations_enabled, revenue_optimiser_enabled, vehicle_owners_enabled, lead_stale_threshold_hours, lead_auto_lost_threshold_hours, communication_tone')
+        .select('id, slug, company_name, status, contact_email, phone, admin_name, integration_veriff, integration_bonzah, integration_xero, integration_zoho_books, bonzah_brochure_url, bonzah_username, bonzah_mode, boldsign_mode, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number, integration_twilio_whatsapp, twilio_whatsapp_number, twilio_whatsapp_lockbox_template_sid, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, integration_tesla_fleet, security_deposit_enabled, global_deposit_amount, deposit_mode, lead_management_enabled, automations_enabled, revenue_optimiser_enabled, vehicle_owners_enabled, lead_stale_threshold_hours, lead_auto_lost_threshold_hours, communication_tone')
         .eq('slug', slug)
         .eq('status', 'active')
         .single();

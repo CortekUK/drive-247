@@ -226,6 +226,33 @@ Deno.serve(async (req) => {
 
     console.log("[EXCESS-MILEAGE] Created charge:", ledgerEntry.id, "amount:", chargeAmount);
 
+    // Finance Sync — enqueue mileage_charge for the accounting sync layer.
+    // Non-fatal: a sync failure must never break the mileage-charge flow.
+    if (effectiveTenantId) {
+      try {
+        const { data: tenantRow } = await supabase
+          .from("tenants")
+          .select("currency_code")
+          .eq("id", effectiveTenantId)
+          .maybeSingle();
+        await supabase.rpc("enqueue_financial_event", {
+          p_tenant_id: effectiveTenantId,
+          p_event_type: "mileage_charge",
+          p_amount_cents: Math.round(Number(chargeAmount) * 100),
+          p_currency: (tenantRow?.currency_code as string) ?? "USD",
+          p_rental_id: rentalId,
+          p_customer_id: rental.customer_id ?? null,
+          p_vehicle_id: rental.vehicle_id ?? null,
+          p_source_table: "ledger_entries",
+          p_source_id: ledgerEntry.id,
+          p_description: `Excess mileage: ${excessMiles} miles × $${effectiveExcessRate}/mile`,
+          p_metadata: { excess_miles: excessMiles, tier, rate: effectiveExcessRate, has_overrides: hasOverrides },
+        });
+      } catch (err) {
+        console.error("[finance-sync] enqueue mileage_charge failed (non-fatal):", err);
+      }
+    }
+
     return jsonResponse({
       success: true,
       chargeId: ledgerEntry.id,

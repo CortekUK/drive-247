@@ -528,6 +528,34 @@ serve(async (req) => {
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+
+      // Finance Sync — enqueue a refund event for the accounting sync layer.
+      // The sync worker will create a Credit Note in Xero/Zoho linked to the
+      // original invoice. Wrapped: sync failures must never break the refund.
+      if (rental?.tenant_id) {
+        try {
+          const { data: refundLedger } = await supabase
+            .from("ledger_entries")
+            .select("id")
+            .eq("reference", refundReference)
+            .maybeSingle();
+          await supabase.rpc("enqueue_financial_event", {
+            p_tenant_id: rental.tenant_id,
+            p_event_type: "refund",
+            p_amount_cents: -Math.abs(Math.round(Number(refundAmount) * 100)),
+            p_currency: currencyCode,
+            p_rental_id: rentalId,
+            p_customer_id: rental.customer_id ?? null,
+            p_vehicle_id: rental.vehicle_id ?? null,
+            p_source_table: "ledger_entries",
+            p_source_id: refundLedger?.id ?? null,
+            p_description: `Refund: ${reason}${extensionId ? ` (extension ${extensionId})` : ""}`,
+            p_metadata: { category, extension_id: extensionId ?? null, refund_reference: refundReference },
+          });
+        } catch (err) {
+          console.error("[finance-sync] enqueue refund failed (non-fatal):", err);
+        }
+      }
     }
 
     // Get customer and vehicle details for response
