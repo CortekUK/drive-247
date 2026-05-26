@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
 import { calculateTotalMileageAllowance, getMileageTier, isUnlimitedMileage } from "@/lib/mileage-utils";
+import { parseLocalDate } from "@/lib/date-utils";
 
 export interface SuperchargerSummary {
   chargeCount: number;
@@ -683,7 +684,7 @@ export function useKeyHandover(rentalId: string | undefined) {
     let rentalDays = 1;
     if (rental.start_date && rental.end_date) {
       rentalDays = Math.max(1, Math.ceil(
-        (new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)
+        (parseLocalDate(rental.end_date).getTime() - parseLocalDate(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)
       ));
     }
 

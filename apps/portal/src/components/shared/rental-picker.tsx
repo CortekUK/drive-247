@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Car, Loader2, User } from "lucide-react";
+import { parseLocalDate } from "@/lib/date-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import {
@@ -177,9 +178,9 @@ export function RentalPicker({
                         </span>
                         <span>·</span>
                         <span className="whitespace-nowrap">
-                          {format(new Date(rental.start_date), "MMM d")} →{" "}
+                          {format(parseLocalDate(rental.start_date), "MMM d")} →{" "}
                           {rental.end_date
-                            ? format(new Date(rental.end_date), "MMM d, yyyy")
+                            ? format(parseLocalDate(rental.end_date), "MMM d, yyyy")
                             : "Open"}
                         </span>
                       </div>

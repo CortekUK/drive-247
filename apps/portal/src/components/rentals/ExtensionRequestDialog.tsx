@@ -24,6 +24,7 @@ import { useExtensionPricing } from '@/hooks/use-extension-pricing';
 import { useRentalSettings } from '@/hooks/use-rental-settings';
 import { format } from 'date-fns';
 import { getCurrencySymbol } from '@/lib/format-utils';
+import { parseLocalDate } from '@/lib/date-utils';
 import { useQuery } from '@tanstack/react-query';
 import { calculateTotalMileageAllowance, getMileageTier, isUnlimitedMileage } from '@/lib/mileage-utils';
 import { type CoverageOptions } from '@/hooks/use-bonzah-premium';
@@ -177,11 +178,11 @@ export function ExtensionRequestDialog({
   // Compute mileage impact
   const mileageImpact = (() => {
     if (!vehicleMileage || isUnlimitedMileage(vehicleMileage)) return null;
-    const currentDays = Math.max(1, Math.ceil((new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
+    const currentDays = Math.max(1, Math.ceil((parseLocalDate(rental.end_date).getTime() - parseLocalDate(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
     const _mtd = tenant?.monthly_tier_days ?? 30;
     const currentAllowance = calculateTotalMileageAllowance(vehicleMileage, currentDays, _mtd);
     if (!rental.previous_end_date) return { currentAllowance, newAllowance: null, currentTier: getMileageTier(currentDays, _mtd), newTier: null };
-    const newDays = Math.max(1, Math.ceil((new Date(rental.previous_end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
+    const newDays = Math.max(1, Math.ceil((parseLocalDate(rental.previous_end_date).getTime() - parseLocalDate(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
     const newAllowance = calculateTotalMileageAllowance(vehicleMileage, newDays, _mtd);
     return { currentAllowance, newAllowance, currentTier: getMileageTier(currentDays, _mtd), newTier: getMileageTier(newDays, _mtd) };
   })();
@@ -698,7 +699,7 @@ export function ExtensionRequestDialog({
                     rel="noopener noreferrer"
                     className="text-xs underline inline-flex items-center gap-1"
                   >
-                    Rental for {c.customerName} ({format(new Date(c.start_date), 'MMM dd')} – {format(new Date(c.end_date), 'MMM dd')}) <ExternalLink className="h-3 w-3" />
+                    Rental for {c.customerName} ({format(parseLocalDate(c.start_date), 'MMM dd')} – {format(parseLocalDate(c.end_date), 'MMM dd')}) <ExternalLink className="h-3 w-3" />
                   </a>
                 ))}
               </AlertDescription>

@@ -44,6 +44,7 @@ import { useOrgSettings } from "@/hooks/use-org-settings";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/format-utils";
+import { parseLocalDate } from "@/lib/date-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
@@ -435,7 +436,7 @@ const PaymentsList = () => {
                                 }
                                 if (!unitRate) return null;
 
-                                const totalDays = Math.max(1, Math.ceil((new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
+                                const totalDays = Math.max(1, Math.ceil((parseLocalDate(rental.end_date).getTime() - parseLocalDate(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
                                 let units = 1;
                                 if (unitLabel === 'day') units = totalDays;
                                 else if (unitLabel === 'week') units = Math.ceil(totalDays / 7);

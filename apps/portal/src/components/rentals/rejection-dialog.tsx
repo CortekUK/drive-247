@@ -25,6 +25,7 @@ import {
   Banknote,
 } from "lucide-react";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { formatCurrency } from "@/lib/format-utils";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { useAuditLog } from "@/hooks/use-audit-log";
@@ -247,8 +248,8 @@ export default function RejectionDialog({
         vehicle_make: rental.vehicle?.make || '',
         vehicle_model: rental.vehicle?.model || '',
         vehicle_reg: rental.vehicle?.reg || '',
-        rental_start_date: rental.start_date ? format(new Date(rental.start_date), 'MMMM dd, yyyy') : 'N/A',
-        rental_end_date: rental.end_date ? format(new Date(rental.end_date), 'MMMM dd, yyyy') : 'N/A',
+        rental_start_date: rental.start_date ? format(parseLocalDate(rental.start_date), 'MMMM dd, yyyy') : 'N/A',
+        rental_end_date: rental.end_date ? format(parseLocalDate(rental.end_date), 'MMMM dd, yyyy') : 'N/A',
         rental_amount: formatCurrency(rental.monthly_amount || 0, currencyCode),
         company_name: (tenant as any)?.company_name || 'Our Company',
         company_email: (tenant as any)?.contact_email || '',

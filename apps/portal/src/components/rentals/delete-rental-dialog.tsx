@@ -15,6 +15,7 @@ import { useAuditLog } from "@/hooks/use-audit-log";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
+import { formatLocalDate } from "@/lib/date-utils";
 
 interface Rental {
   id: string;
@@ -154,7 +155,7 @@ export const DeleteRentalDialog = ({
               </p>
               <p>
                 <span className="font-medium">Start Date:</span>{" "}
-                {new Date(rental.start_date).toLocaleDateString('en-US')}
+                {formatLocalDate(rental.start_date)}
               </p>
               <p>
                 <span className="font-medium">Monthly Amount:</span>{" "}

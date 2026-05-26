@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CalendarIcon, Plus, Trash2, Ban, Calendar as CalendarIconLucide, Globe, AlertTriangle, Info } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { parseLocalDate } from "@/lib/date-utils";
 import { useBlockedDates } from "@/hooks/use-blocked-dates";
 import { supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -383,7 +384,7 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
                       <span className="font-medium">{rental.customer_name}</span>
                       <span className="text-muted-foreground">{rental.vehicle_reg}</span>
                       <span className="text-muted-foreground">
-                        {format(new Date(rental.start_date), 'MMM dd')} – {format(new Date(rental.end_date), 'MMM dd, yyyy')}
+                        {format(parseLocalDate(rental.start_date), 'MMM dd')} – {format(parseLocalDate(rental.end_date), 'MMM dd, yyyy')}
                       </span>
                     </div>
                   ))}

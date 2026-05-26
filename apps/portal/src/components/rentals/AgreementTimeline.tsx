@@ -20,6 +20,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { parseLocalDate } from '@/lib/date-utils';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import type { RentalAgreement } from '@/hooks/use-rental-agreements';
@@ -276,7 +277,7 @@ function AgreementCard({
           <div>
             <p className="text-xs text-muted-foreground">Period</p>
             <p className="font-medium">
-              {format(new Date(agreement.period_start_date), 'MMM d, yyyy')} – {format(new Date(agreement.period_end_date), 'MMM d, yyyy')}
+              {format(parseLocalDate(agreement.period_start_date), 'MMM d, yyyy')} – {format(parseLocalDate(agreement.period_end_date), 'MMM d, yyyy')}
             </p>
 
             {/* Credit failed alert */}

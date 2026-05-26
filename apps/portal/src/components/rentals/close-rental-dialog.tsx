@@ -18,6 +18,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { closeRentalSchema, type CloseRentalFormValues } from "@/client-schemas/rentals/close-rental";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
+import { parseLocalDate, formatLocalDate } from "@/lib/date-utils";
 
 type CloseRentalFormData = CloseRentalFormValues;
 
@@ -178,7 +179,7 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
                 <p><span className="font-medium">Rental:</span> {rental.rental_number}</p>
                 <p><span className="font-medium">Customer:</span> {rental.customer.name}</p>
                 <p><span className="font-medium">Vehicle:</span> {rental.vehicle.reg} ({rental.vehicle.make} {rental.vehicle.model})</p>
-                <p><span className="font-medium">Start Date:</span> {new Date(rental.start_date).toLocaleDateString('en-US')}</p>
+                <p><span className="font-medium">Start Date:</span> {formatLocalDate(rental.start_date)}</p>
                 <p><span className="font-medium">Monthly Amount:</span> {formatCurrency(rental.monthly_amount, currencyCode)}</p>
               </div>
             </div>
@@ -215,7 +216,7 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
                             mode="single"
                             selected={field.value}
                             onSelect={field.onChange}
-                            fromDate={new Date(rental.start_date)}
+                            fromDate={parseLocalDate(rental.start_date)}
                             toDate={new Date()}
                             initialFocus
                           />

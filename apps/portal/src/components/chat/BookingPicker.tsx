@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Paperclip, Search, Car, Calendar, X } from 'lucide-react';
 import { format } from 'date-fns';
+import { parseLocalDate } from '@/lib/date-utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -192,9 +193,9 @@ export function BookingPicker({ customerId, onSelect, disabled }: BookingPickerP
                       <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
                         <Calendar className="h-3 w-3" />
                         <span>
-                          {format(new Date(rental.start_date), 'MMM d')}
+                          {format(parseLocalDate(rental.start_date), 'MMM d')}
                           {rental.end_date && (
-                            <> - {format(new Date(rental.end_date), 'MMM d, yyyy')}</>
+                            <> - {format(parseLocalDate(rental.end_date), 'MMM d, yyyy')}</>
                           )}
                         </span>
                       </div>

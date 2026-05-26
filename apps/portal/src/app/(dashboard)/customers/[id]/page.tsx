@@ -38,6 +38,7 @@ import { NextOfKinCard } from "@/components/customers/next-of-kin-card";
 import { PaymentStatusBadge } from "@/components/customers/payment-status-badge";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 import { useGigDriverImages, useDeleteGigDriverImage } from "@/hooks/use-gig-driver-images";
@@ -888,10 +889,10 @@ const CustomerDetail = () => {
                             </div>
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            {format(new Date(rental.start_date), "MM/dd/yyyy")}
+                            {format(parseLocalDate(rental.start_date), "MM/dd/yyyy")}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            {rental.end_date ? format(new Date(rental.end_date), "MM/dd/yyyy") : "Ongoing"}
+                            {rental.end_date ? format(parseLocalDate(rental.end_date), "MM/dd/yyyy") : "Ongoing"}
                           </TableCell>
                           <TableCell className="text-right font-medium">
                             {formatCurrency(rental.monthly_amount, currencyCode)}

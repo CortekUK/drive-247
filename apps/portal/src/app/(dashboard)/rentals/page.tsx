@@ -47,6 +47,7 @@ const formatTimeOfDay = (value: string | null | undefined): string | null => {
   return `${hour12}:${minutes} ${period}`;
 };
 import Link from "next/link";
+import { formatLocalDate } from "@/lib/date-utils";
 import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
 import { RentalsFilters } from "@/components/rentals/rentals-filters";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
@@ -417,7 +418,7 @@ const RentalsList = () => {
                           {rental.customer.name.split(' ')[0]}
                         </TableCell>
                         <TableCell>
-                          <div>{new Date(rental.start_date).toLocaleDateString('en-US')}</div>
+                          <div>{formatLocalDate(rental.start_date)}</div>
                           {formatTimeOfDay(rental.pickup_time) && (
                             <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
                               <Clock className="h-3 w-3" />
@@ -429,7 +430,7 @@ const RentalsList = () => {
                           {rental.end_date
                             ? (
                               <>
-                                <div>{new Date(rental.end_date).toLocaleDateString('en-US')}</div>
+                                <div>{formatLocalDate(rental.end_date)}</div>
                                 {formatTimeOfDay(rental.return_time) && (
                                   <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
                                     <Clock className="h-3 w-3" />

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { FileText, Download, Shield } from "lucide-react";
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/format-utils";
+import { parseLocalDate } from "@/lib/date-utils";
 import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 import { useTenant } from "@/contexts/TenantContext";
@@ -107,7 +108,7 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
           <div>
             <p className="text-gray-600">Rental Period:</p>
             <p className="font-medium">
-              {format(new Date(rental.start_date), 'PP')} - {format(new Date(rental.end_date), 'PP')}
+              {format(parseLocalDate(rental.start_date), 'PP')} - {format(parseLocalDate(rental.end_date), 'PP')}
             </p>
           </div>
         </div>
@@ -363,7 +364,7 @@ export const InvoiceDialog = ({
                 <div>
                   <p className="text-muted-foreground">Rental Period:</p>
                   <p className="font-medium">
-                    {format(new Date(rental.start_date), 'PP')} - {format(new Date(rental.end_date), 'PP')}
+                    {format(parseLocalDate(rental.start_date), 'PP')} - {format(parseLocalDate(rental.end_date), 'PP')}
                   </p>
                 </div>
               </div>

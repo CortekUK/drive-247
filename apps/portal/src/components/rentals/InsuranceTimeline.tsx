@@ -20,6 +20,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { parseLocalDate } from '@/lib/date-utils';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -222,7 +223,7 @@ function InsuranceTimelineItem({
           {/* Header row: dates + status */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium">
-              {format(new Date(policy.trip_start_date), 'MMM d, yyyy')} – {format(new Date(policy.trip_end_date), 'MMM d, yyyy')}
+              {format(parseLocalDate(policy.trip_start_date), 'MMM d, yyyy')} – {format(parseLocalDate(policy.trip_end_date), 'MMM d, yyyy')}
             </span>
             <Badge className={statusInfo.badgeClass} variant={statusInfo.badgeClass ? 'default' : 'outline'}>
               <statusInfo.icon className="h-3 w-3 mr-1" />

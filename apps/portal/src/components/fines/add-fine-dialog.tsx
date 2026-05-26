@@ -27,6 +27,7 @@ import { DatePickerInput } from "@/components/shared/forms/date-picker-input";
 import { CurrencyInput } from "@/components/shared/forms/currency-input";
 import { EnhancedFileUpload } from "@/components/fines/enhanced-file-upload";
 import { getCurrencySymbol } from "@/lib/format-utils";
+import { formatLocalDate } from "@/lib/date-utils";
 
 const fineSchema = z.object({
   type: z.string().min(1, "Fine type is required"),
@@ -419,7 +420,7 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId, prese
                             customerRentals.map((rental: any) => (
                               <SelectItem key={rental.id} value={rental.id} className="py-2">
                                 <span className="truncate">
-                                  {rental.rental_number || rental.id.slice(0, 8)} — {new Date(rental.start_date).toLocaleDateString('en-US')} to {new Date(rental.end_date).toLocaleDateString('en-US')}
+                                  {rental.rental_number || rental.id.slice(0, 8)} — {formatLocalDate(rental.start_date)} to {formatLocalDate(rental.end_date)}
                                 </span>
                               </SelectItem>
                             ))

@@ -255,11 +255,11 @@ export function AdminExtendRentalDialog({
   // Compute mileage impact
   const mileageImpact = (() => {
     if (!vehicleMileage || isUnlimitedMileage(vehicleMileage)) return null;
-    const currentDays = Math.max(1, Math.ceil((new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
+    const currentDays = Math.max(1, Math.ceil((parseLocalDate(rental.end_date).getTime() - parseLocalDate(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
     const _mtd = tenant?.monthly_tier_days ?? 30;
     const currentAllowance = calculateTotalMileageAllowance(vehicleMileage, currentDays, _mtd);
     if (!newEndDate) return { currentAllowance, newAllowance: null, currentTier: getMileageTier(currentDays, _mtd), newTier: null };
-    const newDays = Math.max(1, Math.ceil((new Date(newEndDate).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
+    const newDays = Math.max(1, Math.ceil((parseLocalDate(newEndDate).getTime() - parseLocalDate(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
     const newAllowance = calculateTotalMileageAllowance(vehicleMileage, newDays, _mtd);
     return { currentAllowance, newAllowance, currentTier: getMileageTier(currentDays, _mtd), newTier: getMileageTier(newDays, _mtd) };
   })();
