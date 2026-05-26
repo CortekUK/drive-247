@@ -84,6 +84,10 @@ verify_jwt = false
 [functions.cmd-webhook]
 verify_jwt = false
 
+# Cron-driven fallback polling for CMD until Modives webhook is wired up.
+[functions.cmd-poll-pending]
+verify_jwt = false
+
 # OAuth callback (Tesla 302-redirects to this endpoint, so it can't carry a JWT).
 # The POST actions in this function still verify the JWT in code.
 [functions.tesla-fleet-api]
