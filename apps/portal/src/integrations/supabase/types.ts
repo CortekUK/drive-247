@@ -7941,6 +7941,8 @@ export type Database = {
           created_at: string
           ends_at: string
           id: string
+          rolled_out_at: string | null
+          rolled_out_vehicle_count: number | null
           started_at: string
           status: string
           tenant_id: string
@@ -7959,6 +7961,8 @@ export type Database = {
           created_at?: string
           ends_at: string
           id?: string
+          rolled_out_at?: string | null
+          rolled_out_vehicle_count?: number | null
           started_at?: string
           status?: string
           tenant_id: string
@@ -7977,6 +7981,8 @@ export type Database = {
           created_at?: string
           ends_at?: string
           id?: string
+          rolled_out_at?: string | null
+          rolled_out_vehicle_count?: number | null
           started_at?: string
           status?: string
           tenant_id?: string
@@ -8111,6 +8117,7 @@ export type Database = {
           applied_by: string | null
           applied_price: number | null
           applied_source: string | null
+          autopilot_run_id: string | null
           confidence: string
           confidence_score: number
           created_at: string
@@ -8120,9 +8127,13 @@ export type Database = {
           dismissed_at: string | null
           dismissed_by: string | null
           elasticity_curve: Json | null
+          experiment_arm: string | null
+          experiment_id: string | null
           expires_at: string
           generation_run_id: string | null
           id: string
+          is_combined: boolean
+          matched_lead_ids: string[] | null
           projected_revenue_delta_monthly: number | null
           reasons: Json
           recommended_price: number
@@ -8133,6 +8144,9 @@ export type Database = {
           reverted_by: string | null
           snoozed_until: string | null
           status: string
+          suppress_reason: string | null
+          suppressed_at: string | null
+          suppressed_by: string | null
           tenant_id: string
           tier: string
           updated_at: string
@@ -8146,6 +8160,7 @@ export type Database = {
           applied_by?: string | null
           applied_price?: number | null
           applied_source?: string | null
+          autopilot_run_id?: string | null
           confidence: string
           confidence_score: number
           created_at?: string
@@ -8155,9 +8170,13 @@ export type Database = {
           dismissed_at?: string | null
           dismissed_by?: string | null
           elasticity_curve?: Json | null
+          experiment_arm?: string | null
+          experiment_id?: string | null
           expires_at: string
           generation_run_id?: string | null
           id?: string
+          is_combined?: boolean
+          matched_lead_ids?: string[] | null
           projected_revenue_delta_monthly?: number | null
           reasons: Json
           recommended_price: number
@@ -8168,6 +8187,9 @@ export type Database = {
           reverted_by?: string | null
           snoozed_until?: string | null
           status?: string
+          suppress_reason?: string | null
+          suppressed_at?: string | null
+          suppressed_by?: string | null
           tenant_id: string
           tier: string
           updated_at?: string
@@ -8181,6 +8203,7 @@ export type Database = {
           applied_by?: string | null
           applied_price?: number | null
           applied_source?: string | null
+          autopilot_run_id?: string | null
           confidence?: string
           confidence_score?: number
           created_at?: string
@@ -8190,9 +8213,13 @@ export type Database = {
           dismissed_at?: string | null
           dismissed_by?: string | null
           elasticity_curve?: Json | null
+          experiment_arm?: string | null
+          experiment_id?: string | null
           expires_at?: string
           generation_run_id?: string | null
           id?: string
+          is_combined?: boolean
+          matched_lead_ids?: string[] | null
           projected_revenue_delta_monthly?: number | null
           reasons?: Json
           recommended_price?: number
@@ -8203,6 +8230,9 @@ export type Database = {
           reverted_by?: string | null
           snoozed_until?: string | null
           status?: string
+          suppress_reason?: string | null
+          suppressed_at?: string | null
+          suppressed_by?: string | null
           tenant_id?: string
           tier?: string
           updated_at?: string
@@ -8224,8 +8254,22 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pricing_recommendations_experiment_id_fkey"
+            columns: ["experiment_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_experiments"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pricing_recommendations_reverted_by_fkey"
             columns: ["reverted_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pricing_recommendations_suppressed_by_fkey"
+            columns: ["suppressed_by"]
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
@@ -10362,6 +10406,134 @@ export type Database = {
           },
         ]
       }
+      revenue_optimiser_anomalies: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          anomaly_type: string
+          created_at: string
+          details: Json | null
+          id: string
+          recommendation_id: string | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          status: string
+          summary: string
+          tenant_id: string
+          updated_at: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          anomaly_type: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          recommendation_id?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          status?: string
+          summary: string
+          tenant_id: string
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          anomaly_type?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          recommendation_id?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          status?: string
+          summary?: string
+          tenant_id?: string
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revenue_optimiser_anomalies_acknowledged_by_fkey"
+            columns: ["acknowledged_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenue_optimiser_anomalies_recommendation_id_fkey"
+            columns: ["recommendation_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_recommendations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenue_optimiser_anomalies_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenue_optimiser_anomalies_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenue_optimiser_anomalies_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "revenue_optimiser_anomalies_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pricing_stats"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "revenue_optimiser_anomalies_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenue_optimiser_anomalies_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "revenue_optimiser_anomalies_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "revenue_optimiser_anomalies_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
       revenue_optimiser_insights: {
         Row: {
           created_at: string
@@ -10442,6 +10614,89 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      revenue_optimiser_offer_dispatches: {
+        Row: {
+          channel: string
+          conversation_id: string | null
+          converted_at: string | null
+          converted_to_rental_id: string | null
+          created_at: string
+          dispatch_error: string | null
+          dispatch_status: string
+          dispatched_at: string | null
+          id: string
+          lead_id: string
+          message_body: string | null
+          recommendation_id: string
+          template_id: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          channel: string
+          conversation_id?: string | null
+          converted_at?: string | null
+          converted_to_rental_id?: string | null
+          created_at?: string
+          dispatch_error?: string | null
+          dispatch_status?: string
+          dispatched_at?: string | null
+          id?: string
+          lead_id: string
+          message_body?: string | null
+          recommendation_id: string
+          template_id?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          conversation_id?: string | null
+          converted_at?: string | null
+          converted_to_rental_id?: string | null
+          created_at?: string
+          dispatch_error?: string | null
+          dispatch_status?: string
+          dispatched_at?: string | null
+          id?: string
+          lead_id?: string
+          message_body?: string | null
+          recommendation_id?: string
+          template_id?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revenue_optimiser_offer_dispatches_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenue_optimiser_offer_dispatches_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenue_optimiser_offer_dispatches_recommendation_id_fkey"
+            columns: ["recommendation_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_recommendations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenue_optimiser_offer_dispatches_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -11737,6 +11992,7 @@ export type Database = {
           twilio_whatsapp_number: string | null
           twitter_url: string | null
           updated_at: string | null
+          vehicle_owners_enabled: boolean
           verification_document_type: string
           voicemail_enabled: boolean | null
           voicemail_greeting_url: string | null
@@ -11941,6 +12197,7 @@ export type Database = {
           twilio_whatsapp_number?: string | null
           twitter_url?: string | null
           updated_at?: string | null
+          vehicle_owners_enabled?: boolean
           verification_document_type?: string
           voicemail_enabled?: boolean | null
           voicemail_greeting_url?: string | null
@@ -12145,6 +12402,7 @@ export type Database = {
           twilio_whatsapp_number?: string | null
           twitter_url?: string | null
           updated_at?: string | null
+          vehicle_owners_enabled?: boolean
           verification_document_type?: string
           voicemail_enabled?: boolean | null
           voicemail_greeting_url?: string | null
@@ -14878,3 +15136,5 @@ export const Constants = {
     },
   },
 } as const
+A new version of Supabase CLI is available: v2.101.0 (currently installed v2.90.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

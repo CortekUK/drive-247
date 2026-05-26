@@ -150,6 +150,7 @@ export function AppSidebar() {
   const leadManagementEnabled = (tenant as { lead_management_enabled?: boolean } | null)?.lead_management_enabled === true;
   const automationsEnabled = (tenant as { automations_enabled?: boolean } | null)?.automations_enabled === true;
   const revenueOptimiserEnabled = (tenant as { revenue_optimiser_enabled?: boolean } | null)?.revenue_optimiser_enabled === true;
+  const vehicleOwnersEnabled = (tenant as { vehicle_owners_enabled?: boolean } | null)?.vehicle_owners_enabled === true;
   const { canAccess: canAccessRevenueOptimiser } = useFeatureAccess("revenue_optimiser_insights");
   // Show Revenue group when EITHER the tenant has flipped the feature flag (so they
   // can find their own page) OR the tenant is on a tier that supports Insights but
@@ -199,8 +200,10 @@ export function AppSidebar() {
       icon: AnimatedCar,
       items: [
         { name: "Vehicles", href: "/vehicles", icon: AnimatedCar },
-        { name: "Vehicle Owners", href: "/vehicle-owners", icon: AnimatedUsers },
-        { name: "Owner Payouts", href: "/owner-payouts", icon: Banknote },
+        ...(vehicleOwnersEnabled ? [
+          { name: "Vehicle Owners", href: "/vehicle-owners", icon: AnimatedUsers },
+          { name: "Owner Payouts", href: "/owner-payouts", icon: Banknote },
+        ] : []),
         { name: "Rentals", href: "/rentals", icon: AnimatedFileText },
         ...(showPendingBookings ? [{ name: "Pending Bookings", href: "/pending-bookings", icon: Clock, badge: pendingBookingsCount || 0 }] : []),
         { name: "Availability", href: "/blocked-dates", icon: AnimatedCalendarDays },
