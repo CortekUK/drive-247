@@ -13,10 +13,11 @@ const TESLA_AUTH_BASE = 'https://auth.tesla.com';
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 function getStateSecret(): string {
-  // Prefer a dedicated secret; fall back to Supabase's JWT secret which is
-  // always present in the edge function runtime and is high-entropy.
-  const secret = Deno.env.get('TESLA_STATE_SECRET') || Deno.env.get('SUPABASE_JWT_SECRET');
-  if (!secret) throw new Error('Missing TESLA_STATE_SECRET / SUPABASE_JWT_SECRET');
+  // Prefer a dedicated secret; fall back to the service role key which is
+  // always injected into the Edge Functions runtime. Used only as an HMAC key
+  // — never returned to clients.
+  const secret = Deno.env.get('TESLA_STATE_SECRET') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!secret) throw new Error('Missing TESLA_STATE_SECRET / SUPABASE_SERVICE_ROLE_KEY');
   return secret;
 }
 
