@@ -41,6 +41,7 @@ import { format } from "date-fns";
 import { parseLocalDate } from "@/lib/date-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
+import { cn } from "@/lib/utils";
 import { useGigDriverImages, useDeleteGigDriverImage } from "@/hooks/use-gig-driver-images";
 import GigDriverUploadDialog from "@/components/customers/gig-driver-upload-dialog";
 import { BlurredImage } from "@/components/ui/blurred-image";
@@ -962,7 +963,65 @@ const CustomerDetail = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="payments" className="mt-6">
+        <TabsContent value="payments" className="mt-6 space-y-4">
+          {/* Balance summary — shows the full picture so operators can reconcile
+              against the customer's bank statement / Stripe dashboard. Without
+              this, "Collected $X" and "Balance $Y" make it look like money is
+              missing when in reality $Z of captured payments is sitting on the
+              customer's account as unallocated credit. */}
+          {customerBalanceData && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Balance Summary</CardTitle>
+                <CardDescription>
+                  Lifetime totals across all rentals. Use these to reconcile against Stripe and the customer's bank statement.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total charges</p>
+                    <p className="text-lg font-semibold tabular-nums">
+                      {formatCurrency(customerBalanceData.totalCharges, currencyCode)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Applied to charges</p>
+                    <p className="text-lg font-semibold tabular-nums">
+                      {formatCurrency(
+                        Math.max(0, customerBalanceData.totalCharges - customerBalanceData.outstandingDebt),
+                        currencyCode,
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Outstanding</p>
+                    <p className={cn(
+                      "text-lg font-semibold tabular-nums",
+                      customerBalanceData.outstandingDebt > 0 ? "text-red-600" : ""
+                    )}>
+                      {formatCurrency(customerBalanceData.outstandingDebt, currencyCode)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Available credit</p>
+                    <p className={cn(
+                      "text-lg font-semibold tabular-nums",
+                      customerBalanceData.availableCredit > 0 ? "text-green-600" : ""
+                    )}>
+                      {formatCurrency(customerBalanceData.availableCredit, currencyCode)}
+                    </p>
+                  </div>
+                </div>
+                {customerBalanceData.availableCredit > 0 && (
+                  <p className="text-xs text-muted-foreground mt-3">
+                    Available credit is money already captured from the customer that hasn't yet been applied to a charge. It will auto-apply (FIFO) to the next open charge.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
@@ -987,6 +1046,7 @@ const CustomerDetail = () => {
                         <TableHead className="font-semibold">Vehicle</TableHead>
                         <TableHead className="font-semibold">Status</TableHead>
                         <TableHead className="font-semibold text-right">Remaining</TableHead>
+                        <TableHead className="font-semibold text-center">Stripe</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1025,6 +1085,21 @@ const CustomerDetail = () => {
                               </span>
                             ) : (
                               <span className="text-green-600 font-medium">Fully Applied</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {payment.stripe_payment_intent_id ? (
+                              <a
+                                href={`https://dashboard.stripe.com/payments/${payment.stripe_payment_intent_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center text-muted-foreground hover:text-indigo-600 transition-colors"
+                                title={`Open in Stripe Dashboard (${payment.capture_status ?? 'captured'})`}
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
                             )}
                           </TableCell>
                         </TableRow>

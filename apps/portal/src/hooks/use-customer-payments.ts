@@ -11,6 +11,8 @@ export interface CustomerPayment {
   status: string;
   remaining_amount: number;
   created_at: string;
+  stripe_payment_intent_id: string | null;
+  capture_status: string | null;
   vehicle: {
     id: string;
     reg: string;
@@ -39,6 +41,8 @@ export const useCustomerPayments = (customerId: string) => {
           status,
           remaining_amount,
           created_at,
+          stripe_payment_intent_id,
+          capture_status,
           vehicles!payments_vehicle_id_fkey(id, reg),
           rentals!payments_rental_id_fkey(id)
         `)
