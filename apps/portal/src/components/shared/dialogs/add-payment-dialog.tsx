@@ -96,6 +96,15 @@ interface AddPaymentDialogProps {
    * invoice fill-ins haven't yet landed in the ledger.
    */
   outstandingBalanceOverride?: number;
+  /**
+   * When true, the Stripe webhook will place a deposit pre-auth hold off-session
+   * after the customer pays the rental — using the card they just used to pay.
+   * Set true from the new-rental post-creation flow when the tenant has
+   * security_deposit_enabled and global_deposit_amount > 0. The webhook handles
+   * the hold via place-deposit-hold; if the rental already has a hold, that
+   * edge function no-ops.
+   */
+  placeDepositHoldAfter?: boolean;
 }
 
 const PAYMENT_METHODS = [
@@ -122,6 +131,7 @@ export const AddPaymentDialog = ({
   onPaymentSuccess,
   breakdownItems,
   outstandingBalanceOverride,
+  placeDepositHoldAfter,
 }: AddPaymentDialogProps) => {
   const [loading, setLoading] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
@@ -530,6 +540,10 @@ export const AddPaymentDialog = ({
           // Installments: stamp the scheduled_installments id so the Stripe
           // webhook can call installment_settle_invoice once the customer pays.
           ...(installmentId ? { installmentId } : {}),
+          // First-rental flow: after the rental payment captures, the webhook
+          // invokes place-deposit-hold to authorise the deposit off-session on
+          // the same saved card.
+          ...(placeDepositHoldAfter ? { placeDepositHoldAfter: true } : {}),
         },
       });
 
@@ -612,6 +626,10 @@ export const AddPaymentDialog = ({
           // Installments: stamp the scheduled_installments id so the Stripe
           // webhook can settle the right installment when the customer pays.
           ...(installmentId ? { installmentId } : {}),
+          // First-rental flow: after the rental payment captures, the webhook
+          // invokes place-deposit-hold to authorise the deposit off-session on
+          // the same saved card.
+          ...(placeDepositHoldAfter ? { placeDepositHoldAfter: true } : {}),
         },
       });
 

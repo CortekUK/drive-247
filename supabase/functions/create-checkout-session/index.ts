@@ -16,7 +16,7 @@ serve(async (req) => {
   }
 
   try {
-    const { bookingId, rentalId, customerEmail, customerName, customerId, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId, successUrl, cancelUrl, targetCategories, extensionId, source, paygAccrualId, installmentId } = await req.json()
+    const { bookingId, rentalId, customerEmail, customerName, customerId, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId, successUrl, cancelUrl, targetCategories, extensionId, source, paygAccrualId, installmentId, placeDepositHoldAfter } = await req.json()
 
     // Get tenant slug from header or body
     const slug = tenantSlug || req.headers.get('x-tenant-slug')
@@ -198,6 +198,11 @@ serve(async (req) => {
         ...(extensionId ? { extension_id: extensionId } : {}),
         ...(paygAccrualId ? { payg_accrual_id: paygAccrualId } : {}),
         ...(installmentId ? { installment_id: installmentId } : {}),
+        // Tells the Stripe webhook to invoke place-deposit-hold once the
+        // payment captures, so the deposit is authorised off-session on the
+        // same saved card (capture_method='manual'). Stripe metadata values
+        // are always strings.
+        ...(placeDepositHoldAfter ? { place_deposit_hold: 'true' } : {}),
       },
     }
 

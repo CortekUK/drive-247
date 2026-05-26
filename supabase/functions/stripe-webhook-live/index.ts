@@ -947,6 +947,52 @@ serve(async (req) => {
               console.error("Error sending booking notification:", notifyError);
             }
           }
+
+          // AUTO-PLACE DEPOSIT HOLD: when the portal's new-rental flow stamps
+          // place_deposit_hold='true', the rental payment we just captured
+          // saved the customer's card (setup_future_usage: 'off_session' in
+          // create-checkout-session). Now authorise the deposit on that same
+          // card without prompting the customer — place-deposit-hold creates
+          // a manual-capture PaymentIntent and writes deposit_hold_status='held'
+          // on the rental. The function is idempotent; if the rental already
+          // has a hold or the tenant has deposits disabled, it no-ops safely.
+          if (session.metadata?.place_deposit_hold === "true" && rentalId) {
+            console.log("[LIVE MODE] place_deposit_hold flag detected, placing off-session hold for rental:", rentalId);
+            try {
+              const holdResponse = await fetch(
+                `${Deno.env.get("SUPABASE_URL")}/functions/v1/place-deposit-hold`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                  },
+                  body: JSON.stringify({ rentalId }),
+                }
+              );
+              const holdResult = await holdResponse.json().catch(() => ({}));
+              if (holdResponse.ok) {
+                if (holdResult.skipped) {
+                  console.log("[LIVE MODE] Deposit hold skipped:", holdResult.message);
+                } else if (holdResult.alreadyHeld) {
+                  console.log("[LIVE MODE] Deposit hold already active");
+                } else {
+                  console.log("[LIVE MODE] Deposit hold placed:", holdResult.paymentIntentId, "amount:", holdResult.amount);
+                }
+              } else {
+                // Don't fail the webhook — the rental payment is already captured.
+                // The hold can be placed manually from the rental detail page.
+                console.error("[LIVE MODE] place-deposit-hold failed:", holdResult?.error || holdResponse.statusText);
+                await supabase
+                  .from("rentals")
+                  .update({ deposit_hold_status: "failed" })
+                  .eq("id", rentalId)
+                  .is("deposit_hold_status", null);
+              }
+            } catch (holdError) {
+              console.error("[LIVE MODE] Error invoking place-deposit-hold:", holdError);
+            }
+          }
         }
 
         // BACKFILL: Ensure stripe_payment_intent_id is saved for ALL matching payments
