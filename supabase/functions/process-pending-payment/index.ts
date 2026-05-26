@@ -98,7 +98,16 @@ Deno.serve(async (req) => {
       } else if (payment.rental_id && isCategoryTargeted && !targetsIncludeRental) {
         console.log(`[PROCESS-PENDING] Skipping retroactive installment self-heal: payment ${payment.id} is targeted to non-Rental categories (${targets!.join(', ')}). Installment plan untouched.`);
       }
-      return new Response(JSON.stringify({ ok: true, status: payment.status, alreadyProcessed: true }), {
+      // Include rentalId so the booking-success page safety-net can still
+      // call place-deposit-hold even when the webhook beat us to the row.
+      // Without this, the alreadyProcessed branch returned no rentalId and the
+      // hold never got placed for the email-link flow (R-b631e8 reproducer).
+      return new Response(JSON.stringify({
+        ok: true,
+        status: payment.status,
+        alreadyProcessed: true,
+        rentalId: payment.rental_id || null,
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
