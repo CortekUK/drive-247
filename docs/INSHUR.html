@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>INSHUR — ABI Insurance Integration</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "DM Sans", Helvetica, Arial, sans-serif;
+    color: #1a1a1a;
+    font-size: 11pt;
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+  }
+  .cover {
+    page-break-after: always;
+    padding: 60px 20px 0;
+    text-align: left;
+  }
+  .cover .tag {
+    font-size: 11pt;
+    letter-spacing: 0.18em;
+    color: #6366f1;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .cover h1 {
+    font-size: 44pt;
+    line-height: 1.05;
+    margin: 18px 0 12px;
+    font-weight: 700;
+    color: #080812;
+    letter-spacing: -0.02em;
+  }
+  .cover .subtitle {
+    font-size: 16pt;
+    color: #404040;
+    font-weight: 400;
+    margin: 0 0 40px;
+  }
+  .cover .meta {
+    margin-top: 60px;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 24px;
+    font-size: 10pt;
+    color: #737373;
+  }
+  .cover .meta div { margin: 4px 0; }
+  .cover .meta strong { color: #080812; font-weight: 600; }
+
+  h1 { font-size: 22pt; color: #080812; margin: 32px 0 10px; font-weight: 700; letter-spacing: -0.01em; }
+  h2 { font-size: 16pt; color: #080812; margin: 28px 0 10px; font-weight: 600; border-bottom: 2px solid #6366f1; padding-bottom: 6px; }
+  h3 { font-size: 13pt; color: #080812; margin: 22px 0 8px; font-weight: 600; }
+  h4 { font-size: 11pt; color: #404040; margin: 16px 0 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  p { margin: 8px 0; }
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+
+  code {
+    font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+    background: #f1f5f9;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 9.5pt;
+    color: #0f172a;
+  }
+  pre {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-size: 9.5pt;
+    overflow-x: auto;
+    line-height: 1.45;
+  }
+  pre code { background: transparent; padding: 0; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 16px;
+    font-size: 10pt;
+  }
+  th {
+    background: #eef2ff;
+    color: #080812;
+    text-align: left;
+    padding: 8px 10px;
+    border: 1px solid #e5e7eb;
+    font-weight: 600;
+  }
+  td {
+    padding: 8px 10px;
+    border: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #fafafa; }
+
+  blockquote {
+    border-left: 3px solid #6366f1;
+    background: #f8fafc;
+    margin: 12px 0;
+    padding: 8px 14px;
+    color: #404040;
+    font-style: italic;
+  }
+
+  .callout {
+    background: #fef3c7;
+    border-left: 3px solid #d97706;
+    padding: 10px 14px;
+    margin: 12px 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 10pt;
+  }
+  .callout strong { color: #92400e; }
+
+  .good {
+    background: #ecfdf5;
+    border-left: 3px solid #16a34a;
+    padding: 10px 14px;
+    margin: 12px 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 10pt;
+  }
+
+  .bad {
+    background: #fef2f2;
+    border-left: 3px solid #dc2626;
+    padding: 10px 14px;
+    margin: 12px 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 10pt;
+  }
+
+  .phase-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 9pt;
+    font-weight: 600;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .phase-1 { background: #ecfdf5; color: #166534; }
+  .phase-2 { background: #fef3c7; color: #92400e; }
+  .phase-3 { background: #dbeafe; color: #1e3a8a; }
+
+  .footer {
+    margin-top: 60px;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 16px;
+    font-size: 9pt;
+    color: #737373;
+  }
+
+  hr { border: none; border-top: 1px solid #e5e7eb; margin: 20px 0; }
+
+  .toc {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px 22px;
+    margin: 20px 0;
+  }
+  .toc h3 { margin-top: 0; }
+  .toc ol { margin: 0; }
+
+  .section { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<!-- =================== COVER =================== -->
+<div class="cover">
+  <div class="tag">Internal · Discovery Document</div>
+  <h1>INSHUR</h1>
+  <div class="subtitle">ABI Insurance Integration — Feature Discovery, Requirements & Recommendation</div>
+
+  <div class="meta">
+    <div><strong>Product:</strong> Drive247</div>
+    <div><strong>Author:</strong> Ghulam Ilyas</div>
+    <div><strong>Date:</strong> 23 May 2026</div>
+    <div><strong>Status:</strong> Discovery / pre-build</div>
+    <div><strong>Source meeting:</strong> Impromptu Google Meet — 21 May 2026 (Chris Aragon, Amy Steelhammer, Amgad Kedic, Neema Ghanbarinia)</div>
+    <div><strong>API docs reviewed:</strong> https://abiweb.readme.io</div>
+  </div>
+</div>
+
+<!-- =================== TOC =================== -->
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li>Executive summary</li>
+    <li>What ABI Insurance is</li>
+    <li>The two-period concept</li>
+    <li>Concrete example — Amgad's flow</li>
+    <li>ABI vs Bonzah</li>
+    <li>Meeting takeaways</li>
+    <li>API documentation review</li>
+    <li>Period X enrollment — what's actually possible</li>
+    <li>Requirements: Phase 1 / Phase 2 / Phase 3</li>
+    <li>Phase 1 — the 4 certain asks</li>
+    <li>Decisions &amp; recommendation</li>
+    <li>Open questions for Neema</li>
+    <li>Appendix: full API endpoint inventory</li>
+  </ol>
+</div>
+
+<!-- =================== 1. EXEC SUMMARY =================== -->
+<div class="section">
+<h1>1. Executive summary</h1>
+<p>ABI provides per-rental car insurance for peer-to-peer / car-share platforms. Hosts buy an off-rental "Period X" policy for each vehicle; on top of that, the platform can programmatically issue "Period Z" on-rental coverage every time a renter books that vehicle.</p>
+<p>Amgad (one of our tenants) is moving to ABI for his fleet and asked whether Drive247 will integrate. Neema confirmed during the call that an integration is desirable but <strong>not blocking</strong> — Amgad can operate through ABI's portal manually until we build it.</p>
+<p><strong>Recommendation:</strong> defer the build. Bonzah already covers the renter-facing upsell; ABI's Period X enrollment API does not yet exist for car-share hosts; and ABI's carrier-name-on-card rule prevents the full white-label experience Amgad wants. Park as a Phase 2 product feature and revisit when 2–3 tenants ask for it or ABI ships the host-onboarding API.</p>
+</div>
+
+<!-- =================== 2. WHAT IT IS =================== -->
+<div class="section">
+<h1>2. What ABI Insurance is</h1>
+<p><strong>One line:</strong> ABI provides per-rental car insurance. Every time a customer rents a vehicle on Drive247, ABI insures that specific rental for the days it runs. The renter receives an insurance ID card with their name on it, valid only for that booking.</p>
+<p>It is purpose-built for peer-to-peer car sharing and rental marketplaces. Hosts sign up once, then issue per-rental policies on top of their fleet through API calls from the platform.</p>
+</div>
+
+<!-- =================== 3. TWO PERIODS =================== -->
+<div class="section">
+<h1>3. The two-period concept</h1>
+<p>A rental vehicle has two distinct insurance phases:</p>
+<table>
+  <thead>
+    <tr><th>Period</th><th>When it applies</th><th>Who drives</th><th>Who pays</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Period X</strong><br>(off-rental)</td>
+      <td>Car at host's lot, parked at home, host driving to wash/fuel</td>
+      <td>Host (owner)</td>
+      <td>Host — bought once, billed monthly</td>
+    </tr>
+    <tr>
+      <td><strong>Period Z</strong><br>(on-rental)</td>
+      <td>Car is rented to a customer</td>
+      <td>Renter</td>
+      <td>Per-rental fee — passed through by platform</td>
+    </tr>
+  </tbody>
+</table>
+<div class="callout"><strong>Critical rule:</strong> a vehicle can only get Period Z if it already has an active Period X policy. Period X is the gating prerequisite for everything else.</div>
+</div>
+
+<!-- =================== 4. EXAMPLE =================== -->
+<div class="section">
+<h1>4. Concrete example — Amgad's flow</h1>
+
+<h3>Setup (one-time, per vehicle)</h3>
+<ul>
+  <li>Amgad owns 5 cars and signs up at <code>portal.abiweb.com</code>.</li>
+  <li>He buys Period X for each car (manual today — no API for new-host enrollment).</li>
+  <li>All 5 cars are now insured at rest and <strong>eligible</strong> for on-rental coverage.</li>
+</ul>
+
+<h3>A booking happens</h3>
+<ol>
+  <li><strong>Sarah</strong> opens Amgad's Drive247 site, books his <strong>Tesla Model 3</strong> for 25 May → 28 May (3 days).</li>
+  <li>Drive247 calls ABI: <em>"Is VIN <code>5YJ3E1EA1JF…</code> eligible?"</em><br>→ ABI: ✅ yes, Period X is active.</li>
+  <li>Drive247 sends Sarah's details: <strong>Add Renter</strong> (name, DOB, license #, license state, address, phone, email) → ABI returns <code>RENTERID</code>.</li>
+  <li>Drive247 creates the rental period: <strong>Create Rental</strong> (VIN + renter ID + start + end + state + timezone + usage type) → ABI returns <code>RENTALID</code>.</li>
+  <li>Drive247 fetches the card: <strong>Get ID Card</strong> → ABI returns a PDF/URL showing Sarah as insured driver, VIN, dates, carrier, policy limits.</li>
+  <li>Drive247 emails the card to Sarah and attaches it to the rental record. She is legally covered to drive that car for 3 days.</li>
+</ol>
+
+<h3>Rental ends</h3>
+<ol start="7">
+  <li>Sarah returns the car on 28 May. Drive247 calls <strong>End Rental</strong> → coverage stops.</li>
+  <li>ABI bills Amgad (or Drive247) for 3 days × daily rate for that Tesla.</li>
+</ol>
+</div>
+
+<!-- =================== 5. ABI vs BONZAH =================== -->
+<div class="section">
+<h1>5. ABI vs Bonzah — they solve different problems</h1>
+<table>
+  <thead>
+    <tr><th></th><th>Bonzah</th><th>ABI</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>What it is</strong></td><td>Renter damage waiver (optional add-on)</td><td>Primary commercial insurance on the vehicle</td></tr>
+    <tr><td><strong>Who buys</strong></td><td>The renter at checkout</td><td>Host (Period X) + platform issues Period Z per rental</td></tr>
+    <tr><td><strong>What it covers</strong></td><td>Renter's damage / excess liability</td><td>Legal liability + comp / collision while in commercial rental use</td></tr>
+    <tr><td><strong>Without it</strong></td><td>Renter pays out-of-pocket for damage</td><td>Host has no legitimate commercial coverage → personal policy denies claims → host is fully exposed</td></tr>
+    <tr><td><strong>Optional?</strong></td><td>Yes — upsell</td><td>No — required for legal commercial operation</td></tr>
+  </tbody>
+</table>
+<p>Bonzah is a <strong>renter-facing upsell</strong>. ABI is the <strong>carrier of record</strong> for the vehicle being rented. A real fleet operation typically has <strong>both</strong>.</p>
+</div>
+
+<!-- =================== 6. MEETING TAKEAWAYS =================== -->
+<div class="section">
+<h1>6. Meeting takeaways (21 May 2026)</h1>
+<h4>Confirmed facts</h4>
+<ul>
+  <li>ABI's carrier name must legally appear on every ID card. Drive247 cannot fully white-label.</li>
+  <li>Period X must be purchased by the host first; without it, vehicles cannot be made eligible for Period Z.</li>
+  <li>ID card displays the renter's name and the vehicle VIN (Chris confirmed verbally; a "renter-name-on-card" defect was discussed and a ticket has been filed).</li>
+  <li>No separate sandbox URL — staging and production share <code>https://api.abiweb.com</code>; only credentials differ.</li>
+  <li>Hosts must already be ABI customers; brand-new host enrollment is not yet API-driven.</li>
+  <li>Volume discount tiers: 1–3 vehicles, 4–9, 10+ (max discount at 10). Pricing covers liability with optional comprehensive + collision.</li>
+</ul>
+
+<h4>Amgad's concerns</h4>
+<ul>
+  <li>Wants to hide ABI from his hosts entirely — branding risk if hosts learn the carrier name.</li>
+  <li>Wants to start with his own 5–9 cars before introducing to third-party hosts.</li>
+  <li>Asked whether coverage is full or liability-only — answer: configurable (add comp/collision on signup).</li>
+</ul>
+
+<h4>Neema's framing</h4>
+<blockquote>"You can insure your vehicles now and continue your business. When the build is finished you'll be able to do it from within the system — but it's not a blocker."</blockquote>
+</div>
+
+<!-- =================== 7. DOC REVIEW =================== -->
+<div class="section">
+<h1>7. API documentation review</h1>
+<h3>What is documented</h3>
+<ul>
+  <li><strong>Auth:</strong> Basic Auth (portal credentials, base64-encoded) + a 2FA token in a <code>Token</code> header for "required users". Endpoints exist to request and verify the 2FA code.</li>
+  <li><strong>Base URL:</strong> <code>https://api.abiweb.com</code> (staging and production share the URL).</li>
+  <li><strong>Core Period Z endpoints:</strong>
+    <ul>
+      <li><code>GET /period-z/eligibility/vin/{VIN}/</code> — Vehicle Eligibility Check</li>
+      <li><code>POST /customer/{CN}/period-zero/renter/</code> — Add Renter</li>
+      <li><code>POST /customer/{CN}/policy/{PN}/period-zero/rental/</code> — Create Rental Period</li>
+      <li><code>POST /customer/{CN}/policy/{PN}/period-zero/rental/{VIN}/end/</code> — End Rental</li>
+      <li><code>DELETE /customer/{CN}/policy/{PN}/period-zero/rental/{VIN}/</code> — Cancel Rental</li>
+      <li><code>GET /customer/{CN}/policy/{PN}/period-zero/rental/{RENTALID}/idcard/</code> — Proof of Insurance</li>
+      <li><code>GET /period-z/states-allowed/</code> — Allowed States</li>
+      <li><code>GET /customer/{CN}/billing/vins/?startDate=&endDate=</code> — Cost by VIN</li>
+    </ul>
+  </li>
+  <li><strong>Renter object fields:</strong> firstname, lastname, license state, license number, phone, email, DOB, address, city, state, ZIP.</li>
+  <li><strong>Rental object fields:</strong> VIN, RENTERID, STATE, TIMEZONE, STARTTIME, ENDTIME, USAGETYPE (<code>Personal</code> or <code>Rideshare</code>), optional EXTERNALREF.</li>
+  <li><strong>USAGETYPE controls renter name on card:</strong> <code>Rideshare</code> shows renter name (Uber/Lyft style); <code>Personal</code> omits it (Turo style). The "bug" mentioned in the call is likely a configuration mismatch.</li>
+</ul>
+
+<h3>What is NOT documented (gaps)</h3>
+<ul>
+  <li>200 / 400 response schemas are referenced but not fully described.</li>
+  <li>ID card payload format (PDF binary vs URL vs base64).</li>
+  <li>2FA token lifetime / TTL.</li>
+  <li>Cancellation window and refund / prorating rules.</li>
+  <li>Per-VIN daily rate structure or pricing breakdown.</li>
+  <li>Webhook / event subscription support — none documented; appears to be poll-only.</li>
+</ul>
+</div>
+
+<!-- =================== 8. PERIOD X ANALYSIS =================== -->
+<div class="section">
+<h1>8. Period X enrollment — what's actually possible today</h1>
+<p>Chris's verbal statement during the call ("we don't have this endpoint set up yet") was correct but oversimplified. The nuanced picture:</p>
+<table>
+  <thead>
+    <tr><th>Capability</th><th>Endpoint</th><th>Supported?</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Enrol a brand-new car-share host into Period X</td><td>—</td><td class="bad"><strong>❌ No</strong> — must use portal.abiweb.com</td></tr>
+    <tr><td>Enrol a new TNC driver (Uber Black)</td><td><code>POST /quote/</code></td><td>⚠️ Yes, but only for <code>TYPE: uber-black</code></td></tr>
+    <tr><td>Get rating / pricing quote</td><td><code>POST /quote/rating/</code></td><td>✅ Pricing only, not enrolment</td></tr>
+    <tr><td>Add a new vehicle to an existing Period X policy</td><td><code>POST /customer/{CN}/policy/{PN}/vehicles/</code></td><td class="good"><strong>✅ Yes</strong></td></tr>
+    <tr><td>List existing policies for a customer</td><td><code>GET /customer/{CN}/policies/</code></td><td class="good"><strong>✅ Yes</strong></td></tr>
+    <tr><td>Process changes (mid-term edits)</td><td><code>POST /customer/{CN}/policy/{PN}/changes/</code></td><td>✅ Yes</td></tr>
+  </tbody>
+</table>
+<p>So the realistic flow today is:</p>
+<ol>
+  <li><strong>One-time per host</strong>: manual signup on <code>portal.abiweb.com</code>. Drive247 records their customer + policy numbers once.</li>
+  <li><strong>Everything after that</strong>: adding a new car to their fleet, eligibility check, creating rentals, issuing cards, ending rentals, billing reconciliation — all API-driven from Drive247.</li>
+</ol>
+<p>That's closer to <strong>95% automated with one manual step at host signup</strong>, not "half-automated" as initially framed.</p>
+</div>
+
+<!-- =================== 9. REQUIREMENTS PHASES =================== -->
+<div class="section">
+<h1>9. Requirements — Phase 1 / Phase 2 / Phase 3</h1>
+
+<h3><span class="phase-pill phase-1">PHASE 1</span> To get started (sandbox build)</h3>
+<ol>
+  <li><strong>Test portal credentials</strong> — explicitly assigned by ABI account manager.</li>
+  <li><strong>2FA setup</strong> for the test account + token TTL (not documented).</li>
+  <li><strong>Our test customer number</strong> (path param on every Period Z endpoint).</li>
+  <li><strong>Our test Period Z master policy number.</strong></li>
+  <li><strong>Sample response payloads</strong> for Eligibility / Create Rental / Get ID Card — plus confirmation of ID card format (PDF binary vs URL vs base64).</li>
+  <li><strong>At least one test VIN with active Period X coverage on our account</strong> — without it, no test call can succeed because eligibility check will fail.</li>
+</ol>
+
+<h3><span class="phase-pill phase-2">PHASE 2</span> To go live (production cutover)</h3>
+<ol>
+  <li>Production credentials + live customer / policy numbers.</li>
+  <li><code>USAGETYPE</code> decision (Personal vs Rideshare) — controls whether renter name appears on card; resolves the "bug" Chris mentioned.</li>
+  <li>Cancellation rules — time window, refund policy, proration on early End Rental.</li>
+  <li>Pricing model — daily rate structure, flat vs by class/state, billing cadence (per call vs monthly invoice).</li>
+  <li>List of supported states for our policy.</li>
+  <li>Vehicle eligibility rules — age, value cap, salvage title, mileage.</li>
+  <li>Driver eligibility rules — min age, license type, MVR check requirements.</li>
+  <li>Period X enrolment workflow for hosts (manual portal vs co-brand option).</li>
+  <li>Coverage details for the ID card — limits (BI/PD), deductibles, liability vs full coverage.</li>
+  <li>Sample ID card so we know what renters receive.</li>
+  <li>Required legal disclosures at booking checkout.</li>
+  <li>Producer / broker license question for our role.</li>
+</ol>
+
+<h3><span class="phase-pill phase-3">PHASE 3</span> Eventually (post-launch / scale)</h3>
+<ol>
+  <li>Period X (host onboarding) API when ABI ships it — true white-label.</li>
+  <li>Webhooks for policy / rental / claim events.</li>
+  <li>Claims workflow integration.</li>
+  <li>Reconciliation endpoints — list active rentals, audit reports per host.</li>
+  <li>Multi-tenant ABI accounts — per-tenant customer/policy pairs (like Bonzah / Stripe Connect).</li>
+  <li>Volume discount tiers for Period Z.</li>
+  <li>Co-branded ID cards.</li>
+  <li>Geographic expansion as ABI adds states.</li>
+  <li>Pre-booking renter pre-qualification.</li>
+  <li>Reporting / analytics dashboards.</li>
+  <li>GPS / telematics feed (<code>Report Location</code> endpoint exists).</li>
+  <li>Data retention &amp; PII processing agreement.</li>
+</ol>
+</div>
+
+<!-- =================== 10. PHASE 1 CERTAIN ASKS =================== -->
+<div class="section">
+<h1>10. Phase 1 — the 4 certain asks</h1>
+<p>After verifying against the docs, only these four are <strong>100% certain blockers</strong>. Everything else can be phrased as a question rather than a firm requirement.</p>
+<div class="good">
+  <ol>
+    <li><strong>Test portal credentials</strong> — quoted directly from docs: <em>"Your account manager will setup and provide you with test credentials on an as needed basis."</em></li>
+    <li><strong>Our test customer number</strong> — every Period Z endpoint has <code>{CUSTOMERNUMBER}</code> in its path.</li>
+    <li><strong>Our test Period Z master policy number</strong> — every rental endpoint has <code>{POLICYNUMBER}</code> in its path.</li>
+    <li><strong>A test VIN with active Period X coverage on our test account</strong> — the eligibility check gates the entire flow; without a Period X-covered vehicle, no rental can be created in test.</li>
+  </ol>
+</div>
+</div>
+
+<!-- =================== 11. DECISIONS =================== -->
+<div class="section">
+<h1>11. Decisions &amp; recommendation</h1>
+
+<h3>Decision: defer the build</h3>
+<p>Bonzah already serves the renter-facing upsell. ABI fills a different need (primary commercial coverage on the vehicle), but its delivery does not yet support the white-label experience Amgad is asking for, and the host enrolment path is still manual. Amgad can operate through ABI's portal today without any Drive247 changes.</p>
+
+<h3>Triggers to revisit</h3>
+<ul>
+  <li>A second or third tenant requests ABI integration (signals it's a product, not a one-off).</li>
+  <li>ABI ships the Period X enrolment API for car-share hosts (unlocks true white-label).</li>
+  <li>Amgad scales past ~15–20 cars and the manual portal workflow becomes painful enough that he asks again.</li>
+  <li>Drive247 wants to offer commercial fleet insurance as a standalone product line.</li>
+</ul>
+
+<h3>If we do build</h3>
+<p>The integration shape is well understood — it follows the Bonzah pattern (call API, pass renter + vehicle + dates, receive policy + ID card). Roughly:</p>
+<ul>
+  <li>Settings → Integrations tab with an ABI connector (test/live toggle, customer + policy number per tenant).</li>
+  <li>Per-vehicle eligibility status cached and refreshed on demand.</li>
+  <li>Hook into the rental creation flow: on confirmation, call Add Renter → Create Rental → Get ID Card → attach to the rental record + email to renter.</li>
+  <li>Hook into rental completion: call End Rental.</li>
+  <li>Hook into rental cancellation: call Cancel Rental.</li>
+  <li>Mirrors the existing Bonzah and BoldSign patterns; effort estimate roughly comparable.</li>
+</ul>
+</div>
+
+<!-- =================== 12. OPEN QUESTIONS =================== -->
+<div class="section">
+<h1>12. Open questions for Neema / ABI</h1>
+<ol>
+  <li>Is the 2FA token requirement applied to API service users, or only to portal-login users?</li>
+  <li>What is the 2FA token lifetime — once obtained, can it be cached?</li>
+  <li>What format does the ID card endpoint return (PDF binary, URL, base64)?</li>
+  <li>For Drive247's use case, should <code>USAGETYPE</code> be <code>Personal</code> or <code>Rideshare</code>? Renter name on card?</li>
+  <li>What is the cancellation window, and what proration/refund applies on early End Rental?</li>
+  <li>Pricing model — flat daily rate per VIN, or rated by class/state/coverage?</li>
+  <li>Is there an ETA for a car-share host enrolment API (beyond the existing <code>uber-black</code>-only path)?</li>
+  <li>What is the supported state list for our policy?</li>
+  <li>Are webhooks on the roadmap, or are we expected to poll?</li>
+  <li>Does Drive247 need to be set up as the producer / retail broker of record before we can issue cards?</li>
+</ol>
+</div>
+
+<!-- =================== APPENDIX =================== -->
+<div class="section">
+<h1>Appendix: full API endpoint inventory</h1>
+<p>From <code>https://abiweb.readme.io/llms.txt</code> — 47 endpoints across 12 sections.</p>
+
+<h4>Authentication &amp; Access</h4>
+<ul>
+  <li>Sign In, Request 2FA Code, Verify 2FA Code, Testing Access</li>
+</ul>
+
+<h4>Customer Management</h4>
+<ul>
+  <li>Get Customer by Policy Number, Get Customers, Search Customers</li>
+</ul>
+
+<h4>Policies</h4>
+<ul>
+  <li>Get Policies, Process Changes, Policy Contacts</li>
+</ul>
+
+<h4>Vehicles</h4>
+<ul>
+  <li>Get Vehicles, Add Vehicles, Remove Vehicles, Update Vehicle, Vehicle Eligibility Check, Cost by VIN</li>
+</ul>
+
+<h4>Vehicle Ownership &amp; Location</h4>
+<ul>
+  <li>Change Owner, Locations, Owners</li>
+</ul>
+
+<h4>Certificates &amp; ID Cards</h4>
+<ul>
+  <li>Get Certificate Holders, Get Certificate, Get ID Card</li>
+</ul>
+
+<h4>Drivers</h4>
+<ul>
+  <li>Get Drivers, Driver Change, Update Driver Status</li>
+</ul>
+
+<h4>Rental Insurance (Period Z)</h4>
+<ul>
+  <li>Period Z overview, Add Renter, Get Renters, Create Rental Period, Cancel Rental Period, End Rental, Get Rentals, Get Rental</li>
+</ul>
+
+<h4>Insurance &amp; Quotes</h4>
+<ul>
+  <li>Proof of Insurance, Quote, ISO Rating API</li>
+</ul>
+
+<h4>Regulatory &amp; Support</h4>
+<ul>
+  <li>States Allowed</li>
+</ul>
+
+<h4>GPS &amp; Documentation</h4>
+<ul>
+  <li>GPS Integration overview, Report Location, Attach Document</li>
+</ul>
+</div>
+
+<!-- =================== FOOTER =================== -->
+<div class="footer">
+  <p><strong>Source chat:</strong> INSHUR</p>
+  <p><strong>Document:</strong> INSHUR.pdf — generated 23 May 2026</p>
+  <p>Generated from a Claude Code session with Ghulam Ilyas. Built from the 21 May 2026 ABI / Drive247 meeting transcript and a live walk-through of the ABI API documentation at <code>abiweb.readme.io</code>.</p>
+</div>
+
+</body>
+</html>
