@@ -242,11 +242,31 @@ Deno.serve(async (req: Request) => {
       { method: "GET" }
     );
     const detailResult = unwrapResult(detail);
-    const applicantVerificationId = extractIdFromDictResult(detailResult, [
+    // The applicantVerificationReqGuidId lives inside result.applicants[0] —
+    // NOT at the top level. If we fall back to "any UUID string at top level"
+    // we accidentally return the dealerGuid (which is also a top-level UUID).
+    const applicants = (detailResult?.applicants ?? detailResult?.Applicants) as
+      | Array<Record<string, unknown>>
+      | undefined;
+    const firstApplicant = Array.isArray(applicants) && applicants.length ? applicants[0] : undefined;
+    const APPLICANT_ID_KEYS = [
       "applicantVerificationReqGuidId",
       "ApplicantVerificationReqGuidId",
       "applicantVerificationId",
-    ]);
+    ];
+    // First look inside applicants[0] (correct location per Modives schema).
+    // Fall back to exact-key lookup on the top-level result (NOT the UUID
+    // fallback — top-level has dealerGuid which would be a false positive).
+    const applicantVerificationId =
+      extractIdFromDictResult(firstApplicant, APPLICANT_ID_KEYS) ??
+      (firstApplicant ? undefined : (() => {
+        if (!detailResult) return undefined;
+        for (const k of APPLICANT_ID_KEYS) {
+          const v = (detailResult as Record<string, unknown>)[k];
+          if (typeof v === "string" && v.length > 0) return v;
+        }
+        return undefined;
+      })());
     if (!applicantVerificationId) {
       console.error("[cmd-create-verification] no applicantVerificationReqGuidId in detail:", detail);
       return errorResponse("Modives did not return applicantVerificationReqGuidId", 502);
