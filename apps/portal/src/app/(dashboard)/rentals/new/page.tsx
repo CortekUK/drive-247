@@ -1256,8 +1256,16 @@ const CreateRental = () => {
       }
 
       // PAYG vs regular mode validation
-      // Regular rentals require end_date + return_location + return_time; PAYG does not.
-      // PAYG requires pickup_time (anchor for the daily accrual window).
+      // Regular rentals require end_date + return_location + return_time + pickup_time;
+      // PAYG just requires pickup_time (anchor for the daily accrual window).
+      //
+      // The Zod schema already requires pickup_time via regex(/^\d{2}:\d{2}$/), but
+      // we re-check here as a belt-and-suspenders guard. A meaningful number of
+      // historical non-PAYG rentals (~26% of recent portal-created ones) have
+      // pickup_time = NULL despite the schema, suggesting some submit path bypasses
+      // the resolver. An explicit guard here means even if Zod is somehow skipped
+      // the rental never lands in the DB without a pickup time — operators won't
+      // get "I can't see the pickup time" support tickets the next morning.
       if (!isPayAsYouGo) {
         if (!data.end_date) {
           throw new Error("End date is required");
@@ -1265,6 +1273,9 @@ const CreateRental = () => {
         const minEndDate = addDays(data.start_date, 1);
         if (!(isAfter(data.end_date, minEndDate) || data.end_date.getTime() === minEndDate.getTime())) {
           throw new Error("End date must be at least 1 day after start date");
+        }
+        if (!data.pickup_time || !/^\d{2}:\d{2}$/.test(data.pickup_time)) {
+          throw new Error("Pickup time is required");
         }
         if (!data.return_time || !/^\d{2}:\d{2}$/.test(data.return_time)) {
           throw new Error("Return time is required");
@@ -1401,6 +1412,16 @@ const CreateRental = () => {
         // Per-rental reminder interval override (null = use tenant default)
         payg_reminder_interval_days: isPayAsYouGo ? paygReminderInterval : null,
       };
+
+      // Final-pass payload guard. The Zod schema and the submit-handler validation
+      // above both require pickup_time, but ~26% of recent non-PAYG portal rentals
+      // still landed with pickup_time = NULL — so something is slipping past both
+      // gates (likely a programmatic submit path or stale form state). Refusing
+      // the insert here is the last line of defense before operators end up not
+      // knowing what time their customer is supposed to arrive.
+      if (!isPayAsYouGo && !rentalInsertPayload.pickup_time) {
+        throw new Error("Pickup time is required");
+      }
 
       // Create rental with Pending status (will become Active after DocuSign)
       const { data: rental, error: rentalError } = await supabaseUntyped
@@ -1722,7 +1743,12 @@ const CreateRental = () => {
         const extra = activeExtras?.find((e: RentalExtra) => e.id === id);
         return sum + (extra ? Number(extra.price) * qty : 0);
       }, 0);
-      const totalAmount = discountedAmount + taxAmount + serviceFee + securityDeposit + insurancePremium + effectiveDeliveryFee + effectiveCollectionFee + extrasTotal;
+      // Deposit is NOT included in the chargeable total — it's held separately
+      // via create-hold-checkout / place-deposit-hold so the customer gets a
+      // proper pre-auth on their card instead of being charged for the deposit
+      // as part of the rental invoice. The invoice still records security_deposit
+      // as a tracking field but it's not part of total_amount.
+      const totalAmount = discountedAmount + taxAmount + serviceFee + insurancePremium + effectiveDeliveryFee + effectiveCollectionFee + extrasTotal;
 
       // Track if this is an installment rental (used for routing after creation)
       const isInstallmentRental = installmentPlanType !== 'full' && rentalSettings?.installments_enabled;
@@ -1744,7 +1770,12 @@ const CreateRental = () => {
           subtotal: discountedAmount,
           tax_amount: taxAmount,
           service_fee: serviceFee,
-          security_deposit: securityDeposit,
+          // Deposit is held off-session via place-deposit-hold (pre-auth on the
+          // saved card). It is NOT a ledger charge — so we don't write it onto
+          // the invoice. The hold lifecycle is tracked on rental.deposit_hold_*
+          // columns instead. Setting to 0 prevents generate_first_charge_for_rental
+          // from materialising an unpaid "Security Deposit" Charge in the ledger.
+          security_deposit: 0,
           insurance_premium: insurancePremium,
           delivery_fee: effectiveDeliveryFee,
           extras_total: extrasTotal,
@@ -2028,7 +2059,9 @@ const CreateRental = () => {
       });
       if (effectiveDeliveryFee > 0) breakdownForPayment.push({ label: 'Delivery Fee', amount: effectiveDeliveryFee });
       if (!sameAsPickup && effectiveCollectionFee > 0) breakdownForPayment.push({ label: 'Collection Fee', amount: effectiveCollectionFee });
-      if (securityDeposit > 0) breakdownForPayment.push({ label: 'Pre-Authorization', amount: securityDeposit });
+      // Deposit is NOT in the payment breakdown — it's placed as a separate hold
+      // off-session by the Stripe webhook (place-deposit-hold) using the same
+      // card the customer used for the rental payment.
 
       // Store rental data for invoice dialog
       setCreatedRentalData({
@@ -5247,6 +5280,14 @@ const CreateRental = () => {
         vehicle_id={createdRentalData?.rental?.vehicle_id || createdRentalData?.formData?.vehicle_id}
         rental_id={createdRentalData?.rental?.id}
         breakdownItems={createdRentalData?.breakdownItems}
+        // Trigger an off-session deposit hold after the customer pays the rental
+        // invoice. The Stripe webhook uses the saved card to place the hold —
+        // see place-deposit-hold edge function. Only true for the first-rental
+        // post-creation flow; the dialog when reused elsewhere defaults to false.
+        placeDepositHoldAfter={Boolean(
+          tenant?.security_deposit_enabled &&
+          Number(tenant?.global_deposit_amount) > 0
+        )}
       />
 
       {/* Invoice Dialog */}
