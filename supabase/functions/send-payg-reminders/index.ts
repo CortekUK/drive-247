@@ -558,13 +558,26 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const totalOutstanding = (openAccruals ?? []).reduce(
-          (sum, a: any) =>
-            sum + Number(a.daily_rate || 0) + Number(a.tax_amount || 0) + Number(a.service_fee_amount || 0),
+        // Outstanding must come from the ledger's remaining_amount on PAYG
+        // charge rows, NOT the gross accrual totals. An accrual stays
+        // invoice_status='open' until *every* category (rental + tax + fee)
+        // for that day is drained — but a partial FIFO payment (e.g. customer
+        // pays $360 against 7 days of rent, tax still owed) leaves the accrual
+        // 'open' while the ledger correctly shows rent=0 / tax=$3.60. Summing
+        // gross accruals here billed the customer for already-paid rent.
+        const { data: openCharges, error: chargesErr } = await supabase
+          .from("ledger_entries")
+          .select("remaining_amount")
+          .eq("rental_id", r.id)
+          .eq("type", "Charge")
+          .like("reference", "payg-%");
+        if (chargesErr) throw chargesErr;
+        const totalOutstanding = (openCharges ?? []).reduce(
+          (sum, e: any) => sum + Number(e.remaining_amount || 0),
           0,
         );
 
-        if (totalOutstanding <= 0) {
+        if (totalOutstanding <= 0.005) {
           skipped++;
           continue;
         }

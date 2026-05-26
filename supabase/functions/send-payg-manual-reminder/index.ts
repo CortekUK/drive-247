@@ -461,13 +461,28 @@ Deno.serve(async (req) => {
       return clientError("No outstanding invoice to remind about");
     }
 
-    const totalOutstanding = (openAccruals ?? []).reduce(
-      (sum, a: any) =>
-        sum + Number(a.daily_rate || 0) + Number(a.tax_amount || 0) + Number(a.service_fee_amount || 0),
+    // Outstanding must come from the ledger's remaining_amount on PAYG
+    // charge rows, NOT the gross accrual totals — see send-payg-reminders
+    // for the full reasoning. tl;dr: an accrual stays 'open' until every
+    // category for that day is drained, but a partial FIFO payment leaves
+    // the accrual 'open' while ledger remaining correctly reflects what's
+    // still owed. Summing gross accruals double-bills already-paid days.
+    const { data: openCharges, error: chargesErr } = await supabase
+      .from("ledger_entries")
+      .select("remaining_amount")
+      .eq("rental_id", r.id)
+      .eq("type", "Charge")
+      .like("reference", "payg-%");
+    if (chargesErr) {
+      console.error("[PaygManualReminder] Ledger fetch error:", chargesErr);
+      throw chargesErr;
+    }
+    const totalOutstanding = (openCharges ?? []).reduce(
+      (sum, e: any) => sum + Number(e.remaining_amount || 0),
       0,
     );
 
-    if (totalOutstanding <= 0) {
+    if (totalOutstanding <= 0.005) {
       return clientError("Outstanding balance is already $0");
     }
 
