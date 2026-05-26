@@ -4273,7 +4273,20 @@ const RentalDetail = () => {
 
           {/* Rental Period */}
           <div className="border rounded-lg p-4">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">Rental Period</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Rental Period</p>
+              {canEdit && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowEditPickupReturn(true)}
+                >
+                  <Pencil className="w-3 h-3" />
+                  Edit
+                </Button>
+              )}
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
               <div>
                 <p className="text-sm text-muted-foreground">Pickup</p>
@@ -4312,6 +4325,14 @@ const RentalDetail = () => {
                 <Badge variant="outline" className="mt-1">{rental.rental_period_type || 'Monthly'}</Badge>
               </div>
             </div>
+
+            {/* Timezone footer — operators were confused which timezone the
+                dates and times were in (especially after the off-by-one bug),
+                so spell it out explicitly. Tenant timezone wins; falls back to
+                the browser's resolved zone. */}
+            <p className="text-xs text-muted-foreground mt-3 italic">
+              Times shown in {tenant?.timezone || (typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "local time")}
+            </p>
 
             {/* Extension History */}
             {extensionGroups.length > 0 && (
