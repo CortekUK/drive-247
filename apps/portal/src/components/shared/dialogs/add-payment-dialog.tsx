@@ -445,16 +445,32 @@ export const AddPaymentDialog = ({
       }
       const { data: applyResult, error: applyError } = await supabase.functions.invoke('apply-payment', { body: applyBody });
 
+      // Roll back BOTH the ledger Payment entry AND the payments row when apply-payment
+      // fails. Without the ledger delete, the FK fk_ledger_entries_payment_id (ON DELETE
+      // SET NULL) leaves an orphan ledger Payment row with payment_id = NULL — and FIFO
+      // on subsequent payments will happily drain it against open charges, producing
+      // phantom credit. We hit this on one tenant where a $390.55 orphan made a
+      // customer appear $390.55 in credit on top of his real payments.
+      const rollbackPayment = async () => {
+        let ledgerDelete = supabase
+          .from('ledger_entries')
+          .delete()
+          .eq('payment_id', payment.id)
+          .eq('type', 'Payment');
+        if (tenant?.id) ledgerDelete = ledgerDelete.eq('tenant_id', tenant.id);
+        await ledgerDelete;
+
+        let paymentDelete = supabase.from('payments').delete().eq('id', payment.id);
+        if (tenant?.id) paymentDelete = paymentDelete.eq('tenant_id', tenant.id);
+        await paymentDelete;
+      };
+
       if (applyError) {
-        let deleteQuery = supabase.from('payments').delete().eq('id', payment.id);
-        if (tenant?.id) deleteQuery = deleteQuery.eq('tenant_id', tenant.id);
-        await deleteQuery;
+        await rollbackPayment();
         throw new Error(applyError.message || 'Payment processing failed');
       }
       if (!applyResult?.ok) {
-        let deleteQuery = supabase.from('payments').delete().eq('id', payment.id);
-        if (tenant?.id) deleteQuery = deleteQuery.eq('tenant_id', tenant.id);
-        await deleteQuery;
+        await rollbackPayment();
         throw new Error(applyResult?.error || applyResult?.detail || 'Payment processing failed');
       }
 
