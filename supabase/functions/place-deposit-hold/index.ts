@@ -168,45 +168,74 @@ Deno.serve(async (req) => {
     // idempotency_key is keyed on rentalId so any retry from Stripe or any
     // accidental second invocation returns the SAME PaymentIntent instead of
     // creating a duplicate. Stripe honours this for 24h.
+    //
+    // We try with request_multicapture first so partial captures can keep the
+    // remainder authorised on the SAME PaymentIntent instead of releasing it.
+    // Stripe is supposed to silently ignore the request when not supported
+    // ("if_available" semantics), but Connect accounts that haven't been
+    // approved for multicapture actually error out with
+    // "This account is not eligible for the requested card features." — so we
+    // catch that and retry without the option. capture-deposit-hold will then
+    // fall back to the rollover-PI flow for partial captures on these accounts.
+    const basePayload = {
+      amount: amountInCents,
+      currency: currencyCode,
+      customer: customer.stripe_customer_id,
+      payment_method: paymentMethodId,
+      capture_method: "manual" as const,
+      confirm: true,
+      off_session: true,
+      description: `Security deposit hold for rental ${rentalId.substring(0, 8).toUpperCase()}`,
+      metadata: {
+        rental_id: rentalId,
+        tenant_id: effectiveTenantId,
+        type: "deposit_hold",
+      },
+    };
+    const requestOpts = { ...(stripeOptions ?? {}), idempotencyKey: `deposit-hold-${rentalId}` };
+
     let paymentIntent;
     try {
       paymentIntent = await stripe.paymentIntents.create(
         {
-          amount: amountInCents,
-          currency: currencyCode,
-          customer: customer.stripe_customer_id,
-          payment_method: paymentMethodId,
-          capture_method: "manual",
-          confirm: true,
-          off_session: true,
-          description: `Security deposit hold for rental ${rentalId.substring(0, 8).toUpperCase()}`,
-          // Request multicapture so partial captures keep the remainder
-          // authorised on the SAME PaymentIntent instead of releasing it. Stripe
-          // grants this on a per-card / per-account basis; if it's not granted
-          // the PI still works as a normal single-capture hold (the request is
-          // silently ignored). capture-deposit-hold detects the resulting
-          // multicapture status and either calls capture with final_capture:false
-          // (multicapture path) or falls back to the rollover-PI flow.
+          ...basePayload,
           payment_method_options: {
-            card: { request_multicapture: "if_available" },
-          },
-          metadata: {
-            rental_id: rentalId,
-            tenant_id: effectiveTenantId,
-            type: "deposit_hold",
+            card: { request_multicapture: "if_available" as const },
           },
         },
-        { ...(stripeOptions ?? {}), idempotencyKey: `deposit-hold-${rentalId}` }
+        requestOpts
       );
-    } catch (piErr) {
-      // Release the claim so a manual retry isn't blocked by a stuck
-      // 'processing' status.
-      await supabase
-        .from("rentals")
-        .update({ deposit_hold_status: null })
-        .eq("id", rentalId)
-        .eq("deposit_hold_status", "processing");
-      throw piErr;
+    } catch (piErr: any) {
+      const msg = String(piErr?.message ?? "");
+      const notEligibleForFeature = msg.toLowerCase().includes("not eligible for the requested card features");
+      if (notEligibleForFeature) {
+        console.warn("[DEPOSIT-HOLD] Multicapture not granted on this account, retrying without:", msg);
+        try {
+          // Idempotency key must change for the retry — Stripe returns the
+          // failed first response otherwise. Suffix with -no-mc so subsequent
+          // retries are still idempotent on this rental.
+          paymentIntent = await stripe.paymentIntents.create(basePayload, {
+            ...requestOpts,
+            idempotencyKey: `${requestOpts.idempotencyKey}-no-mc`,
+          });
+        } catch (retryErr) {
+          // Release the claim so a manual retry isn't blocked by a stuck
+          // 'processing' status.
+          await supabase
+            .from("rentals")
+            .update({ deposit_hold_status: null })
+            .eq("id", rentalId)
+            .eq("deposit_hold_status", "processing");
+          throw retryErr;
+        }
+      } else {
+        await supabase
+          .from("rentals")
+          .update({ deposit_hold_status: null })
+          .eq("id", rentalId)
+          .eq("deposit_hold_status", "processing");
+        throw piErr;
+      }
     }
 
     console.log("[DEPOSIT-HOLD] PaymentIntent created:", paymentIntent.id, "status:", paymentIntent.status);
