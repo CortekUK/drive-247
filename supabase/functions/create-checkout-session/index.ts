@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts'
+import { formatCurrency } from '../_shared/format-utils.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -110,11 +111,15 @@ serve(async (req) => {
     // Whether to show the deposit-hold transparency notice on Stripe Checkout.
     // We do this when the caller signals placeDepositHoldAfter AND the tenant
     // actually has a non-zero security deposit configured. Without both being
-    // true the notice would be misleading.
+    // true the notice would be misleading (no hold is going to be placed).
     const shouldShowDepositNotice = !!placeDepositHoldAfter && securityDepositEnabled && depositHoldAmount > 0;
-    const formatAmount = (n: number) => `${currencyCode.toUpperCase()} ${n.toFixed(2)}`;
+    // formatCurrency renders proper symbols ($3.00 / £3.00 / €3.00) per the
+    // tenant's currency_code instead of the raw "USD 3.00" output.
+    const formattedDeposit = shouldShowDepositNotice
+      ? formatCurrency(depositHoldAmount, currencyCode.toUpperCase())
+      : '';
     const depositNoticeText = shouldShowDepositNotice
-      ? `After this payment captures, a separate ${formatAmount(depositHoldAmount)} security deposit hold will be authorised on the same card. This is not a charge — the amount is released when your rental ends.`
+      ? `After payment, a ${formattedDeposit} security deposit hold (not a charge) will be authorised on the same card. Released when your rental ends.`
       : null;
 
     // Get Stripe client for the tenant's mode
@@ -182,11 +187,13 @@ serve(async (req) => {
             currency: currencyCode,
             product_data: {
               name: 'Vehicle Rental',
-              // Append the deposit-hold notice into the line item description so
-              // it shows directly under the amount on the Stripe Checkout page.
+              // Description shows directly under the amount on the Stripe
+              // Checkout page. Stays minimal when no deposit is configured;
+              // appends the hold disclosure when one will be placed so the
+              // customer isn't surprised by a second authorisation.
               description: shouldShowDepositNotice
-                ? `Rental fees for ${companyName}. ${depositNoticeText}`
-                : `Premium vehicle rental - ${companyName}`,
+                ? `Rental fees — ${companyName}. ${depositNoticeText}`
+                : `Rental fees — ${companyName}`,
             },
             unit_amount: Math.round(totalAmount * 100), // Convert to cents
           },
