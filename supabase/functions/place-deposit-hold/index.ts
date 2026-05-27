@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     // Fetch rental details
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
-      .select("customer_id, vehicle_id, tenant_id, deposit_hold_status")
+      .select("customer_id, vehicle_id, tenant_id, deposit_hold_status, deposit_amount_override")
       .eq("id", rentalId)
       .single();
 
@@ -62,10 +62,20 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, skipped: true, message: "Security deposit is disabled for this tenant" });
     }
 
-    const depositAmount = tenant.global_deposit_amount || 0;
+    // Per-rental override beats the tenant default. The operator can change
+    // the deposit amount on the new-rental Pre-Auth input; that value is
+    // stored on rentals.deposit_amount_override. NULL means "use the tenant
+    // default" (the original behaviour).
+    const overrideAmount = rental.deposit_amount_override !== null && rental.deposit_amount_override !== undefined
+      ? Number(rental.deposit_amount_override)
+      : null;
+    const depositAmount = overrideAmount !== null && overrideAmount > 0
+      ? overrideAmount
+      : (Number(tenant.global_deposit_amount) || 0);
     if (depositAmount <= 0) {
       return jsonResponse({ success: true, skipped: true, message: "Deposit amount is 0" });
     }
+    console.log("[DEPOSIT-HOLD] Using amount:", depositAmount, overrideAmount !== null ? "(rental override)" : "(tenant default)");
 
     // Fetch customer's Stripe customer ID
     const { data: customer, error: customerError } = await supabase

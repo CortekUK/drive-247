@@ -1411,6 +1411,12 @@ const CreateRental = () => {
         payg_paused: false,
         // Per-rental reminder interval override (null = use tenant default)
         payg_reminder_interval_days: isPayAsYouGo ? paygReminderInterval : null,
+        // Per-rental security-deposit override. NULL keeps the tenant default
+        // (tenants.global_deposit_amount); a numeric value overrides it for this
+        // rental only and is honoured by place-deposit-hold + the Stripe / email
+        // disclosure copy. Without this, the operator's edit on the Pre-Auth
+        // input was silently ignored downstream.
+        deposit_amount_override: depositOverride !== null ? depositOverride : null,
       };
 
       // Final-pass payload guard. The Zod schema and the submit-handler validation
@@ -5286,8 +5292,18 @@ const CreateRental = () => {
         // post-creation flow; the dialog when reused elsewhere defaults to false.
         placeDepositHoldAfter={Boolean(
           tenant?.security_deposit_enabled &&
-          Number(tenant?.global_deposit_amount) > 0
+          (
+            (depositOverride !== null && depositOverride > 0) ||
+            Number(tenant?.global_deposit_amount) > 0
+          )
         )}
+        // Honour the operator's per-rental Pre-Auth override; falls back to the
+        // tenant default inside the dialog when undefined.
+        depositHoldAmount={
+          depositOverride !== null && depositOverride > 0
+            ? depositOverride
+            : Number(tenant?.global_deposit_amount) || undefined
+        }
       />
 
       {/* Invoice Dialog */}

@@ -105,6 +105,14 @@ interface AddPaymentDialogProps {
    * edge function no-ops.
    */
   placeDepositHoldAfter?: boolean;
+  /**
+   * Effective security-deposit amount for THIS rental (the rental's
+   * deposit_amount_override if set, otherwise the tenant's
+   * global_deposit_amount). Used in the per-mode confirmation popup so the
+   * operator sees the actual amount that will be held / quoted to the
+   * customer — not just the tenant default.
+   */
+  depositHoldAmount?: number;
 }
 
 const PAYMENT_METHODS = [
@@ -132,6 +140,7 @@ export const AddPaymentDialog = ({
   breakdownItems,
   outstandingBalanceOverride,
   placeDepositHoldAfter,
+  depositHoldAmount: depositHoldAmountProp,
 }: AddPaymentDialogProps) => {
   const [loading, setLoading] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
@@ -359,9 +368,17 @@ export const AddPaymentDialog = ({
   // non-zero security deposit, so the choice of mode meaningfully affects the
   // hold outcome. In any other context (paying down an existing balance, etc.)
   // the popup adds friction with no value, so we bypass it.
+  // Effective deposit amount for confirmation copy + downstream API calls:
+  // the rental-specific override (passed in from the new-rental page) wins
+  // over the tenant default. Without this the popup would show $3 even when
+  // the operator set $10 on the Pre-Auth input.
+  const effectiveDepositAmount = depositHoldAmountProp && depositHoldAmountProp > 0
+    ? depositHoldAmountProp
+    : Number(tenant?.global_deposit_amount) || 0;
+
   const shouldConfirmMode = !!placeDepositHoldAfter
     && !!tenant?.security_deposit_enabled
-    && Number(tenant?.global_deposit_amount) > 0;
+    && effectiveDepositAmount > 0;
 
   // Manual payment submit
   const onSubmit = async (data: PaymentFormData) => {
@@ -683,9 +700,10 @@ export const AddPaymentDialog = ({
           overrideAmount: amount,
           // When the rental payment will also trigger a deposit hold, pass the
           // hold amount so the email template can render the transparency
-          // notice for the customer alongside the Pay Now button.
-          ...(placeDepositHoldAfter && tenant?.security_deposit_enabled && Number(tenant?.global_deposit_amount) > 0
-            ? { depositHoldAmount: Number(tenant.global_deposit_amount) }
+          // notice for the customer alongside the Pay Now button. Uses the
+          // per-rental override when set, falls back to tenant default.
+          ...(placeDepositHoldAfter && tenant?.security_deposit_enabled && effectiveDepositAmount > 0
+            ? { depositHoldAmount: effectiveDepositAmount }
             : {}),
           ...(targetCategories && targetCategories.length > 0
             ? { overrideDescription: `Payment for: ${targetCategories.join(', ')}` }
@@ -1056,7 +1074,7 @@ export const AddPaymentDialog = ({
               </DialogHeader>
               <div className="text-xs text-muted-foreground leading-relaxed space-y-2 pt-1">
                 <p>
-                  Because no card is on file, the <strong>{formatCurrency(Number(tenant?.global_deposit_amount), tenant?.currency_code || 'USD')} deposit hold</strong> will <strong>not</strong> be placed automatically.
+                  Because no card is on file, the <strong>{formatCurrency(effectiveDepositAmount, tenant?.currency_code || 'USD')} deposit hold</strong> will <strong>not</strong> be placed automatically.
                 </p>
                 <p>
                   To still secure the deposit, open the rental after recording this payment and use the <em>Place Pre-Auth Hold</em> button — it sends the customer a Stripe link (or opens one in-person) for the hold only.
@@ -1096,7 +1114,7 @@ export const AddPaymentDialog = ({
                   Customer is charged <strong>{formatCurrency(stripeAmount, tenant?.currency_code || 'USD')}</strong> for rental fees.
                 </p>
                 <p>
-                  Immediately after the charge captures, a separate <strong>{formatCurrency(Number(tenant?.global_deposit_amount), tenant?.currency_code || 'USD')} pre-authorisation hold</strong> (not a charge) is placed on the same card — the customer only enters their card once.
+                  Immediately after the charge captures, a separate <strong>{formatCurrency(effectiveDepositAmount, tenant?.currency_code || 'USD')} pre-authorisation hold</strong> (not a charge) is placed on the same card — the customer only enters their card once.
                 </p>
               </div>
               <div className="flex gap-2 justify-end pt-3">
@@ -1131,7 +1149,7 @@ export const AddPaymentDialog = ({
                   When the customer pays, they&apos;ll be charged <strong>{formatCurrency(stripeAmount, tenant?.currency_code || 'USD')}</strong> for rental fees.
                 </p>
                 <p>
-                  Immediately after the charge captures, a separate <strong>{formatCurrency(Number(tenant?.global_deposit_amount), tenant?.currency_code || 'USD')} pre-authorisation hold</strong> (not a charge) is placed on the same card — the customer only enters their card once.
+                  Immediately after the charge captures, a separate <strong>{formatCurrency(effectiveDepositAmount, tenant?.currency_code || 'USD')} pre-authorisation hold</strong> (not a charge) is placed on the same card — the customer only enters their card once.
                 </p>
               </div>
               <div className="flex gap-2 justify-end pt-3">

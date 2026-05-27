@@ -2899,18 +2899,20 @@ const RentalDetail = () => {
             // Deposits are never charged upfront — they live on rental.deposit_hold_*.
             // When the hold has been captured or released, show the remaining
             // deposit_hold_amount directly (0 for fully-captured/released).
-            // Otherwise fall back to tenant config so the row still displays
-            // the configured figure when no hold has been placed yet.
+            // Otherwise prefer the actual held amount, then the per-rental
+            // override (operator's edit on the new-rental Pre-Auth input), then
+            // the tenant default, then the invoice line as a last resort.
             const holdStatus = rental.deposit_hold_status;
             if (holdStatus === 'captured' || holdStatus === 'released' || holdStatus === 'expired') {
               return Number(rental.deposit_hold_amount) || 0;
             }
             const depositFromHold = Number(rental.deposit_hold_amount) || 0;
+            const depositFromRentalOverride = Number((rental as any).deposit_amount_override) || 0;
             const depositFromTenant = tenant?.security_deposit_enabled ? Number(tenant?.global_deposit_amount) || 0 : 0;
             const depositFromInvoice = Number(invoiceBreakdown.securityDeposit) || 0;
-            return depositFromHold || depositFromTenant || depositFromInvoice;
+            return depositFromHold || depositFromRentalOverride || depositFromTenant || depositFromInvoice;
           })(), depositHoldStatus: rental.deposit_hold_status || null, detail: (() => {
-            const depositAmount = Number(rental.deposit_hold_amount) || (tenant?.security_deposit_enabled ? Number(tenant?.global_deposit_amount) || 0 : 0) || Number(invoiceBreakdown.securityDeposit) || 0;
+            const depositAmount = Number(rental.deposit_hold_amount) || Number((rental as any).deposit_amount_override) || (tenant?.security_deposit_enabled ? Number(tenant?.global_deposit_amount) || 0 : 0) || Number(invoiceBreakdown.securityDeposit) || 0;
             if (depositAmount <= 0) return '';
             if (rental.deposit_hold_status === 'held') return 'On hold';
             if (rental.deposit_hold_status === 'captured') return 'Charged';

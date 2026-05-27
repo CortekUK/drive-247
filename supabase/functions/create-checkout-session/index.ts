@@ -108,6 +108,24 @@ serve(async (req) => {
       }
     }
 
+    // Per-rental deposit override beats the tenant default. The operator can
+    // edit the deposit amount on the Pre-Auth input when creating a rental;
+    // that value lives on rentals.deposit_amount_override. We surface the
+    // override in the Stripe Checkout disclosure so the customer sees the
+    // right number (instead of the global default).
+    if (rentalId) {
+      const { data: rentalRow } = await supabaseClient
+        .from('rentals')
+        .select('deposit_amount_override')
+        .eq('id', rentalId)
+        .single()
+      const override = rentalRow?.deposit_amount_override
+      if (override !== null && override !== undefined && Number(override) > 0) {
+        depositHoldAmount = Number(override)
+        console.log('Deposit amount override applied:', depositHoldAmount, 'for rental', rentalId)
+      }
+    }
+
     // Whether to show the deposit-hold transparency notice on Stripe Checkout.
     // We do this when the caller signals placeDepositHoldAfter AND the tenant
     // actually has a non-zero security deposit configured. Without both being
