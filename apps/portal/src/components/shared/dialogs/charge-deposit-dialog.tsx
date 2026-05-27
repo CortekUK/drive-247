@@ -116,6 +116,25 @@ export const ChargeDepositDialog = ({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2">
+            {/* Loud, up-front notice that partial captures are temporarily off.
+                Goes ABOVE the amount + reason so the operator reads it before
+                anything else and there's no surprise after they click charge. */}
+            <Alert className="border-amber-500/60 bg-amber-500/10">
+              <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <AlertDescription className="space-y-1.5 pl-1">
+                <p className="text-sm font-bold text-amber-900 dark:text-amber-100">
+                  Partial pre-auth charging is not available right now.
+                </p>
+                <p className="text-xs leading-relaxed text-amber-900/85 dark:text-amber-100/85">
+                  Charging this hold will capture the <strong>full {formatCurrency(holdAmount, currency)}</strong>.
+                  <br />
+                  <strong>Coming soon:</strong> we&apos;re enabling partial charges as soon as Stripe approves
+                  the <em>multicapture</em> feature for your account — you&apos;ll then be able to charge any
+                  amount and keep the rest on hold automatically.
+                </p>
+              </AlertDescription>
+            </Alert>
+
             {/* Full-hold capture only — see comment block above the schema for
                 why. Showing the amount as static text instead of an input makes
                 it impossible to accidentally submit a partial value. */}
@@ -142,18 +161,6 @@ export const ChargeDepositDialog = ({
                 </FormItem>
               )}
             />
-
-            <Alert className="border-amber-500/30 bg-amber-500/5">
-              <AlertCircle className="h-4 w-4 text-amber-500" />
-              <AlertDescription className="text-xs leading-relaxed">
-                <strong>Partial captures aren&apos;t available yet.</strong> Charging
-                the hold will capture the full {formatCurrency(holdAmount, currency)}.
-                Stripe&apos;s <em>multicapture</em> feature (needed to keep the
-                remainder held after a partial charge) hasn&apos;t been approved
-                for your Connect account yet — once it is, this dialog will let
-                you charge any amount and keep the rest on hold.
-              </AlertDescription>
-            </Alert>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button
