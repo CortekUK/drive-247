@@ -946,25 +946,38 @@ export const AddPaymentDialog = ({
 
               {/* Transparency banner: only show when the new-rental post-creation
                   flow opens this dialog AND the tenant has a security deposit
-                  configured. Spells out exactly what Stripe will do so the
+                  configured. Spells out exactly what each button does so the
                   operator can quote it to the customer with confidence. */}
               {placeDepositHoldAfter && tenant?.security_deposit_enabled && Number(tenant?.global_deposit_amount) > 0 && (
-                <div className="rounded-md border border-amber-200 dark:border-amber-900/40 bg-amber-50/70 dark:bg-amber-950/20 p-3 text-xs">
+                <div className="rounded-md border border-amber-200 dark:border-amber-900/40 bg-amber-50/70 dark:bg-amber-950/20 p-3 text-xs space-y-2.5">
                   <div className="flex items-start gap-2">
                     <Info className="w-4 h-4 text-amber-700 dark:text-amber-400 mt-0.5 shrink-0" />
-                    <div className="space-y-1.5 flex-1 text-amber-900/90 dark:text-amber-100/90">
-                      <p className="font-semibold">What happens when you use Stripe (Charge or Email Link):</p>
-                      <ul className="space-y-1 list-disc list-inside leading-relaxed">
-                        <li>
-                          The customer will be charged <strong>{formatCurrency(stripeAmount, tenant?.currency_code || 'USD')}</strong> — exactly the breakdown above.
-                        </li>
-                        <li>
-                          As soon as that charge succeeds, a separate <strong>{formatCurrency(Number(tenant?.global_deposit_amount), tenant?.currency_code || 'USD')} pre-authorisation hold</strong> is placed automatically on the same card. The customer only enters their card details once.
-                        </li>
-                        <li>
-                          The hold is <strong>not</strong> a charge — it reserves the amount on the customer&apos;s card and shows up under <em>Pre-Auth Hold</em> on this rental. You release or capture it at the end of the rental.
-                        </li>
-                      </ul>
+                    <div className="space-y-2.5 flex-1 text-amber-900/90 dark:text-amber-100/90">
+                      <div className="space-y-1.5">
+                        <p className="font-semibold">If you use Stripe (Charge or Email Link):</p>
+                        <ul className="space-y-1 list-disc list-inside leading-relaxed">
+                          <li>
+                            The customer will be charged <strong>{formatCurrency(stripeAmount, tenant?.currency_code || 'USD')}</strong> — exactly the breakdown above.
+                          </li>
+                          <li>
+                            As soon as that charge succeeds, a separate <strong>{formatCurrency(Number(tenant?.global_deposit_amount), tenant?.currency_code || 'USD')} pre-authorisation hold</strong> is placed automatically on the same card. The customer only enters their card details once.
+                          </li>
+                          <li>
+                            The hold is <strong>not</strong> a charge — it reserves the amount on the customer&apos;s card and shows under <em>Pre-Auth Hold</em> on this rental. You release or capture it at the end of the rental.
+                          </li>
+                        </ul>
+                      </div>
+                      <div className="pt-2 border-t border-amber-300/40 dark:border-amber-700/40 space-y-1.5">
+                        <p className="font-semibold">If you use Record Payment (cash / bank transfer / etc.):</p>
+                        <ul className="space-y-1 list-disc list-inside leading-relaxed">
+                          <li>
+                            No automatic hold is placed — you&apos;ve received the money outside Stripe, so there&apos;s no card on file to authorise against.
+                          </li>
+                          <li>
+                            To still secure the <strong>{formatCurrency(Number(tenant?.global_deposit_amount), tenant?.currency_code || 'USD')} deposit</strong>, open the rental after recording the payment and use the <em>Place Pre-Auth Hold</em> button — that sends the customer a Stripe link (or opens one for in-person) for the hold only.
+                          </li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 </div>
