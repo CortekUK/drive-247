@@ -43,7 +43,11 @@ import {
   PenLine,
   Loader2,
   Download,
+  FileDown,
+  ImageDown,
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import JSZip from 'jszip';
 
 interface FileRef {
   url: string;
@@ -113,6 +117,33 @@ export default function BonzahOnboardingPage() {
   const [filter, setFilter] = useState<FilterStatus>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selected, setSelected] = useState<Submission | null>(null);
+  const [rowAction, setRowAction] = useState<{ id: string; kind: 'pdf' | 'zip' } | null>(null);
+
+  const handleDownloadPdf = async (e: React.MouseEvent, s: Submission) => {
+    e.stopPropagation();
+    setRowAction({ id: s.id, kind: 'pdf' });
+    try {
+      await generateSubmissionPdf(s);
+      toast.success('PDF downloaded');
+    } catch (err: any) {
+      toast.error(`PDF failed: ${err.message || err}`);
+    } finally {
+      setRowAction(null);
+    }
+  };
+
+  const handleDownloadZip = async (e: React.MouseEvent, s: Submission) => {
+    e.stopPropagation();
+    setRowAction({ id: s.id, kind: 'zip' });
+    try {
+      const n = await generateImagesZip(s);
+      toast.success(`Downloaded ${n} image${n === 1 ? '' : 's'}`);
+    } catch (err: any) {
+      toast.error(`ZIP failed: ${err.message || err}`);
+    } finally {
+      setRowAction(null);
+    }
+  };
 
   const loadSubmissions = async () => {
     try {
@@ -346,16 +377,46 @@ export default function BonzahOnboardingPage() {
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelected(s);
-                          }}
-                        >
-                          Review
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Download structured PDF"
+                            onClick={(e) => handleDownloadPdf(e, s)}
+                            disabled={rowAction?.id === s.id}
+                          >
+                            {rowAction?.id === s.id && rowAction.kind === 'pdf' ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <FileDown className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Download images as ZIP"
+                            onClick={(e) => handleDownloadZip(e, s)}
+                            disabled={rowAction?.id === s.id}
+                          >
+                            {rowAction?.id === s.id && rowAction.kind === 'zip' ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <ImageDown className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelected(s);
+                            }}
+                          >
+                            Review
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -373,6 +434,456 @@ export default function BonzahOnboardingPage() {
       />
     </div>
   );
+}
+
+// ── Export helpers ───────────────────────────────────────────────────────────
+
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
+
+const isImageFile = (f: FileRef) =>
+  IMAGE_EXT_RE.test(f.name || '') || IMAGE_EXT_RE.test(f.path || '');
+
+const safeFilename = (s: string) =>
+  s.replace(/[^a-z0-9._-]+/gi, '_').replace(/^_+|_+$/g, '') || 'file';
+
+async function fetchAsBlob(url: string): Promise<Blob> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
+  return await res.blob();
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+function imageFormatFromDataUrl(dataUrl: string): 'PNG' | 'JPEG' | 'WEBP' {
+  const m = dataUrl.match(/^data:image\/([a-z0-9+.-]+);/i);
+  const t = (m?.[1] || '').toLowerCase();
+  if (t.includes('jpeg') || t.includes('jpg')) return 'JPEG';
+  if (t.includes('webp')) return 'WEBP';
+  return 'PNG';
+}
+
+async function loadImageSize(dataUrl: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => reject(new Error('Failed to decode image'));
+    img.src = dataUrl;
+  });
+}
+
+type Section = {
+  key: string;
+  title: string;
+  entries: [string, any][];
+  longText?: { title: string; value?: string }[];
+  fileBlocks?: { title: string; files?: FileRef[] }[];
+};
+
+function buildSections(submission: Submission): Section[] {
+  const data = submission.data || {};
+  const files = submission.file_urls || {};
+  return [
+    {
+      key: 'business',
+      title: 'Business',
+      entries: [
+        ['Trade Name', data.business_trade_name],
+        ['Legal Name', data.business_legal_name],
+        ['Business Address', data.business_address],
+        ['City / State', `${data.city || ''} ${data.state || ''}`.trim()],
+        ['Country / Postal', `${data.country || ''} ${data.postal_code || ''}`.trim()],
+        ['Business Phone', data.business_phone],
+        ['Alt. Phone', data.alternative_business_phone],
+        ['EIN / Tax ID', data.ein],
+        ['Company Type', data.company_type],
+        ['Start Date', data.business_start_date],
+        ['Website', data.company_website],
+      ],
+      fileBlocks: [{ title: 'Business Logo', files: files.business_logo }],
+    },
+    {
+      key: 'operations',
+      title: 'Operations',
+      entries: [
+        ['States Served', data.states_where_you_do_business],
+        ['Licensed Everywhere', data.licensed_in_all_locations],
+        ['Adheres to Auto Licensing', data.adhering_to_license_requirements],
+        ['Years in Auto Rental', data.years_in_private_auto_rental],
+        ['Years on Turo', data.years_on_turo],
+      ],
+      longText: [{ title: 'Business Owners', value: data.business_owners }],
+    },
+    {
+      key: 'contacts',
+      title: 'Contacts',
+      entries: [
+        ['Primary Name', `${data.primary_first_name || ''} ${data.primary_last_name || ''}`.trim()],
+        ['Primary Email', data.primary_email],
+        ['Primary Phone', data.primary_phone],
+        ['Primary DOB', data.primary_date_of_birth],
+        ['Primary Years Driving', data.primary_years_driving],
+        ['Primary Marital Status', data.primary_marital_status],
+        ...((Array.isArray(data.additional_users) ? data.additional_users : []).flatMap(
+          (u: any, i: number): [string, any][] => [
+            [`Additional #${i + 1} — Name`, u.full_name],
+            [`Additional #${i + 1} — Email`, u.email],
+            [`Additional #${i + 1} — Phone`, u.phone],
+            [`Additional #${i + 1} — DOB`, u.date_of_birth],
+            [`Additional #${i + 1} — Years Driving`, u.years_driving],
+            [`Additional #${i + 1} — Marital Status`, u.marital_status],
+          ],
+        ) as [string, any][]),
+      ],
+      fileBlocks: [
+        { title: "Driver's Licenses", files: files.driver_licenses },
+        { title: 'Additional Users Spreadsheet', files: files.additional_users_spreadsheet },
+      ],
+    },
+    {
+      key: 'banking',
+      title: 'Banking',
+      entries: [
+        ['Account Holder', data.bank_account_name],
+        ['Account Type', data.bank_account_type],
+        ['Bank', data.bank_name],
+        ['Routing #', data.routing_number],
+        ['Account #', data.account_number],
+        ['Bank Address', data.bank_account_address],
+        ['Card Number', data.credit_card_number],
+        ['Card Expiry', data.card_expiration_date],
+        ['Card CVC', data.card_security_code],
+        ['Name on Card', data.card_name],
+        ['Card Billing Address', data.card_billing_address],
+        ['Starting Balance', data.desired_starting_balance],
+        ['RMS', data.rental_management_system],
+        ['Embed Bonzah on Site', data.explore_embedding_bonzah],
+      ],
+    },
+    {
+      key: 'insurance',
+      title: 'Insurance',
+      entries: [
+        ['Current Carrier', data.current_insurance_carrier],
+        ['Rental Agreement Timestamp', data.rental_agreement_has_timestamp],
+        ['Vehicles Have GPS', data.vehicles_have_gps],
+        ['GPS Brand', data.gps_brand],
+        ['Vehicles in Company Name', data.vehicles_registered_in_company_name],
+        ['Salvage Vehicles', data.any_vehicles_salvage],
+        ['For Hire / TNC', data.rent_for_hire],
+        ['Used Outside Rentals', data.vehicles_used_outside_rentals],
+        ['Had Commercial Auto Losses', data.had_commercial_auto_losses],
+        ['Has Loss Summary', data.has_loss_summary],
+      ],
+      longText: [{ title: 'What can we help you with?', value: data.what_can_we_help_with }],
+      fileBlocks: [
+        { title: 'Fleet Insurance Policy', files: files.fleet_insurance_policy },
+        { title: 'Rental Agreement', files: files.rental_agreement_file },
+        { title: 'Loss Runs', files: files.loss_runs_file },
+        { title: 'Vehicle Schedule', files: files.vehicle_schedule_file },
+        { title: 'Loss History', files: files.loss_history_file },
+      ],
+    },
+    {
+      key: 'policies',
+      title: 'Policies',
+      entries: [
+        ['Drivers Need Valid License', data.require_drivers_valid_license],
+        ['Check Employee Driving Records', data.check_employee_driving_records],
+        ['Storage Security', data.vehicle_storage_security],
+        ['Delivers / Picks Up', data.deliver_or_pickup],
+        ['Min Age Renters', data.minimum_age_renters],
+        ['Rents > 30 Days', data.rent_more_than_30_days],
+        ['Avg Rental Duration', data.average_rental_duration],
+        ['Photocopy Driver IDs', data.photocopy_driver_ids],
+        ['Require Renter Insurance', data.require_renters_primary_insurance],
+        ['Verify Renter Insurance', data.verify_renter_insurance],
+        ['% Renters w/ Insurance', data.pct_renters_with_insurance],
+        ['Retain Insurance Proof', data.retain_renter_insurance_proof],
+      ],
+      longText: [
+        { title: 'Renter Screening Process', value: data.renter_screening_process },
+        { title: 'Stolen / Converted Vehicle', value: data.renter_stolen_vehicle },
+        { title: 'Payment Methods', value: data.payment_methods },
+        { title: 'Cash / App + Card on File', value: data.cash_app_card_on_file },
+        { title: 'OTC Insurance Products', value: data.offers_otc_insurance },
+        { title: 'Maintenance Program', value: data.vehicle_maintenance_program },
+        { title: 'Inspection Process', value: data.inspect_vehicles },
+        { title: 'Other Businesses', value: data.own_other_businesses },
+        { title: 'What Else?', value: data.what_else_should_we_know },
+      ],
+      fileBlocks: [{ title: 'Additional Information', files: files.additional_information_file }],
+    },
+    {
+      key: 'underwriting',
+      title: 'Underwriting',
+      entries: [
+        ['Accidents/Claims (3 yrs)', data.uw_accidents_past_3_years],
+        ['Canceled Policy', data.uw_canceled_policy],
+        ['Insurance Fraud Conviction', data.uw_insurance_fraud],
+        ['DUI / Reckless / Multiple Violations', data.uw_dui_violations],
+        ['Invalid License Drivers', data.uw_invalid_license_drivers],
+        ['Salvage Title', data.uw_salvage_title],
+        ['Performance Modified', data.uw_modified_for_performance],
+        ['Used for Other Purposes', data.uw_other_use],
+      ],
+    },
+    {
+      key: 'signature',
+      title: 'Signature',
+      entries: [
+        ['Confirms Accuracy', data.declare_complete_accurate ? 'Yes' : '—'],
+        ['Confirms Authorization', data.declare_authorized ? 'Yes' : '—'],
+        ['Authorizes Bonzah', data.declare_authorize_bonzah ? 'Yes' : '—'],
+        ['Agrees to User Agreement', data.agree_user_agreement ? 'Yes' : '—'],
+      ],
+    },
+  ];
+}
+
+async function generateSubmissionPdf(submission: Submission) {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginX = 40;
+  const marginTop = 50;
+  const marginBottom = 40;
+  const contentWidth = pageWidth - marginX * 2;
+  let y = marginTop;
+
+  const ensureSpace = (needed: number) => {
+    if (y + needed > pageHeight - marginBottom) {
+      doc.addPage();
+      y = marginTop;
+    }
+  };
+
+  const drawText = (
+    text: string,
+    opts: { size?: number; style?: 'normal' | 'bold'; color?: [number, number, number]; indent?: number } = {},
+  ) => {
+    const { size = 10, style = 'normal', color = [40, 40, 50], indent = 0 } = opts;
+    doc.setFont('helvetica', style);
+    doc.setFontSize(size);
+    doc.setTextColor(color[0], color[1], color[2]);
+    const lines = doc.splitTextToSize(text, contentWidth - indent);
+    for (const line of lines) {
+      ensureSpace(size + 4);
+      doc.text(line, marginX + indent, y);
+      y += size + 4;
+    }
+  };
+
+  const drawDivider = () => {
+    ensureSpace(10);
+    doc.setDrawColor(220, 220, 230);
+    doc.line(marginX, y, marginX + contentWidth, y);
+    y += 10;
+  };
+
+  const drawSectionHeader = (title: string) => {
+    ensureSpace(36);
+    doc.setFillColor(238, 242, 255);
+    doc.rect(marginX, y - 4, contentWidth, 26, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(63, 63, 130);
+    doc.text(title.toUpperCase(), marginX + 10, y + 13);
+    y += 32;
+  };
+
+  const drawKeyValue = (label: string, value: string) => {
+    const labelWidth = 200;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 115);
+    const labelLines = doc.splitTextToSize(label, labelWidth - 8);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(30, 30, 40);
+    const valueLines = doc.splitTextToSize(value || '—', contentWidth - labelWidth - 8);
+
+    const rowHeight = Math.max(labelLines.length, valueLines.length) * 13 + 4;
+    ensureSpace(rowHeight);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 115);
+    doc.text(labelLines, marginX, y + 9);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(30, 30, 40);
+    doc.text(valueLines, marginX + labelWidth, y + 9);
+
+    y += rowHeight;
+    doc.setDrawColor(240, 240, 245);
+    doc.line(marginX, y, marginX + contentWidth, y);
+    y += 4;
+  };
+
+  const drawLongText = (title: string, value: string) => {
+    ensureSpace(40);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 115);
+    doc.text(title.toUpperCase(), marginX, y + 4);
+    y += 14;
+    drawText(value, { size: 10, color: [40, 40, 50] });
+    y += 6;
+  };
+
+  const drawImageFromDataUrl = async (dataUrl: string, captionAbove?: string, maxHeight = 280) => {
+    try {
+      const { w, h } = await loadImageSize(dataUrl);
+      const ratio = w / h;
+      let drawW = contentWidth;
+      let drawH = drawW / ratio;
+      if (drawH > maxHeight) {
+        drawH = maxHeight;
+        drawW = drawH * ratio;
+      }
+      const headerH = captionAbove ? 16 : 0;
+      ensureSpace(drawH + headerH + 10);
+      if (captionAbove) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(100, 100, 115);
+        doc.text(captionAbove.toUpperCase(), marginX, y + 4);
+        y += headerH;
+      }
+      const format = imageFormatFromDataUrl(dataUrl);
+      doc.addImage(dataUrl, format, marginX, y, drawW, drawH, undefined, 'FAST');
+      y += drawH + 10;
+    } catch {
+      drawText(`[Could not render image: ${captionAbove || ''}]`, { size: 9, color: [180, 60, 60] });
+    }
+  };
+
+  // Header / cover
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, pageWidth, 70, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.setTextColor(255, 255, 255);
+  doc.text('Bonzah Onboarding Submission', marginX, 32);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  doc.setTextColor(200, 200, 220);
+  doc.text(submission.business_trade_name || '—', marginX, 52);
+  y = 90;
+
+  drawKeyValue('Legal Name', submission.business_legal_name || '—');
+  drawKeyValue('Status', statusLabel[submission.status]);
+  drawKeyValue('Submitted', formatDate(submission.submitted_at));
+  if (submission.reviewed_at) drawKeyValue('Reviewed', formatDate(submission.reviewed_at));
+  if (submission.tenant_name) drawKeyValue('Tenant', submission.tenant_name);
+  if (submission.admin_note) drawKeyValue('Admin Note', submission.admin_note);
+  y += 6;
+  drawDivider();
+
+  const sections = buildSections(submission);
+  for (const section of sections) {
+    drawSectionHeader(section.title);
+    for (const [label, value] of section.entries) {
+      const display =
+        value === undefined || value === null || value === '' ? '—' : String(value);
+      drawKeyValue(label, display);
+    }
+    if (section.longText) {
+      for (const lt of section.longText) {
+        if (lt.value) {
+          y += 6;
+          drawLongText(lt.title, lt.value);
+        }
+      }
+    }
+    if (section.fileBlocks) {
+      for (const fb of section.fileBlocks) {
+        if (!fb.files || fb.files.length === 0) continue;
+        y += 4;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(100, 100, 115);
+        ensureSpace(18);
+        doc.text(fb.title.toUpperCase(), marginX, y + 4);
+        y += 14;
+        for (const f of fb.files) {
+          if (isImageFile(f) && f.url) {
+            try {
+              const blob = await fetchAsBlob(f.url);
+              const dataUrl = await blobToDataUrl(blob);
+              await drawImageFromDataUrl(dataUrl, f.name);
+            } catch {
+              drawText(`• ${f.name} (image fetch failed — ${f.url})`, { size: 9, color: [180, 60, 60] });
+            }
+          } else {
+            drawText(`• ${f.name} — ${formatBytes(f.size)}${f.url ? `  (${f.url})` : ''}`, { size: 9 });
+          }
+        }
+      }
+    }
+    if (submission.data?.signature_data_url && section.key === 'signature') {
+      y += 6;
+      await drawImageFromDataUrl(submission.data.signature_data_url, 'Preparer Signature', 160);
+    }
+    y += 6;
+  }
+
+  const filename = `bonzah-onboarding-${safeFilename(submission.business_trade_name || submission.id)}.pdf`;
+  doc.save(filename);
+}
+
+async function generateImagesZip(submission: Submission) {
+  const zip = new JSZip();
+  const files = submission.file_urls || {};
+  const data = submission.data || {};
+  let imageCount = 0;
+
+  for (const [sectionKey, fileList] of Object.entries(files)) {
+    if (!Array.isArray(fileList)) continue;
+    for (const f of fileList as FileRef[]) {
+      if (!isImageFile(f) || !f.url) continue;
+      try {
+        const blob = await fetchAsBlob(f.url);
+        zip.file(`${safeFilename(sectionKey)}/${safeFilename(f.name)}`, blob);
+        imageCount++;
+      } catch {
+        // skip failed fetches
+      }
+    }
+  }
+
+  if (typeof data.signature_data_url === 'string' && data.signature_data_url.startsWith('data:image')) {
+    const base64 = data.signature_data_url.split(',')[1] || '';
+    if (base64) {
+      const ext = imageFormatFromDataUrl(data.signature_data_url).toLowerCase();
+      zip.file(`signature/signature.${ext === 'jpeg' ? 'jpg' : ext}`, base64, { base64: true });
+      imageCount++;
+    }
+  }
+
+  if (imageCount === 0) {
+    throw new Error('No images were found in this submission.');
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `bonzah-onboarding-images-${safeFilename(submission.business_trade_name || submission.id)}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return imageCount;
 }
 
 // ── Detail Dialog ────────────────────────────────────────────────────────────
