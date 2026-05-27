@@ -54,8 +54,21 @@ function formatDate(dateString: string): string {
   });
 }
 
-function generateEmailContent(invoice: InvoiceData, branding: TenantBranding, currencyCode: string, paymentUrl?: string, overrideAmount?: number, overrideDescription?: string): string {
+function generateEmailContent(invoice: InvoiceData, branding: TenantBranding, currencyCode: string, paymentUrl?: string, overrideAmount?: number, overrideDescription?: string, depositHoldAmount?: number): string {
   const displayAmount = overrideAmount ?? invoice.total_amount;
+  const depositNotice = depositHoldAmount && depositHoldAmount > 0 ? `
+        <table role="presentation" style="width: 100%; border-collapse: collapse; background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; margin-bottom: 25px;">
+          <tr>
+            <td style="padding: 16px;">
+              <p style="margin: 0 0 8px; color: #92400e; font-size: 14px; font-weight: 600;">Heads up: what happens when you pay</p>
+              <ul style="margin: 0; padding-left: 18px; color: #78350f; font-size: 13px; line-height: 1.6;">
+                <li>You will be charged <strong>${formatCurrency(displayAmount, currencyCode)}</strong> for your rental fees (the amount shown above).</li>
+                <li>Right after that, a separate <strong>${formatCurrency(depositHoldAmount, currencyCode)} security deposit hold</strong> will be authorised on the same card. This is <em>not</em> a charge &mdash; the amount is reserved on your card and released when your rental ends (or captured if there is damage / unpaid extras).</li>
+                <li>You only enter your card details once.</li>
+              </ul>
+            </td>
+          </tr>
+        </table>` : "";
   const payNowButton = paymentUrl ? `
         <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
           <tr>
@@ -119,6 +132,7 @@ function generateEmailContent(invoice: InvoiceData, branding: TenantBranding, cu
             </td>
           </tr>
         </table>
+        ${depositNotice}
         ${payNowButton}
         <p style="margin: 0 0 15px; color: #444; line-height: 1.6; font-size: 16px;">
           If you have any questions about this invoice, please don't hesitate to contact us.
@@ -139,7 +153,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { invoiceId, tenantId, recipientEmail, paymentUrl: externalPaymentUrl, overrideAmount, overrideDescription, rentalId: bodyRentalId, customerName: bodyCustomerName, amount: bodyAmount }: SendInvoiceEmailRequest & { paymentUrl?: string; overrideAmount?: number; overrideDescription?: string } = await req.json();
+    const { invoiceId, tenantId, recipientEmail, paymentUrl: externalPaymentUrl, overrideAmount, overrideDescription, rentalId: bodyRentalId, customerName: bodyCustomerName, amount: bodyAmount, depositHoldAmount }: SendInvoiceEmailRequest & { paymentUrl?: string; overrideAmount?: number; overrideDescription?: string; depositHoldAmount?: number } = await req.json();
 
     if (!tenantId) {
       throw new Error("Missing required field: tenantId");
@@ -295,7 +309,7 @@ serve(async (req) => {
     }
 
     // Generate email HTML
-    const emailContent = generateEmailContent(invoice as InvoiceData, branding, tenantCurrencyCode, paymentUrl, overrideAmount, overrideDescription);
+    const emailContent = generateEmailContent(invoice as InvoiceData, branding, tenantCurrencyCode, paymentUrl, overrideAmount, overrideDescription, depositHoldAmount);
     const emailHtml = wrapWithBrandedTemplate(emailContent, branding);
 
     console.log(`Sending invoice email to: ${toEmail}`);

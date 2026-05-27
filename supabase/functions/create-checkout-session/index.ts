@@ -38,12 +38,14 @@ serve(async (req) => {
     let currencyCode = 'gbp'
     let stripeMode: StripeMode = 'test' // Default to test mode for safety
     let tenantData: any = null
+    let depositHoldAmount = 0
+    let securityDepositEnabled = false
 
     // Try to get tenant by slug first, then by ID, then from rental
     if (slug) {
       const { data: tenant, error: tenantError } = await supabaseClient
         .from('tenants')
-        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete')
+        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, security_deposit_enabled, global_deposit_amount')
         .eq('slug', slug)
         .eq('status', 'active')
         .single()
@@ -54,13 +56,15 @@ serve(async (req) => {
         currencyCode = (tenant.currency_code || 'USD').toLowerCase()
         stripeMode = (tenant.stripe_mode as StripeMode) || 'test'
         tenantData = tenant
+        securityDepositEnabled = !!tenant.security_deposit_enabled
+        depositHoldAmount = Number(tenant.global_deposit_amount) || 0
         console.log('Tenant loaded from slug:', tenantId, 'mode:', stripeMode)
       }
     } else if (tenantId) {
       // Lookup tenant by ID if slug not provided
       const { data: tenant, error: tenantError } = await supabaseClient
         .from('tenants')
-        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete')
+        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, security_deposit_enabled, global_deposit_amount')
         .eq('id', tenantId)
         .eq('status', 'active')
         .single()
@@ -70,6 +74,8 @@ serve(async (req) => {
         currencyCode = (tenant.currency_code || 'USD').toLowerCase()
         stripeMode = (tenant.stripe_mode as StripeMode) || 'test'
         tenantData = tenant
+        securityDepositEnabled = !!tenant.security_deposit_enabled
+        depositHoldAmount = Number(tenant.global_deposit_amount) || 0
         console.log('Tenant loaded from ID:', tenantId, 'mode:', stripeMode)
       }
     } else if (rentalId) {
@@ -85,7 +91,7 @@ serve(async (req) => {
 
         const { data: tenant } = await supabaseClient
           .from('tenants')
-          .select('company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete')
+          .select('company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, security_deposit_enabled, global_deposit_amount')
           .eq('id', tenantId)
           .single()
 
@@ -94,10 +100,22 @@ serve(async (req) => {
           currencyCode = (tenant.currency_code || 'USD').toLowerCase()
           stripeMode = (tenant.stripe_mode as StripeMode) || 'test'
           tenantData = tenant
+          securityDepositEnabled = !!tenant.security_deposit_enabled
+          depositHoldAmount = Number(tenant.global_deposit_amount) || 0
           console.log('Tenant loaded from rental:', tenantId, 'mode:', stripeMode)
         }
       }
     }
+
+    // Whether to show the deposit-hold transparency notice on Stripe Checkout.
+    // We do this when the caller signals placeDepositHoldAfter AND the tenant
+    // actually has a non-zero security deposit configured. Without both being
+    // true the notice would be misleading.
+    const shouldShowDepositNotice = !!placeDepositHoldAfter && securityDepositEnabled && depositHoldAmount > 0;
+    const formatAmount = (n: number) => `${currencyCode.toUpperCase()} ${n.toFixed(2)}`;
+    const depositNoticeText = shouldShowDepositNotice
+      ? `After this payment captures, a separate ${formatAmount(depositHoldAmount)} security deposit hold will be authorised on the same card. This is not a charge — the amount is released when your rental ends.`
+      : null;
 
     // Get Stripe client for the tenant's mode
     const stripe = getStripeClient(stripeMode)
@@ -164,7 +182,11 @@ serve(async (req) => {
             currency: currencyCode,
             product_data: {
               name: 'Vehicle Rental',
-              description: `Premium vehicle rental - ${companyName}`,
+              // Append the deposit-hold notice into the line item description so
+              // it shows directly under the amount on the Stripe Checkout page.
+              description: shouldShowDepositNotice
+                ? `Rental fees for ${companyName}. ${depositNoticeText}`
+                : `Premium vehicle rental - ${companyName}`,
             },
             unit_amount: Math.round(totalAmount * 100), // Convert to cents
           },
@@ -178,6 +200,13 @@ serve(async (req) => {
       payment_intent_data: {
         setup_future_usage: 'off_session',
       },
+      // Surface the deposit-hold notice as official Stripe Checkout copy: shows
+      // up right next to the Pay button so the customer can't miss it.
+      ...(shouldShowDepositNotice ? {
+        custom_text: {
+          submit: { message: depositNoticeText! },
+        },
+      } : {}),
       client_reference_id: referenceId,
       success_url: successUrl || (rentalId
         ? `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rentalId}`

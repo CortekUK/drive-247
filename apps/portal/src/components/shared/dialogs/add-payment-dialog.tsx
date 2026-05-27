@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
-import { CalendarIcon, DollarSign, Loader2, Banknote, CreditCard, Building2, Smartphone, FileText, MoreHorizontal, ExternalLink, Mail, ChevronDown } from "lucide-react";
+import { CalendarIcon, DollarSign, Loader2, Banknote, CreditCard, Building2, Smartphone, FileText, MoreHorizontal, ExternalLink, Mail, ChevronDown, Info } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -652,6 +652,12 @@ export const AddPaymentDialog = ({
           recipientEmail: customerEmail,
           paymentUrl: checkoutData.url,
           overrideAmount: amount,
+          // When the rental payment will also trigger a deposit hold, pass the
+          // hold amount so the email template can render the transparency
+          // notice for the customer alongside the Pay Now button.
+          ...(placeDepositHoldAfter && tenant?.security_deposit_enabled && Number(tenant?.global_deposit_amount) > 0
+            ? { depositHoldAmount: Number(tenant.global_deposit_amount) }
+            : {}),
           ...(targetCategories && targetCategories.length > 0
             ? { overrideDescription: `Payment for: ${targetCategories.join(', ')}` }
             : invoiceToSend && Math.abs(amount - (invoiceToSend.total_amount ?? amount)) > 0.01
@@ -937,6 +943,32 @@ export const AddPaymentDialog = ({
                   <><DollarSign className="w-4 h-4 mr-2" /> Record Payment</>
                 )}
               </Button>
+
+              {/* Transparency banner: only show when the new-rental post-creation
+                  flow opens this dialog AND the tenant has a security deposit
+                  configured. Spells out exactly what Stripe will do so the
+                  operator can quote it to the customer with confidence. */}
+              {placeDepositHoldAfter && tenant?.security_deposit_enabled && Number(tenant?.global_deposit_amount) > 0 && (
+                <div className="rounded-md border border-amber-200 dark:border-amber-900/40 bg-amber-50/70 dark:bg-amber-950/20 p-3 text-xs">
+                  <div className="flex items-start gap-2">
+                    <Info className="w-4 h-4 text-amber-700 dark:text-amber-400 mt-0.5 shrink-0" />
+                    <div className="space-y-1.5 flex-1 text-amber-900/90 dark:text-amber-100/90">
+                      <p className="font-semibold">What happens when you use Stripe (Charge or Email Link):</p>
+                      <ul className="space-y-1 list-disc list-inside leading-relaxed">
+                        <li>
+                          The customer will be charged <strong>{formatCurrency(stripeAmount, tenant?.currency_code || 'USD')}</strong> — exactly the breakdown above.
+                        </li>
+                        <li>
+                          As soon as that charge succeeds, a separate <strong>{formatCurrency(Number(tenant?.global_deposit_amount), tenant?.currency_code || 'USD')} pre-authorisation hold</strong> is placed automatically on the same card. The customer only enters their card details once.
+                        </li>
+                        <li>
+                          The hold is <strong>not</strong> a charge — it reserves the amount on the customer&apos;s card and shows up under <em>Pre-Auth Hold</em> on this rental. You release or capture it at the end of the rental.
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Stripe options row */}
               {selectedCustomerId && (
