@@ -137,6 +137,18 @@ export const AddPaymentDialog = ({
   const [stripeLoading, setStripeLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  // Pending action awaiting operator confirmation in the deposit-hold popup.
+  // Only used when placeDepositHoldAfter+tenant deposit is configured; in every
+  // other context the buttons run their handlers immediately as before.
+  const [pendingConfirm, setPendingConfirm] = useState<
+    | { type: 'record'; data: PaymentFormData }
+    | { type: 'stripe' }
+    | { type: 'email' }
+    | null
+  >(null);
+  // Bypass flag set just before re-invoking the manual onSubmit after the
+  // operator confirms — avoids re-opening the popup in an infinite loop.
+  const skipConfirmRef = useRef(false);
   // Synchronous double-submit guards. React `loading` state is async — between
   // a click and the next render, a second click can slip through and create a
   // duplicate payment / duplicate Stripe checkout. Refs update synchronously
@@ -342,8 +354,25 @@ export const AddPaymentDialog = ({
     }
   };
 
+  // True when there's something worth confirming with the operator — i.e. the
+  // post-rental-creation flow opened the dialog and the tenant actually has a
+  // non-zero security deposit, so the choice of mode meaningfully affects the
+  // hold outcome. In any other context (paying down an existing balance, etc.)
+  // the popup adds friction with no value, so we bypass it.
+  const shouldConfirmMode = !!placeDepositHoldAfter
+    && !!tenant?.security_deposit_enabled
+    && Number(tenant?.global_deposit_amount) > 0;
+
   // Manual payment submit
   const onSubmit = async (data: PaymentFormData) => {
+    // Gate: if the operator hasn't yet seen the "Record Payment doesn't auto-hold"
+    // confirmation, show it instead of submitting. After they confirm we re-call
+    // this with skipConfirmRef set so the gate falls through.
+    if (shouldConfirmMode && !skipConfirmRef.current) {
+      setPendingConfirm({ type: 'record', data });
+      return;
+    }
+    skipConfirmRef.current = false;
     // Synchronous double-submit guard — see ref declaration for rationale.
     if (submitInFlight.current) return;
     submitInFlight.current = true;
@@ -944,44 +973,6 @@ export const AddPaymentDialog = ({
                 )}
               </Button>
 
-              {/* Transparency banner: only show when the new-rental post-creation
-                  flow opens this dialog AND the tenant has a security deposit
-                  configured. Spells out exactly what each button does so the
-                  operator can quote it to the customer with confidence. */}
-              {placeDepositHoldAfter && tenant?.security_deposit_enabled && Number(tenant?.global_deposit_amount) > 0 && (
-                <div className="rounded-md border border-amber-200 dark:border-amber-900/40 bg-amber-50/70 dark:bg-amber-950/20 p-3 text-xs space-y-2.5">
-                  <div className="flex items-start gap-2">
-                    <Info className="w-4 h-4 text-amber-700 dark:text-amber-400 mt-0.5 shrink-0" />
-                    <div className="space-y-2.5 flex-1 text-amber-900/90 dark:text-amber-100/90">
-                      <div className="space-y-1.5">
-                        <p className="font-semibold">If you use Stripe (Charge or Email Link):</p>
-                        <ul className="space-y-1 list-disc list-inside leading-relaxed">
-                          <li>
-                            The customer will be charged <strong>{formatCurrency(stripeAmount, tenant?.currency_code || 'USD')}</strong> — exactly the breakdown above.
-                          </li>
-                          <li>
-                            As soon as that charge succeeds, a separate <strong>{formatCurrency(Number(tenant?.global_deposit_amount), tenant?.currency_code || 'USD')} pre-authorisation hold</strong> is placed automatically on the same card. The customer only enters their card details once.
-                          </li>
-                          <li>
-                            The hold is <strong>not</strong> a charge — it reserves the amount on the customer&apos;s card and shows under <em>Pre-Auth Hold</em> on this rental. You release or capture it at the end of the rental.
-                          </li>
-                        </ul>
-                      </div>
-                      <div className="pt-2 border-t border-amber-300/40 dark:border-amber-700/40 space-y-1.5">
-                        <p className="font-semibold">If you use Record Payment (cash / bank transfer / etc.):</p>
-                        <ul className="space-y-1 list-disc list-inside leading-relaxed">
-                          <li>
-                            No automatic hold is placed — you&apos;ve received the money outside Stripe, so there&apos;s no card on file to authorise against.
-                          </li>
-                          <li>
-                            To still secure the <strong>{formatCurrency(Number(tenant?.global_deposit_amount), tenant?.currency_code || 'USD')} deposit</strong>, open the rental after recording the payment and use the <em>Place Pre-Auth Hold</em> button — that sends the customer a Stripe link (or opens one for in-person) for the hold only.
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* Stripe options row */}
               {selectedCustomerId && (
@@ -990,7 +981,13 @@ export const AddPaymentDialog = ({
                     type="button"
                     variant="outline"
                     disabled={isAnyLoading || stripeAmount <= 0}
-                    onClick={handleStripePayment}
+                    onClick={() => {
+                      if (shouldConfirmMode) {
+                        setPendingConfirm({ type: 'stripe' });
+                      } else {
+                        handleStripePayment();
+                      }
+                    }}
                     className="w-full h-10 gap-2"
                   >
                     {stripeLoading ? (
@@ -1006,7 +1003,13 @@ export const AddPaymentDialog = ({
                     type="button"
                     variant="outline"
                     disabled={isAnyLoading || !customerEmail || (!latestInvoice && !rentalDetails)}
-                    onClick={handleSendInvoiceEmail}
+                    onClick={() => {
+                      if (shouldConfirmMode) {
+                        setPendingConfirm({ type: 'email' });
+                      } else {
+                        handleSendInvoiceEmail();
+                      }
+                    }}
                     className="w-full h-10 gap-2"
                   >
                     {emailLoading ? (
@@ -1031,6 +1034,121 @@ export const AddPaymentDialog = ({
           </form>
         </Form>
       </DialogContent>
+
+      {/* Mode confirmation popup — only renders when shouldConfirmMode is true
+          and the operator has picked a button. Spells out exactly what will
+          happen for THIS specific mode (different copy for record vs Stripe).
+          Confirming runs the original handler; cancelling just dismisses. */}
+      <Dialog open={!!pendingConfirm} onOpenChange={(open) => { if (!open) setPendingConfirm(null); }}>
+        <DialogContent className="sm:max-w-[460px]">
+          {pendingConfirm?.type === 'record' && (
+            <>
+              <DialogHeader>
+                <div className="flex items-start gap-2">
+                  <Info className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                  <div>
+                    <DialogTitle className="text-base">Record Payment — no automatic hold</DialogTitle>
+                    <DialogDescription className="mt-1 text-xs">
+                      You&apos;re recording <strong>{formatCurrency(stripeAmount, tenant?.currency_code || 'USD')}</strong> as a manual payment (cash, bank transfer, etc.). Stripe is not charged.
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+              <div className="text-xs text-muted-foreground leading-relaxed space-y-2 pt-1">
+                <p>
+                  Because no card is on file, the <strong>{formatCurrency(Number(tenant?.global_deposit_amount), tenant?.currency_code || 'USD')} deposit hold</strong> will <strong>not</strong> be placed automatically.
+                </p>
+                <p>
+                  To still secure the deposit, open the rental after recording this payment and use the <em>Place Pre-Auth Hold</em> button — it sends the customer a Stripe link (or opens one in-person) for the hold only.
+                </p>
+              </div>
+              <div className="flex gap-2 justify-end pt-3">
+                <Button variant="outline" onClick={() => setPendingConfirm(null)}>Cancel</Button>
+                <Button
+                  onClick={() => {
+                    const data = pendingConfirm.data;
+                    setPendingConfirm(null);
+                    skipConfirmRef.current = true;
+                    void onSubmit(data);
+                  }}
+                >
+                  Record without hold
+                </Button>
+              </div>
+            </>
+          )}
+
+          {pendingConfirm?.type === 'stripe' && (
+            <>
+              <DialogHeader>
+                <div className="flex items-start gap-2">
+                  <CreditCard className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mt-0.5 shrink-0" />
+                  <div>
+                    <DialogTitle className="text-base">Charge via Stripe</DialogTitle>
+                    <DialogDescription className="mt-1 text-xs">
+                      Opens a Stripe Checkout in a new tab for the customer.
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+              <div className="text-xs text-muted-foreground leading-relaxed space-y-2 pt-1">
+                <p>
+                  Customer is charged <strong>{formatCurrency(stripeAmount, tenant?.currency_code || 'USD')}</strong> for rental fees.
+                </p>
+                <p>
+                  Immediately after the charge captures, a separate <strong>{formatCurrency(Number(tenant?.global_deposit_amount), tenant?.currency_code || 'USD')} pre-authorisation hold</strong> (not a charge) is placed on the same card — the customer only enters their card once.
+                </p>
+              </div>
+              <div className="flex gap-2 justify-end pt-3">
+                <Button variant="outline" onClick={() => setPendingConfirm(null)}>Cancel</Button>
+                <Button
+                  onClick={() => {
+                    setPendingConfirm(null);
+                    void handleStripePayment();
+                  }}
+                >
+                  Open Stripe Checkout
+                </Button>
+              </div>
+            </>
+          )}
+
+          {pendingConfirm?.type === 'email' && (
+            <>
+              <DialogHeader>
+                <div className="flex items-start gap-2">
+                  <Mail className="w-5 h-5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+                  <div>
+                    <DialogTitle className="text-base">Email Stripe Link</DialogTitle>
+                    <DialogDescription className="mt-1 text-xs">
+                      Emails the customer a Stripe payment link they can pay at their convenience.
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+              <div className="text-xs text-muted-foreground leading-relaxed space-y-2 pt-1">
+                <p>
+                  When the customer pays, they&apos;ll be charged <strong>{formatCurrency(stripeAmount, tenant?.currency_code || 'USD')}</strong> for rental fees.
+                </p>
+                <p>
+                  Immediately after the charge captures, a separate <strong>{formatCurrency(Number(tenant?.global_deposit_amount), tenant?.currency_code || 'USD')} pre-authorisation hold</strong> (not a charge) is placed on the same card — the customer only enters their card once.
+                </p>
+              </div>
+              <div className="flex gap-2 justify-end pt-3">
+                <Button variant="outline" onClick={() => setPendingConfirm(null)}>Cancel</Button>
+                <Button
+                  onClick={() => {
+                    setPendingConfirm(null);
+                    void handleSendInvoiceEmail();
+                  }}
+                >
+                  Send link
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 };
