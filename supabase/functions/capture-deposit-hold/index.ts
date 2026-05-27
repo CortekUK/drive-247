@@ -67,20 +67,63 @@ Deno.serve(async (req) => {
     const remainder = Math.max(0, originalHold - amount);
     const currency = (tenant?.currency_code || "usd").toLowerCase();
 
-    // 1. Capture the requested amount from the original PI.
-    const capturedIntent = await stripe.paymentIntents.capture(
+    // 1. Detect whether the PI was authorised with multicapture available. If
+    //    it was, we can capture partial amounts on the SAME PI without losing
+    //    the remainder (no rollover-PI needed). New holds (placed after the
+    //    multicapture rollout) qualify; older holds fall back to rollover.
+    const preCaptureIntent = await stripe.paymentIntents.retrieve(
       rental.deposit_hold_payment_intent_id,
-      { amount_to_capture: capturedInCents },
       stripeOptions
     );
-    console.log("[DEPOSIT-CAPTURE] Captured", amount, "on PI", capturedIntent.id);
+    const multicaptureStatus = (preCaptureIntent as any)?.payment_method_options?.card?.multicapture;
+    const multicaptureAvailable = multicaptureStatus === "available";
+    console.log("[DEPOSIT-CAPTURE] PI", preCaptureIntent.id, "multicapture:", multicaptureStatus ?? "n/a");
 
-    // 2. If remainder > 0, create a fresh hold so the customer still has money
-    //    on the card. Stripe has released the uncaptured portion of the original
-    //    PI the moment we partial-captured.
+    // 2. Capture the requested amount.
+    //    - Multicapture path: pass final_capture=false when there's a remainder
+    //      so Stripe keeps the rest authorised on the same PI. Pass true (or
+    //      omit) when this capture consumes the whole hold.
+    //    - Single-capture path: a normal partial capture releases the remainder
+    //      automatically — we fall back to creating a fresh rollover PI below.
+    let capturedIntent;
+    let usedMulticapture = false;
+    if (multicaptureAvailable && remainder > 0) {
+      try {
+        capturedIntent = await stripe.paymentIntents.capture(
+          rental.deposit_hold_payment_intent_id,
+          { amount_to_capture: capturedInCents, final_capture: false },
+          stripeOptions
+        );
+        usedMulticapture = true;
+        console.log("[DEPOSIT-CAPTURE] Multicapture: captured", amount, "kept", remainder, "held on PI", capturedIntent.id);
+      } catch (mcErr) {
+        // If Stripe rejects the multicapture call for any reason (e.g. card
+        // network limits), fall through to a normal partial capture + rollover
+        // so the operator still gets the requested amount.
+        console.warn("[DEPOSIT-CAPTURE] Multicapture capture failed, falling back to rollover:", mcErr);
+        capturedIntent = await stripe.paymentIntents.capture(
+          rental.deposit_hold_payment_intent_id,
+          { amount_to_capture: capturedInCents },
+          stripeOptions
+        );
+      }
+    } else {
+      capturedIntent = await stripe.paymentIntents.capture(
+        rental.deposit_hold_payment_intent_id,
+        { amount_to_capture: capturedInCents },
+        stripeOptions
+      );
+      console.log("[DEPOSIT-CAPTURE] Single-capture: captured", amount, "on PI", capturedIntent.id);
+    }
+
+    // 3. Decide how to keep the remainder held:
+    //    - Multicapture: same PI is still active for `remainder` — no new PI.
+    //    - Single-capture with remainder > 0: original PI's uncaptured portion
+    //      was released by Stripe, so spin up a fresh manual-capture PI for the
+    //      remainder on the saved card.
     let newHoldPiId: string | null = null;
     let newHoldExpiresAt: string | null = null;
-    if (remainder > 0 && rental.deposit_hold_payment_method_id && rental.deposit_hold_stripe_customer_id) {
+    if (!usedMulticapture && remainder > 0 && rental.deposit_hold_payment_method_id && rental.deposit_hold_stripe_customer_id) {
       try {
         const newHold = await stripe.paymentIntents.create(
           {
@@ -92,6 +135,11 @@ Deno.serve(async (req) => {
             confirm: true,
             off_session: true,
             description: `Security deposit hold (rollover after partial capture) for rental ${rentalId.substring(0, 8).toUpperCase()}`,
+            // Ask for multicapture on the rollover PI too so future captures
+            // can stay on this one PI.
+            payment_method_options: {
+              card: { request_multicapture: "if_available" },
+            },
             metadata: {
               rental_id: rentalId,
               tenant_id: effectiveTenantId,
@@ -211,11 +259,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. Update rental's deposit hold state. When the capture consumed the
-    //    entire hold (remainder = 0), zero out deposit_hold_amount so the UI
-    //    shows $0 for the Security Deposit row and hides Release/Charge buttons.
+    // 4. Update rental's deposit hold state. Three cases:
+    //    a. Multicapture: same PI is still active for `remainder` — only
+    //       decrement deposit_hold_amount, keep status='held' and the same PI id.
+    //    b. Single-capture with a successful rollover PI: swap in the new PI id
+    //       and set hold amount to remainder.
+    //    c. Otherwise (full capture, or single-capture with no rollover): hold
+    //       is gone, mark captured and zero the amount.
     const rentalUpdate: Record<string, unknown> = {};
-    if (newHoldPiId) {
+    if (usedMulticapture) {
+      rentalUpdate.deposit_hold_status = "held";
+      rentalUpdate.deposit_hold_amount = remainder;
+      // Same PI, same placed_at, same expires_at — nothing to update there.
+    } else if (newHoldPiId) {
       rentalUpdate.deposit_hold_status = "held";
       rentalUpdate.deposit_hold_payment_intent_id = newHoldPiId;
       rentalUpdate.deposit_hold_amount = remainder;
@@ -234,8 +290,9 @@ Deno.serve(async (req) => {
       success: true,
       capturedAmount: amount,
       holdAmount: originalHold,
-      remainingHeldAmount: newHoldPiId ? remainder : 0,
+      remainingHeldAmount: usedMulticapture || newHoldPiId ? remainder : 0,
       newHoldPiId,
+      usedMulticapture,
       reason,
     });
   } catch (error: any) {

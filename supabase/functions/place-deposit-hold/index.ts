@@ -170,6 +170,16 @@ Deno.serve(async (req) => {
           confirm: true,
           off_session: true,
           description: `Security deposit hold for rental ${rentalId.substring(0, 8).toUpperCase()}`,
+          // Request multicapture so partial captures keep the remainder
+          // authorised on the SAME PaymentIntent instead of releasing it. Stripe
+          // grants this on a per-card / per-account basis; if it's not granted
+          // the PI still works as a normal single-capture hold (the request is
+          // silently ignored). capture-deposit-hold detects the resulting
+          // multicapture status and either calls capture with final_capture:false
+          // (multicapture path) or falls back to the rollover-PI flow.
+          payment_method_options: {
+            card: { request_multicapture: "if_available" },
+          },
           metadata: {
             rental_id: rentalId,
             tenant_id: effectiveTenantId,
