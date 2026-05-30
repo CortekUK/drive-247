@@ -69,6 +69,9 @@ verify_jwt = false
 [functions.send-payg-reminders]
 verify_jwt = false
 
+[functions.auto-extend-rentals]
+verify_jwt = false
+
 [functions.finalize-payg-rental]
 verify_jwt = true
 
