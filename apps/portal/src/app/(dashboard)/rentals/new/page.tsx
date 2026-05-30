@@ -196,6 +196,12 @@ const CreateRental = () => {
   // Per-rental reminder interval override. null = use tenant default.
   const [paygReminderInterval, setPaygReminderInterval] = useState<number | null>(null);
 
+  // Auto-extension state. An auto-extend rental is a REGULAR rental (real end_date)
+  // that auto-renews each period and is charged UPFRONT — handled by the auto-extend cron.
+  const [isAutoExtend, setIsAutoExtend] = useState(false);
+  const [autoExtendChargeMode, setAutoExtendChargeMode] = useState<'auto_charge' | 'pay_link'>('pay_link');
+  const [autoExtendMaxPeriods, setAutoExtendMaxPeriods] = useState<number | null>(null);
+
   // Per-rental gig-driver flag. Defaults to the selected customer's flag, but the
   // operator can override per-rental (e.g., a customer who hasn't yet self-declared
   // in the booking portal but verbally confirmed gig-worker status). Persisted to
@@ -1349,6 +1355,16 @@ const CreateRental = () => {
         paygNextAccrualAt = anchor.toISOString();
       }
 
+      // Auto-extension: the first upfront charge is due when the first paid period
+      // ends (the form's end_date). The cron renews from there each period.
+      let autoExtendNextChargeAt: string | null = null;
+      if (isAutoExtend && data.end_date) {
+        const leadHours = Number((rentalSettings as any)?.auto_extend_default_lead_hours ?? 0);
+        const periodEnd = new Date(`${data.end_date.toISOString().split('T')[0]}T00:00:00Z`);
+        periodEnd.setUTCHours(periodEnd.getUTCHours() - leadHours);
+        autoExtendNextChargeAt = periodEnd.toISOString();
+      }
+
       // For PAYG rentals we clear end_date + return fields and persist accrual metadata.
       // Use supabaseUntyped because some PAYG columns are not yet in generated types.
       const rentalInsertPayload: any = {
@@ -1397,8 +1413,16 @@ const CreateRental = () => {
         unlimited_mileage_total: unlimitedMileageEnabled && unlimitedMileageFlat
           ? Number(unlimitedMileageFlat.toFixed(2))
           : null,
-        has_installment_plan: !isPayAsYouGo && installmentPlanType !== 'full' && rentalSettings?.installments_enabled,
+        has_installment_plan: !isPayAsYouGo && !isAutoExtend && installmentPlanType !== 'full' && rentalSettings?.installments_enabled,
         is_pay_as_you_go: isPayAsYouGo,
+        // Auto-extension (regular rental that auto-renews + bills upfront each period).
+        auto_extend_enabled: isAutoExtend,
+        auto_extend_charge_mode: isAutoExtend ? autoExtendChargeMode : 'pay_link',
+        auto_extend_period_unit: isAutoExtend ? data.rental_period_type : 'Weekly',
+        auto_extend_next_charge_at: autoExtendNextChargeAt,
+        auto_extend_lead_hours: isAutoExtend ? Number((rentalSettings as any)?.auto_extend_default_lead_hours ?? 0) : 0,
+        auto_extend_max_periods: isAutoExtend ? autoExtendMaxPeriods : null,
+        auto_extend_status: 'active',
         // Gig-driver snapshot for this rental. Distinct from customers.is_gig_driver
         // (which can change after this rental is signed). The agreement merge
         // variable {{is_gig_driver}} prefers this rental-level value.
@@ -2952,8 +2976,8 @@ const CreateRental = () => {
                 />
               )}
 
-              {/* ── Payment Mode: Regular vs Pay As You Go (positioned after Customer & Vehicle) ──────── */}
-              {rentalSettings?.pay_as_you_go_enabled && selectedVehicleId && (
+              {/* ── Payment Mode: Regular vs Pay As You Go vs Auto-Extend (positioned after Customer & Vehicle) ──────── */}
+              {((rentalSettings as any)?.pay_as_you_go_enabled || (rentalSettings as any)?.auto_extend_enabled) && selectedVehicleId && (
                 <div className="rounded-xl border bg-card shadow-sm">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
                     <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
@@ -2963,9 +2987,20 @@ const CreateRental = () => {
                   </div>
                   <div className="p-5 space-y-4">
                     <RadioGroup
-                      value={isPayAsYouGo ? 'payg' : 'regular'}
+                      value={isAutoExtend ? 'auto_extend' : isPayAsYouGo ? 'payg' : 'regular'}
                       onValueChange={(val) => {
                         setIsPayAsYouGo(val === 'payg');
+                        setIsAutoExtend(val === 'auto_extend');
+                        if (val === 'auto_extend') {
+                          // Auto-extend bills per-period upfront — like PAYG it's Weekly/Monthly with an
+                          // explicit per-period rate, but it's a REGULAR rental (keeps end_date + return).
+                          setInstallmentPlanType('full');
+                          setInstallmentAmountOverride(null);
+                          if (form.getValues('rental_period_type') === 'Daily') {
+                            form.setValue('rental_period_type', 'Weekly');
+                          }
+                          setAutoExtendChargeMode(((rentalSettings as any)?.auto_extend_default_charge_mode ?? 'pay_link') as 'auto_charge' | 'pay_link');
+                        }
                         if (val === 'payg') {
                           setInstallmentPlanType('full');
                           setInstallmentAmountOverride(null);
@@ -3000,14 +3035,57 @@ const CreateRental = () => {
                           <p className="text-xs text-muted-foreground">Standard payment — pay upfront or via installments</p>
                         </div>
                       </label>
-                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isPayAsYouGo ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
-                        <RadioGroupItem value="payg" />
-                        <div>
-                          <span className="text-sm font-medium">Pay As You Go</span>
-                          <p className="text-xs text-muted-foreground">Rental amount, tax, and percentage-based service fees are paid incrementally</p>
-                        </div>
-                      </label>
+                      {(rentalSettings as any)?.pay_as_you_go_enabled && (
+                        <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isPayAsYouGo ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
+                          <RadioGroupItem value="payg" />
+                          <div>
+                            <span className="text-sm font-medium">Pay As You Go</span>
+                            <p className="text-xs text-muted-foreground">Rental amount, tax, and percentage-based service fees are paid incrementally (in arrears)</p>
+                          </div>
+                        </label>
+                      )}
+                      {(rentalSettings as any)?.auto_extend_enabled && (
+                        <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isAutoExtend ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
+                          <RadioGroupItem value="auto_extend" />
+                          <div>
+                            <span className="text-sm font-medium">Auto-Extend</span>
+                            <p className="text-xs text-muted-foreground">Renews each period automatically and charges the customer upfront. Set the end date to the first period's end.</p>
+                          </div>
+                        </label>
+                      )}
                     </RadioGroup>
+
+                    {isAutoExtend && (
+                      <div className="space-y-4 rounded-lg border p-4 bg-muted/30">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Charge method</Label>
+                          <Select value={autoExtendChargeMode} onValueChange={(v) => setAutoExtendChargeMode(v as 'auto_charge' | 'pay_link')}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pay_link">Pay-link — email the customer a checkout link each period</SelectItem>
+                              <SelectItem value="auto_charge">Auto-charge — charge the saved card automatically</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">Auto-charge needs the customer's card saved on file (via booking / deposit hold).</p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Max periods (optional)</Label>
+                          <Input
+                            type="number" min={1} max={520}
+                            placeholder="No limit"
+                            value={autoExtendMaxPeriods ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setAutoExtendMaxPeriods(v === '' ? null : Math.max(1, Math.min(520, parseInt(v) || 1)));
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">Stop auto-renewing after this many periods. Leave empty for open-ended (until returned).</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Set <strong>Rental Period Type</strong> and the per-period <strong>rate</strong> below, and an <strong>end date</strong> one period out (e.g. +7 days for weekly). The system renews and charges from there.
+                        </p>
+                      </div>
+                    )}
 
                     {isPayAsYouGo && (
                       <div className="space-y-2">
