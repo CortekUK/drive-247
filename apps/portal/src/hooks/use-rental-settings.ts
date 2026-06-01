@@ -77,6 +77,12 @@ export interface RentalSettings {
   payg_preauth_days: number | null;
   payg_max_duration_days: number | null;
   payg_upfront_required: boolean | null;
+  // Auto-extension (prepaid rolling rentals)
+  auto_extend_enabled: boolean | null;
+  auto_extend_default_charge_mode: 'auto_charge' | 'pay_link' | null;
+  auto_extend_default_lead_hours: number | null;
+  auto_extend_grace_hours: number | null;
+  auto_extend_max_retries: number | null;
   // Blog
   blog_enabled: boolean | null;
 }
@@ -146,6 +152,12 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   payg_preauth_days: 2,
   payg_max_duration_days: 90,
   payg_upfront_required: false,
+  // Auto-extension (prepaid rolling rentals)
+  auto_extend_enabled: false,
+  auto_extend_default_charge_mode: 'pay_link',
+  auto_extend_default_lead_hours: 0,
+  auto_extend_grace_hours: 48,
+  auto_extend_max_retries: 3,
   // Blog
   blog_enabled: false,
 };

@@ -1,0 +1,408 @@
+// Auto-Extend Rentals cron.
+//
+// For each rental with auto_extend_enabled=true whose current paid period is ending
+// (auto_extend_next_charge_at <= now), renew the rental for one more period and charge
+// the customer UPFRONT. Built on the existing rental_extensions rails:
+//
+//   1. create a rental_extensions row for the next period (+ Extension* ledger charges)
+//   2a. auto_charge mode: off-session PaymentIntent on the saved card -> settle FIFO
+//       (payment_apply_fifo_v2, isolated by extension_id) -> finalize_rental_extension
+//       rolls rentals.end_date forward.
+//   2b. pay_link mode (or no saved card): create a Checkout session, email the customer a
+//       "pay for next period" link, park auto_extend_pending_extension_id. The existing
+//       stripe webhook -> finalize path rolls the date forward when they pay.
+//
+// Idempotent: only acts when next_charge_at <= now and advances the pointer in the same
+// write. A pending unpaid pay-link extension blocks creating another (no double-billing).
+//
+// See docs/AUTO_EXTENSION.md.
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
+import { corsHeaders } from "../_shared/cors.ts";
+import { sendEmail } from "../_shared/resend-service.ts";
+
+// ---------------------------------------------------------------------------
+// Stripe context (mirrors send-payg-reminders / place-deposit-hold resolution)
+// ---------------------------------------------------------------------------
+interface StripeContext {
+  stripe: Stripe;
+  mode: "test" | "live";
+  connectAccountId: string | null;
+  options: { stripeAccount: string } | undefined;
+  currencyCode: string;
+}
+
+async function getStripeContext(supabase: any, tenant: any): Promise<StripeContext | null> {
+  const mode: "test" | "live" = tenant?.stripe_mode === "live" ? "live" : "test";
+  const secretKey = mode === "live"
+    ? Deno.env.get("STRIPE_LIVE_SECRET_KEY")
+    : Deno.env.get("STRIPE_TEST_SECRET_KEY");
+  if (!secretKey) {
+    console.warn(`[auto-extend] no Stripe secret key for ${mode} mode`);
+    return null;
+  }
+  const stripe = new Stripe(secretKey, {
+    apiVersion: "2023-10-16",
+    httpClient: Stripe.createFetchHttpClient(),
+  });
+  let connectAccountId: string | null = null;
+  if (mode === "test") {
+    connectAccountId = Deno.env.get("STRIPE_TEST_CONNECT_ACCOUNT_ID") || null;
+  } else if (tenant?.stripe_onboarding_complete && tenant?.stripe_account_id) {
+    connectAccountId = tenant.stripe_account_id;
+  }
+  const options = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
+  return { stripe, mode, connectAccountId, options, currencyCode: tenant?.currency_code || "USD" };
+}
+
+function deriveBookingOrigin(tenantSlug: string): string {
+  const fullOverride = Deno.env.get("BOOKING_BASE_URL");
+  if (fullOverride) return fullOverride.replace(/\/+$/, "");
+  const baseDomain = Deno.env.get("BOOKING_BASE_DOMAIN") || "drive-247.com";
+  return `https://${tenantSlug}.${baseDomain}`;
+}
+
+// ---------------------------------------------------------------------------
+// Period math + money helpers
+// ---------------------------------------------------------------------------
+function addPeriod(endDate: string, unit: string): { newEndDate: string; days: number } {
+  // endDate is a YYYY-MM-DD DATE. Compute the next period boundary.
+  const d = new Date(`${endDate}T00:00:00Z`);
+  const before = d.getTime();
+  if (unit === "Daily") {
+    d.setUTCDate(d.getUTCDate() + 1);
+  } else if (unit === "Monthly") {
+    d.setUTCMonth(d.getUTCMonth() + 1);
+  } else {
+    d.setUTCDate(d.getUTCDate() + 7); // Weekly default
+  }
+  const days = Math.round((d.getTime() - before) / (24 * 60 * 60 * 1000));
+  return { newEndDate: d.toISOString().split("T")[0], days };
+}
+
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+function computeBreakdown(rentalAmount: number, tenant: any): {
+  rental: number; tax: number; serviceFee: number; total: number;
+} {
+  const rental = round2(Number(rentalAmount) || 0);
+  const taxPct = tenant?.tax_enabled ? Number(tenant?.tax_percentage || 0) : 0;
+  const tax = round2(rental * (taxPct / 100));
+  let serviceFee = 0;
+  if (tenant?.service_fee_enabled) {
+    if (tenant?.service_fee_type === "percentage") {
+      serviceFee = round2(rental * (Number(tenant?.service_fee_value || 0) / 100));
+    } else {
+      serviceFee = round2(Number(tenant?.service_fee_value ?? tenant?.service_fee_amount ?? 0));
+    }
+  }
+  return { rental, tax, serviceFee, total: round2(rental + tax + serviceFee) };
+}
+
+function fmtCurrency(amount: number, code: string): string {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: code || "USD" }).format(amount);
+  } catch {
+    return `${code || "USD"} ${Number(amount).toFixed(2)}`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+  let renewed = 0, linked = 0, paused = 0, skipped = 0, failed = 0;
+
+  try {
+    console.log(`[auto-extend] run at ${nowIso}`);
+
+    const { data: rentals, error: rentalErr } = await supabase
+      .from("rentals")
+      .select(`
+        id, tenant_id, customer_id, vehicle_id, end_date, monthly_amount,
+        auto_extend_enabled, auto_extend_charge_mode, auto_extend_period_unit,
+        auto_extend_next_charge_at, auto_extend_lead_hours, auto_extend_charge_count,
+        auto_extend_max_periods, auto_extend_failed_attempts, auto_extend_pending_extension_id,
+        auto_extend_status, status,
+        deposit_hold_stripe_customer_id, deposit_hold_payment_method_id,
+        customers!rentals_customer_id_fkey ( id, name, email ),
+        vehicles ( make, model, reg )
+      `)
+      .eq("auto_extend_enabled", true)
+      .eq("status", "Active")
+      .eq("auto_extend_paused", false)
+      .not("auto_extend_next_charge_at", "is", null)
+      .lte("auto_extend_next_charge_at", nowIso);
+
+    if (rentalErr) throw rentalErr;
+    if (!rentals || rentals.length === 0) {
+      return new Response(JSON.stringify({ success: true, renewed, linked, paused, skipped, failed }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Tenant config cache
+    const tenantIds = [...new Set(rentals.map((r: any) => r.tenant_id))];
+    const { data: tenants } = await supabase
+      .from("tenants")
+      .select(`id, slug, company_name, contact_email, contact_phone, currency_code,
+               tax_enabled, tax_percentage, service_fee_enabled, service_fee_type, service_fee_value, service_fee_amount,
+               stripe_mode, stripe_account_id, stripe_onboarding_complete,
+               auto_extend_grace_hours, auto_extend_max_retries`)
+      .in("id", tenantIds);
+    const tenantMap = new Map<string, any>((tenants ?? []).map((t: any) => [t.id, t]));
+
+    for (const r of rentals as any[]) {
+      try {
+        const tenant = tenantMap.get(r.tenant_id);
+        if (!tenant) { skipped++; continue; }
+
+        // Safety cap: max periods reached -> stop auto-extending.
+        if (r.auto_extend_max_periods && r.auto_extend_charge_count >= r.auto_extend_max_periods) {
+          await supabase.from("rentals").update({ auto_extend_status: "ended", updated_at: nowIso }).eq("id", r.id);
+          skipped++; continue;
+        }
+
+        // A pay-link extension is still awaiting payment -> don't create another.
+        if (r.auto_extend_pending_extension_id) {
+          const { data: pending } = await supabase
+            .from("rental_extensions").select("id, status").eq("id", r.auto_extend_pending_extension_id).maybeSingle();
+          if (pending && pending.status === "paid") {
+            // Webhook already settled it; clear the flag and let next cron renew.
+            await supabase.from("rentals").update({
+              auto_extend_pending_extension_id: null, auto_extend_status: "active", updated_at: nowIso,
+            }).eq("id", r.id);
+          } else {
+            // Still unpaid. Pause past the grace window; otherwise leave it parked.
+            const graceMs = (Number(tenant.auto_extend_grace_hours) || 48) * 3600 * 1000;
+            const dueMs = new Date(r.auto_extend_next_charge_at).getTime();
+            if (now.getTime() - dueMs > graceMs) {
+              await supabase.from("rentals").update({
+                auto_extend_paused: true, auto_extend_paused_at: nowIso, auto_extend_status: "paused", updated_at: nowIso,
+              }).eq("id", r.id);
+              paused++;
+            } else {
+              skipped++;
+            }
+          }
+          continue;
+        }
+
+        if (!r.end_date) { skipped++; continue; }
+
+        const customer = r.customers;
+        if (!customer?.email) { skipped++; continue; }
+
+        // 1. Next period + breakdown
+        const { newEndDate, days } = addPeriod(r.end_date, r.auto_extend_period_unit || "Weekly");
+        const bd = computeBreakdown(r.monthly_amount, tenant);
+        if (bd.total <= 0) { skipped++; continue; }
+
+        // 2. rental_extensions row (next sequence number)
+        const { data: maxRow } = await supabase
+          .from("rental_extensions").select("sequence_number")
+          .eq("rental_id", r.id).order("sequence_number", { ascending: false }).limit(1).maybeSingle();
+        const seq = (maxRow?.sequence_number ?? 0) + 1;
+
+        const { data: ext, error: extErr } = await supabase
+          .from("rental_extensions")
+          .insert({
+            rental_id: r.id, tenant_id: r.tenant_id, sequence_number: seq, status: "approved",
+            previous_end_date: r.end_date, new_end_date: newEndDate, extension_days: days,
+            rental_amount: bd.rental, tax_amount: bd.tax, service_fee_amount: bd.serviceFee, insurance_amount: 0,
+            requested_at: nowIso, approved_at: nowIso,
+          })
+          .select("id").single();
+        if (extErr) throw extErr;
+
+        // 3. Extension* ledger charges (mirror AdminExtendRentalDialog)
+        const today = nowIso.split("T")[0];
+        const baseLedger = {
+          rental_id: r.id, customer_id: r.customer_id, vehicle_id: r.vehicle_id, tenant_id: r.tenant_id,
+          type: "Charge" as const, entry_date: today, due_date: newEndDate, extension_id: ext.id,
+        };
+        const ledgerRows: any[] = [
+          { ...baseLedger, category: "Extension Rental", reference: `Auto-extend #${seq}: ${days}d (${r.end_date} → ${newEndDate})`, amount: bd.rental, remaining_amount: bd.rental },
+        ];
+        if (bd.tax > 0) ledgerRows.push({ ...baseLedger, category: "Extension Tax", reference: `Auto-extend #${seq}: Tax`, amount: bd.tax, remaining_amount: bd.tax });
+        if (bd.serviceFee > 0) ledgerRows.push({ ...baseLedger, category: "Extension Service Fee", reference: `Auto-extend #${seq}: Service Fee`, amount: bd.serviceFee, remaining_amount: bd.serviceFee });
+        const { error: ledgerErr } = await supabase.from("ledger_entries").insert(ledgerRows);
+        if (ledgerErr) throw ledgerErr;
+
+        const ctx = await getStripeContext(supabase, tenant);
+        const nextChargeAt = new Date(`${newEndDate}T00:00:00Z`);
+        nextChargeAt.setUTCHours(nextChargeAt.getUTCHours() - (Number(r.auto_extend_lead_hours) || 0));
+        const hasSavedCard = !!(r.deposit_hold_stripe_customer_id && r.deposit_hold_payment_method_id);
+        const mode = r.auto_extend_charge_mode || "pay_link";
+
+        // 4a. AUTO-CHARGE path — off-session on the saved card
+        if (mode === "auto_charge" && hasSavedCard && ctx) {
+          try {
+            const pi = await ctx.stripe.paymentIntents.create({
+              amount: Math.round(bd.total * 100),
+              currency: ctx.currencyCode.toLowerCase(),
+              customer: r.deposit_hold_stripe_customer_id,
+              payment_method: r.deposit_hold_payment_method_id,
+              off_session: true,
+              confirm: true,
+              description: `Auto-extension #${seq} for rental ${String(r.id).slice(0, 8).toUpperCase()}`,
+              metadata: { rental_id: r.id, tenant_id: r.tenant_id, extension_id: ext.id, type: "auto_extension" },
+            }, ctx.options);
+
+            if (pi.status !== "succeeded") throw new Error(`PaymentIntent status ${pi.status}`);
+
+            const { data: pay, error: payErr } = await supabase
+              .from("payments").insert({
+                rental_id: r.id, customer_id: r.customer_id, vehicle_id: r.vehicle_id, tenant_id: r.tenant_id,
+                extension_id: ext.id, amount: bd.total, remaining_amount: bd.total,
+                payment_date: today, method: "Card", payment_type: "Payment",
+                status: "Completed", verification_status: "approved", capture_status: "captured",
+                stripe_payment_intent_id: pi.id, booking_source: "auto_extend",
+                target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"],
+                created_at: nowIso, updated_at: nowIso,
+              }).select("id").single();
+            if (payErr) throw payErr;
+
+            // Settle FIFO (isolated to this extension via payment.extension_id) then roll the date.
+            await supabase.rpc("payment_apply_fifo_v2", { p_id: pay.id });
+            await supabase.rpc("finalize_rental_extension", { p_extension_id: ext.id, p_payment_id: pay.id });
+
+            await supabase.from("rentals").update({
+              auto_extend_charge_count: (r.auto_extend_charge_count || 0) + 1,
+              auto_extend_last_charge_at: nowIso,
+              auto_extend_next_charge_at: nextChargeAt.toISOString(),
+              auto_extend_failed_attempts: 0,
+              auto_extend_status: "active",
+              updated_at: nowIso,
+            }).eq("id", r.id);
+            renewed++;
+            console.log(`[auto-extend] renewed ${r.id} ext#${seq} ${fmtCurrency(bd.total, ctx.currencyCode)}`);
+            continue;
+          } catch (chargeErr: any) {
+            // Decline / network. Roll back the unpaid extension + its charges so we retry cleanly.
+            await supabase.from("ledger_entries").delete().eq("extension_id", ext.id);
+            await supabase.from("rental_extensions").delete().eq("id", ext.id);
+            const attempts = (r.auto_extend_failed_attempts || 0) + 1;
+            const maxRetries = Number(tenant.auto_extend_max_retries) || 3;
+            if (attempts >= maxRetries) {
+              await supabase.from("rentals").update({
+                auto_extend_failed_attempts: attempts, auto_extend_paused: true,
+                auto_extend_paused_at: nowIso, auto_extend_status: "paused", updated_at: nowIso,
+              }).eq("id", r.id);
+              paused++;
+            } else {
+              // Space out retries across the grace window instead of every cron tick.
+              const graceHrs = Number(tenant.auto_extend_grace_hours) || 48;
+              const retry = new Date(now.getTime() + (graceHrs / maxRetries) * 3600 * 1000);
+              await supabase.from("rentals").update({
+                auto_extend_failed_attempts: attempts,
+                auto_extend_next_charge_at: retry.toISOString(), updated_at: nowIso,
+              }).eq("id", r.id);
+              failed++;
+            }
+            console.error(`[auto-extend] charge failed ${r.id}: ${chargeErr?.message}`);
+            continue;
+          }
+        }
+
+        // 4b. PAY-LINK path — email a checkout link, park the pending extension
+        if (ctx) {
+          const origin = deriveBookingOrigin(tenant.slug || "app");
+          const session = await ctx.stripe.checkout.sessions.create({
+            payment_method_types: ["card"],
+            line_items: [{
+              price_data: {
+                currency: ctx.currencyCode.toLowerCase(),
+                product_data: { name: "Rental Renewal", description: `Renew ${r.end_date} → ${newEndDate}` },
+                unit_amount: Math.round(bd.total * 100),
+              },
+              quantity: 1,
+            }],
+            mode: "payment",
+            customer_email: customer.email,
+            payment_intent_data: { setup_future_usage: "off_session" },
+            client_reference_id: r.id,
+            success_url: `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${r.id}&type=invoice`,
+            cancel_url: `${origin}/portal/bookings/${r.id}`,
+            metadata: {
+              type: "extension", extension_id: ext.id, rental_id: r.id, customer_id: r.customer_id,
+              tenant_id: r.tenant_id, extension_days: String(days), new_end_date: newEndDate,
+              previous_end_date: r.end_date, source: "auto_extend",
+              target_categories: JSON.stringify(["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"]),
+            },
+          }, ctx.options);
+
+          await supabase.from("rental_extensions").update({
+            stripe_checkout_session_id: session.id, checkout_url: session.url,
+          }).eq("id", ext.id);
+
+          await supabase.from("payments").insert({
+            rental_id: r.id, customer_id: r.customer_id, vehicle_id: r.vehicle_id, tenant_id: r.tenant_id,
+            extension_id: ext.id, amount: bd.total, remaining_amount: bd.total,
+            payment_date: today, method: "Card", payment_type: "Payment",
+            status: "Pending", verification_status: "pending", capture_status: "requires_capture",
+            stripe_checkout_session_id: session.id, booking_source: "auto_extend",
+            target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"],
+            created_at: nowIso, updated_at: nowIso,
+          });
+
+          const total = fmtCurrency(bd.total, ctx.currencyCode);
+          const vehicle = r.vehicles ? `${r.vehicles.make ?? ""} ${r.vehicles.model ?? ""}`.trim() : "your vehicle";
+          const html = `
+            <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#374151;">
+              <h2 style="color:#111827;">Time to renew your rental</h2>
+              <p>Hi ${customer.name || "there"},</p>
+              <p>Your rental of <strong>${vehicle}</strong> with <strong>${tenant.company_name || "us"}</strong> is due to renew for another period
+              (<strong>${r.end_date} → ${newEndDate}</strong>).</p>
+              <p>Please pay <strong>${total}</strong> upfront to continue:</p>
+              <p style="text-align:center;margin:24px 0;">
+                <a href="${session.url}" style="display:inline-block;background:#0f172a;color:#fff;padding:14px 28px;border-radius:8px;font-weight:600;text-decoration:none;">Pay ${total} & Renew</a>
+              </p>
+              <p style="font-size:12px;color:#64748b;">If you've returned the vehicle, you can ignore this message.</p>
+            </div>`;
+          await sendEmail(customer.email, `Renew your rental — ${total} due`, html, supabase, r.tenant_id);
+
+          await supabase.from("rentals").update({
+            auto_extend_pending_extension_id: ext.id,
+            auto_extend_status: "awaiting_payment",
+            auto_extend_next_charge_at: nextChargeAt.toISOString(),
+            updated_at: nowIso,
+          }).eq("id", r.id);
+          linked++;
+          console.log(`[auto-extend] pay-link sent ${r.id} ext#${seq} ${total}`);
+          continue;
+        }
+
+        // No Stripe context — roll back and skip.
+        await supabase.from("ledger_entries").delete().eq("extension_id", ext.id);
+        await supabase.from("rental_extensions").delete().eq("id", ext.id);
+        skipped++;
+      } catch (perRentalErr: any) {
+        console.error(`[auto-extend] error on rental ${r.id}:`, perRentalErr?.message ?? perRentalErr);
+        failed++;
+      }
+    }
+
+    console.log(`[auto-extend] done renewed=${renewed} linked=${linked} paused=${paused} skipped=${skipped} failed=${failed}`);
+    return new Response(JSON.stringify({ success: true, renewed, linked, paused, skipped, failed }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error: any) {
+    console.error("[auto-extend] fatal:", error);
+    return new Response(JSON.stringify({ success: false, error: error.message }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
