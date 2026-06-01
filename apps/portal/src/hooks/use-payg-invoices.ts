@@ -149,6 +149,8 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
         () => queryClient.invalidateQueries({ queryKey }))
       .on("postgres_changes", { event: "*", schema: "public", table: "payg_reminder_log", filter },
         () => queryClient.invalidateQueries({ queryKey }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "ledger_entries", filter },
+        () => queryClient.invalidateQueries({ queryKey }))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [rentalId, tenant?.id, enabled, queryClient, queryKey]);
@@ -158,7 +160,7 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
     queryFn: async (): Promise<PaygInvoiceData> => {
       if (!rentalId || !tenant?.id) return EMPTY;
 
-      const [accrualsRes, paymentsRes, remindersRes, rentalRes, tenantRes] = await Promise.all([
+      const [accrualsRes, paymentsRes, remindersRes, rentalRes, tenantRes, ledgerRes] = await Promise.all([
         supabaseUntyped
           .from("payg_accruals")
           .select(
@@ -196,6 +198,16 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
           .select("payg_auto_reminders_enabled, payg_reminder_interval_days")
           .eq("id", tenant.id)
           .maybeSingle(),
+        // Outstanding balance is the money truth — sum of remaining_amount on the
+        // rental's Charge entries. This captures everything the customer owes,
+        // including manual adjustments and FIFO settlements that the accrual
+        // rolling-total can drift from (the Giovante/Annquanette mismatch).
+        supabaseUntyped
+          .from("ledger_entries")
+          .select("remaining_amount")
+          .eq("rental_id", rentalId)
+          .eq("tenant_id", tenant.id)
+          .eq("type", "Charge"),
       ]);
 
       if (accrualsRes.error) throw accrualsRes.error;
@@ -203,6 +215,7 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
       if (remindersRes.error) throw remindersRes.error;
       if (rentalRes.error) throw rentalRes.error;
       if (tenantRes.error) throw tenantRes.error;
+      if (ledgerRes.error) throw ledgerRes.error;
 
       const accruals = accrualsRes.data || [];
       const paymentsRaw = paymentsRes.data || [];
@@ -299,9 +312,19 @@ export const usePaygInvoices = (rentalId: string | undefined, enabled: boolean) 
           .reduce((s, p) => s + p.amount, 0),
       );
       const refunded = round2(payments.reduce((s, p) => s + p.refundAmount, 0));
-      const balanceDue = round2(
+      // Balance Due = true outstanding from the ledger (sum of remaining_amount on
+      // Charge entries). The ledger is the money truth: it reflects FIFO settlements
+      // and manual adjustments that the accrual rolling-total can drift away from.
+      // Fall back to the open-accrual sum only when there are no ledger rows yet
+      // (e.g. brand-new rental before the first accrual posts a charge).
+      const ledgerRows = ledgerRes.data || [];
+      const ledgerOutstanding = round2(
+        ledgerRows.reduce((s: number, e: any) => s + Number(e.remaining_amount || 0), 0),
+      );
+      const accrualOutstanding = round2(
         invoices.filter((i) => i.status === "open").reduce((s, i) => s + i.dayTotal, 0),
       );
+      const balanceDue = ledgerRows.length > 0 ? ledgerOutstanding : accrualOutstanding;
       const netReceived = round2(collected - refunded);
 
       // Prefer the last accrued daily_rate (what the cron actually billed). If the
