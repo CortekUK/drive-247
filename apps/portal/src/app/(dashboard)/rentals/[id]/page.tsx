@@ -2121,6 +2121,19 @@ const RentalDetail = () => {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* Universal Collect Payment — available on every rental regardless of
+              status (Active, Closed, Completed…) so staff can always send a Stripe
+              pay link / record a payment. Opens the regular AddPaymentDialog. */}
+          {canEdit('rentals') && (
+            <Button
+              variant="default"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              onClick={() => setShowAddPayment(true)}
+            >
+              <CreditCard className="h-4 w-4 mr-2" />
+              Collect Payment
+            </Button>
+          )}
           {/* Pending Rental - Show Approve, Reject, Delete buttons */}
           {canEdit('rentals') && displayStatus === 'Pending' && (
             <>
