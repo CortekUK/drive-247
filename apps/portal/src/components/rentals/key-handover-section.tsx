@@ -198,7 +198,11 @@ export const KeyHandoverSection = ({
 
   const isClosed = rentalStatus === "Closed" || rentalStatus === "Completed";
   const isActive = rentalStatus === "Active";
-  const returnEnabled = isActive || isClosed; // Only allow return when rental is active (or already closed for viewing)
+  const returnEnabled = isActive || isClosed; // Return section available once rental is active, and stays available after it's closed/completed
+  // Key Handover stays editable for the whole lifecycle — including after the rental
+  // is completed/closed — so staff can always document condition. Editing is only
+  // gated by the per-handover confirm lock (givingCompleted/receivingCompleted),
+  // which can always be undone, not by the rental status.
 
   const givingCompleted = !!givingHandover?.handed_at;
   const receivingCompleted = !!receivingHandover?.handed_at;
@@ -539,7 +543,7 @@ export const KeyHandoverSection = ({
               onDelete={(photo) => deletePhoto.mutate(photo)}
               isUploading={isUploading}
               isDeleting={isDeleting}
-              disabled={givingCompleted || isClosed}
+              disabled={givingCompleted}
             />
 
             {/* Mileage Input */}
@@ -561,7 +565,7 @@ export const KeyHandoverSection = ({
                     updateMileage.mutate({ type: "giving", mileage: mileageValue });
                   }
                 }}
-                disabled={givingCompleted || isClosed}
+                disabled={givingCompleted}
                 className="mt-1"
                 min={0}
               />
@@ -582,7 +586,7 @@ export const KeyHandoverSection = ({
                     updateNotes.mutate({ type: "giving", notes: givingNotes });
                   }
                 }}
-                disabled={givingCompleted || isClosed}
+                disabled={givingCompleted}
                 className="mt-1"
                 rows={3}
               />
@@ -646,8 +650,8 @@ export const KeyHandoverSection = ({
               </p>
             )}
 
-            {/* Key Handed Toggle Button — sticky at bottom */}
-            {!isClosed && (
+            {/* Key Handed Toggle Button — sticky at bottom (always available, even after the rental is closed/completed) */}
+            {(
               <div className="sticky bottom-0 pt-3 pb-1 bg-inherit space-y-2 border-t mt-2 -mx-4 px-4">
                 <Button
                   onClick={() => givingCompleted ? setConfirmUndo("giving") : handleRequestHandover("giving")}
@@ -732,7 +736,7 @@ export const KeyHandoverSection = ({
                 onDelete={(photo) => deletePhoto.mutate(photo)}
                 isUploading={isUploading}
                 isDeleting={isDeleting}
-                disabled={receivingCompleted || isClosed}
+                disabled={receivingCompleted}
               />
             )}
 
@@ -756,7 +760,7 @@ export const KeyHandoverSection = ({
                       updateMileage.mutate({ type: "receiving", mileage: mileageValue });
                     }
                   }}
-                  disabled={receivingCompleted || isClosed}
+                  disabled={receivingCompleted}
                   className="mt-1"
                   min={0}
                 />
@@ -782,7 +786,7 @@ export const KeyHandoverSection = ({
                       updateNotes.mutate({ type: "receiving", notes: receivingNotes });
                     }
                   }}
-                  disabled={receivingCompleted || isClosed}
+                  disabled={receivingCompleted}
                   className="mt-1"
                   rows={3}
                 />
@@ -796,8 +800,8 @@ export const KeyHandoverSection = ({
               </p>
             )}
 
-            {/* Key Received Toggle Button — sticky at bottom */}
-            {returnEnabled && givingCompleted && !isClosed && (
+            {/* Key Received Toggle Button — sticky at bottom (always available, even after the rental is closed/completed) */}
+            {returnEnabled && givingCompleted && (
               <div className="sticky bottom-0 pt-3 pb-1 bg-inherit space-y-2 border-t mt-2 -mx-4 px-4">
                 <Button
                   onClick={() => receivingCompleted ? setConfirmUndo("receiving") : handleRequestHandover("receiving")}
