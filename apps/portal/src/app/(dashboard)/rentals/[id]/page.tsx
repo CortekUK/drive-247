@@ -2042,6 +2042,22 @@ const RentalDetail = () => {
                   )}
                 </Badge>
               )}
+              {/* Auto-Extension indicator */}
+              {(rental as any).auto_extend_enabled && (
+                <Badge
+                  variant="outline"
+                  className="bg-violet-500/10 text-violet-600 border-violet-500/30 gap-1"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  Auto-Extension
+                  {(rental as any).auto_extend_status === 'paused' && (
+                    <span className="ml-1 text-xs font-normal text-amber-500">· Paused</span>
+                  )}
+                  {(rental as any).auto_extend_status === 'awaiting_payment' && (
+                    <span className="ml-1 text-xs font-normal text-amber-500">· Awaiting payment</span>
+                  )}
+                </Badge>
+              )}
               {/* Tesla Fleet indicator */}
               {rental.vehicles?.tesla_fleet_enabled && (
                 <Badge

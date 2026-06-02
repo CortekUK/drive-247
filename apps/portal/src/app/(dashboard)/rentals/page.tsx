@@ -473,6 +473,11 @@ const RentalsList = () => {
                                 PAYG
                               </Badge>
                             )}
+                            {(rental as any).auto_extend_enabled && (
+                              <Badge variant="outline" className="text-violet-600 border-violet-300 bg-violet-100 dark:text-violet-400 dark:border-violet-700 dark:bg-violet-950/30 text-[10px]">
+                                Auto-Extend
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>

@@ -45,6 +45,7 @@ export interface EnhancedRental {
   created_at?: string;
   is_extended?: boolean;
   is_pay_as_you_go?: boolean;
+  auto_extend_enabled?: boolean;
   previous_end_date?: string | null;
   cancellation_requested?: boolean;
   bonzah_status?: string | null;
@@ -139,6 +140,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           created_at,
           is_extended,
           is_pay_as_you_go,
+          auto_extend_enabled,
           previous_end_date,
           cancellation_requested,
           customers!rentals_customer_id_fkey(id, name),
@@ -241,6 +243,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             payment_mode: rental.payment_mode,
             is_extended: rental.is_extended,
             is_pay_as_you_go: rental.is_pay_as_you_go,
+            auto_extend_enabled: rental.auto_extend_enabled,
             previous_end_date: rental.previous_end_date,
             cancellation_requested: rental.cancellation_requested,
             bonzah_status: bonzahPolicyMap.get(rental.id) || null,
