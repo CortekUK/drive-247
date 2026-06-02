@@ -4054,6 +4054,50 @@ export type Database = {
           },
         ]
       }
+      expense_categories: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean
+          is_default: boolean
+          name: string
+          pnl_bucket: string
+          sort_order: number
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name: string
+          pnl_bucket?: string
+          sort_order?: number
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name?: string
+          pnl_bucket?: string
+          sort_order?: number
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_categories_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       external_bookings: {
         Row: {
           created_at: string
@@ -13352,42 +13396,57 @@ export type Database = {
       vehicle_expenses: {
         Row: {
           amount: number
-          category: Database["public"]["Enums"]["expense_category"]
+          category: string
           created_at: string | null
           created_by: string | null
           expense_date: string
           id: string
+          is_recurring: boolean
           notes: string | null
+          payment_method: string | null
+          receipt_url: string | null
+          recurrence_interval: string | null
           reference: string | null
           tenant_id: string | null
           updated_at: string | null
-          vehicle_id: string
+          vehicle_id: string | null
+          vendor: string | null
         }
         Insert: {
           amount: number
-          category?: Database["public"]["Enums"]["expense_category"]
+          category?: string
           created_at?: string | null
           created_by?: string | null
           expense_date?: string
           id?: string
+          is_recurring?: boolean
           notes?: string | null
+          payment_method?: string | null
+          receipt_url?: string | null
+          recurrence_interval?: string | null
           reference?: string | null
           tenant_id?: string | null
           updated_at?: string | null
-          vehicle_id: string
+          vehicle_id?: string | null
+          vendor?: string | null
         }
         Update: {
           amount?: number
-          category?: Database["public"]["Enums"]["expense_category"]
+          category?: string
           created_at?: string | null
           created_by?: string | null
           expense_date?: string
           id?: string
+          is_recurring?: boolean
           notes?: string | null
+          payment_method?: string | null
+          receipt_url?: string | null
+          recurrence_interval?: string | null
           reference?: string | null
           tenant_id?: string | null
           updated_at?: string | null
-          vehicle_id?: string
+          vehicle_id?: string | null
+          vendor?: string | null
         }
         Relationships: [
           {

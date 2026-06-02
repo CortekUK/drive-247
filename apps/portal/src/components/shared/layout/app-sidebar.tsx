@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, ShieldX, Bolt, CalendarSync, Search, X, Inbox } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, ShieldX, Bolt, CalendarSync, Search, X, Inbox, Wallet } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -211,6 +211,7 @@ export function AppSidebar() {
         { name: "Payments", href: "/payments", icon: AnimatedCreditCard },
         { name: "Invoices", href: "/invoices", icon: AnimatedReceipt },
         { name: "Fines", href: "/fines", icon: AnimatedBadgeAlert },
+        { name: "Expenses", href: "/expenses", icon: Wallet },
         { name: "Credits", href: "/credits", icon: CircleDollarSign },
       ],
     },
