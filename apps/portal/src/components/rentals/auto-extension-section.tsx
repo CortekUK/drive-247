@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import {
-  RefreshCw, Pause, Play, Zap, Ban, CreditCard, CalendarClock, Check, Clock, AlertTriangle,
+  RefreshCw, Pause, Play, Zap, Ban, CreditCard, CalendarClock, Check, Clock, AlertTriangle, FileText, Mail,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -69,6 +69,10 @@ export function AutoExtensionSection({
       period: `${fmtD(rental.start_date)} → ${fmtD(baseEnd)}`,
       amount: perPeriodRate,
       paid: baseOutstanding <= 0.01,
+      pending: false,
+      isExtension: false,
+      checkoutUrl: null as string | null,
+      reminderSentAt: null as string | null,
     },
     ...exts.map((e: any) => ({
       key: e.id,
@@ -78,6 +82,11 @@ export function AutoExtensionSection({
       amount: Number(e.total_amount) || perPeriodRate,
       paid: e.display_status === "paid",
       pending: e.display_status === "awaiting_payment" || e.display_status === "partial",
+      isExtension: true,
+      // For pay-link auto-extension, the link is emailed when the extension is
+      // created — so a checkout_url means the reminder/pay-link was sent.
+      checkoutUrl: (e.checkout_url as string | null) || null,
+      reminderSentAt: e.checkout_url ? (e.created_at as string | null) : null,
     })),
   ];
 
@@ -132,45 +141,71 @@ export function AutoExtensionSection({
 
         {/* Weekly schedule */}
         <div className="rounded-lg border overflow-hidden">
-          <div className="grid grid-cols-12 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
+          <div className="grid grid-cols-12 px-4 py-2 bg-muted/50 text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
             <div className="col-span-3">Period</div>
-            <div className="col-span-5">Dates</div>
+            <div className="col-span-3">Dates</div>
             <div className="col-span-2 text-right">Amount</div>
-            <div className="col-span-2 text-right">Status</div>
+            <div className="col-span-2">Status</div>
+            <div className="col-span-1">Reminder</div>
+            <div className="col-span-1 text-right">Invoice</div>
           </div>
           {rows.map((r) => (
-            <div key={r.key} className="grid grid-cols-12 px-4 py-2.5 border-t items-center text-sm">
+            <div key={r.key} className="grid grid-cols-12 px-4 py-2.5 border-t items-center text-sm gap-1">
               <div className="col-span-3">
                 <div className="font-medium">{r.label}</div>
                 <div className="text-xs text-muted-foreground">{r.sub}</div>
               </div>
-              <div className="col-span-5 text-muted-foreground">{r.period}</div>
+              <div className="col-span-3 text-muted-foreground text-xs">{r.period}</div>
               <div className="col-span-2 text-right font-medium">{formatCurrency(r.amount, currencyCode)}</div>
-              <div className="col-span-2 flex justify-end">
+              <div className="col-span-2">
                 {r.paid ? (
                   <span className="inline-flex items-center gap-1 text-emerald-600 text-xs font-medium"><Check className="h-3.5 w-3.5" />Paid</span>
-                ) : (r as any).pending ? (
+                ) : r.pending ? (
                   <span className="inline-flex items-center gap-1 text-amber-600 text-xs font-medium"><Clock className="h-3.5 w-3.5" />Awaiting</span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-muted-foreground text-xs font-medium">Not paid</span>
+                  <span className="text-muted-foreground text-xs font-medium">Not paid</span>
+                )}
+              </div>
+              {/* Reminder */}
+              <div className="col-span-1">
+                {!r.isExtension ? (
+                  <span className="text-muted-foreground text-xs">—</span>
+                ) : r.reminderSentAt ? (
+                  <span className="inline-flex items-center gap-1 text-blue-600 text-xs font-medium" title={`Sent ${formatInTimeZone(new Date(r.reminderSentAt), tz, "dd MMM, h:mm a")}`}>
+                    <Mail className="h-3.5 w-3.5" />Sent
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground text-xs">Not sent</span>
+                )}
+              </div>
+              {/* Invoice */}
+              <div className="col-span-1 flex justify-end">
+                {r.checkoutUrl ? (
+                  <a href={r.checkoutUrl} target="_blank" rel="noopener noreferrer" title="Open invoice / pay-link" className="text-muted-foreground hover:text-violet-600">
+                    <FileText className="h-4 w-4" />
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground/40"><FileText className="h-4 w-4" /></span>
                 )}
               </div>
             </div>
           ))}
           {/* Upcoming (not yet created) week */}
           {!isPaused && status !== "ended" && (
-            <div className="grid grid-cols-12 px-4 py-2.5 border-t items-center text-sm bg-violet-500/5">
+            <div className="grid grid-cols-12 px-4 py-2.5 border-t items-center text-sm bg-violet-500/5 gap-1">
               <div className="col-span-3">
                 <div className="font-medium">Week {rows.length + 1}</div>
                 <div className="text-xs text-muted-foreground">Upcoming</div>
               </div>
-              <div className="col-span-5 text-muted-foreground">charges {nextChargeAt}</div>
+              <div className="col-span-3 text-muted-foreground text-xs">charges {nextChargeAt}</div>
               <div className="col-span-2 text-right font-medium">{formatCurrency(perPeriodRate, currencyCode)}</div>
-              <div className="col-span-2 flex justify-end">
+              <div className="col-span-2">
                 <span className="inline-flex items-center gap-1 text-violet-600 text-xs font-medium">
                   {chargeMode === "auto_charge" ? "Auto-charge" : "Pay-link"}
                 </span>
               </div>
+              <div className="col-span-1"><span className="text-muted-foreground text-xs">Pending</span></div>
+              <div className="col-span-1 flex justify-end"><span className="text-muted-foreground/40"><FileText className="h-4 w-4" /></span></div>
             </div>
           )}
         </div>
