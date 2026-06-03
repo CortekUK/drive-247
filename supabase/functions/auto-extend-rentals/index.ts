@@ -19,8 +19,25 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
-import { corsHeaders } from "../_shared/cors.ts";
-import { sendEmail } from "../_shared/resend-service.ts";
+// Vendored inline so the function deploys as a single self-contained file.
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-tenant-slug",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+};
+async function sendEmailInline(to: string, subject: string, html: string, slug: string): Promise<{ success: boolean; error?: string }> {
+  const key = Deno.env.get("RESEND_API_KEY");
+  if (!key) { console.log("[auto-extend] RESEND_API_KEY not set — simulating send"); return { success: true }; }
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: `Drive247 <${slug || "noreply"}@drive-247.com>`, to: [to], subject, html }),
+    });
+    if (!res.ok) return { success: false, error: `Resend ${res.status}` };
+    return { success: true };
+  } catch (e: any) { return { success: false, error: e.message }; }
+}
 
 // ---------------------------------------------------------------------------
 // Stripe context (mirrors send-payg-reminders / place-deposit-hold resolution)
@@ -66,16 +83,17 @@ function deriveBookingOrigin(tenantSlug: string): string {
 // ---------------------------------------------------------------------------
 // Period math + money helpers
 // ---------------------------------------------------------------------------
-function addPeriod(endDate: string, unit: string): { newEndDate: string; days: number } {
-  // endDate is a YYYY-MM-DD DATE. Compute the next period boundary.
+function addPeriod(endDate: string, unit: string, count = 1): { newEndDate: string; days: number } {
+  // endDate is a YYYY-MM-DD DATE. Advance by `count` units (e.g. 2 weeks, 10 days, 3 months).
+  const n = Math.max(1, Math.floor(count || 1));
   const d = new Date(`${endDate}T00:00:00Z`);
   const before = d.getTime();
   if (unit === "Daily") {
-    d.setUTCDate(d.getUTCDate() + 1);
+    d.setUTCDate(d.getUTCDate() + n);
   } else if (unit === "Monthly") {
-    d.setUTCMonth(d.getUTCMonth() + 1);
+    d.setUTCMonth(d.getUTCMonth() + n);
   } else {
-    d.setUTCDate(d.getUTCDate() + 7); // Weekly default
+    d.setUTCDate(d.getUTCDate() + n * 7); // Weekly
   }
   const days = Math.round((d.getTime() - before) / (24 * 60 * 60 * 1000));
   return { newEndDate: d.toISOString().split("T")[0], days };
@@ -132,7 +150,7 @@ Deno.serve(async (req) => {
       .from("rentals")
       .select(`
         id, tenant_id, customer_id, vehicle_id, end_date, monthly_amount,
-        auto_extend_enabled, auto_extend_charge_mode, auto_extend_period_unit,
+        auto_extend_enabled, auto_extend_charge_mode, auto_extend_period_unit, auto_extend_interval_count,
         auto_extend_next_charge_at, auto_extend_lead_hours, auto_extend_charge_count,
         auto_extend_max_periods, auto_extend_failed_attempts, auto_extend_pending_extension_id,
         auto_extend_status, status,
@@ -206,7 +224,7 @@ Deno.serve(async (req) => {
         if (!customer?.email) { skipped++; continue; }
 
         // 1. Next period + breakdown
-        const { newEndDate, days } = addPeriod(r.end_date, r.auto_extend_period_unit || "Weekly");
+        const { newEndDate, days } = addPeriod(r.end_date, r.auto_extend_period_unit || "Weekly", r.auto_extend_interval_count || 1);
         const bd = computeBreakdown(r.monthly_amount, tenant);
         if (bd.total <= 0) { skipped++; continue; }
 
@@ -372,7 +390,7 @@ Deno.serve(async (req) => {
               </p>
               <p style="font-size:12px;color:#64748b;">If you've returned the vehicle, you can ignore this message.</p>
             </div>`;
-          await sendEmail(customer.email, `Renew your rental — ${total} due`, html, supabase, r.tenant_id);
+          await sendEmailInline(customer.email, `Renew your rental — ${total} due`, html, tenant.slug || "noreply");
 
           await supabase.from("rentals").update({
             auto_extend_pending_extension_id: ext.id,

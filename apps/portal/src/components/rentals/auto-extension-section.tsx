@@ -5,8 +5,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatInTimeZone } from "date-fns-tz";
 import {
   RefreshCw, Pause, Play, Zap, Ban, CreditCard, CalendarClock, Clock, AlertTriangle,
-  Send, Eye, History, User, Loader2,
+  Send, Eye, History, User, Loader2, Pencil,
 } from "lucide-react";
+import { CadenceEditorDialog } from "@/components/rentals/cadence-editor-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
@@ -67,6 +68,7 @@ export function AutoExtensionSection({
   const [sending, setSending] = useState(false);
   const [customAmount, setCustomAmount] = useState<string>("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [cadenceOpen, setCadenceOpen] = useState(false);
 
   if (!rental?.auto_extend_enabled) return null;
 
@@ -77,6 +79,17 @@ export function AutoExtensionSection({
   const chargeMode: "pay_link" | "auto_charge" = rental.auto_extend_charge_mode || "pay_link";
   const periodUnit: string = rental.auto_extend_period_unit || "Weekly";
   const periodLabel = periodUnit === "Monthly" ? "month" : periodUnit === "Daily" ? "day" : "week";
+  const intervalCount = Number(rental.auto_extend_interval_count ?? 1);
+  const cadenceText = (periodUnit === "Daily" && intervalCount === 7)
+    ? "Every week"
+    : intervalCount === 1 ? `Every ${periodLabel}` : `Every ${intervalCount} ${periodLabel}s`;
+
+  const saveCadence = async (unit: string, cnt: number) => {
+    await update(
+      { auto_extend_period_unit: unit, auto_extend_interval_count: cnt },
+      `Renewal cadence updated to ${cnt === 1 ? `every ${unit === "Monthly" ? "month" : unit === "Daily" ? "day" : "week"}` : `every ${cnt} ${unit === "Monthly" ? "month" : unit === "Daily" ? "day" : "week"}s`}`,
+    );
+  };
 
   const perPeriodRate = Math.round((Number(rental.monthly_amount) || 0) * (1 + (Number(taxPercent) || 0) / 100) * 100) / 100;
 
@@ -156,10 +169,18 @@ export function AutoExtensionSection({
       <CardContent className="space-y-5">
         {/* Key figures */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Stat icon={<CalendarClock className="h-4 w-4" />} label="Billing period" value={`Every ${periodLabel}`} />
+          <div className="rounded-lg border p-3 relative">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1"><CalendarClock className="h-4 w-4" />Billing period</div>
+            <div className="font-semibold text-sm truncate pr-5">{cadenceText}</div>
+            {canEdit && status !== "ended" && (
+              <button onClick={() => setCadenceOpen(true)} className="absolute top-2.5 right-2.5 text-muted-foreground hover:text-violet-600" title="Edit renewal cadence">
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
           <Stat icon={<CreditCard className="h-4 w-4" />} label={`Per-${periodLabel} rate`} value={formatCurrency(perPeriodRate, currencyCode)} />
-          <Stat icon={<RefreshCw className="h-4 w-4" />} label="Weeks billed" value={String(rental.auto_extend_charge_count ?? exts.length + 1)} />
-          <Stat icon={<Clock className="h-4 w-4" />} label="Next charge" value={isPaused ? "Paused" : nextChargeAt} />
+          <Stat icon={<RefreshCw className="h-4 w-4" />} label="Periods billed" value={String(rental.auto_extend_charge_count ?? exts.length + 1)} />
+          <Stat icon={<Clock className="h-4 w-4" />} label="Next renewal" value={isPaused ? "Paused" : nextChargeAt} />
         </div>
 
         {/* Next renewal (automation only). The per-extension payment breakdown,
@@ -275,6 +296,17 @@ export function AutoExtensionSection({
             </div>
           </div>
         )}
+
+        {/* Renewal cadence editor */}
+        <CadenceEditorDialog
+          open={cadenceOpen}
+          onOpenChange={setCadenceOpen}
+          anchorDate={new Date(rental.auto_extend_next_charge_at || rental.end_date || Date.now())}
+          initialUnit={(periodUnit as any) || "Weekly"}
+          initialCount={intervalCount}
+          rateLabel={`${formatCurrency(perPeriodRate, currencyCode)} / period`}
+          onSave={saveCadence}
+        />
 
         {/* Email preview */}
         <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
