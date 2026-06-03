@@ -325,6 +325,16 @@ export function AutoExtensionSection({
             customerName: customerName || "",
             periodLabel,
           }}
+          occurrenceContext={{
+            baseRate: perPeriodRate,
+            currencyCode,
+            periodUnit: (periodUnit === "Monthly" ? "Monthly" : periodUnit === "Daily" ? "Daily" : "Weekly") as "Daily" | "Weekly" | "Monthly",
+            intervalCount,
+            customerId: rental.customer_id,
+            customerEmail,
+            rental,
+            vehicle: rental.vehicles,
+          }}
           rateLabel={`${formatCurrency(perPeriodRate, currencyCode)} / period`}
           onSave={saveCadence}
         />

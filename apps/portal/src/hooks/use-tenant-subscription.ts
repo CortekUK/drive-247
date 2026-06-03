@@ -175,7 +175,21 @@ export function useTenantSubscription() {
   // Tenant had a subscription that's no longer active (expired trial or canceled)
   const hasExpiredSubscription = !isSubscribed && !!pastSubscriptionQuery.data;
 
-  const isTrialing = subscriptionQuery.data?.status === "trialing";
+  // A trial whose end date has already passed is NOT actively trialing — the
+  // subscription has (or should have) converted to active. Guard against a
+  // stale `status = 'trialing'` row left behind by a missed Stripe webhook so
+  // we never render a nonsensical "Trial · 0 days left". isSubscribed already
+  // covers the "trialing" status, so portal access is preserved regardless.
+  const trialEndMs = subscriptionQuery.data?.trial_end
+    ? new Date(subscriptionQuery.data.trial_end).getTime()
+    : null;
+  const trialExpired =
+    subscriptionQuery.data?.status === "trialing" &&
+    trialEndMs != null &&
+    trialEndMs <= Date.now();
+
+  const isTrialing =
+    subscriptionQuery.data?.status === "trialing" && !trialExpired;
 
   const trialDaysRemaining = (() => {
     if (!isTrialing || !subscriptionQuery.data?.trial_end) return 0;

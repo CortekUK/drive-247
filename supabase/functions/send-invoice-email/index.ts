@@ -215,6 +215,26 @@ serve(async (req) => {
         vehicles: rental.vehicles as InvoiceData["vehicles"],
         rentals: { start_date: rental.start_date, end_date: rental.end_date, monthly_amount: rental.monthly_amount },
       };
+    } else if (externalPaymentUrl && recipientEmail) {
+      // Account-level payment link (no invoice, no rental) — e.g. the customer
+      // "collect then decide" credit flow. Build a minimal invoice-like object
+      // straight from the supplied amount + name + the pre-made Stripe link.
+      console.log(`Sending account-level payment link email to: ${recipientEmail}, tenant: ${tenantId}`);
+      const amt = bodyAmount || overrideAmount || 0;
+      invoice = {
+        id: `account-${Date.now()}`,
+        invoice_number: "PAYMENT",
+        invoice_date: new Date().toISOString(),
+        due_date: null,
+        subtotal: amt,
+        tax_amount: 0,
+        total_amount: amt,
+        notes: null,
+        rental_id: null as unknown as string,
+        customers: { name: bodyCustomerName || "Customer", email: recipientEmail, phone: null } as InvoiceData["customers"],
+        vehicles: null as unknown as InvoiceData["vehicles"],
+        rentals: null as unknown as InvoiceData["rentals"],
+      };
     } else {
       throw new Error("Missing required field: invoiceId or rentalId");
     }

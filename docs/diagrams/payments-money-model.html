@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drive247 — Payments / FIFO Money Model</title>
+<style>
+  :root{
+    --indigo:#6366f1; --indigo-soft:#e0e7ff;
+    --ink:#080812; --body:#404040; --muted:#737373;
+    --green:#16a34a; --green-soft:#dcfce7;
+    --red:#dc2626;   --red-soft:#fee2e2;
+    --amber:#d97706; --amber-soft:#fef9c3;
+    --blue:#2563eb;  --blue-soft:#dbeafe;
+    --line:#e2e8f0; --page:#f8fafc; --card:#ffffff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #eef2ff 0%, transparent 60%),
+      var(--page);
+    color:var(--body); padding:48px 24px; min-height:100vh;
+  }
+  .wrap{max-width:1080px;margin:0 auto}
+  header{margin-bottom:40px}
+  .eyebrow{font-family:Inter,sans-serif;font-size:12px;font-weight:600;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--indigo);margin-bottom:8px}
+  h1{font-size:30px;font-weight:600;color:var(--ink);letter-spacing:-.02em}
+  .sub{font-size:15px;color:var(--muted);margin-top:6px}
+
+  .stage{display:flex;flex-direction:column;align-items:center;gap:0}
+
+  .node{
+    position:relative;background:var(--card);border:1.5px solid var(--line);
+    border-radius:16px;padding:18px 22px;width:340px;
+    box-shadow:0 1px 2px rgba(8,8,18,.04);
+  }
+  .node .tag{font-family:Inter,sans-serif;font-size:10px;font-weight:700;letter-spacing:.08em;
+    text-transform:uppercase;display:inline-block;padding:3px 9px;border-radius:999px;margin-bottom:10px}
+  .node h3{font-size:17px;font-weight:600;color:var(--ink);margin-bottom:4px;display:flex;align-items:center;gap:8px}
+  .node p{font-size:12.5px;color:var(--muted);line-height:1.5}
+  .node code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
+    background:#f1f5f9;padding:1px 6px;border-radius:6px;color:#334155}
+
+  .c-customer{border-color:var(--indigo)}
+  .c-customer .tag{background:var(--indigo-soft);color:var(--indigo)}
+  .c-pay{border-color:var(--green)}
+  .c-pay .tag{background:var(--green-soft);color:var(--green)}
+  .c-inv{border-color:var(--red)}
+  .c-inv .tag{background:var(--red-soft);color:var(--red)}
+  .c-bridge{border-color:var(--amber);background:linear-gradient(180deg,#fffdf5,#fff)}
+  .c-bridge .tag{background:var(--amber-soft);color:var(--amber)}
+  .c-fuel{border-color:var(--blue)}
+  .c-fuel .tag{background:var(--blue-soft);color:var(--blue)}
+  .c-rental{border-color:#cbd5e1;border-style:dashed}
+  .c-rental .tag{background:#f1f5f9;color:var(--muted)}
+
+  .arrow{display:flex;flex-direction:column;align-items:center;color:var(--muted);
+    font-size:11px;font-family:Inter,sans-serif;font-weight:600;letter-spacing:.04em}
+  .arrow .lbl{background:var(--page);padding:0 8px;margin-bottom:-3px;z-index:1}
+  .arrow .line{width:2px;height:26px;background:linear-gradient(var(--line),var(--muted))}
+  .arrow .head{margin-top:-6px;color:var(--muted);font-size:13px}
+  .arrow.dashed .line{background:repeating-linear-gradient(var(--muted) 0 4px,transparent 4px 8px)}
+
+  .row{display:flex;align-items:stretch;gap:0;justify-content:center;width:100%}
+  .branch{display:flex;flex-direction:column;align-items:center}
+
+  .bridge-row{display:flex;align-items:center;gap:18px;margin:10px 0;
+    background:#fffdf5;border:1.5px dashed var(--amber);border-radius:18px;padding:16px 20px}
+  .bridge-row .flow{font-family:Inter,sans-serif;font-size:11px;font-weight:700;color:var(--amber);
+    text-transform:uppercase;letter-spacing:.08em;text-align:center;min-width:84px}
+  .bridge-row .flow span{display:block;font-size:18px;line-height:1}
+
+  .credit{margin-top:8px;border-color:var(--blue);background:var(--blue-soft)}
+  .credit .bugnote{margin-top:10px;font-size:11.5px;color:var(--red);background:#fff;
+    border:1px solid var(--red-soft);border-radius:8px;padding:7px 10px;font-weight:500}
+
+  .legend{margin-top:40px;display:flex;flex-wrap:wrap;gap:14px;justify-content:center;
+    font-size:12px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+  .tldr{margin-top:36px;background:var(--card);border:1.5px solid var(--line);border-radius:16px;
+    padding:20px 24px;font-size:14px;color:var(--body);line-height:1.65}
+  .tldr b{color:var(--ink)}
+  .tldr .chip{font-family:ui-monospace,monospace;font-size:12px;background:#f1f5f9;
+    padding:1px 7px;border-radius:6px;color:#334155}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Drive247 · Database Mental Model</div>
+    <h1>Payments &amp; the FIFO Money Engine</h1>
+    <p class="sub">How money flows from a customer's account, drains against invoices, and turns into credit.</p>
+  </header>
+
+  <div class="stage">
+
+    <!-- CUSTOMER -->
+    <div class="node c-customer">
+      <span class="tag">Top of hierarchy</span>
+      <h3>👤 customer (account)</h3>
+      <p>Money belongs to a customer first — not a rental. <code>customer_id NOT NULL</code> on every payment.</p>
+    </div>
+
+    <div class="arrow"><span class="lbl">owns</span><span class="line"></span><span class="head">▼</span></div>
+
+    <!-- ROW: payments + rentals -->
+    <div class="row" style="gap:48px">
+      <div class="branch">
+        <div class="node c-pay">
+          <span class="tag">Money IN</span>
+          <h3>💵 payments</h3>
+          <p><code>rental_id</code> is <b>nullable</b> — a payment can exist with no rental at all.</p>
+        </div>
+      </div>
+      <div class="branch">
+        <div class="node c-rental">
+          <span class="tag">Optional</span>
+          <h3>📋 rentals</h3>
+          <p>A customer <i>may</i> have rentals. They generate the charges that become invoices.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow"><span class="lbl">drains over time</span><span class="line"></span><span class="head">▼</span></div>
+
+    <!-- FUEL -->
+    <div class="node c-fuel">
+      <span class="tag">The FIFO fuel</span>
+      <h3>⛽ remaining_amount</h3>
+      <p>Starts equal to <code>amount</code>, drops as the payment is applied. Hits <b>0</b> = fully used.</p>
+    </div>
+
+    <!-- BRIDGE -->
+    <div class="bridge-row">
+      <div class="node c-inv" style="width:280px">
+        <span class="tag">Money OWED</span>
+        <h3>🧾 invoices</h3>
+        <p>Charges the rental rang up — what the customer owes.</p>
+      </div>
+      <div class="flow"><span>⇄</span>FIFO<br/>match</div>
+      <div class="node c-bridge" style="width:280px">
+        <span class="tag">The bridge</span>
+        <h3>🌉 payment_applications</h3>
+        <p>Matches owed↔paid in order, draining <code>remaining_amount</code>. <b>The heart of FIFO.</b></p>
+      </div>
+    </div>
+
+    <div class="arrow"><span class="lbl">leftover when &gt; 0</span><span class="line"></span><span class="head">▼</span></div>
+
+    <!-- CREDIT -->
+    <div class="node credit">
+      <span class="tag" style="background:#fff;color:var(--blue)">End state</span>
+      <h3>💳 customer CREDIT balance</h3>
+      <p>Whatever <code>remaining_amount</code> never drained sits as credit on the account.</p>
+      <div class="bugnote">⚠️ Your <b>"Stripe payment strands as Credit"</b> bug lives exactly here — this field not draining correctly.</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i class="dot" style="background:#6366f1"></i>Customer (root)</span>
+    <span><i class="dot" style="background:#16a34a"></i>Money in</span>
+    <span><i class="dot" style="background:#dc2626"></i>Money owed</span>
+    <span><i class="dot" style="background:#d97706"></i>FIFO bridge</span>
+    <span><i class="dot" style="background:#2563eb"></i>Fuel / credit</span>
+    <span><i class="dot" style="background:#cbd5e1"></i>Optional link</span>
+  </div>
+
+  <div class="tldr">
+    <b>The story in one line:</b> money lands on the <span class="chip">customer</span> →
+    sits in <span class="chip">payments</span> with <span class="chip">remaining_amount</span> as fuel →
+    <span class="chip">payment_applications</span> FIFO-matches it against <span class="chip">invoices</span> →
+    whatever doesn't drain becomes <span class="chip">credit</span>.
+  </div>
+</div>
+</body>
+</html>

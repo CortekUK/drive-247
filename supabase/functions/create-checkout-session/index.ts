@@ -17,7 +17,7 @@ serve(async (req) => {
   }
 
   try {
-    const { bookingId, rentalId, customerEmail, customerName, customerId, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId, successUrl, cancelUrl, targetCategories, extensionId, source, paygAccrualId, installmentId, placeDepositHoldAfter } = await req.json()
+    const { bookingId, rentalId, customerEmail, customerName, customerId, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId, successUrl, cancelUrl, targetCategories, extensionId, source, paygAccrualId, installmentId, placeDepositHoldAfter, holdAsCredit } = await req.json()
 
     // Get tenant slug from header or body
     const slug = tenantSlug || req.headers.get('x-tenant-slug')
@@ -257,6 +257,11 @@ serve(async (req) => {
         // same saved card (capture_method='manual'). Stripe metadata values
         // are always strings.
         ...(placeDepositHoldAfter ? { place_deposit_hold: 'true' } : {}),
+        // Account-level "collect then decide" flow: tells the webhook to commit
+        // the captured money as UNALLOCATED account credit (apply-payment with
+        // holdAsCredit) instead of FIFO-ing it onto charges. Carries the
+        // customer id since there's no rental to resolve it from.
+        ...(holdAsCredit ? { hold_as_credit: 'true', customer_id: resolvedCustomerId || customerId || '' } : {}),
       },
     }
 
@@ -370,6 +375,36 @@ serve(async (req) => {
             console.log('✅ Created new payment with session ID:', createdPayment.id, 'session:', session.id)
           }
         }
+      }
+    } else if (holdAsCredit && resolvedCustomerId) {
+      // Account-level collect-then-decide: no rental, so create a customer-level
+      // Pending payment keyed to this session. The webhook finds it by session
+      // id, marks it Completed, then calls apply-payment with holdAsCredit so it
+      // lands as unallocated account credit for the operator to allocate later.
+      const paymentAmount = Math.round(totalAmount * 100) / 100
+      const today = new Date().toISOString().split('T')[0]
+      const { data: createdCredit, error: creditError } = await supabaseClient
+        .from('payments')
+        .insert({
+          customer_id: resolvedCustomerId,
+          tenant_id: tenantId,
+          amount: paymentAmount,
+          payment_date: today,
+          method: 'Card',
+          payment_type: 'Payment',
+          status: 'Pending',
+          remaining_amount: paymentAmount,
+          verification_status: 'pending',
+          stripe_checkout_session_id: session.id,
+          capture_status: 'requires_capture',
+          booking_source: source === 'portal' ? 'admin' : 'website',
+        })
+        .select('id')
+        .single()
+      if (creditError) {
+        console.error('Failed to create customer-level credit payment record:', creditError)
+      } else {
+        console.log('✅ Created customer-level hold-as-credit payment with session ID:', createdCredit.id, 'session:', session.id)
       }
     }
 

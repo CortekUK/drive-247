@@ -308,6 +308,54 @@ async function handleInvoicePaid(supabase: any, invoice: any) {
 
   if (error) console.error("Error upserting invoice:", error);
   console.log(`Invoice ${invoice.id} paid for tenant ${tenant.id} (base: ${baseAmount}, usage: ${usageAmount}, qty: ${usageQuantity})`);
+
+  // Self-heal: a paid recurring invoice (billing_reason "subscription_cycle")
+  // means the subscription is active. If the trialing→active
+  // `customer.subscription.updated` event was missed/dropped by Stripe, the
+  // subscription row would otherwise stay frozen at "trialing" and the portal
+  // would render a nonsensical "Trial · 0 days left". Promoting here closes
+  // that gap. We deliberately only act on "subscription_cycle" so the initial
+  // $1 setup-fee / trial-start invoice ("subscription_create") never triggers
+  // a premature go-live during the trial.
+  if (sub?.id && invoice.billing_reason === "subscription_cycle" && (invoice.amount_paid || 0) > 0) {
+    const { data: currentSub } = await supabase
+      .from("tenant_subscriptions")
+      .select("status")
+      .eq("id", sub.id)
+      .single();
+
+    // Only promote non-terminal states — never resurrect a canceled subscription.
+    if (currentSub && ["trialing", "past_due", "incomplete"].includes(currentSub.status)) {
+      await supabase
+        .from("tenant_subscriptions")
+        .update({
+          status: "active",
+          ...(invoice.period_start ? { current_period_start: new Date(invoice.period_start * 1000).toISOString() } : {}),
+          ...(invoice.period_end ? { current_period_end: new Date(invoice.period_end * 1000).toISOString() } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", sub.id);
+
+      // Auto go-live once (mirrors handleSubscriptionUpdated)
+      const { data: t } = await supabase
+        .from("tenants")
+        .select("setup_completed_at")
+        .eq("id", tenant.id)
+        .single();
+      if (t && !t.setup_completed_at) {
+        await supabase
+          .from("tenants")
+          .update({
+            stripe_mode: "live",
+            bonzah_mode: "live",
+            setup_completed_at: new Date().toISOString(),
+          })
+          .eq("id", tenant.id);
+        console.log(`Auto go-live (via invoice.paid) for tenant ${tenant.id}`);
+      }
+      console.log(`Subscription ${subscriptionId} promoted trialing→active via invoice.paid for tenant ${tenant.id}`);
+    }
+  }
 }
 
 async function handleInvoicePaymentFailed(supabase: any, invoice: any) {

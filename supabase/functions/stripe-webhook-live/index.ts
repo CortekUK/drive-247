@@ -105,6 +105,62 @@ serve(async (req) => {
         const isInvoicePayment = session.metadata?.type === "invoice_payment";
         const invoiceId = session.metadata?.invoice_id;
 
+        // Account-level "collect then decide": commit captured money as
+        // UNALLOCATED account credit (no rental). Runs before the rental-id
+        // skip below because these sessions intentionally have no rental.
+        if (session.metadata?.hold_as_credit === "true") {
+          const creditCustomerId = session.metadata?.customer_id || null;
+          const paidAmount = (session.amount_total || 0) / 100;
+          const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id;
+
+          const { data: existingCredit } = await supabase
+            .from("payments")
+            .select("id")
+            .eq("stripe_checkout_session_id", session.id)
+            .maybeSingle();
+
+          let creditPaymentId: string | null = existingCredit?.id ?? null;
+          if (creditPaymentId) {
+            await supabase.from("payments").update({
+              status: "Completed",
+              capture_status: "captured",
+              verification_status: "auto_approved",
+              paid_at: new Date().toISOString(),
+              stripe_payment_intent_id: paymentIntentId || null,
+            }).eq("id", creditPaymentId);
+          } else if (creditCustomerId) {
+            // Fallback: create-checkout-session didn't pre-create the row.
+            const { data: newCredit } = await supabase.from("payments").insert({
+              customer_id: creditCustomerId,
+              tenant_id: session.metadata?.tenant_id || null,
+              amount: paidAmount,
+              payment_date: new Date().toISOString().split("T")[0],
+              method: "Card",
+              payment_type: "Payment",
+              status: "Completed",
+              remaining_amount: paidAmount,
+              capture_status: "captured",
+              verification_status: "auto_approved",
+              paid_at: new Date().toISOString(),
+              stripe_payment_intent_id: paymentIntentId || null,
+              stripe_checkout_session_id: session.id,
+              booking_source: "admin",
+            }).select("id").single();
+            creditPaymentId = newCredit?.id ?? null;
+          }
+
+          if (creditPaymentId) {
+            const { error: applyError } = await supabase.functions.invoke("apply-payment", {
+              body: { paymentId: creditPaymentId, holdAsCredit: true },
+            });
+            if (applyError) console.error("[LIVE MODE] hold-as-credit apply-payment error:", applyError);
+            else console.log("[LIVE MODE] payment held as account credit:", creditPaymentId);
+          } else {
+            console.warn("[LIVE MODE] hold_as_credit session with no payment row and no customer_id:", session.id);
+          }
+          break;
+        }
+
         if (!rentalId && !isInvoicePayment) {
           console.log("No rental ID in session and not an invoice payment, skipping");
           break;
@@ -490,6 +546,20 @@ serve(async (req) => {
               }
             } catch (applyError) {
               console.error("Error applying extension payment:", applyError);
+            }
+
+            // Roll the rental forward + mark the extension paid (idempotent).
+            // The booking-success page finalizes too, but the webhook is the
+            // authoritative signal — finalize here so auto-extension renewals
+            // sync even if the customer never completes the browser redirect.
+            const extIdMeta = session.metadata?.extension_id;
+            if (extIdMeta) {
+              const { error: finalizeErr } = await supabase.rpc("finalize_rental_extension", {
+                p_extension_id: extIdMeta,
+                p_payment_id: extensionPayment.id,
+              });
+              if (finalizeErr) console.error("[LIVE MODE] finalize_rental_extension error:", finalizeErr);
+              else console.log("Extension finalized via webhook:", extIdMeta);
             }
           } else {
             console.error("No extension payment found for session:", session.id, extPaymentError?.message);

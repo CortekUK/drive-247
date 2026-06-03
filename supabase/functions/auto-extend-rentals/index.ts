@@ -165,7 +165,7 @@ Deno.serve(async (req) => {
         auto_extend_max_periods, auto_extend_failed_attempts, auto_extend_pending_extension_id,
         auto_extend_status, status,
         deposit_hold_stripe_customer_id, deposit_hold_payment_method_id,
-        customers!rentals_customer_id_fkey ( id, name, email ),
+        customers!rentals_customer_id_fkey ( id, name, email, address_state ),
         vehicles ( make, model, reg )
       `)
       .eq("auto_extend_enabled", true)
@@ -235,8 +235,50 @@ Deno.serve(async (req) => {
 
         // 1. Next period + breakdown
         const { newEndDate, days } = addPeriod(r.end_date, r.auto_extend_period_unit || "Weekly", r.auto_extend_interval_count || 1);
-        const bd = computeBreakdown(r.monthly_amount, tenant);
-        if (bd.total <= 0) { skipped++; continue; }
+
+        // Per-occurrence override (keyed by the current renewal date = end_date):
+        // custom price, extras, insurance, and email content for just this renewal.
+        const occ = (r.auto_extend_overrides && r.auto_extend_overrides[r.end_date]) || {};
+
+        // Price: when overridden, the value is tax-inclusive — back out the pre-tax rental.
+        let bd: { rental: number; tax: number; serviceFee: number; total: number };
+        if (occ.priceOverride != null && Number(occ.priceOverride) >= 0) {
+          const taxPct = tenant?.tax_enabled ? Number(tenant?.tax_percentage || 0) : 0;
+          const incl = round2(Number(occ.priceOverride));
+          const rental = taxPct > 0 ? round2(incl / (1 + taxPct / 100)) : incl;
+          bd = { rental, tax: round2(incl - rental), serviceFee: 0, total: incl };
+        } else {
+          bd = computeBreakdown(r.monthly_amount, tenant);
+        }
+
+        // Extras + insurance ride on top of the period price (all tax-inclusive flat amounts).
+        const occExtras: { label: string; amount: number }[] = Array.isArray(occ.extras)
+          ? occ.extras.filter((e: any) => e && Number(e.amount) > 0).map((e: any) => ({ label: String(e.label || "Extra"), amount: round2(Number(e.amount)) }))
+          : [];
+        const extrasTotal = round2(occExtras.reduce((s, e) => s + e.amount, 0));
+
+        // Insurance: the operator pre-selected which Bonzah coverage to buy; price it
+        // NOW (at creation) for this period's trip dates, then bill it on this renewal.
+        const cov = (occ.buyInsurance && occ.insuranceCoverage) ? occ.insuranceCoverage : null;
+        let insurancePremium = 0;
+        if (cov && (cov.cdw || cov.rcli || cov.sli || cov.pai)) {
+          try {
+            const { data: prem } = await supabase.functions.invoke("bonzah-calculate-premium", {
+              body: {
+                trip_start_date: r.end_date,
+                trip_end_date: newEndDate,
+                pickup_state: customer?.address_state || "FL",
+                cdw_cover: !!cov.cdw, rcli_cover: !!cov.rcli, sli_cover: !!cov.sli, pai_cover: !!cov.pai,
+              },
+            });
+            insurancePremium = round2(Number(prem?.total_premium) || 0);
+          } catch (premErr: any) {
+            console.error(`[auto-extend] bonzah premium failed ${r.id}: ${premErr?.message}`);
+            insurancePremium = 0;
+          }
+        }
+        const chargeTotal = round2(bd.total + extrasTotal + insurancePremium);
+        if (chargeTotal <= 0) { skipped++; continue; }
 
         // 2. rental_extensions row (next sequence number)
         const { data: maxRow } = await supabase
@@ -249,7 +291,7 @@ Deno.serve(async (req) => {
           .insert({
             rental_id: r.id, tenant_id: r.tenant_id, sequence_number: seq, status: "approved",
             previous_end_date: r.end_date, new_end_date: newEndDate, extension_days: days,
-            rental_amount: bd.rental, tax_amount: bd.tax, service_fee_amount: bd.serviceFee, insurance_amount: 0,
+            rental_amount: bd.rental, tax_amount: bd.tax, service_fee_amount: bd.serviceFee, insurance_amount: insurancePremium,
             requested_at: nowIso, approved_at: nowIso,
           })
           .select("id").single();
@@ -266,6 +308,8 @@ Deno.serve(async (req) => {
         ];
         if (bd.tax > 0) ledgerRows.push({ ...baseLedger, category: "Extension Tax", reference: `Auto-extend #${seq}: Tax`, amount: bd.tax, remaining_amount: bd.tax });
         if (bd.serviceFee > 0) ledgerRows.push({ ...baseLedger, category: "Extension Service Fee", reference: `Auto-extend #${seq}: Service Fee`, amount: bd.serviceFee, remaining_amount: bd.serviceFee });
+        for (const ex of occExtras) ledgerRows.push({ ...baseLedger, category: "Extension Add-on", reference: `Auto-extend #${seq}: ${ex.label}`, amount: ex.amount, remaining_amount: ex.amount });
+        if (insurancePremium > 0) ledgerRows.push({ ...baseLedger, category: "Extension Insurance", reference: `Auto-extend #${seq}: Insurance`, amount: insurancePremium, remaining_amount: insurancePremium });
         const { error: ledgerErr } = await supabase.from("ledger_entries").insert(ledgerRows);
         if (ledgerErr) throw ledgerErr;
 
@@ -281,7 +325,7 @@ Deno.serve(async (req) => {
         if (mode === "auto_charge" && hasSavedCard && ctx) {
           try {
             const pi = await ctx.stripe.paymentIntents.create({
-              amount: Math.round(bd.total * 100),
+              amount: Math.round(chargeTotal * 100),
               currency: ctx.currencyCode.toLowerCase(),
               customer: r.deposit_hold_stripe_customer_id,
               payment_method: r.deposit_hold_payment_method_id,
@@ -296,11 +340,11 @@ Deno.serve(async (req) => {
             const { data: pay, error: payErr } = await supabase
               .from("payments").insert({
                 rental_id: r.id, customer_id: r.customer_id, vehicle_id: r.vehicle_id, tenant_id: r.tenant_id,
-                extension_id: ext.id, amount: bd.total, remaining_amount: bd.total,
+                extension_id: ext.id, amount: chargeTotal, remaining_amount: chargeTotal,
                 payment_date: today, method: "Card", payment_type: "Payment",
                 status: "Completed", verification_status: "approved", capture_status: "captured",
                 stripe_payment_intent_id: pi.id, booking_source: "auto_extend",
-                target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"],
+                target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"],
                 created_at: nowIso, updated_at: nowIso,
               }).select("id").single();
             if (payErr) throw payErr;
@@ -318,7 +362,7 @@ Deno.serve(async (req) => {
               updated_at: nowIso,
             }).eq("id", r.id);
             renewed++;
-            console.log(`[auto-extend] renewed ${r.id} ext#${seq} ${fmtCurrency(bd.total, ctx.currencyCode)}`);
+            console.log(`[auto-extend] renewed ${r.id} ext#${seq} ${fmtCurrency(chargeTotal, ctx.currencyCode)}`);
             continue;
           } catch (chargeErr: any) {
             // Decline / network. Roll back the unpaid extension + its charges so we retry cleanly.
@@ -356,7 +400,7 @@ Deno.serve(async (req) => {
               price_data: {
                 currency: ctx.currencyCode.toLowerCase(),
                 product_data: { name: "Rental Renewal", description: `Renew ${r.end_date} → ${newEndDate}` },
-                unit_amount: Math.round(bd.total * 100),
+                unit_amount: Math.round(chargeTotal * 100),
               },
               quantity: 1,
             }],
@@ -370,7 +414,7 @@ Deno.serve(async (req) => {
               type: "extension", extension_id: ext.id, rental_id: r.id, customer_id: r.customer_id,
               tenant_id: r.tenant_id, extension_days: String(days), new_end_date: newEndDate,
               previous_end_date: r.end_date, source: "auto_extend",
-              target_categories: JSON.stringify(["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"]),
+              target_categories: JSON.stringify(["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"]),
             },
           }, ctx.options);
 
@@ -380,24 +424,33 @@ Deno.serve(async (req) => {
 
           await supabase.from("payments").insert({
             rental_id: r.id, customer_id: r.customer_id, vehicle_id: r.vehicle_id, tenant_id: r.tenant_id,
-            extension_id: ext.id, amount: bd.total, remaining_amount: bd.total,
+            extension_id: ext.id, amount: chargeTotal, remaining_amount: chargeTotal,
             payment_date: today, method: "Card", payment_type: "Payment",
             status: "Pending", verification_status: "pending", capture_status: "requires_capture",
             stripe_checkout_session_id: session.id, booking_source: "auto_extend",
-            target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"],
+            target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"],
             created_at: nowIso, updated_at: nowIso,
           });
 
-          const total = fmtCurrency(bd.total, ctx.currencyCode);
+          const total = fmtCurrency(chargeTotal, ctx.currencyCode);
           const vehicle = r.vehicles ? `${r.vehicles.make ?? ""} ${r.vehicles.model ?? ""}`.trim() : "your vehicle";
-          // Per-occurrence override (keyed by the current renewal date = end_date):
-          // send/skip the email and use custom subject/body if the operator set them.
-          const occ = (r.auto_extend_overrides && r.auto_extend_overrides[r.end_date]) || {};
+          // Per-occurrence override email (subject/body) was resolved above as `occ`.
           if (occ.sendEmail !== false) {
             const bodyHtml = occ.emailBody
               ? String(occ.emailBody).split("\n").map((p: string) => `<p>${p}</p>`).join("")
               : `<p>Hi ${customer.name || "there"},</p><p>Your rental of <strong>${vehicle}</strong> with <strong>${tenant.company_name || "us"}</strong> is due to renew for another period (<strong>${r.end_date} → ${newEndDate}</strong>).</p><p>Please pay <strong>${total}</strong> upfront to continue:</p>`;
-            const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#374151;">${bodyHtml}<p style="text-align:center;margin:24px 0;"><a href="${session.url}" style="display:inline-block;background:#0f172a;color:#fff;padding:14px 28px;border-radius:8px;font-weight:600;text-decoration:none;">Pay ${total} & Renew</a></p><p style="font-size:12px;color:#64748b;">If you've returned the vehicle, you can ignore this message.</p></div>`;
+            // Itemised breakdown when extras / insurance ride on this renewal.
+            const breakdownRows: string[] = [];
+            if (occExtras.length > 0 || insurancePremium > 0) {
+              breakdownRows.push(`<tr><td style="padding:4px 0;">Period</td><td style="padding:4px 0;text-align:right;">${fmtCurrency(bd.total, ctx.currencyCode)}</td></tr>`);
+              for (const ex of occExtras) breakdownRows.push(`<tr><td style="padding:4px 0;color:#64748b;">${ex.label}</td><td style="padding:4px 0;text-align:right;color:#64748b;">${fmtCurrency(ex.amount, ctx.currencyCode)}</td></tr>`);
+              if (insurancePremium > 0) breakdownRows.push(`<tr><td style="padding:4px 0;color:#64748b;">Insurance</td><td style="padding:4px 0;text-align:right;color:#64748b;">${fmtCurrency(insurancePremium, ctx.currencyCode)}</td></tr>`);
+              breakdownRows.push(`<tr><td style="padding:6px 0;border-top:1px solid #e2e8f0;font-weight:600;">Total</td><td style="padding:6px 0;border-top:1px solid #e2e8f0;text-align:right;font-weight:600;">${total}</td></tr>`);
+            }
+            const breakdownHtml = breakdownRows.length
+              ? `<table style="width:100%;border-collapse:collapse;font-size:14px;margin:16px 0;">${breakdownRows.join("")}</table>`
+              : "";
+            const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#374151;">${bodyHtml}${breakdownHtml}<p style="text-align:center;margin:24px 0;"><a href="${session.url}" style="display:inline-block;background:#0f172a;color:#fff;padding:14px 28px;border-radius:8px;font-weight:600;text-decoration:none;">Pay ${total} & Renew</a></p><p style="font-size:12px;color:#64748b;">If you've returned the vehicle, you can ignore this message.</p></div>`;
             await sendEmailInline(customer.email, occ.emailSubject || `Renew your rental — ${total} due`, html, tenant.slug || "noreply");
           }
 

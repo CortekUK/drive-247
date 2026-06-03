@@ -64,7 +64,8 @@
       "mcp__supabase__execute_sql",
       "Bash(fuser -k 3001/tcp)",
       "Bash(npx eslint *)",
-      "Bash(npx supabase functions deploy:*)"
+      "Bash(npx supabase functions deploy:*)",
+      "mcp__0af8510d-dbbd-4419-95b8-e7a1643cdd5e__generate_diagram"
     ],
     "deny": [],
     "ask": []

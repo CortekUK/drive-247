@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { OccurrenceConfigDialog, type OccurrenceOverride } from "@/components/rentals/occurrence-config-dialog";
+import { OccurrenceConfigDialog, type OccurrenceOverride, type OccurrenceContext } from "@/components/rentals/occurrence-config-dialog";
 import { cn } from "@/lib/utils";
 
 // Small helper: an info tooltip with a worked example, used to teach each control.
@@ -37,6 +37,8 @@ interface CadenceEditorDialogProps {
   rateLabel?: string;
   // Defaults for the per-occurrence config dialog (email template, names, etc.).
   occurrenceDefaults?: { emailSubject: string; emailBody: string; rateLabel: string; companyName: string; customerName: string; periodLabel: string };
+  // Context for price/extras/insurance/agreement inside the per-occurrence dialog.
+  occurrenceContext?: OccurrenceContext;
   onSave: (data: { unit: Unit; count: number; anchorYmd: string; exceptions: ScheduleExceptions; overrides: Record<string, OccurrenceOverride> }) => Promise<void> | void;
 }
 
@@ -124,7 +126,7 @@ function MonthGrid({ year, month, active, skipped, movedFrom, nextKey, todayKey,
   );
 }
 
-export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUnit, initialCount, initialExceptions, initialOverrides, occurrenceDefaults, rateLabel, onSave }: CadenceEditorDialogProps) {
+export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUnit, initialCount, initialExceptions, initialOverrides, occurrenceDefaults, occurrenceContext, rateLabel, onSave }: CadenceEditorDialogProps) {
   const [unit, setUnit] = useState<Unit>(initialUnit);
   const [count, setCount] = useState<number>(initialCount);
   const [anchor, setAnchor] = useState<Date>(anchorDate);
@@ -288,6 +290,7 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
               exceptionType={exType}
               override={origKey ? (overrides[origKey] ?? {}) : {}}
               defaults={occurrenceDefaults ?? { emailSubject: "Renew your rental", emailBody: "Your rental is due to renew. Please pay to continue.", rateLabel: rateLabel ?? "", companyName: "us", customerName: "", periodLabel: "period" }}
+              ctx={occurrenceContext ?? { baseRate: 0, currencyCode: "USD", periodUnit: unit, intervalCount: Math.max(1, count || 1) }}
               onSkip={() => origKey && skipDate(origKey)}
               onMove={() => { if (origKey) { setMovingFrom(origKey); setConfigDate(null); } }}
               onMakeNext={() => configDate && setAsNext(configDate)}

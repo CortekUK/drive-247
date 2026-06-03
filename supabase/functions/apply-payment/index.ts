@@ -19,7 +19,7 @@ interface PaymentProcessingResult {
   status?: string;
 }
 
-async function applyPayment(supabase: any, paymentId: string, targetCategories?: string[]): Promise<PaymentProcessingResult> {
+async function applyPayment(supabase: any, paymentId: string, targetCategories?: string[], holdAsCredit?: boolean): Promise<PaymentProcessingResult> {
   try {
     console.log('Processing payment:', paymentId);
 
@@ -198,6 +198,43 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           detail: `${ledgerError.code}: ${ledgerError.message}`
         };
       }
+    }
+
+    // HOLD-AS-CREDIT (collect-then-allocate). When the operator collects money
+    // into the customer's account to decide allocation LATER, we create the
+    // ledger Payment entry above (so the credit is real and auditable) but skip
+    // FIFO allocation entirely. The money sits as available credit
+    // (payments.remaining_amount = full, status='Credit'); useCustomerBalanceWithStatus
+    // subtracts it so the customer shows "In Credit". A later apply-payment call
+    // (without holdAsCredit, optionally with a rental_id/targetCategories) resumes
+    // allocation via the duplicate-ledger re-entry path above.
+    //
+    // Idempotency guard: only honour holdAsCredit when NOTHING has been allocated
+    // yet. If applications already exist (accidental re-call), fall through to
+    // normal allocation so we never reset remaining_amount and desync the ledger.
+    if (holdAsCredit) {
+      const { data: priorApps } = await supabase
+        .from('payment_applications')
+        .select('id')
+        .eq('payment_id', paymentId)
+        .limit(1);
+      if (!priorApps || priorApps.length === 0) {
+        await supabase
+          .from('payments')
+          .update({ status: 'Credit', remaining_amount: payment.amount })
+          .eq('id', paymentId);
+        console.log(`Payment ${paymentId} held as unallocated account credit (${formatCurrency(payment.amount, currencyCode)}).`);
+        return {
+          ok: true,
+          paymentId,
+          category: ledgerCategory,
+          entryDate,
+          allocated: 0,
+          remaining: payment.amount,
+          status: 'Credit',
+        };
+      }
+      console.log(`Payment ${paymentId} has prior applications — ignoring holdAsCredit and continuing allocation.`);
     }
 
     // Handle InitialFee payments - allocate to fee charges first, then rental
@@ -834,7 +871,7 @@ serve(async (req) => {
       });
     }
     
-    const { paymentId, targetCategories } = body;
+    const { paymentId, targetCategories, holdAsCredit } = body;
 
     if (!paymentId) {
       return new Response(JSON.stringify({
@@ -847,11 +884,21 @@ serve(async (req) => {
     }
 
     // Apply payment using targeted category allocation (auto-derives from rental charges if not specified)
-    const result = await applyPayment(supabase, paymentId, targetCategories);
+    const result = await applyPayment(supabase, paymentId, targetCategories, holdAsCredit);
 
     if (!result.ok) {
       return new Response(JSON.stringify(result), {
         status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Held-as-credit collections are intentionally unallocated — skip the
+    // installment self-heal so we don't settle a slot with money the operator
+    // hasn't decided how to apply yet.
+    if (holdAsCredit && result.status === 'Credit') {
+      return new Response(JSON.stringify(result), {
+        status: 201,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

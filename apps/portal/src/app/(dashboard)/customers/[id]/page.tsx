@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users, ShieldCheck, Briefcase, ExternalLink, ImageIcon, Loader2, Pencil, Check, X, RefreshCw, Shield } from "lucide-react";
+import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users, ShieldCheck, Briefcase, ExternalLink, ImageIcon, Loader2, Pencil, Check, X, RefreshCw, Shield, Scale } from "lucide-react";
 import { MetricItem, MetricDivider } from "@/components/vehicles/metric-card";
 import { useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
 import { TruncatedCell } from "@/components/shared/data-display/truncated-cell";
@@ -30,6 +30,9 @@ import { useCustomerFines, useCustomerFineStats } from "@/hooks/use-customer-fin
 import { useCustomerVehicleHistory } from "@/hooks/use-customer-vehicle-history";
 import AddCustomerDocumentDialog from "@/components/customers/add-customer-document-dialog";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
+import { EditBalanceDialog } from "@/components/customers/edit-balance-dialog";
+import { CollectPaymentDialog } from "@/components/customers/collect-payment-dialog";
+import { AllocatePaymentDialog } from "@/components/customers/allocate-payment-dialog";
 import { AddFineDialog } from "@/components/fines/add-fine-dialog";
 import { CustomerFormModal } from "@/components/customers/customer-form-modal";
 import DocumentStatusBadge from "@/components/customers/document-status-badge";
@@ -92,6 +95,9 @@ const CustomerDetail = () => {
   const [documentDialogOpen, setDocumentDialogOpen] = useState(false);
   const [editingDocumentId, setEditingDocumentId] = useState<string | undefined>();
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [collectDialogOpen, setCollectDialogOpen] = useState(false);
+  const [editBalanceOpen, setEditBalanceOpen] = useState(false);
+  const [allocatePayment, setAllocatePayment] = useState<{ id: string; amount: number; remaining_amount: number } | null>(null);
   const [fineDialogOpen, setFineDialogOpen] = useState(false);
   const [editCustomerOpen, setEditCustomerOpen] = useState(false);
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
@@ -435,9 +441,13 @@ const CustomerDetail = () => {
                   <Plus className="h-4 w-4 mr-1" />
                   Add Rental
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setPaymentDialogOpen(true)}>
+                <Button size="sm" variant="outline" onClick={() => setCollectDialogOpen(true)}>
                   <DollarSign className="h-4 w-4 mr-1" />
-                  Payment
+                  Collect Payment
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setEditBalanceOpen(true)}>
+                  <Scale className="h-4 w-4 mr-1" />
+                  Edit Balance
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => setFineDialogOpen(true)}>
                   <AlertTriangle className="h-4 w-4 mr-1" />
@@ -1047,6 +1057,7 @@ const CustomerDetail = () => {
                         <TableHead className="font-semibold">Status</TableHead>
                         <TableHead className="font-semibold text-right">Remaining</TableHead>
                         <TableHead className="font-semibold text-center">Stripe</TableHead>
+                        <TableHead className="font-semibold text-right">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1098,6 +1109,19 @@ const CustomerDetail = () => {
                               >
                                 <ExternalLink className="h-3.5 w-3.5" />
                               </a>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {payment.remaining_amount > 0.005 ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setAllocatePayment({ id: payment.id, amount: payment.amount, remaining_amount: payment.remaining_amount })}
+                              >
+                                Allocate
+                              </Button>
                             ) : (
                               <span className="text-muted-foreground text-xs">—</span>
                             )}
@@ -1615,6 +1639,28 @@ const CustomerDetail = () => {
         open={paymentDialogOpen}
         onOpenChange={setPaymentDialogOpen}
         customer_id={id}
+      />
+
+      <CollectPaymentDialog
+        open={collectDialogOpen}
+        onOpenChange={setCollectDialogOpen}
+        customerId={id!}
+      />
+
+      <EditBalanceDialog
+        open={editBalanceOpen}
+        onOpenChange={setEditBalanceOpen}
+        customerId={id!}
+        customerName={customer.name}
+        currentOutstanding={customerBalanceData?.outstandingDebt ?? 0}
+        currentCredit={customerBalanceData?.availableCredit ?? 0}
+      />
+
+      <AllocatePaymentDialog
+        open={!!allocatePayment}
+        onOpenChange={(v) => { if (!v) setAllocatePayment(null); }}
+        payment={allocatePayment}
+        customerId={id!}
       />
 
       <AddFineDialog

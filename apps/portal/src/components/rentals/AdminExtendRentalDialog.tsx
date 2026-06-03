@@ -236,6 +236,42 @@ export function AdminExtendRentalDialog({
   })();
   const insurancePremium = extensionInsuranceType === 'bonzah' ? bonzahPremiumAmount : 0;
 
+  // Resolve the pickup state + renter details for the Bonzah extension quote.
+  // Prefer the original policy (it carries the exact snapshot used at booking),
+  // but fall back to the customer record so extensions can still attach Bonzah
+  // when the base rental had NO Bonzah policy (e.g. the customer brought their
+  // own insurance originally, or the booking-time policy was never linked).
+  const bonzahPickupState =
+    (originalPolicy?.pickup_state as string) || (fullCustomer as any)?.address_state || 'FL';
+
+  // Build a RenterDetails object (the shape bonzah-create-quote expects) from
+  // the customer row, mirroring the new-rental flow. Returns null if we have no
+  // customer to build from.
+  const buildRenterFromCustomer = () => {
+    const c = fullCustomer as any;
+    if (!c) return null;
+    const parts = String(c.name || '').trim().split(/\s+/);
+    const firstName = parts[0] || c.name || '';
+    const lastName = parts.slice(1).join(' ') || firstName;
+    return {
+      first_name: firstName,
+      last_name: lastName,
+      dob: c.date_of_birth || '',
+      email: c.email || '',
+      phone: c.phone || '',
+      address: {
+        street: c.address_street || '',
+        city: c.address_city || '',
+        state: c.address_state || bonzahPickupState,
+        zip: c.address_zip || '',
+      },
+      license: {
+        number: c.license_number || '',
+        state: c.license_state || c.address_state || bonzahPickupState,
+      },
+    };
+  };
+
   // Fetch vehicle mileage data for mileage impact display
   const vehicleId = rental.vehicles?.id || rental.vehicle_id;
   const { data: vehicleMileage } = useQuery({
@@ -592,8 +628,13 @@ export function AdminExtendRentalDialog({
       }
 
       setSubmissionStep('Finalising...');
-      // 8. Auto-create extension insurance (fire-and-forget) — only if Bonzah selected with coverage
-      if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && originalPolicy) {
+      // 8. Auto-create extension insurance (fire-and-forget) — runs whenever
+      //    Bonzah is selected with coverage. Renter details come from the
+      //    original policy when present, otherwise we rebuild them from the
+      //    customer record so extensions work even when the base rental had no
+      //    Bonzah policy. We require at least one source of renter details.
+      const renterForQuote = (originalPolicy?.renter_details as any) || buildRenterFromCustomer();
+      if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && renterForQuote) {
         try {
           // Create extension quote with the user-selected coverage
           const { data: quoteResult } = await supabase.functions.invoke('bonzah-create-quote', {
@@ -605,9 +646,9 @@ export function AdminExtendRentalDialog({
                 start: extensionStartForInsurance,
                 end: newEndDate.split('T')[0],
               },
-              pickup_state: originalPolicy.pickup_state,
+              pickup_state: bonzahPickupState,
               coverage: extensionCoverage,
-              renter: originalPolicy.renter_details,
+              renter: renterForQuote,
               policy_type: 'extension',
               extension_id: createdExtensionId ?? undefined,
             },
@@ -1046,30 +1087,31 @@ export function AdminExtendRentalDialog({
                       )}
                     </label>
 
-                    {/* Bonzah Coverage Selector */}
+                    {/* Bonzah Coverage Selector — rendered whenever Bonzah is
+                        chosen, even when the base rental had no original policy.
+                        The selector collects renter details itself when missing. */}
                     {extensionInsuranceType === 'bonzah' && (
-                      <div className="pl-2">
-                        {originalPolicy ? (
-                          <BonzahInsuranceSelector
-                            tripStartDate={extensionStartForInsurance}
-                            tripEndDate={newEndDate || null}
-                            pickupState={(originalPolicy.pickup_state as string) || 'FL'}
-                            onCoverageChange={(coverage, premium) => {
-                              setExtensionCoverage(coverage);
-                              setBonzahPremiumAmount(premium);
-                            }}
-                            onSkipInsurance={() => {
-                              setExtensionCoverage({ cdw: false, rcli: false, sli: false, pai: false });
-                              setBonzahPremiumAmount(0);
-                            }}
-                            initialCoverage={extensionCoverage}
-                            customerDetails={fullCustomer || undefined}
-                          />
-                        ) : (
-                          <p className="text-xs text-muted-foreground p-3 border rounded-lg bg-muted/20">
-                            No original Bonzah policy found. You can add insurance from the rental page after extending.
+                      <div className="pl-2 space-y-2">
+                        {!originalPolicy && (
+                          <p className="text-xs text-muted-foreground p-2.5 border rounded-lg bg-muted/20">
+                            This rental had no Bonzah policy at booking — choose coverage below to add it for the extension.
                           </p>
                         )}
+                        <BonzahInsuranceSelector
+                          tripStartDate={extensionStartForInsurance}
+                          tripEndDate={newEndDate || null}
+                          pickupState={bonzahPickupState}
+                          onCoverageChange={(coverage, premium) => {
+                            setExtensionCoverage(coverage);
+                            setBonzahPremiumAmount(premium);
+                          }}
+                          onSkipInsurance={() => {
+                            setExtensionCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+                            setBonzahPremiumAmount(0);
+                          }}
+                          initialCoverage={extensionCoverage}
+                          customerDetails={fullCustomer || undefined}
+                        />
                       </div>
                     )}
 
