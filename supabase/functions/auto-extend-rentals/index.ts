@@ -99,6 +99,16 @@ function addPeriod(endDate: string, unit: string, count = 1): { newEndDate: stri
   return { newEndDate: d.toISOString().split("T")[0], days };
 }
 
+// Apply per-occurrence schedule exceptions to the next renewal's grid date:
+// skip past skipped dates (advancing one period each time), then relocate if moved.
+function applyExceptions(gridYmd: string, unit: string, count: number, ex: any): string {
+  let g = gridYmd, guard = 0;
+  const skips: string[] = Array.isArray(ex?.skips) ? ex.skips : [];
+  const moves: Record<string, string> = (ex && typeof ex.moves === "object") ? ex.moves : {};
+  while (skips.includes(g) && guard < 500) { g = addPeriod(g, unit, count).newEndDate; guard++; }
+  return moves[g] || g;
+}
+
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
@@ -150,7 +160,7 @@ Deno.serve(async (req) => {
       .from("rentals")
       .select(`
         id, tenant_id, customer_id, vehicle_id, end_date, monthly_amount,
-        auto_extend_enabled, auto_extend_charge_mode, auto_extend_period_unit, auto_extend_interval_count,
+        auto_extend_enabled, auto_extend_charge_mode, auto_extend_period_unit, auto_extend_interval_count, auto_extend_exceptions,
         auto_extend_next_charge_at, auto_extend_lead_hours, auto_extend_charge_count,
         auto_extend_max_periods, auto_extend_failed_attempts, auto_extend_pending_extension_id,
         auto_extend_status, status,
@@ -260,7 +270,9 @@ Deno.serve(async (req) => {
         if (ledgerErr) throw ledgerErr;
 
         const ctx = await getStripeContext(supabase, tenant);
-        const nextChargeAt = new Date(`${newEndDate}T00:00:00Z`);
+        // Next renewal grid date is newEndDate; apply skip/move exceptions to it.
+        const nextGrid = applyExceptions(newEndDate, r.auto_extend_period_unit || "Weekly", r.auto_extend_interval_count || 1, r.auto_extend_exceptions);
+        const nextChargeAt = new Date(`${nextGrid}T00:00:00Z`);
         nextChargeAt.setUTCHours(nextChargeAt.getUTCHours() - (Number(r.auto_extend_lead_hours) || 0));
         const hasSavedCard = !!(r.deposit_hold_stripe_customer_id && r.deposit_hold_payment_method_id);
         const mode = r.auto_extend_charge_mode || "pay_link";

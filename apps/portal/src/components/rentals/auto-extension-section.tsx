@@ -84,10 +84,20 @@ export function AutoExtensionSection({
     ? "Every week"
     : intervalCount === 1 ? `Every ${periodLabel}` : `Every ${intervalCount} ${periodLabel}s`;
 
-  const saveCadence = async (unit: string, cnt: number) => {
+  const saveCadence = async (data: { unit: string; count: number; anchorYmd: string; exceptions: any }) => {
+    // Keep the original time-of-day; only change the calendar date to the picked anchor.
+    const orig = new Date(rental.auto_extend_next_charge_at || rental.end_date || Date.now());
+    const [y, m, d] = data.anchorYmd.split("-").map(Number);
+    const next = new Date(orig);
+    next.setFullYear(y, m - 1, d);
     await update(
-      { auto_extend_period_unit: unit, auto_extend_interval_count: cnt },
-      `Renewal cadence updated to ${cnt === 1 ? `every ${unit === "Monthly" ? "month" : unit === "Daily" ? "day" : "week"}` : `every ${cnt} ${unit === "Monthly" ? "month" : unit === "Daily" ? "day" : "week"}s`}`,
+      {
+        auto_extend_period_unit: data.unit,
+        auto_extend_interval_count: data.count,
+        auto_extend_next_charge_at: next.toISOString(),
+        auto_extend_exceptions: data.exceptions,
+      },
+      "Renewal schedule updated",
     );
   };
 
@@ -304,6 +314,7 @@ export function AutoExtensionSection({
           anchorDate={new Date(rental.auto_extend_next_charge_at || rental.end_date || Date.now())}
           initialUnit={(periodUnit as any) || "Weekly"}
           initialCount={intervalCount}
+          initialExceptions={(rental.auto_extend_exceptions as any) || { skips: [], moves: {} }}
           rateLabel={`${formatCurrency(perPeriodRate, currencyCode)} / period`}
           onSave={saveCadence}
         />
