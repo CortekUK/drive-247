@@ -67,10 +67,10 @@ function MonthGrid({ year, month, highlights, todayKey }: { year: number; month:
   return (
     <div className="flex-1 min-w-[280px]">
       <div className="text-sm font-semibold text-center mb-2">{format(first, "MMMM yyyy")}</div>
-      <div className="grid grid-cols-7 gap-1 mb-1 text-[10px] text-muted-foreground text-center">
+      <div className="grid grid-cols-7 gap-2 mb-2 text-[10px] text-muted-foreground text-center">
         {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <div key={i}>{d}</div>)}
       </div>
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-2">
         {cells.map((d, i) => {
           if (d === null) return <div key={i} />;
           const k = `${year}-${month}-${d}`;
