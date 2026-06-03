@@ -2652,6 +2652,8 @@ const RentalDetail = () => {
             .reduce((s, [, a]) => s + (Number(a) || 0), 0)}
           canEdit={canEdit('rentals')}
           timezone={tenant?.timezone || 'America/New_York'}
+          customerEmail={rental.customers?.email}
+          customerName={rental.customers?.name}
         />
       )}
 

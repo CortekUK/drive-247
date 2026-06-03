@@ -1,18 +1,25 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import {
   RefreshCw, Pause, Play, Zap, Ban, CreditCard, CalendarClock, Check, Clock, AlertTriangle, FileText, Mail,
+  Send, Eye, History, User, Loader2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
+import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/format-utils";
 
 interface AutoExtensionSectionProps {
@@ -24,6 +31,8 @@ interface AutoExtensionSectionProps {
   baseOutstanding: number;
   canEdit: boolean;
   timezone: string;
+  customerEmail?: string | null;
+  customerName?: string | null;
 }
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
@@ -35,10 +44,30 @@ const STATUS_META: Record<string, { label: string; className: string }> = {
 
 export function AutoExtensionSection({
   rentalId, rental, currencyCode, taxPercent, baseOutstanding, canEdit, timezone,
+  customerEmail, customerName,
 }: AutoExtensionSectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
   const { data: extensions } = useRentalExtensionTotals(rentalId);
+
+  // Reminder history (drives the log + paid-through-link timestamps).
+  const { data: reminders } = useQuery({
+    queryKey: ["auto-ext-reminders", rentalId],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("auto_extension_reminders")
+        .select("id, reminder_type, channel, recipient, subject, amount, status, sent_at, paid_at")
+        .eq("rental_id", rentalId)
+        .order("sent_at", { ascending: false });
+      return (data ?? []) as any[];
+    },
+    enabled: !!rentalId,
+  });
+
+  const [sending, setSending] = useState(false);
+  const [customAmount, setCustomAmount] = useState<string>("");
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   if (!rental?.auto_extend_enabled) return null;
 
@@ -99,6 +128,32 @@ export function AutoExtensionSection({
     toast({ title: successMsg });
     queryClient.invalidateQueries({ queryKey: ["rental", rentalId] });
     queryClient.invalidateQueries({ queryKey: ["rental-extension-totals"] });
+  };
+
+  const reminderEnabled = rental.auto_extend_reminder_enabled !== false;
+  const reminderInterval = Number(rental.auto_extend_reminder_interval_days ?? 2);
+  const reminderMax = Number(rental.auto_extend_reminder_max ?? 3);
+  const remindersSent = Number(rental.auto_extend_reminder_count ?? 0);
+
+  // Send a pay-link reminder now (optionally a custom amount) via the edge function.
+  const sendReminder = async (amount?: number) => {
+    setSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-auto-extension-reminder", {
+        body: { rentalId, ...(amount ? { customAmount: amount } : {}) },
+      });
+      if (error) throw new Error(error.message);
+      if (data && data.ok === false) throw new Error(data.reason || "Could not send");
+      toast({ title: "Reminder sent", description: `Pay-link emailed to ${data?.recipient || customerEmail} for ${formatCurrency(Number(data?.amount || amount || perPeriodRate), currencyCode)}.` });
+      setCustomAmount("");
+      queryClient.invalidateQueries({ queryKey: ["auto-ext-reminders", rentalId] });
+      queryClient.invalidateQueries({ queryKey: ["rental", rentalId] });
+      queryClient.invalidateQueries({ queryKey: ["rental-extension-totals"] });
+    } catch (e: any) {
+      toast({ title: "Couldn't send reminder", description: e.message, variant: "destructive" });
+    } finally {
+      setSending(false);
+    }
   };
 
   const togglePause = () =>
@@ -241,6 +296,87 @@ export function AutoExtensionSection({
             <span>Auto-charge is selected but no saved card is on file for this rental. The next charge will fall back to a pay-link until a card is saved.</span>
           </div>
         )}
+
+        {/* ── Reminders & recipient ─────────────────────────────── */}
+        {canEdit && status !== "ended" && (
+          <div className="rounded-lg border p-4 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm min-w-0">
+                <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground">Emails go to</span>
+                <span className="font-medium truncate">{customerEmail || "— no email on file"}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)} className="gap-1.5"><Eye className="h-3.5 w-3.5" />Preview email</Button>
+                <Button size="sm" onClick={() => sendReminder()} disabled={sending || !customerEmail} className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white">
+                  {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}Send reminder now
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="space-y-1">
+                <Label className="text-xs">Custom amount</Label>
+                <div className="flex items-center gap-2">
+                  <Input type="number" min={0} step="0.01" placeholder={String(perPeriodRate)} value={customAmount} onChange={(e) => setCustomAmount(e.target.value)} className="h-8 w-28" />
+                  <Button variant="outline" size="sm" disabled={sending || !customAmount || Number(customAmount) <= 0 || !customerEmail} onClick={() => sendReminder(Number(customAmount))}>Send</Button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Reminder every (days)</Label>
+                <Input type="number" min={1} max={30} defaultValue={reminderInterval} className="h-8 w-24"
+                  onBlur={(e) => { const v = Math.max(1, Math.min(30, Number(e.target.value) || 2)); if (v !== reminderInterval) update({ auto_extend_reminder_interval_days: v }, "Reminder frequency updated"); }} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Max reminders</Label>
+                <Input type="number" min={0} max={20} defaultValue={reminderMax} className="h-8 w-24"
+                  onBlur={(e) => { const v = Math.max(0, Math.min(20, Number(e.target.value) || 3)); if (v !== reminderMax) update({ auto_extend_reminder_max: v }, "Reminder cap updated"); }} />
+              </div>
+              <div className="flex items-center gap-2 ml-auto">
+                <Switch checked={reminderEnabled} onCheckedChange={(v) => update({ auto_extend_reminder_enabled: v }, v ? "Auto-reminders on" : "Auto-reminders off")} />
+                <span className="text-xs text-muted-foreground">Auto-reminders {reminderEnabled ? "on" : "off"}</span>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2"><History className="h-3.5 w-3.5" />Reminder history ({remindersSent} sent)</div>
+              {reminders && reminders.length > 0 ? (
+                <div className="space-y-1.5 max-h-44 overflow-auto">
+                  {reminders.map((r: any) => (
+                    <div key={r.id} className="flex items-center justify-between text-xs border-l-2 pl-3 py-1"
+                      style={{ borderLeftColor: r.status === "paid" ? "#16a34a" : r.status === "failed" ? "#dc2626" : "#7c3aed" }}>
+                      <div className="truncate">
+                        <span className="font-medium capitalize">{r.reminder_type}</span> · {r.recipient} · {formatCurrency(Number(r.amount || 0), currencyCode)}
+                        <span className="text-muted-foreground"> — {formatInTimeZone(new Date(r.sent_at), tz, "dd MMM, h:mm a")}</span>
+                      </div>
+                      <span className={`shrink-0 ml-2 ${r.status === "paid" ? "text-emerald-600" : r.status === "failed" ? "text-red-600" : "text-muted-foreground"}`}>
+                        {r.status === "paid" ? `Paid${r.paid_at ? " " + formatInTimeZone(new Date(r.paid_at), tz, "dd MMM") : ""}` : r.status === "failed" ? "Failed" : "Sent"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="text-xs text-muted-foreground">No reminders sent yet.</p>}
+            </div>
+          </div>
+        )}
+
+        {/* Email preview */}
+        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader><DialogTitle>Email preview</DialogTitle></DialogHeader>
+            <div className="text-sm space-y-2">
+              <div className="text-xs text-muted-foreground">To: {customerEmail || "—"}</div>
+              <div className="text-xs text-muted-foreground">Subject: Pay {formatCurrency(perPeriodRate, currencyCode)} to renew your rental</div>
+              <div className="rounded-lg border p-4 bg-muted/30">
+                <p className="font-semibold mb-2">Time to renew your rental</p>
+                <p className="mb-2">Hi {customerName || "there"},</p>
+                <p className="mb-2">Your rental with <strong>{tenant?.company_name || "us"}</strong> renews for another {periodLabel}. Please pay <strong>{formatCurrency(perPeriodRate, currencyCode)}</strong> to continue.</p>
+                <div className="text-center my-3"><span className="inline-block bg-violet-600 text-white px-5 py-2 rounded-md text-sm font-semibold">Pay {formatCurrency(perPeriodRate, currencyCode)} Now</span></div>
+                <p className="text-xs text-muted-foreground">If you've already paid or returned the vehicle, please disregard.</p>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

@@ -66,6 +66,7 @@ import {
 import { ExtendRentalDialog } from '@/components/customer-portal/ExtendRentalDialog';
 import PaymentBreakdown from '@/components/customer-portal/PaymentBreakdown';
 import { PaygSection } from '@/components/customer-portal/payg-section';
+import { AutoExtensionCard } from '@/components/customer-portal/AutoExtensionCard';
 import { CustomerInstallmentsView } from '@/components/installments/CustomerInstallmentsView';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 
@@ -471,6 +472,7 @@ export default function BookingDetailPage() {
           payg_reminder_count, payg_reminder_interval_days, payg_paused, payg_closed_at,
           payg_accrual_day_count,
           is_unlimited_mileage, unlimited_mileage_tier, unlimited_mileage_total,
+          auto_extend_enabled,
           vehicles:vehicle_id (id, reg, make, model, colour, photo_url, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, vehicle_photos (photo_url)),
           installment_plans!installment_plans_rental_id_fkey (id, plan_type, status, total_installable_amount, upfront_amount, upfront_paid, installment_amount, number_of_installments, paid_installments, total_paid, next_due_date, scheduled_installments (id, installment_number, amount, due_date, status))
         `)
@@ -560,9 +562,11 @@ export default function BookingDetailPage() {
         queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
         queryClient.invalidateQueries({ queryKey: ['customer-rental-ledger', id] });
         queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+        queryClient.invalidateQueries({ queryKey: ['customer-auto-extension', id] });
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rentals', filter: `id=eq.${id}` }, () => {
         queryClient.invalidateQueries({ queryKey: ['customer-rental-detail', id] });
+        queryClient.invalidateQueries({ queryKey: ['customer-auto-extension', id] });
       })
       .subscribe();
     return () => {
@@ -985,6 +989,18 @@ export default function BookingDetailPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Weekly Billing / Auto-Extension — read-only customer view, synced with
+          the same rental_extension_totals data the admin sees. Renders only for
+          auto-extension rentals. */}
+      {(rental as any)?.auto_extend_enabled && (
+        <AutoExtensionCard
+          rentalId={(rental as any).id}
+          currencyCode={currencyCode}
+          taxPercent={tenant?.tax_enabled ? Number(tenant?.tax_percentage || 0) : 0}
+          timezone={(tenant as any)?.timezone}
+        />
       )}
 
       {/* PAYG Upfront Payment banner — shown when tenant requires first-period
