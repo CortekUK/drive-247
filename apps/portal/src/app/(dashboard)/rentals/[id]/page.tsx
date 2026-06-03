@@ -445,13 +445,18 @@ const RentalDetail = () => {
   // mean the four header cards stay in sync with the latest accrual / payment.
   const { data: paygInvoiceData } = usePaygInvoices(id, rental?.is_pay_as_you_go === true);
 
-  // PAYG rentals have no upfront invoice — synthesise an invoice-shaped object from the
-  // ledger-entry sums so the regular Payment Breakdown card can render (with all the same
-  // categories, refund controls, pay-selected buttons, etc). Regular rentals keep using
-  // the real invoice row untouched.
+  // PAYG and auto-extension rentals have no upfront invoice — synthesise an
+  // invoice-shaped object from the ledger-entry sums so the regular Payment
+  // Breakdown card (incl. the per-extension accordion) can render with all the
+  // same categories, refund controls, pay-selected buttons, etc. Regular rentals
+  // keep using the real invoice row untouched.
   const invoiceBreakdown = useMemo(() => {
     if (rawInvoiceBreakdown) return rawInvoiceBreakdown;
-    if (!rental?.is_pay_as_you_go) return null;
+    // No real invoice: synthesise from the ledger when this rental bills via the
+    // ledger (PAYG accruals or auto-extension extensions) rather than an upfront invoice.
+    const billsViaLedger = rental?.is_pay_as_you_go || (rental as any)?.auto_extend_enabled
+      || (rentalCharges && rentalCharges.length > 0);
+    if (!billsViaLedger) return null;
 
     const sumBy = (cat: string) =>
       (rentalCharges || [])
@@ -475,7 +480,9 @@ const RentalDetail = () => {
       deliveryFee,
       extrasTotal,
       totalAmount: rentalFee + taxAmount + serviceFee + insurancePremium + deliveryFee + extrasTotal,
-      status: (rental as any)?.payg_closed_at ? 'closed' : 'active',
+      // payg_closed_at only means "closed" for actual PAYG rentals; on a migrated
+      // auto-extension rental it's a leftover flag, so don't treat it as closed.
+      status: ((rental as any)?.payg_closed_at && rental?.is_pay_as_you_go) ? 'closed' : 'active',
     } as typeof rawInvoiceBreakdown;
   }, [rawInvoiceBreakdown, rental, rentalCharges]);
 
