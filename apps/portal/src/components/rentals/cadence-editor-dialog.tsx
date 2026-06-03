@@ -8,7 +8,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+
+// A menu row inside the date popover: icon + label + a tiny example so it teaches.
+function ActionRow({ icon, label, desc, onClick, tone }: { icon: React.ReactNode; label: string; desc: string; onClick: () => void; tone?: "violet" | "rose" | "amber" }) {
+  const toneCls = tone === "rose" ? "hover:bg-rose-500/10" : tone === "amber" ? "hover:bg-amber-500/10" : "hover:bg-violet-500/10";
+  const iconCls = tone === "rose" ? "text-rose-500" : tone === "amber" ? "text-amber-500" : "text-violet-500";
+  return (
+    <button type="button" onClick={onClick} className={cn("w-full text-left rounded-md px-2 py-2 flex items-start gap-2.5 transition-colors", toneCls)}>
+      <span className={cn("mt-0.5 shrink-0", iconCls)}>{icon}</span>
+      <span className="min-w-0">
+        <span className="text-sm font-medium block leading-tight">{label}</span>
+        <span className="text-[11px] text-muted-foreground leading-snug">{desc}</span>
+      </span>
+    </button>
+  );
+}
 
 // Small helper: an info tooltip with a worked example, used to teach each control.
 function Hint({ children }: { children: React.ReactNode }) {
@@ -73,9 +89,10 @@ function project(anchor: Date, unit: Unit, count: number, skips: string[], moves
   return out;
 }
 
-function MonthGrid({ year, month, active, skipped, movedFrom, nextKey, todayKey, onPick }: {
+function MonthGrid({ year, month, active, skipped, movedFrom, nextKey, todayKey, openKey, onOpenChange, renderPopover }: {
   year: number; month: number; active: Set<string>; skipped: Set<string>; movedFrom: Set<string>;
-  nextKey: string; todayKey: string; onPick: (k: string) => void;
+  nextKey: string; todayKey: string;
+  openKey: string | null; onOpenChange: (k: string, o: boolean) => void; renderPopover: (k: string) => React.ReactNode;
 }) {
   const first = new Date(year, month, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -104,18 +121,22 @@ function MonthGrid({ year, month, active, skipped, movedFrom, nextKey, todayKey,
             : isMovedFrom ? "Moved to another date (click to undo)"
             : isToday ? "Today"
             : "Click to make this the next renewal";
+          const cls = cn(
+            "aspect-square w-full rounded-lg flex items-center justify-center text-sm font-medium transition-colors",
+            isActive ? "bg-violet-400/20 text-violet-700 dark:text-violet-200" : "bg-foreground/[0.03] text-muted-foreground hover:bg-foreground/[0.07]",
+            isNext && "ring-2 ring-violet-500/70",
+            isActive && !isNext && "ring-1 ring-violet-400/40",
+            isSkipped && "line-through text-rose-500/70 dark:text-rose-300/70 bg-rose-500/5 ring-1 ring-rose-400/30",
+            isMovedFrom && "line-through text-amber-500/80 dark:text-amber-300/70 bg-amber-500/5 ring-1 ring-amber-400/30",
+            isToday && !isActive && !isSkipped && !isMovedFrom && "ring-1 ring-sky-400/50 text-foreground",
+          );
           return (
-            <button key={i} type="button" onClick={() => onPick(k)} title={title} className={cn(
-              "aspect-square rounded-lg flex items-center justify-center text-sm font-medium transition-colors",
-              isActive ? "bg-violet-400/20 text-violet-700 dark:text-violet-200" : "bg-foreground/[0.03] text-muted-foreground hover:bg-foreground/[0.07]",
-              isNext && "ring-2 ring-violet-500/70",
-              isActive && !isNext && "ring-1 ring-violet-400/40",
-              isSkipped && "line-through text-rose-500/70 dark:text-rose-300/70 bg-rose-500/5 ring-1 ring-rose-400/30",
-              isMovedFrom && "line-through text-amber-500/80 dark:text-amber-300/70 bg-amber-500/5 ring-1 ring-amber-400/30",
-              isToday && !isActive && !isSkipped && !isMovedFrom && "ring-1 ring-sky-400/50 text-foreground",
-            )}>
-              {d}
-            </button>
+            <Popover key={i} open={openKey === k} onOpenChange={(o) => onOpenChange(k, o)}>
+              <PopoverTrigger asChild>
+                <button type="button" title={title} className={cls}>{d}</button>
+              </PopoverTrigger>
+              <PopoverContent align="center" className="w-auto p-2">{renderPopover(k)}</PopoverContent>
+            </Popover>
           );
         })}
       </div>
@@ -162,14 +183,14 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
     return res;
   }, [anchor, series]);
 
-  const onPick = (k: string) => {
+  // Single handler for cell interaction. In move mode, the next clicked date is
+  // the move target (popover never opens); otherwise the popover opens/closes.
+  const handleOpenChange = (k: string, o: boolean) => {
     if (movingFrom) {
-      // record the move: original grid date -> picked date
-      setMoves((m) => ({ ...m, [movingFrom]: k }));
-      setMovingFrom(null); setSelected(null);
+      if (o) { setMoves((m) => ({ ...m, [movingFrom]: k })); setMovingFrom(null); }
       return;
     }
-    setSelected(k);
+    setSelected(o ? k : null);
   };
 
   const setAsNext = (k: string) => { setAnchor(keyToDate(k)); setSelected(null); };
@@ -186,16 +207,41 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
 
   const isPreset = (p: typeof PRESETS[number]) => p.unit === unit && p.count === count;
 
+  // Contextual menu shown in the popover anchored to a clicked date.
+  const renderPopover = (k: string) => {
+    const dateLabel = format(keyToDate(k), "EEE dd MMM");
+    if (skipSet.has(k) || movedFromSet.has(k)) {
+      return (
+        <div className="min-w-[200px]">
+          <div className="text-xs font-medium px-2 pt-1 pb-2">{dateLabel} — <span className={skipSet.has(k) ? "text-rose-500" : "text-amber-500"}>{skipSet.has(k) ? "skipped" : "moved"}</span></div>
+          <ActionRow icon={<X className="h-4 w-4" />} label="Undo" desc="Restore this renewal to the normal schedule." onClick={() => clearException(k)} />
+        </div>
+      );
+    }
+    if (active.has(k)) {
+      const orig = displayToOriginal.get(k) ?? k;
+      return (
+        <div className="min-w-[240px]">
+          <div className="text-xs font-medium px-2 pt-1 pb-1.5">{dateLabel} renewal</div>
+          <ActionRow tone="rose" icon={<SkipForward className="h-4 w-4" />} label="Skip this renewal" desc="No charge this period — the next renewal jumps to the following one." onClick={() => skipDate(orig)} />
+          <ActionRow tone="amber" icon={<MoveRight className="h-4 w-4" />} label="Move to another date…" desc="Relocate just this one. Then click the new date; the rest stay put." onClick={() => { setMovingFrom(orig); setSelected(null); }} />
+          <ActionRow tone="violet" icon={<CalendarCheck className="h-4 w-4" />} label="Make next renewal" desc="Re-base the whole schedule so this is the immediate next charge." onClick={() => setAsNext(k)} />
+        </div>
+      );
+    }
+    return (
+      <div className="min-w-[220px]">
+        <div className="text-xs font-medium px-2 pt-1 pb-1.5">{dateLabel}</div>
+        <ActionRow tone="violet" icon={<CalendarCheck className="h-4 w-4" />} label="Set as next renewal" desc={`Make this the next charge; ${cadenceLabel(unit, count).toLowerCase()} continues from here.`} onClick={() => setAsNext(k)} />
+      </div>
+    );
+  };
+
   const save = async () => {
     setSaving(true);
     try { await onSave({ unit, count: Math.max(1, count || 1), anchorYmd: dkey(anchor), exceptions: { skips, moves } }); onOpenChange(false); }
     finally { setSaving(false); }
   };
-
-  // Context-aware action bar content for the selected/moving state.
-  const selectedIsActive = selected != null && active.has(selected);
-  const selectedOriginal = selected != null ? (displayToOriginal.get(selected) ?? selected) : null;
-  const selectedHasException = selected != null && (skipSet.has(selected) || movedFromSet.has(selected));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -239,53 +285,16 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
           </div>
         </div>
 
-        {/* Action bar */}
-        <div className="rounded-lg border p-3 bg-violet-500/[0.04] min-h-[52px] flex items-center">
+        {/* Hint / move-mode bar */}
+        <div className="rounded-lg border p-2.5 bg-violet-500/[0.04] min-h-[44px] flex items-center text-sm">
           {movingFrom ? (
-            <div className="flex items-center gap-3 text-sm">
-              <MoveRight className="h-4 w-4 text-violet-600" />
-              <span>Click a date to move the <strong>{format(keyToDate(movingFrom), "dd MMM")}</strong> renewal to it.</span>
+            <div className="flex items-center gap-3">
+              <MoveRight className="h-4 w-4 text-amber-500" />
+              <span>Now click a date to move the <strong>{format(keyToDate(movingFrom), "dd MMM")}</strong> renewal there.</span>
               <Button variant="ghost" size="sm" onClick={() => setMovingFrom(null)} className="gap-1"><X className="h-3.5 w-3.5" />Cancel</Button>
             </div>
-          ) : selected == null ? (
-            <span className="text-sm text-muted-foreground">Tip: click a <span className="text-violet-600 dark:text-violet-300 font-medium">highlighted</span> date to skip/move it, or any other date to make it the next renewal.</span>
-          ) : selectedHasException ? (
-            <div className="flex items-center gap-3 text-sm flex-wrap">
-              <span><strong>{format(keyToDate(selected), "EEE dd MMM")}</strong> — {skipSet.has(selected) ? "skipped" : "moved"}.</span>
-              <Button variant="outline" size="sm" onClick={() => clearException(selected)}>Undo</Button>
-            </div>
-          ) : selectedIsActive ? (
-            <div className="flex items-center gap-2 text-sm flex-wrap">
-              <span><strong>{format(keyToDate(selected), "EEE dd MMM")}</strong> renewal:</span>
-              <Tooltip delayDuration={150}>
-                <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" onClick={() => skipDate(selectedOriginal!)} className="gap-1 hover:border-rose-400/60 hover:text-rose-500"><SkipForward className="h-3.5 w-3.5" />Skip</Button>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs text-xs leading-relaxed"><strong>Skip this renewal.</strong> No charge for this period — the next renewal jumps to the following one.<br /><span className="text-muted-foreground">e.g. skip Sat 13 Jun → next becomes Sat 20 Jun.</span></TooltipContent>
-              </Tooltip>
-              <Tooltip delayDuration={150}>
-                <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" onClick={() => { setMovingFrom(selectedOriginal); setSelected(null); }} className="gap-1 hover:border-amber-400/60 hover:text-amber-500"><MoveRight className="h-3.5 w-3.5" />Move…</Button>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs text-xs leading-relaxed"><strong>Move just this one renewal</strong> to another day. Click this, then click the new date — everything after stays put.<br /><span className="text-muted-foreground">e.g. move Sat 13 Jun → Mon 15 Jun.</span></TooltipContent>
-              </Tooltip>
-              <Tooltip delayDuration={150}>
-                <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" onClick={() => setAsNext(selected)} className="gap-1 hover:border-violet-400/60 hover:text-violet-500"><CalendarCheck className="h-3.5 w-3.5" />Make next renewal</Button>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs text-xs leading-relaxed"><strong>Restart the cadence from this date.</strong> Makes it the immediate next renewal, so every future date shifts to line up.<br /><span className="text-muted-foreground">Use this to re-base the whole schedule.</span></TooltipContent>
-              </Tooltip>
-            </div>
           ) : (
-            <div className="flex items-center gap-2 text-sm flex-wrap">
-              <span><strong>{format(keyToDate(selected), "EEE dd MMM")}</strong>:</span>
-              <Tooltip delayDuration={150}>
-                <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" onClick={() => setAsNext(selected)} className="gap-1 hover:border-violet-400/60 hover:text-violet-500"><CalendarCheck className="h-3.5 w-3.5" />Set as next renewal</Button>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs text-xs leading-relaxed">Make this the <strong>next renewal date</strong>; the cadence ({cadenceLabel(unit, count)}) continues from here.<br /><span className="text-muted-foreground">e.g. if the next charge shouldn't be on its current day, pick a better one.</span></TooltipContent>
-              </Tooltip>
-            </div>
+            <span className="text-muted-foreground">Click a <span className="text-violet-600 dark:text-violet-300 font-medium">renewal date</span> for skip / move options, or any other date to make it the next renewal.</span>
           )}
         </div>
 
@@ -293,7 +302,8 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
         <div className="flex flex-wrap gap-6 max-h-[40vh] overflow-auto p-1">
           {months.map((m) => (
             <MonthGrid key={`${m.year}-${m.month}`} year={m.year} month={m.month}
-              active={active} skipped={skipSet} movedFrom={movedFromSet} nextKey={nextKey} todayKey={todayKey} onPick={onPick} />
+              active={active} skipped={skipSet} movedFrom={movedFromSet} nextKey={nextKey} todayKey={todayKey}
+              openKey={movingFrom ? null : selected} onOpenChange={handleOpenChange} renderPopover={renderPopover} />
           ))}
         </div>
 
