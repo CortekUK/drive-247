@@ -18,6 +18,7 @@ import { BlurredImage } from "@/components/ui/blurred-image";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
+import { AutoExtensionSection } from "@/components/rentals/auto-extension-section";
 import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
 import { ChargeDepositDialog } from "@/components/shared/dialogs/charge-deposit-dialog";
 import { AddHoldDialog } from "@/components/shared/dialogs/add-hold-dialog";
@@ -2638,6 +2639,21 @@ const RentalDetail = () => {
           </div>
         );
       })()}
+
+      {/* Auto-Extension management — right after the stat cards */}
+      {rental && (rental as any).auto_extend_enabled && id && (
+        <AutoExtensionSection
+          rentalId={id}
+          rental={rental}
+          currencyCode={tenant?.currency_code || 'USD'}
+          taxPercent={(rentalSettings as any)?.tax_enabled ? Number((rentalSettings as any)?.tax_percentage || 0) : 0}
+          baseOutstanding={Object.entries(categoryRemainingAmounts || {})
+            .filter(([c]) => !c.startsWith('Extension'))
+            .reduce((s, [, a]) => s + (Number(a) || 0), 0)}
+          canEdit={canEdit('rentals')}
+          timezone={tenant?.timezone || 'America/New_York'}
+        />
+      )}
 
       {/* PAYG Upfront Payment banner — gates key handover until the first period
           (week or month) is paid. Tenant must opt in via Settings → PAYG.
