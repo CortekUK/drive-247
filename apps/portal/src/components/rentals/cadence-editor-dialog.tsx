@@ -8,23 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { OccurrenceConfigDialog, type OccurrenceOverride } from "@/components/rentals/occurrence-config-dialog";
 import { cn } from "@/lib/utils";
-
-// A menu row inside the date popover: icon + label + a tiny example so it teaches.
-function ActionRow({ icon, label, desc, onClick, tone }: { icon: React.ReactNode; label: string; desc: string; onClick: () => void; tone?: "violet" | "rose" | "amber" }) {
-  const toneCls = tone === "rose" ? "hover:bg-rose-500/10" : tone === "amber" ? "hover:bg-amber-500/10" : "hover:bg-violet-500/10";
-  const iconCls = tone === "rose" ? "text-rose-500" : tone === "amber" ? "text-amber-500" : "text-violet-500";
-  return (
-    <button type="button" onClick={onClick} className={cn("w-full text-left rounded-md px-2 py-2 flex items-start gap-2.5 transition-colors", toneCls)}>
-      <span className={cn("mt-0.5 shrink-0", iconCls)}>{icon}</span>
-      <span className="min-w-0">
-        <span className="text-sm font-medium block leading-tight">{label}</span>
-        <span className="text-[11px] text-muted-foreground leading-snug">{desc}</span>
-      </span>
-    </button>
-  );
-}
 
 // Small helper: an info tooltip with a worked example, used to teach each control.
 function Hint({ children }: { children: React.ReactNode }) {
@@ -48,8 +33,11 @@ interface CadenceEditorDialogProps {
   initialUnit: Unit;
   initialCount: number;
   initialExceptions?: ScheduleExceptions;
+  initialOverrides?: Record<string, OccurrenceOverride>;
   rateLabel?: string;
-  onSave: (data: { unit: Unit; count: number; anchorYmd: string; exceptions: ScheduleExceptions }) => Promise<void> | void;
+  // Defaults for the per-occurrence config dialog (email template, names, etc.).
+  occurrenceDefaults?: { emailSubject: string; emailBody: string; rateLabel: string; companyName: string; customerName: string; periodLabel: string };
+  onSave: (data: { unit: Unit; count: number; anchorYmd: string; exceptions: ScheduleExceptions; overrides: Record<string, OccurrenceOverride> }) => Promise<void> | void;
 }
 
 const PRESETS: { label: string; unit: Unit; count: number }[] = [
@@ -89,10 +77,9 @@ function project(anchor: Date, unit: Unit, count: number, skips: string[], moves
   return out;
 }
 
-function MonthGrid({ year, month, active, skipped, movedFrom, nextKey, todayKey, openKey, onOpenChange, renderPopover }: {
+function MonthGrid({ year, month, active, skipped, movedFrom, nextKey, todayKey, onPick }: {
   year: number; month: number; active: Set<string>; skipped: Set<string>; movedFrom: Set<string>;
-  nextKey: string; todayKey: string;
-  openKey: string | null; onOpenChange: (k: string, o: boolean) => void; renderPopover: (k: string) => React.ReactNode;
+  nextKey: string; todayKey: string; onPick: (k: string) => void;
 }) {
   const first = new Date(year, month, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -130,21 +117,14 @@ function MonthGrid({ year, month, active, skipped, movedFrom, nextKey, todayKey,
             isMovedFrom && "line-through text-amber-500/80 dark:text-amber-300/70 bg-amber-500/5 ring-1 ring-amber-400/30",
             isToday && !isActive && !isSkipped && !isMovedFrom && "ring-1 ring-sky-400/50 text-foreground",
           );
-          return (
-            <Popover key={i} open={openKey === k} onOpenChange={(o) => onOpenChange(k, o)}>
-              <PopoverTrigger asChild>
-                <button type="button" title={title} className={cls}>{d}</button>
-              </PopoverTrigger>
-              <PopoverContent align="center" className="w-auto p-2">{renderPopover(k)}</PopoverContent>
-            </Popover>
-          );
+          return <button key={i} type="button" onClick={() => onPick(k)} title={title} className={cls}>{d}</button>;
         })}
       </div>
     </div>
   );
 }
 
-export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUnit, initialCount, initialExceptions, rateLabel, onSave }: CadenceEditorDialogProps) {
+export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUnit, initialCount, initialExceptions, initialOverrides, occurrenceDefaults, rateLabel, onSave }: CadenceEditorDialogProps) {
   const [unit, setUnit] = useState<Unit>(initialUnit);
   const [count, setCount] = useState<number>(initialCount);
   const [anchor, setAnchor] = useState<Date>(anchorDate);
@@ -152,15 +132,18 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
   const [moves, setMoves] = useState<Record<string, string>>(initialExceptions?.moves ?? {});
   const [selected, setSelected] = useState<string | null>(null);
   const [movingFrom, setMovingFrom] = useState<string | null>(null);
+  const [overrides, setOverrides] = useState<Record<string, OccurrenceOverride>>(initialOverrides ?? {});
+  const [configDate, setConfigDate] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
       setUnit(initialUnit); setCount(initialCount); setAnchor(anchorDate);
       setSkips(initialExceptions?.skips ?? []); setMoves(initialExceptions?.moves ?? {});
-      setSelected(null); setMovingFrom(null);
+      setOverrides(initialOverrides ?? {});
+      setSelected(null); setMovingFrom(null); setConfigDate(null);
     }
-  }, [open, initialUnit, initialCount, anchorDate, initialExceptions]);
+  }, [open, initialUnit, initialCount, anchorDate, initialExceptions, initialOverrides]);
 
   const series = useMemo(() => project(anchor, unit, Math.max(1, count || 1), skips, moves, 12), [anchor, unit, count, skips, moves]);
   const active = useMemo(() => new Set(series.map((s) => s.displayKey)), [series]);
@@ -184,62 +167,29 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
   }, [anchor, series]);
 
   // Single handler for cell interaction. In move mode, the next clicked date is
-  // the move target (popover never opens); otherwise the popover opens/closes.
-  const handleOpenChange = (k: string, o: boolean) => {
-    if (movingFrom) {
-      if (o) { setMoves((m) => ({ ...m, [movingFrom]: k })); setMovingFrom(null); }
-      return;
-    }
-    setSelected(o ? k : null);
+  // a move target; otherwise it opens the per-occurrence config dialog.
+  const onPick = (k: string) => {
+    if (movingFrom) { setMoves((m) => ({ ...m, [movingFrom]: k })); setMovingFrom(null); return; }
+    setConfigDate(k);
   };
 
-  const setAsNext = (k: string) => { setAnchor(keyToDate(k)); setSelected(null); };
+  const setAsNext = (k: string) => { setAnchor(keyToDate(k)); setConfigDate(null); };
   const skipDate = (origKey: string) => {
     setMoves((m) => { const c = { ...m }; delete c[origKey]; return c; });
     setSkips((s) => (s.includes(origKey) ? s : [...s, origKey]));
-    setSelected(null);
+    setConfigDate(null);
   };
   const clearException = (origKey: string) => {
     setSkips((s) => s.filter((x) => x !== origKey));
     setMoves((m) => { const c = { ...m }; delete c[origKey]; return c; });
-    setSelected(null);
+    setConfigDate(null);
   };
 
   const isPreset = (p: typeof PRESETS[number]) => p.unit === unit && p.count === count;
 
-  // Contextual menu shown in the popover anchored to a clicked date.
-  const renderPopover = (k: string) => {
-    const dateLabel = format(keyToDate(k), "EEE dd MMM");
-    if (skipSet.has(k) || movedFromSet.has(k)) {
-      return (
-        <div className="min-w-[200px]">
-          <div className="text-xs font-medium px-2 pt-1 pb-2">{dateLabel} — <span className={skipSet.has(k) ? "text-rose-500" : "text-amber-500"}>{skipSet.has(k) ? "skipped" : "moved"}</span></div>
-          <ActionRow icon={<X className="h-4 w-4" />} label="Undo" desc="Restore this renewal to the normal schedule." onClick={() => clearException(k)} />
-        </div>
-      );
-    }
-    if (active.has(k)) {
-      const orig = displayToOriginal.get(k) ?? k;
-      return (
-        <div className="min-w-[240px]">
-          <div className="text-xs font-medium px-2 pt-1 pb-1.5">{dateLabel} renewal</div>
-          <ActionRow tone="rose" icon={<SkipForward className="h-4 w-4" />} label="Skip this renewal" desc="No charge this period — the next renewal jumps to the following one." onClick={() => skipDate(orig)} />
-          <ActionRow tone="amber" icon={<MoveRight className="h-4 w-4" />} label="Move to another date…" desc="Relocate just this one. Then click the new date; the rest stay put." onClick={() => { setMovingFrom(orig); setSelected(null); }} />
-          <ActionRow tone="violet" icon={<CalendarCheck className="h-4 w-4" />} label="Make next renewal" desc="Re-base the whole schedule so this is the immediate next charge." onClick={() => setAsNext(k)} />
-        </div>
-      );
-    }
-    return (
-      <div className="min-w-[220px]">
-        <div className="text-xs font-medium px-2 pt-1 pb-1.5">{dateLabel}</div>
-        <ActionRow tone="violet" icon={<CalendarCheck className="h-4 w-4" />} label="Set as next renewal" desc={`Make this the next charge; ${cadenceLabel(unit, count).toLowerCase()} continues from here.`} onClick={() => setAsNext(k)} />
-      </div>
-    );
-  };
-
   const save = async () => {
     setSaving(true);
-    try { await onSave({ unit, count: Math.max(1, count || 1), anchorYmd: dkey(anchor), exceptions: { skips, moves } }); onOpenChange(false); }
+    try { await onSave({ unit, count: Math.max(1, count || 1), anchorYmd: dkey(anchor), exceptions: { skips, moves }, overrides }); onOpenChange(false); }
     finally { setSaving(false); }
   };
 
@@ -302,8 +252,7 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
         <div className="flex flex-wrap gap-6 max-h-[40vh] overflow-auto p-1">
           {months.map((m) => (
             <MonthGrid key={`${m.year}-${m.month}`} year={m.year} month={m.month}
-              active={active} skipped={skipSet} movedFrom={movedFromSet} nextKey={nextKey} todayKey={todayKey}
-              openKey={movingFrom ? null : selected} onOpenChange={handleOpenChange} renderPopover={renderPopover} />
+              active={active} skipped={skipSet} movedFrom={movedFromSet} nextKey={nextKey} todayKey={todayKey} onPick={onPick} />
           ))}
         </div>
 
@@ -323,6 +272,31 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
           </div>
         </div>
        </TooltipProvider>
+
+        {/* Per-occurrence config (proper dialog) */}
+        {(() => {
+          const origKey = configDate ? (displayToOriginal.get(configDate) ?? configDate) : null;
+          const exType: "skip" | "move" | null = configDate
+            ? (skipSet.has(configDate) ? "skip" : movedFromSet.has(configDate) ? "move" : null)
+            : null;
+          return (
+            <OccurrenceConfigDialog
+              open={configDate != null}
+              onOpenChange={(o) => { if (!o) setConfigDate(null); }}
+              dateKey={configDate}
+              isRenewal={configDate != null && active.has(configDate)}
+              exceptionType={exType}
+              override={origKey ? (overrides[origKey] ?? {}) : {}}
+              defaults={occurrenceDefaults ?? { emailSubject: "Renew your rental", emailBody: "Your rental is due to renew. Please pay to continue.", rateLabel: rateLabel ?? "", companyName: "us", customerName: "", periodLabel: "period" }}
+              onSkip={() => origKey && skipDate(origKey)}
+              onMove={() => { if (origKey) { setMovingFrom(origKey); setConfigDate(null); } }}
+              onMakeNext={() => configDate && setAsNext(configDate)}
+              onSetNext={() => configDate && setAsNext(configDate)}
+              onUndo={() => origKey && clearException(origKey)}
+              onChangeOverride={(cfg) => { if (origKey) setOverrides((o) => ({ ...o, [origKey]: cfg })); }}
+            />
+          );
+        })()}
       </DialogContent>
     </Dialog>
   );

@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
       .from("rentals")
       .select(`
         id, tenant_id, customer_id, vehicle_id, end_date, monthly_amount,
-        auto_extend_enabled, auto_extend_charge_mode, auto_extend_period_unit, auto_extend_interval_count, auto_extend_exceptions,
+        auto_extend_enabled, auto_extend_charge_mode, auto_extend_period_unit, auto_extend_interval_count, auto_extend_exceptions, auto_extend_overrides,
         auto_extend_next_charge_at, auto_extend_lead_hours, auto_extend_charge_count,
         auto_extend_max_periods, auto_extend_failed_attempts, auto_extend_pending_extension_id,
         auto_extend_status, status,
@@ -390,19 +390,16 @@ Deno.serve(async (req) => {
 
           const total = fmtCurrency(bd.total, ctx.currencyCode);
           const vehicle = r.vehicles ? `${r.vehicles.make ?? ""} ${r.vehicles.model ?? ""}`.trim() : "your vehicle";
-          const html = `
-            <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#374151;">
-              <h2 style="color:#111827;">Time to renew your rental</h2>
-              <p>Hi ${customer.name || "there"},</p>
-              <p>Your rental of <strong>${vehicle}</strong> with <strong>${tenant.company_name || "us"}</strong> is due to renew for another period
-              (<strong>${r.end_date} → ${newEndDate}</strong>).</p>
-              <p>Please pay <strong>${total}</strong> upfront to continue:</p>
-              <p style="text-align:center;margin:24px 0;">
-                <a href="${session.url}" style="display:inline-block;background:#0f172a;color:#fff;padding:14px 28px;border-radius:8px;font-weight:600;text-decoration:none;">Pay ${total} & Renew</a>
-              </p>
-              <p style="font-size:12px;color:#64748b;">If you've returned the vehicle, you can ignore this message.</p>
-            </div>`;
-          await sendEmailInline(customer.email, `Renew your rental — ${total} due`, html, tenant.slug || "noreply");
+          // Per-occurrence override (keyed by the current renewal date = end_date):
+          // send/skip the email and use custom subject/body if the operator set them.
+          const occ = (r.auto_extend_overrides && r.auto_extend_overrides[r.end_date]) || {};
+          if (occ.sendEmail !== false) {
+            const bodyHtml = occ.emailBody
+              ? String(occ.emailBody).split("\n").map((p: string) => `<p>${p}</p>`).join("")
+              : `<p>Hi ${customer.name || "there"},</p><p>Your rental of <strong>${vehicle}</strong> with <strong>${tenant.company_name || "us"}</strong> is due to renew for another period (<strong>${r.end_date} → ${newEndDate}</strong>).</p><p>Please pay <strong>${total}</strong> upfront to continue:</p>`;
+            const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#374151;">${bodyHtml}<p style="text-align:center;margin:24px 0;"><a href="${session.url}" style="display:inline-block;background:#0f172a;color:#fff;padding:14px 28px;border-radius:8px;font-weight:600;text-decoration:none;">Pay ${total} & Renew</a></p><p style="font-size:12px;color:#64748b;">If you've returned the vehicle, you can ignore this message.</p></div>`;
+            await sendEmailInline(customer.email, occ.emailSubject || `Renew your rental — ${total} due`, html, tenant.slug || "noreply");
+          }
 
           await supabase.from("rentals").update({
             auto_extend_pending_extension_id: ext.id,
