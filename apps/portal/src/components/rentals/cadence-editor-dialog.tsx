@@ -2,12 +2,25 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { format } from "date-fns";
-import { RefreshCw, Loader2, CalendarCheck, SkipForward, MoveRight, X } from "lucide-react";
+import { RefreshCw, Loader2, CalendarCheck, SkipForward, MoveRight, X, Info } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+
+// Small helper: an info tooltip with a worked example, used to teach each control.
+function Hint({ children }: { children: React.ReactNode }) {
+  return (
+    <Tooltip delayDuration={150}>
+      <TooltipTrigger asChild>
+        <span className="inline-flex"><Info className="h-3.5 w-3.5 text-muted-foreground/70 hover:text-violet-500 cursor-help" /></span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs text-xs leading-relaxed">{children}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 type Unit = "Daily" | "Weekly" | "Monthly";
 export interface ScheduleExceptions { skips: string[]; moves: Record<string, string>; }
@@ -85,14 +98,21 @@ function MonthGrid({ year, month, active, skipped, movedFrom, nextKey, todayKey,
           const isMovedFrom = movedFrom.has(k);
           const isNext = k === nextKey;
           const isToday = k === todayKey;
+          const title = isNext ? "Next renewal — the customer is billed on this date"
+            : isActive ? "Renewal date — click to skip or move it"
+            : isSkipped ? "Skipped — no charge this period (click to undo)"
+            : isMovedFrom ? "Moved to another date (click to undo)"
+            : isToday ? "Today"
+            : "Click to make this the next renewal";
           return (
-            <button key={i} type="button" onClick={() => onPick(k)} className={cn(
+            <button key={i} type="button" onClick={() => onPick(k)} title={title} className={cn(
               "aspect-square rounded-lg flex items-center justify-center text-sm font-medium transition-colors",
               isActive ? "bg-violet-400/20 text-violet-700 dark:text-violet-200" : "bg-foreground/[0.03] text-muted-foreground hover:bg-foreground/[0.07]",
-              isNext && "ring-2 ring-violet-500/60",
+              isNext && "ring-2 ring-violet-500/70",
               isActive && !isNext && "ring-1 ring-violet-400/40",
-              (isSkipped || isMovedFrom) && "line-through text-muted-foreground/50 bg-transparent",
-              isToday && !isActive && "ring-1 ring-sky-400/50 text-foreground",
+              isSkipped && "line-through text-rose-500/70 dark:text-rose-300/70 bg-rose-500/5 ring-1 ring-rose-400/30",
+              isMovedFrom && "line-through text-amber-500/80 dark:text-amber-300/70 bg-amber-500/5 ring-1 ring-amber-400/30",
+              isToday && !isActive && !isSkipped && !isMovedFrom && "ring-1 ring-sky-400/50 text-foreground",
             )}>
               {d}
             </button>
@@ -180,13 +200,17 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
+       <TooltipProvider>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><RefreshCw className="h-5 w-5 text-violet-600" />Renewal schedule</DialogTitle>
-          <DialogDescription>Set the cadence, move the next renewal, or skip/move individual dates. Highlighted dates update live.</DialogDescription>
+          <DialogDescription>How often the customer is auto-billed and the rental rolls forward. Set a rhythm below, then fine-tune individual dates on the calendar — the highlighted dates update live.</DialogDescription>
         </DialogHeader>
 
         {/* Presets */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground mr-1">How often
+            <Hint><strong>Billing rhythm.</strong> Pick how often the rental renews and the customer is charged. e.g. "Every week" bills every 7 days; "Every 2 weeks" bills every 14.</Hint>
+          </span>
           {PRESETS.map((p) => (
             <button key={p.label} type="button" onClick={() => { setUnit(p.unit); setCount(p.count); }}
               className={cn("px-3 py-1.5 rounded-full text-sm font-medium border transition-colors",
@@ -233,14 +257,34 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
           ) : selectedIsActive ? (
             <div className="flex items-center gap-2 text-sm flex-wrap">
               <span><strong>{format(keyToDate(selected), "EEE dd MMM")}</strong> renewal:</span>
-              <Button variant="outline" size="sm" onClick={() => skipDate(selectedOriginal!)} className="gap-1"><SkipForward className="h-3.5 w-3.5" />Skip this</Button>
-              <Button variant="outline" size="sm" onClick={() => { setMovingFrom(selectedOriginal); setSelected(null); }} className="gap-1"><MoveRight className="h-3.5 w-3.5" />Move…</Button>
-              <Button variant="outline" size="sm" onClick={() => setAsNext(selected)} className="gap-1"><CalendarCheck className="h-3.5 w-3.5" />Make next renewal</Button>
+              <Tooltip delayDuration={150}>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" onClick={() => skipDate(selectedOriginal!)} className="gap-1 hover:border-rose-400/60 hover:text-rose-500"><SkipForward className="h-3.5 w-3.5" />Skip</Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs text-xs leading-relaxed"><strong>Skip this renewal.</strong> No charge for this period — the next renewal jumps to the following one.<br /><span className="text-muted-foreground">e.g. skip Sat 13 Jun → next becomes Sat 20 Jun.</span></TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={150}>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" onClick={() => { setMovingFrom(selectedOriginal); setSelected(null); }} className="gap-1 hover:border-amber-400/60 hover:text-amber-500"><MoveRight className="h-3.5 w-3.5" />Move…</Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs text-xs leading-relaxed"><strong>Move just this one renewal</strong> to another day. Click this, then click the new date — everything after stays put.<br /><span className="text-muted-foreground">e.g. move Sat 13 Jun → Mon 15 Jun.</span></TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={150}>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" onClick={() => setAsNext(selected)} className="gap-1 hover:border-violet-400/60 hover:text-violet-500"><CalendarCheck className="h-3.5 w-3.5" />Make next renewal</Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs text-xs leading-relaxed"><strong>Restart the cadence from this date.</strong> Makes it the immediate next renewal, so every future date shifts to line up.<br /><span className="text-muted-foreground">Use this to re-base the whole schedule.</span></TooltipContent>
+              </Tooltip>
             </div>
           ) : (
             <div className="flex items-center gap-2 text-sm flex-wrap">
               <span><strong>{format(keyToDate(selected), "EEE dd MMM")}</strong>:</span>
-              <Button variant="outline" size="sm" onClick={() => setAsNext(selected)} className="gap-1"><CalendarCheck className="h-3.5 w-3.5" />Set as next renewal</Button>
+              <Tooltip delayDuration={150}>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" onClick={() => setAsNext(selected)} className="gap-1 hover:border-violet-400/60 hover:text-violet-500"><CalendarCheck className="h-3.5 w-3.5" />Set as next renewal</Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs text-xs leading-relaxed">Make this the <strong>next renewal date</strong>; the cadence ({cadenceLabel(unit, count)}) continues from here.<br /><span className="text-muted-foreground">e.g. if the next charge shouldn't be on its current day, pick a better one.</span></TooltipContent>
+              </Tooltip>
             </div>
           )}
         </div>
@@ -253,11 +297,13 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
           ))}
         </div>
 
-        <div className="flex items-center justify-between pt-2 border-t">
-          <span className="inline-flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-violet-400/30 ring-1 ring-violet-400/50" /> renewal</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded ring-1 ring-sky-400/50" /> today</span>
-            <span className="inline-flex items-center gap-1"><span className="line-through">skip/moved</span></span>
+        <div className="flex items-center justify-between pt-2 border-t flex-wrap gap-2">
+          <span className="inline-flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+            <span className="inline-flex items-center gap-1" title="A date the customer is billed and the rental rolls forward"><span className="inline-block h-3 w-3 rounded bg-violet-400/30 ring-1 ring-violet-400/50" /> renewal</span>
+            <span className="inline-flex items-center gap-1" title="The very next charge"><span className="inline-block h-3 w-3 rounded ring-2 ring-violet-500/70" /> next</span>
+            <span className="inline-flex items-center gap-1" title="Today's date"><span className="inline-block h-3 w-3 rounded ring-1 ring-sky-400/50" /> today</span>
+            <span className="inline-flex items-center gap-1" title="Skipped — no charge that period"><span className="inline-block h-3 w-3 rounded bg-rose-500/10 ring-1 ring-rose-400/30" /> <span className="line-through decoration-rose-400">skipped</span></span>
+            <span className="inline-flex items-center gap-1" title="Moved to another date"><span className="inline-block h-3 w-3 rounded bg-amber-500/10 ring-1 ring-amber-400/30" /> <span className="line-through decoration-amber-400">moved</span></span>
           </span>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -266,6 +312,7 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
             </Button>
           </div>
         </div>
+       </TooltipProvider>
       </DialogContent>
     </Dialog>
   );
