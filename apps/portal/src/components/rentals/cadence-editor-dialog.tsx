@@ -79,8 +79,8 @@ function MonthGrid({ year, month, highlights, todayKey }: { year: number; month:
           return (
             <div key={i} className={cn(
               "aspect-square rounded-lg flex items-center justify-center text-sm font-medium transition-colors",
-              hit ? "bg-violet-600 text-white shadow-sm ring-2 ring-violet-400" : "bg-muted/40 text-muted-foreground",
-              isToday && !hit && "ring-2 ring-blue-400 text-foreground",
+              hit ? "bg-violet-400/20 text-violet-700 dark:text-violet-200 ring-1 ring-violet-400/40" : "bg-foreground/[0.03] text-muted-foreground",
+              isToday && !hit && "ring-1 ring-sky-400/50 text-foreground",
             )}>
               {d}
             </div>
@@ -136,7 +136,7 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
           {PRESETS.map((p) => (
             <button key={p.label} type="button" onClick={() => { setUnit(p.unit); setCount(p.count); }}
               className={cn("px-3 py-1.5 rounded-full text-sm font-medium border transition-colors",
-                isPreset(p) ? "bg-violet-600 text-white border-violet-600" : "border-border hover:bg-muted")}>
+                isPreset(p) ? "bg-violet-400/20 text-violet-700 dark:text-violet-200 border-violet-400/50" : "border-border hover:bg-muted")}>
               {p.label}
             </button>
           ))}
@@ -174,7 +174,7 @@ export function CadenceEditorDialog({ open, onOpenChange, anchorDate, initialUni
 
         <div className="flex items-center justify-between pt-2 border-t">
           <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="inline-block h-3 w-3 rounded bg-violet-600" /> renewal date
+            <span className="inline-block h-3 w-3 rounded bg-violet-400/30 ring-1 ring-violet-400/50" /> renewal date
           </span>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
