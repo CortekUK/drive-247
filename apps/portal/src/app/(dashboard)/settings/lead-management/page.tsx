@@ -75,14 +75,14 @@ export default function LeadManagementSettingsPage() {
 
   if (!settings) {
     return (
-      <main className="mx-auto max-w-[1160px] px-6 py-16 text-center">
+      <main className="container mx-auto px-6 py-16 text-center">
         <Loader2 className="mx-auto h-5 w-5 animate-spin text-[#737373]" />
       </main>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-[1160px] px-6 py-8">
+    <main className="container mx-auto px-6 py-8">
       <header className="mb-6">
         <h1 className="text-[30px] font-medium text-[#080812]">Lead Management</h1>
         <p className="mt-1 text-sm text-[#737373]">

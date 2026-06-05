@@ -66,6 +66,7 @@ import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-do
 import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
 import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
 import { useVehiclePricingOverrides } from "@/hooks/use-vehicle-pricing-overrides";
+import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
 import { calculateRentalPriceBreakdown, type DayBreakdown } from "@/lib/calculate-rental-price";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { useVehicleBookedDates } from "@/hooks/use-vehicle-booked-dates";
@@ -120,6 +121,7 @@ const CreateRental = () => {
   const { isManager, canEdit } = useManagerPermissions();
   const { logAction } = useAuditLog();
   const [loading, setLoading] = useState(false);
+  const submitInFlightRef = useRef(false); // Synchronous re-entrancy lock against double-click duplicate rental creation
   const [creationProgress, setCreationProgress] = useState(0);
   const creationSteps = useMemo(() => [
     { label: 'Validating rental details' },
@@ -1234,6 +1236,10 @@ const CreateRental = () => {
   };
 
   const onSubmit = async (data: RentalFormData) => {
+    // Re-entrancy lock: blocks a double-click from creating two rentals before
+    // the `loading` state disables the submit button.
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     setLoading(true);
     setCreationProgress(1); // Step 1: Validating
     setSubmitError("");
@@ -1451,6 +1457,29 @@ const CreateRental = () => {
       // knowing what time their customer is supposed to arrive.
       if (!isPayAsYouGo && !rentalInsertPayload.pickup_time) {
         throw new Error("Pickup time is required");
+      }
+
+      // Duplicate guard: block an exact-duplicate rental (same customer + vehicle +
+      // start date) created within the last 10 minutes. Narrow window + exact match
+      // so it only catches accidental double-submits, never a legitimate second
+      // booking staff deliberately create.
+      if (tenant?.id && data.customer_id && data.vehicle_id) {
+        const dupSince = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        const { data: recentDupes } = await supabaseUntyped
+          .from("rentals")
+          .select("id")
+          .eq("tenant_id", tenant.id)
+          .eq("customer_id", data.customer_id)
+          .eq("vehicle_id", data.vehicle_id)
+          .eq("start_date", rentalInsertPayload.start_date)
+          .gte("created_at", dupSince)
+          .limit(1);
+
+        if (recentDupes && recentDupes.length > 0) {
+          throw new Error(
+            "A rental for this customer and vehicle starting on the same date was just created moments ago. Refresh the rentals list to see it — submit again only if this is intentional."
+          );
+        }
       }
 
       // Create rental with Pending status (will become Active after DocuSign)
@@ -2156,6 +2185,7 @@ const CreateRental = () => {
       });
     } finally {
       setLoading(false);
+      submitInFlightRef.current = false;
     }
   };
 
@@ -3464,6 +3494,16 @@ const CreateRental = () => {
                                   ? `Customer is billed this amount every ${periodType.toLowerCase().replace(/ly$/, '')} on a rolling basis.`
                                   : "Auto-filled from vehicle rates."}
                               </FormDescription>
+                              {selectedVehicleId && (
+                                <div className="mt-1.5">
+                                  <TraxPriceSuggestion
+                                    vehicleId={selectedVehicleId}
+                                    tier={periodType.toLowerCase() as "daily" | "weekly" | "monthly"}
+                                    currentPrice={perPeriodRate ?? undefined}
+                                    onImplement={(price) => setPerPeriodRate(price)}
+                                  />
+                                </div>
+                              )}
                             </FormItem>
                             {!isPayAsYouGo && (
                               <div>

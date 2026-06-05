@@ -12,10 +12,15 @@ const twoYearsOut = () => {
   return d;
 };
 
-const isoDate = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
-  .refine((v) => !Number.isNaN(Date.parse(v)), "Invalid date");
+// Builds a required ISO-date field with a clear "is required" message for empty
+// values (instead of the confusing format message a blank field would otherwise show).
+const isoDateField = (label: string) =>
+  z
+    .string()
+    .trim()
+    .min(1, `${label} is required`)
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+    .refine((v) => !Number.isNaN(Date.parse(v)), "Invalid date");
 
 export const enquirySchema = z
   .object({
@@ -38,8 +43,8 @@ export const enquirySchema = z
         return digitCount >= 7 && digitCount <= 15;
       }, "Please enter a valid phone number (7-15 digits)"),
     vehicleId: z.string().uuid().nullable().optional(),
-    startDate: isoDate,
-    endDate: isoDate,
+    startDate: isoDateField("Start date"),
+    endDate: isoDateField("End date"),
     description: z
       .string()
       .trim()

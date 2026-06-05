@@ -93,7 +93,7 @@ export default function ApplyFormSettingsPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-[1160px] px-6 py-8">
+    <main className="container mx-auto px-6 py-8">
       <header className="mb-6">
         <h1 className="text-[30px] font-medium text-[#080812]">Apply form</h1>
         <p className="mt-1 text-sm text-[#737373]">

@@ -48,7 +48,7 @@ export default function AutomationsPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-[1160px] px-6 py-8">
+    <main className="container mx-auto px-6 py-8">
       <header className="mb-6 flex items-end justify-between">
         <div>
           <h1 className="text-[30px] font-medium text-[#080812]">Automations</h1>

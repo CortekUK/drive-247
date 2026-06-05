@@ -41,6 +41,8 @@ import { VehiclePhotoGallery } from "@/components/vehicles/vehicle-photo-gallery
 import { BlockedDatesManager } from "@/components/blocked-dates/blocked-dates-manager";
 import { VehicleExtrasManager } from "@/components/vehicles/vehicle-extras-manager";
 import { VehicleDynamicPricing } from "@/components/vehicles/vehicle-dynamic-pricing";
+import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
+import { TraxIcon } from "@/components/chat/TraxIcon";
 import { VehicleOwnershipPanel } from "@/components/vehicles/vehicle-ownership-panel";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
 import { Package, Loader2 as SpinnerIcon, Zap } from "lucide-react";
@@ -734,6 +736,52 @@ export default function VehicleDetail() {
           {/* Ownership Section */}
           <div className="mt-6">
             <VehicleOwnershipPanel vehicleId={vehicle.id} />
+          </div>
+
+          {/* Vehicle Pricing — Trax suggestions vs the network */}
+          <div className="mt-6">
+            <Card className="shadow-card rounded-lg">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <TraxIcon size={20} />
+                  Vehicle Pricing
+                </CardTitle>
+                <CardDescription>
+                  Trax compares your rates against similar vehicles across the Drive247 network.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {([
+                    ["daily", "Daily", "daily_rent"],
+                    ["weekly", "Weekly", "weekly_rent"],
+                    ["monthly", "Monthly", "monthly_rent"],
+                  ] as const).map(([tier, label, col]) => (
+                    <TraxPriceSuggestion
+                      key={tier}
+                      variant="card"
+                      label={label}
+                      vehicleId={vehicle.id}
+                      tier={tier}
+                      currentPrice={vehicle[col] ?? undefined}
+                      showEmpty
+                      onImplement={async (price) => {
+                        await supabase
+                          .from("vehicles")
+                          .update({ [col]: price })
+                          .eq("id", vehicle.id);
+                        queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                        queryClient.invalidateQueries({ queryKey: ["trax-price"] });
+                        toast({
+                          title: "Price updated",
+                          description: `${label} rate set to $${price}.`,
+                        });
+                      }}
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Vehicle Details Section */}

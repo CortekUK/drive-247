@@ -226,6 +226,8 @@ const MultiStepBookingWidget = () => {
   }, []);
   const [existingRentals, setExistingRentals] = useState<ExistingRental[]>([]); // Completed rentals for buffer time checking
   const [overlappingVehicleIds, setOverlappingVehicleIds] = useState<Set<string>>(new Set()); // Vehicles with Pending/Active rentals overlapping selected dates
+  const [blockedDateRanges, setBlockedDateRanges] = useState<{ vehicle_id: string | null; start_date: string; end_date: string }[]>([]); // Manual blocked_dates (e.g. car rented on Turo); filtered by date overlap at render time
+  const submitInFlightRef = useRef(false); // Synchronous re-entrancy lock — blocks double-click duplicate submits before `loading` state updates
   const [errors, setErrors] = useState<{
     [key: string]: string;
   }>({});
@@ -1134,6 +1136,17 @@ const MultiStepBookingWidget = () => {
     } else {
       setOverlappingVehicleIds(new Set());
     }
+
+    // Manual blocks (blocked_dates) — operator-marked unavailable windows such as a
+    // car rented out on Turo. Loaded once here; the date-overlap filter runs at
+    // render time in getFilteredAndSortedVehicles using the customer's chosen dates.
+    const todayStr = new Date().toISOString().split("T")[0];
+    const { data: blockRows } = await supabase
+      .from("blocked_dates")
+      .select("vehicle_id, start_date, end_date")
+      .eq("tenant_id", tenant.id)
+      .gte("end_date", todayStr);
+    setBlockedDateRanges((blockRows as { vehicle_id: string | null; start_date: string; end_date: string }[]) || []);
   };
 
   // Check verification status - first tries database, then falls back to Veriff API directly
@@ -1757,9 +1770,14 @@ const MultiStepBookingWidget = () => {
   };
 
   const handleSubmit = async () => {
+    // Re-entrancy lock: a fast double-click can call handleSubmit twice before the
+    // `loading` state disables the button. The ref is read synchronously, so the
+    // second call bails out immediately — no duplicate request.
+    if (submitInFlightRef.current) return;
     if (!validateStep3()) {
       return;
     }
+    submitInFlightRef.current = true;
     setLoading(true);
     try {
       // Check if customer is blocked before proceeding
@@ -1915,6 +1933,50 @@ const MultiStepBookingWidget = () => {
         }
       }
 
+      // Pre-insert manual-block guard (blocked_dates) — operator marked the vehicle
+      // unavailable for the window (e.g. rented out on Turo). Overlap when
+      // block.start <= end AND block.end >= start. A null vehicle_id is tenant-wide.
+      if (formData.vehicleId && tenant?.id) {
+        const { data: blocks } = await supabase
+          .from("blocked_dates")
+          .select("id")
+          .eq("tenant_id", tenant.id)
+          .or(`vehicle_id.eq.${formData.vehicleId},vehicle_id.is.null`)
+          .lte("start_date", rentalData.end_date)
+          .gte("end_date", rentalData.start_date)
+          .limit(1);
+
+        if (blocks && blocks.length > 0) {
+          throw new Error(
+            "This vehicle is not available for the selected dates. Please go back and choose different dates or a different vehicle."
+          );
+        }
+      }
+
+      // Duplicate-request cooldown: block an identical request (same customer +
+      // vehicle + dates) submitted within the last 30 minutes. Catches accidental
+      // re-submits/refreshes that the overlap guard misses once the first request
+      // is cancelled/rejected.
+      if (customerId && formData.vehicleId && tenant?.id) {
+        const cooldownSince = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+        const { data: recentDupes } = await supabase
+          .from("rentals")
+          .select("id")
+          .eq("tenant_id", tenant.id)
+          .eq("customer_id", customerId)
+          .eq("vehicle_id", formData.vehicleId)
+          .eq("start_date", rentalData.start_date)
+          .eq("end_date", rentalData.end_date)
+          .gte("created_at", cooldownSince)
+          .limit(1);
+
+        if (recentDupes && recentDupes.length > 0) {
+          throw new Error(
+            "You already submitted this booking request a few minutes ago. Please check your email or contact us instead of submitting again."
+          );
+        }
+      }
+
       const {
         data,
         error
@@ -1951,10 +2013,14 @@ const MultiStepBookingWidget = () => {
       toast.success("Booking confirmed! Check admin portal for new rental.");
       setShowConfirmation(true);
     } catch (error) {
-      toast.error("Failed to process payment. Please try again.");
+      // Surface our own friendly guard messages (availability, blocked dates,
+      // duplicate-request cooldown). Fall back to a generic message otherwise.
+      const msg = error instanceof Error ? error.message : "";
+      toast.error(msg || "Failed to process payment. Please try again.");
       console.error("Payment error:", error);
     } finally {
       setLoading(false);
+      submitInFlightRef.current = false;
     }
   };
   const handleCloseConfirmation = () => {
@@ -2530,6 +2596,21 @@ const MultiStepBookingWidget = () => {
       // Filter out vehicles with overlapping Pending/Active rentals (clash prevention)
       if (overlappingVehicleIds.size > 0) {
         filtered = filtered.filter(vehicle => !overlappingVehicleIds.has(vehicle.id));
+      }
+
+      // Filter out vehicles manually blocked (blocked_dates) for the chosen window.
+      // Overlap: block.start <= dropoff AND block.end >= pickup. A null vehicle_id is
+      // a tenant-wide block that hides every vehicle for that window.
+      if (blockedDateRanges.length > 0) {
+        const overlapping = blockedDateRanges.filter(
+          b => b.start_date <= formData.dropoffDate && b.end_date >= formData.pickupDate
+        );
+        if (overlapping.some(b => !b.vehicle_id)) {
+          filtered = [];
+        } else if (overlapping.length > 0) {
+          const blockedIds = new Set(overlapping.map(b => b.vehicle_id).filter(Boolean) as string[]);
+          filtered = filtered.filter(vehicle => !blockedIds.has(vehicle.id));
+        }
       }
     }
 

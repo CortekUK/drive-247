@@ -31,8 +31,7 @@ import {
   Plus,
   Users,
   Settings2,
-  Search,
-  ArrowLeft
+  Search
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -383,18 +382,9 @@ export default function UsersManagement() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-start sm:items-center gap-2 sm:gap-4 min-w-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => window.history.back()}
-            className="shrink-0 h-9 px-2 sm:px-3"
-          >
-            <ArrowLeft className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Back</span>
-          </Button>
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
               <Users className="h-6 w-6 sm:h-8 sm:w-8 shrink-0" />

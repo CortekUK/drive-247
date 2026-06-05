@@ -153,6 +153,33 @@ const BookingVehiclesContent = () => {
         }
       }
 
+      // Hide vehicles manually blocked (blocked_dates) for the requested window —
+      // e.g. operator marked the car as rented out on Turo. A block overlaps the
+      // request when block.start <= reqEnd AND block.end >= reqStart. A block with
+      // vehicle_id = null is tenant-wide and blocks every vehicle for that window.
+      if (tenant?.id && pickupDate && returnDate) {
+        const reqStart = pickupDate.split("T")[0];
+        const reqEnd = returnDate.split("T")[0];
+        const { data: overlappingBlocks } = await supabase
+          .from("blocked_dates")
+          .select("vehicle_id")
+          .eq("tenant_id", tenant.id)
+          .lte("start_date", reqEnd)
+          .gte("end_date", reqStart);
+
+        if (overlappingBlocks && overlappingBlocks.length > 0) {
+          if (overlappingBlocks.some(b => !b.vehicle_id)) {
+            // Tenant-wide block covering the window — nothing is bookable
+            filteredData = [];
+          } else {
+            const blockedVehicleIds = new Set(
+              overlappingBlocks.map(b => b.vehicle_id).filter(Boolean) as string[]
+            );
+            filteredData = filteredData.filter(v => !blockedVehicleIds.has(v.id));
+          }
+        }
+      }
+
       if (filteredData.length === 0) {
         toast.info("No vehicles available at the moment");
       }

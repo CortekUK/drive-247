@@ -208,7 +208,7 @@ export default function UsersManagement() {
   // Only head_admin can access this page
   if (!appUser || appUser.role !== 'head_admin') {
     return (
-      <div className="p-6">
+      <div className="container mx-auto p-6">
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>

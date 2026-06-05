@@ -119,7 +119,7 @@ function EnquiriesPageContent() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="container mx-auto p-6 space-y-6">
       <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
         <strong className="font-semibold">Enquiries are moving to Leads.</strong>{" "}
         New submissions now appear in the full lead pipeline. This page is read-only and will be

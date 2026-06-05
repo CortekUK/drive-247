@@ -247,11 +247,11 @@ export default function AutomationBuilderPage({ params }: { params: Promise<{ id
   };
 
   if (isLoading || !automation) {
-    return <main className="mx-auto w-full max-w-[1160px] px-6 py-8 text-sm text-[#737373]">Loading…</main>;
+    return <main className="container mx-auto px-6 py-8 text-sm text-[#737373]">Loading…</main>;
   }
 
   return (
-    <main className="mx-auto w-full max-w-[1160px] px-6 py-8">
+    <main className="container mx-auto px-6 py-8">
       <header className="mb-6 flex items-center justify-between">
         <button
           type="button"

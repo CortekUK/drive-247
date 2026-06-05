@@ -1,9 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { VehicleTimelineData, calculateBarPosition } from "@/lib/calendar-utils";
+import { useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  VehicleTimelineData,
+  CalendarBlock,
+  calculateBarPosition,
+} from "@/lib/calendar-utils";
 import { VehiclePhotoThumbnail } from "@/components/vehicles/vehicle-photo-thumbnail";
 import { RentalBar } from "./rental-bar";
+import { BlockBar } from "./block-bar";
 import { cn } from "@/lib/utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { addMinutes, format } from "date-fns";
@@ -18,18 +24,73 @@ interface VehicleRowProps {
   rangeStart: Date;
   rangeEnd: Date;
   index: number;
+  /** Phase 2 inline editing — invoked when the user click-drags an empty span. */
+  onCreateBlock?: (vehicleId: string, startDate: string, endDate: string) => void;
+  onRemoveBlock?: (block: CalendarBlock) => void;
+  removingBlockId?: string | null;
+  /** Ordered list of date columns in the visible range (for drag → date mapping). */
+  dates?: Date[];
 }
 
-export function VehicleRow({ data, rangeStart, rangeEnd, index }: VehicleRowProps) {
+export function VehicleRow({
+  data,
+  rangeStart,
+  rangeEnd,
+  index,
+  onCreateBlock,
+  onRemoveBlock,
+  removingBlockId,
+  dates,
+}: VehicleRowProps) {
   const router = useRouter();
   const { tenant } = useTenant();
-  const { vehicle, rentals } = data;
+  const { vehicle, rentals, blocks } = data;
   const bufferMinutes = (tenant as any)?.buffer_time_minutes || 0;
 
-  // Calculate row height based on rentals (stacked)
-  const barCount = Math.max(1, rentals.length);
+  // Calculate row height based on rentals + blocks (stacked)
+  const barCount = Math.max(1, rentals.length + blocks.length);
   const contentHeight = barCount * BAR_HEIGHT + (barCount - 1) * BAR_GAP + ROW_PADDING * 2;
   const rowHeight = Math.max(80, contentHeight);
+
+  // Phase 2 — drag-to-block. Selection is tracked as start/end column indices.
+  const canEdit = !!onCreateBlock && !!dates && dates.length > 0;
+  const [drag, setDrag] = useState<{ start: number; end: number } | null>(null);
+
+  const colFromClientX = (clientX: number, el: HTMLElement): number => {
+    const rect = el.getBoundingClientRect();
+    const ratio = (clientX - rect.left) / rect.width;
+    const col = Math.floor(ratio * (dates?.length || 1));
+    return Math.max(0, Math.min((dates?.length || 1) - 1, col));
+  };
+
+  const handleDragDown = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!canEdit || e.button !== 0) return;
+    const col = colFromClientX(e.clientX, e.currentTarget);
+    setDrag({ start: col, end: col });
+  };
+
+  const handleDragMove = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!drag) return;
+    const col = colFromClientX(e.clientX, e.currentTarget);
+    setDrag((d) => (d ? { ...d, end: col } : d));
+  };
+
+  const handleDragUp = () => {
+    if (!drag || !dates || !onCreateBlock) {
+      setDrag(null);
+      return;
+    }
+    const lo = Math.min(drag.start, drag.end);
+    const hi = Math.max(drag.start, drag.end);
+    const startStr = format(dates[lo], "yyyy-MM-dd");
+    const endStr = format(dates[hi], "yyyy-MM-dd");
+    setDrag(null);
+    onCreateBlock(vehicle.id, startStr, endStr);
+  };
+
+  const totalCols = dates?.length || 1;
+  const dragLo = drag ? Math.min(drag.start, drag.end) : 0;
+  const dragHi = drag ? Math.max(drag.start, drag.end) : 0;
 
   return (
     <div
@@ -58,8 +119,36 @@ export function VehicleRow({ data, rangeStart, rangeEnd, index }: VehicleRowProp
         </div>
       </div>
 
-      {/* Timeline area — bars stacked vertically */}
-      <div className="flex-1 relative" style={{ minHeight: `${rowHeight}px` }}>
+      {/* Timeline area — bars stacked vertically. Drag move/up live on this outer
+          container so a drag survives crossing over existing bars (the bars are
+          siblings of the drag layer, so releasing over a bar still lands here). */}
+      <div
+        className="flex-1 relative"
+        style={{ minHeight: `${rowHeight}px` }}
+        onMouseMove={canEdit ? handleDragMove : undefined}
+        onMouseUp={canEdit ? handleDragUp : undefined}
+        onMouseLeave={canEdit ? () => setDrag(null) : undefined}
+      >
+        {/* Drag-to-block start layer (Phase 2). Sits behind the bars so a drag only
+            STARTS on empty space; bars intercept their own pointer events (open trip). */}
+        {canEdit && (
+          <div
+            className="absolute inset-0 cursor-cell"
+            onMouseDown={handleDragDown}
+            title="Drag to block these dates"
+          >
+            {drag && (
+              <div
+                className="absolute top-1 bottom-1 rounded-md bg-slate-400/30 border border-dashed border-slate-500/60 pointer-events-none"
+                style={{
+                  left: `${(dragLo / totalCols) * 100}%`,
+                  width: `${((dragHi - dragLo + 1) / totalCols) * 100}%`,
+                }}
+              />
+            )}
+          </div>
+        )}
+
         {rentals.map((rental, i) => {
           const position = calculateBarPosition(
             rental.start_date,
@@ -115,6 +204,29 @@ export function VehicleRow({ data, rangeStart, rangeEnd, index }: VehicleRowProp
                 </Tooltip>
               )}
             </div>
+          );
+        })}
+
+        {/* Manual blocks (e.g. car rented out on Turo) — stacked below rentals */}
+        {blocks.map((block, i) => {
+          const position = calculateBarPosition(
+            block.start_date,
+            block.end_date,
+            rangeStart,
+            rangeEnd
+          );
+          const topOffset =
+            ROW_PADDING + (rentals.length + i) * (BAR_HEIGHT + BAR_GAP);
+          return (
+            <BlockBar
+              key={block.id}
+              block={block}
+              position={position}
+              topOffset={topOffset}
+              barHeight={BAR_HEIGHT}
+              onRemove={onRemoveBlock}
+              isRemoving={removingBlockId === block.id}
+            />
           );
         })}
       </div>

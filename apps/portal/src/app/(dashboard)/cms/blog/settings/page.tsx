@@ -66,7 +66,7 @@ export default function BlogSettingsPage() {
   }
 
   return (
-    <div className="space-y-4 md:space-y-6 p-4 md:p-6">
+    <div className="container mx-auto space-y-4 md:space-y-6 p-4 md:p-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => router.push("/cms/blog")}>
           <ArrowLeft className="h-4 w-4 mr-1" />

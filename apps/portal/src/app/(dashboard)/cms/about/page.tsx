@@ -162,7 +162,7 @@ export default function CMSAboutEditor() {
   };
 
   return (
-    <div className="space-y-6 pt-4 sm:pt-6 px-3 sm:px-0">
+    <div className="container mx-auto space-y-6 pt-4 sm:pt-6 px-3 sm:px-0">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-start sm:items-center gap-2 sm:gap-4 min-w-0">

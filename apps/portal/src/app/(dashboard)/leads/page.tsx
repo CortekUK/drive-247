@@ -95,7 +95,7 @@ export default function LeadsPage() {
     !board.isLoading && totalActive === 0 && (waitlist.data?.length ?? 0) === 0;
 
   return (
-    <main className="mx-auto w-full max-w-[1160px] px-6 py-8">
+    <main className="container mx-auto px-6 py-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[30px] font-medium text-[#080812]">Leads</h1>

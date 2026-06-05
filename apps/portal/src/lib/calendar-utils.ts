@@ -27,9 +27,21 @@ export interface CalendarRental {
   vehicle: { id: string; reg: string; make: string; model: string; photo_url?: string };
 }
 
+export interface CalendarBlock {
+  id: string;
+  vehicle_id: string | null; // null = tenant-wide block (applies to every vehicle)
+  start_date: string;
+  end_date: string;
+  reason: string | null;
+  /** 'manual' = operator-created block (incl. Turo/Airbnb marked unavailable);
+   *  'external' = synced from an external calendar (reserved for future iCal sync). */
+  source: "manual" | "external";
+}
+
 export interface VehicleTimelineData {
   vehicle: { id: string; reg: string; make: string; model: string; photo_url?: string };
   rentals: CalendarRental[];
+  blocks: CalendarBlock[];
 }
 
 export interface BarPosition {
@@ -90,6 +102,61 @@ export function calculateBarPosition(
   };
 }
 
+type VehicleInfo = VehicleTimelineData["vehicle"];
+
+/**
+ * Build the per-vehicle timeline from rentals + manual blocks.
+ *
+ * A vehicle row is created if it has at least one rental OR one block.
+ * Blocks with vehicle_id = null are tenant-wide and are attached to every
+ * vehicle row (so an operator's "all cars off" block shows across the fleet).
+ *
+ * `vehicleLookup` supplies reg/make/model/photo for vehicles that only have
+ * blocks (no rentals) — those vehicle details aren't carried on a block row.
+ */
+export function groupTimelineByVehicle(
+  rentals: CalendarRental[],
+  blocks: CalendarBlock[],
+  vehicleLookup: Map<string, VehicleInfo>
+): VehicleTimelineData[] {
+  const vehicleMap = new Map<string, VehicleTimelineData>();
+
+  const ensureRow = (vehicle: VehicleInfo): VehicleTimelineData => {
+    if (!vehicleMap.has(vehicle.id)) {
+      vehicleMap.set(vehicle.id, { vehicle, rentals: [], blocks: [] });
+    }
+    return vehicleMap.get(vehicle.id)!;
+  };
+
+  for (const rental of rentals) {
+    ensureRow(rental.vehicle).rentals.push(rental);
+  }
+
+  const tenantWideBlocks: CalendarBlock[] = [];
+  for (const block of blocks) {
+    if (!block.vehicle_id) {
+      tenantWideBlocks.push(block);
+      continue;
+    }
+    const vehicle = vehicleLookup.get(block.vehicle_id);
+    if (!vehicle) continue; // vehicle no longer exists / not in tenant
+    ensureRow(vehicle).blocks.push(block);
+  }
+
+  // Attach tenant-wide blocks to every vehicle row that exists
+  if (tenantWideBlocks.length) {
+    for (const row of vehicleMap.values()) {
+      row.blocks.push(...tenantWideBlocks);
+    }
+  }
+
+  // Sort vehicles by reg
+  return Array.from(vehicleMap.values()).sort((a, b) =>
+    a.vehicle.reg.localeCompare(b.vehicle.reg)
+  );
+}
+
+/** @deprecated use groupTimelineByVehicle — kept for backward compatibility */
 export function groupRentalsByVehicle(
   rentals: CalendarRental[]
 ): VehicleTimelineData[] {
@@ -98,12 +165,11 @@ export function groupRentalsByVehicle(
   for (const rental of rentals) {
     const key = rental.vehicle.id;
     if (!vehicleMap.has(key)) {
-      vehicleMap.set(key, { vehicle: rental.vehicle, rentals: [] });
+      vehicleMap.set(key, { vehicle: rental.vehicle, rentals: [], blocks: [] });
     }
     vehicleMap.get(key)!.rentals.push(rental);
   }
 
-  // Sort vehicles by reg
   return Array.from(vehicleMap.values()).sort((a, b) =>
     a.vehicle.reg.localeCompare(b.vehicle.reg)
   );
@@ -153,6 +219,79 @@ export function getStatusColor(status: string): {
         text: "text-slate-700 dark:text-slate-400",
       };
   }
+}
+
+export interface DatePricingInfo {
+  type: "regular" | "weekend" | "holiday";
+  surchargePercent: number;
+  label: string | null; // holiday name when type === 'holiday'
+}
+
+export interface DatePricingHoliday {
+  name: string;
+  start_date: string;
+  end_date: string;
+  surcharge_percent: number | string;
+  recurs_annually: boolean;
+}
+
+/**
+ * Classify a single calendar date for the per-day pricing strip. Mirrors the
+ * holiday/weekend logic in calculate-rental-price.ts so the calendar's surcharge
+ * markers match what the booking flow actually charges. Holiday wins over weekend.
+ */
+export function classifyDatePricing(
+  date: Date,
+  weekendConfig: { weekend_surcharge_percent: number; weekend_days: number[] } | null,
+  holidays: DatePricingHoliday[]
+): DatePricingInfo {
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const dateStr = format(date, "yyyy-MM-dd");
+
+  for (const h of holidays) {
+    let match = false;
+    if (h.recurs_annually) {
+      const start = parseISO(h.start_date);
+      const end = parseISO(h.end_date);
+      const sM = start.getMonth() + 1;
+      const sD = start.getDate();
+      const eM = end.getMonth() + 1;
+      const eD = end.getDate();
+      if (sM === eM) {
+        match = month === sM && day >= sD && day <= eD;
+      } else {
+        match =
+          (month === sM && day >= sD) ||
+          (month === eM && day <= eD) ||
+          (month > sM && month < eM);
+      }
+    } else {
+      match = dateStr >= h.start_date && dateStr <= h.end_date;
+    }
+    if (match) {
+      return {
+        type: "holiday",
+        surchargePercent: Number(h.surcharge_percent) || 0,
+        label: h.name,
+      };
+    }
+  }
+
+  const dow = date.getDay();
+  if (
+    weekendConfig &&
+    weekendConfig.weekend_surcharge_percent > 0 &&
+    weekendConfig.weekend_days?.includes(dow)
+  ) {
+    return {
+      type: "weekend",
+      surchargePercent: weekendConfig.weekend_surcharge_percent,
+      label: null,
+    };
+  }
+
+  return { type: "regular", surchargePercent: 0, label: null };
 }
 
 export function formatDateRange(start: Date, end: Date): string {

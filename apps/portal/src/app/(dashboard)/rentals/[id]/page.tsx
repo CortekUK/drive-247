@@ -1972,7 +1972,7 @@ const RentalDetail = () => {
   const needsKeyHandover = rental?.approval_status === 'approved' && rental?.payment_status === 'fulfilled' && !isKeyHandoverCompleted;
 
   return (
-    <div className="space-y-6 py-[24px] px-[8px]">
+    <div className="container mx-auto space-y-6 py-[24px] px-[8px]">
       {/* Key Handover Action Banner */}
       <KeyHandoverActionBanner
         show={needsKeyHandover}

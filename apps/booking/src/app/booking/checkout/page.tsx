@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,7 @@ const BookingCheckoutContent = () => {
   const { tenant } = useTenant();
   const { context: bookingContext, pendingInsuranceFiles, clearPendingInsuranceFiles, pendingGigDriverFiles, clearPendingGigDriverFiles } = useBookingStore();
   const [loading, setLoading] = useState(false);
+  const submitInFlightRef = useRef(false); // Synchronous re-entrancy lock against double-click duplicate submits
   const [vehicleDetails, setVehicleDetails] = useState<any>(null);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -354,11 +355,15 @@ const BookingCheckoutContent = () => {
   };
 
   const handleSubmit = async () => {
+    // Re-entrancy lock: blocks a double-click from running handleSubmit twice
+    // before the `loading` state disables the button.
+    if (submitInFlightRef.current) return;
     if (!validateForm()) {
       toast.error("Please fill in all required fields correctly");
       return;
     }
 
+    submitInFlightRef.current = true;
     setLoading(true);
     try {
       // Get customer data from Zustand store (saved in Step 1)
@@ -618,6 +623,52 @@ const BookingCheckoutContent = () => {
         }
       }
 
+      // Step 3d: Manual block check (blocked_dates) — operator marked this vehicle
+      // unavailable for the window (e.g. rented out on Turo). Overlap when
+      // block.start <= returnDate AND block.end >= pickupDate. A null vehicle_id
+      // is a tenant-wide block covering every vehicle.
+      if (tenant?.id && vehicleId && pickupDate && returnDate) {
+        const { data: blocks, error: blockError } = await supabase
+          .from("blocked_dates")
+          .select("id")
+          .eq("tenant_id", tenant.id)
+          .or(`vehicle_id.eq.${vehicleId},vehicle_id.is.null`)
+          .lte("start_date", returnDate)
+          .gte("end_date", pickupDate)
+          .limit(1);
+
+        if (blockError) throw blockError;
+        if (blocks && blocks.length > 0) {
+          throw new Error(
+            "This vehicle is not available for your selected dates. Please go back and choose a different vehicle or dates."
+          );
+        }
+      }
+
+      // Step 3e: Duplicate-request cooldown — block an identical request (same
+      // customer + vehicle + dates) submitted within the last 30 minutes. Catches
+      // accidental re-submits/refreshes the overlap guard misses once the first
+      // request is cancelled/rejected.
+      if (tenant?.id && customer?.id && vehicleId && pickupDate && returnDate) {
+        const cooldownSince = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+        const { data: recentDupes } = await supabase
+          .from("rentals")
+          .select("id")
+          .eq("tenant_id", tenant.id)
+          .eq("customer_id", customer.id)
+          .eq("vehicle_id", vehicleId)
+          .eq("start_date", pickupDate)
+          .eq("end_date", returnDate)
+          .gte("created_at", cooldownSince)
+          .limit(1);
+
+        if (recentDupes && recentDupes.length > 0) {
+          throw new Error(
+            "You already submitted this booking request a few minutes ago. Please check your email or contact us instead of submitting again."
+          );
+        }
+      }
+
       // Step 4: Calculate monthly amount
       const days = calculateRentalDays();
       const monthlyAmount = vehicleDetails.monthly_rent || calculateVehiclePrice();
@@ -844,6 +895,7 @@ const BookingCheckoutContent = () => {
       toast.error(error.message || "Failed to create rental");
     } finally {
       setLoading(false);
+      submitInFlightRef.current = false;
     }
   };
 

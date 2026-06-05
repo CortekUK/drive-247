@@ -23,6 +23,8 @@ import { editVehicleEnhancedSchema, type EditVehicleEnhancedFormValues } from "@
 import { useTenant } from "@/contexts/TenantContext";
 import { getCurrencySymbol } from "@/lib/format-utils";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
+import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
+import { TraxIcon } from "@/components/chat/TraxIcon";
 
 type VehicleFormData = EditVehicleEnhancedFormValues;
 
@@ -735,6 +737,34 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                   )}
                 />
               </div>
+
+              {/* Trax pricing suggestions (existing vehicles only — needs make/model on record) */}
+              {vehicle?.id && (
+                <div className="mt-3 rounded-lg border border-[#f1f5f9] dark:border-gray-800 bg-[#f8fafc] dark:bg-gray-800/40 p-3 space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-[#080812] dark:text-gray-100">
+                    <TraxIcon size={16} /> Trax pricing suggestions
+                  </div>
+                  {([
+                    ["daily", "Daily", "daily_rent"],
+                    ["weekly", "Weekly", "weekly_rent"],
+                    ["monthly", "Monthly", "monthly_rent"],
+                  ] as const).map(([tier, label, col]) => (
+                    <div key={tier} className="flex items-center gap-2">
+                      <span className="w-14 shrink-0 text-[11px] text-[#737373] dark:text-gray-400">
+                        {label}
+                      </span>
+                      <TraxPriceSuggestion
+                        vehicleId={vehicle.id}
+                        tier={tier}
+                        currentPrice={Number(form.watch(col)) || undefined}
+                        onImplement={(price) =>
+                          form.setValue(col, price, { shouldDirty: true, shouldValidate: true })
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Vehicle classification */}
               <div className="mt-4 pt-4 border-t space-y-3">

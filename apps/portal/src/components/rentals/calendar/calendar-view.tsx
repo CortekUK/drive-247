@@ -6,15 +6,31 @@ import { Card, CardContent } from "@/components/ui/card";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CalendarIcon, Loader2 } from "lucide-react";
 import { useCalendarRentals } from "@/hooks/use-calendar-rentals";
+import { useCalendarBlocks } from "@/hooks/use-calendar-blocks";
+import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
+import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
 import { RentalFilters } from "@/hooks/use-enhanced-rentals";
 import {
   ViewType,
+  CalendarBlock,
   getDateRange,
   getDatesInRange,
+  classifyDatePricing,
 } from "@/lib/calendar-utils";
 import { CalendarHeader } from "./calendar-header";
 import { VehicleRow } from "./vehicle-row";
 import { AIInsightsPanel } from "./ai-insights-panel";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 interface CalendarViewProps {
@@ -53,7 +69,28 @@ export function CalendarView({ filters }: CalendarViewProps) {
 
   const { data, isLoading } = useCalendarRentals(rangeStart, rangeEnd, filters);
 
-  // Filter grouped data by active statuses
+  // Phase 2 — inline availability editing
+  const { createBlock, removeBlock } = useCalendarBlocks();
+  const [pendingBlock, setPendingBlock] = useState<{
+    vehicleId: string;
+    startDate: string;
+    endDate: string;
+    reason: string;
+  } | null>(null);
+
+  // Phase 3 — per-day pricing strip data (weekend + holiday surcharges)
+  const { holidays } = useTenantHolidays();
+  const { settings: weekendSettings } = useWeekendPricing();
+  const weekendConfig = useMemo(
+    () =>
+      weekendSettings && weekendSettings.weekend_surcharge_percent > 0
+        ? weekendSettings
+        : null,
+    [weekendSettings]
+  );
+
+  // Filter grouped data by active statuses. A vehicle row stays visible if it has
+  // matching rentals OR any blocks (blocks aren't subject to the status filter).
   const filteredGrouped = useMemo(() => {
     if (!data?.grouped) return [];
     return data.grouped
@@ -61,8 +98,31 @@ export function CalendarView({ filters }: CalendarViewProps) {
         ...v,
         rentals: v.rentals.filter((r) => activeStatuses.has(r.computed_status)),
       }))
-      .filter((v) => v.rentals.length > 0);
+      .filter((v) => v.rentals.length > 0 || v.blocks.length > 0);
   }, [data?.grouped, activeStatuses]);
+
+  const handleCreateBlock = (
+    vehicleId: string,
+    startDate: string,
+    endDate: string
+  ) => {
+    setPendingBlock({ vehicleId, startDate, endDate, reason: "" });
+  };
+
+  const handleRemoveBlock = (block: CalendarBlock) => {
+    removeBlock.mutate(block.id);
+  };
+
+  const confirmCreateBlock = () => {
+    if (!pendingBlock) return;
+    createBlock.mutate({
+      vehicleId: pendingBlock.vehicleId,
+      startDate: pendingBlock.startDate,
+      endDate: pendingBlock.endDate,
+      reason: pendingBlock.reason,
+    });
+    setPendingBlock(null);
+  };
 
   const handlePrev = () => {
     setAnchorDate((d) => (viewType === "week" ? subWeeks(d, 1) : subMonths(d, 1)));
@@ -168,6 +228,9 @@ export function CalendarView({ filters }: CalendarViewProps) {
                 <div className="flex-1 flex relative">
                   {dates.map((date, i) => {
                     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                    // Per-day pricing signal (weekend / holiday surcharge)
+                    const pricing = classifyDatePricing(date, weekendConfig, holidays);
+                    const hasSurcharge = pricing.surchargePercent > 0;
                     return (
                       <div
                         key={i}
@@ -176,6 +239,13 @@ export function CalendarView({ filters }: CalendarViewProps) {
                           isWeekend && "bg-muted/40",
                           isToday(date) && "bg-primary/10 font-semibold"
                         )}
+                        title={
+                          pricing.type === "holiday"
+                            ? `${pricing.label}: +${pricing.surchargePercent}%`
+                            : pricing.type === "weekend"
+                            ? `Weekend: +${pricing.surchargePercent}%`
+                            : undefined
+                        }
                       >
                         <div className="text-muted-foreground">
                           {format(date, "EEE")}
@@ -185,6 +255,21 @@ export function CalendarView({ filters }: CalendarViewProps) {
                           isToday(date) && "text-primary"
                         )}>
                           {format(date, "d")}
+                        </div>
+                        {/* Surcharge marker — fleet-wide per-day pricing signal */}
+                        <div className="h-3.5 mt-0.5 flex items-center justify-center">
+                          {hasSurcharge && (
+                            <span
+                              className={cn(
+                                "inline-block leading-none rounded-sm px-1 py-0.5 text-[8px] font-bold",
+                                pricing.type === "holiday"
+                                  ? "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300"
+                                  : "bg-amber-100 text-amber-700 dark:bg-amber-400/20 dark:text-amber-300"
+                              )}
+                            >
+                              +{pricing.surchargePercent}%
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
@@ -217,6 +302,10 @@ export function CalendarView({ filters }: CalendarViewProps) {
                       rangeStart={rangeStart}
                       rangeEnd={rangeEnd}
                       index={index}
+                      dates={dates}
+                      onCreateBlock={handleCreateBlock}
+                      onRemoveBlock={handleRemoveBlock}
+                      removingBlockId={removeBlock.isPending ? (removeBlock.variables as string) : null}
                     />
                   ))}
                 </div>
@@ -226,6 +315,53 @@ export function CalendarView({ filters }: CalendarViewProps) {
           )}
         </div>
       </div>
+
+      {/* Phase 2 — confirm new block from drag-to-block */}
+      <AlertDialog
+        open={!!pendingBlock}
+        onOpenChange={(o) => !o && setPendingBlock(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Block these dates?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingBlock && (
+                <>
+                  This vehicle will be marked unavailable from{" "}
+                  <span className="font-semibold text-foreground">
+                    {format(new Date(pendingBlock.startDate + "T00:00:00"), "MMM d, yyyy")}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-semibold text-foreground">
+                    {format(new Date(pendingBlock.endDate + "T00:00:00"), "MMM d, yyyy")}
+                  </span>
+                  . Customers won't be able to book it for that window.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-1">
+            <label className="text-xs font-medium text-muted-foreground">
+              Reason (optional)
+            </label>
+            <Input
+              autoFocus
+              placeholder="e.g. Rented on Turo, maintenance…"
+              value={pendingBlock?.reason ?? ""}
+              onChange={(e) =>
+                setPendingBlock((p) => (p ? { ...p, reason: e.target.value } : p))
+              }
+              className="mt-1"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCreateBlock}>
+              Block dates
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </TooltipProvider>
   );
 }

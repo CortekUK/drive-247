@@ -193,7 +193,7 @@ export default function SubscriptionPage() {
 
   // Subscribed state
   return (
-    <div className="p-6">
+    <div className="container mx-auto p-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Subscription</h1>

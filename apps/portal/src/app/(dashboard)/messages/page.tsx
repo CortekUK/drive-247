@@ -54,7 +54,7 @@ export default function MessagesPage() {
   }, [targetCustomerId, channels, tenant?.id, joinRoom, router, searchParams, selectedChannel?.id]);
 
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col">
+    <div className="container mx-auto h-[calc(100vh-64px)] flex flex-col">
       {/* Chat layout - full height */}
       <div className="flex-1 flex overflow-hidden">
         {/* Channel list - left panel: hidden on mobile when a chat is selected */}

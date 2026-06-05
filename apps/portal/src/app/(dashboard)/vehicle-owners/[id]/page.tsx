@@ -59,7 +59,7 @@ export default function VehicleOwnerDetailPage() {
     .reduce((s, p) => s + (Number(p.net_owed) - Number(p.amount_paid)), 0);
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="container mx-auto space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => router.push("/vehicle-owners")}>

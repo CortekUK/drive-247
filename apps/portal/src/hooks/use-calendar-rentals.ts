@@ -5,8 +5,9 @@ import { getRentalStatus } from "@/lib/rental-utils";
 import { RentalFilters } from "@/hooks/use-enhanced-rentals";
 import {
   CalendarRental,
+  CalendarBlock,
   VehicleTimelineData,
-  groupRentalsByVehicle,
+  groupTimelineByVehicle,
 } from "@/lib/calendar-utils";
 
 export const useCalendarRentals = (
@@ -61,8 +62,54 @@ export const useCalendarRentals = (
         .lte("start_date", endStr)
         .or(`end_date.gte.${startStr},end_date.is.null`) as any;
 
-      const { data: rentalsData, error } = await query;
+      // Manual blocks (blocked_dates) overlapping the visible range — operator-
+      // marked unavailable windows (e.g. car rented out on Turo). A block overlaps
+      // when start_date <= rangeEnd AND end_date >= rangeStart.
+      const blocksQuery = supabase
+        .from("blocked_dates")
+        .select("id, vehicle_id, start_date, end_date, reason")
+        .eq("tenant_id", tenant.id)
+        .lte("start_date", endStr)
+        .gte("end_date", startStr) as any;
+
+      // Lightweight vehicle lookup so block-only vehicles (no rentals in range)
+      // still get a row with reg/make/model/photo.
+      const vehiclesQuery = supabase
+        .from("vehicles")
+        .select("id, reg, make, model, vehicle_photos(photo_url)")
+        .eq("tenant_id", tenant.id) as any;
+
+      const [
+        { data: rentalsData, error },
+        { data: blocksData, error: blocksError },
+        { data: vehiclesData, error: vehiclesError },
+      ] = await Promise.all([query, blocksQuery, vehiclesQuery]);
+
       if (error) throw error;
+      if (blocksError) throw blocksError;
+      if (vehiclesError) throw vehiclesError;
+
+      const vehicleLookup = new Map<string, VehicleTimelineData["vehicle"]>();
+      for (const v of (vehiclesData || []) as any[]) {
+        vehicleLookup.set(v.id, {
+          id: v.id,
+          reg: v.reg,
+          make: v.make,
+          model: v.model,
+          photo_url: v.vehicle_photos?.[0]?.photo_url || undefined,
+        });
+      }
+
+      const calendarBlocks: CalendarBlock[] = ((blocksData || []) as any[]).map(
+        (b) => ({
+          id: b.id,
+          vehicle_id: b.vehicle_id,
+          start_date: b.start_date,
+          end_date: b.end_date,
+          reason: b.reason,
+          source: "manual" as const,
+        })
+      );
 
       const calendarRentals: CalendarRental[] = (rentalsData || [])
         .filter((r: any) => r.customers && r.vehicles)
@@ -110,7 +157,11 @@ export const useCalendarRentals = (
 
       return {
         rentals: calendarRentals,
-        grouped: groupRentalsByVehicle(calendarRentals),
+        grouped: groupTimelineByVehicle(
+          calendarRentals,
+          calendarBlocks,
+          vehicleLookup
+        ),
       };
     },
     enabled: !!tenant,

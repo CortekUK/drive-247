@@ -27,6 +27,8 @@ import { cn } from "@/lib/utils";
 import { addVehicleDialogSchema, type AddVehicleDialogFormValues } from "@/client-schemas/vehicles/add-vehicle-dialog";
 import { getCurrencySymbol } from "@/lib/format-utils";
 import { toast as sonnerToast } from "sonner";
+import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
+import { TraxIcon } from "@/components/chat/TraxIcon";
 
 type VehicleFormData = AddVehicleDialogFormValues;
 
@@ -862,6 +864,36 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                     )}
                   />
                 </div>
+
+                {/* Trax pricing suggestions (draft mode — matches on the make/model you type) */}
+                {!!form.watch("make")?.trim() && !!form.watch("model")?.trim() && (
+                  <div className="mt-3 rounded-lg border border-[#f1f5f9] dark:border-gray-800 bg-[#f8fafc] dark:bg-gray-800/40 p-3 space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-[#080812] dark:text-gray-100">
+                      <TraxIcon size={16} /> Trax pricing suggestions
+                    </div>
+                    {([
+                      ["daily", "Daily", "daily_rent"],
+                      ["weekly", "Weekly", "weekly_rent"],
+                      ["monthly", "Monthly", "monthly_rent"],
+                    ] as const).map(([tier, label, col]) => (
+                      <div key={tier} className="flex items-center gap-2">
+                        <span className="w-14 shrink-0 text-[11px] text-[#737373] dark:text-gray-400">
+                          {label}
+                        </span>
+                        <TraxPriceSuggestion
+                          tier={tier}
+                          draftMake={form.watch("make") || undefined}
+                          draftModel={form.watch("model") || undefined}
+                          draftYear={Number(form.watch("year")) || undefined}
+                          currentPrice={Number(form.watch(col)) || undefined}
+                          onImplement={(price) =>
+                            form.setValue(col, price, { shouldDirty: true, shouldValidate: true })
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-3 gap-3 items-start">
                   <FormField

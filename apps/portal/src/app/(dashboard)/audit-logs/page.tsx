@@ -39,7 +39,6 @@ import {
   Calendar as CalendarIcon,
   FileText,
   Download,
-  ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -143,15 +142,6 @@ const AuditLogs = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-start sm:items-center gap-2 sm:gap-4 min-w-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => window.history.back()}
-            className="shrink-0 h-9 px-2 sm:px-3"
-          >
-            <ArrowLeft className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Back</span>
-          </Button>
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold">Audit Logs</h1>
             <p className="text-muted-foreground text-sm sm:text-base">

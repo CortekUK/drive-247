@@ -405,7 +405,7 @@ const CustomerDetail = () => {
   }
 
   return (
-    <div className="space-y-8 pt-4">
+    <div className="container mx-auto p-4 sm:p-6 space-y-8">
       {/* Blocked Customer Alert */}
       {customer.is_blocked && (
         <Alert variant="destructive" className="border-destructive/50 bg-destructive/10">
