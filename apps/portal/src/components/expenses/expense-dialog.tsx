@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
@@ -15,12 +15,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -33,28 +30,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Receipt, Upload, FileText, X, Loader2, ExternalLink } from "lucide-react";
+import { Receipt, Upload, FileText, X, Loader2, Car, Building2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { getCurrencySymbol } from "@/lib/format-utils";
-import {
-  expenseSchema,
-  type ExpenseFormValues,
-  PAYMENT_METHODS,
-} from "@/client-schemas/expenses/expense";
+import { expenseSchema, type ExpenseFormValues } from "@/client-schemas/expenses/expense";
 import { useExpenseCategories } from "@/hooks/use-expense-categories";
+import { DateTimePicker } from "@/components/expenses/datetime-picker";
 import type { Expense, ExpenseInput } from "@/hooks/use-expenses";
-
-const NO_VEHICLE = "__none__";
-const NO_METHOD = "__none__";
 
 interface ExpenseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Provided when editing an existing expense; null/undefined for create. */
   expense?: Expense | null;
   onSubmit: (input: ExpenseInput) => Promise<unknown> | void;
-  isSubmitting?: boolean;
   uploadReceipt: (file: File) => Promise<string>;
-  getReceiptUrl: (path: string) => Promise<string | null>;
+  getReceiptUrl: (path: string, opts?: { download?: boolean }) => Promise<string | null>;
+  removeReceiptFile?: (path: string | null | undefined) => Promise<void>;
 }
 
 const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
@@ -64,9 +55,9 @@ export function ExpenseDialog({
   onOpenChange,
   expense,
   onSubmit,
-  isSubmitting,
   uploadReceipt,
   getReceiptUrl,
+  removeReceiptFile,
 }: ExpenseDialogProps) {
   const { tenant } = useTenant();
   const currencySymbol = getCurrencySymbol(tenant?.currency_code || "USD");
@@ -83,22 +74,27 @@ export function ExpenseDialog({
   const form = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseSchema),
     defaultValues: {
-      expense_date: new Date().toISOString().split("T")[0],
-      category: "",
-      amount: undefined,
+      type: "business",
       vehicle_id: null,
-      vendor: "",
-      payment_method: "",
-      reference: "",
-      notes: "",
-      is_recurring: false,
-      recurrence_interval: null,
+      category: "",
+      expense_at: new Date().toISOString(),
+      amount: undefined as unknown as number,
     },
   });
 
-  const isRecurring = form.watch("is_recurring");
+  const type = form.watch("type");
 
-  // Vehicles for the optional picker.
+  // Categories filtered to the selected type, plus the editing expense's own
+  // category if it has since been removed (so the value stays valid).
+  const typeCategories = useMemo(() => {
+    const list = categories.filter((c) => c.category_type === type).map((c) => c.name);
+    if (expense?.category && !list.includes(expense.category)) {
+      const expType = expense.vehicle_id ? "vehicle" : "business";
+      if (expType === type) return [expense.category, ...list];
+    }
+    return list;
+  }, [categories, type, expense]);
+
   const { data: vehicles = [] } = useQuery({
     queryKey: ["expense-vehicle-options", tenant?.id],
     queryFn: async () => {
@@ -113,42 +109,41 @@ export function ExpenseDialog({
     enabled: !!tenant && open,
   });
 
-  // Reset the form whenever the dialog opens (for create or a specific edit).
   useEffect(() => {
     if (!open) return;
     setReceiptFile(null);
     setUploadError(null);
     if (expense) {
       form.reset({
-        expense_date: expense.expense_date,
-        category: expense.category,
-        amount: Number(expense.amount),
+        type: expense.vehicle_id ? "vehicle" : "business",
         vehicle_id: expense.vehicle_id,
-        vendor: expense.vendor ?? "",
-        payment_method: expense.payment_method ?? "",
-        reference: expense.reference ?? "",
-        notes: expense.notes ?? "",
-        is_recurring: expense.is_recurring,
-        recurrence_interval: expense.recurrence_interval,
+        category: expense.category,
+        expense_at: expense.expense_at,
+        amount: Number(expense.amount),
       });
       setExistingReceipt(expense.receipt_url ?? null);
     } else {
       form.reset({
-        expense_date: new Date().toISOString().split("T")[0],
-        category: categories[0]?.name ?? "",
-        amount: undefined,
+        type: "business",
         vehicle_id: null,
-        vendor: "",
-        payment_method: "",
-        reference: "",
-        notes: "",
-        is_recurring: false,
-        recurrence_interval: null,
+        category: "",
+        expense_at: new Date().toISOString(),
+        amount: undefined as unknown as number,
       });
       setExistingReceipt(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, expense?.id]);
+
+  const switchType = (next: "business" | "vehicle") => {
+    form.setValue("type", next);
+    form.setValue("vehicle_id", next === "business" ? null : form.getValues("vehicle_id"));
+    // Reset category when leaving the current type's set.
+    const stillValid = categories.some(
+      (c) => c.category_type === next && c.name === form.getValues("category")
+    );
+    if (!stillValid) form.setValue("category", "");
+  };
 
   const pickFile = (file: File | undefined) => {
     setUploadError(null);
@@ -167,60 +162,133 @@ export function ExpenseDialog({
 
   const handleSubmit = async (values: ExpenseFormValues) => {
     setBusy(true);
+    let freshUpload: string | null = null;
     try {
       let receipt_url: string | null = existingReceipt;
       if (receiptFile) {
         receipt_url = await uploadReceipt(receiptFile);
+        freshUpload = receipt_url;
       }
       const input: ExpenseInput = {
-        expense_date: values.expense_date,
+        expense_at: values.expense_at,
         category: values.category,
         amount: values.amount,
-        vehicle_id: values.vehicle_id || null,
-        vendor: values.vendor?.trim() || null,
-        payment_method: values.payment_method || null,
-        reference: values.reference?.trim() || null,
-        notes: values.notes?.trim() || null,
+        vehicle_id: values.type === "vehicle" ? values.vehicle_id || null : null,
         receipt_url,
-        is_recurring: values.is_recurring ?? false,
-        recurrence_interval: values.is_recurring ? values.recurrence_interval ?? null : null,
+        previous_receipt_url: expense?.receipt_url ?? null,
       };
       await onSubmit(input);
       onOpenChange(false);
     } catch (e: any) {
+      if (freshUpload) await removeReceiptFile?.(freshUpload);
       setUploadError(e?.message || "Something went wrong while saving.");
     } finally {
       setBusy(false);
     }
   };
 
-  const submitting = busy || isSubmitting;
-
   return (
-    <Dialog open={open} onOpenChange={(o) => !submitting && onOpenChange(o)}>
-      <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Receipt className="h-5 w-5 text-primary" />
             {isEdit ? "Edit Expense" : "Add Expense"}
           </DialogTitle>
-          <DialogDescription>
-            Record a vehicle cost or a business-wide overhead. It flows straight into your P&amp;L.
-          </DialogDescription>
+          <DialogDescription>Record a business or vehicle expense.</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            {/* Type toggle */}
+            <FormField
+              control={form.control}
+              name="type"
+              render={() => (
+                <FormItem>
+                  <FormLabel>Type</FormLabel>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["business", "vehicle"] as const).map((t) => {
+                      const active = type === t;
+                      const Icon = t === "business" ? Building2 : Car;
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => switchType(t)}
+                          className={cn(
+                            "flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium capitalize transition-colors",
+                            active
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border text-muted-foreground hover:bg-muted/50"
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {t}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </FormItem>
+              )}
+            />
+
+            {/* Vehicle (vehicle type only) */}
+            {type === "vehicle" && (
+              <FormField
+                control={form.control}
+                name="vehicle_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vehicle</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select vehicle" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {vehicles.map((v: any) => (
+                          <SelectItem key={v.id} value={v.id}>
+                            {v.reg} · {v.make} {v.model}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {/* Category + Amount */}
             <div className="grid grid-cols-2 gap-3">
               <FormField
                 control={form.control}
-                name="expense_date"
+                name="category"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
+                    <FormLabel>Category</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {typeCategories.length === 0 ? (
+                          <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                            No {type} categories yet.
+                          </div>
+                        ) : (
+                          typeCategories.map((name) => (
+                            <SelectItem key={name} value={name}>
+                              {name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -252,133 +320,15 @@ export function ExpenseDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {categories.map((c) => (
-                          <SelectItem key={c.id} value={c.name}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="vehicle_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Vehicle</FormLabel>
-                    <Select
-                      onValueChange={(v) => field.onChange(v === NO_VEHICLE ? null : v)}
-                      value={field.value ?? NO_VEHICLE}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value={NO_VEHICLE}>
-                          Business-wide (no vehicle)
-                        </SelectItem>
-                        {vehicles.map((v: any) => (
-                          <SelectItem key={v.id} value={v.id}>
-                            {v.reg} · {v.make} {v.model}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="vendor"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Vendor / Payee</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Kwik Fit" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="payment_method"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Payment Method</FormLabel>
-                    <Select
-                      onValueChange={(v) => field.onChange(v === NO_METHOD ? "" : v)}
-                      value={field.value || NO_METHOD}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Optional" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value={NO_METHOD}>Not specified</SelectItem>
-                        {PAYMENT_METHODS.map((m) => (
-                          <SelectItem key={m} value={m}>
-                            {m}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
+            {/* Date + time */}
             <FormField
               control={form.control}
-              name="reference"
+              name="expense_at"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Reference (Optional)</FormLabel>
+                  <FormLabel>Date &amp; time</FormLabel>
                   <FormControl>
-                    <Input placeholder="Invoice number, PO, etc." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes (Optional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Anything worth remembering about this expense..."
-                      className="min-h-[72px]"
-                      {...field}
-                    />
+                    <DateTimePicker value={field.value} onChange={field.onChange} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -387,7 +337,7 @@ export function ExpenseDialog({
 
             {/* Receipt upload */}
             <div className="space-y-1.5">
-              <FormLabel>Receipt (Optional)</FormLabel>
+              <FormLabel>Receipt (optional)</FormLabel>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -397,7 +347,7 @@ export function ExpenseDialog({
               />
               {receiptFile ? (
                 <div className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2">
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex min-w-0 items-center gap-2">
                     <FileText className="h-4 w-4 shrink-0 text-primary" />
                     <span className="truncate text-sm">{receiptFile.name}</span>
                   </div>
@@ -416,13 +366,12 @@ export function ExpenseDialog({
                   <button
                     type="button"
                     onClick={() => openReceipt(existingReceipt)}
-                    className="flex items-center gap-2 min-w-0 text-sm text-primary hover:underline"
+                    className="flex min-w-0 items-center gap-2 text-sm text-primary hover:underline"
                   >
                     <FileText className="h-4 w-4 shrink-0" />
                     <span className="truncate">View current receipt</span>
-                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                   </button>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex shrink-0 items-center gap-1">
                     <Button
                       type="button"
                       variant="ghost"
@@ -457,9 +406,10 @@ export function ExpenseDialog({
                     setDragOver(false);
                     pickFile(e.dataTransfer.files?.[0]);
                   }}
-                  className={`flex w-full flex-col items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-5 text-center transition-colors ${
+                  className={cn(
+                    "flex w-full flex-col items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-5 text-center transition-colors",
                     dragOver ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"
-                  }`}
+                  )}
                 >
                   <Upload className="h-5 w-5 text-muted-foreground" />
                   <span className="text-sm text-muted-foreground">
@@ -472,67 +422,14 @@ export function ExpenseDialog({
               )}
             </div>
 
-            {/* Recurring */}
-            <div className="rounded-md border p-3 space-y-3">
-              <FormField
-                control={form.control}
-                name="is_recurring"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between space-y-0">
-                    <div className="space-y-0.5">
-                      <FormLabel>Recurring expense</FormLabel>
-                      <FormDescription className="text-[11px]">
-                        Mark expenses like rent or subscriptions that repeat.
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch checked={!!field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              {isRecurring && (
-                <FormField
-                  control={form.control}
-                  name="recurrence_interval"
-                  render={({ field }) => (
-                    <FormItem>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value ?? "monthly"}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="How often?" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="monthly">Every month</SelectItem>
-                          <SelectItem value="yearly">Every year</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-            </div>
-
-            {uploadError && (
-              <p className="text-sm text-destructive">{uploadError}</p>
-            )}
+            {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
 
             <div className="flex justify-end gap-2 pt-1">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={submitting}
-              >
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <Button type="submit" disabled={busy}>
+                {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isEdit ? "Save Changes" : "Add Expense"}
               </Button>
             </div>

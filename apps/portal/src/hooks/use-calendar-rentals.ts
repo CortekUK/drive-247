@@ -27,14 +27,6 @@ export const useCalendarRentals = (
   return useQuery<{
     rentals: CalendarRental[];
     grouped: VehicleTimelineData[];
-    externalBookings: Array<{
-      id: string;
-      vehicle_id: string;
-      source: string;
-      summary: string | null;
-      start_date: string;
-      end_date: string;
-    }>;
   }>({
     queryKey: [
       "calendar-rentals",
@@ -116,19 +108,9 @@ export const useCalendarRentals = (
           return true;
         });
 
-      // Also fetch external bookings (Turo/Airbnb iCal imports) so the calendar
-      // shows them as read-only blocks alongside Drive247 rentals.
-      const { data: externalData } = await supabase
-        .from("external_bookings")
-        .select("id, vehicle_id, source, summary, start_date, end_date")
-        .eq("tenant_id", tenant.id)
-        .lte("start_date", endStr)
-        .gte("end_date", startStr);
-
       return {
         rentals: calendarRentals,
         grouped: groupRentalsByVehicle(calendarRentals),
-        externalBookings: (externalData || []) as any,
       };
     },
     enabled: !!tenant,

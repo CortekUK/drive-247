@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,9 +8,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -20,10 +29,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Trash2, Lock, Tag } from "lucide-react";
+import { Plus, Trash2, Lock, Tag, Car, Building2 } from "lucide-react";
 import {
   useExpenseCategories,
-  type PnlBucket,
+  type CategoryType,
+  type ExpenseCategory,
 } from "@/hooks/use-expense-categories";
 
 interface Props {
@@ -32,140 +42,174 @@ interface Props {
 }
 
 export function ExpenseCategoriesDialog({ open, onOpenChange }: Props) {
-  const { categories, addCategory, updateCategory, deleteCategory, isMutating } =
-    useExpenseCategories({ activeOnly: false });
+  const { categories, addCategory, deleteCategory, getUsageCount, isMutating } =
+    useExpenseCategories();
 
   const [name, setName] = useState("");
-  const [bucket, setBucket] = useState<PnlBucket>("Expenses");
+  const [type, setType] = useState<CategoryType>("business");
+
+  const [deleteTarget, setDeleteTarget] = useState<ExpenseCategory | null>(null);
+  const [deleteUsage, setDeleteUsage] = useState<number | null>(null);
+  const [checkingUsage, setCheckingUsage] = useState(false);
+
+  const groups = useMemo(
+    () => ({
+      business: categories.filter((c) => c.category_type === "business"),
+      vehicle: categories.filter((c) => c.category_type === "vehicle"),
+    }),
+    [categories]
+  );
 
   const handleAdd = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    addCategory({ name: trimmed, pnl_bucket: bucket });
+    addCategory({ name: trimmed, category_type: type });
     setName("");
-    setBucket("Expenses");
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Tag className="h-5 w-5 text-primary" />
-            Expense Categories
-          </DialogTitle>
-          <DialogDescription>
-            Customise the categories your team can pick. The P&amp;L bucket controls how each
-            one shows up in your Profit &amp; Loss report.
-          </DialogDescription>
-        </DialogHeader>
+  const requestDelete = async (c: ExpenseCategory) => {
+    setDeleteTarget(c);
+    setDeleteUsage(null);
+    setCheckingUsage(true);
+    try {
+      setDeleteUsage(await getUsageCount(c.name));
+    } catch {
+      setDeleteUsage(0);
+    } finally {
+      setCheckingUsage(false);
+    }
+  };
 
-        {/* Add new */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <div className="flex-1">
-            <label className="text-xs font-medium text-muted-foreground">New category</label>
-            <Input
-              value={name}
-              placeholder="e.g. Parking, Software, Detailing"
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleAdd();
-                }
-              }}
-            />
-          </div>
-          <div className="w-full sm:w-[150px]">
-            <label className="text-xs font-medium text-muted-foreground">P&amp;L bucket</label>
-            <Select value={bucket} onValueChange={(v) => setBucket(v as PnlBucket)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Expenses">Expenses</SelectItem>
-                <SelectItem value="Service">Service</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Button onClick={handleAdd} disabled={!name.trim() || isMutating}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add
-          </Button>
-        </div>
+  const confirmDelete = () => {
+    if (deleteTarget) deleteCategory(deleteTarget.id);
+    setDeleteTarget(null);
+  };
 
-        {/* List */}
-        <ScrollArea className="max-h-[340px] -mx-2 px-2">
-          <div className="space-y-1.5">
-            {categories.map((c) => (
-              <div
-                key={c.id}
-                className="flex items-center gap-3 rounded-md border px-3 py-2"
-              >
-                <div className="flex flex-1 items-center gap-2 min-w-0">
-                  <span className="truncate text-sm font-medium">{c.name}</span>
-                  {c.is_default && (
-                    <Badge variant="secondary" className="gap-1 font-normal">
-                      <Lock className="h-3 w-3" />
-                      Default
-                    </Badge>
-                  )}
-                  {!c.is_active && (
-                    <Badge variant="outline" className="font-normal text-muted-foreground">
-                      Hidden
-                    </Badge>
-                  )}
-                </div>
-
-                <Select
-                  value={c.pnl_bucket}
-                  onValueChange={(v) =>
-                    updateCategory({ id: c.id, pnl_bucket: v as PnlBucket })
-                  }
-                >
-                  <SelectTrigger className="h-8 w-[120px] text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Expenses">Expenses</SelectItem>
-                    <SelectItem value="Service">Service</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {/* Show/Hide toggle */}
-                <div className="flex items-center gap-1" title={c.is_active ? "Visible" : "Hidden"}>
-                  <Switch
-                    checked={c.is_active}
-                    onCheckedChange={(v) => updateCategory({ id: c.id, is_active: v })}
-                  />
-                </div>
-
-                {/* Delete (custom categories only) */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive disabled:opacity-30"
-                  disabled={c.is_default}
-                  title={c.is_default ? "Default categories can't be deleted" : "Delete"}
-                  onClick={() => deleteCategory(c.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-            {categories.length === 0 && (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                No categories yet.
-              </p>
+  const renderGroup = (label: string, Icon: typeof Car, list: ExpenseCategory[]) => (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      {list.length === 0 ? (
+        <p className="px-1 py-2 text-xs text-muted-foreground/70">None yet.</p>
+      ) : (
+        list.map((c) => (
+          <div key={c.id} className="flex items-center gap-3 rounded-md border px-3 py-2">
+            <span className="flex-1 truncate text-sm font-medium">{c.name}</span>
+            {c.is_default && (
+              <Badge variant="secondary" className="gap-1 font-normal">
+                <Lock className="h-3 w-3" />
+                Default
+              </Badge>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive disabled:opacity-30"
+              disabled={c.is_default}
+              title={c.is_default ? "Default categories can't be deleted" : "Delete"}
+              onClick={() => requestDelete(c)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
-        </ScrollArea>
+        ))
+      )}
+    </div>
+  );
 
-        <p className="text-[11px] text-muted-foreground">
-          Tip: hide a category to stop it appearing in the picker without losing past expenses
-          filed under it.
-        </p>
-      </DialogContent>
-    </Dialog>
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="h-5 w-5 text-primary" />
+              Expense Categories
+            </DialogTitle>
+            <DialogDescription>
+              Create the categories your team can pick. Each is tagged Business or Vehicle.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Add new */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <label className="text-xs font-medium text-muted-foreground">New category</label>
+              <Input
+                value={name}
+                placeholder="e.g. Parking, Tyres, Software"
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAdd();
+                  }
+                }}
+              />
+            </div>
+            <div className="w-full sm:w-[140px]">
+              <label className="text-xs font-medium text-muted-foreground">Type</label>
+              <Select value={type} onValueChange={(v) => setType(v as CategoryType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="business">Business</SelectItem>
+                  <SelectItem value="vehicle">Vehicle</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleAdd} disabled={!name.trim() || isMutating}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add
+            </Button>
+          </div>
+
+          {/* Grouped list */}
+          <ScrollArea className="-mx-2 max-h-[360px] px-2">
+            <div className="space-y-4">
+              {renderGroup("Business", Building2, groups.business)}
+              {renderGroup("Vehicle", Car, groups.vehicle)}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete &quot;{deleteTarget?.name}&quot;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {checkingUsage ? (
+                "Checking how many expenses use this category…"
+              ) : deleteUsage && deleteUsage > 0 ? (
+                <>
+                  <span className="font-medium text-foreground">
+                    {deleteUsage} expense{deleteUsage === 1 ? "" : "s"}
+                  </span>{" "}
+                  use this category. Deleting it won&apos;t remove those expenses — they keep the
+                  label, but you won&apos;t be able to pick it again.
+                </>
+              ) : (
+                "This category isn't used by any expenses."
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDelete}
+              disabled={checkingUsage}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

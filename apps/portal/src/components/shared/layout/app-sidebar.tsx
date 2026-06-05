@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, ShieldX, Bolt, CalendarSync, Search, X, Inbox, Wallet } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, ShieldX, Bolt, Search, X, Inbox, Wallet } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -30,8 +30,7 @@ import { useReminderStats } from "@/hooks/use-reminders";
 import { useOrgSettings } from "@/hooks/use-org-settings";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
-import { UserPlus, Workflow, LineChart } from "lucide-react";
-import { useFeatureAccess } from "@/hooks/use-feature-access";
+import { UserPlus, Workflow } from "lucide-react";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
@@ -121,7 +120,6 @@ const settingsTabGroups = [
       { value: 'insurance', icon: Shield, label: 'Insurance' },
       { value: 'esign', icon: FileSignature, label: 'E-Signatures' },
       { value: 'tesla', icon: Bolt, label: 'Tesla Fleet' },
-      { value: 'calendar-sync', icon: CalendarSync, label: 'Calendar Sync' },
       { value: 'blacklist', icon: ShieldX, label: 'Blacklist' },
     ],
   },
@@ -149,13 +147,7 @@ export function AppSidebar() {
   const { tenant } = useTenant();
   const leadManagementEnabled = (tenant as { lead_management_enabled?: boolean } | null)?.lead_management_enabled === true;
   const automationsEnabled = (tenant as { automations_enabled?: boolean } | null)?.automations_enabled === true;
-  const revenueOptimiserEnabled = (tenant as { revenue_optimiser_enabled?: boolean } | null)?.revenue_optimiser_enabled === true;
   const vehicleOwnersEnabled = (tenant as { vehicle_owners_enabled?: boolean } | null)?.vehicle_owners_enabled === true;
-  const { canAccess: canAccessRevenueOptimiser } = useFeatureAccess("revenue_optimiser_insights");
-  // Show Revenue group when EITHER the tenant has flipped the feature flag (so they
-  // can find their own page) OR the tenant is on a tier that supports Insights but
-  // hasn't enabled yet (so they discover the welcome/backtest screen).
-  const showRevenueOptimiserNav = canAccessRevenueOptimiser || revenueOptimiserEnabled;
   const { data: pendingBookingsCount } = usePendingBookingsCount();
   const { unreadCount: chatUnreadCount } = useUnreadCount();
   const { data: enquiryStats } = useEnquiryStats();
@@ -231,17 +223,6 @@ export function AppSidebar() {
               ...(automationsEnabled
                 ? [{ name: "Automations", href: "/automations", icon: Workflow }]
                 : []),
-            ],
-          } as NavGroup,
-        ]
-      : []),
-    ...(showRevenueOptimiserNav
-      ? [
-          {
-            label: "Revenue",
-            icon: LineChart,
-            items: [
-              { name: "Revenue Optimiser", href: "/revenue", icon: LineChart },
             ],
           } as NavGroup,
         ]

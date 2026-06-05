@@ -23,12 +23,7 @@ export const editVehicleEnhancedSchema = z.object({
   daily_rent: z.number({ required_error: "Daily rent is required", invalid_type_error: "Daily rent must be a number" }).min(0, "Daily rent must be positive"),
   weekly_rent: z.number({ required_error: "Weekly rent is required", invalid_type_error: "Weekly rent must be a number" }).min(0, "Weekly rent must be positive"),
   monthly_rent: z.number({ required_error: "Monthly rent is required", invalid_type_error: "Monthly rent must be a number" }).min(0, "Monthly rent must be positive"),
-  // Revenue Optimiser — category drives the elasticity-fallback model + Autopilot scope;
-  // cost floors below which RO will never recommend (Spec §13).
   category: z.enum(["economy", "sedan", "suv", "luxury", "van", "electric"]).optional(),
-  cost_floor_daily: z.union([z.number().min(0, "Cost floor must be positive"), z.undefined(), z.null()]).optional(),
-  cost_floor_weekly: z.union([z.number().min(0, "Cost floor must be positive"), z.undefined(), z.null()]).optional(),
-  cost_floor_monthly: z.union([z.number().min(0, "Cost floor must be positive"), z.undefined(), z.null()]).optional(),
   // Pre-authorization
   security_deposit: z.union([z.number().min(0, "Pre-authorization amount must be positive"), z.undefined(), z.null()]).optional(),
   // Per-tier mileage allowance

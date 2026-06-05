@@ -3,74 +3,75 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 
-export type PnlBucket = "Service" | "Expenses";
+export type CategoryType = "business" | "vehicle";
 
 export interface ExpenseCategory {
   id: string;
   tenant_id: string;
   name: string;
-  pnl_bucket: PnlBucket;
+  category_type: CategoryType;
   is_default: boolean;
-  is_active: boolean;
   sort_order: number;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface CategoryInput {
   name: string;
-  pnl_bucket?: PnlBucket;
-  sort_order?: number;
+  category_type: CategoryType;
 }
 
 /**
- * Per-tenant expense categories. `activeOnly` (default) filters to the set the
- * operator can currently assign; pass false in the settings editor to manage all.
+ * Per-tenant expense categories, tagged business or vehicle. The Add Expense
+ * dialog filters this list by the chosen type.
  */
-export function useExpenseCategories(options?: { activeOnly?: boolean }) {
-  const activeOnly = options?.activeOnly ?? true;
+export function useExpenseCategories() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { tenant } = useTenant();
 
   const query = useQuery({
-    queryKey: ["expense-categories", tenant?.id, activeOnly],
+    queryKey: ["expense-categories", tenant?.id],
     queryFn: async () => {
-      let q = supabase
+      const { data, error } = await supabase
         .from("expense_categories")
-        .select("*")
+        .select("id, tenant_id, name, category_type, is_default, sort_order")
         .eq("tenant_id", tenant!.id)
+        .order("category_type", { ascending: true })
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true });
-
-      if (activeOnly) q = q.eq("is_active", true);
-
-      const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as ExpenseCategory[];
+      return (data || []) as unknown as ExpenseCategory[];
     },
     enabled: !!tenant,
   });
 
-  const invalidate = () => {
+  const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ["expense-categories", tenant?.id] });
+
+  /** How many expenses currently reference this category name (for safe delete). */
+  const getUsageCount = async (name: string): Promise<number> => {
+    const { count, error } = await supabase
+      .from("vehicle_expenses")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenant!.id)
+      .eq("category", name);
+    if (error) throw error;
+    return count ?? 0;
   };
 
   const addCategory = useMutation({
     mutationFn: async (input: CategoryInput) => {
       if (!tenant?.id) throw new Error("No tenant context");
-      // Place new categories after existing ones.
       const maxOrder = (query.data || []).reduce((m, c) => Math.max(m, c.sort_order), 0);
       const { data, error } = await supabase
         .from("expense_categories")
         .insert({
           tenant_id: tenant.id,
           name: input.name.trim(),
-          pnl_bucket: input.pnl_bucket ?? "Expenses",
-          sort_order: input.sort_order ?? maxOrder + 10,
+          category_type: input.category_type,
+          sort_order: maxOrder + 10,
           is_default: false,
           is_active: true,
-        })
+        } as any)
         .select()
         .single();
       if (error) throw error;
@@ -88,20 +89,6 @@ export function useExpenseCategories(options?: { activeOnly?: boolean }) {
         variant: "destructive",
       });
     },
-  });
-
-  const updateCategory = useMutation({
-    mutationFn: async ({ id, ...patch }: Partial<ExpenseCategory> & { id: string }) => {
-      const { error } = await supabase
-        .from("expense_categories")
-        .update(patch)
-        .eq("id", id)
-        .eq("tenant_id", tenant!.id);
-      if (error) throw error;
-    },
-    onSuccess: () => invalidate(),
-    onError: (e: any) =>
-      toast({ title: "Couldn't update category", description: e?.message, variant: "destructive" }),
   });
 
   const deleteCategory = useMutation({
@@ -124,10 +111,9 @@ export function useExpenseCategories(options?: { activeOnly?: boolean }) {
   return {
     categories: query.data || [],
     isLoading: query.isLoading,
+    getUsageCount,
     addCategory: addCategory.mutate,
-    updateCategory: updateCategory.mutate,
     deleteCategory: deleteCategory.mutate,
-    isMutating:
-      addCategory.isPending || updateCategory.isPending || deleteCategory.isPending,
+    isMutating: addCategory.isPending || deleteCategory.isPending,
   };
 }

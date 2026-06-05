@@ -10,17 +10,8 @@ export interface RentalConflict {
   is_pay_as_you_go?: boolean;
 }
 
-export interface ExternalConflict {
-  id: string;
-  source: string;
-  summary: string | null;
-  start_date: string;
-  end_date: string;
-}
-
 export interface ConflictResult {
   rentalConflicts: RentalConflict[];
-  externalConflicts: ExternalConflict[];
   hasConflicts: boolean;
 }
 
@@ -68,28 +59,8 @@ export async function checkRentalConflicts(
       is_pay_as_you_go: r.is_pay_as_you_go === true,
     }));
 
-  // Query 2: Check for overlapping external bookings (Turo / Airbnb iCal imports)
-  const { data: externalData, error: externalError } = await supabase
-    .from('external_bookings')
-    .select('id, source, summary, start_date, end_date')
-    .eq('vehicle_id', vehicleId)
-    .eq('tenant_id', tenantId)
-    .lte('start_date', endDate)
-    .gte('end_date', startDate);
-
-  if (externalError) throw externalError;
-
-  const externalConflicts: ExternalConflict[] = (externalData || []).map((r: any) => ({
-    id: r.id,
-    source: r.source,
-    summary: r.summary,
-    start_date: r.start_date,
-    end_date: r.end_date,
-  }));
-
   return {
     rentalConflicts,
-    externalConflicts,
-    hasConflicts: rentalConflicts.length > 0 || externalConflicts.length > 0,
+    hasConflicts: rentalConflicts.length > 0,
   };
 }

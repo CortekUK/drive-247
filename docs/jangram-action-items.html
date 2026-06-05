@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 22mm 18mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: #1a1a1a; font-size: 11pt; line-height: 1.5; margin: 0;
+  }
+  .head { border-bottom: 3px solid #223331; padding-bottom: 14px; margin-bottom: 22px; }
+  .brandrow { display: flex; align-items: baseline; justify-content: space-between; }
+  h1 { font-size: 20pt; margin: 0; color: #223331; letter-spacing: -0.3px; }
+  .accent { color: #E9B63E; }
+  .sub { color: #666; font-size: 10pt; margin-top: 4px; }
+  .meta { font-size: 9.5pt; color: #888; margin-top: 10px; }
+  .meta b { color: #444; }
+  h2 {
+    font-size: 12pt; margin: 26px 0 10px; padding: 7px 12px; border-radius: 6px;
+    background: #223331; color: #fff;
+  }
+  h2 .tag { float: right; font-weight: 400; font-size: 9pt; opacity: .8; }
+  ol { margin: 0; padding-left: 0; counter-reset: item; list-style: none; }
+  li {
+    position: relative; padding: 9px 12px 9px 40px; margin-bottom: 6px;
+    border: 1px solid #ececec; border-left: 3px solid #E9B63E; border-radius: 5px;
+    background: #fafafa; counter-increment: item;
+  }
+  li::before {
+    content: counter(item); position: absolute; left: 10px; top: 9px;
+    width: 20px; height: 20px; background: #223331; color: #fff; border-radius: 50%;
+    font-size: 9pt; font-weight: 600; text-align: center; line-height: 20px;
+  }
+  li b { color: #223331; }
+  .note { font-size: 9pt; color: #777; font-style: italic; }
+  .footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 8.5pt; color: #999; }
+  .biz li { border-left-color: #2563eb; }
+  .flow li { border-left-color: #d97706; }
+  .cust li { border-left-color: #16a34a; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="brandrow">
+      <h1>Jangram Car Rental <span class="accent">— Action Items</span></h1>
+    </div>
+    <div class="sub">Impromptu Google Meet · May 29, 2026 · 44 min</div>
+    <div class="meta">
+      <b>Client:</b> Nivriti Ingram ("Sam") — Denver, CO · ex-Turo/Airbnb host &nbsp;|&nbsp;
+      <b>On call:</b> Neema Ghanbarinia, Ghulam, Nivriti Ingram
+    </div>
+  </div>
+
+  <h2>Dev / Engineering <span class="tag">Ghulam</span></h2>
+  <ol>
+    <li><b>Turo-style calendar (top priority).</b> Visual calendar showing booked cars as struck-through bars, click-to-open the trip, adjust availability inline, and per-day pricing shown per date. She spends nearly all her time in the calendar + inbox.</li>
+    <li><b>Fix holiday/weekend surcharge not applying.</b> Her +60% summer override (May 24–Aug 5) is set on the vehicle but doesn't flow into the base price, the admin "Set up a rental" flow, or the "How is this calculated" breakdown. Known bug.</li>
+    <li><b>Blocked-vehicle booking bug.</b> Vehicle "DJKE" (blocked 5/30–6/5 for Turo) still accepted a booking request. Unavailable cars must reject/hide immediately. Trace the rejected request's reference number.</li>
+    <li><b>Duplicate-request buffer (~30 min).</b> Same customer submitted the same request twice; add a cooldown to block accidental double-booking (Turo does this).</li>
+    <li><b>Make start/end dates required on the inquiry form.</b> Customers submit inquiries with no dates.</li>
+    <li><b>Manual override on AI pricing (Revenue Optimiser).</b> Allow ~10% hand-adjustment while AI handles ~90%. Target 75–80% suggestion accuracy, not 100%.</li>
+    <li><b>Investigate external pricing data sources.</b> References: Red Scout (Turo estimator — platform-only data, skews high assuming airport rentals) and PriceLabs (Airbnb dynamic pricing). Decide public-API vs scraping; reverse-engineer Turo dynamics. Currently only weather is used externally.</li>
+    <li><b>Embed Meta/Facebook Messenger in-app.</b> Embed the view only (private API, so no branding); then assess AI-driven replies, ideally fanning out to SMS + email.</li>
+  </ol>
+
+  <h2 class="flow">Flow Review <span class="tag">design before building</span></h2>
+  <ol class="flow">
+    <li><b>Reduce booking friction / reconsider mandatory account creation.</b> Forcing account creation at step 1 is a high barrier — she's not Turo/Uber and risks losing everyone. Review the customer-portal-account requirement.</li>
+    <li><b>Pre-auth / cancellation flow redesign.</b> Desired: reserve car with card first → send insurance + ID upload links → warn if not filled → lock in ~48h after booking (or up to 1 week before trip for far-out bookings) → auto-release calendar if they bail. Verify compatibility with calendar/vehicle block-out and insurance/ID gating before committing. <span class="note">Neema: don't confirm anything until the full sync flow is reviewed.</span></li>
+    <li><b>Clarify "this is a hold, not a charge" messaging.</b> She missed it at checkout — make the credit-card-hold labeling unmissable. Also discussed scaling the deposit relative to trip length (some clients hold $500).</li>
+  </ol>
+
+  <h2 class="biz">Business / Marketing <span class="tag">Neema</span></h2>
+  <ol class="biz">
+    <li><b>Send Slack invite + create shared channel</b> (Neema + Ghulam) for proactive white-glove support.</li>
+    <li><b>Refund owed (~$150).</b> First-month booking guarantee; 2 months in with near-zero ad-driven bookings (only 1 from her neighbor). Ad creative recently refreshed by Jordan.</li>
+    <li><b>Referral opportunity.</b> She knows someone with ~200 cars and could refer hosts once her own bookings pick up.</li>
+  </ol>
+
+  <h2 class="cust">Customer-Side <span class="tag">Nivriti — support if needed</span></h2>
+  <ol class="cust">
+    <li><b>Complete WhatsApp Business verification</b> to unlock WhatsApp in the messaging tab (SMS already enabled).</li>
+  </ol>
+
+  <div class="footer">
+    Drive247 · Jangram Car Rental (tenant: jangramrentals) · Generated June 5, 2026
+  </div>
+</body>
+</html>

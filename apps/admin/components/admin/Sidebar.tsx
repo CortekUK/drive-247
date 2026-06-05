@@ -70,13 +70,6 @@ function useNavigation() {
       ],
     },
     {
-      label: 'Revenue Optimiser',
-      items: [
-        { name: 'Anomaly Inbox', href: '/admin/revenue-optimiser/anomalies', icon: AlertTriangle },
-        { name: 'Tenant Performance', href: '/admin/revenue-optimiser/tenants', icon: TrendingUp },
-      ],
-    },
-    {
       label: 'Configuration',
       items: [
         { name: 'Settings', href: '/admin/settings', icon: Settings },

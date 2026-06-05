@@ -2,8 +2,12 @@
  * Dynamic Pricing Calculation Utility
  *
  * Centralizes rental pricing logic with support for weekend/holiday surcharges.
- * Dynamic pricing only applies to the daily tier (< 7 days).
- * Weekly and monthly tiers remain unchanged.
+ * Weekend/holiday surcharges apply across ALL tiers (daily, weekly, monthly).
+ * Each tier computes a per-day equivalent rate (daily = daily_rent,
+ * weekly = weekly_rent / 7, monthly = monthly_rent / monthlyTierDays), then
+ * surcharges are applied per-day only on the days that fall in a weekend/holiday.
+ * Non-surcharge days keep the tier's discounted per-day rate, so weekly/monthly
+ * discounts are preserved — only the special days cost extra.
  */
 
 export interface VehicleRates {
@@ -276,8 +280,13 @@ function getDayRate(
 /**
  * Calculate the full rental price with dynamic pricing support.
  *
- * Dynamic pricing only applies to the daily tier (< 7 days).
- * Weekly (7–monthlyTierDays) and monthly (>= monthlyTierDays) use standard pro-rata rates.
+ * Weekend/holiday surcharges apply across ALL tiers. Each tier runs the same
+ * per-day loop using its per-day equivalent rate:
+ *   - daily   (< 7 days)              → daily_rent
+ *   - weekly  (7 to monthlyTierDays-1)→ weekly_rent / 7
+ *   - monthly (>= monthlyTierDays)    → monthly_rent / monthlyTierDays
+ * Non-surcharge days keep the tier rate, so weekly/monthly discounts are
+ * preserved; only weekend/holiday days carry the surcharge.
  */
 export function calculateRentalPriceBreakdown(
   pickupDate: string,
@@ -297,40 +306,21 @@ export function calculateRentalPriceBreakdown(
   const weeklyRent = rates.weekly_rent || 0;
   const monthlyRent = rates.monthly_rent || 0;
 
-  // Monthly tier (>= monthlyTierDays) — no dynamic pricing
-  if (rentalDays >= monthlyTierDays && monthlyRent > 0) {
-    return {
-      rentalPrice: (rentalDays / monthlyTierDays) * monthlyRent,
-      rentalDays,
-      pricingTier: 'monthly',
-      dayBreakdown: [],
-    };
-  }
+  const safeHolidays = holidays || [];
+  const safeOverrides = overrides || [];
 
-  // Weekly tier (7 to monthlyTierDays-1 days) — no dynamic pricing
-  if (rentalDays >= 7 && rentalDays < monthlyTierDays && weeklyRent > 0) {
-    return {
-      rentalPrice: (rentalDays / 7) * weeklyRent,
-      rentalDays,
-      pricingTier: 'weekly',
-      dayBreakdown: [],
-    };
-  }
-
-  // Daily tier (< 7 days) — apply dynamic pricing
-  if (dailyRent > 0) {
-    const safeHolidays = holidays || [];
-    const safeOverrides = overrides || [];
+  // Run the per-day surcharge loop for any tier given its per-day base rate.
+  // Non-surcharge days cost `perDayRate`; weekend/holiday days carry the surcharge.
+  const runDayLoop = (perDayRate: number): { rentalPrice: number; dayBreakdown: DayBreakdown[] } => {
     const breakdown: DayBreakdown[] = [];
     let totalPrice = 0;
-
     for (let i = 0; i < rentalDays; i++) {
       const currentDate = new Date(pickup);
       currentDate.setDate(currentDate.getDate() + i);
 
       const dayInfo = getDayRate(
         currentDate,
-        dailyRent,
+        perDayRate,
         weekendConfig || null,
         safeHolidays,
         safeOverrides,
@@ -340,31 +330,30 @@ export function calculateRentalPriceBreakdown(
       breakdown.push(dayInfo);
       totalPrice += dayInfo.effectiveRate;
     }
+    return { rentalPrice: Math.round(totalPrice * 100) / 100, dayBreakdown: breakdown };
+  };
 
-    return {
-      rentalPrice: Math.round(totalPrice * 100) / 100,
-      rentalDays,
-      pricingTier: 'daily',
-      dayBreakdown: breakdown,
-    };
+  // Monthly tier (>= monthlyTierDays) — surcharges on the per-day equivalent
+  if (rentalDays >= monthlyTierDays && monthlyRent > 0) {
+    return { ...runDayLoop(monthlyRent / monthlyTierDays), rentalDays, pricingTier: 'monthly' };
+  }
+
+  // Weekly tier (7 to monthlyTierDays-1 days) — surcharges on the per-day equivalent
+  if (rentalDays >= 7 && rentalDays < monthlyTierDays && weeklyRent > 0) {
+    return { ...runDayLoop(weeklyRent / 7), rentalDays, pricingTier: 'weekly' };
+  }
+
+  // Daily tier (< 7 days)
+  if (dailyRent > 0) {
+    return { ...runDayLoop(dailyRent), rentalDays, pricingTier: 'daily' };
   }
 
   // Fallbacks when daily rate is missing
   if (weeklyRent > 0) {
-    return {
-      rentalPrice: (rentalDays / 7) * weeklyRent,
-      rentalDays,
-      pricingTier: 'weekly',
-      dayBreakdown: [],
-    };
+    return { ...runDayLoop(weeklyRent / 7), rentalDays, pricingTier: 'weekly' };
   }
   if (monthlyRent > 0) {
-    return {
-      rentalPrice: (rentalDays / monthlyTierDays) * monthlyRent,
-      rentalDays,
-      pricingTier: 'monthly',
-      dayBreakdown: [],
-    };
+    return { ...runDayLoop(monthlyRent / monthlyTierDays), rentalDays, pricingTier: 'monthly' };
   }
 
   return {

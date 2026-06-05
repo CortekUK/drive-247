@@ -217,9 +217,6 @@ export function CalendarView({ filters }: CalendarViewProps) {
                       rangeStart={rangeStart}
                       rangeEnd={rangeEnd}
                       index={index}
-                      externalBookings={(data?.externalBookings || []).filter(
-                        (b) => b.vehicle_id === vehicleData.vehicle.id
-                      )}
                     />
                   ))}
                 </div>

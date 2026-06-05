@@ -1223,65 +1223,6 @@ export type Database = {
           },
         ]
       }
-      backtest_results: {
-        Row: {
-          actual_revenue: number
-          bookings_analysed: number
-          confidence: string
-          generated_at: string
-          id: string
-          monthly_breakdown: Json | null
-          per_vehicle_summary: Json | null
-          period_end: string
-          period_start: string
-          projected_revenue: number
-          tenant_id: string
-          uplift_amount: number
-          uplift_percent: number
-          vehicles_analysed: number
-        }
-        Insert: {
-          actual_revenue: number
-          bookings_analysed?: number
-          confidence: string
-          generated_at?: string
-          id?: string
-          monthly_breakdown?: Json | null
-          per_vehicle_summary?: Json | null
-          period_end: string
-          period_start: string
-          projected_revenue: number
-          tenant_id: string
-          uplift_amount: number
-          uplift_percent: number
-          vehicles_analysed?: number
-        }
-        Update: {
-          actual_revenue?: number
-          bookings_analysed?: number
-          confidence?: string
-          generated_at?: string
-          id?: string
-          monthly_breakdown?: Json | null
-          per_vehicle_summary?: Json | null
-          period_end?: string
-          period_start?: string
-          projected_revenue?: number
-          tenant_id?: string
-          uplift_amount?: number
-          uplift_percent?: number
-          vehicles_analysed?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "backtest_results_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       blacklist_entries: {
         Row: {
           added_by: string | null
@@ -1417,13 +1358,6 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "blocked_dates_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -3304,13 +3238,6 @@ export type Database = {
             foreignKeyName: "customer_documents_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "customer_documents_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -4032,13 +3959,6 @@ export type Database = {
             foreignKeyName: "enquiries_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "enquiries_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -4161,8 +4081,53 @@ export type Database = {
           },
         ]
       }
+      expense_ai_summaries: {
+        Row: {
+          created_at: string
+          generated_at: string
+          id: string
+          scope: string
+          source_count: number
+          source_total: number
+          summary: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          generated_at?: string
+          id?: string
+          scope: string
+          source_count?: number
+          source_total?: number
+          summary?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          generated_at?: string
+          id?: string
+          scope?: string
+          source_count?: number
+          source_total?: number
+          summary?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_ai_summaries_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expense_categories: {
         Row: {
+          category_type: string
           created_at: string | null
           id: string
           is_active: boolean
@@ -4174,6 +4139,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          category_type?: string
           created_at?: string | null
           id?: string
           is_active?: boolean
@@ -4185,6 +4151,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          category_type?: string
           created_at?: string | null
           id?: string
           is_active?: boolean
@@ -4202,98 +4169,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
-          },
-        ]
-      }
-      external_bookings: {
-        Row: {
-          created_at: string
-          end_date: string
-          external_uid: string
-          id: string
-          raw: Json | null
-          source: string
-          start_date: string
-          summary: string | null
-          synced_at: string
-          tenant_id: string
-          vehicle_id: string
-        }
-        Insert: {
-          created_at?: string
-          end_date: string
-          external_uid: string
-          id?: string
-          raw?: Json | null
-          source?: string
-          start_date: string
-          summary?: string | null
-          synced_at?: string
-          tenant_id: string
-          vehicle_id: string
-        }
-        Update: {
-          created_at?: string
-          end_date?: string
-          external_uid?: string
-          id?: string
-          raw?: Json | null
-          source?: string
-          start_date?: string
-          summary?: string | null
-          synced_at?: string
-          tenant_id?: string
-          vehicle_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "external_bookings_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "external_bookings_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "external_bookings_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "external_bookings_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "external_bookings_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_fines_export"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "external_bookings_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_owner_revenue"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "external_bookings_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_pl_by_vehicle"
-            referencedColumns: ["vehicle_id"]
           },
         ]
       }
@@ -4619,13 +4494,6 @@ export type Database = {
             foreignKeyName: "financial_events_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "financial_events_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -4824,13 +4692,6 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "fines_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -5715,13 +5576,6 @@ export type Database = {
             foreignKeyName: "insurance_policies_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "insurance_policies_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -6017,13 +5871,6 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "invoices_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -6426,13 +6273,6 @@ export type Database = {
             foreignKeyName: "lead_offers_accepted_vehicle_id_fkey"
             columns: ["accepted_vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "lead_offers_accepted_vehicle_id_fkey"
-            columns: ["accepted_vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -6684,13 +6524,6 @@ export type Database = {
             foreignKeyName: "leads_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "leads_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -6876,13 +6709,6 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "ledger_entries_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -7541,13 +7367,6 @@ export type Database = {
             foreignKeyName: "owner_payout_lines_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "owner_payout_lines_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -8151,13 +7970,6 @@ export type Database = {
             foreignKeyName: "payments_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "payments_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -8308,13 +8120,6 @@ export type Database = {
             foreignKeyName: "plates_assigned_vehicle_id_fkey"
             columns: ["assigned_vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "plates_assigned_vehicle_id_fkey"
-            columns: ["assigned_vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -8351,13 +8156,6 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "plates_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -8452,13 +8250,6 @@ export type Database = {
             foreignKeyName: "pnl_entries_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "pnl_entries_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -8533,504 +8324,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
-          },
-        ]
-      }
-      pricing_change_history: {
-        Row: {
-          change_source: string
-          changed_by: string | null
-          created_at: string
-          id: string
-          new_price: number
-          notes: string | null
-          old_price: number | null
-          recommendation_id: string | null
-          tenant_id: string
-          tier: string
-          vehicle_id: string
-        }
-        Insert: {
-          change_source: string
-          changed_by?: string | null
-          created_at?: string
-          id?: string
-          new_price: number
-          notes?: string | null
-          old_price?: number | null
-          recommendation_id?: string | null
-          tenant_id: string
-          tier: string
-          vehicle_id: string
-        }
-        Update: {
-          change_source?: string
-          changed_by?: string | null
-          created_at?: string
-          id?: string
-          new_price?: number
-          notes?: string | null
-          old_price?: number | null
-          recommendation_id?: string | null
-          tenant_id?: string
-          tier?: string
-          vehicle_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pricing_change_history_changed_by_fkey"
-            columns: ["changed_by"]
-            isOneToOne: false
-            referencedRelation: "app_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_change_history_recommendation_id_fkey"
-            columns: ["recommendation_id"]
-            isOneToOne: false
-            referencedRelation: "pricing_recommendations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_change_history_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_change_history_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "pricing_change_history_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "pricing_change_history_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_change_history_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_fines_export"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "pricing_change_history_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_owner_revenue"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "pricing_change_history_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_pl_by_vehicle"
-            referencedColumns: ["vehicle_id"]
-          },
-        ]
-      }
-      pricing_experiments: {
-        Row: {
-          control_bookings: number | null
-          control_price: number
-          control_revenue: number | null
-          created_at: string
-          ends_at: string
-          id: string
-          rolled_out_at: string | null
-          rolled_out_vehicle_count: number | null
-          started_at: string
-          status: string
-          tenant_id: string
-          test_bookings: number | null
-          test_price: number
-          test_revenue: number | null
-          tier: string
-          updated_at: string
-          vehicle_id: string
-          winner: string | null
-        }
-        Insert: {
-          control_bookings?: number | null
-          control_price: number
-          control_revenue?: number | null
-          created_at?: string
-          ends_at: string
-          id?: string
-          rolled_out_at?: string | null
-          rolled_out_vehicle_count?: number | null
-          started_at?: string
-          status?: string
-          tenant_id: string
-          test_bookings?: number | null
-          test_price: number
-          test_revenue?: number | null
-          tier: string
-          updated_at?: string
-          vehicle_id: string
-          winner?: string | null
-        }
-        Update: {
-          control_bookings?: number | null
-          control_price?: number
-          control_revenue?: number | null
-          created_at?: string
-          ends_at?: string
-          id?: string
-          rolled_out_at?: string | null
-          rolled_out_vehicle_count?: number | null
-          started_at?: string
-          status?: string
-          tenant_id?: string
-          test_bookings?: number | null
-          test_price?: number
-          test_revenue?: number | null
-          tier?: string
-          updated_at?: string
-          vehicle_id?: string
-          winner?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pricing_experiments_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_experiments_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "pricing_experiments_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "pricing_experiments_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_experiments_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_fines_export"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "pricing_experiments_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_owner_revenue"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "pricing_experiments_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_pl_by_vehicle"
-            referencedColumns: ["vehicle_id"]
-          },
-        ]
-      }
-      pricing_recommendation_outcomes: {
-        Row: {
-          bookings_after: number | null
-          bookings_before: number | null
-          created_at: string
-          id: string
-          measured_at: string
-          measurement_window_days: number
-          net_revenue_delta: number | null
-          outcome: string
-          recommendation_id: string
-          revenue_after: number | null
-          revenue_before: number | null
-          tenant_id: string
-          utilization_after: number | null
-          utilization_before: number | null
-          vehicle_id: string
-        }
-        Insert: {
-          bookings_after?: number | null
-          bookings_before?: number | null
-          created_at?: string
-          id?: string
-          measured_at?: string
-          measurement_window_days?: number
-          net_revenue_delta?: number | null
-          outcome: string
-          recommendation_id: string
-          revenue_after?: number | null
-          revenue_before?: number | null
-          tenant_id: string
-          utilization_after?: number | null
-          utilization_before?: number | null
-          vehicle_id: string
-        }
-        Update: {
-          bookings_after?: number | null
-          bookings_before?: number | null
-          created_at?: string
-          id?: string
-          measured_at?: string
-          measurement_window_days?: number
-          net_revenue_delta?: number | null
-          outcome?: string
-          recommendation_id?: string
-          revenue_after?: number | null
-          revenue_before?: number | null
-          tenant_id?: string
-          utilization_after?: number | null
-          utilization_before?: number | null
-          vehicle_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pricing_recommendation_outcomes_recommendation_id_fkey"
-            columns: ["recommendation_id"]
-            isOneToOne: true
-            referencedRelation: "pricing_recommendations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pricing_recommendations: {
-        Row: {
-          ai_explanation: string | null
-          ai_model: string | null
-          ai_tokens_total: number | null
-          applied_at: string | null
-          applied_by: string | null
-          applied_price: number | null
-          applied_source: string | null
-          autopilot_run_id: string | null
-          confidence: string
-          confidence_score: number
-          created_at: string
-          current_price: number
-          data_points: Json
-          dismiss_reason: string | null
-          dismissed_at: string | null
-          dismissed_by: string | null
-          elasticity_curve: Json | null
-          experiment_arm: string | null
-          experiment_id: string | null
-          expires_at: string
-          generation_run_id: string | null
-          id: string
-          is_combined: boolean
-          matched_lead_ids: string[] | null
-          projected_revenue_delta_monthly: number | null
-          reasons: Json
-          recommended_price: number
-          recommended_range_high: number
-          recommended_range_low: number
-          revert_reason: string | null
-          reverted_at: string | null
-          reverted_by: string | null
-          snoozed_until: string | null
-          status: string
-          suppress_reason: string | null
-          suppressed_at: string | null
-          suppressed_by: string | null
-          tenant_id: string
-          tier: string
-          updated_at: string
-          vehicle_id: string
-        }
-        Insert: {
-          ai_explanation?: string | null
-          ai_model?: string | null
-          ai_tokens_total?: number | null
-          applied_at?: string | null
-          applied_by?: string | null
-          applied_price?: number | null
-          applied_source?: string | null
-          autopilot_run_id?: string | null
-          confidence: string
-          confidence_score: number
-          created_at?: string
-          current_price: number
-          data_points: Json
-          dismiss_reason?: string | null
-          dismissed_at?: string | null
-          dismissed_by?: string | null
-          elasticity_curve?: Json | null
-          experiment_arm?: string | null
-          experiment_id?: string | null
-          expires_at: string
-          generation_run_id?: string | null
-          id?: string
-          is_combined?: boolean
-          matched_lead_ids?: string[] | null
-          projected_revenue_delta_monthly?: number | null
-          reasons: Json
-          recommended_price: number
-          recommended_range_high: number
-          recommended_range_low: number
-          revert_reason?: string | null
-          reverted_at?: string | null
-          reverted_by?: string | null
-          snoozed_until?: string | null
-          status?: string
-          suppress_reason?: string | null
-          suppressed_at?: string | null
-          suppressed_by?: string | null
-          tenant_id: string
-          tier: string
-          updated_at?: string
-          vehicle_id: string
-        }
-        Update: {
-          ai_explanation?: string | null
-          ai_model?: string | null
-          ai_tokens_total?: number | null
-          applied_at?: string | null
-          applied_by?: string | null
-          applied_price?: number | null
-          applied_source?: string | null
-          autopilot_run_id?: string | null
-          confidence?: string
-          confidence_score?: number
-          created_at?: string
-          current_price?: number
-          data_points?: Json
-          dismiss_reason?: string | null
-          dismissed_at?: string | null
-          dismissed_by?: string | null
-          elasticity_curve?: Json | null
-          experiment_arm?: string | null
-          experiment_id?: string | null
-          expires_at?: string
-          generation_run_id?: string | null
-          id?: string
-          is_combined?: boolean
-          matched_lead_ids?: string[] | null
-          projected_revenue_delta_monthly?: number | null
-          reasons?: Json
-          recommended_price?: number
-          recommended_range_high?: number
-          recommended_range_low?: number
-          revert_reason?: string | null
-          reverted_at?: string | null
-          reverted_by?: string | null
-          snoozed_until?: string | null
-          status?: string
-          suppress_reason?: string | null
-          suppressed_at?: string | null
-          suppressed_by?: string | null
-          tenant_id?: string
-          tier?: string
-          updated_at?: string
-          vehicle_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pricing_recommendations_applied_by_fkey"
-            columns: ["applied_by"]
-            isOneToOne: false
-            referencedRelation: "app_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_recommendations_dismissed_by_fkey"
-            columns: ["dismissed_by"]
-            isOneToOne: false
-            referencedRelation: "app_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_recommendations_experiment_id_fkey"
-            columns: ["experiment_id"]
-            isOneToOne: false
-            referencedRelation: "pricing_experiments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_recommendations_reverted_by_fkey"
-            columns: ["reverted_by"]
-            isOneToOne: false
-            referencedRelation: "app_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_recommendations_suppressed_by_fkey"
-            columns: ["suppressed_by"]
-            isOneToOne: false
-            referencedRelation: "app_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_recommendations_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_recommendations_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "pricing_recommendations_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "pricing_recommendations_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pricing_recommendations_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_fines_export"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "pricing_recommendations_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_owner_revenue"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "pricing_recommendations_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_pl_by_vehicle"
-            referencedColumns: ["vehicle_id"]
           },
         ]
       }
@@ -9468,13 +8761,6 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "reminder_events_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -10314,13 +9600,6 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "rental_extras_vehicle_pricing_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -11189,13 +10468,6 @@ export type Database = {
             foreignKeyName: "rentals_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "rentals_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -11219,475 +10491,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
-          },
-        ]
-      }
-      revenue_optimiser_anomalies: {
-        Row: {
-          acknowledged_at: string | null
-          acknowledged_by: string | null
-          anomaly_type: string
-          created_at: string
-          details: Json | null
-          id: string
-          recommendation_id: string | null
-          resolution_notes: string | null
-          resolved_at: string | null
-          resolved_by: string | null
-          severity: string
-          status: string
-          summary: string
-          tenant_id: string
-          updated_at: string
-          vehicle_id: string | null
-        }
-        Insert: {
-          acknowledged_at?: string | null
-          acknowledged_by?: string | null
-          anomaly_type: string
-          created_at?: string
-          details?: Json | null
-          id?: string
-          recommendation_id?: string | null
-          resolution_notes?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          severity?: string
-          status?: string
-          summary: string
-          tenant_id: string
-          updated_at?: string
-          vehicle_id?: string | null
-        }
-        Update: {
-          acknowledged_at?: string | null
-          acknowledged_by?: string | null
-          anomaly_type?: string
-          created_at?: string
-          details?: Json | null
-          id?: string
-          recommendation_id?: string | null
-          resolution_notes?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          severity?: string
-          status?: string
-          summary?: string
-          tenant_id?: string
-          updated_at?: string
-          vehicle_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "revenue_optimiser_anomalies_acknowledged_by_fkey"
-            columns: ["acknowledged_by"]
-            isOneToOne: false
-            referencedRelation: "app_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_anomalies_recommendation_id_fkey"
-            columns: ["recommendation_id"]
-            isOneToOne: false
-            referencedRelation: "pricing_recommendations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_anomalies_resolved_by_fkey"
-            columns: ["resolved_by"]
-            isOneToOne: false
-            referencedRelation: "app_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_anomalies_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_anomalies_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_anomalies_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_anomalies_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_anomalies_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_fines_export"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_anomalies_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_owner_revenue"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_anomalies_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_pl_by_vehicle"
-            referencedColumns: ["vehicle_id"]
-          },
-        ]
-      }
-      revenue_optimiser_insights: {
-        Row: {
-          created_at: string
-          id: string
-          label: string
-          observation_date: string
-          observation_type: string
-          tenant_id: string
-          value: Json | null
-          vehicle_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          label: string
-          observation_date?: string
-          observation_type: string
-          tenant_id: string
-          value?: Json | null
-          vehicle_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          label?: string
-          observation_date?: string
-          observation_type?: string
-          tenant_id?: string
-          value?: Json | null
-          vehicle_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "revenue_optimiser_insights_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_insights_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_insights_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_insights_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_insights_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_fines_export"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_insights_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_owner_revenue"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_insights_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_pl_by_vehicle"
-            referencedColumns: ["vehicle_id"]
-          },
-        ]
-      }
-      revenue_optimiser_offer_dispatches: {
-        Row: {
-          channel: string
-          conversation_id: string | null
-          converted_at: string | null
-          converted_to_rental_id: string | null
-          created_at: string
-          dispatch_error: string | null
-          dispatch_status: string
-          dispatched_at: string | null
-          id: string
-          lead_id: string
-          message_body: string | null
-          recommendation_id: string
-          template_id: string | null
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          channel: string
-          conversation_id?: string | null
-          converted_at?: string | null
-          converted_to_rental_id?: string | null
-          created_at?: string
-          dispatch_error?: string | null
-          dispatch_status?: string
-          dispatched_at?: string | null
-          id?: string
-          lead_id: string
-          message_body?: string | null
-          recommendation_id: string
-          template_id?: string | null
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          channel?: string
-          conversation_id?: string | null
-          converted_at?: string | null
-          converted_to_rental_id?: string | null
-          created_at?: string
-          dispatch_error?: string | null
-          dispatch_status?: string
-          dispatched_at?: string | null
-          id?: string
-          lead_id?: string
-          message_body?: string | null
-          recommendation_id?: string
-          template_id?: string | null
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "revenue_optimiser_offer_dispatches_conversation_id_fkey"
-            columns: ["conversation_id"]
-            isOneToOne: false
-            referencedRelation: "conversations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_offer_dispatches_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_offer_dispatches_recommendation_id_fkey"
-            columns: ["recommendation_id"]
-            isOneToOne: false
-            referencedRelation: "pricing_recommendations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_offer_dispatches_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      revenue_optimiser_rules: {
-        Row: {
-          autopilot_enabled: boolean
-          category: string | null
-          created_at: string
-          id: string
-          max_price_daily: number | null
-          max_price_monthly: number | null
-          max_price_weekly: number | null
-          min_price_daily: number | null
-          min_price_monthly: number | null
-          min_price_weekly: number | null
-          paused_until: string | null
-          tenant_id: string
-          updated_at: string
-          vehicle_id: string | null
-        }
-        Insert: {
-          autopilot_enabled?: boolean
-          category?: string | null
-          created_at?: string
-          id?: string
-          max_price_daily?: number | null
-          max_price_monthly?: number | null
-          max_price_weekly?: number | null
-          min_price_daily?: number | null
-          min_price_monthly?: number | null
-          min_price_weekly?: number | null
-          paused_until?: string | null
-          tenant_id: string
-          updated_at?: string
-          vehicle_id?: string | null
-        }
-        Update: {
-          autopilot_enabled?: boolean
-          category?: string | null
-          created_at?: string
-          id?: string
-          max_price_daily?: number | null
-          max_price_monthly?: number | null
-          max_price_weekly?: number | null
-          min_price_daily?: number | null
-          min_price_monthly?: number | null
-          min_price_weekly?: number | null
-          paused_until?: string | null
-          tenant_id?: string
-          updated_at?: string
-          vehicle_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "revenue_optimiser_rules_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_rules_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_rules_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_rules_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_rules_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_fines_export"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_rules_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_owner_revenue"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "revenue_optimiser_rules_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "view_pl_by_vehicle"
-            referencedColumns: ["vehicle_id"]
-          },
-        ]
-      }
-      revenue_optimiser_settings: {
-        Row: {
-          auto_pause_on_utilization_drop: boolean
-          auto_pause_threshold_percent: number
-          backtest_completed_at: string | null
-          backtest_projected_lift_amount: number | null
-          backtest_projected_lift_percent: number | null
-          calibration_complete: boolean
-          calibration_started_at: string | null
-          cost_floor_enabled: boolean
-          created_at: string
-          enabled: boolean
-          max_swing_percent: number
-          mode: string
-          notify_anomalies: boolean
-          notify_daily_summary: boolean
-          notify_outcome: boolean
-          require_approval_above_amount: number | null
-          tenant_id: string
-          updated_at: string
-          weekend_max_increase_percent: number
-        }
-        Insert: {
-          auto_pause_on_utilization_drop?: boolean
-          auto_pause_threshold_percent?: number
-          backtest_completed_at?: string | null
-          backtest_projected_lift_amount?: number | null
-          backtest_projected_lift_percent?: number | null
-          calibration_complete?: boolean
-          calibration_started_at?: string | null
-          cost_floor_enabled?: boolean
-          created_at?: string
-          enabled?: boolean
-          max_swing_percent?: number
-          mode?: string
-          notify_anomalies?: boolean
-          notify_daily_summary?: boolean
-          notify_outcome?: boolean
-          require_approval_above_amount?: number | null
-          tenant_id: string
-          updated_at?: string
-          weekend_max_increase_percent?: number
-        }
-        Update: {
-          auto_pause_on_utilization_drop?: boolean
-          auto_pause_threshold_percent?: number
-          backtest_completed_at?: string | null
-          backtest_projected_lift_amount?: number | null
-          backtest_projected_lift_percent?: number | null
-          calibration_complete?: boolean
-          calibration_started_at?: string | null
-          cost_floor_enabled?: boolean
-          created_at?: string
-          enabled?: boolean
-          max_swing_percent?: number
-          mode?: string
-          notify_anomalies?: boolean
-          notify_daily_summary?: boolean
-          notify_outcome?: boolean
-          require_approval_above_amount?: number | null
-          tenant_id?: string
-          updated_at?: string
-          weekend_max_increase_percent?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "revenue_optimiser_settings_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: true
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -11983,13 +10786,6 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "service_records_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -12759,7 +11555,6 @@ export type Database = {
           return_multiple_locations_enabled: boolean | null
           return_reminder_enabled: boolean
           return_reminder_hours: number
-          revenue_optimiser_enabled: boolean
           saturday_close: string | null
           saturday_enabled: boolean | null
           saturday_open: string | null
@@ -12797,9 +11592,6 @@ export type Database = {
           tuesday_close: string | null
           tuesday_enabled: boolean | null
           tuesday_open: string | null
-          turo_ical_last_error: string | null
-          turo_ical_last_synced_at: string | null
-          turo_ical_url: string | null
           twilio_account_sid: string | null
           twilio_api_key_secret: string | null
           twilio_api_key_sid: string | null
@@ -12971,7 +11763,6 @@ export type Database = {
           return_multiple_locations_enabled?: boolean | null
           return_reminder_enabled?: boolean
           return_reminder_hours?: number
-          revenue_optimiser_enabled?: boolean
           saturday_close?: string | null
           saturday_enabled?: boolean | null
           saturday_open?: string | null
@@ -13009,9 +11800,6 @@ export type Database = {
           tuesday_close?: string | null
           tuesday_enabled?: boolean | null
           tuesday_open?: string | null
-          turo_ical_last_error?: string | null
-          turo_ical_last_synced_at?: string | null
-          turo_ical_url?: string | null
           twilio_account_sid?: string | null
           twilio_api_key_secret?: string | null
           twilio_api_key_sid?: string | null
@@ -13183,7 +11971,6 @@ export type Database = {
           return_multiple_locations_enabled?: boolean | null
           return_reminder_enabled?: boolean
           return_reminder_hours?: number
-          revenue_optimiser_enabled?: boolean
           saturday_close?: string | null
           saturday_enabled?: boolean | null
           saturday_open?: string | null
@@ -13221,9 +12008,6 @@ export type Database = {
           tuesday_close?: string | null
           tuesday_enabled?: boolean | null
           tuesday_open?: string | null
-          turo_ical_last_error?: string | null
-          turo_ical_last_synced_at?: string | null
-          turo_ical_url?: string | null
           twilio_account_sid?: string | null
           twilio_api_key_secret?: string | null
           twilio_api_key_sid?: string | null
@@ -13361,13 +12145,6 @@ export type Database = {
             foreignKeyName: "tesla_supercharger_charges_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "tesla_supercharger_charges_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -13491,13 +12268,6 @@ export type Database = {
             foreignKeyName: "vehicle_events_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "vehicle_events_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -13530,6 +12300,7 @@ export type Database = {
           category: string
           created_at: string | null
           created_by: string | null
+          expense_at: string | null
           expense_date: string
           id: string
           is_recurring: boolean
@@ -13548,6 +12319,7 @@ export type Database = {
           category?: string
           created_at?: string | null
           created_by?: string | null
+          expense_at?: string | null
           expense_date?: string
           id?: string
           is_recurring?: boolean
@@ -13566,6 +12338,7 @@ export type Database = {
           category?: string
           created_at?: string | null
           created_by?: string | null
+          expense_at?: string | null
           expense_date?: string
           id?: string
           is_recurring?: boolean
@@ -13592,13 +12365,6 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "vehicle_expenses_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -13681,13 +12447,6 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "vehicle_files_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -13829,13 +12588,6 @@ export type Database = {
             foreignKeyName: "vehicle_photos_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "vehicle_photos_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -13915,13 +12667,6 @@ export type Database = {
             foreignKeyName: "vehicle_pricing_overrides_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "vehicle_pricing_overrides_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -13961,9 +12706,6 @@ export type Database = {
           colour: string | null
           commission_type_override: string | null
           commission_value_override: number | null
-          cost_floor_daily: number | null
-          cost_floor_monthly: number | null
-          cost_floor_weekly: number | null
           created_at: string | null
           current_mileage: number | null
           daily_mileage: number | null
@@ -13973,11 +12715,6 @@ export type Database = {
           disposal_date: string | null
           disposal_notes: string | null
           excess_mileage_rate: number | null
-          external_ical_enabled: boolean
-          external_ical_last_error: string | null
-          external_ical_last_synced_at: string | null
-          external_ical_source: string | null
-          external_ical_url: string | null
           finance_start_date: string | null
           flat_fee_period_override: string | null
           fuel_type: string | null
@@ -14039,9 +12776,6 @@ export type Database = {
           colour?: string | null
           commission_type_override?: string | null
           commission_value_override?: number | null
-          cost_floor_daily?: number | null
-          cost_floor_monthly?: number | null
-          cost_floor_weekly?: number | null
           created_at?: string | null
           current_mileage?: number | null
           daily_mileage?: number | null
@@ -14051,11 +12785,6 @@ export type Database = {
           disposal_date?: string | null
           disposal_notes?: string | null
           excess_mileage_rate?: number | null
-          external_ical_enabled?: boolean
-          external_ical_last_error?: string | null
-          external_ical_last_synced_at?: string | null
-          external_ical_source?: string | null
-          external_ical_url?: string | null
           finance_start_date?: string | null
           flat_fee_period_override?: string | null
           fuel_type?: string | null
@@ -14117,9 +12846,6 @@ export type Database = {
           colour?: string | null
           commission_type_override?: string | null
           commission_value_override?: number | null
-          cost_floor_daily?: number | null
-          cost_floor_monthly?: number | null
-          cost_floor_weekly?: number | null
           created_at?: string | null
           current_mileage?: number | null
           daily_mileage?: number | null
@@ -14129,11 +12855,6 @@ export type Database = {
           disposal_date?: string | null
           disposal_notes?: string | null
           excess_mileage_rate?: number | null
-          external_ical_enabled?: boolean
-          external_ical_last_error?: string | null
-          external_ical_last_synced_at?: string | null
-          external_ical_source?: string | null
-          external_ical_url?: string | null
           finance_start_date?: string | null
           flat_fee_period_override?: string | null
           fuel_type?: string | null
@@ -14709,41 +13430,6 @@ export type Database = {
         }
         Relationships: []
       }
-      vehicle_pricing_stats: {
-        Row: {
-          active_enquiries_14d: number | null
-          booked_days_30d: number | null
-          bookings_30d: number | null
-          bookings_90d: number | null
-          category: string | null
-          computed_at: string | null
-          cost_floor_daily: number | null
-          cost_floor_monthly: number | null
-          cost_floor_weekly: number | null
-          daily_rent: number | null
-          enquiry_conversion_90d: number | null
-          idle_days: number | null
-          make: string | null
-          model: string | null
-          monthly_rent: number | null
-          revenue_30d: number | null
-          revenue_90d: number | null
-          tenant_id: string | null
-          upcoming_booking_days_90d: number | null
-          utilization_30d: number | null
-          vehicle_id: string | null
-          weekly_rent: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "vehicles_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       view_aging_receivables: {
         Row: {
           bucket_0_30: number | null
@@ -14841,13 +13527,6 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "ledger_entries_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -15051,13 +13730,6 @@ export type Database = {
             foreignKeyName: "payments_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "payments_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
@@ -15195,13 +13867,6 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicle_pnl_rollup"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "rentals_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_pricing_stats"
             referencedColumns: ["vehicle_id"]
           },
           {
@@ -15794,6 +14459,10 @@ export type Database = {
       recalculate_vehicle_pl: {
         Args: { p_vehicle_id: string }
         Returns: undefined
+      }
+      reclassify_expense_pnl: {
+        Args: { p_bucket: string; p_category: string; p_tenant_id: string }
+        Returns: number
       }
       record_installment_notification: {
         Args: {

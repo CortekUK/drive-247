@@ -41,9 +41,7 @@ import { VehiclePhotoGallery } from "@/components/vehicles/vehicle-photo-gallery
 import { BlockedDatesManager } from "@/components/blocked-dates/blocked-dates-manager";
 import { VehicleExtrasManager } from "@/components/vehicles/vehicle-extras-manager";
 import { VehicleDynamicPricing } from "@/components/vehicles/vehicle-dynamic-pricing";
-import { SmartPricingPanel } from "@/components/revenue/smart-pricing-panel";
 import { VehicleOwnershipPanel } from "@/components/vehicles/vehicle-ownership-panel";
-import { VehicleCalendarSync } from "@/components/vehicles/vehicle-calendar-sync";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
 import { Package, Loader2 as SpinnerIcon, Zap } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -1396,16 +1394,6 @@ export default function VehicleDetail() {
                 <VehicleDynamicPricing vehicleId={id} dailyRent={vehicle?.daily_rent || 0} />
               </CardContent>
             </Card>
-          </div>
-
-          {/* Smart Pricing — Revenue Optimiser recommendation for this vehicle */}
-          <div className="mt-8">
-            <SmartPricingPanel vehicleId={id} />
-          </div>
-
-          {/* External Calendar Sync (Turo / Airbnb / Vrbo / Booking.com) */}
-          <div className="mt-8">
-            <VehicleCalendarSync vehicleId={id} vehicleReg={vehicle?.reg || ""} />
           </div>
 
         </div>

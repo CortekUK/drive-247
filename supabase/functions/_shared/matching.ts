@@ -11,7 +11,7 @@
  * Algorithm overview (deterministic core):
  *  1. Resolve candidate vehicles (specific / class / any).
  *  2. Filter by eligibility (active, rental-type flags, min_rental_hours, rideshare).
- *  3. Compute availability per vehicle (bookings ∪ external_bookings ∪ maintenance + buffer).
+ *  3. Compute availability per vehicle (bookings ∪ maintenance + buffer).
  *  4. Price each option (daily/weekly/monthly tier + dynamic pricing).
  *  5. Compute matchScore (closeness, coverage, price fit, utilisation).
  *  6. Detect stitched combos when no single vehicle covers the period.
@@ -103,12 +103,6 @@ interface RentalBooking {
   start_date: string;
   end_date: string;
   status: string;
-}
-
-interface ExternalBookingRow {
-  vehicle_id: string;
-  start_date: string;
-  end_date: string;
 }
 
 // Minimal Supabase client surface used here.
@@ -208,7 +202,7 @@ export async function runMatchingEngine(
 
   const vehicleIds = vehicles.map((v) => v.id);
 
-  // 3. Bookings (active/pending/confirmed) + external bookings
+  // 3. Bookings (active/pending/confirmed)
   const bookingsRes = await (supabase.from("rentals") as unknown as {
     select: (s: string) => {
       in: (c: string, v: string[]) => Promise<{ data: RentalBooking[] | null }>;
@@ -216,15 +210,8 @@ export async function runMatchingEngine(
   }).select("vehicle_id, start_date, end_date, status").in("vehicle_id", vehicleIds);
   const bookings = bookingsRes.data ?? [];
 
-  const externalRes = await (supabase.from("external_bookings") as unknown as {
-    select: (s: string) => {
-      in: (c: string, v: string[]) => Promise<{ data: ExternalBookingRow[] | null }>;
-    };
-  }).select("vehicle_id, start_date, end_date").in("vehicle_id", vehicleIds);
-  const externals = externalRes.data ?? [];
-
   function vehicleAvailability(vehicleId: string): "full" | "partial" | "unavailable" {
-    const occupiedDays = [...bookings, ...externals]
+    const occupiedDays = bookings
       .filter((b) => b.vehicle_id === vehicleId)
       .map((b) => overlapDays(input.startDate, input.endDate, b.start_date, b.end_date))
       .reduce((acc, d) => acc + d, 0);
@@ -330,7 +317,7 @@ export async function runMatchingEngine(
 
     function occupiedSetFor(vehicleId: string): Set<number> {
       const occupied = new Set<number>();
-      for (const b of [...bookings, ...externals]) {
+      for (const b of bookings) {
         if (b.vehicle_id !== vehicleId) continue;
         const overlapStart = Math.max(startMs, Date.parse(b.start_date));
         const overlapEnd = Math.min(Date.parse(input.endDate), Date.parse(b.end_date));

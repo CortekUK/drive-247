@@ -670,6 +670,31 @@ export function BonzahSettings() {
               </div>
             </>
           )}
+
+          {/* Legal — mirrors Bonzah's own footer links so operators are covered */}
+          <div className="pt-4 mt-2 border-t">
+            <p className="text-xs text-[#737373]">
+              By connecting, you agree to Bonzah's{' '}
+              <a
+                href="https://www.bonzah.com/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#6366f1] hover:underline"
+              >
+                Terms of Service
+              </a>{' '}
+              and{' '}
+              <a
+                href="https://www.bonzah.com/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#6366f1] hover:underline"
+              >
+                Privacy Policy
+              </a>
+              .
+            </p>
+          </div>
         </CardContent>
       </Card>
 

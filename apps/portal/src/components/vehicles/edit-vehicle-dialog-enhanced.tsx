@@ -45,11 +45,7 @@ interface Vehicle {
   daily_rent?: number;
   weekly_rent?: number;
   monthly_rent?: number;
-  // Revenue Optimiser fields
   category?: "economy" | "sedan" | "suv" | "luxury" | "van" | "electric";
-  cost_floor_daily?: number;
-  cost_floor_weekly?: number;
-  cost_floor_monthly?: number;
   mot_due_date?: string;
   tax_due_date?: string;
   warranty_start_date?: string;
@@ -74,11 +70,6 @@ interface Vehicle {
   available_daily?: boolean;
   available_weekly?: boolean;
   available_monthly?: boolean;
-  external_ical_enabled?: boolean;
-  external_ical_source?: string | null;
-  external_ical_url?: string | null;
-  external_ical_last_synced_at?: string | null;
-  external_ical_last_error?: string | null;
 }
 
 interface EditVehicleDialogProps {
@@ -129,11 +120,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
       daily_rent: vehicle.daily_rent ?? 0,
       weekly_rent: vehicle.weekly_rent ?? 0,
       monthly_rent: vehicle.monthly_rent ?? 0,
-      // Revenue Optimiser fields
       category: vehicle.category,
-      cost_floor_daily: vehicle.cost_floor_daily ?? undefined,
-      cost_floor_weekly: vehicle.cost_floor_weekly ?? undefined,
-      cost_floor_monthly: vehicle.cost_floor_monthly ?? undefined,
       mot_due_date: vehicle.mot_due_date ? new Date(vehicle.mot_due_date) : undefined,
       tax_due_date: vehicle.tax_due_date ? new Date(vehicle.tax_due_date) : undefined,
       warranty_start_date: vehicle.warranty_start_date ? new Date(vehicle.warranty_start_date) : undefined,
@@ -190,11 +177,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
         daily_rent: data.daily_rent || null,
         weekly_rent: data.weekly_rent || null,
         monthly_rent: data.monthly_rent || null,
-        // Revenue Optimiser fields
         category: data.category ?? null,
-        cost_floor_daily: data.cost_floor_daily ?? null,
-        cost_floor_weekly: data.cost_floor_weekly ?? null,
-        cost_floor_monthly: data.cost_floor_monthly ?? null,
         mot_due_date: data.mot_due_date ? format(data.mot_due_date, 'yyyy-MM-dd') : undefined,
         tax_due_date: data.tax_due_date ? format(data.tax_due_date, 'yyyy-MM-dd') : undefined,
         warranty_start_date: data.warranty_start_date ? format(data.warranty_start_date, 'yyyy-MM-dd') : undefined,
@@ -753,13 +736,11 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                 />
               </div>
 
-              {/* Revenue Optimiser — pricing safety (Spec §13). RO will never
-                  recommend below these floors, and uses `category` for elasticity
-                  fallback when this vehicle has too few bookings of its own. */}
+              {/* Vehicle classification */}
               <div className="mt-4 pt-4 border-t space-y-3">
                 <div>
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pricing safety (Revenue Optimiser)</h4>
-                  <p className="text-[11px] text-muted-foreground">Used by the Revenue Optimiser to keep recommendations safe.</p>
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Classification</h4>
+                  <p className="text-[11px] text-muted-foreground">Used to group similar vehicles.</p>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-start">
                   <FormField
@@ -783,57 +764,6 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                             <SelectItem value="electric">Electric</SelectItem>
                           </SelectContent>
                         </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="cost_floor_daily"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="whitespace-nowrap">Floor / Day ({currencySymbol})</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number" step="0.01" min="0" placeholder="Optional"
-                            {...field} value={field.value ?? ''}
-                            onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="cost_floor_weekly"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="whitespace-nowrap">Floor / Week ({currencySymbol})</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number" step="0.01" min="0" placeholder="Optional"
-                            {...field} value={field.value ?? ''}
-                            onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="cost_floor_monthly"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="whitespace-nowrap">Floor / Month ({currencySymbol})</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number" step="0.01" min="0" placeholder="Optional"
-                            {...field} value={field.value ?? ''}
-                            onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                          />
-                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}

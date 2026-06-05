@@ -980,25 +980,25 @@ const CreateRental = () => {
       : perPeriodRate > 0 ? 'daily'
       : weeklyRent > 0 ? 'weekly' : 'monthly';
 
-    let amount: number;
-
-    if (tier === 'monthly') {
-      amount = Math.round(((days / mtd) * perPeriodRate) * 100) / 100;
-    } else if (tier === 'weekly') {
-      amount = Math.round(((days / 7) * perPeriodRate) * 100) / 100;
-    } else {
-      const breakdown = calculateRentalPriceBreakdown(
-        format(watchedStartDate, 'yyyy-MM-dd'),
-        format(watchedEndDate, 'yyyy-MM-dd'),
-        { daily_rent: perPeriodRate, weekly_rent: weeklyRent, monthly_rent: monthlyRent },
-        weekendPricingSettings,
-        tenantHolidays,
-        vehiclePricingOverrides,
-        selectedVehicleId,
-        mtd,
-      );
-      amount = breakdown.rentalPrice;
-    }
+    // Surcharges apply across all tiers. Slot the user-editable perPeriodRate into
+    // the active tier's rate field so weekend/holiday surcharges run against the
+    // edited rate, then let the shared engine apply per-day surcharges.
+    const ratesForTier = {
+      daily_rent: tier === 'daily' ? perPeriodRate : (vehicle.daily_rent || 0),
+      weekly_rent: tier === 'weekly' ? perPeriodRate : weeklyRent,
+      monthly_rent: tier === 'monthly' ? perPeriodRate : monthlyRent,
+    };
+    const breakdown = calculateRentalPriceBreakdown(
+      format(watchedStartDate, 'yyyy-MM-dd'),
+      format(watchedEndDate, 'yyyy-MM-dd'),
+      ratesForTier,
+      weekendPricingSettings,
+      tenantHolidays,
+      vehiclePricingOverrides,
+      selectedVehicleId,
+      mtd,
+    );
+    const amount = breakdown.rentalPrice;
 
     if (amount !== watchedMonthlyAmount) {
       form.setValue("monthly_amount", amount, { shouldValidate: true });
@@ -3506,13 +3506,19 @@ const CreateRental = () => {
                                 : dailyRent > 0 ? 'daily'
                                 : weeklyRent > 0 ? 'weekly' : 'monthly';
 
-                              // Use the shared pricing helper so this display always matches
-                              // the form value (incl. weekend + holiday + vehicle overrides).
-                              const breakdownResult = (tier === 'daily' && watchedStartDate && watchedEndDate)
+                              // Slot the user-editable perPeriodRate into the active tier's rate so
+                              // the breakdown matches the form value. Surcharges apply across all tiers
+                              // via the shared pricing helper (incl. weekend + holiday + vehicle overrides).
+                              const ratesForTier = {
+                                daily_rent: tier === 'daily' ? dailyRent : (vehicle.daily_rent || 0),
+                                weekly_rent: tier === 'weekly' && perPeriodRate ? perPeriodRate : weeklyRent,
+                                monthly_rent: tier === 'monthly' && perPeriodRate ? perPeriodRate : monthlyRent,
+                              };
+                              const breakdownResult = (watchedStartDate && watchedEndDate)
                                 ? calculateRentalPriceBreakdown(
                                     format(watchedStartDate, 'yyyy-MM-dd'),
                                     format(watchedEndDate, 'yyyy-MM-dd'),
-                                    { daily_rent: dailyRent, weekly_rent: weeklyRent, monthly_rent: monthlyRent },
+                                    ratesForTier,
                                     weekendPricingSettings,
                                     tenantHolidays,
                                     vehiclePricingOverrides,
@@ -3521,7 +3527,13 @@ const CreateRental = () => {
                                   )
                                 : null;
 
-                              // Group daily-tier days for display
+                              // Per-day equivalent rate for the active tier (what each non-surcharge day costs)
+                              const perDayBase = tier === 'monthly' ? (ratesForTier.monthly_rent / mtd)
+                                : tier === 'weekly' ? (ratesForTier.weekly_rent / 7)
+                                : ratesForTier.daily_rent;
+                              const perDayBaseRounded = Math.round(perDayBase * 100) / 100;
+
+                              // Group days for display (all tiers)
                               const regularItems: DayBreakdown[] = [];
                               const weekendItems: DayBreakdown[] = [];
                               const holidayGroups: Record<string, { name: string; items: DayBreakdown[]; surcharge: number }> = {};
@@ -3561,70 +3573,49 @@ const CreateRental = () => {
                                       <Badge variant="outline" className="text-[10px] h-5 capitalize">{tier}</Badge>
                                     </div>
                                     <div className="border-t my-1.5" />
+                                    {/* Period rate header (weekly/monthly) */}
                                     {tier === 'monthly' && (
-                                      <>
-                                        <div className="flex justify-between">
-                                          <span>Monthly Rate</span>
-                                          <span>{formatCurrency(monthlyRent, currency)}/month</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                          <span>Formula</span>
-                                          <span>({days} days &divide; 30) &times; {formatCurrency(monthlyRent, currency)}</span>
-                                        </div>
-                                      </>
+                                      <div className="flex justify-between">
+                                        <span>Monthly Rate</span>
+                                        <span>{formatCurrency(ratesForTier.monthly_rent, currency)}/month</span>
+                                      </div>
                                     )}
                                     {tier === 'weekly' && (
-                                      <>
-                                        <div className="flex justify-between">
-                                          <span>Weekly Rate</span>
-                                          <span>{formatCurrency(weeklyRent, currency)}/week</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                          <span>Formula</span>
-                                          <span>({days} days &divide; 7) &times; {formatCurrency(weeklyRent, currency)}</span>
-                                        </div>
-                                      </>
+                                      <div className="flex justify-between">
+                                        <span>Weekly Rate</span>
+                                        <span>{formatCurrency(ratesForTier.weekly_rent, currency)}/week</span>
+                                      </div>
                                     )}
-                                    {tier === 'daily' && (
-                                      <>
-                                        <div className="flex justify-between">
-                                          <span>Daily Rate</span>
-                                          <span>{formatCurrency(dailyRent, currency)}/day</span>
-                                        </div>
-                                        {regularDays > 0 && (
-                                          <div className="flex justify-between">
-                                            <span>Regular days</span>
-                                            <span>{regularDays} &times; {formatCurrency(dailyRent, currency)} = {formatCurrency(regularItems.reduce((s, d) => s + d.effectiveRate, 0), currency)}</span>
-                                          </div>
-                                        )}
-                                        {weekendDays > 0 && (
-                                          <div className="flex justify-between text-amber-600 dark:text-amber-400">
-                                            <span>Weekend days (+{weekendPricingSettings.weekend_surcharge_percent}%)</span>
-                                            <span>{weekendDays} day{weekendDays !== 1 ? 's' : ''} = {formatCurrency(weekendTotal, currency)}</span>
-                                          </div>
-                                        )}
-                                        {Object.values(holidayGroups).map((g) => {
-                                          const total = g.items.reduce((s, d) => s + d.effectiveRate, 0);
-                                          return (
-                                            <div key={g.name + g.surcharge} className="flex justify-between text-orange-600 dark:text-orange-400">
-                                              <span>{g.name} {g.surcharge > 0 ? `(+${g.surcharge}%)` : '(override)'}</span>
-                                              <span>{g.items.length} day{g.items.length !== 1 ? 's' : ''} = {formatCurrency(total, currency)}</span>
-                                            </div>
-                                          );
-                                        })}
-                                      </>
+                                    {/* Per-day equivalent — shown for all tiers since surcharges apply per-day */}
+                                    <div className="flex justify-between">
+                                      <span>{tier === 'daily' ? 'Daily Rate' : 'Per-day rate'}</span>
+                                      <span>{formatCurrency(perDayBaseRounded, currency)}/day</span>
+                                    </div>
+                                    {regularDays > 0 && (
+                                      <div className="flex justify-between">
+                                        <span>Regular days</span>
+                                        <span>{regularDays} &times; {formatCurrency(perDayBaseRounded, currency)} = {formatCurrency(regularItems.reduce((s, d) => s + d.effectiveRate, 0), currency)}</span>
+                                      </div>
                                     )}
+                                    {weekendDays > 0 && (
+                                      <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                                        <span>Weekend days (+{weekendPricingSettings.weekend_surcharge_percent}%)</span>
+                                        <span>{weekendDays} day{weekendDays !== 1 ? 's' : ''} = {formatCurrency(weekendTotal, currency)}</span>
+                                      </div>
+                                    )}
+                                    {Object.values(holidayGroups).map((g) => {
+                                      const total = g.items.reduce((s, d) => s + d.effectiveRate, 0);
+                                      return (
+                                        <div key={g.name + g.surcharge} className="flex justify-between text-orange-600 dark:text-orange-400">
+                                          <span>{g.name} {g.surcharge > 0 ? `(+${g.surcharge}%)` : '(override)'}</span>
+                                          <span>{g.items.length} day{g.items.length !== 1 ? 's' : ''} = {formatCurrency(total, currency)}</span>
+                                        </div>
+                                      );
+                                    })}
                                     <div className="border-t my-1.5" />
                                     {(() => {
-                                      // Compute the auto-calculated amount to compare with field value
-                                      let autoTotal = 0;
-                                      if (tier === 'daily' && breakdownResult) {
-                                        autoTotal = breakdownResult.rentalPrice;
-                                      } else if (tier === 'weekly' && weeklyRent > 0) {
-                                        autoTotal = Math.round(((days / 7) * weeklyRent) * 100) / 100;
-                                      } else if (tier === 'monthly' && monthlyRent > 0) {
-                                        autoTotal = Math.round(((days / mtd) * monthlyRent) * 100) / 100;
-                                      }
+                                      // Auto-calculated amount from the shared engine (all tiers, surcharge-inclusive)
+                                      const autoTotal = breakdownResult ? breakdownResult.rentalPrice : 0;
                                       const isOverridden = autoTotal > 0 && Math.abs((field.value || 0) - autoTotal) > 0.01;
                                       return (
                                         <>
@@ -5565,7 +5556,6 @@ const CreateRental = () => {
         open={showConflictDialog}
         onOpenChange={setShowConflictDialog}
         rentalConflicts={conflictResult?.rentalConflicts || []}
-        externalConflicts={conflictResult?.externalConflicts || []}
         onRetry={() => {
           setShowConflictDialog(false);
           setConflictResult(null);
@@ -5579,7 +5569,6 @@ const CreateRental = () => {
         open={vehicleChangeConflict !== null}
         onOpenChange={(open) => { if (!open) setVehicleChangeConflict(null); }}
         rentalConflicts={vehicleChangeConflict?.rentalConflicts || []}
-        externalConflicts={vehicleChangeConflict?.externalConflicts || []}
         title="Date Conflicts with New Vehicle"
         description="Your selected dates overlap with rentals on the new vehicle. Clear the dates so you can pick new ones, or keep them and adjust manually."
         primaryLabel="Clear Dates"

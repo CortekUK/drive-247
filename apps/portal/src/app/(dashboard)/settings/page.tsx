@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, CalendarSync, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -43,7 +43,6 @@ import { WhatsAppMetaSettings } from '@/components/settings/whatsapp-meta-settin
 import { CommunicationSettings } from '@/components/settings/communication-settings';
 import { SubscriptionSettings } from '@/components/settings/subscription-settings';
 import { TeslaFleetSettings } from '@/components/settings/tesla-fleet-settings';
-import { TuroSyncSettings } from '@/components/settings/turo-sync-settings';
 import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates-section';
 import { PricingRulesSettings } from '@/components/settings/pricing-rules-settings';
 import { InstallmentConfigDialog } from '@/components/settings/installment-config-dialog';
@@ -69,7 +68,7 @@ const Settings = () => {
     'requirements', 'duration', 'lockbox',
     'pricing', 'fees', 'preauth', 'installments', 'payg', 'auto-extend', 'promos', 'extras', 'payments',
     'reminders', 'templates',
-    'messaging', 'insurance', 'esign', 'tesla', 'calendar-sync', 'blacklist',
+    'messaging', 'insurance', 'esign', 'tesla', 'blacklist',
     'subscription',
   ];
   const visibleTabs = allSettingsTabs.filter(t => canViewSettings(t));
@@ -1301,7 +1300,6 @@ const Settings = () => {
                 { value: 'insurance', icon: Shield, label: 'Insurance' },
                 { value: 'esign', icon: FilePenLine, label: 'E-Sign' },
                 { value: 'tesla', icon: Zap, label: 'Tesla' },
-                { value: 'calendar-sync', icon: CalendarSync, label: 'Calendar Sync' },
                 { value: 'blacklist', icon: ShieldX, label: 'Blacklist' },
                 { value: 'subscription', icon: Crown, label: 'Subscription' },
               ] as const).filter(item => canViewSettings(item.value)).map(item => (
@@ -4158,11 +4156,6 @@ const Settings = () => {
         {/* Tesla Fleet Tab */}
         <TabsContent value="tesla" className="space-y-6">
           <TeslaFleetSettings />
-        </TabsContent>
-
-        {/* Calendar Sync (Turo) Tab */}
-        <TabsContent value="calendar-sync" className="space-y-6">
-          <TuroSyncSettings />
         </TabsContent>
 
         {/* Blacklist Tab */}

@@ -1090,7 +1090,7 @@ const BookingCheckoutContent = () => {
                         const weeklyRent = vehicleDetails.weekly_rent || 0;
                         const monthlyRent = vehicleDetails.monthly_rent || 0;
                         const priceResult = calculateVehiclePriceResult();
-                        const hasDynamicPricing = priceResult.pricingTier === 'daily' && priceResult.dayBreakdown.length > 0 &&
+                        const hasDynamicPricing = priceResult.dayBreakdown.length > 0 &&
                           priceResult.dayBreakdown.some(d => d.type !== 'regular');
 
                         if (hasDynamicPricing) {

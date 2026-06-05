@@ -307,7 +307,7 @@ export default function BookingCheckoutStep({
     const weeklyRent = selectedVehicle?.weekly_rent || 0;
     const monthlyRent = selectedVehicle?.monthly_rent || 0;
 
-    const hasDynamicPricing = pricingTier === 'daily' && dayBreakdown.length > 0 &&
+    const hasDynamicPricing = dayBreakdown.length > 0 &&
       dayBreakdown.some(d => d.type !== 'regular');
 
     if (hasDynamicPricing && dayBreakdown.length > 0) {
@@ -1752,8 +1752,9 @@ export default function BookingCheckoutStep({
                     const weeklyRent = selectedVehicle?.weekly_rent || 0;
                     const monthlyRent = selectedVehicle?.monthly_rent || 0;
 
-                    // For daily tier with dynamic pricing, check if rates vary across days
-                    const hasDynamicPricing = pricingTier === 'daily' && dayBreakdown.length > 0 &&
+                    // Surcharges apply across all tiers — show the per-day breakdown
+                    // whenever any day carries a weekend/holiday surcharge.
+                    const hasDynamicPricing = dayBreakdown.length > 0 &&
                       dayBreakdown.some(d => d.type !== 'regular');
 
                     // Group days by rate for a cleaner breakdown
