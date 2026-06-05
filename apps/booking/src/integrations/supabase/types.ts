@@ -749,6 +749,113 @@ export type Database = {
           },
         ]
       }
+      auto_extension_reminders: {
+        Row: {
+          amount: number | null
+          channel: string
+          created_at: string
+          error_message: string | null
+          extension_id: string | null
+          id: string
+          paid_at: string | null
+          recipient: string | null
+          reminder_type: string
+          rental_id: string
+          sent_at: string
+          sent_by: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          subject: string | null
+          tenant_id: string
+        }
+        Insert: {
+          amount?: number | null
+          channel?: string
+          created_at?: string
+          error_message?: string | null
+          extension_id?: string | null
+          id?: string
+          paid_at?: string | null
+          recipient?: string | null
+          reminder_type?: string
+          rental_id: string
+          sent_at?: string
+          sent_by?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          subject?: string | null
+          tenant_id: string
+        }
+        Update: {
+          amount?: number | null
+          channel?: string
+          created_at?: string
+          error_message?: string | null
+          extension_id?: string | null
+          id?: string
+          paid_at?: string | null
+          recipient?: string | null
+          reminder_type?: string
+          rental_id?: string
+          sent_at?: string
+          sent_by?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          subject?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auto_extension_reminders_extension_id_fkey"
+            columns: ["extension_id"]
+            isOneToOne: false
+            referencedRelation: "rental_extension_totals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auto_extension_reminders_extension_id_fkey"
+            columns: ["extension_id"]
+            isOneToOne: false
+            referencedRelation: "rental_extensions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auto_extension_reminders_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auto_extension_reminders_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "auto_extension_reminders_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "auto_extension_reminders_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auto_extension_reminders_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_event_queue: {
         Row: {
           attempts: number
@@ -10627,15 +10734,23 @@ export type Database = {
           auto_extend_charge_count: number
           auto_extend_charge_mode: string
           auto_extend_enabled: boolean
+          auto_extend_exceptions: Json
           auto_extend_failed_attempts: number
+          auto_extend_interval_count: number
           auto_extend_last_charge_at: string | null
+          auto_extend_last_reminder_at: string | null
           auto_extend_lead_hours: number
           auto_extend_max_periods: number | null
           auto_extend_next_charge_at: string | null
+          auto_extend_overrides: Json
           auto_extend_paused: boolean
           auto_extend_paused_at: string | null
           auto_extend_pending_extension_id: string | null
           auto_extend_period_unit: string
+          auto_extend_reminder_count: number
+          auto_extend_reminder_enabled: boolean
+          auto_extend_reminder_interval_days: number
+          auto_extend_reminder_max: number
           auto_extend_status: string
           boldsign_mode: string | null
           bonzah_policy_id: string | null
@@ -10729,15 +10844,23 @@ export type Database = {
           auto_extend_charge_count?: number
           auto_extend_charge_mode?: string
           auto_extend_enabled?: boolean
+          auto_extend_exceptions?: Json
           auto_extend_failed_attempts?: number
+          auto_extend_interval_count?: number
           auto_extend_last_charge_at?: string | null
+          auto_extend_last_reminder_at?: string | null
           auto_extend_lead_hours?: number
           auto_extend_max_periods?: number | null
           auto_extend_next_charge_at?: string | null
+          auto_extend_overrides?: Json
           auto_extend_paused?: boolean
           auto_extend_paused_at?: string | null
           auto_extend_pending_extension_id?: string | null
           auto_extend_period_unit?: string
+          auto_extend_reminder_count?: number
+          auto_extend_reminder_enabled?: boolean
+          auto_extend_reminder_interval_days?: number
+          auto_extend_reminder_max?: number
           auto_extend_status?: string
           boldsign_mode?: string | null
           bonzah_policy_id?: string | null
@@ -10831,15 +10954,23 @@ export type Database = {
           auto_extend_charge_count?: number
           auto_extend_charge_mode?: string
           auto_extend_enabled?: boolean
+          auto_extend_exceptions?: Json
           auto_extend_failed_attempts?: number
+          auto_extend_interval_count?: number
           auto_extend_last_charge_at?: string | null
+          auto_extend_last_reminder_at?: string | null
           auto_extend_lead_hours?: number
           auto_extend_max_periods?: number | null
           auto_extend_next_charge_at?: string | null
+          auto_extend_overrides?: Json
           auto_extend_paused?: boolean
           auto_extend_paused_at?: string | null
           auto_extend_pending_extension_id?: string | null
           auto_extend_period_unit?: string
+          auto_extend_reminder_count?: number
+          auto_extend_reminder_enabled?: boolean
+          auto_extend_reminder_interval_days?: number
+          auto_extend_reminder_max?: number
           auto_extend_status?: string
           boldsign_mode?: string | null
           bonzah_policy_id?: string | null

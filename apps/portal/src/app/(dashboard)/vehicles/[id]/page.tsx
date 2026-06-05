@@ -41,6 +41,7 @@ import { VehiclePhotoGallery } from "@/components/vehicles/vehicle-photo-gallery
 import { BlockedDatesManager } from "@/components/blocked-dates/blocked-dates-manager";
 import { VehicleExtrasManager } from "@/components/vehicles/vehicle-extras-manager";
 import { VehicleDynamicPricing } from "@/components/vehicles/vehicle-dynamic-pricing";
+import { SmartPricingPanel } from "@/components/revenue/smart-pricing-panel";
 import { VehicleOwnershipPanel } from "@/components/vehicles/vehicle-ownership-panel";
 import { VehicleCalendarSync } from "@/components/vehicles/vehicle-calendar-sync";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
@@ -1395,6 +1396,11 @@ export default function VehicleDetail() {
                 <VehicleDynamicPricing vehicleId={id} dailyRent={vehicle?.daily_rent || 0} />
               </CardContent>
             </Card>
+          </div>
+
+          {/* Smart Pricing — Revenue Optimiser recommendation for this vehicle */}
+          <div className="mt-8">
+            <SmartPricingPanel vehicleId={id} />
           </div>
 
           {/* External Calendar Sync (Turo / Airbnb / Vrbo / Booking.com) */}

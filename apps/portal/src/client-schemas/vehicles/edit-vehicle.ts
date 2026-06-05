@@ -15,6 +15,11 @@ export const editVehicleSchema = z.object({
   daily_rent: z.number({ required_error: "Daily rent is required", invalid_type_error: "Daily rent must be a number" }).min(0, "Daily rent must be positive"),
   weekly_rent: z.number({ required_error: "Weekly rent is required", invalid_type_error: "Weekly rent must be a number" }).min(0, "Weekly rent must be positive"),
   monthly_rent: z.number({ required_error: "Monthly rent is required", invalid_type_error: "Monthly rent must be a number" }).min(0, "Monthly rent must be positive"),
+  // Revenue Optimiser fields — pricing category + per-tier floor below which RO never recommends.
+  category: z.enum(["economy", "sedan", "suv", "luxury", "van", "electric"]).optional(),
+  cost_floor_daily: z.number().min(0, "Cost floor must be positive").optional(),
+  cost_floor_weekly: z.number().min(0, "Cost floor must be positive").optional(),
+  cost_floor_monthly: z.number().min(0, "Cost floor must be positive").optional(),
   // Acquisition date: cannot be in the future
   acquisition_date: z.date().refine(
     (date) => startOfDay(date) <= getToday(),

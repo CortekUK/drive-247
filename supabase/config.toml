@@ -102,3 +102,64 @@ verify_jwt = false
 # Hourly Tesla Supercharger sync (called by pg_cron with a service-role bearer).
 [functions.sync-tesla-charges-cron]
 verify_jwt = false
+
+# Lead Management — public application form submission (Spec §6.2).
+[functions.submit-application]
+verify_jwt = false
+
+# Lead Management — presigned upload URL for applicant documents (pre-auth).
+[functions.lead-document-presign]
+verify_jwt = false
+
+# Lead Management — customer opens an offer link (no auth, lead-side).
+[functions.view-offer]
+verify_jwt = false
+
+# Lead Management — customer accepts an offer (no auth, lead-side).
+[functions.accept-offer]
+verify_jwt = false
+
+# Lead Management — hourly cron: stale reminders + auto-lost + offer expiry.
+# Authorised via X-Cron-Secret header (env: AUTOMATION_CRON_SECRET).
+[functions.lead-stale-poll]
+verify_jwt = false
+
+# Automations engine — minute-by-minute cron polling automation_event_queue
+# and resuming waiting runs. Same X-Cron-Secret auth as lead-stale-poll.
+[functions.automation-poll-pending]
+verify_jwt = false
+
+# Lead Management — inbound SMS (AWS SNS / generic JSON envelope).
+[functions.lead-inbound-sms-webhook]
+verify_jwt = false
+
+# Lead Management — inbound email (SES / Resend).
+[functions.lead-inbound-email-webhook]
+verify_jwt = false
+
+# Phase 4 scaffold — public read of per-tenant Apply form config.
+[functions.get-apply-form-config]
+verify_jwt = false
+
+# Phase 3 AI layer.
+[functions.ai-rank-matches]
+verify_jwt = true
+
+[functions.ai-extract-from-conversation]
+verify_jwt = true
+
+[functions.ai-draft-message]
+verify_jwt = true
+
+# Automations engine support functions.
+[functions.automation-test-run]
+verify_jwt = true
+
+[functions.automation-trigger-event]
+verify_jwt = true
+
+[functions.automation-execute-step]
+verify_jwt = true
+
+[functions.automation-publish]
+verify_jwt = true
