@@ -1,6 +1,7 @@
 // generate-expense-summary
-// Produces a short, cached AI summary of a tenant's expenses for one tab/scope
-// (overall | business | vehicle) and upserts it into expense_ai_summaries.
+// Produces a rich, cached AI summary of a tenant's expenses for one tab/scope
+// (overall | business | vehicle). Stores a JSON payload (headline, narrative,
+// insights, highlights) in expense_ai_summaries.summary.
 // Self-contained (no ../_shared imports) so it deploys cleanly via MCP.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -28,7 +29,6 @@ function money(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
-// Best-effort usage log (mirrors _shared/openai.ts), never throws.
 async function logUsage(row: Record<string, unknown>): Promise<void> {
   try {
     const url = Deno.env.get("SUPABASE_URL");
@@ -74,8 +74,6 @@ Deno.serve(async (req) => {
       ? body.scope
       : "overall") as Scope;
 
-    // Resolve tenant from the authenticated user (don't trust the client),
-    // except super admins who may target a specific tenant via the body.
     const { data: appUser } = await supabase
       .from("app_users")
       .select("tenant_id, is_super_admin")
@@ -120,24 +118,31 @@ Deno.serve(async (req) => {
       return jsonResponse({ summary: "", source_count: 0, source_total: 0 });
     }
 
-    // Distribution — by vehicle for the vehicle tab, otherwise by category.
-    const byKey = new Map<string, number>();
-    for (const e of items) {
-      const key =
-        scope === "vehicle"
-          ? (e.vehicle
-              ? `${e.vehicle.reg ?? "Vehicle"} (${e.vehicle.make ?? ""} ${e.vehicle.model ?? ""})`.trim()
-              : "Unknown vehicle")
-          : (e.category || "Uncategorised");
-      byKey.set(key, (byKey.get(key) || 0) + Number(e.amount || 0));
-    }
-    const topBreakdown = [...byKey.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([k, v]) => `${k}: ${money(v)}`)
-      .join("; ");
+    const labelFor = (e: any) =>
+      scope === "vehicle"
+        ? (e.vehicle
+            ? `${e.vehicle.reg ?? "Vehicle"} (${e.vehicle.make ?? ""} ${e.vehicle.model ?? ""})`.trim()
+            : "Unknown vehicle")
+        : (e.category || "Uncategorised");
 
-    // Month-over-month trend (last two months present).
+    // Distribution.
+    const byKey = new Map<string, number>();
+    for (const e of items) byKey.set(labelFor(e), (byKey.get(labelFor(e)) || 0) + Number(e.amount || 0));
+    const ranked = [...byKey.entries()].sort((a, b) => b[1] - a[1]);
+    const topBreakdown = ranked.slice(0, 6).map(([k, v]) => `${k}: ${money(v)}`).join("; ");
+    const [topName, topVal] = ranked[0] ?? ["—", 0];
+    const topPct = total ? Math.round((topVal / total) * 100) : 0;
+
+    // Biggest single expense.
+    const biggest = items.reduce((mx, e) => (Number(e.amount) > Number(mx.amount) ? e : mx), items[0]);
+
+    // Business vs vehicle split (overall only).
+    const vehicleSpend = items
+      .filter((e) => e.vehicle_id)
+      .reduce((s, e) => s + Number(e.amount || 0), 0);
+    const businessSpend = total - vehicleSpend;
+
+    // Month-over-month trend.
     const byMonth = new Map<string, number>();
     for (const e of items) {
       const d = new Date(e.expense_at || e.expense_date);
@@ -145,28 +150,54 @@ Deno.serve(async (req) => {
       byMonth.set(key, (byMonth.get(key) || 0) + Number(e.amount || 0));
     }
     const months = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    let trendPct: number | null = null;
     let trendLine = "";
     if (months.length >= 2) {
       const prev = months[months.length - 2][1];
       const last = months[months.length - 1][1];
-      const pct = prev > 0 ? Math.round(((last - prev) / prev) * 100) : null;
-      trendLine = pct === null
-        ? `Latest month total: ${money(last)}.`
-        : `Latest month ${money(last)} vs previous ${money(prev)} (${pct >= 0 ? "+" : ""}${pct}%).`;
+      trendPct = prev > 0 ? Math.round(((last - prev) / prev) * 100) : null;
+      trendLine =
+        trendPct === null
+          ? `Latest month total ${money(last)}.`
+          : `Latest month ${money(last)} vs previous ${money(prev)} (${trendPct >= 0 ? "+" : ""}${trendPct}%).`;
     }
+
+    // Deterministic highlight chips (numbers never hallucinated).
+    const highlights: any[] = [
+      { label: "Total spend", amount: total },
+      {
+        label: scope === "vehicle" ? "Top vehicle" : "Top category",
+        text: `${topName.length > 22 ? topName.slice(0, 21) + "…" : topName} · ${topPct}%`,
+      },
+    ];
+    if (trendPct !== null) {
+      highlights.push({
+        label: "Vs last month",
+        text: `${trendPct >= 0 ? "+" : ""}${trendPct}%`,
+        trend: trendPct > 0 ? "up" : trendPct < 0 ? "down" : "flat",
+      });
+    }
+    highlights.push({ label: "Biggest item", amount: Number(biggest.amount), sub: labelFor(biggest) });
 
     const scopeLabel =
       scope === "overall" ? "all expenses (vehicle + business)" :
       scope === "business" ? "business / overhead expenses" : "vehicle-related expenses";
 
     const systemPrompt =
-      "You are a finance assistant for a car-rental operator. Write a concise, factual 2-3 sentence summary of the operator's expenses for internal staff. Highlight the biggest spend areas and any month-over-month trend. Plain English, no bullet points, no preamble, do not invent numbers.";
+      "You are a finance assistant for a car-rental operator. Given expense facts, respond with STRICT JSON only: " +
+      '{"headline": string, "narrative": string, "insights": string[]}. ' +
+      "headline = one punchy sentence (max ~12 words). " +
+      "narrative = 2 concise factual sentences. " +
+      "insights = 3 short bullet observations (max ~10 words each) about concentration, trend, or notable spend. " +
+      "Use the numbers given; never invent figures; no currency symbols; no markdown.";
+
     const userPrompt =
       `Scope: ${scopeLabel}.\n` +
-      `Total spend: ${money(total)} across ${count} expense(s).\n` +
+      `Total ${money(total)} across ${count} expense(s).\n` +
+      `Business portion ${money(businessSpend)}, vehicle portion ${money(vehicleSpend)}.\n` +
       `Top breakdown — ${topBreakdown}.\n` +
-      (trendLine ? `Trend — ${trendLine}\n` : "") +
-      `Write the summary.`;
+      `Largest single item: ${labelFor(biggest)} at ${money(Number(biggest.amount))}.\n` +
+      (trendLine ? `Trend — ${trendLine}\n` : "");
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) return errorResponse("OPENAI_API_KEY not set", 500);
@@ -185,8 +216,9 @@ Deno.serve(async (req) => {
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        temperature: 0.3,
-        max_tokens: 200,
+        temperature: 0.4,
+        max_tokens: 320,
+        response_format: { type: "json_object" },
       }),
     });
 
@@ -207,7 +239,6 @@ Deno.serve(async (req) => {
 
     const aiData = await aiRes.json();
     const usage = aiData.usage || {};
-    // USD per 1M tokens for gpt-4o-mini.
     const cost =
       ((usage.prompt_tokens || 0) * 0.15 + (usage.completion_tokens || 0) * 0.6) / 1_000_000;
     await logUsage({
@@ -224,8 +255,24 @@ Deno.serve(async (req) => {
       metadata: { scope },
     });
 
-    const summaryText =
-      aiData.choices?.[0]?.message?.content?.trim() || "Unable to generate summary.";
+    const raw = aiData.choices?.[0]?.message?.content?.trim() || "{}";
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(raw);
+    } catch (_) {
+      parsed = { narrative: raw };
+    }
+
+    const payload = {
+      headline: typeof parsed.headline === "string" ? parsed.headline : "",
+      narrative:
+        typeof parsed.narrative === "string" ? parsed.narrative : "Summary unavailable.",
+      insights: Array.isArray(parsed.insights)
+        ? parsed.insights.filter((s: unknown) => typeof s === "string").slice(0, 4)
+        : [],
+      highlights,
+    };
+    const summaryText = JSON.stringify(payload);
 
     const { error: upsertError } = await supabase.from("expense_ai_summaries").upsert(
       {

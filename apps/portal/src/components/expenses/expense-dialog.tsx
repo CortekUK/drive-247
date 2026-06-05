@@ -326,7 +326,10 @@ export function ExpenseDialog({
               name="expense_at"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Date &amp; time</FormLabel>
+                  <FormLabel>
+                    Date{" "}
+                    <span className="font-normal text-muted-foreground">· time optional</span>
+                  </FormLabel>
                   <FormControl>
                     <DateTimePicker value={field.value} onChange={field.onChange} />
                   </FormControl>

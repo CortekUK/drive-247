@@ -71,7 +71,9 @@ export function useExpenses(type: ExpenseType = "all") {
         .from("vehicle_expenses")
         .select("*, vehicle:vehicles(id, reg, make, model)")
         .eq("tenant_id", tenant!.id)
-        .order("expense_at", { ascending: false });
+        // Newest by expense date, then most-recently-added first on ties.
+        .order("expense_at", { ascending: false })
+        .order("created_at", { ascending: false });
       if (type === "business") q = q.is("vehicle_id", null);
       if (type === "vehicle") q = q.not("vehicle_id", "is", null);
       const { data, error } = await q;

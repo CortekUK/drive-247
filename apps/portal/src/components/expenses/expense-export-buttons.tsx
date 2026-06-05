@@ -1,14 +1,8 @@
 "use client";
 
 import { useState, type RefObject } from "react";
-import { Download, FileText, Loader2 } from "lucide-react";
+import { FileText, FileSpreadsheet, Loader2 } from "lucide-react";
 import { format } from "date-fns";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format-utils";
 import { csvEscape } from "@/lib/expense-utils";
@@ -164,28 +158,22 @@ export function ExpenseExportButtons({ rows, currencyCode, scopeLabel, captureRe
     }
   };
 
+  const disabled = rows.length === 0;
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" disabled={busy || rows.length === 0}>
-          {busy ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="mr-2 h-4 w-4" />
-          )}
-          Export
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={exportCsv}>
+    <div className="flex items-center gap-2">
+      <Button variant="outline" size="sm" onClick={exportCsv} disabled={disabled || busy}>
+        <FileSpreadsheet className="mr-2 h-4 w-4" />
+        Export CSV
+      </Button>
+      <Button variant="outline" size="sm" onClick={exportPdf} disabled={disabled || busy}>
+        {busy ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
           <FileText className="mr-2 h-4 w-4" />
-          Export CSV
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={exportPdf}>
-          <FileText className="mr-2 h-4 w-4" />
-          Export PDF
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        )}
+        Export PDF
+      </Button>
+    </div>
   );
 }

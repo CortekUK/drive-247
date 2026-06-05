@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { PieChart as PieIcon } from "lucide-react";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
@@ -19,22 +20,27 @@ interface Props {
   currencyCode: string;
   title: string;
   subtitle?: string;
+  /** Optional control rendered on the right of the header (e.g. a breakdown toggle). */
+  headerRight?: ReactNode;
 }
 
-export function ExpensePieChart({ data, currencyCode, title, subtitle }: Props) {
+export function ExpensePieChart({ data, currencyCode, title, subtitle, headerRight }: Props) {
   const total = data.reduce((s, d) => s + d.value, 0);
   const top = data.slice(0, 8);
 
   return (
-    <div className="rounded-xl border border-border/60 bg-card p-4 sm:p-5">
-      <div className="mb-4 flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <PieIcon className="h-4 w-4" />
+    <div className="flex h-full flex-col rounded-xl border border-border/60 bg-card p-4 sm:p-5">
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <PieIcon className="h-4 w-4" />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-foreground">{title}</h3>
+            {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+          </div>
         </div>
-        <div>
-          <h3 className="text-sm font-medium text-foreground">{title}</h3>
-          {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
-        </div>
+        {headerRight}
       </div>
 
       {total === 0 ? (

@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,8 +12,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Tag, LayoutGrid, Building2, Car } from "lucide-react";
+import { Plus, Tag } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
+import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format-utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useExpenses, type Expense } from "@/hooks/use-expenses";
@@ -22,14 +22,28 @@ import { ExpenseDialog } from "@/components/expenses/expense-dialog";
 import { ExpenseCategoriesDialog } from "@/components/expenses/expense-categories-dialog";
 import { ExpenseTabPanel } from "@/components/expenses/expense-tab-panel";
 
+type TabKey = "overall" | "business" | "vehicle";
+
+const TABS: Record<
+  TabKey,
+  { type: "all" | "business" | "vehicle"; scope: "overall" | "business" | "vehicle"; label: string; sub: string }
+> = {
+  overall: { type: "all", scope: "overall", label: "Overall", sub: "All expenses" },
+  business: { type: "business", scope: "business", label: "Business-wide", sub: "Overheads" },
+  vehicle: { type: "vehicle", scope: "vehicle", label: "Vehicle-wise", sub: "Vehicle costs" },
+};
+
 export default function ExpensesPage() {
   const { tenant } = useTenant();
   const currencyCode = tenant?.currency_code || "USD";
   const { canEdit } = useManagerPermissions();
   const editable = canEdit("expenses");
 
-  // Page-level mutations + receipt helpers (type-agnostic; invalidates all tabs).
+  const [tab, setTab] = useState<TabKey>("overall");
+
+  // Page-level data: drives the nav-card totals + mutations (invalidates all tabs).
   const {
+    expenses: allExpenses,
     addExpenseAsync,
     updateExpenseAsync,
     deleteExpense,
@@ -38,6 +52,27 @@ export default function ExpensesPage() {
     getReceiptUrl,
     removeReceiptFile,
   } = useExpenses("all");
+
+  const totals = useMemo(() => {
+    const acc = {
+      overall: { total: 0, count: 0 },
+      business: { total: 0, count: 0 },
+      vehicle: { total: 0, count: 0 },
+    };
+    for (const e of allExpenses) {
+      const a = Number(e.amount || 0);
+      acc.overall.total += a;
+      acc.overall.count += 1;
+      if (e.vehicle_id) {
+        acc.vehicle.total += a;
+        acc.vehicle.count += 1;
+      } else {
+        acc.business.total += a;
+        acc.business.count += 1;
+      }
+    }
+    return acc;
+  }, [allExpenses]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
@@ -58,8 +93,10 @@ export default function ExpensesPage() {
     else await addExpenseAsync(input);
   };
 
+  const active = TABS[tab];
+
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto space-y-6 p-4 sm:p-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -82,63 +119,64 @@ export default function ExpensesPage() {
         )}
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="overall" className="space-y-5">
-        <TabsList className="grid w-full grid-cols-3 sm:inline-flex sm:w-auto">
-          <TabsTrigger value="overall" className="gap-1.5">
-            <LayoutGrid className="h-4 w-4" />
-            <span className="hidden sm:inline">Overall</span>
-            <span className="sm:hidden">All</span>
-          </TabsTrigger>
-          <TabsTrigger value="business" className="gap-1.5">
-            <Building2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Business-wide</span>
-            <span className="sm:hidden">Business</span>
-          </TabsTrigger>
-          <TabsTrigger value="vehicle" className="gap-1.5">
-            <Car className="h-4 w-4" />
-            <span className="hidden sm:inline">Vehicle-wise</span>
-            <span className="sm:hidden">Vehicle</span>
-          </TabsTrigger>
-        </TabsList>
+      {/* Nav cards — total per scope, double as the tab switcher */}
+      <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+        {(Object.keys(TABS) as TabKey[]).map((key) => {
+          const t = TABS[key];
+          const isActive = tab === key;
+          const stat = totals[key];
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              aria-pressed={isActive}
+              className={cn(
+                "rounded-xl border p-4 text-left transition-all",
+                isActive
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                  : "border-border/60 bg-card hover:border-border hover:bg-muted/30"
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span
+                  className={cn(
+                    "text-sm font-medium",
+                    isActive ? "text-primary" : "text-muted-foreground"
+                  )}
+                >
+                  {t.label}
+                </span>
+                <span
+                  className={cn(
+                    "h-2 w-2 rounded-full transition-colors",
+                    isActive ? "bg-primary" : "bg-border"
+                  )}
+                />
+              </div>
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-foreground">
+                {formatCurrency(stat.total, currencyCode)}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t.sub} · {stat.count} item{stat.count === 1 ? "" : "s"}
+              </p>
+            </button>
+          );
+        })}
+      </div>
 
-        <TabsContent value="overall">
-          <ExpenseTabPanel
-            type="all"
-            scope="overall"
-            scopeLabel="Overall"
-            currencyCode={currencyCode}
-            editable={editable}
-            onEdit={openEdit}
-            onDelete={setDeleting}
-            getReceiptUrl={getReceiptUrl}
-          />
-        </TabsContent>
-        <TabsContent value="business">
-          <ExpenseTabPanel
-            type="business"
-            scope="business"
-            scopeLabel="Business-wide"
-            currencyCode={currencyCode}
-            editable={editable}
-            onEdit={openEdit}
-            onDelete={setDeleting}
-            getReceiptUrl={getReceiptUrl}
-          />
-        </TabsContent>
-        <TabsContent value="vehicle">
-          <ExpenseTabPanel
-            type="vehicle"
-            scope="vehicle"
-            scopeLabel="Vehicle-wise"
-            currencyCode={currencyCode}
-            editable={editable}
-            onEdit={openEdit}
-            onDelete={setDeleting}
-            getReceiptUrl={getReceiptUrl}
-          />
-        </TabsContent>
-      </Tabs>
+      {/* Active panel */}
+      <ExpenseTabPanel
+        key={tab}
+        type={active.type}
+        scope={active.scope}
+        scopeLabel={active.label}
+        currencyCode={currencyCode}
+        editable={editable}
+        onEdit={openEdit}
+        onDelete={setDeleting}
+        getReceiptUrl={getReceiptUrl}
+      />
 
       {/* Manage categories */}
       <ExpenseCategoriesDialog open={categoriesOpen} onOpenChange={setCategoriesOpen} />

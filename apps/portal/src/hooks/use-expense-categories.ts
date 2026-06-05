@@ -12,6 +12,7 @@ export interface ExpenseCategory {
   category_type: CategoryType;
   is_default: boolean;
   sort_order: number;
+  created_at: string;
 }
 
 export interface CategoryInput {
@@ -33,11 +34,12 @@ export function useExpenseCategories() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("expense_categories")
-        .select("id, tenant_id, name, category_type, is_default, sort_order")
+        .select("id, tenant_id, name, category_type, is_default, sort_order, created_at")
         .eq("tenant_id", tenant!.id)
-        .order("category_type", { ascending: true })
-        .order("sort_order", { ascending: true })
-        .order("name", { ascending: true });
+        // Newest-added first within each type (defaults share a timestamp, so
+        // they keep their original seeded order via sort_order).
+        .order("created_at", { ascending: false })
+        .order("sort_order", { ascending: true });
       if (error) throw error;
       return (data || []) as unknown as ExpenseCategory[];
     },
