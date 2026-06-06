@@ -3395,9 +3395,25 @@ const RentalDetail = () => {
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 try {
-                                  await supabase.functions.invoke('release-deposit-hold', {
+                                  // supabase.functions.invoke() does NOT throw on a
+                                  // non-2xx response — it resolves with { data, error }.
+                                  // We must inspect both, otherwise a server-side 500
+                                  // (e.g. the hold could not be cancelled) silently
+                                  // shows a success toast while the status never changes.
+                                  const { data, error } = await supabase.functions.invoke('release-deposit-hold', {
                                     body: { rentalId: rental.id, tenantId: tenant?.id },
                                   });
+                                  if (error) {
+                                    let detail = error.message;
+                                    try {
+                                      const body = await error.context?.json?.();
+                                      if (body?.error) detail = body.error;
+                                    } catch { /* ignore parse errors */ }
+                                    throw new Error(detail);
+                                  }
+                                  if (data && data.success === false) {
+                                    throw new Error(data.error || 'Failed to release the deposit hold.');
+                                  }
                                   queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
                                   toast({ title: 'Deposit Released', description: 'The deposit hold has been released.' });
                                 } catch (err: any) {

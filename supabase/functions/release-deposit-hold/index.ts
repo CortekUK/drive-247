@@ -68,9 +68,24 @@ Deno.serve(async (req) => {
       );
       console.log("[DEPOSIT-RELEASE] PaymentIntent cancelled:", rental.deposit_hold_payment_intent_id);
     } catch (stripeErr: any) {
-      // If already cancelled or captured, that's fine
-      if (stripeErr.code === "payment_intent_unexpected_state") {
-        console.warn("[DEPOSIT-RELEASE] PaymentIntent already in final state:", stripeErr.message);
+      // Treat "nothing left to cancel" as success and self-heal the DB:
+      //  - payment_intent_unexpected_state: already cancelled or captured
+      //  - resource_missing: the PI no longer exists on the Stripe account we
+      //    currently target (orphaned hold — e.g. placed before a Connect
+      //    account / customer was re-created, or a manual-capture auth that
+      //    Stripe already auto-expired after ~7 days). Either way there is no
+      //    live hold on the card, so we still mark the rental released below
+      //    instead of throwing a 500 the way the old code did.
+      if (
+        stripeErr.code === "payment_intent_unexpected_state" ||
+        stripeErr.code === "resource_missing"
+      ) {
+        console.warn(
+          "[DEPOSIT-RELEASE] No live hold to cancel (",
+          stripeErr.code,
+          "):",
+          stripeErr.message
+        );
       } else {
         throw stripeErr;
       }
