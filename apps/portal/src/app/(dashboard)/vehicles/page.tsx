@@ -463,6 +463,7 @@ export default function VehiclesListEnhanced() {
           { value: 'all', label: 'All Status' },
           { value: 'available', label: 'Available' },
           { value: 'rented', label: 'Rented' },
+          { value: 'maintenance', label: 'Maintenance' },
           { value: 'disposed', label: 'Disposed' },
         ];
         const performanceOptions = [

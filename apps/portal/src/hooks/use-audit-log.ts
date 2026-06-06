@@ -18,6 +18,7 @@ export type AuditAction =
   | "rental_extended"
   | "rental_extension_approved"
   | "rental_extension_rejected"
+  | "rental_vehicle_swapped"
   // Customer actions
   | "customer_created"
   | "customer_updated"

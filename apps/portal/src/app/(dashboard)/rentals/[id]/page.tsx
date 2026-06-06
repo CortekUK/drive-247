@@ -41,6 +41,7 @@ import RejectionDialog from "@/components/rentals/rejection-dialog";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalDialog";
 import { EditPickupReturnDialog } from "@/components/rentals/edit-pickup-return-dialog";
+import { SwapVehicleDialog } from "@/components/rentals/swap-vehicle-dialog";
 import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
 import { InstallmentSection } from "@/components/installments/InstallmentSection";
 import { useInstallmentPlan } from "@/hooks/use-installment-plan";
@@ -321,6 +322,7 @@ const RentalDetail = () => {
 
   // Edit pickup/return dialog state
   const [showEditPickupReturn, setShowEditPickupReturn] = useState(false);
+  const [showSwapVehicle, setShowSwapVehicle] = useState(false);
 
   // Extension payment state
   const [showExtensionPayment, setShowExtensionPayment] = useState(false);
@@ -4213,7 +4215,20 @@ const RentalDetail = () => {
               )}
             </div>
             <div className="bg-muted/30 rounded-lg p-4 space-y-1">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Vehicle</p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Vehicle</p>
+                {canEdit('rentals') && (displayStatus === 'Active' || displayStatus === 'Pending') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 gap-1 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowSwapVehicle(true)}
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Swap
+                  </Button>
+                )}
+              </div>
               <p className="text-lg font-semibold">{rental.vehicles?.reg}</p>
               <p className="text-sm text-muted-foreground">{rental.vehicles?.make} {rental.vehicles?.model}</p>
             </div>
@@ -4474,6 +4489,12 @@ const RentalDetail = () => {
           <EditPickupReturnDialog
             open={showEditPickupReturn}
             onOpenChange={setShowEditPickupReturn}
+            rental={rental}
+          />
+
+          <SwapVehicleDialog
+            open={showSwapVehicle}
+            onOpenChange={setShowSwapVehicle}
             rental={rental}
           />
 

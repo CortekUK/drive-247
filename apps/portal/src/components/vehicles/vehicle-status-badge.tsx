@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Car, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
+import { Car, AlertTriangle, CheckCircle, XCircle, Wrench } from "lucide-react";
 
 interface VehicleStatusBadgeProps {
   status: string;
@@ -23,6 +23,13 @@ const getStatusConfig = (status: string) => {
         icon: Car,
         className: 'bg-slate-800 text-slate-100 hover:bg-slate-700',
         tooltip: 'Vehicle is currently rented out'
+      };
+    case 'maintenance':
+      return {
+        variant: 'secondary' as const,
+        icon: Wrench,
+        className: 'bg-amber-100 text-amber-700 hover:bg-amber-200',
+        tooltip: 'Vehicle is in maintenance and unavailable for rental'
       };
     case 'disposed':
       return {
