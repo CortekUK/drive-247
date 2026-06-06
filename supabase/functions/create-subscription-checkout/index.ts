@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     // Look up the plan from DB
     const { data: plan, error: planError } = await supabase
       .from("subscription_plans")
-      .select("id, name, stripe_price_id, stripe_product_id, tenant_id, is_active, trial_days, amount, currency, interval")
+      .select("id, name, stripe_price_id, stripe_product_id, tenant_id, is_active, trial_days, amount, currency, interval, billing_model")
       .eq("id", planId)
       .single();
 
@@ -127,7 +127,23 @@ Deno.serve(async (req) => {
       console.log(`Created Stripe customer ${customer.id} for tenant ${tenantId} (mode: ${mode})`);
     }
 
-    const trialDays = plan.trial_days || 0;
+    // Determine how long until the first real charge.
+    // - "trial": classic free trial of plan.trial_days days.
+    // - "upfront_monthly" (new model): no free trial framing. Card is entered
+    //   now; the first payment is taken EXACTLY one calendar month from today
+    //   (relative to entry). We still ride Stripe's trial primitive so nothing
+    //   is charged for the plan until then, but the UI never calls it a trial.
+    const isUpfrontMonthly = plan.billing_model === "upfront_monthly";
+    let trialDays = plan.trial_days || 0;
+    if (isUpfrontMonthly) {
+      const now = new Date();
+      const firstCharge = new Date(now);
+      firstCharge.setMonth(firstCharge.getMonth() + 1); // same day, next month
+      trialDays = Math.max(
+        1,
+        Math.round((firstCharge.getTime() - now.getTime()) / 86_400_000),
+      );
+    }
 
     // Build line items: fixed plan price + optional metered e-sign price + $1 card verification
     const lineItems: Array<any> = [
@@ -161,7 +177,7 @@ Deno.serve(async (req) => {
       cancel_url: cancelUrl,
       metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, source: "platform_subscription", setup_fee: "true" },
       subscription_data: {
-        metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name },
+        metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, billing_model: plan.billing_model || "trial" },
         trial_period_days: trialDays,
       },
     });

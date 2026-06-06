@@ -151,6 +151,7 @@ interface SubscriptionPlan {
   is_active: boolean;
   sort_order: number;
   trial_days: number;
+  billing_model: string;
   created_at: string;
   active_subscriptions: number;
 }
@@ -162,6 +163,7 @@ interface PlanFormData {
   currency: string;
   interval: string;
   trialDays: string;
+  billingModel: string;
   features: string[];
 }
 
@@ -303,6 +305,7 @@ export default function TenantDetailsPage() {
     currency: 'usd',
     interval: 'month',
     trialDays: '',
+    billingModel: 'trial',
     features: [],
   });
   const [newFeature, setNewFeature] = useState('');
@@ -668,7 +671,7 @@ export default function TenantDetailsPage() {
 
   const openAddPlan = () => {
     setEditingPlan(null);
-    setPlanForm({ name: '', description: '', amount: '', currency: 'usd', interval: 'month', trialDays: '0', features: [] });
+    setPlanForm({ name: '', description: '', amount: '', currency: 'usd', interval: 'month', trialDays: '0', billingModel: 'trial', features: [] });
     setNewFeature('');
     setShowPlanModal(true);
   };
@@ -682,6 +685,7 @@ export default function TenantDetailsPage() {
       currency: plan.currency,
       interval: plan.interval,
       trialDays: (plan.trial_days || 0).toString(),
+      billingModel: plan.billing_model || 'trial',
       features: [...plan.features],
     });
     setNewFeature('');
@@ -710,6 +714,7 @@ export default function TenantDetailsPage() {
             currency: planForm.currency,
             interval: planForm.interval,
             trialDays: parseInt(planForm.trialDays) || 0,
+            billingModel: planForm.billingModel,
           },
         });
         if (error) throw error;
@@ -731,6 +736,7 @@ export default function TenantDetailsPage() {
             currency: planForm.currency,
             interval: planForm.interval,
             trialDays: parseInt(planForm.trialDays) || 0,
+            billingModel: planForm.billingModel,
           },
         });
         if (error) throw error;
@@ -2106,7 +2112,9 @@ export default function TenantDetailsPage() {
                           <TableCell className="text-sm">{formatCurrency(plan.amount, plan.currency)}</TableCell>
                           <TableCell className="text-sm capitalize">
                             {plan.interval}
-                            {plan.trial_days > 0 && <Badge variant="default" className="ml-2 text-[10px]">{plan.trial_days}d trial</Badge>}
+                            {plan.billing_model === 'upfront_monthly'
+                              ? <Badge variant="secondary" className="ml-2 text-[10px]">upfront · 1st charge +1mo</Badge>
+                              : plan.trial_days > 0 && <Badge variant="default" className="ml-2 text-[10px]">{plan.trial_days}d trial</Badge>}
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1.5">
@@ -2296,16 +2304,36 @@ export default function TenantDetailsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Trial Period (days)</Label>
-              <Input
-                type="number"
-                min="0"
-                value={planForm.trialDays}
-                onChange={(e) => setPlanForm({ ...planForm, trialDays: e.target.value })}
-                placeholder="0 = no trial"
-              />
-              <p className="text-xs text-muted-foreground">Set to 0 for no trial. Customers enter card at checkout but aren&apos;t charged until trial ends.</p>
+              <Label>Billing Model</Label>
+              <Select value={planForm.billingModel} onValueChange={(v) => setPlanForm({ ...planForm, billingModel: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="trial">Free trial (then auto-charge)</SelectItem>
+                  <SelectItem value="upfront_monthly">Upfront monthly — first charge 1 month after card entry (no free trial)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {planForm.billingModel === 'upfront_monthly'
+                  ? 'Tenant hits a hard gate, enters their card, and is charged exactly one calendar month later (relative to entry), then monthly. Never shown as a free trial.'
+                  : 'Tenant starts a free trial, then is auto-charged when it ends.'}
+              </p>
             </div>
+
+            {planForm.billingModel === 'trial' && (
+              <div className="space-y-2">
+                <Label>Trial Period (days)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={planForm.trialDays}
+                  onChange={(e) => setPlanForm({ ...planForm, trialDays: e.target.value })}
+                  placeholder="0 = no trial"
+                />
+                <p className="text-xs text-muted-foreground">Set to 0 for no trial. Customers enter card at checkout but aren&apos;t charged until trial ends.</p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Features</Label>

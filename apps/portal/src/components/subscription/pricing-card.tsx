@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Sparkles, Zap } from "lucide-react";
+import { CalendarClock, Loader2, Sparkles, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface PricingCardProps {
@@ -13,6 +13,7 @@ interface PricingCardProps {
     interval: string;
     features: string[];
     trial_days?: number;
+    billing_model?: string;
   };
   onSubscribe: (planId: string) => void;
   isLoading?: boolean;
@@ -28,8 +29,17 @@ function formatPrice(amount: number, currency: string) {
   }).format(amount / 100);
 }
 
+// "Upfront monthly" plans charge exactly one calendar month from today.
+function firstChargeLabel() {
+  const d = new Date();
+  d.setMonth(d.getMonth() + 1);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan }: PricingCardProps) {
-  const hasTrial = plan.trial_days && plan.trial_days > 0;
+  const isUpfront = plan.billing_model === "upfront_monthly";
+  const hasTrial = !isUpfront && plan.trial_days && plan.trial_days > 0;
+  const firstCharge = firstChargeLabel();
 
   return (
     <div className="w-full max-w-sm">
@@ -47,6 +57,16 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan }: Pri
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-500 ring-1 ring-amber-500/20">
               <Zap className="h-3 w-3" />
               {plan.trial_days}-day free trial
+            </span>
+          </div>
+        )}
+
+        {/* Upfront-monthly badge (no free trial) */}
+        {isUpfront && !isCurrentPlan && (
+          <div className="absolute top-4 right-4">
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary ring-1 ring-primary/20">
+              <CalendarClock className="h-3 w-3" />
+              First payment {firstCharge}
             </span>
           </div>
         )}
@@ -83,6 +103,13 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan }: Pri
                 {formatPrice(plan.amount, plan.currency)}/{plan.interval}
               </p>
             )}
+            {isUpfront && (
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                Add your card today — first payment of{" "}
+                {formatPrice(plan.amount, plan.currency)} on{" "}
+                <span className="font-medium text-foreground">{firstCharge}</span>, then monthly.
+              </p>
+            )}
           </div>
 
           {/* CTA */}
@@ -102,6 +129,8 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan }: Pri
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Redirecting to checkout...
                 </>
+              ) : isUpfront ? (
+                "Add Card to Continue"
               ) : hasTrial ? (
                 <>
                   Start {plan.trial_days}-Day Free Trial
@@ -115,7 +144,9 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan }: Pri
           {/* Fine print */}
           {!isCurrentPlan && (
             <p className="mt-3 text-center text-[11px] text-muted-foreground">
-              {hasTrial
+              {isUpfront
+                ? `Your card is saved now — first charge on ${firstCharge}. Cancel anytime.`
+                : hasTrial
                 ? "No charge until trial ends. Cancel anytime."
                 : "Cancel anytime. No long-term contracts."}
             </p>

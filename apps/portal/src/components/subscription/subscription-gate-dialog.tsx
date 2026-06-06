@@ -21,6 +21,13 @@ function formatPrice(amount: number, currency: string) {
   }).format(amount / 100);
 }
 
+// "Upfront monthly" plans take the first payment exactly one month from today.
+function firstChargeLabel() {
+  const d = new Date();
+  d.setMonth(d.getMonth() + 1);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 interface SubscriptionGateDialogProps {
   /**
    * When omitted, defaults to `true` (matching the legacy always-open behavior).
@@ -56,6 +63,13 @@ export function SubscriptionGateDialog({
       ? `${trialDays} day${trialDays !== 1 ? "s" : ""}`
       : `${trialDays * 24} hours`
     : null;
+
+  // New billing model: card entered now, first charge exactly 1 month later.
+  // Never framed as a free trial.
+  const isUpfront = !!plans?.some(
+    (p) => (p as { billing_model?: string }).billing_model === "upfront_monthly",
+  );
+  const firstCharge = firstChargeLabel();
 
   const handleSubscribe = async (planId: string) => {
     setSubscribing(true);
@@ -112,6 +126,22 @@ export function SubscriptionGateDialog({
                   <p className="font-medium text-foreground">
                     Access to the dashboard is paused until your subscription
                     is active.
+                  </p>
+                </>
+              ) : isUpfront ? (
+                <>
+                  <p>
+                    To continue using Drive247, please add your card details.
+                  </p>
+                  <p>
+                    Your first payment will be taken{" "}
+                    <span className="font-medium text-foreground">
+                      {firstCharge} — one month from today
+                    </span>
+                    , then monthly after that.
+                  </p>
+                  <p className="font-medium text-foreground">
+                    Nothing is charged today.
                   </p>
                 </>
               ) : (
@@ -209,11 +239,15 @@ export function SubscriptionGateDialog({
                   ))}
                 </ul>
               )}
-              {plans[0].trial_days > 0 && (
+              {isUpfront ? (
+                <p className="text-xs text-primary font-medium">
+                  First payment {firstCharge} — nothing charged today
+                </p>
+              ) : plans[0].trial_days > 0 ? (
                 <p className="text-xs text-amber-600 font-medium">
                   Includes {plans[0].trial_days}-day free trial
                 </p>
-              )}
+              ) : null}
             </div>
 
             <p className="text-xs text-muted-foreground text-center">

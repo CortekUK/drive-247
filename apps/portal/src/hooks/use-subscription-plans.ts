@@ -16,6 +16,7 @@ export interface SubscriptionPlan {
   is_active: boolean;
   sort_order: number;
   trial_days: number;
+  billing_model: string;
   created_at: string;
   updated_at: string;
 }

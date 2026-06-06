@@ -91,7 +91,8 @@ async function getStripe(supabase: any, tenantId: string) {
 }
 
 async function handleCreate(supabase: any, body: any) {
-  const { tenantId, name, description, features, amount, currency = "usd", interval = "month", trialDays = 0 } = body;
+  const { tenantId, name, description, features, amount, currency = "usd", interval = "month", trialDays = 0, billingModel = "trial" } = body;
+  const safeBillingModel = billingModel === "upfront_monthly" ? "upfront_monthly" : "trial";
 
   if (!tenantId) return errorResponse("tenantId is required");
   if (!name) return errorResponse("name is required");
@@ -123,6 +124,7 @@ async function handleCreate(supabase: any, body: any) {
       stripe_price_id: price.id,
       stripe_product_id: productId,
       trial_days: trialDays,
+      billing_model: safeBillingModel,
     })
     .select()
     .single();
@@ -136,7 +138,7 @@ async function handleCreate(supabase: any, body: any) {
 }
 
 async function handleUpdate(supabase: any, body: any) {
-  const { planId, name, description, features, amount, currency, interval, trialDays } = body;
+  const { planId, name, description, features, amount, currency, interval, trialDays, billingModel } = body;
 
   if (!planId) return errorResponse("planId is required");
 
@@ -187,6 +189,7 @@ async function handleUpdate(supabase: any, body: any) {
   if (currency !== undefined) updateData.currency = currency.toLowerCase();
   if (interval !== undefined) updateData.interval = interval;
   if (trialDays !== undefined) updateData.trial_days = trialDays;
+  if (billingModel !== undefined) updateData.billing_model = billingModel === "upfront_monthly" ? "upfront_monthly" : "trial";
   if (newStripePriceId !== existingPlan.stripe_price_id) {
     updateData.stripe_price_id = newStripePriceId;
   }
