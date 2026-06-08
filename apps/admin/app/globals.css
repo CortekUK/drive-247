@@ -62,12 +62,33 @@
     --chart-5: 350 70% 55%;             /* pink-red */
   }
 
+  :root {
+    /* Render native form controls (and autofill) in dark mode so typed text
+       stays light/visible instead of going white-on-white. */
+    color-scheme: dark;
+  }
+
   * {
     @apply border-border;
   }
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Chrome/Safari autofill: keep the dark input background and light text
+     (otherwise autofill paints a white box + invisible text). App-wide. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: hsl(var(--foreground));
+    -webkit-box-shadow: 0 0 0 1000px hsl(var(--input)) inset;
+    box-shadow: 0 0 0 1000px hsl(var(--input)) inset;
+    caret-color: hsl(var(--foreground));
+    transition: background-color 9999s ease-in-out 0s;
   }
 }
 
