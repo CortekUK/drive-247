@@ -5,13 +5,12 @@ import { useCMSPage } from "@/hooks/use-cms-pages";
 import { useCMSPageSections } from "@/hooks/use-cms-page-sections";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { SEOEditor } from "@/components/website-content/seo-editor";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tile, SectionCard, Shimmer } from "@/components/bento";
 import { ArrowLeft, Save, Loader2, FileText, Search, Eye } from "lucide-react";
 import { CMS_DEFAULTS } from "@/constants/website-content";
 import type { HeroContent, SEOContent } from "@/types/cms";
@@ -59,8 +58,11 @@ export default function BlogSettingsPage() {
   if (pageLoading) {
     return (
       <div className="space-y-6 p-4 md:p-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
+        <Shimmer className="h-8 w-48" />
+        <Tile noMotion className="space-y-4">
+          <Shimmer className="h-10 w-full" />
+          <Shimmer className="h-40 w-full" />
+        </Tile>
       </div>
     );
   }
@@ -72,11 +74,11 @@ export default function BlogSettingsPage() {
           <ArrowLeft className="h-4 w-4 mr-1" />
           Back
         </Button>
-        <h1 className="text-2xl font-display font-bold">Blog Page Settings</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight">Blog Page Settings</h1>
       </div>
 
       {!hasEditAccess && (
-        <div className="bg-muted border rounded-lg p-3 flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 rounded-tile-sm border border-border [background:var(--bento-tile-2)] p-3 text-sm text-muted-foreground">
           <Eye className="h-4 w-4" />
           You have view-only access.
         </div>
@@ -95,11 +97,8 @@ export default function BlogSettingsPage() {
         </TabsList>
 
         <TabsContent value="hero" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Blog Page Hero</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <SectionCard icon={<FileText className="h-4 w-4" />} title="Blog Page Hero">
+            <div className="space-y-4">
               <div>
                 <Label>Title</Label>
                 <Input
@@ -131,8 +130,8 @@ export default function BlogSettingsPage() {
                   </Button>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </SectionCard>
         </TabsContent>
 
         <TabsContent value="seo" className="mt-6">

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Loader2, Check, Mail, ShieldAlert } from "lucide-react";
+import { Money } from "@/components/bento";
 
 function formatPrice(amount: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -214,15 +215,15 @@ export function SubscriptionGateDialog({
               </DialogTitle>
             </DialogHeader>
 
-            <div className="rounded-lg border p-4 space-y-3">
+            <div className="rounded-tile-sm border border-border p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="font-semibold">{plans[0].name}</span>
-                <span className="text-lg font-bold">
+                <span className="font-bold tracking-tight">{plans[0].name}</span>
+                <Money className="text-lg font-extrabold">
                   {formatPrice(plans[0].amount, plans[0].currency)}
                   <span className="text-sm font-normal text-muted-foreground">
                     /{plans[0].interval}
                   </span>
-                </span>
+                </Money>
               </div>
               {plans[0].description && (
                 <p className="text-sm text-muted-foreground">
@@ -244,7 +245,7 @@ export function SubscriptionGateDialog({
                   First payment {firstCharge} — nothing charged today
                 </p>
               ) : plans[0].trial_days > 0 ? (
-                <p className="text-xs text-amber-600 font-medium">
+                <p className="text-xs text-[color:var(--bento-warn-accent)] font-medium">
                   Includes {plans[0].trial_days}-day free trial
                 </p>
               ) : null}
@@ -285,20 +286,20 @@ export function SubscriptionGateDialog({
                 <button
                   key={plan.id}
                   onClick={() => setSelectedPlanId(plan.id)}
-                  className={`w-full rounded-lg border p-4 text-left transition-colors ${
+                  className={`w-full rounded-tile-sm border p-4 text-left transition-colors ${
                     selectedPlanId === plan.id
-                      ? "border-primary bg-primary/5 ring-1 ring-primary"
+                      ? "border-primary [background:var(--bento-primary-weak)] ring-1 ring-primary"
                       : "border-border hover:border-muted-foreground/30"
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold">{plan.name}</span>
-                    <span className="text-lg font-bold">
+                    <span className="font-bold tracking-tight">{plan.name}</span>
+                    <Money className="text-lg font-extrabold">
                       {formatPrice(plan.amount, plan.currency)}
                       <span className="text-sm font-normal text-muted-foreground">
                         /{plan.interval}
                       </span>
-                    </span>
+                    </Money>
                   </div>
                   {plan.description && (
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -306,7 +307,7 @@ export function SubscriptionGateDialog({
                     </p>
                   )}
                   {plan.trial_days > 0 && (
-                    <p className="mt-1 text-xs text-amber-600 font-medium">
+                    <p className="mt-1 text-xs text-[color:var(--bento-warn-accent)] font-medium">
                       {plan.trial_days}-day free trial
                     </p>
                   )}

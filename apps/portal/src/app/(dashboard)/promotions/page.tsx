@@ -6,16 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import {
   Form,
   FormControl,
@@ -29,6 +25,31 @@ import { Plus, Edit, Trash2, Search, Tag, Calendar, Percent, DollarSign, Image, 
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { format, isBefore, isAfter } from "date-fns";
+import {
+  Eyebrow,
+  KpiTile,
+  Tile,
+  StatusPill,
+  type StatusTone,
+  Modal,
+  EmptyState,
+  Money,
+  Shimmer,
+} from "@/components/bento";
+
+const PROMO_STATUS_TONE: Record<string, StatusTone> = {
+  active: "success",
+  scheduled: "info",
+  expired: "neutral",
+  inactive: "neutral",
+};
+
+const PROMO_STATUS_LABEL: Record<string, string> = {
+  active: "Active",
+  scheduled: "Scheduled",
+  expired: "Expired",
+  inactive: "Inactive",
+};
 
 interface Promotion {
   id: string;
@@ -329,20 +350,12 @@ export default function PromotionsManager() {
     return filtered;
   }, [promotions, searchQuery, statusFilter]);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "active":
-        return <Badge className="bg-green-500/20 text-green-600">Active</Badge>;
-      case "scheduled":
-        return <Badge className="bg-blue-500/20 text-blue-600">Scheduled</Badge>;
-      case "expired":
-        return <Badge variant="secondary">Expired</Badge>;
-      case "inactive":
-        return <Badge variant="outline">Inactive</Badge>;
-      default:
-        return null;
-    }
-  };
+  const getStatusBadge = (status: string) =>
+    PROMO_STATUS_LABEL[status] ? (
+      <StatusPill tone={PROMO_STATUS_TONE[status] ?? "neutral"} dot>
+        {PROMO_STATUS_LABEL[status]}
+      </StatusPill>
+    ) : null;
 
   const stats = useMemo(() => {
     const active = promotions.filter(p => getPromotionStatus(p) === "active").length;
@@ -359,26 +372,26 @@ export default function PromotionsManager() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-display font-bold text-gradient-metal">
+          <Eyebrow>Marketing</Eyebrow>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight">
             Promotions
           </h1>
           <p className="text-muted-foreground">
             Create and manage promotional offers for customers
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={resetForm} className="w-full sm:w-auto">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Promotion
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                {editingPromotion ? "Edit Promotion" : "Create Promotion"}
-              </DialogTitle>
-            </DialogHeader>
+        <Button onClick={() => { resetForm(); setDialogOpen(true); }} className="w-full sm:w-auto">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Promotion
+        </Button>
+      </div>
+
+        <Modal
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+          title={editingPromotion ? "Edit Promotion" : "Create Promotion"}
+        >
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
@@ -620,36 +633,14 @@ export default function PromotionsManager() {
                 </div>
               </form>
             </Form>
-          </DialogContent>
-        </Dialog>
-      </div>
+        </Modal>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-sm text-muted-foreground">Total Promotions</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-green-600">{stats.active}</div>
-            <p className="text-sm text-muted-foreground">Active</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-blue-600">{stats.scheduled}</div>
-            <p className="text-sm text-muted-foreground">Scheduled</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-muted-foreground">{stats.expired}</div>
-            <p className="text-sm text-muted-foreground">Expired</p>
-          </CardContent>
-        </Card>
+        <KpiTile label="Total Promotions" value={stats.total} />
+        <KpiTile label="Active" value={stats.active} />
+        <KpiTile label="Scheduled" value={stats.scheduled} />
+        <KpiTile label="Expired" value={stats.expired} />
       </div>
 
       {/* Filters */}
@@ -681,87 +672,86 @@ export default function PromotionsManager() {
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-64 rounded-lg" />
+            <Tile key={i} noMotion pad="none" className="overflow-hidden">
+              <Shimmer className="aspect-video w-full rounded-none" />
+              <div className="space-y-3 p-4">
+                <Shimmer className="h-4 w-2/3" />
+                <Shimmer className="h-3 w-full" />
+                <Shimmer className="h-3 w-1/2" />
+              </div>
+            </Tile>
           ))}
         </div>
       ) : filteredPromotions.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Crown className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="text-lg font-semibold mb-2">No promotions found</h3>
-            <p className="text-muted-foreground mb-4">
-              {searchQuery || statusFilter !== "all"
-                ? "Try adjusting your filters"
-                : "Create your first promotion to get started"}
-            </p>
-            {!searchQuery && statusFilter === "all" && (
+        <EmptyState
+          icon={<Crown className="h-5 w-5" />}
+          title="No promotions found"
+          description={
+            searchQuery || statusFilter !== "all"
+              ? "Try adjusting your filters"
+              : "Create your first promotion to get started"
+          }
+          action={
+            !searchQuery && statusFilter === "all" ? (
               <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Promotion
               </Button>
-            )}
-          </CardContent>
-        </Card>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredPromotions.map((promo) => {
             const status = getPromotionStatus(promo);
             return (
-              <Card key={promo.id} className="overflow-hidden">
-                {promo.image_url ? (
-                  <div className="aspect-video relative">
+              <Tile key={promo.id} pad="none" className="overflow-hidden">
+                <div className="aspect-video relative">
+                  {promo.image_url ? (
                     <img
                       src={promo.image_url}
                       alt={promo.title}
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute top-2 right-2">
-                      {getStatusBadge(status)}
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center [background:var(--bento-tile-2)]">
+                      <Crown className="h-12 w-12 text-[color:var(--bento-text-3)]" />
                     </div>
-                    <div className="absolute top-2 left-2">
-                      <Badge className="bg-accent text-accent-foreground">
-                        {promo.discount_type === "percentage"
-                          ? `${promo.discount_value}% OFF`
-                          : `$${promo.discount_value} OFF`}
-                      </Badge>
-                    </div>
+                  )}
+                  <div className="absolute top-2 right-2">
+                    {getStatusBadge(status)}
                   </div>
-                ) : (
-                  <div className="aspect-video bg-muted/50 flex items-center justify-center relative">
-                    <Crown className="h-12 w-12 text-muted-foreground/30" />
-                    <div className="absolute top-2 right-2">
-                      {getStatusBadge(status)}
-                    </div>
-                    <div className="absolute top-2 left-2">
-                      <Badge className="bg-accent text-accent-foreground">
-                        {promo.discount_type === "percentage"
-                          ? `${promo.discount_value}% OFF`
-                          : `$${promo.discount_value} OFF`}
-                      </Badge>
-                    </div>
+                  <div className="absolute top-2 left-2">
+                    <StatusPill tone="primary">
+                      {promo.discount_type === "percentage"
+                        ? `${promo.discount_value}% OFF`
+                        : `$${promo.discount_value} OFF`}
+                    </StatusPill>
                   </div>
-                )}
-                <CardContent className="p-4">
-                  <h3 className="font-semibold mb-1 line-clamp-1">{promo.title}</h3>
+                </div>
+                <div className="p-4">
+                  <h3 className="font-bold tracking-tight mb-1 line-clamp-1">{promo.title}</h3>
                   <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
                     {promo.description}
                   </p>
 
                   <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
                     <Calendar className="h-3 w-3" />
-                    {format(new Date(promo.start_date), "MMM d")} - {format(new Date(promo.end_date), "MMM d, yyyy")}
+                    <Money className="text-xs">
+                      {format(new Date(promo.start_date), "MMM d")} - {format(new Date(promo.end_date), "MMM d, yyyy")}
+                    </Money>
                   </div>
 
                   {promo.promo_code && (
                     <div className="flex items-center gap-2 mb-3">
-                      <Tag className="h-3 w-3 text-accent" />
-                      <code className="text-xs px-2 py-1 bg-accent/10 text-accent rounded">
+                      <Tag className="h-3 w-3 text-[color:var(--bento-primary-weak-fg)]" />
+                      <Money className="text-xs px-2 py-1 [background:var(--bento-primary-weak)] text-[color:var(--bento-primary-weak-fg)] rounded-tile-sm">
                         {promo.promo_code}
-                      </code>
+                      </Money>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between pt-3 border-t">
+                  <div className="flex items-center justify-between pt-3 border-t border-border">
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={promo.is_active}
@@ -790,8 +780,8 @@ export default function PromotionsManager() {
                       </Button>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </Tile>
             );
           })}
         </div>

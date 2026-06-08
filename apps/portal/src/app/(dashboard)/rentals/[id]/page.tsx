@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Shimmer, KpiTileSkeletonRow, ErrorState } from "@/components/bento";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -1669,11 +1670,40 @@ const RentalDetail = () => {
   }, [categoryRemainingAmounts, extensionTotals]);
 
   if (isLoading) {
-    return <div>Loading rental details...</div>;
+    return (
+      <div className="container mx-auto p-4 md:p-6 space-y-6">
+        <div className="flex items-center gap-4">
+          <Shimmer className="h-10 w-10 rounded-xl" />
+          <div className="space-y-2">
+            <Shimmer className="h-7 w-48" />
+            <Shimmer className="h-4 w-64" />
+          </div>
+        </div>
+        <KpiTileSkeletonRow count={4} />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <Shimmer className="h-64 rounded-tile" />
+            <Shimmer className="h-48 rounded-tile" />
+          </div>
+          <div className="space-y-6">
+            <Shimmer className="h-40 rounded-tile" />
+            <Shimmer className="h-40 rounded-tile" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  if (!rental) {
-    return <div>Rental not found</div>;
+  if (rentalError || !rental) {
+    return (
+      <div className="container mx-auto p-4 md:p-6">
+        <ErrorState
+          title="Rental not found"
+          description="We couldn't load this rental. It may have been removed or you may not have access."
+          onRetry={() => queryClient.invalidateQueries({ queryKey: ['rental', id] })}
+        />
+      </div>
+    );
   }
 
   // Scope-split insurance docs (Phase 5 polish): original vs per-extension.
@@ -2002,7 +2032,7 @@ const RentalDetail = () => {
               const ref = rental.rental_number || rental.id?.slice(0, 8).toUpperCase();
               return (
                 <div className="flex items-center gap-2">
-                  <h1 className="text-2xl sm:text-3xl font-bold font-mono tabular-nums tracking-tight">
+                  <h1 className="text-2xl sm:text-3xl font-extrabold font-mono tabular-nums tracking-tight">
                     #{ref || '—'}
                   </h1>
                   {ref && (

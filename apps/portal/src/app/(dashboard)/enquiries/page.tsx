@@ -3,17 +3,9 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { format, parseISO } from "date-fns";
-import { Inbox, Loader2, Search, MessageSquare } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Inbox, Search, MessageSquare } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -22,6 +14,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  KpiTile,
+  TableTile,
+  bentoTable,
+  Segmented,
+  StatusPill,
+  type StatusTone,
+  EmptyState,
+  TableSkeleton,
+  KpiTileSkeletonRow,
+} from "@/components/bento";
 import {
   useEnquiries,
   type EnquiryStatus,
@@ -37,10 +40,10 @@ const STATUS_FILTERS: { value: EnquiryStatus | "all"; label: string }[] = [
   { value: "resolved", label: "Resolved" },
 ];
 
-const STATUS_TEXT: Record<EnquiryStatus, string> = {
-  new: "text-blue-600 dark:text-blue-400",
-  contacted: "text-amber-600 dark:text-amber-400",
-  resolved: "text-green-600 dark:text-green-400",
+const STATUS_TONE: Record<EnquiryStatus, StatusTone> = {
+  new: "info",
+  contacted: "warn",
+  resolved: "success",
 };
 
 const STATUS_LABEL: Record<EnquiryStatus, string> = {
@@ -127,122 +130,117 @@ function EnquiriesPageContent() {
         <a href="/leads" className="font-medium underline underline-offset-2">Open Leads →</a>
       </div>
       <div>
-        <h1 className="text-2xl md:text-3xl font-medium tracking-tight">Enquiries</h1>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Enquiries</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Customer enquiries from the booking site, including requests for currently booked vehicles.
         </p>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="New" value={stats?.pending ?? 0} highlight />
-        <StatCard label="Contacted" value={stats?.contacted ?? 0} />
-        <StatCard label="Resolved" value={stats?.resolved ?? 0} />
-        <StatCard label="This month" value={stats?.totalThisMonth ?? 0} />
+      {/* Stat tiles */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiTile
+          variant="feature"
+          label="New"
+          value={stats?.pending ?? 0}
+          icon={<Inbox className="h-4 w-4" />}
+        />
+        <KpiTile label="Contacted" value={stats?.contacted ?? 0} />
+        <KpiTile label="Resolved" value={stats?.resolved ?? 0} />
+        <KpiTile label="This month" value={stats?.totalThisMonth ?? 0} />
       </div>
 
-      {/* Filter bar */}
-      <Card className="border-border/60">
-        <CardContent className="p-4 flex flex-col md:flex-row gap-3 items-stretch md:items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, email, phone, or message…"
-              className="pl-9"
-            />
-          </div>
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as EnquiryStatus | "all")}>
-            <SelectTrigger className="md:w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_FILTERS.map((f) => (
-                <SelectItem key={f.value} value={f.value}>
-                  {f.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
       {/* Table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-medium">All enquiries</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : enquiries.length === 0 ? (
-            <div className="flex flex-col items-center py-16 text-center text-muted-foreground">
-              <Inbox className="w-10 h-10 mb-3" />
-              <p className="text-sm">No enquiries match your filters yet.</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader className="bg-indigo-50 dark:bg-indigo-950/30">
-                <TableRow>
-                  <TableHead>Submitted</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Dates</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {enquiries.map((e) => {
-                  const vehicleLabel = e.vehicle
-                    ? [e.vehicle.make, e.vehicle.model].filter(Boolean).join(" ") || e.vehicle.reg
-                    : e.vehicle_id
-                      ? "Vehicle removed"
-                      : "Any";
-                  return (
-                    <TableRow
-                      key={e.id}
-                      className={`cursor-pointer ${!e.is_read ? "font-medium" : ""}`}
-                      onClick={() => handleRowClick(e.id)}
-                    >
-                      <TableCell>{safeDate(e.created_at)}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span>{e.customer_name}</span>
-                          <span className="text-xs text-muted-foreground">{e.customer_email}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{vehicleLabel}</TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {safeDate(e.start_date)} → {safeDate(e.end_date)}
-                      </TableCell>
-                      <TableCell>
-                        <span className={STATUS_TEXT[e.status]}>{STATUS_LABEL[e.status]}</span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            handleRowClick(e.id);
-                          }}
-                        >
-                          <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
-                          View
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {isLoading ? (
+        <TableSkeleton rows={6} cols={6} />
+      ) : enquiries.length === 0 ? (
+        <EmptyState
+          icon={<Inbox className="h-5 w-5" />}
+          title="No enquiries yet"
+          description="No enquiries match your filters. New customer enquiries from the booking site will appear here."
+        />
+      ) : (
+        <TableTile
+          toolbar={
+            <>
+              <Segmented
+                options={STATUS_FILTERS}
+                value={statusFilter}
+                onValueChange={(v) => setStatusFilter(v)}
+              />
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search by name, email, phone, or message…"
+                  className="pl-9"
+                />
+              </div>
+            </>
+          }
+        >
+          <Table>
+            <TableHeader className={bentoTable.header}>
+              <TableRow>
+                <TableHead>Submitted</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Vehicle</TableHead>
+                <TableHead>Dates</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {enquiries.map((e) => {
+                const vehicleLabel = e.vehicle
+                  ? [e.vehicle.make, e.vehicle.model].filter(Boolean).join(" ") || e.vehicle.reg
+                  : e.vehicle_id
+                    ? "Vehicle removed"
+                    : "Any";
+                return (
+                  <TableRow
+                    key={e.id}
+                    className={`${bentoTable.row} ${!e.is_read ? "font-semibold" : ""}`}
+                    onClick={() => handleRowClick(e.id)}
+                  >
+                    <TableCell className="font-mono tabular-nums text-[color:var(--bento-text-2)]">
+                      {safeDate(e.created_at)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="text-foreground">{e.customer_name}</span>
+                        <span className="text-xs text-muted-foreground">{e.customer_email}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{vehicleLabel}</TableCell>
+                    <TableCell className="whitespace-nowrap font-mono tabular-nums text-[color:var(--bento-text-2)]">
+                      {safeDate(e.start_date)} → {safeDate(e.end_date)}
+                    </TableCell>
+                    <TableCell>
+                      <StatusPill tone={STATUS_TONE[e.status]} dot>
+                        {STATUS_LABEL[e.status]}
+                      </StatusPill>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          handleRowClick(e.id);
+                        }}
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableTile>
+      )}
 
       <EnquiryDetailDrawer
         enquiryId={selectedId}
@@ -253,29 +251,13 @@ function EnquiriesPageContent() {
   );
 }
 
-function StatCard({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
-  return (
-    <Card className="border-border/60">
-      <CardContent className="p-4">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p
-          className={`text-2xl font-medium mt-1 ${
-            highlight ? "text-indigo-600 dark:text-indigo-400" : ""
-          }`}
-        >
-          {value}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function EnquiriesPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        <div className="p-6 space-y-6">
+          <KpiTileSkeletonRow count={4} />
+          <TableSkeleton rows={6} cols={6} />
         </div>
       }
     >

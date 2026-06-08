@@ -59,7 +59,7 @@ export default function MessagesPage() {
       <div className="flex-1 flex overflow-hidden">
         {/* Channel list - left panel: hidden on mobile when a chat is selected */}
         <div className={cn(
-          "w-full md:w-[340px] shrink-0 border-r border-border/50 bg-card/30",
+          "w-full md:w-[340px] shrink-0 border-r border-border [background:var(--bento-tile-2)]",
           selectedChannel ? "hidden md:block" : "block"
         )}>
           <ChannelList
@@ -71,7 +71,7 @@ export default function MessagesPage() {
 
         {/* Chat window - right panel: hidden on mobile when no chat is selected */}
         <div className={cn(
-          "flex-1 min-w-0 bg-background/50",
+          "flex-1 min-w-0 bg-background",
           selectedChannel ? "block" : "hidden md:block"
         )}>
           <ChatWindow

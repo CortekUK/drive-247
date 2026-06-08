@@ -1,10 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { format, differenceInDays, parseISO } from "date-fns";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -42,10 +40,21 @@ import {
   Car,
   User,
   Calendar,
-  DollarSign,
   Shield,
   RefreshCw,
+  Inbox,
 } from "lucide-react";
+import {
+  KpiTile,
+  TableTile,
+  bentoTable,
+  StatusPill,
+  Money,
+  EmptyState,
+  ErrorState,
+  TableSkeleton,
+  KpiTileSkeletonRow,
+} from "@/components/bento";
 import { usePendingBookings, PendingBooking } from "@/hooks/use-pending-bookings";
 import { useApproveBooking, useRejectBooking } from "@/hooks/use-booking-approval";
 import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
@@ -94,33 +103,30 @@ const PendingBookings = () => {
     return differenceInDays(parseISO(expiresAt), new Date());
   };
 
-  const getExpiryBadge = (expiresAt: string | null) => {
+  const getExpiryPill = (expiresAt: string | null) => {
     const days = getDaysUntilExpiry(expiresAt);
-    if (days === null) return null;
+    if (days === null) return <span className="text-muted-foreground">—</span>;
 
     if (days <= 1) {
       return (
-        <Badge variant="destructive" className="flex items-center gap-1">
+        <StatusPill tone="danger">
           <AlertTriangle className="h-3 w-3" />
           Expires in {days} day{days !== 1 ? "s" : ""}
-        </Badge>
+        </StatusPill>
       );
     } else if (days <= 3) {
       return (
-        <Badge
-          variant="outline"
-          className="border-amber-500 text-amber-600 flex items-center gap-1"
-        >
+        <StatusPill tone="warn">
           <Clock className="h-3 w-3" />
           Expires in {days} days
-        </Badge>
+        </StatusPill>
       );
     }
     return (
-      <Badge variant="outline" className="flex items-center gap-1">
+      <StatusPill tone="neutral">
         <Clock className="h-3 w-3" />
         {days} days left
-      </Badge>
+      </StatusPill>
     );
   };
 
@@ -131,211 +137,239 @@ const PendingBookings = () => {
     return booking.vehicle?.reg || "Unknown Vehicle";
   };
 
-  const getVerificationBadge = (status: string | null) => {
+  const getVerificationPill = (status: string | null) => {
     switch (status) {
       case "verified":
       case "manually_verified":
         return (
-          <Badge className="bg-green-100 text-green-800 flex items-center gap-1">
+          <StatusPill tone="success">
             <Shield className="h-3 w-3" />
             {status === "manually_verified" ? "Manually Verified" : "Verified"}
-          </Badge>
+          </StatusPill>
         );
       case "pending":
         return (
-          <Badge variant="outline" className="flex items-center gap-1">
+          <StatusPill tone="warn">
             <Clock className="h-3 w-3" />
             Pending
-          </Badge>
+          </StatusPill>
         );
       case "rejected":
         return (
-          <Badge variant="destructive" className="flex items-center gap-1">
+          <StatusPill tone="danger">
             <XCircle className="h-3 w-3" />
             Rejected
-          </Badge>
+          </StatusPill>
         );
       default:
-        return (
-          <Badge variant="secondary" className="flex items-center gap-1">
-            Not Verified
-          </Badge>
-        );
+        return <StatusPill tone="neutral">Not Verified</StatusPill>;
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const stats = useMemo(() => {
+    const list = bookings ?? [];
+    const expiringSoon = list.filter((b) => {
+      const d = getDaysUntilExpiry(b.preauth_expires_at);
+      return d !== null && d <= 3;
+    }).length;
+    const verified = list.filter((b) => {
+      const s = b.customer?.identity_verification_status;
+      return s === "verified" || s === "manually_verified";
+    }).length;
+    const totalValue = list.reduce((sum, b) => sum + (b.amount ?? 0), 0);
+    return { total: list.length, expiringSoon, verified, totalValue };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookings]);
 
-  if (error) {
-    return (
-      <Card>
-        <CardContent className="py-12">
-          <div className="text-center text-destructive">
-            <AlertTriangle className="h-12 w-12 mx-auto mb-4" />
-            <p>Failed to load pending bookings</p>
-            <Button onClick={() => refetch()} variant="outline" className="mt-4">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Retry
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const headerActions = (
+    <Button onClick={() => refetch()} variant="outline" size="sm">
+      <RefreshCw className="h-4 w-4 mr-2" />
+      Refresh
+    </Button>
+  );
 
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Pending Bookings</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Pending Bookings</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Review and approve customer booking requests
           </p>
         </div>
-        <Button onClick={() => refetch()} variant="outline" size="sm">
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
-        </Button>
+        {headerActions}
       </div>
 
-      {bookings && bookings.length === 0 ? (
-        <div className="text-center py-12">
-          <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
-          <h3 className="text-lg font-semibold mb-2">All caught up!</h3>
-          <p className="text-muted-foreground">No pending bookings require your attention.</p>
-        </div>
+      {isLoading ? (
+        <>
+          <KpiTileSkeletonRow count={4} />
+          <TableSkeleton rows={5} cols={7} />
+        </>
+      ) : error ? (
+        <ErrorState
+          title="Failed to load pending bookings"
+          description="We couldn't fetch the booking requests. Please try again."
+          onRetry={() => refetch()}
+        />
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Dates</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Verification</TableHead>
-                  <TableHead>Expiry</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {bookings?.map((booking) => (
-                  <TableRow key={booking.id}>
-                    <TableCell>
-                      <div className="flex items-start gap-2">
-                        <User className="h-4 w-4 mt-1 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium">{booking.customer?.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {booking.customer?.email}
-                          </p>
-                          {booking.customer?.phone && (
+        <>
+          {/* Stat tiles */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <KpiTile
+              variant="feature"
+              label="Pending"
+              value={stats.total}
+              icon={<Inbox className="h-4 w-4" />}
+            />
+            <KpiTile
+              variant={stats.expiringSoon > 0 ? "warn" : "default"}
+              label="Expiring soon"
+              value={stats.expiringSoon}
+              icon={<Clock className="h-4 w-4" />}
+            />
+            <KpiTile
+              label="Verified"
+              value={stats.verified}
+              icon={<Shield className="h-4 w-4" />}
+            />
+            <KpiTile
+              label="Total value"
+              value={stats.totalValue}
+              format={(v) => <Money value={v} currency="USD" />}
+            />
+          </div>
+
+          {bookings && bookings.length === 0 ? (
+            <EmptyState
+              icon={<CheckCircle className="h-5 w-5" />}
+              title="All caught up!"
+              description="No pending bookings require your attention right now."
+              action={headerActions}
+            />
+          ) : (
+            <TableTile>
+              <Table>
+                <TableHeader className={bentoTable.header}>
+                  <TableRow>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Vehicle</TableHead>
+                    <TableHead>Dates</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Verification</TableHead>
+                    <TableHead>Expiry</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bookings?.map((booking) => (
+                    <TableRow key={booking.id} className="border-border">
+                      <TableCell>
+                        <div className="flex items-start gap-2">
+                          <User className="h-4 w-4 mt-1 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium text-foreground">{booking.customer?.name}</p>
                             <p className="text-sm text-muted-foreground">
-                              {booking.customer.phone}
+                              {booking.customer?.email}
                             </p>
+                            {booking.customer?.phone && (
+                              <p className="text-sm text-muted-foreground font-mono tabular-nums">
+                                {booking.customer.phone}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-start gap-2">
+                          <Car className="h-4 w-4 mt-1 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium text-foreground">{getVehicleName(booking)}</p>
+                            <p className="text-sm text-muted-foreground font-mono">
+                              {booking.vehicle?.reg}
+                            </p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-start gap-2">
+                          <Calendar className="h-4 w-4 mt-1 text-muted-foreground" />
+                          <div className="font-mono tabular-nums">
+                            <p className="text-sm">
+                              {booking.rental?.start_date &&
+                                format(
+                                  parseISO(booking.rental.start_date),
+                                  "MMM dd, yyyy"
+                                )}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              to{" "}
+                              {booking.rental?.end_date &&
+                                format(
+                                  parseISO(booking.rental.end_date),
+                                  "MMM dd, yyyy"
+                                )}
+                            </p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Money
+                          value={booking.amount ?? 0}
+                          currency="USD"
+                          className="font-semibold text-foreground"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {getVerificationPill(
+                          booking.customer?.identity_verification_status
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {getExpiryPill(booking.preauth_expires_at)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {canEdit('pending_bookings') && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => {
+                                  setSelectedBooking(booking);
+                                  setShowRejectDialog(true);
+                                }}
+                                disabled={
+                                  approveBooking.isPending || rejectBooking.isPending
+                                }
+                              >
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Reject
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedBooking(booking);
+                                  setShowApproveDialog(true);
+                                }}
+                                disabled={
+                                  approveBooking.isPending || rejectBooking.isPending
+                                }
+                              >
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Approve
+                              </Button>
+                            </>
                           )}
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-start gap-2">
-                        <Car className="h-4 w-4 mt-1 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium">{getVehicleName(booking)}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {booking.vehicle?.reg}
-                          </p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-start gap-2">
-                        <Calendar className="h-4 w-4 mt-1 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm">
-                            {booking.rental?.start_date &&
-                              format(
-                                parseISO(booking.rental.start_date),
-                                "MMM dd, yyyy"
-                              )}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            to{" "}
-                            {booking.rental?.end_date &&
-                              format(
-                                parseISO(booking.rental.end_date),
-                                "MMM dd, yyyy"
-                              )}
-                          </p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-semibold">
-                          ${booking.amount?.toLocaleString()}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {getVerificationBadge(
-                        booking.customer?.identity_verification_status
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {getExpiryBadge(booking.preauth_expires_at)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {canEdit('pending_bookings') && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => {
-                                setSelectedBooking(booking);
-                                setShowRejectDialog(true);
-                              }}
-                              disabled={
-                                approveBooking.isPending || rejectBooking.isPending
-                              }
-                            >
-                              <XCircle className="h-4 w-4 mr-1" />
-                              Reject
-                            </Button>
-                            <Button
-                              size="sm"
-                              className="bg-green-600 hover:bg-green-700"
-                              onClick={() => {
-                                setSelectedBooking(booking);
-                                setShowApproveDialog(true);
-                              }}
-                              disabled={
-                                approveBooking.isPending || rejectBooking.isPending
-                              }
-                            >
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              Approve
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableTile>
+          )}
+        </>
       )}
 
       {/* Approve Confirmation Dialog */}
@@ -371,7 +405,6 @@ const PendingBookings = () => {
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleApprove}
-              className="bg-green-600 hover:bg-green-700"
               disabled={approveBooking.isPending}
             >
               {approveBooking.isPending ? (
@@ -402,13 +435,17 @@ const PendingBookings = () => {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="bg-muted p-4 rounded-lg text-sm">
+            <div className="rounded-tile [background:var(--bento-tile-2)] p-4 text-sm">
               <p>
                 <strong>Customer:</strong> {selectedBooking?.customer?.name}
               </p>
               <p>
-                <strong>Amount to release:</strong> $
-                {selectedBooking?.amount?.toLocaleString()}
+                <strong>Amount to release:</strong>{" "}
+                <Money
+                  value={selectedBooking?.amount ?? 0}
+                  currency="USD"
+                  className="font-semibold"
+                />
               </p>
             </div>
 

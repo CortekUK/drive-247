@@ -20,6 +20,15 @@ import { MetricItem, MetricDivider } from "@/components/vehicles/metric-card";
 import { useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
 import { TruncatedCell } from "@/components/shared/data-display/truncated-cell";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
+import {
+  KpiTile,
+  StatusPill,
+  statusTone,
+  type StatusTone,
+  ErrorState,
+  Shimmer,
+  TableSkeleton,
+} from "@/components/bento";
 import { CustomerBalanceChip } from "@/components/customers/customer-balance-chip";
 import { useCustomerDocuments, useDeleteCustomerDocument, useDownloadDocument } from "@/hooks/use-customer-documents";
 import { useCustomerBalanceWithStatus } from "@/hooks/use-customer-balance";
@@ -397,11 +406,31 @@ const CustomerDetail = () => {
   });
 
   if (isLoading) {
-    return <div>Loading customer details...</div>;
+    return (
+      <div className="space-y-8 pt-4">
+        <div className="flex items-center justify-between">
+          <Shimmer className="h-7 w-40" />
+          <Shimmer className="h-9 w-64 rounded-tile" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Shimmer className="h-64 rounded-tile lg:col-span-2" />
+          <Shimmer className="h-64 rounded-tile" />
+        </div>
+        <TableSkeleton rows={6} cols={6} />
+      </div>
+    );
   }
 
   if (!customer) {
-    return <div>Customer not found</div>;
+    return (
+      <div className="pt-4">
+        <ErrorState
+          title="Customer not found"
+          description="We couldn't find this customer. They may have been deleted."
+          onRetry={() => router.push("/customers")}
+        />
+      </div>
+    );
   }
 
   return (
@@ -460,7 +489,7 @@ const CustomerDetail = () => {
                 variant="outline"
                 onClick={handleUnblockCustomer}
                 disabled={blockingLoading}
-                className="border-green-600 text-green-600 hover:bg-green-600/10"
+                className="border-[color:var(--bento-success)] text-[color:var(--bento-success)] hover:[background:var(--bento-success-weak)]"
               >
                 <CheckCircle className="h-4 w-4 mr-1" />
                 {blockingLoading ? "Unblocking..." : "Unblock"}
@@ -488,7 +517,7 @@ const CustomerDetail = () => {
       {/* Profile & Verification */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Personal Information */}
-        <Card className="lg:col-span-2 shadow-card rounded-lg">
+        <Card className="lg:col-span-2 shadow-bento rounded-tile">
           <CardHeader className="pb-2 pt-4 px-5 flex flex-row items-center justify-between">
             <CardTitle className="text-base font-semibold">Personal Information</CardTitle>
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditCustomerOpen(true)} title="Edit customer info">
@@ -515,10 +544,10 @@ const CustomerDetail = () => {
                         }}
                       />
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSaveName} disabled={savingName || !nameValue.trim()}>
-                        <Check className="h-3.5 w-3.5 text-green-600" />
+                        <Check className="h-3.5 w-3.5 text-[color:var(--bento-success)]" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCancelEditName} disabled={savingName}>
-                        <X className="h-3.5 w-3.5 text-red-500" />
+                        <X className="h-3.5 w-3.5 text-[color:var(--bento-danger-fg)]" />
                       </Button>
                     </div>
                   ) : (
@@ -552,10 +581,10 @@ const CustomerDetail = () => {
                         }}
                       />
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSaveDob} disabled={savingDob || !dobValue}>
-                        <Check className="h-3.5 w-3.5 text-green-600" />
+                        <Check className="h-3.5 w-3.5 text-[color:var(--bento-success)]" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCancelEditDob} disabled={savingDob}>
-                        <X className="h-3.5 w-3.5 text-red-500" />
+                        <X className="h-3.5 w-3.5 text-[color:var(--bento-danger-fg)]" />
                       </Button>
                     </div>
                   ) : (
@@ -579,10 +608,10 @@ const CustomerDetail = () => {
                   <span className="text-xs text-muted-foreground mb-0.5">Gig Driver</span>
                   <span className="text-sm font-semibold">
                     {customer.is_gig_driver ? (
-                      <Badge variant="outline" className="border-green-500/30 bg-green-500/10 text-green-600 text-xs">
-                        <Briefcase className="h-3 w-3 mr-1" />
+                      <StatusPill tone="success">
+                        <Briefcase className="h-3 w-3" />
                         Yes
-                      </Badge>
+                      </StatusPill>
                     ) : (
                       <span className="text-muted-foreground">No</span>
                     )}
@@ -639,24 +668,24 @@ const CustomerDetail = () => {
         </Card>
 
         {/* Right: Verification (CMD + AI) */}
-        <Card className="shadow-card rounded-lg">
+        <Card className="shadow-bento rounded-tile">
           <CardHeader className="pb-2 pt-4 px-5">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-base font-semibold">Verification</CardTitle>
               <div className="flex items-center gap-2 flex-wrap justify-end">
                 {!hasCmd && latestVerification?.status && (
-                  <Badge
-                    variant="outline"
-                    className={
+                  <StatusPill
+                    tone={
                       latestVerification.status === 'approved'
-                        ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
+                        ? 'success'
                         : latestVerification.status === 'declined'
-                        ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
-                        : 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800'
+                        ? 'danger'
+                        : 'warn'
                     }
+                    dot
                   >
                     {latestVerification.status === 'approved' ? 'Verified' : latestVerification.status === 'declined' ? 'Declined' : 'Pending'}
-                  </Badge>
+                  </StatusPill>
                 )}
                 <Button
                   variant="outline"
@@ -687,17 +716,17 @@ const CustomerDetail = () => {
                     <ShieldCheck className="h-3 w-3" />
                     CMD
                     {cmdVerification?.cmd_license_status === 'Valid' && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      <span className="h-1.5 w-1.5 rounded-full [background:var(--bento-success)]" />
                     )}
                     {(cmdVerification?.cmd_license_status === 'Invalid' || cmdVerification?.cmd_license_status === 'Expired') && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                      <span className="h-1.5 w-1.5 rounded-full [background:var(--bento-danger-fg)]" />
                     )}
                   </TabsTrigger>
                   <TabsTrigger value="ai" className="text-xs gap-1.5 h-7">
                     <Shield className="h-3 w-3" />
                     AI
                     {latestVerification?.status === 'approved' && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      <span className="h-1.5 w-1.5 rounded-full [background:var(--bento-success)]" />
                     )}
                   </TabsTrigger>
                 </TabsList>
@@ -743,7 +772,7 @@ const CustomerDetail = () => {
                           key={i}
                           type="button"
                           onClick={() => setPreviewImage({ url, label: `License Doc ${i + 1}` })}
-                          className="relative aspect-[3/2] rounded-lg overflow-hidden border border-border hover:border-indigo-300 transition-colors"
+                          className="relative aspect-[3/2] rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
                         >
                           <BlurredImage src={url} alt={`License doc ${i + 1}`} label={`Doc ${i + 1}`} />
                           <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center z-10">
@@ -763,7 +792,7 @@ const CustomerDetail = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 text-[11px] gap-1 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-500/10"
+                      className="h-7 text-[11px] gap-1 text-primary hover:text-primary hover:[background:var(--bento-primary-weak)]"
                       disabled={!cmdVerification || resendCmdMutation.isPending}
                       onClick={() =>
                         cmdVerification &&
@@ -914,15 +943,15 @@ const CustomerDetail = () => {
                             ) : outstanding === null ? (
                               <span className="text-muted-foreground text-sm">-</span>
                             ) : outstanding > 0.01 ? (
-                              <span className="text-red-600 font-medium">{formatCurrency(outstanding, currencyCode)}</span>
+                              <span className="text-[color:var(--bento-danger-fg)] font-mono font-medium tabular-nums">{formatCurrency(outstanding, currencyCode)}</span>
                             ) : (
-                              <span className="text-green-600 font-medium">Settled</span>
+                              <span className="text-[color:var(--bento-success)] font-medium">Settled</span>
                             )}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={rental.status === 'Active' ? 'default' : 'secondary'}>
+                            <StatusPill tone={statusTone(rental.status)} dot>
                               {rental.status}
-                            </Badge>
+                            </StatusPill>
                           </TableCell>
                           <TableCell>
                             <Button
@@ -980,56 +1009,53 @@ const CustomerDetail = () => {
               missing when in reality $Z of captured payments is sitting on the
               customer's account as unallocated credit. */}
           {customerBalanceData && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Balance Summary</CardTitle>
-                <CardDescription>
+            <div className="space-y-3">
+              <div>
+                <h2 className="text-base font-bold tracking-tight">Balance Summary</h2>
+                <p className="text-sm text-muted-foreground">
                   Lifetime totals across all rentals. Use these to reconcile against Stripe and the customer's bank statement.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Total charges</p>
-                    <p className="text-lg font-semibold tabular-nums">
-                      {formatCurrency(customerBalanceData.totalCharges, currencyCode)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Applied to charges</p>
-                    <p className="text-lg font-semibold tabular-nums">
-                      {formatCurrency(
-                        Math.max(0, customerBalanceData.totalCharges - customerBalanceData.outstandingDebt),
-                        currencyCode,
-                      )}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Outstanding</p>
-                    <p className={cn(
-                      "text-lg font-semibold tabular-nums",
-                      customerBalanceData.outstandingDebt > 0 ? "text-red-600" : ""
-                    )}>
-                      {formatCurrency(customerBalanceData.outstandingDebt, currencyCode)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Available credit</p>
-                    <p className={cn(
-                      "text-lg font-semibold tabular-nums",
-                      customerBalanceData.availableCredit > 0 ? "text-green-600" : ""
-                    )}>
-                      {formatCurrency(customerBalanceData.availableCredit, currencyCode)}
-                    </p>
-                  </div>
-                </div>
-                {customerBalanceData.availableCredit > 0 && (
-                  <p className="text-xs text-muted-foreground mt-3">
-                    Available credit is money already captured from the customer that hasn't yet been applied to a charge. It will auto-apply (FIFO) to the next open charge.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+                </p>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <KpiTile
+                  label="Total charges"
+                  value={customerBalanceData.totalCharges}
+                  noCountUp
+                  format={(v) => formatCurrency(v, currencyCode)}
+                />
+                <KpiTile
+                  label="Applied to charges"
+                  value={Math.max(0, customerBalanceData.totalCharges - customerBalanceData.outstandingDebt)}
+                  noCountUp
+                  format={(v) => formatCurrency(v, currencyCode)}
+                />
+                <KpiTile
+                  label="Outstanding"
+                  value={customerBalanceData.outstandingDebt}
+                  noCountUp
+                  format={(v) => (
+                    <span className={customerBalanceData.outstandingDebt > 0 ? "text-[color:var(--bento-danger-fg)]" : ""}>
+                      {formatCurrency(v, currencyCode)}
+                    </span>
+                  )}
+                />
+                <KpiTile
+                  label="Available credit"
+                  value={customerBalanceData.availableCredit}
+                  noCountUp
+                  format={(v) => (
+                    <span className={customerBalanceData.availableCredit > 0 ? "text-[color:var(--bento-success)]" : ""}>
+                      {formatCurrency(v, currencyCode)}
+                    </span>
+                  )}
+                />
+              </div>
+              {customerBalanceData.availableCredit > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Available credit is money already captured from the customer that hasn't yet been applied to a charge. It will auto-apply (FIFO) to the next open charge.
+                </p>
+              )}
+            </div>
           )}
 
           <Card>
@@ -1066,7 +1092,7 @@ const CustomerDetail = () => {
                           <TableCell className="whitespace-nowrap">
                             {format(new Date(payment.payment_date), "MM/dd/yyyy")}
                           </TableCell>
-                          <TableCell className="text-right font-medium">
+                          <TableCell className="text-right font-mono font-medium tabular-nums">
                             {formatCurrency(payment.amount, currencyCode)}
                           </TableCell>
                           <TableCell>
@@ -1091,11 +1117,11 @@ const CustomerDetail = () => {
                           </TableCell>
                           <TableCell className="text-right">
                             {payment.remaining_amount > 0 ? (
-                              <span className="text-orange-600 font-medium">
+                              <span className="text-[color:var(--bento-warn-accent)] font-mono font-medium tabular-nums">
                                 {formatCurrency(payment.remaining_amount, currencyCode)}
                               </span>
                             ) : (
-                              <span className="text-green-600 font-medium">Fully Applied</span>
+                              <span className="text-[color:var(--bento-success)] font-medium">Fully Applied</span>
                             )}
                           </TableCell>
                           <TableCell className="text-center">
@@ -1104,7 +1130,7 @@ const CustomerDetail = () => {
                                 href={`https://dashboard.stripe.com/payments/${payment.stripe_payment_intent_id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center text-muted-foreground hover:text-indigo-600 transition-colors"
+                                className="inline-flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
                                 title={`Open in Stripe Dashboard (${payment.capture_status ?? 'captured'})`}
                               >
                                 <ExternalLink className="h-3.5 w-3.5" />
@@ -1695,7 +1721,7 @@ const CustomerDetail = () => {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="block-reason">Reason for blocking <span className="text-red-500">*</span></Label>
+              <Label htmlFor="block-reason">Reason for blocking <span className="text-destructive">*</span></Label>
               <Textarea
                 id="block-reason"
                 placeholder="Enter the reason for blocking this customer..."
@@ -1757,46 +1783,42 @@ const CustomerDetail = () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function CmdLicensePill({ status }: { status: CmdLicenseStatus }) {
-  const map: Record<string, { label: string; classes: string; icon: React.ReactNode }> = {
+  const map: Record<string, { label: string; tone: StatusTone; icon: React.ReactNode }> = {
     Valid: {
       label: 'License valid',
-      classes:
-        'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30',
+      tone: 'success',
       icon: <CheckCircle className="h-3 w-3" />,
     },
     Invalid: {
       label: 'License invalid',
-      classes:
-        'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30',
+      tone: 'danger',
       icon: <Ban className="h-3 w-3" />,
     },
     Expired: {
       label: 'License expired',
-      classes:
-        'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30',
+      tone: 'warn',
       icon: <AlertTriangle className="h-3 w-3" />,
     },
     Pending: {
       label: 'Waiting for customer',
-      classes:
-        'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/30',
+      tone: 'primary',
       icon: <Loader2 className="h-3 w-3 animate-spin" />,
     },
   };
   const config = (status && map[status]) || map.Pending;
   return (
-    <Badge variant="outline" className={`gap-1.5 h-6 px-2.5 text-[11px] font-medium ${config.classes}`}>
+    <StatusPill tone={config.tone} className="h-6">
       {config.icon}
       {config.label}
-    </Badge>
+    </StatusPill>
   );
 }
 
 function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className={`text-[13px] text-foreground/90 ${mono ? 'font-mono' : ''}`}>{value}</span>
+      <span className="text-[11px] uppercase tracking-wide text-[color:var(--bento-text-3)]">{label}</span>
+      <span className={`text-[13px] text-foreground/90 ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</span>
     </div>
   );
 }

@@ -7,13 +7,18 @@ import { useBlogCategories } from "@/hooks/use-blog-categories";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import {
+  Tile,
+  TableTile,
+  bentoTable,
+  StatusPill,
+  EmptyState,
+  Shimmer,
+} from "@/components/bento";
 import {
   Select,
   SelectContent,
@@ -46,8 +51,6 @@ import {
   Trash2,
   Edit,
   Eye,
-  CheckCircle,
-  Clock,
   FileText,
   ChevronLeft,
   ChevronRight,
@@ -90,9 +93,13 @@ export default function BlogListingPage() {
   if (isLoading) {
     return (
       <div className="space-y-6 p-4 md:p-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-64 w-full" />
+        <Shimmer className="h-8 w-48" />
+        <Shimmer className="h-10 w-full" />
+        <Tile noMotion className="space-y-3">
+          {[...Array(6)].map((_, i) => (
+            <Shimmer key={i} className="h-12 w-full" />
+          ))}
+        </Tile>
       </div>
     );
   }
@@ -112,7 +119,7 @@ export default function BlogListingPage() {
             <span className="hidden sm:inline">Back</span>
           </Button>
           <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-display font-bold text-gradient-metal">
+            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
               Blog
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
@@ -151,7 +158,7 @@ export default function BlogListingPage() {
 
       {/* Blog Visibility Toggle */}
       {hasEditAccess && (
-        <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+        <Tile pad="compact" className="flex items-center justify-between">
           <div className="space-y-0.5">
             <Label className="font-medium">Show blog on website</Label>
             <p className="text-xs text-muted-foreground">
@@ -171,7 +178,7 @@ export default function BlogListingPage() {
               }
             }}
           />
-        </div>
+        </Tile>
       )}
 
       {/* Filters */}
@@ -227,29 +234,29 @@ export default function BlogListingPage() {
 
       {/* Table */}
       {posts.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No blog posts</h3>
-            <p className="text-muted-foreground text-center mb-4">
-              {searchQuery || statusFilter !== "all" || categoryFilter !== "all"
-                ? "No posts match your filters"
-                : "Create your first blog post to get started"}
-            </p>
-            {hasEditAccess && !searchQuery && statusFilter === "all" && (
+        <EmptyState
+          icon={<FileText className="h-5 w-5" />}
+          title="No blog posts"
+          description={
+            searchQuery || statusFilter !== "all" || categoryFilter !== "all"
+              ? "No posts match your filters"
+              : "Create your first blog post to get started"
+          }
+          action={
+            hasEditAccess && !searchQuery && statusFilter === "all" ? (
               <Button onClick={() => router.push("/cms/blog/new")}>
                 <Plus className="h-4 w-4 mr-2" />
                 New Post
               </Button>
-            )}
-          </CardContent>
-        </Card>
+            ) : undefined
+          }
+        />
       ) : (
         <>
-          <Card>
+          <TableTile>
             <Table>
-              <TableHeader>
-                <TableRow className="bg-indigo-50/50 dark:bg-indigo-950/20">
+              <TableHeader className={bentoTable.header}>
+                <TableRow>
                   <TableHead>Title</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Status</TableHead>
@@ -262,16 +269,14 @@ export default function BlogListingPage() {
                 {posts.map((post) => (
                   <TableRow
                     key={post.id}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className={bentoTable.row}
                     onClick={() => router.push(`/cms/blog/${post.id}`)}
                   >
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{post.title}</span>
                         {post.is_featured && (
-                          <Badge variant="outline" className="text-xs">
-                            Featured
-                          </Badge>
+                          <StatusPill tone="primary">Featured</StatusPill>
                         )}
                       </div>
                       {post.excerpt && (
@@ -282,27 +287,15 @@ export default function BlogListingPage() {
                     </TableCell>
                     <TableCell>
                       {post.category?.name ? (
-                        <Badge variant="secondary">{post.category.name}</Badge>
+                        <StatusPill tone="neutral">{post.category.name}</StatusPill>
                       ) : (
                         <span className="text-muted-foreground text-sm">—</span>
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant={post.status === "published" ? "default" : "secondary"}
-                        className={
-                          post.status === "published"
-                            ? "bg-green-500/20 text-green-600 hover:bg-green-500/30"
-                            : ""
-                        }
-                      >
-                        {post.status === "published" ? (
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                        ) : (
-                          <Clock className="h-3 w-3 mr-1" />
-                        )}
+                      <StatusPill tone={post.status === "published" ? "success" : "warn"} dot>
                         {post.status === "published" ? "Published" : "Draft"}
-                      </Badge>
+                      </StatusPill>
                     </TableCell>
                     <TableCell className="text-sm">
                       {post.author_name || "—"}
@@ -345,7 +338,7 @@ export default function BlogListingPage() {
                 ))}
               </TableBody>
             </Table>
-          </Card>
+          </TableTile>
 
           {/* Pagination */}
           {totalPages > 1 && (

@@ -4,11 +4,19 @@ import { useState, useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tile,
+  KpiTile,
+  Eyebrow,
+  StatusPill,
+  bentoTable,
+  KpiTileSkeletonRow,
+  TableSkeleton,
+  EmptyState,
+} from "@/components/bento";
 import { ChevronLeft, Car, DollarSign, TrendingUp, TrendingDown, Download, ArrowUpDown, ArrowUp, ArrowDown, BarChart3 } from "lucide-react";
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
@@ -244,11 +252,11 @@ const MonthlyPLDrilldown = () => {
 
   const getStatusBadge = (netProfit: number) => {
     if (netProfit > 0) {
-      return <Badge className="bg-success text-success-foreground">Profitable</Badge>;
+      return <StatusPill tone="success" dot>Profitable</StatusPill>;
     } else if (netProfit < 0) {
-      return <Badge className="bg-destructive text-destructive-foreground">Loss</Badge>;
+      return <StatusPill tone="danger" dot>Loss</StatusPill>;
     } else {
-      return <Badge variant="secondary">Break Even</Badge>;
+      return <StatusPill tone="neutral">Break Even</StatusPill>;
     }
   };
 
@@ -267,7 +275,13 @@ const MonthlyPLDrilldown = () => {
   ];
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-64">Loading monthly breakdown...</div>;
+    return (
+      <div className="space-y-6 p-6">
+        <PLBreadcrumb items={breadcrumbItems} />
+        <KpiTileSkeletonRow count={4} />
+        <TableSkeleton rows={6} cols={6} />
+      </div>
+    );
   }
 
   return (
@@ -293,8 +307,9 @@ const MonthlyPLDrilldown = () => {
             </UITooltip>
           </TooltipProvider>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              P&L Breakdown – {format(monthDate, 'MMMM yyyy')}
+            <Eyebrow>P&amp;L Breakdown</Eyebrow>
+            <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-foreground">
+              {format(monthDate, 'MMMM yyyy')}
             </h1>
             <p className="text-muted-foreground mt-1">
               Vehicle performance breakdown for the selected month
@@ -326,87 +341,55 @@ const MonthlyPLDrilldown = () => {
 
       {/* KPI Cards */}
       {monthlyTotals && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(monthlyTotals.total_revenue)}</div>
-              <div className="text-xs text-muted-foreground mt-2">Monthly total</div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Costs</CardTitle>
-              <TrendingDown className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(monthlyTotals.total_costs)}</div>
-              <div className="text-xs text-muted-foreground mt-2">Monthly total</div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
-              <DollarSign className={cn(
-                "h-4 w-4",
-                monthlyTotals.net_profit > 0 ? "text-success" :
-                monthlyTotals.net_profit < 0 ? "text-destructive" :
-                "text-muted-foreground"
-              )} />
-            </CardHeader>
-            <CardContent>
-              <div className={cn(
-                "text-2xl font-bold",
-                monthlyTotals.net_profit > 0 ? "text-success" :
-                monthlyTotals.net_profit < 0 ? "text-destructive" : ""
-              )}>
-                {formatCurrency(monthlyTotals.net_profit)}
-              </div>
-              <div className="flex items-center mt-2 text-xs text-muted-foreground">
-                {monthlyTotals.net_profit > 0 && (
-                  <>
-                    <TrendingUp className="h-3 w-3 text-success mr-1" />
-                    <span>Positive</span>
-                  </>
-                )}
-                {monthlyTotals.net_profit < 0 && (
-                  <>
-                    <TrendingDown className="h-3 w-3 text-destructive mr-1" />
-                    <span>Negative</span>
-                  </>
-                )}
-                {monthlyTotals.net_profit === 0 && <span>—</span>}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Vehicles Active</CardTitle>
-              <Car className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{monthlyTotals.active_vehicles}</div>
-              <div className="text-xs text-muted-foreground mt-2">This month</div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiTile
+            variant="hero"
+            label="Total Revenue"
+            value={monthlyTotals.total_revenue}
+            format={(v) => <span className="font-sans">{formatCurrency(v)}</span>}
+            sub="Monthly total"
+            icon={<TrendingUp className="h-4 w-4" />}
+          />
+          <KpiTile
+            label="Total Costs"
+            value={monthlyTotals.total_costs}
+            format={(v) => <span className="font-sans">{formatCurrency(v)}</span>}
+            sub="Monthly total"
+            icon={<TrendingDown className="h-4 w-4" />}
+          />
+          <KpiTile
+            variant="feature"
+            label="Net Profit"
+            value={monthlyTotals.net_profit}
+            format={(v) => <span className="font-sans">{formatCurrency(v)}</span>}
+            sub={
+              monthlyTotals.net_profit > 0
+                ? 'Positive'
+                : monthlyTotals.net_profit < 0
+                ? 'Negative'
+                : 'Break even'
+            }
+            icon={<DollarSign className="h-4 w-4" />}
+          />
+          <KpiTile
+            label="Vehicles Active"
+            value={monthlyTotals.active_vehicles}
+            sub="This month"
+            icon={<Car className="h-4 w-4" />}
+          />
         </div>
       )}
 
       {/* Vehicle Breakdown */}
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle>Vehicle Performance Breakdown</CardTitle>
-          <CardDescription>
-            Click on a vehicle to view detailed P&L for this month
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Tile pad="none" className="overflow-hidden">
+        <div className="px-5 pt-5 pb-4">
+          <h3 className="text-base font-bold tracking-tight text-foreground">Vehicle Performance Breakdown</h3>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Click on a vehicle to view detailed P&amp;L for this month
+          </p>
+        </div>
+        <div className="border-t border-border" />
+        <div className="p-5">
           {showChart ? (
             <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -426,10 +409,16 @@ const MonthlyPLDrilldown = () => {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+          ) : sortedVehicleData.length === 0 ? (
+            <EmptyState
+              icon={<Car className="h-5 w-5" />}
+              title="No vehicle activity"
+              description="There are no P&L entries for any vehicle in this month."
+            />
           ) : (
             <div className="relative overflow-x-auto">
-              <Table>
-                <TableHeader className="sticky top-0 bg-background">
+              <Table className={bentoTable.header}>
+                <TableHeader className="sticky top-0">
                   <TableRow>
                     <TableHead>
                       <SortButton field="vehicle_reg">Vehicle</SortButton>
@@ -452,7 +441,7 @@ const MonthlyPLDrilldown = () => {
                   {sortedVehicleData?.map((vehicle) => (
                     <TableRow
                       key={vehicle.vehicle_id}
-                      className="hover:bg-muted/50 transition-colors cursor-pointer"
+                      className={bentoTable.row}
                       onClick={() => router.push(`/vehicles/${vehicle.vehicle_id}?tab=pl&month=${month}&from=monthly`)}
                       role="button"
                       tabIndex={0}
@@ -460,20 +449,20 @@ const MonthlyPLDrilldown = () => {
                     >
                       <TableCell>
                         <div>
-                          <div className="font-medium">{vehicle.vehicle_reg}</div>
+                          <div className="font-mono font-semibold text-foreground">{vehicle.vehicle_reg}</div>
                           <div className="text-xs text-muted-foreground">{vehicle.make_model}</div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(vehicle.revenue_rental)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(vehicle.revenue_fees)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(vehicle.cost_service)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(vehicle.cost_fines)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(vehicle.cost_other)}</TableCell>
-                      <TableCell className="text-right font-mono font-medium">{formatCurrency(vehicle.total_costs)}</TableCell>
-                      <TableCell className="text-right font-mono font-bold">
+                      <TableCell className={bentoTable.figure}>{formatCurrency(vehicle.revenue_rental)}</TableCell>
+                      <TableCell className={bentoTable.figure}>{formatCurrency(vehicle.revenue_fees)}</TableCell>
+                      <TableCell className={bentoTable.figure}>{formatCurrency(vehicle.cost_service)}</TableCell>
+                      <TableCell className={bentoTable.figure}>{formatCurrency(vehicle.cost_fines)}</TableCell>
+                      <TableCell className={bentoTable.figure}>{formatCurrency(vehicle.cost_other)}</TableCell>
+                      <TableCell className={cn(bentoTable.figure, "font-semibold")}>{formatCurrency(vehicle.total_costs)}</TableCell>
+                      <TableCell className={cn(bentoTable.figure, "font-bold")}>
                         <span className={cn(
-                          vehicle.net_profit > 0 ? 'text-success' :
-                          vehicle.net_profit < 0 ? 'text-destructive' : ''
+                          vehicle.net_profit > 0 ? 'text-[color:var(--bento-success)]' :
+                          vehicle.net_profit < 0 ? 'text-[color:var(--bento-danger-fg)]' : ''
                         )}>
                           {formatCurrency(vehicle.net_profit)}
                         </span>
@@ -485,8 +474,8 @@ const MonthlyPLDrilldown = () => {
               </Table>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Tile>
     </div>
   );
 };

@@ -52,6 +52,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { Eyebrow, EmptyState as BentoEmptyState, Shimmer, KpiTileSkeletonRow } from "@/components/bento";
 
 interface Vehicle {
   id: string;
@@ -453,11 +454,37 @@ export default function VehicleDetail() {
   };
 
   if (vehicleLoading) {
-    return <div>Loading vehicle details...</div>;
+    return (
+      <div className="container mx-auto p-4 sm:p-6 space-y-6">
+        <div className="flex items-center gap-4">
+          <Shimmer className="h-10 w-10 rounded-xl" />
+          <div className="space-y-2">
+            <Shimmer className="h-7 w-40 rounded-tile" />
+            <Shimmer className="h-4 w-56 rounded-tile" />
+          </div>
+        </div>
+        <Shimmer className="h-56 rounded-tile" />
+        <KpiTileSkeletonRow count={3} />
+        <Shimmer className="h-72 rounded-tile" />
+      </div>
+    );
   }
 
   if (!vehicle) {
-    return <div>Vehicle not found</div>;
+    return (
+      <div className="container mx-auto p-4 sm:p-6">
+        <BentoEmptyState
+          icon={<Car className="h-5 w-5" />}
+          title="Vehicle not found"
+          description="We couldn't find this vehicle. It may have been removed or you may not have access."
+          action={
+            <Button variant="outline" onClick={() => router.push("/vehicles")}>
+              Back to Fleet
+            </Button>
+          }
+        />
+      </div>
+    );
   }
 
   return (
@@ -480,7 +507,8 @@ export default function VehicleDetail() {
             </Tooltip>
           </TooltipProvider>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">{vehicle.reg}</h1>
+            <Eyebrow>Vehicle</Eyebrow>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-mono tabular-nums">{vehicle.reg}</h1>
             <p className="text-muted-foreground">
               {vehicle.make} {vehicle.model} • {vehicle.colour}
             </p>
@@ -638,11 +666,11 @@ export default function VehicleDetail() {
           {/* Tesla Fleet API Section */}
           {tenant?.integration_tesla_fleet && (
             <div className="mb-6">
-              <Card className="shadow-card rounded-lg border-red-200/50 dark:border-red-900/30">
+              <Card className="shadow-bento rounded-tile border-red-200/50 dark:border-red-900/30">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                      <CardTitle className="text-lg font-bold tracking-tight flex items-center gap-2">
                         <div className="p-1.5 rounded-lg bg-red-500/10">
                           <TeslaLogo size={18} className="text-red-500" />
                         </div>
@@ -786,10 +814,10 @@ export default function VehicleDetail() {
 
           {/* Vehicle Details Section */}
           <div className="mt-6">
-            <Card className="shadow-card rounded-lg">
+            <Card className="shadow-bento rounded-tile">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <CardTitle className="text-lg font-bold tracking-tight flex items-center gap-2">
                     <Car className="h-5 w-5" />
                     Vehicle Details
                   </CardTitle>
@@ -1203,11 +1231,11 @@ export default function VehicleDetail() {
 
           {/* P&L Summary Section */}
           <div className="mt-8">
-            <Card className="shadow-card rounded-lg">
+            <Card className="shadow-bento rounded-tile">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <CardTitle className="text-lg font-bold tracking-tight flex items-center gap-2">
                       <TrendingUp className="h-5 w-5" />
                       P&L Summary
                     </CardTitle>
@@ -1258,11 +1286,11 @@ export default function VehicleDetail() {
 
           {/* Services Section */}
           <div className="mt-8">
-            <Card className="shadow-card rounded-lg">
+            <Card className="shadow-bento rounded-tile">
               <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <CardTitle className="text-lg font-bold tracking-tight flex items-center gap-2">
                       <Wrench className="h-5 w-5" />
                       Service History
                     </CardTitle>
@@ -1342,11 +1370,11 @@ export default function VehicleDetail() {
                 e.target.value = '';
               }}
             />
-            <Card className="shadow-card rounded-lg">
+            <Card className="shadow-bento rounded-tile">
               <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <CardTitle className="text-lg font-bold tracking-tight flex items-center gap-2">
                       <FileText className="h-5 w-5" />
                       Documents & Files {files.length > 0 && `(${files.length})`}
                     </CardTitle>
@@ -1384,11 +1412,11 @@ export default function VehicleDetail() {
 
           {/* Blocked Dates Section */}
           <div className="mt-8">
-            <Card className="shadow-card rounded-lg">
+            <Card className="shadow-bento rounded-tile">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <CardTitle className="text-lg font-bold tracking-tight flex items-center gap-2">
                       <Calendar className="h-5 w-5" />
                       Blocked Dates
                     </CardTitle>
@@ -1406,11 +1434,11 @@ export default function VehicleDetail() {
 
           {/* Rental Extras Section */}
           <div className="mt-8">
-            <Card className="shadow-card rounded-lg">
+            <Card className="shadow-bento rounded-tile">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <CardTitle className="text-lg font-bold tracking-tight flex items-center gap-2">
                       <Package className="h-5 w-5" />
                       Rental Extras
                     </CardTitle>
@@ -1426,11 +1454,11 @@ export default function VehicleDetail() {
 
           {/* Dynamic Pricing Section */}
           <div className="mt-8">
-            <Card className="shadow-card rounded-lg">
+            <Card className="shadow-bento rounded-tile">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <CardTitle className="text-lg font-bold tracking-tight flex items-center gap-2">
                       <TrendingUp className="h-5 w-5" />
                       Dynamic Pricing
                     </CardTitle>

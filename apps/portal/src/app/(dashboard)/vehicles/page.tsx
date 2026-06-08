@@ -9,13 +9,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Eye, Plus, Search, BarChart3, ChevronDown, X } from "lucide-react";
+import { Eye, Plus, Search, BarChart3, ChevronDown, X, Car } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { EmptyState } from "@/components/shared/data-display/empty-state";
+import {
+  TableTile,
+  bentoTable,
+  EmptyState,
+  Eyebrow,
+  KpiTileSkeletonRow,
+  TableSkeleton,
+} from "@/components/bento";
 import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import { FleetSummaryCards } from "@/components/vehicles/fleet-summary-cards";
 import { VehicleStatusBadge } from "@/components/vehicles/vehicle-status-badge";
@@ -400,30 +405,20 @@ export default function VehiclesListEnhanced() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-start">
-          <div>
-            <Skeleton className="h-8 w-48 mb-2" />
-            <Skeleton className="h-4 w-96" />
+      <div className="container mx-auto p-4 sm:p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+          <div className="min-w-0">
+            <Eyebrow>Fleet</Eyebrow>
+            <h1 className="text-3xl font-extrabold tracking-tight">Fleet Management</h1>
+            <p className="text-muted-foreground text-sm">
+              Manage your vehicle fleet and track performance
+            </p>
           </div>
-          <Skeleton className="h-10 w-32" />
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-10" />
-          ))}
-        </div>
-
-        <Card>
-          <CardContent className="p-0">
-            <div className="space-y-2">
-              {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <KpiTileSkeletonRow count={4} />
+        <TableTile>
+          <TableSkeleton rows={6} cols={7} />
+        </TableTile>
       </div>
     );
   }
@@ -433,7 +428,8 @@ export default function VehiclesListEnhanced() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold">Fleet Management</h1>
+          <Eyebrow>Fleet</Eyebrow>
+          <h1 className="text-3xl font-extrabold tracking-tight">Fleet Management</h1>
           <p className="text-muted-foreground text-sm sm:text-base">
             Manage your vehicle fleet and track performance
           </p>
@@ -568,22 +564,29 @@ export default function VehiclesListEnhanced() {
       {/* Table */}
       {filteredVehicles.length === 0 ? (
         <EmptyState
-          icon={Plus}
+          icon={<Car className="h-5 w-5" />}
           title="No vehicles found"
           description="No vehicles match your current filters. Try adjusting your search criteria."
-          actionLabel="Add Vehicle"
-          onAction={() => {
-            // Open add vehicle dialog programmatically
-            const addButton = document.querySelector('[data-add-vehicle-trigger] button') as HTMLButtonElement;
-            addButton?.click();
-          }}
+          action={
+            canEdit('vehicles') ? (
+              <Button
+                onClick={() => {
+                  // Open add vehicle dialog programmatically
+                  const addButton = document.querySelector('[data-add-vehicle-trigger] button') as HTMLButtonElement;
+                  addButton?.click();
+                }}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" /> Add Vehicle
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
+        <TableTile>
+          <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
             <Table key={`${sortField || 'default'}-${sortDirection}`}>
-               <TableHeader className="sticky top-0 z-10 bg-background">
+               <TableHeader className={cn("sticky top-0 z-10", bentoTable.header)}>
                  <TableRow>
                    <TableHead>Photo</TableHead>
                    <TableHead>Registration</TableHead>
@@ -601,7 +604,7 @@ export default function VehiclesListEnhanced() {
                   return (
                     <TableRow
                       key={`${vehicle.id}-${sortField || 'default'}-${sortDirection}`}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className={bentoTable.row}
                        onClick={() => handleRowClick(vehicle.id)}
                      >
                      <TableCell>
@@ -615,7 +618,7 @@ export default function VehiclesListEnhanced() {
                      <TableCell>
                       <Link
                         href={`/vehicles/${vehicle.id}`}
-                        className="font-semibold text-foreground hover:text-primary hover:underline"
+                        className="font-mono tabular-nums font-semibold text-foreground hover:text-primary hover:underline"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {vehicle.reg}
@@ -636,12 +639,12 @@ export default function VehiclesListEnhanced() {
                         <Link
                           href={`/vehicle-owners/${vehicle.owner_id}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="text-sm text-[#6366f1] hover:underline"
+                          className="text-sm text-primary hover:underline"
                         >
                           {vehicle.vehicle_owners?.full_name ?? "Owner"}
                         </Link>
                       ) : (
-                        <Badge variant="outline" className="text-xs border-gray-300 text-[#737373]">Own fleet</Badge>
+                        <Badge variant="outline" className="text-xs text-muted-foreground">Own fleet</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-center">
@@ -664,9 +667,8 @@ export default function VehiclesListEnhanced() {
                  })}
                </TableBody>
             </Table>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </TableTile>
       )}
 
       {/* Pagination */}

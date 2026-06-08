@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -20,7 +18,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -47,9 +44,53 @@ import {
   useAuditLogActions,
   useAdminUsers,
   formatActionName,
-  getActionColor,
   AuditLogsFilters,
 } from "@/hooks/use-audit-logs";
+import {
+  Eyebrow,
+  KpiTile,
+  TableTile,
+  bentoTable,
+  StatusPill,
+  type StatusTone,
+  Money,
+  EmptyState,
+  TableSkeleton,
+  KpiTileSkeletonRow,
+} from "@/components/bento";
+
+/** Map an audit action string to a Bento status tone (token-only). */
+function actionTone(action: string): StatusTone {
+  if (action.includes("warning_shown") || action.includes("dialog_shown")) return "warn";
+  if (
+    action.includes("rejected") ||
+    action.includes("deleted") ||
+    action.includes("blocked") ||
+    action.includes("cancelled") ||
+    action.includes("failed") ||
+    action.includes("waived")
+  )
+    return "danger";
+  if (
+    action.includes("approved") ||
+    action.includes("created") ||
+    action.includes("unblocked") ||
+    action.includes("captured") ||
+    action.includes("paid") ||
+    action.includes("uploaded") ||
+    action.includes("assigned")
+  )
+    return "success";
+  if (
+    action.includes("updated") ||
+    action.includes("changed") ||
+    action.includes("extended") ||
+    action.includes("closed")
+  )
+    return "info";
+  if (action.includes("refunded")) return "warn";
+  return "neutral";
+}
 
 const AuditLogs = () => {
   const [filters, setFilters] = useState<AuditLogsFilters>({});
@@ -117,22 +158,14 @@ const AuditLogs = () => {
   if (isLoading) {
     return (
       <div className="container mx-auto p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <Skeleton className="h-8 w-48 mb-2" />
-            <Skeleton className="h-4 w-64" />
-          </div>
+        <div>
+          <Eyebrow>Activity</Eyebrow>
+          <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight">
+            Audit Logs
+          </h1>
         </div>
-        <Skeleton className="h-10 w-full" />
-        <Card>
-          <CardContent className="p-0">
-            <div className="space-y-4 p-4">
-              {[...Array(10)].map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <KpiTileSkeletonRow count={4} />
+        <TableSkeleton rows={10} cols={5} />
       </div>
     );
   }
@@ -143,16 +176,40 @@ const AuditLogs = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-start sm:items-center gap-2 sm:gap-4 min-w-0">
           <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold">Audit Logs</h1>
+            <Eyebrow>Activity</Eyebrow>
+            <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight">
+              Audit Logs
+            </h1>
             <p className="text-muted-foreground text-sm sm:text-base">
               Track all system actions and changes
             </p>
           </div>
         </div>
-        <Button onClick={handleExportCSV} className="bg-gradient-primary w-full sm:w-auto">
+        <Button onClick={handleExportCSV} className="w-full sm:w-auto">
           <Download className="h-4 w-4 mr-2" />
           Export CSV
         </Button>
+      </div>
+
+      {/* Stat tiles */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KpiTile label="Total Entries" value={totalLogs} />
+        <KpiTile
+          label="Entity Types"
+          value={new Set((logs || []).map((l) => l.entity_type).filter(Boolean)).size}
+        />
+        <KpiTile
+          label="Action Types"
+          value={new Set((logs || []).map((l) => l.action)).size}
+        />
+        <KpiTile
+          label="Active Filters"
+          value={
+            [filters.entityType, filters.action, filters.actorId, filters.dateFrom, filters.dateTo].filter(
+              Boolean,
+            ).length
+          }
+        />
       </div>
 
       {/* Filter Bar */}
@@ -312,10 +369,9 @@ const AuditLogs = () => {
       {/* Audit Logs Table */}
       {logs && logs.length > 0 ? (
         <>
-          <Card>
-            <CardContent className="p-0">
+          <TableTile>
               <Table>
-                <TableHeader>
+                <TableHeader className={bentoTable.header}>
                   <TableRow>
                     <TableHead>Date & Time</TableHead>
                     <TableHead>Action</TableHead>
@@ -326,38 +382,35 @@ const AuditLogs = () => {
                 </TableHeader>
                 <TableBody>
                   {paginatedLogs.map((log) => (
-                    <TableRow key={log.id}>
+                    <TableRow key={log.id} className={bentoTable.row}>
                       <TableCell className="whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                           <div>
-                            <div className="font-medium">
+                            <Money className="block text-[13px] font-semibold">
                               {format(new Date(log.created_at), "MMM dd, yyyy")}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
+                            </Money>
+                            <Money className="block text-xs text-muted-foreground">
                               {format(new Date(log.created_at), "HH:mm:ss")}
-                            </div>
+                            </Money>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant="secondary"
+                        <StatusPill
+                          tone={actionTone(log.action)}
                           title={formatActionName(log.action)}
-                          className={cn(
-                            "inline-block w-[120px] sm:w-auto sm:max-w-none max-w-[120px] truncate whitespace-nowrap text-center align-middle",
-                            getActionColor(log.action)
-                          )}
+                          className="max-w-[160px] truncate"
                         >
                           {formatActionName(log.action)}
-                        </Badge>
+                        </StatusPill>
                       </TableCell>
                       <TableCell>
                         {log.entity_type ? (
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="capitalize">
+                            <StatusPill tone="neutral" className="capitalize">
                               {log.entity_type}
-                            </Badge>
+                            </StatusPill>
                             {log.details?.customer_name && (
                               <span className="text-sm font-medium">
                                 {log.details.customer_name}
@@ -418,8 +471,7 @@ const AuditLogs = () => {
                   ))}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+          </TableTile>
 
           {/* Pagination */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -450,21 +502,23 @@ const AuditLogs = () => {
           </div>
         </>
       ) : (
-        <div className="text-center py-12">
-          <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-2">No audit logs found</h3>
-          <p className="text-muted-foreground mb-4">
-            {hasActiveFilters
+        <EmptyState
+          icon={<FileText className="h-5 w-5" />}
+          title="No audit logs found"
+          description={
+            hasActiveFilters
               ? "Try adjusting your filter criteria"
-              : "Activity logs will appear here as actions are performed"}
-          </p>
-          {hasActiveFilters && (
-            <Button variant="outline" onClick={clearFilters}>
-              <X className="h-4 w-4 mr-2" />
-              Clear Filters
-            </Button>
-          )}
-        </div>
+              : "Activity logs will appear here as actions are performed"
+          }
+          action={
+            hasActiveFilters ? (
+              <Button variant="outline" onClick={clearFilters}>
+                <X className="h-4 w-4 mr-2" />
+                Clear Filters
+              </Button>
+            ) : undefined
+          }
+        />
       )}
     </div>
   );

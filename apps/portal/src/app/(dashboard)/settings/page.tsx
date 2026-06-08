@@ -54,6 +54,14 @@ import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
 import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
 import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
 import { useAuditLog } from '@/hooks/use-audit-log';
+import {
+  Tile,
+  SectionCard,
+  StatusPill,
+  Eyebrow,
+  ErrorState as BentoErrorState,
+  Shimmer,
+} from '@/components/bento';
 
 const Settings = () => {
   const queryClient = useQueryClient();
@@ -1196,57 +1204,37 @@ const Settings = () => {
   // Show error state with fallback
   if (error && !settings) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-foreground">Settings</h1>
-            <p className="text-muted-foreground mt-1">
-              Configure your fleet management system
-            </p>
-          </div>
+      <div className="container mx-auto p-4 sm:p-6 space-y-6">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">Settings</h1>
+          <p className="text-muted-foreground mt-1">
+            Configure your fleet management system
+          </p>
         </div>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              <div>
-                <h3 className="font-medium">Failed to load settings</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {error.message || 'Unable to connect to settings service'}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2"
-                  onClick={() => window.location.reload()}
-                >
-                  Reload Page
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <BentoErrorState
+          title="Failed to load settings"
+          description={error.message || 'Unable to connect to settings service'}
+          onRetry={() => window.location.reload()}
+        />
       </div>
     );
   }
 
   if (isLoading && !settings) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-foreground">Settings</h1>
-            <p className="text-muted-foreground mt-1">
-              Configure your fleet management system
-            </p>
-          </div>
+      <div className="container mx-auto p-4 sm:p-6 space-y-6">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">Settings</h1>
+          <p className="text-muted-foreground mt-1">
+            Configure your fleet management system
+          </p>
         </div>
-        <Card>
-          <CardContent className="p-6 flex items-center gap-3">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span>Loading settings...</span>
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Shimmer className="h-10 w-full" />
+          {[1, 2, 3].map((i) => (
+            <Shimmer key={i} className="h-40 w-full rounded-tile" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -1265,7 +1253,7 @@ const Settings = () => {
           <span className="sr-only">Back</span>
         </Button>
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-semibold">Settings</h1>
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">Settings</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             Configure your fleet management system
           </p>
@@ -1277,7 +1265,7 @@ const Settings = () => {
         <div className="space-y-6">
           {/* Mobile: Horizontal scrollable nav (sidebar handles desktop nav) */}
           <div className="lg:hidden">
-            <TabsList className="flex w-full overflow-x-auto gap-1 bg-muted/50 p-1 rounded-lg scrollbar-thin h-auto justify-start">
+            <TabsList className="flex w-full overflow-x-auto gap-1 [background:var(--bento-tile-2)] p-1 rounded-tile-sm scrollbar-thin h-auto justify-start">
               {([
                 { value: 'general', icon: Building2, label: 'General' },
                 { value: 'locations', icon: MapPin, label: 'Locations' },
@@ -1313,26 +1301,21 @@ const Settings = () => {
           {/* Tab Content Area */}
           <div className="space-y-6">
             {!canEditSettings(activeTab) && (
-              <div className="p-3 bg-muted/50 border rounded-lg flex items-center gap-2 text-sm text-muted-foreground">
+              <Tile variant="inset" pad="compact" className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Eye className="h-4 w-4 shrink-0" />
                 You have view-only access to this settings tab.
-              </div>
+              </Tile>
             )}
             <div className={!canEditSettings(activeTab) ? "pointer-events-none select-none" : ""}>
 
         {/* General Tab */}
         <TabsContent value="general" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-primary" />
-                Regional Settings
-              </CardTitle>
-              <CardDescription>
-                Configure currency and distance units for your organisation
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+          <SectionCard
+            icon={<Building2 className="h-4 w-4" />}
+            title="Regional Settings"
+            description="Configure currency and distance units for your organisation"
+          >
+            <div className="space-y-6">
               {/* Currency */}
               <div className="space-y-2">
                 <Label htmlFor="currency_code">Currency</Label>
@@ -1373,8 +1356,8 @@ const Settings = () => {
                   Unit of measurement for vehicle mileage and distance tracking
                 </p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </SectionCard>
 
           {/* Save Button */}
           {canEditSettings('general') && (

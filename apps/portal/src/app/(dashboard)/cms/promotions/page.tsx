@@ -9,16 +9,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCMSPage, useCMSPages } from "@/hooks/use-cms-pages";
 import { useCMSPageSections } from "@/hooks/use-cms-page-sections";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Tile, StatusPill, EmptyState, Shimmer, KpiTile } from "@/components/bento";
 import {
   Form,
   FormControl,
@@ -32,8 +30,6 @@ import {
   ArrowLeft,
   Upload,
   History,
-  CheckCircle,
-  Clock,
   Loader2,
   ListOrdered,
   FileText,
@@ -380,13 +376,13 @@ export default function CMSPromotionsEditor() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
-        return <Badge className="bg-green-500/20 text-green-600">Active</Badge>;
+        return <StatusPill tone="success" dot>Active</StatusPill>;
       case "scheduled":
-        return <Badge className="bg-blue-500/20 text-blue-600">Scheduled</Badge>;
+        return <StatusPill tone="info" dot>Scheduled</StatusPill>;
       case "expired":
-        return <Badge variant="secondary">Expired</Badge>;
+        return <StatusPill tone="neutral">Expired</StatusPill>;
       case "inactive":
-        return <Badge variant="outline">Inactive</Badge>;
+        return <StatusPill tone="neutral">Inactive</StatusPill>;
       default:
         return null;
     }
@@ -419,28 +415,28 @@ export default function CMSPromotionsEditor() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-96" />
+      <div className="space-y-6 p-4 md:p-6">
+        <Shimmer className="h-10 w-64" />
+        <Tile noMotion className="space-y-4">
+          <Shimmer className="h-10 w-full" />
+          <Shimmer className="h-80 w-full" />
+        </Tile>
       </div>
     );
   }
 
   if (!page) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 p-4 md:p-6">
         <Button variant="ghost" onClick={() => router.push("/cms")}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to CMS
         </Button>
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Promotions page not found in CMS.</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Please ensure the "promotions" page is set up in the database.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={<Crown className="h-5 w-5" />}
+          title="Promotions page not found in CMS"
+          description='Please ensure the "promotions" page is set up in the database.'
+        />
       </div>
     );
   }
@@ -491,23 +487,11 @@ export default function CMSPromotionsEditor() {
             <span className="hidden sm:inline">Back</span>
           </Button>
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-display font-bold flex flex-wrap items-center gap-2">
+            <h1 className="flex flex-wrap items-center gap-2 text-xl font-extrabold tracking-tight sm:text-2xl">
               {page.name}
-              <Badge
-                variant={page.status === "published" ? "default" : "secondary"}
-                className={
-                  page.status === "published"
-                    ? "bg-green-500/20 text-green-600"
-                    : ""
-                }
-              >
-                {page.status === "published" ? (
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                ) : (
-                  <Clock className="h-3 w-3 mr-1" />
-                )}
+              <StatusPill tone={page.status === "published" ? "success" : "warn"} dot>
                 {page.status === "published" ? "Published" : "Draft"}
-              </Badge>
+              </StatusPill>
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">{page.description}</p>
           </div>
@@ -562,10 +546,9 @@ export default function CMSPromotionsEditor() {
       </div>
 
       {/* Editor Tabs */}
-      <Card>
-        <CardContent className="pt-6">
+      <Tile pad="roomy">
           {!canEdit('cms') && (
-            <div className="mb-4 p-3 bg-muted/50 border rounded-lg flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="mb-4 flex items-center gap-2 rounded-tile-sm border border-border [background:var(--bento-tile-2)] p-3 text-sm text-muted-foreground">
               <Eye className="h-4 w-4 shrink-0" />
               You have view-only access to website content.
             </div>
@@ -841,31 +824,19 @@ export default function CMSPromotionsEditor() {
                 </div>
 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-2xl font-bold">{stats.total}</div>
-                      <p className="text-sm text-muted-foreground">Total</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-2xl font-bold text-green-600">{stats.active}</div>
-                      <p className="text-sm text-muted-foreground">Active</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-2xl font-bold text-blue-600">{stats.scheduled}</div>
-                      <p className="text-sm text-muted-foreground">Scheduled</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-2xl font-bold text-muted-foreground">{stats.expired}</div>
-                      <p className="text-sm text-muted-foreground">Expired</p>
-                    </CardContent>
-                  </Card>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                  <KpiTile label="Total" value={stats.total} icon={<Crown className="h-4 w-4" />} />
+                  <KpiTile
+                    label="Active"
+                    value={stats.active}
+                    sub={<span className="text-[color:var(--bento-success)]">Live now</span>}
+                  />
+                  <KpiTile
+                    label="Scheduled"
+                    value={stats.scheduled}
+                    sub={<span className="text-[color:var(--bento-info)]">Upcoming</span>}
+                  />
+                  <KpiTile label="Expired" value={stats.expired} sub="Past" />
                 </div>
 
                 {/* Filters */}
@@ -897,60 +868,67 @@ export default function CMSPromotionsEditor() {
                 {promotionsLoading ? (
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {[...Array(6)].map((_, i) => (
-                      <Skeleton key={i} className="h-64 rounded-lg" />
+                      <Tile key={i} noMotion className="space-y-3">
+                        <Shimmer className="aspect-video w-full" />
+                        <Shimmer className="h-4 w-3/4" />
+                        <Shimmer className="h-3 w-full" />
+                        <Shimmer className="h-8 w-full" />
+                      </Tile>
                     ))}
                   </div>
                 ) : filteredPromotions.length === 0 ? (
-                  <div className="py-12 text-center border rounded-lg">
-                    <Crown className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                    <h3 className="text-lg font-semibold mb-2">No promotions found</h3>
-                    <p className="text-muted-foreground mb-4">
-                      {searchQuery || statusFilter !== "all"
+                  <EmptyState
+                    icon={<Crown className="h-5 w-5" />}
+                    title="No promotions found"
+                    description={
+                      searchQuery || statusFilter !== "all"
                         ? "Try adjusting your filters"
-                        : "Create your first promotion to get started"}
-                    </p>
-                  </div>
+                        : "Create your first promotion to get started"
+                    }
+                  />
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {filteredPromotions.map((promo) => {
                       const status = getPromotionStatus(promo);
+                      const discountLabel =
+                        promo.discount_type === "percentage"
+                          ? `${promo.discount_value}% OFF`
+                          : `$${promo.discount_value} OFF`;
                       return (
-                        <Card key={promo.id} className="overflow-hidden">
+                        <Tile key={promo.id} pad="none" className="flex flex-col overflow-hidden">
                           {promo.image_url ? (
-                            <div className="aspect-video relative">
-                              <img src={promo.image_url} alt={promo.title} className="w-full h-full object-cover" />
+                            <div className="relative aspect-video">
+                              <img src={promo.image_url} alt={promo.title} className="h-full w-full object-cover" />
                               <div className="absolute top-2 right-2">{getStatusBadge(status)}</div>
                               <div className="absolute top-2 left-2">
-                                <Badge className="bg-accent text-accent-foreground">
-                                  {promo.discount_type === "percentage" ? `${promo.discount_value}% OFF` : `$${promo.discount_value} OFF`}
-                                </Badge>
+                                <StatusPill tone="primary" className="font-mono">{discountLabel}</StatusPill>
                               </div>
                             </div>
                           ) : (
-                            <div className="aspect-video bg-muted/50 flex items-center justify-center relative">
-                              <Crown className="h-12 w-12 text-muted-foreground/30" />
+                            <div className="relative flex aspect-video items-center justify-center [background:var(--bento-tile-2)]">
+                              <Crown className="h-12 w-12 text-[color:var(--bento-text-3)]/40" />
                               <div className="absolute top-2 right-2">{getStatusBadge(status)}</div>
                               <div className="absolute top-2 left-2">
-                                <Badge className="bg-accent text-accent-foreground">
-                                  {promo.discount_type === "percentage" ? `${promo.discount_value}% OFF` : `$${promo.discount_value} OFF`}
-                                </Badge>
+                                <StatusPill tone="primary" className="font-mono">{discountLabel}</StatusPill>
                               </div>
                             </div>
                           )}
-                          <CardContent className="p-4">
-                            <h3 className="font-semibold mb-1 line-clamp-1">{promo.title}</h3>
-                            <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{promo.description}</p>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                          <div className="flex flex-1 flex-col p-4">
+                            <h3 className="mb-1 line-clamp-1 font-bold tracking-tight">{promo.title}</h3>
+                            <p className="mb-3 line-clamp-2 text-sm text-muted-foreground">{promo.description}</p>
+                            <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
                               <Calendar className="h-3 w-3" />
-                              {format(new Date(promo.start_date), "MMM d")} - {format(new Date(promo.end_date), "MMM d, yyyy")}
+                              <span className="font-mono tabular-nums">
+                                {format(new Date(promo.start_date), "MMM d")} - {format(new Date(promo.end_date), "MMM d, yyyy")}
+                              </span>
                             </div>
                             {promo.promo_code && (
-                              <div className="flex items-center gap-2 mb-3">
-                                <Tag className="h-3 w-3 text-accent" />
-                                <code className="text-xs px-2 py-1 bg-accent/10 text-accent rounded">{promo.promo_code}</code>
+                              <div className="mb-3 flex items-center gap-2">
+                                <Tag className="h-3 w-3 text-primary" />
+                                <code className="rounded-tile-sm [background:var(--bento-primary-weak)] px-2 py-1 font-mono text-xs text-[color:var(--bento-primary-weak-fg)]">{promo.promo_code}</code>
                               </div>
                             )}
-                            <div className="flex items-center justify-between pt-3 border-t">
+                            <div className="mt-auto flex items-center justify-between border-t border-border pt-3">
                               <div className="flex items-center gap-2">
                                 <Switch
                                   checked={promo.is_active}
@@ -974,8 +952,8 @@ export default function CMSPromotionsEditor() {
                                 </Button>
                               </div>
                             </div>
-                          </CardContent>
-                        </Card>
+                          </div>
+                        </Tile>
                       );
                     })}
                   </div>
@@ -1037,8 +1015,7 @@ export default function CMSPromotionsEditor() {
             </div>
             </div>
           </Tabs>
-        </CardContent>
-      </Card>
+      </Tile>
 
       {/* Version History Dialog */}
       <VersionHistoryDialog

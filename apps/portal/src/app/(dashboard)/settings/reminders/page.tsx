@@ -3,14 +3,12 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { SectionCard, StatusPill, Tile } from "@/components/bento";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Bell, Clock, Shield } from "lucide-react";
+import { Bell, Clock, Shield, SlidersHorizontal, FileText } from "lucide-react";
 
 export default function ReminderSettings() {
   const [isLoading, setIsLoading] = useState(false);
@@ -76,21 +74,19 @@ export default function ReminderSettings() {
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold">Reminder Settings</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight">Reminder Settings</h1>
         <p className="text-muted-foreground">
           Configure reminder timing, delivery mode, and automation preferences
         </p>
       </div>
 
       {/* Delivery Mode */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Delivery Mode
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <SectionCard
+        icon={<Shield className="h-4 w-4" />}
+        title="Delivery Mode"
+        action={<StatusPill tone="neutral">In-App Only</StatusPill>}
+      >
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <Label className="text-base">Current Mode</Label>
@@ -98,25 +94,21 @@ export default function ReminderSettings() {
                 Reminders are delivered in-app only. External channels will be available later.
               </p>
             </div>
-            <Badge variant="secondary">In-App Only</Badge>
           </div>
-          <div className="p-4 bg-muted rounded-lg">
+          <Tile variant="inset" pad="compact">
             <p className="text-sm">
               <strong>Future Ready:</strong> Email and WhatsApp delivery will be enabled when external APIs are connected.
             </p>
-          </div>
-        </CardContent>
-      </Card>
+          </Tile>
+        </div>
+      </SectionCard>
 
       {/* Timing Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Timing & Schedule
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      <SectionCard
+        icon={<Clock className="h-4 w-4" />}
+        title="Timing & Schedule"
+      >
+        <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <Label className="text-base">Timezone</Label>
@@ -159,18 +151,15 @@ export default function ReminderSettings() {
               </Select>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
       {/* Reminder Types */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bell className="h-5 w-5" />
-            Reminder Types
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <SectionCard
+        icon={<Bell className="h-4 w-4" />}
+        title="Reminder Types"
+      >
+        <div className="space-y-4">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -214,15 +203,15 @@ export default function ReminderSettings() {
               />
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
       {/* Advanced Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Advanced Settings</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <SectionCard
+        icon={<SlidersHorizontal className="h-4 w-4" />}
+        title="Advanced Settings"
+      >
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <Label className="text-base">Respect Credit Coverage</Label>
@@ -300,43 +289,43 @@ export default function ReminderSettings() {
               />
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
       {/* Message Templates Preview */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Message Templates</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <SectionCard
+        icon={<FileText className="h-4 w-4" />}
+        title="Message Templates"
+      >
+        <div className="space-y-4">
           <div className="space-y-3">
-            <div className="p-3 bg-blue-50 rounded-lg border-l-4 border-blue-400">
-              <Label className="text-sm font-medium text-blue-800">Upcoming</Label>
-              <p className="text-sm text-blue-700 mt-1">
-                $250.00 due on 2024-01-15 for ABC123 – will notify customer on due date once channels are connected.
+            <Tile variant="inset" pad="compact" className="space-y-1">
+              <StatusPill tone="info">Upcoming</StatusPill>
+              <p className="text-sm text-muted-foreground">
+                <span className="font-mono tabular-nums">$250.00</span> due on <span className="font-mono tabular-nums">2024-01-15</span> for <span className="font-mono">ABC123</span> – will notify customer on due date once channels are connected.
               </p>
-            </div>
+            </Tile>
 
-            <div className="p-3 bg-orange-50 rounded-lg border-l-4 border-orange-400">
-              <Label className="text-sm font-medium text-orange-800">Due Today</Label>
-              <p className="text-sm text-orange-700 mt-1">
-                $250.00 due today for ABC123.
+            <Tile variant="inset" pad="compact" className="space-y-1">
+              <StatusPill tone="warn">Due Today</StatusPill>
+              <p className="text-sm text-muted-foreground">
+                <span className="font-mono tabular-nums">$250.00</span> due today for <span className="font-mono">ABC123</span>.
               </p>
-            </div>
+            </Tile>
 
-            <div className="p-3 bg-red-50 rounded-lg border-l-4 border-red-400">
-              <Label className="text-sm font-medium text-red-800">Overdue</Label>
-              <p className="text-sm text-red-700 mt-1">
-                $250.00 overdue for ABC123 (since 2024-01-15).
+            <Tile variant="inset" pad="compact" className="space-y-1">
+              <StatusPill tone="danger">Overdue</StatusPill>
+              <p className="text-sm text-muted-foreground">
+                <span className="font-mono tabular-nums">$250.00</span> overdue for <span className="font-mono">ABC123</span> (since <span className="font-mono tabular-nums">2024-01-15</span>).
               </p>
-            </div>
+            </Tile>
           </div>
 
           <p className="text-sm text-muted-foreground">
             Custom message templates will be available when external delivery channels are enabled.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
     </div>
   );
 }

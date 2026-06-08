@@ -3,11 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Plus, Users, Car, Wallet, Search, Eye } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
@@ -20,6 +17,16 @@ import { OwnerFormDialog } from "@/components/vehicle-owners/owner-form-dialog";
 import { formatCurrency } from "@/lib/format-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import {
+  KpiTile,
+  Money,
+  StatusPill,
+  TableTile,
+  bentoTable,
+  EmptyState,
+  KpiTileSkeletonRow,
+  TableSkeleton,
+} from "@/components/bento";
 
 export default function VehicleOwnersPage() {
   const { tenant } = useTenant();
@@ -81,7 +88,7 @@ export default function VehicleOwnersPage() {
     <div className="container mx-auto space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-medium text-foreground">Vehicle Owners</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Vehicle Owners</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Third-party owners whose vehicles you manage on consignment.
           </p>
@@ -91,16 +98,22 @@ export default function VehicleOwnersPage() {
         </Button>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard icon={<Users className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />} label="Active Owners" value={String(totalActive)} />
-        <StatCard icon={<Car className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />} label="Managed Vehicles" value={String(totalManagedVehicles)} />
-        <StatCard
-          icon={<Wallet className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
-          label="Outstanding Owed"
-          value={formatCurrency(totalOutstanding, currency)}
-        />
-      </div>
+      {/* KPI strip */}
+      {isLoading ? (
+        <KpiTileSkeletonRow count={3} />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <KpiTile label="Active Owners" value={totalActive} icon={<Users className="h-5 w-5" />} />
+          <KpiTile label="Managed Vehicles" value={totalManagedVehicles} icon={<Car className="h-5 w-5" />} />
+          <KpiTile
+            label="Outstanding Owed"
+            value={totalOutstanding}
+            format={(v) => <Money currency={currency} value={v} />}
+            icon={<Wallet className="h-5 w-5" />}
+            variant="feature"
+          />
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="flex items-center gap-3">
@@ -120,11 +133,30 @@ export default function VehicleOwnersPage() {
       </div>
 
       {/* Table */}
-      <Card>
-        <CardContent className="p-0">
+      {isLoading ? (
+        <TableSkeleton rows={6} cols={8} />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={<Users className="h-5 w-5" />}
+          title={owners.length === 0 ? "No vehicle owners yet" : "No matches found"}
+          description={
+            owners.length === 0
+              ? "Add a third-party owner to start managing their vehicles on consignment."
+              : "No owners match your search. Try a different name, email, or phone."
+          }
+          action={
+            owners.length === 0 ? (
+              <Button onClick={() => setShowAdd(true)}>
+                <Plus className="h-4 w-4 mr-2" /> Add Owner
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <TableTile>
           <Table>
-            <TableHeader>
-              <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+            <TableHeader className={bentoTable.header}>
+              <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Vehicles</TableHead>
@@ -136,76 +168,44 @@ export default function VehicleOwnersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell colSpan={8}><Skeleton className="h-8 w-full" /></TableCell>
-                  </TableRow>
-                ))
-              ) : filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
-                    {owners.length === 0
-                      ? "No vehicle owners yet. Click “Add Owner” to get started."
-                      : "No owners match your search."}
+              {filtered.map((o) => (
+                <TableRow key={o.id} className={bentoTable.row}>
+                  <TableCell className="font-semibold">{o.full_name}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {o.email && <div className="text-foreground/80">{o.email}</div>}
+                    {o.phone && <Money className="text-muted-foreground">{o.phone}</Money>}
+                    {!o.email && !o.phone && <span>—</span>}
+                  </TableCell>
+                  <TableCell className="font-mono tabular-nums">{vehicleCounts[o.id] ?? 0}</TableCell>
+                  <TableCell className="font-mono tabular-nums">
+                    {o.commission_type === "percentage"
+                      ? `${o.commission_value}%`
+                      : `${formatCurrency(o.commission_value, currency)} / ${o.flat_fee_period === "per_month" ? "month" : "rental"}`}
+                  </TableCell>
+                  <TableCell className="capitalize">{o.payout_frequency.replace("_", " ")}</TableCell>
+                  <TableCell className={bentoTable.figure}>
+                    {(outstandingPerOwner[o.id] ?? 0) > 0
+                      ? <span className="text-[color:var(--bento-warn-accent)] font-semibold">{formatCurrency(outstandingPerOwner[o.id], currency)}</span>
+                      : <span className="text-muted-foreground">{formatCurrency(0, currency)}</span>}
+                  </TableCell>
+                  <TableCell>
+                    {o.is_active
+                      ? <StatusPill tone="success" dot>Active</StatusPill>
+                      : <StatusPill tone="neutral" dot>Inactive</StatusPill>}
+                  </TableCell>
+                  <TableCell>
+                    <Link href={`/vehicle-owners/${o.id}`}>
+                      <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
+                    </Link>
                   </TableCell>
                 </TableRow>
-              ) : (
-                filtered.map((o) => (
-                  <TableRow key={o.id}>
-                    <TableCell className="font-medium">{o.full_name}</TableCell>
-                    <TableCell className="text-sm text-foreground/80">
-                      {o.email && <div>{o.email}</div>}
-                      {o.phone && <div className="text-muted-foreground">{o.phone}</div>}
-                      {!o.email && !o.phone && <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell>{vehicleCounts[o.id] ?? 0}</TableCell>
-                    <TableCell>
-                      {o.commission_type === "percentage"
-                        ? `${o.commission_value}%`
-                        : `${formatCurrency(o.commission_value, currency)} / ${o.flat_fee_period === "per_month" ? "month" : "rental"}`}
-                    </TableCell>
-                    <TableCell className="capitalize">{o.payout_frequency.replace("_", " ")}</TableCell>
-                    <TableCell className="text-right">
-                      {(outstandingPerOwner[o.id] ?? 0) > 0
-                        ? <span className="text-orange-700 dark:text-orange-400">{formatCurrency(outstandingPerOwner[o.id], currency)}</span>
-                        : <span className="text-muted-foreground">{formatCurrency(0, currency)}</span>}
-                    </TableCell>
-                    <TableCell>
-                      {o.is_active
-                        ? <Badge variant="outline" className="border-green-300 text-green-700 dark:border-green-800 dark:text-green-400">Active</Badge>
-                        : <Badge variant="outline" className="border-gray-300 text-muted-foreground dark:border-gray-700">Inactive</Badge>}
-                    </TableCell>
-                    <TableCell>
-                      <Link href={`/vehicle-owners/${o.id}`}>
-                        <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
+              ))}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </TableTile>
+      )}
 
       <OwnerFormDialog open={showAdd} onOpenChange={setShowAdd} />
     </div>
-  );
-}
-
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">{label}</p>
-            <p className="text-2xl font-medium text-foreground mt-1">{value}</p>
-          </div>
-          <div className="h-10 w-10 rounded-md bg-[#eef2ff] dark:bg-muted flex items-center justify-center">{icon}</div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

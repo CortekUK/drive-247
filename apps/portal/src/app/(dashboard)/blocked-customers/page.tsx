@@ -4,15 +4,23 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  KpiTile,
+  KpiTileSkeletonRow,
+  TableTile,
+  TableSkeleton,
+  bentoTable,
+  Segmented,
+  EmptyState,
+  Modal,
+  Tile,
+} from "@/components/bento";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,6 +60,7 @@ const BlockedCustomers = () => {
   const { toast } = useToast();
   const { tenant } = useTenant();
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState<"customers" | "identities">("customers");
   const [customersPage, setCustomersPage] = useState(1);
   const [identitiesPage, setIdentitiesPage] = useState(1);
   const pageSize = 25;
@@ -245,7 +254,7 @@ const BlockedCustomers = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2">
             Blocked Customers
           </h1>
           <p className="text-sm md:text-base text-muted-foreground mt-1">
@@ -253,43 +262,46 @@ const BlockedCustomers = () => {
           </p>
         </div>
         {canEdit('blocked_customers') && (
-          <Button onClick={() => setAddIdentityDialogOpen(true)} className="w-full sm:w-auto">
-            <Plus className="h-4 w-4 mr-2" />
+          <Button onClick={() => setAddIdentityDialogOpen(true)} className="w-full sm:w-auto gap-2">
+            <Plus className="h-4 w-4" />
             Add to Blocklist
           </Button>
         )}
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-3 gap-3 md:gap-4">
-        <Card className="p-4 md:p-6">
-          <div className="text-2xl md:text-3xl font-bold text-destructive">
-            {blockedCustomers?.length || 0}
-          </div>
-          <div className="text-xs md:text-sm text-muted-foreground mt-1">
-            Blocked Customers
-          </div>
-        </Card>
-        <Card className="p-4 md:p-6">
-          <div className="text-2xl md:text-3xl font-bold text-orange-500">
-            {blockedIdentities?.length || 0}
-          </div>
-          <div className="text-xs md:text-sm text-muted-foreground mt-1">
-            Blocked Identities
-          </div>
-        </Card>
-        <Card className="p-4 md:p-6">
-          <div className="text-2xl md:text-3xl font-bold">
-            {blockedIdentities?.filter(i => i.identity_type === "license").length || 0}
-          </div>
-          <div className="text-xs md:text-sm text-muted-foreground mt-1">
-            Blocked Licenses
-          </div>
-        </Card>
-      </div>
+      {/* Stats tiles */}
+      {customersLoading || identitiesLoading ? (
+        <KpiTileSkeletonRow count={3} />
+      ) : (
+        <div className="grid grid-cols-3 gap-3 md:gap-4">
+          <KpiTile
+            label="Blocked Customers"
+            value={blockedCustomers?.length || 0}
+            variant={(blockedCustomers?.length || 0) > 0 ? "warn" : "default"}
+            icon={<Ban className="h-4 w-4" />}
+          />
+          <KpiTile
+            label="Blocked Identities"
+            value={blockedIdentities?.length || 0}
+            icon={<CreditCard className="h-4 w-4" />}
+          />
+          <KpiTile
+            label="Blocked Licenses"
+            value={blockedIdentities?.filter((i) => i.identity_type === "license").length || 0}
+          />
+        </div>
+      )}
 
-      {/* Search */}
-      <div className="flex items-center gap-4">
+      {/* Filter bar: tab segmented + search */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <Segmented
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v)}
+          options={[
+            { value: "customers", label: "Customers", count: filteredCustomers.length },
+            { value: "identities", label: "Identities", count: filteredIdentities.length },
+          ]}
+        />
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -301,37 +313,30 @@ const BlockedCustomers = () => {
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="customers" className="space-y-4">
-        <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
-          <TabsTrigger value="customers" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-            <User className="h-3 w-3 md:h-4 md:w-4" />
-            <span><span className="hidden sm:inline">Blocked </span>Customers ({filteredCustomers.length})</span>
-          </TabsTrigger>
-          <TabsTrigger value="identities" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-            <CreditCard className="h-3 w-3 md:h-4 md:w-4" />
-            <span><span className="hidden sm:inline">Blocked </span>Identities ({filteredIdentities.length})</span>
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Blocked Customers Tab */}
-        <TabsContent value="customers" className="space-y-4">
+      {/* Blocked Customers Tab */}
+      {activeTab === "customers" && (
+        <div className="space-y-4">
           {customersLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading...</div>
+            <TableSkeleton rows={6} cols={5} />
           ) : filteredCustomers.length === 0 ? (
-            <div className="text-center py-8">
-              <Ban className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-              <p className="text-muted-foreground">No blocked customers found</p>
-            </div>
+            <EmptyState
+              icon={<Ban className="h-5 w-5" />}
+              title="No blocked customers"
+              description={
+                searchTerm
+                  ? "No blocked customers match your search."
+                  : "Blocked customers will appear here. You can block a customer from their profile."
+              }
+            />
           ) : (
             <>
               {/* Mobile Card View */}
               <div className="md:hidden space-y-3">
                     {paginatedCustomers.map((customer) => (
-                      <div key={customer.id} className="border rounded-lg p-4 space-y-3">
+                      <Tile key={customer.id} pad="compact" className="space-y-3">
                         <div className="flex justify-between items-start">
                           <div>
-                            <div className="font-medium">{customer.name}</div>
+                            <div className="font-semibold">{customer.name}</div>
                             <div className="text-sm text-muted-foreground">
                               {customer.email || customer.phone || "No contact"}
                             </div>
@@ -341,10 +346,10 @@ const BlockedCustomers = () => {
                         {(customer.license_number || customer.id_number) && (
                           <div className="text-sm space-y-1">
                             {customer.license_number && (
-                              <div><span className="text-muted-foreground">License:</span> {customer.license_number}</div>
+                              <div><span className="text-muted-foreground">License:</span> <span className="font-mono tabular-nums">{customer.license_number}</span></div>
                             )}
                             {customer.id_number && (
-                              <div><span className="text-muted-foreground">ID:</span> {customer.id_number}</div>
+                              <div><span className="text-muted-foreground">ID:</span> <span className="font-mono tabular-nums">{customer.id_number}</span></div>
                             )}
                           </div>
                         )}
@@ -370,24 +375,23 @@ const BlockedCustomers = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="flex-1 text-green-600 border-green-600 hover:bg-green-50"
+                              className="flex-1 gap-1 text-[color:var(--bento-success)] [border-color:var(--bento-success)] hover:[background:var(--bento-success-weak)]"
                               onClick={() => setUnblockCustomerDialog({ open: true, id: customer.id, name: customer.name })}
                               disabled={isLoading}
                             >
-                              <CheckCircle className="h-4 w-4 mr-1" />
+                              <CheckCircle className="h-4 w-4" />
                               Unblock
                             </Button>
                           )}
                         </div>
-                      </div>
+                      </Tile>
                     ))}
                   </div>
 
               {/* Desktop Table View */}
-              <Card className="hidden md:block">
-                <CardContent className="p-0">
+              <TableTile className="hidden md:block">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className={bentoTable.header}>
                       <TableRow>
                         <TableHead>Customer</TableHead>
                         <TableHead>License / ID</TableHead>
@@ -398,10 +402,10 @@ const BlockedCustomers = () => {
                     </TableHeader>
                     <TableBody>
                       {paginatedCustomers.map((customer) => (
-                        <TableRow key={customer.id}>
+                        <TableRow key={customer.id} className="border-border">
                           <TableCell>
                             <div>
-                              <div className="font-medium">{customer.name}</div>
+                              <div className="font-semibold">{customer.name}</div>
                               <div className="text-sm text-muted-foreground">
                                 {customer.email || customer.phone || "No contact"}
                               </div>
@@ -411,12 +415,12 @@ const BlockedCustomers = () => {
                             <div className="space-y-1">
                               {customer.license_number && (
                                 <div className="text-sm">
-                                  <span className="text-muted-foreground">License:</span> {customer.license_number}
+                                  <span className="text-muted-foreground">License:</span> <span className="font-mono tabular-nums">{customer.license_number}</span>
                                 </div>
                               )}
                               {customer.id_number && (
                                 <div className="text-sm">
-                                  <span className="text-muted-foreground">ID:</span> {customer.id_number}
+                                  <span className="text-muted-foreground">ID:</span> <span className="font-mono tabular-nums">{customer.id_number}</span>
                                 </div>
                               )}
                               {!customer.license_number && !customer.id_number && (
@@ -452,9 +456,9 @@ const BlockedCustomers = () => {
                                   size="sm"
                                   onClick={() => setUnblockCustomerDialog({ open: true, id: customer.id, name: customer.name })}
                                   disabled={isLoading}
-                                  className="text-green-600 border-green-600 hover:bg-green-50"
+                                  className="gap-1 text-[color:var(--bento-success)] [border-color:var(--bento-success)] hover:[background:var(--bento-success-weak)]"
                                 >
-                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  <CheckCircle className="h-4 w-4" />
                                   Unblock
                                 </Button>
                               )}
@@ -464,8 +468,7 @@ const BlockedCustomers = () => {
                       ))}
                     </TableBody>
                   </Table>
-                </CardContent>
-              </Card>
+              </TableTile>
 
               {/* Pagination */}
               {totalCustomersPages > 1 && (
@@ -498,37 +501,42 @@ const BlockedCustomers = () => {
               )}
             </>
           )}
-        </TabsContent>
+        </div>
+      )}
 
-        {/* Blocked Identities Tab */}
-        <TabsContent value="identities" className="space-y-4">
+      {/* Blocked Identities Tab */}
+      {activeTab === "identities" && (
+        <div className="space-y-4">
           {identitiesLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading...</div>
+            <TableSkeleton rows={6} cols={7} />
           ) : filteredIdentities.length === 0 ? (
-            <div className="text-center py-8">
-              <CreditCard className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-              <p className="text-muted-foreground">No blocked identities found</p>
-              {canEdit('blocked_customers') && (
-                <Button
-                  variant="outline"
-                  className="mt-4"
-                  onClick={() => setAddIdentityDialogOpen(true)}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add First Identity
-                </Button>
-              )}
-            </div>
+            <EmptyState
+              icon={<CreditCard className="h-5 w-5" />}
+              title="No blocked identities"
+              description={
+                searchTerm
+                  ? "No blocked identities match your search."
+                  : "Add a license, ID or passport number to block it across registrations."
+              }
+              action={
+                canEdit('blocked_customers') ? (
+                  <Button onClick={() => setAddIdentityDialogOpen(true)} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add First Identity
+                  </Button>
+                ) : undefined
+              }
+            />
           ) : (
             <>
               {/* Mobile Card View */}
               <div className="md:hidden space-y-3">
                     {paginatedIdentities.map((identity) => (
-                      <div key={identity.id} className="border rounded-lg p-4 space-y-3">
+                      <Tile key={identity.id} pad="compact" className="space-y-3">
                         <div className="flex justify-between items-start">
                           <div className="space-y-1">
                             {getIdentityTypeBadge(identity.identity_type)}
-                            <div className="font-mono font-medium text-sm mt-2">
+                            <div className="font-mono font-semibold text-sm tabular-nums mt-2">
                               {identity.identity_number}
                             </div>
                           </div>
@@ -553,23 +561,22 @@ const BlockedCustomers = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="w-full text-destructive border-destructive hover:bg-destructive/10"
+                            className="w-full gap-1 text-destructive border-destructive hover:bg-destructive/10"
                             onClick={() => setRemoveIdentityDialog({ open: true, id: identity.id, number: identity.identity_number })}
                             disabled={isLoading}
                           >
-                            <Trash2 className="h-4 w-4 mr-1" />
+                            <Trash2 className="h-4 w-4" />
                             Remove from Blocklist
                           </Button>
                         )}
-                      </div>
+                      </Tile>
                     ))}
                   </div>
 
               {/* Desktop Table View */}
-              <Card className="hidden md:block">
-                <CardContent className="p-0">
+              <TableTile className="hidden md:block">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className={bentoTable.header}>
                       <TableRow>
                         <TableHead>Type</TableHead>
                         <TableHead>Customer</TableHead>
@@ -582,16 +589,16 @@ const BlockedCustomers = () => {
                     </TableHeader>
                     <TableBody>
                       {paginatedIdentities.map((identity) => (
-                        <TableRow key={identity.id}>
+                        <TableRow key={identity.id} className="border-border">
                           <TableCell>
                             {getIdentityTypeBadge(identity.identity_type)}
                           </TableCell>
                           <TableCell>
-                            <span className="text-sm font-medium">
+                            <span className="text-sm font-semibold">
                               {identity.customer_name || "-"}
                             </span>
                           </TableCell>
-                          <TableCell className="font-mono font-medium">
+                          <TableCell className="font-mono font-medium tabular-nums">
                             {identity.identity_number}
                           </TableCell>
                           <TableCell>
@@ -625,8 +632,7 @@ const BlockedCustomers = () => {
                       ))}
                     </TableBody>
                   </Table>
-                </CardContent>
-              </Card>
+              </TableTile>
 
               {/* Pagination for Identities */}
               {totalIdentitiesPages > 1 && (
@@ -659,21 +665,40 @@ const BlockedCustomers = () => {
               )}
             </>
           )}
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
 
       {/* Add Identity Dialog */}
-      <Dialog open={addIdentityDialogOpen} onOpenChange={(open) => {
-        setAddIdentityDialogOpen(open);
-        if (!open) {
-          setCustomerComboboxOpen(false);
+      <Modal
+        open={addIdentityDialogOpen}
+        onOpenChange={(open) => {
+          setAddIdentityDialogOpen(open);
+          if (!open) {
+            setCustomerComboboxOpen(false);
+          }
+        }}
+        title="Add to Blocklist"
+        className="max-w-[425px]"
+        footer={
+          <div className="flex w-full flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => {
+              setAddIdentityDialogOpen(false);
+              setCustomerComboboxOpen(false);
+            }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full sm:w-auto"
+              onClick={handleAddIdentity}
+              disabled={!newIdentity.number.trim() || !newIdentity.reason.trim() || isLoading}
+            >
+              {isLoading ? "Adding..." : "Add to Blocklist"}
+            </Button>
+          </div>
         }
-      }}>
-        <DialogContent className="w-[calc(100%-2rem)] max-w-[425px] max-h-[90vh] flex flex-col rounded-lg mx-auto p-4">
-          <DialogHeader className="pb-1">
-            <DialogTitle className="text-base">Add to Blocklist</DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto">
+      >
+          <div className="max-h-[60vh] overflow-y-auto">
             <div className="grid gap-3">
               <div className="grid gap-1.5">
                 <Label htmlFor="customer-name" className="text-sm">Customer Name</Label>
@@ -803,31 +828,14 @@ const BlockedCustomers = () => {
               </Alert>
             </div>
           </div>
-          <DialogFooter className="pt-3 flex-col-reverse sm:flex-row gap-2">
-            <Button variant="outline" className="w-full sm:w-auto" onClick={() => {
-              setAddIdentityDialogOpen(false);
-              setCustomerComboboxOpen(false);
-            }}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              className="w-full sm:w-auto"
-              onClick={handleAddIdentity}
-              disabled={!newIdentity.number.trim() || !newIdentity.reason.trim() || isLoading}
-            >
-              {isLoading ? "Adding..." : "Add to Blocklist"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </Modal>
 
       {/* Unblock Customer Confirmation Dialog */}
       <AlertDialog open={!!unblockCustomerDialog} onOpenChange={(open) => !open && setUnblockCustomerDialog(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
+              <CheckCircle className="h-5 w-5 text-[color:var(--bento-success)]" />
               Unblock Customer
             </AlertDialogTitle>
             <AlertDialogDescription>
@@ -839,7 +847,7 @@ const BlockedCustomers = () => {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleUnblockCustomer}
-              className="bg-green-600 hover:bg-green-700"
+              className="[background:var(--bento-success)] text-white hover:opacity-90"
             >
               {isLoading ? "Unblocking..." : "Unblock"}
             </AlertDialogAction>

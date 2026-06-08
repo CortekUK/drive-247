@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useBlogCategories } from "@/hooks/use-blog-categories";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,12 +17,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+  TableTile,
+  bentoTable,
+  EmptyState,
+  Shimmer,
+  Modal,
+} from "@/components/bento";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +33,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Plus, Edit, Trash2, Tags, Loader2 } from "lucide-react";
 import type { BlogCategoryWithCount } from "@/types/blog";
 
@@ -137,8 +135,14 @@ export default function BlogCategoriesPage() {
   if (isLoading) {
     return (
       <div className="space-y-6 p-4 md:p-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
+        <Shimmer className="h-8 w-48" />
+        <TableTile>
+          <div className="space-y-3 p-4">
+            {[...Array(6)].map((_, i) => (
+              <Shimmer key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        </TableTile>
       </div>
     );
   }
@@ -152,7 +156,7 @@ export default function BlogCategoriesPage() {
             <ArrowLeft className="h-4 w-4 mr-1" />
             Back
           </Button>
-          <h1 className="text-2xl font-display font-bold">Blog Categories</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight">Blog Categories</h1>
         </div>
         {hasEditAccess && (
           <Button onClick={openCreate}>
@@ -164,26 +168,24 @@ export default function BlogCategoriesPage() {
 
       {/* Table */}
       {categories.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Tags className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No categories</h3>
-            <p className="text-muted-foreground text-center mb-4">
-              Create categories to organize your blog posts
-            </p>
-            {hasEditAccess && (
+        <EmptyState
+          icon={<Tags className="h-5 w-5" />}
+          title="No categories"
+          description="Create categories to organize your blog posts"
+          action={
+            hasEditAccess ? (
               <Button onClick={openCreate}>
                 <Plus className="h-4 w-4 mr-2" />
                 New Category
               </Button>
-            )}
-          </CardContent>
-        </Card>
+            ) : undefined
+          }
+        />
       ) : (
-        <Card>
+        <TableTile>
           <Table>
-            <TableHeader>
-              <TableRow className="bg-indigo-50/50 dark:bg-indigo-950/20">
+            <TableHeader className={bentoTable.header}>
+              <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Slug</TableHead>
                 <TableHead>Posts</TableHead>
@@ -193,7 +195,7 @@ export default function BlogCategoriesPage() {
             </TableHeader>
             <TableBody>
               {categories.map((cat) => (
-                <TableRow key={cat.id}>
+                <TableRow key={cat.id} className="border-border">
                   <TableCell>
                     <div>
                       <span className="font-medium">{cat.name}</span>
@@ -204,11 +206,11 @@ export default function BlogCategoriesPage() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="font-mono text-sm text-muted-foreground">
                     {cat.slug}
                   </TableCell>
-                  <TableCell className="text-sm">{cat.post_count}</TableCell>
-                  <TableCell className="text-sm">{cat.display_order}</TableCell>
+                  <TableCell className="font-mono text-sm tabular-nums">{cat.post_count}</TableCell>
+                  <TableCell className="font-mono text-sm tabular-nums">{cat.display_order}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       {hasEditAccess && (
@@ -235,18 +237,32 @@ export default function BlogCategoriesPage() {
               ))}
             </TableBody>
           </Table>
-        </Card>
+        </TableTile>
       )}
 
       {/* Create/Edit Dialog */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingCategory ? "Edit Category" : "New Category"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
+      <Modal
+        open={showDialog}
+        onOpenChange={setShowDialog}
+        title={editingCategory ? "Edit Category" : "New Category"}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShowDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={!name.trim() || isCreating || isUpdating}
+            >
+              {isCreating || isUpdating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : null}
+              {editingCategory ? "Update" : "Create"}
+            </Button>
+          </>
+        }
+      >
+          <div className="space-y-4">
             <div>
               <Label>Name</Label>
               <Input
@@ -288,22 +304,7 @@ export default function BlogCategoriesPage() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={!name.trim() || isCreating || isUpdating}
-            >
-              {isCreating || isUpdating ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : null}
-              {editingCategory ? "Update" : "Create"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </Modal>
 
       {/* Delete Confirmation */}
       <AlertDialog

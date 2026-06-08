@@ -11,18 +11,25 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  Tile,
+  KpiTile,
+  TableTile,
+  bentoTable,
+  StatusPill,
+  EmptyState,
+  ErrorState,
+  TableSkeleton,
+  KpiTileSkeletonRow,
+} from '@/components/bento';
+import { ChevronDown, ChevronUp, ShieldX, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 
@@ -105,7 +112,7 @@ export default function GlobalBlacklistPage() {
               ← Back
             </Button>
           </div>
-          <h1 className="text-2xl md:text-3xl font-bold mt-2">
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mt-2">
             Global Blacklist
           </h1>
           <p className="text-sm md:text-base text-muted-foreground mt-1">
@@ -115,80 +122,52 @@ export default function GlobalBlacklistPage() {
       </div>
 
       {/* Info Banner */}
-      <Alert className="bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900">
-        <AlertDescription className="text-amber-800 dark:text-amber-200">
+      <Tile variant="warn" pad="default">
+        <p className="text-sm [color:var(--bento-warn-fg)]">
           <strong>Platform-wide protection:</strong> When a customer is blocked by 3 or more rental companies,
           they are automatically added here and cannot book with <em>any</em> company on the platform.
-        </AlertDescription>
-      </Alert>
+        </p>
+      </Tile>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-3 gap-3 md:gap-4">
-        <Card className="p-4 md:p-6">
-          <div className="text-2xl md:text-3xl font-bold text-destructive">
-            {isLoading ? <Skeleton className="h-8 w-12" /> : totalBlacklisted}
-          </div>
-          <div className="text-xs md:text-sm text-muted-foreground mt-1">
-            Blacklisted Customers
-          </div>
-        </Card>
-        <Card className="p-4 md:p-6">
-          <div className="text-2xl md:text-3xl font-bold text-orange-600">
-            {isLoading ? <Skeleton className="h-8 w-12" /> : totalBlockingCompanies}
-          </div>
-          <div className="text-xs md:text-sm text-muted-foreground mt-1">
-            Total Blocks
-          </div>
-        </Card>
-        <Card className="p-4 md:p-6">
-          <div className="text-2xl md:text-3xl font-bold text-blue-600">
-            {isLoading ? <Skeleton className="h-8 w-12" /> : recentBlocks}
-          </div>
-          <div className="text-xs md:text-sm text-muted-foreground mt-1">
-            Last 30 Days
-          </div>
-        </Card>
-      </div>
+      {isLoading ? (
+        <KpiTileSkeletonRow count={3} />
+      ) : (
+        <div className="grid grid-cols-3 gap-3 md:gap-4">
+          <KpiTile label="Blacklisted Customers" value={totalBlacklisted} variant="warn" icon={<ShieldX className="h-4 w-4" />} />
+          <KpiTile label="Total Blocks" value={totalBlockingCompanies} />
+          <KpiTile label="Last 30 Days" value={recentBlocks} />
+        </div>
+      )}
 
       {/* Search */}
-      <div className="flex items-center gap-4">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Search by email, company name, or reason..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-1"
+          className="pl-10"
         />
       </div>
 
       {/* Blacklist Table */}
-      <Card>
-        <CardHeader className="p-4 md:p-6">
-          <CardTitle className="text-lg md:text-xl">
-            Blacklisted Customers
-          </CardTitle>
-          <CardDescription className="text-xs md:text-sm">
-            Click on a row to view blocking details from each company
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 md:p-6 pt-0">
+      <TableTile
+        toolbar={
+          <div>
+            <h2 className="text-base font-bold tracking-tight">Blacklisted Customers</h2>
+            <p className="text-xs text-muted-foreground">Click on a row to view blocking details from each company</p>
+          </div>
+        }
+      >
+        <div className="p-4 md:p-5 pt-0 md:pt-0">
           {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center space-x-4 p-4 border rounded-lg">
-                  <div className="space-y-2 flex-1">
-                    <Skeleton className="h-4 w-[200px]" />
-                    <Skeleton className="h-3 w-[150px]" />
-                  </div>
-                  <Skeleton className="h-6 w-20" />
-                </div>
-              ))}
-            </div>
+            <TableSkeleton rows={4} cols={5} />
           ) : error ? (
-            <Alert variant="destructive">
-              <AlertDescription>
-                Failed to load blacklist. Please try again later.
-              </AlertDescription>
-            </Alert>
+            <ErrorState
+              title="Failed to load blacklist"
+              description="Please try again later."
+            />
           ) : filteredBlacklist.length > 0 ? (
             <>
               {/* Mobile Card View */}
@@ -212,9 +191,9 @@ export default function GlobalBlacklistPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Badge variant="destructive" className="text-xs">
+                              <StatusPill tone="danger">
                                 {entry.blocked_tenant_count} blocks
-                              </Badge>
+                              </StatusPill>
                               {expandedRows.has(entry.id) ? (
                                 <ChevronUp className="h-4 w-4 text-muted-foreground" />
                               ) : (
@@ -263,15 +242,15 @@ export default function GlobalBlacklistPage() {
               </div>
 
               {/* Desktop Table View */}
-              <div className="hidden md:block rounded-md border">
+              <div className="hidden md:block rounded-tile-sm border border-border overflow-hidden">
                 <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="font-semibold">Email</TableHead>
-                      <TableHead className="font-semibold">Status</TableHead>
-                      <TableHead className="font-semibold">First Blocked</TableHead>
-                      <TableHead className="font-semibold">Last Blocked</TableHead>
-                      <TableHead className="font-semibold">Details</TableHead>
+                  <TableHeader className={bentoTable.header}>
+                    <TableRow>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>First Blocked</TableHead>
+                      <TableHead>Last Blocked</TableHead>
+                      <TableHead>Details</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -284,21 +263,21 @@ export default function GlobalBlacklistPage() {
                       >
                         <>
                           <CollapsibleTrigger asChild>
-                            <TableRow className="cursor-pointer hover:bg-muted/50 transition-colors">
-                              <TableCell className="font-medium">
+                            <TableRow className="cursor-pointer border-border transition-colors hover:bg-[color:var(--bento-tile-2)]">
+                              <TableCell className="font-semibold font-mono text-xs">
                                 {entry.email}
                               </TableCell>
                               <TableCell>
-                                <Badge variant="destructive">
+                                <StatusPill tone="danger" dot>
                                   {entry.blocked_tenant_count} companies
-                                </Badge>
+                                </StatusPill>
                               </TableCell>
-                              <TableCell className="text-muted-foreground">
+                              <TableCell className="text-muted-foreground font-mono text-xs tabular-nums">
                                 {entry.first_blocked_at
                                   ? format(new Date(entry.first_blocked_at), 'MMM d, yyyy')
                                   : '-'}
                               </TableCell>
-                              <TableCell className="text-muted-foreground">
+                              <TableCell className="text-muted-foreground font-mono text-xs tabular-nums">
                                 {entry.last_blocked_at
                                   ? format(new Date(entry.last_blocked_at), 'MMM d, yyyy')
                                   : '-'}
@@ -364,17 +343,18 @@ export default function GlobalBlacklistPage() {
               </div>
             </>
           ) : (
-            <div className="text-center py-12">
-              <h3 className="text-lg font-medium">No Blacklisted Customers</h3>
-              <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-                {searchTerm
+            <EmptyState
+              icon={<ShieldX className="h-5 w-5" />}
+              title="No Blacklisted Customers"
+              description={
+                searchTerm
                   ? 'No results match your search. Try a different term.'
-                  : 'Customers will appear here when blocked by 3 or more rental companies on the platform.'}
-              </p>
-            </div>
+                  : 'Customers will appear here when blocked by 3 or more rental companies on the platform.'
+              }
+            />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </TableTile>
     </div>
   );
 }

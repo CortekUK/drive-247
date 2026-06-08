@@ -13,13 +13,18 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  KpiTile,
+  TableTile,
+  bentoTable,
+  StatusPill,
+  EmptyState,
+  TableSkeleton,
+  Modal,
+} from '@/components/bento';
 import {
   MoreHorizontal,
   Key,
@@ -27,7 +32,8 @@ import {
   UserX,
   UserCheck,
   Copy,
-  AlertCircle
+  AlertCircle,
+  Users as UsersIcon,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -176,13 +182,11 @@ export default function UsersManagement() {
     }
   });
 
-  const getRoleBadgeVariant = (role: string) => {
+  const getRoleTone = (role: string): 'primary' | 'info' | 'neutral' => {
     switch (role) {
-      case 'head_admin': return 'default';
-      case 'admin': return 'secondary';
-      case 'ops': return 'outline';
-      case 'viewer': return 'outline';
-      default: return 'outline';
+      case 'head_admin': return 'primary';
+      case 'admin': return 'info';
+      default: return 'neutral';
     }
   };
 
@@ -219,155 +223,136 @@ export default function UsersManagement() {
     );
   }
 
+  const totalUsers = users?.length ?? 0;
+  const activeUsers = users?.filter((u) => u.is_active).length ?? 0;
+  const adminUsers = users?.filter((u) => u.role === 'head_admin' || u.role === 'admin').length ?? 0;
+
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Users Management</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight">Users Management</h1>
         <p className="text-muted-foreground">Manage user accounts and permissions</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Users</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-8">Loading users...</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="w-[50px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users?.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name || 'N/A'}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      <Badge variant={getRoleBadgeVariant(user.role)}>
-                        {getRoleDisplay(user.role)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={user.is_active ? 'default' : 'destructive'}>
+      {/* Stat tiles */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+        <KpiTile label="Total Users" value={totalUsers} icon={<UsersIcon className="h-4 w-4" />} />
+        <KpiTile label="Active" value={activeUsers} sub={`${totalUsers - activeUsers} inactive`} />
+        <KpiTile label="Administrators" value={adminUsers} icon={<Shield className="h-4 w-4" />} />
+      </div>
+
+      <TableTile
+        toolbar={<h2 className="text-base font-bold tracking-tight">Users</h2>}
+      >
+        {isLoading ? (
+          <TableSkeleton rows={5} cols={6} />
+        ) : !users || users.length === 0 ? (
+          <EmptyState
+            icon={<UsersIcon className="h-5 w-5" />}
+            title="No users yet"
+            description="Team members you invite will appear here."
+          />
+        ) : (
+          <Table>
+            <TableHeader className={bentoTable.header}>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="w-[50px] text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {users?.map((user) => (
+                <TableRow key={user.id} className="border-border">
+                  <TableCell className="font-semibold">{user.name || 'N/A'}</TableCell>
+                  <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">{user.email}</TableCell>
+                  <TableCell>
+                    <StatusPill tone={getRoleTone(user.role)}>
+                      {getRoleDisplay(user.role)}
+                    </StatusPill>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <StatusPill tone={user.is_active ? 'success' : 'danger'} dot>
                         {user.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
+                      </StatusPill>
                       {user.must_change_password && (
-                        <Badge variant="outline" className="ml-1 text-xs">
-                          Temp Password
-                        </Badge>
+                        <StatusPill tone="warn">Temp Password</StatusPill>
                       )}
-                    </TableCell>
-                    <TableCell>{format(new Date(user.created_at), 'MMM d, yyyy')}</TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setSelectedUser(user);
-                              setResetPassword(generatePassword());
-                              setShowResetDialog(true);
-                            }}
-                          >
-                            <Key className="mr-2 h-4 w-4" />
-                            Reset Password
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              const newRole = user.role === 'viewer' ? 'ops' :
-                                            user.role === 'ops' ? 'admin' : 'viewer';
-                              updateRoleMutation.mutate({ userId: user.id, newRole });
-                            }}
-                          >
-                            <Shield className="mr-2 h-4 w-4" />
-                            Change Role
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() =>
-                              toggleActiveMutation.mutate({
-                                userId: user.id,
-                                isActive: !user.is_active
-                              })
-                            }
-                          >
-                            {user.is_active ? (
-                              <>
-                                <UserX className="mr-2 h-4 w-4" />
-                                Deactivate
-                              </>
-                            ) : (
-                              <>
-                                <UserCheck className="mr-2 h-4 w-4" />
-                                Activate
-                              </>
-                            )}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">{format(new Date(user.created_at), 'MMM d, yyyy')}</TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setSelectedUser(user);
+                            setResetPassword(generatePassword());
+                            setShowResetDialog(true);
+                          }}
+                        >
+                          <Key className="mr-2 h-4 w-4" />
+                          Reset Password
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            const newRole = user.role === 'viewer' ? 'ops' :
+                                          user.role === 'ops' ? 'admin' : 'viewer';
+                            updateRoleMutation.mutate({ userId: user.id, newRole });
+                          }}
+                        >
+                          <Shield className="mr-2 h-4 w-4" />
+                          Change Role
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            toggleActiveMutation.mutate({
+                              userId: user.id,
+                              isActive: !user.is_active
+                            })
+                          }
+                        >
+                          {user.is_active ? (
+                            <>
+                              <UserX className="mr-2 h-4 w-4" />
+                              Deactivate
+                            </>
+                          ) : (
+                            <>
+                              <UserCheck className="mr-2 h-4 w-4" />
+                              Activate
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </TableTile>
 
 
       {/* Reset Password Dialog */}
-      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reset Password</DialogTitle>
-            <DialogDescription>
-              Reset password for {selectedUser?.name} ({selectedUser?.email})
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="new-password">New Password</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="new-password"
-                  type="text"
-                  value={resetPassword}
-                  onChange={(e) => setResetPassword(e.target.value)}
-                  placeholder="Enter new password"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setResetPassword(generatePassword())}
-                >
-                  Generate
-                </Button>
-                {resetPassword && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => copyToClipboard(resetPassword)}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
+      <Modal
+        open={showResetDialog}
+        onOpenChange={setShowResetDialog}
+        title="Reset Password"
+        description={selectedUser ? `Reset password for ${selectedUser.name} (${selectedUser.email})` : undefined}
+        footer={
+          <>
             <Button
               variant="outline"
               onClick={() => setShowResetDialog(false)}
@@ -384,9 +369,42 @@ export default function UsersManagement() {
             >
               {resetPasswordMutation.isPending ? 'Resetting...' : 'Reset Password'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="new-password">New Password</Label>
+            <div className="flex gap-2">
+              <Input
+                id="new-password"
+                type="text"
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+                placeholder="Enter new password"
+                className="font-mono"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setResetPassword(generatePassword())}
+              >
+                Generate
+              </Button>
+              {resetPassword && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => copyToClipboard(resetPassword)}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

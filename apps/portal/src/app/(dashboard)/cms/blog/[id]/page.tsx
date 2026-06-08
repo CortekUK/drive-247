@@ -24,15 +24,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tile, SectionCard, StatusPill, Shimmer } from "@/components/bento";
 import {
   Select,
   SelectContent,
@@ -346,8 +344,21 @@ export default function BlogPostEditorPage() {
   if (isLoadingPost && !isNew) {
     return (
       <div className="space-y-6 p-4 md:p-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-96 w-full" />
+        <Shimmer className="h-8 w-48" />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
+            <Tile noMotion className="space-y-3">
+              <Shimmer className="h-10 w-full" />
+              <Shimmer className="h-10 w-full" />
+              <Shimmer className="h-20 w-full" />
+            </Tile>
+            <Tile noMotion><Shimmer className="h-64 w-full" /></Tile>
+          </div>
+          <div className="space-y-6">
+            <Tile noMotion><Shimmer className="h-48 w-full" /></Tile>
+            <Tile noMotion><Shimmer className="h-32 w-full" /></Tile>
+          </div>
+        </div>
       </div>
     );
   }
@@ -366,16 +377,14 @@ export default function BlogPostEditorPage() {
             <ArrowLeft className="h-4 w-4 mr-1" />
             Back
           </Button>
-          <h1 className="text-2xl font-display font-bold">
+          <h1 className="text-2xl font-extrabold tracking-tight">
             {isNew ? "New Post" : "Edit Post"}
           </h1>
           {isPublished && (
-            <Badge className="bg-green-500/20 text-green-600">Published</Badge>
+            <StatusPill tone="success" dot>Published</StatusPill>
           )}
           {isDirty && !isPublished && (
-            <Badge variant="outline" className="text-amber-600 border-amber-300">
-              Unsaved
-            </Badge>
+            <StatusPill tone="warn" dot>Unsaved</StatusPill>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -432,7 +441,7 @@ export default function BlogPostEditorPage() {
 
       {/* View-only banner */}
       {!hasEditAccess && (
-        <div className="bg-muted border rounded-lg p-3 flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 rounded-tile-sm border border-border [background:var(--bento-tile-2)] p-3 text-sm text-muted-foreground">
           <Eye className="h-4 w-4" />
           You have view-only access to this page.
         </div>
@@ -440,12 +449,16 @@ export default function BlogPostEditorPage() {
 
       {/* Published lock banner */}
       {isPublished && hasEditAccess && (
-        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+        <Tile
+          variant="warn"
+          pad="compact"
+          className="flex items-center gap-2 text-sm [color:var(--bento-warn-fg)]"
+        >
           <Lock className="h-4 w-4 flex-shrink-0" />
           <span>
             This post is live on your website. <strong>Unpublish it first</strong> to make changes.
           </span>
-        </div>
+        </Tile>
       )}
 
       <Tabs defaultValue="content">
@@ -465,8 +478,8 @@ export default function BlogPostEditorPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main content */}
             <div className="lg:col-span-2 space-y-6">
-              <Card>
-                <CardContent className="pt-6 space-y-4">
+              <Tile pad="roomy">
+                <div className="space-y-4">
                   <div>
                     <Label>Title</Label>
                     <Input
@@ -502,31 +515,23 @@ export default function BlogPostEditorPage() {
                       disabled={fieldsDisabled}
                     />
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </Tile>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Content</CardTitle>
-                </CardHeader>
-                <CardContent>
+              <SectionCard icon={<FileText className="h-4 w-4" />} title="Content">
                   <BlogEditor
                     content={content}
                     onChange={setContent}
                     placeholder="Write your blog post..."
                     editable={!fieldsDisabled}
                   />
-                </CardContent>
-              </Card>
+              </SectionCard>
             </div>
 
             {/* Sidebar */}
             <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Settings</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
+              <SectionCard title="Settings">
+                <div className="space-y-4">
                   <div>
                     <Label>Category</Label>
                     <Select
@@ -596,21 +601,17 @@ export default function BlogPostEditorPage() {
                     </p>
                   </div>
 
-                  <div className="pt-2 border-t text-xs text-muted-foreground space-y-1">
-                    <p>{wordCount.toLocaleString()} words</p>
-                    <p>{readingTime} min read</p>
+                  <div className="space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
+                    <p><span className="font-mono tabular-nums">{wordCount.toLocaleString()}</span> words</p>
+                    <p><span className="font-mono tabular-nums">{readingTime}</span> min read</p>
                     {post?.created_at && (
-                      <p>Created {new Date(post.created_at).toLocaleDateString()}</p>
+                      <p>Created <span className="font-mono tabular-nums">{new Date(post.created_at).toLocaleDateString()}</span></p>
                     )}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </SectionCard>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Featured Image</CardTitle>
-                </CardHeader>
-                <CardContent>
+              <SectionCard title="Featured Image">
                   {isLocked ? (
                     featuredImage ? (
                       <img
@@ -631,22 +632,15 @@ export default function BlogPostEditorPage() {
                       recommendedSize="1200x630px"
                     />
                   )}
-                </CardContent>
-              </Card>
+              </SectionCard>
             </div>
           </div>
         </TabsContent>
 
         {/* SEO TAB */}
         <TabsContent value="seo" className="space-y-6 mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Search className="h-5 w-5" />
-                SEO Settings
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
+          <SectionCard icon={<Search className="h-4 w-4" />} title="SEO Settings">
+            <div className="space-y-6">
               <div>
                 <Label>Meta Title</Label>
                 <Input
@@ -657,7 +651,7 @@ export default function BlogPostEditorPage() {
                 />
                 <p className="text-xs text-muted-foreground mt-1 flex justify-between">
                   <span>Override the title shown in search results</span>
-                  <span className={metaTitleLength > 60 ? "text-amber-500" : ""}>
+                  <span className={"font-mono tabular-nums " + (metaTitleLength > 60 ? "text-[color:var(--bento-warn-accent)]" : "")}>
                     {metaTitleLength}/70
                   </span>
                 </p>
@@ -674,7 +668,7 @@ export default function BlogPostEditorPage() {
                 />
                 <p className="text-xs text-muted-foreground mt-1 flex justify-between">
                   <span>Shown below the title in search results</span>
-                  <span className={metaDescriptionLength > 150 ? "text-amber-500" : ""}>
+                  <span className={"font-mono tabular-nums " + (metaDescriptionLength > 150 ? "text-[color:var(--bento-warn-accent)]" : "")}>
                     {metaDescriptionLength}/160
                   </span>
                 </p>
@@ -722,24 +716,24 @@ export default function BlogPostEditorPage() {
               </div>
 
               {/* SERP Preview */}
-              <div className="border rounded-lg p-4 bg-muted/50">
-                <p className="text-sm font-medium mb-3 flex items-center gap-2">
+              <Tile variant="inset" pad="compact">
+                <p className="mb-3 flex items-center gap-2 text-sm font-medium">
                   Search Result Preview
                 </p>
                 <div className="space-y-1">
-                  <p className="text-blue-600 text-lg hover:underline cursor-pointer">
+                  <p className="cursor-pointer text-lg text-[color:var(--bento-info)] hover:underline">
                     {metaTitle || title || "Post Title"}
                   </p>
-                  <p className="text-green-700 text-sm">
+                  <p className="font-mono text-sm text-[color:var(--bento-success)]">
                     yoursite.com/blog/{slug || "..."}
                   </p>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
+                  <p className="line-clamp-2 text-sm text-muted-foreground">
                     {metaDescription || excerpt || "Meta description will appear here..."}
                   </p>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </Tile>
+            </div>
+          </SectionCard>
         </TabsContent>
       </Tabs>
 
@@ -759,15 +753,13 @@ export default function BlogPostEditorPage() {
                 versions.map((v) => (
                   <div
                     key={v.id}
-                    className="flex items-center justify-between p-3 border rounded-lg"
+                    className="flex items-center justify-between rounded-tile-sm border border-border p-3"
                   >
                     <div>
-                      <p className="text-sm font-medium">
-                        Version {v.version_number}
+                      <p className="flex items-center gap-2 text-sm font-medium">
+                        Version <span className="font-mono tabular-nums">{v.version_number}</span>
                         {v.version_number === versions[0]?.version_number && (
-                          <Badge variant="secondary" className="ml-2 text-xs">
-                            Latest
-                          </Badge>
+                          <StatusPill tone="primary">Latest</StatusPill>
                         )}
                       </p>
                       <p className="text-xs text-muted-foreground">
@@ -798,7 +790,7 @@ export default function BlogPostEditorPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <AlertTriangle className="h-5 w-5 text-[color:var(--bento-warn-accent)]" />
               Unpublish this post?
             </AlertDialogTitle>
             <AlertDialogDescription>

@@ -4,16 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCMSPage, useCMSPages } from "@/hooks/use-cms-pages";
 import { useCMSPageSections } from "@/hooks/use-cms-page-sections";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Tile, StatusPill, EmptyState, Shimmer } from "@/components/bento";
 import {
   ArrowLeft,
   Upload,
   History,
-  CheckCircle,
-  Clock,
   Loader2,
   Settings,
   RotateCcw,
@@ -62,28 +58,28 @@ export default function CMSSiteSettingsEditor() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-96" />
+      <div className="space-y-6 p-4 md:p-6">
+        <Shimmer className="h-10 w-64" />
+        <Tile noMotion className="space-y-4">
+          <Shimmer className="h-10 w-full" />
+          <Shimmer className="h-80 w-full" />
+        </Tile>
       </div>
     );
   }
 
   if (!page) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 p-4 md:p-6">
         <Button variant="ghost" onClick={() => router.push("/cms")}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to CMS
         </Button>
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Site Settings page not found in CMS.</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Please run the SQL migration to set up the "site-settings" page.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={<Settings className="h-5 w-5" />}
+          title="Site Settings page not found in CMS"
+          description='Please run the SQL migration to set up the "site-settings" page.'
+        />
       </div>
     );
   }
@@ -142,16 +138,12 @@ export default function CMSSiteSettingsEditor() {
             <span className="hidden sm:inline">Back</span>
           </Button>
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-display font-bold flex flex-wrap items-center gap-2">
-              <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
+            <h1 className="flex flex-wrap items-center gap-2 text-xl font-extrabold tracking-tight sm:text-2xl">
+              <Settings className="h-5 w-5 shrink-0 text-primary sm:h-6 sm:w-6" />
               {page.name}
-              <Badge
-                variant={page.status === "published" ? "default" : "secondary"}
-                className={page.status === "published" ? "bg-green-500/20 text-green-600" : ""}
-              >
-                {page.status === "published" ? <CheckCircle className="h-3 w-3 mr-1" /> : <Clock className="h-3 w-3 mr-1" />}
+              <StatusPill tone={page.status === "published" ? "success" : "warn"} dot>
                 {page.status === "published" ? "Published" : "Draft"}
-              </Badge>
+              </StatusPill>
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">{page.description}</p>
           </div>
@@ -197,10 +189,9 @@ export default function CMSSiteSettingsEditor() {
       </div>
 
       {/* Editor */}
-      <Card>
-        <CardContent className="pt-6">
+      <Tile pad="roomy">
           {!canEdit('cms') && (
-            <div className="mb-4 p-3 bg-muted/50 border rounded-lg flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="mb-4 flex items-center gap-2 rounded-tile-sm border border-border [background:var(--bento-tile-2)] p-3 text-sm text-muted-foreground">
               <Eye className="h-4 w-4 shrink-0" />
               You have view-only access to website content.
             </div>
@@ -218,8 +209,7 @@ export default function CMSSiteSettingsEditor() {
             isSaving={isUpdating}
           />
           </div>
-        </CardContent>
-      </Card>
+      </Tile>
 
       <VersionHistoryDialog
         open={versionHistoryOpen}

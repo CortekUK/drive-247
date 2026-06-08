@@ -2399,7 +2399,7 @@ const CreateRental = () => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-2xl font-extrabold tracking-tight">
             {renewalSource ? "Renew Rental" : "New Rental Agreement"}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -2477,8 +2477,8 @@ const CreateRental = () => {
             {/* ── Left: Scrollable Form ─────────────────────── */}
             <div className="lg:col-span-3 lg:overflow-y-auto lg:pr-2 space-y-6 lg:flex lg:flex-col lg:min-h-0">
               {/* ── Section 1: Customer & Vehicle ──────────────────────────── */}
-              <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+              <div className="rounded-tile border bg-card shadow-bento">
+                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b [background:var(--bento-primary-weak)] rounded-t-xl">
                   <span className="text-2xl font-extrabold text-primary">1.</span>
                   <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Customer & Vehicle</h2>
                 </div>
@@ -3008,8 +3008,8 @@ const CreateRental = () => {
 
               {/* ── Payment Mode: Regular vs Pay As You Go vs Auto-Extend (positioned after Customer & Vehicle) ──────── */}
               {((rentalSettings as any)?.pay_as_you_go_enabled || (rentalSettings as any)?.auto_extend_enabled) && selectedVehicleId && (
-                <div className="rounded-xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                <div className="rounded-tile border bg-card shadow-bento">
+                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b [background:var(--bento-primary-weak)] rounded-t-xl">
                     <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
                       <CreditCard className="h-4 w-4" />
                     </div>
@@ -3249,8 +3249,8 @@ const CreateRental = () => {
               )}
 
               {/* ── Section 2: Rental Period & Pricing ────────────── */}
-              <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+              <div className="rounded-tile border bg-card shadow-bento">
+                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b [background:var(--bento-primary-weak)] rounded-t-xl">
                   <span className="text-2xl font-extrabold text-primary">2.</span>
                   <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Rental Period & Pricing</h2>
                 </div>
@@ -3452,8 +3452,8 @@ const CreateRental = () => {
                   periodType === "Weekly" ? "Weekly Rate" : "Monthly Rate";
 
                 return (
-                  <div className="rounded-xl border bg-card shadow-sm">
-                    <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                  <div className="rounded-tile border bg-card shadow-bento">
+                    <div className="flex items-center gap-1.5 px-6 py-3.5 border-b [background:var(--bento-primary-weak)] rounded-t-xl">
                       <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
                         <Banknote className="h-4 w-4" />
                       </div>
@@ -4139,8 +4139,8 @@ const CreateRental = () => {
                   }
                   if (reasons.length > 0) {
                     return (
-                      <div className="rounded-xl border bg-card shadow-sm">
-                        <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                      <div className="rounded-tile border bg-card shadow-bento">
+                        <div className="flex items-center gap-1.5 px-6 py-3.5 border-b [background:var(--bento-primary-weak)] rounded-t-xl">
                           <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
                             <CreditCard className="h-4 w-4" />
                           </div>
@@ -4162,8 +4162,8 @@ const CreateRental = () => {
                 const effectiveInstallmentAmount = installmentAmountOverride !== null ? installmentAmountOverride : selectedPlan.amount;
 
                 return (
-                  <div className="rounded-xl border bg-card shadow-sm">
-                    <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                  <div className="rounded-tile border bg-card shadow-bento">
+                    <div className="flex items-center gap-1.5 px-6 py-3.5 border-b [background:var(--bento-primary-weak)] rounded-t-xl">
                       <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
                         <CreditCard className="h-4 w-4" />
                       </div>
@@ -4378,8 +4378,8 @@ const CreateRental = () => {
                   { key: 'monthly', label: 'Monthly', vehicleVal: vehicle.monthly_mileage, override: monthlyMileageOverride, setOverride: setMonthlyMileageOverride },
                 ];
                 return (
-                  <div className="rounded-xl border bg-card shadow-sm">
-                    <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                  <div className="rounded-tile border bg-card shadow-bento">
+                    <div className="flex items-center gap-1.5 px-6 py-3.5 border-b [background:var(--bento-primary-weak)] rounded-t-xl">
                       <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary"><Clock className="h-4 w-4" /></div>
                       <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Mileage</h2>
                     </div>
@@ -4528,8 +4528,8 @@ const CreateRental = () => {
               })()}
 
               {/* ── Section 3: Pickup & Return ────────────────────── */}
-              <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+              <div className="rounded-tile border bg-card shadow-bento">
+                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b [background:var(--bento-primary-weak)] rounded-t-xl">
                   <span className="text-2xl font-extrabold text-primary">3.</span>
                   <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">{isPayAsYouGo ? 'Pickup' : 'Pickup & Return'}</h2>
                 </div>
@@ -4667,8 +4667,8 @@ const CreateRental = () => {
 
               {/* ── Section 4: Insurance (hidden for PAYG — Bonzah not offered on PAYG rentals) ─── */}
               {!isPayAsYouGo && (
-                <div className="rounded-xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                <div className="rounded-tile border bg-card shadow-bento">
+                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b [background:var(--bento-primary-weak)] rounded-t-xl">
                     <span className="text-2xl font-extrabold text-primary">4.</span>
                     <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Insurance</h2>
                   </div>
@@ -4950,8 +4950,8 @@ const CreateRental = () => {
 
               {/* ── Section 5: Optional Extras ────────────────────── */}
               {activeExtras.length > 0 && (
-                <div className="rounded-xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                <div className="rounded-tile border bg-card shadow-bento">
+                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b [background:var(--bento-primary-weak)] rounded-t-xl">
                     <span className="text-2xl font-extrabold text-primary">5.</span>
                     <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Optional Extras</h2>
                   </div>
@@ -5121,8 +5121,8 @@ const CreateRental = () => {
             {/* ── Right: Static Preview ─────────────────────── */}
             <div className="hidden lg:block lg:col-span-2 lg:overflow-y-auto lg:min-h-0">
               <div className="space-y-5">
-                <div className="rounded-xl border bg-card shadow-sm sticky top-0">
-                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                <div className="rounded-tile border bg-card shadow-bento sticky top-0">
+                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b [background:var(--bento-primary-weak)] rounded-t-xl">
                     <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary"><FileText className="h-4 w-4" /></div>
                     <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Rental Preview</h2>
                   </div>

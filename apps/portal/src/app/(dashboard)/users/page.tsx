@@ -13,9 +13,6 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -49,6 +46,25 @@ import { CredentialsModal } from '@/components/users/credentials-modal';
 import { ManagerPermissionsSelector } from '@/components/users/manager-permissions-selector';
 import type { AddUserFormValues, PermissionEntry } from '@/client-schemas/users/add-user';
 import { useAuditLog } from '@/hooks/use-audit-log';
+import {
+  Eyebrow,
+  KpiTile,
+  TableTile,
+  bentoTable,
+  StatusPill,
+  type StatusTone,
+  Modal,
+  EmptyState,
+  TableSkeleton,
+} from '@/components/bento';
+
+const ROLE_TONE: Record<string, StatusTone> = {
+  head_admin: 'primary',
+  admin: 'info',
+  manager: 'info',
+  ops: 'neutral',
+  viewer: 'neutral',
+};
 
 interface UserCredentials {
   name: string;
@@ -311,17 +327,6 @@ export default function UsersManagement() {
     }
   });
 
-  const getRoleBadgeVariant = (role: string) => {
-    switch (role) {
-      case 'head_admin': return 'default';
-      case 'admin': return 'secondary';
-      case 'manager': return 'secondary';
-      case 'ops': return 'outline';
-      case 'viewer': return 'outline';
-      default: return 'outline';
-    }
-  };
-
   const getRoleDisplay = (role: string) => {
     switch (role) {
       case 'head_admin': return 'Head Admin';
@@ -386,7 +391,8 @@ export default function UsersManagement() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-start sm:items-center gap-2 sm:gap-4 min-w-0">
           <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+            <Eyebrow>Team</Eyebrow>
+            <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2">
               <Users className="h-6 w-6 sm:h-8 sm:w-8 shrink-0" />
               Manage Users
             </h1>
@@ -395,11 +401,25 @@ export default function UsersManagement() {
         </div>
         <Button
           onClick={() => setShowAddDialog(true)}
-          className="bg-gradient-primary text-primary-foreground w-full sm:w-auto"
+          className="w-full sm:w-auto"
         >
           <Plus className="mr-2 h-4 w-4" />
           Add User
         </Button>
+      </div>
+
+      {/* Stat tiles */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KpiTile label="Total Users" value={users?.length || 0} />
+        <KpiTile label="Active" value={(users || []).filter((u) => u.is_active).length} />
+        <KpiTile
+          label="Admins"
+          value={(users || []).filter((u) => u.role === 'head_admin' || u.role === 'admin').length}
+        />
+        <KpiTile
+          label="Managers"
+          value={(users || []).filter((u) => u.role === 'manager').length}
+        />
       </div>
 
       {/* Search Bar */}
@@ -413,60 +433,66 @@ export default function UsersManagement() {
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Team Members</CardTitle>
-          <CardDescription>
-            All users with access to this portal. Head admins can create admins, operations staff, and viewers.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-8">Loading users...</div>
-          ) : filteredUsers.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              {searchQuery ? "No users match your search." : 'No users found. Click "Add User" to create one.'}
-            </div>
-          ) : (
-            <div className="max-h-[calc(100vh-420px)] min-h-[200px] overflow-auto relative">
+      {isLoading ? (
+        <TableSkeleton rows={6} cols={6} />
+      ) : filteredUsers.length === 0 ? (
+        <EmptyState
+          icon={<Users className="h-5 w-5" />}
+          title={searchQuery ? "No matching users" : "No users yet"}
+          description={
+            searchQuery
+              ? "No users match your search."
+              : "Create the first user account for your team."
+          }
+          action={
+            !searchQuery ? (
+              <Button onClick={() => setShowAddDialog(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add User
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <TableTile>
             <Table>
-              <TableHeader className="sticky top-0 z-10 bg-background">
+              <TableHeader className={bentoTable.header}>
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead className="w-[50px]">Actions</TableHead>
+                  <TableHead className="w-[50px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredUsers.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name || 'N/A'}</TableCell>
-                    <TableCell>{user.email}</TableCell>
+                  <TableRow key={user.id} className={bentoTable.row}>
+                    <TableCell className="font-semibold">{user.name || 'N/A'}</TableCell>
+                    <TableCell className="text-muted-foreground">{user.email}</TableCell>
                     <TableCell>
-                      <Badge variant={getRoleBadgeVariant(user.role)}>
+                      <StatusPill tone={ROLE_TONE[user.role] ?? 'neutral'}>
                         {getRoleDisplay(user.role)}
-                      </Badge>
+                      </StatusPill>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Badge variant={user.is_active ? 'default' : 'destructive'}>
+                        <StatusPill tone={user.is_active ? 'success' : 'danger'} dot>
                           {user.is_active ? 'Active' : 'Inactive'}
-                        </Badge>
+                        </StatusPill>
                         {user.must_change_password && (
-                          <Badge variant="outline" className="text-xs">
-                            Temp Password
-                          </Badge>
+                          <StatusPill tone="warn">Temp Password</StatusPill>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>{format(new Date(user.created_at), 'MMM d, yyyy')}</TableCell>
-                    <TableCell>
+                    <TableCell className="font-mono tabular-nums text-muted-foreground">
+                      {format(new Date(user.created_at), 'MMM d, yyyy')}
+                    </TableCell>
+                    <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -531,10 +557,8 @@ export default function UsersManagement() {
                 ))}
               </TableBody>
             </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </TableTile>
+      )}
 
       {/* Add User Dialog */}
       <AddUserDialog
@@ -552,14 +576,32 @@ export default function UsersManagement() {
       />
 
       {/* Reset Password Dialog */}
-      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reset Password</DialogTitle>
-            <DialogDescription>
-              Reset password for {selectedUser?.name} ({selectedUser?.email})
-            </DialogDescription>
-          </DialogHeader>
+      <Modal
+        open={showResetDialog}
+        onOpenChange={setShowResetDialog}
+        title="Reset Password"
+        description={`Reset password for ${selectedUser?.name} (${selectedUser?.email})`}
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setShowResetDialog(false)}
+              disabled={resetPasswordMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => selectedUser && resetPasswordMutation.mutate({
+                userId: selectedUser.id,
+                newPassword: resetPassword
+              })}
+              disabled={!resetPassword || resetPasswordMutation.isPending}
+            >
+              {resetPasswordMutation.isPending ? 'Resetting...' : 'Reset Password'}
+            </Button>
+          </>
+        }
+      >
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="new-password">New Password</Label>
@@ -570,6 +612,7 @@ export default function UsersManagement() {
                   value={resetPassword}
                   onChange={(e) => setResetPassword(e.target.value)}
                   placeholder="Enter new password"
+                  className="font-mono"
                 />
                 <Button
                   type="button"
@@ -591,36 +634,42 @@ export default function UsersManagement() {
               </div>
             </div>
           </div>
-          <DialogFooter>
+      </Modal>
+
+      {/* Change Role Dialog */}
+      <Modal
+        open={showRoleDialog}
+        onOpenChange={setShowRoleDialog}
+        className={selectedRole === 'manager' ? 'sm:max-w-[650px]' : undefined}
+        title="Change User Role"
+        description={`Change role for ${selectedUser?.name} (${selectedUser?.email})`}
+        footer={
+          <>
             <Button
               variant="outline"
-              onClick={() => setShowResetDialog(false)}
-              disabled={resetPasswordMutation.isPending}
+              onClick={() => setShowRoleDialog(false)}
+              disabled={updateRoleMutation.isPending}
             >
               Cancel
             </Button>
             <Button
-              onClick={() => selectedUser && resetPasswordMutation.mutate({
+              onClick={() => selectedUser && updateRoleMutation.mutate({
                 userId: selectedUser.id,
-                newPassword: resetPassword
+                newRole: selectedRole,
+                ...(selectedRole === 'manager' ? { permissions: rolePermissions } : {}),
               })}
-              disabled={!resetPassword || resetPasswordMutation.isPending}
+              disabled={
+                !selectedRole ||
+                (selectedRole === selectedUser?.role && selectedRole !== 'manager') ||
+                (selectedRole === 'manager' && rolePermissions.length === 0) ||
+                updateRoleMutation.isPending
+              }
             >
-              {resetPasswordMutation.isPending ? 'Resetting...' : 'Reset Password'}
+              {updateRoleMutation.isPending ? 'Updating...' : 'Update Role'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Change Role Dialog */}
-      <Dialog open={showRoleDialog} onOpenChange={setShowRoleDialog}>
-        <DialogContent className={selectedRole === 'manager' ? 'sm:max-w-[650px]' : ''}>
-          <DialogHeader>
-            <DialogTitle>Change User Role</DialogTitle>
-            <DialogDescription>
-              Change role for {selectedUser?.name} ({selectedUser?.email})
-            </DialogDescription>
-          </DialogHeader>
+          </>
+        }
+      >
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="role-select">New Role</Label>
@@ -646,49 +695,17 @@ export default function UsersManagement() {
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowRoleDialog(false)}
-              disabled={updateRoleMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => selectedUser && updateRoleMutation.mutate({
-                userId: selectedUser.id,
-                newRole: selectedRole,
-                ...(selectedRole === 'manager' ? { permissions: rolePermissions } : {}),
-              })}
-              disabled={
-                !selectedRole ||
-                (selectedRole === selectedUser?.role && selectedRole !== 'manager') ||
-                (selectedRole === 'manager' && rolePermissions.length === 0) ||
-                updateRoleMutation.isPending
-              }
-            >
-              {updateRoleMutation.isPending ? 'Updating...' : 'Update Role'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </Modal>
 
       {/* Edit Manager Permissions Dialog */}
-      <Dialog open={showEditPermissionsDialog} onOpenChange={setShowEditPermissionsDialog}>
-        <DialogContent className="sm:max-w-[650px]">
-          <DialogHeader>
-            <DialogTitle>Edit Manager Permissions</DialogTitle>
-            <DialogDescription>
-              Update tab access for {editPermissionsUser?.name} ({editPermissionsUser?.email})
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <ManagerPermissionsSelector
-              value={editPermissions}
-              onChange={setEditPermissions}
-            />
-          </div>
-          <DialogFooter>
+      <Modal
+        open={showEditPermissionsDialog}
+        onOpenChange={setShowEditPermissionsDialog}
+        className="sm:max-w-[650px]"
+        title="Edit Manager Permissions"
+        description={`Update tab access for ${editPermissionsUser?.name} (${editPermissionsUser?.email})`}
+        footer={
+          <>
             <Button
               variant="outline"
               onClick={() => setShowEditPermissionsDialog(false)}
@@ -705,9 +722,16 @@ export default function UsersManagement() {
             >
               {updatePermissionsMutation.isPending ? 'Saving...' : 'Save Permissions'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+          <div className="space-y-4">
+            <ManagerPermissionsSelector
+              value={editPermissions}
+              onChange={setEditPermissions}
+            />
+          </div>
+      </Modal>
     </div>
   );
 }

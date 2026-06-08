@@ -4,11 +4,9 @@ import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
-import { ArrowLeft, Edit, Plus, Wallet, Eye, Ban } from "lucide-react";
+import { ArrowLeft, Edit, Plus, Wallet, Ban, Car, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +22,18 @@ import { RecordPaymentDialog } from "@/components/vehicle-owners/record-payment-
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
 import { PAYOUT_STATUS_LABEL, type OwnerPayout } from "@/types/vehicle-owners";
+import {
+  Tile,
+  KpiTile,
+  Eyebrow,
+  Money,
+  StatusPill,
+  statusTone,
+  TableTile,
+  bentoTable,
+  EmptyState,
+  ErrorState,
+} from "@/components/bento";
 
 export default function VehicleOwnerDetailPage() {
   const params = useParams<{ id: string }>();
@@ -42,35 +52,60 @@ export default function VehicleOwnerDetailPage() {
   const [createPayoutOpen, setCreatePayoutOpen] = useState(false);
   const [recordPaymentFor, setRecordPaymentFor] = useState<OwnerPayout | null>(null);
 
+  const totalOwed = useMemo(
+    () =>
+      payouts
+        .filter((p) => p.status === "pending" || p.status === "partially_paid")
+        .reduce((s, p) => s + (Number(p.net_owed) - Number(p.amount_paid)), 0),
+    [payouts],
+  );
+  const totalPaid = useMemo(
+    () => payouts.reduce((s, p) => s + Number(p.amount_paid), 0),
+    [payouts],
+  );
+
   if (isLoading) {
-    return <div className="p-6 space-y-4"><Skeleton className="h-12 w-64" /><Skeleton className="h-40 w-full" /></div>;
+    return (
+      <div className="p-6 space-y-6">
+        <Skeleton className="h-12 w-64" />
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 w-full rounded-tile" />
+          ))}
+        </div>
+        <Skeleton className="h-64 w-full rounded-tile" />
+      </div>
+    );
   }
   if (!owner) {
     return (
       <div className="p-6">
-        <p>Owner not found.</p>
-        <Link href="/vehicle-owners"><Button variant="outline" className="mt-4"><ArrowLeft className="h-4 w-4 mr-2" /> Back</Button></Link>
+        <ErrorState
+          title="Owner not found"
+          description="This vehicle owner does not exist or you no longer have access."
+          onRetry={() => router.push("/vehicle-owners")}
+        />
       </div>
     );
   }
 
-  const totalOwed = payouts
-    .filter((p) => p.status === "pending" || p.status === "partially_paid")
-    .reduce((s, p) => s + (Number(p.net_owed) - Number(p.amount_paid)), 0);
-
   return (
     <div className="container mx-auto space-y-6 p-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => router.push("/vehicle-owners")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-3xl font-medium text-foreground">{owner.full_name}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{owner.full_name}</h1>
+              {owner.is_active
+                ? <StatusPill tone="success" dot>Active</StatusPill>
+                : <StatusPill tone="neutral" dot>Inactive</StatusPill>}
+            </div>
             <p className="text-sm text-muted-foreground mt-1">
               {owner.is_active ? "Active owner" : "Inactive — payout history preserved"}
-              {" · "}{vehicles.length} vehicle{vehicles.length === 1 ? "" : "s"}
-              {" · "}Outstanding {formatCurrency(totalOwed, currency)}
             </p>
           </div>
         </div>
@@ -84,6 +119,24 @@ export default function VehicleOwnerDetailPage() {
         </div>
       </div>
 
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KpiTile label="Vehicles" value={vehicles.length} icon={<Car className="h-5 w-5" />} />
+        <KpiTile label="Payouts" value={payouts.length} icon={<Users className="h-5 w-5" />} />
+        <KpiTile
+          label="Total Paid"
+          value={totalPaid}
+          format={(v) => <Money currency={currency} value={v} />}
+        />
+        <KpiTile
+          label="Outstanding"
+          value={totalOwed}
+          format={(v) => <Money currency={currency} value={v} />}
+          icon={<Wallet className="h-5 w-5" />}
+          variant="feature"
+        />
+      </div>
+
       <Tabs defaultValue="overview" className="w-full">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -93,30 +146,32 @@ export default function VehicleOwnerDetailPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          <Card>
-            <CardHeader><CardTitle>Contact</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4 text-sm">
-              <Field label="Email" value={owner.email ?? "—"} />
-              <Field label="Phone" value={owner.phone ?? "—"} />
-              <Field label="Address" value={owner.address ?? "—"} className="col-span-2" />
-              <Field label="Notes" value={owner.notes ?? "—"} className="col-span-2" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle>Commission & Payout</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-3 gap-4 text-sm">
-              <Field
-                label="Commission"
-                value={
-                  owner.commission_type === "percentage"
-                    ? `${owner.commission_value}% of revenue`
-                    : `${formatCurrency(owner.commission_value, currency)} per ${owner.flat_fee_period === "per_month" ? "month" : "rental"}`
-                }
-              />
-              <Field label="Payout Frequency" value={owner.payout_frequency.replace("_", " ")} />
-              <Field label="Status" value={owner.is_active ? "Active" : "Inactive"} />
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Tile className="space-y-4">
+              <Eyebrow>Contact</Eyebrow>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Email" value={owner.email ?? "—"} />
+                <Field label="Phone" value={owner.phone ?? "—"} mono />
+                <Field label="Address" value={owner.address ?? "—"} className="col-span-2" />
+                <Field label="Notes" value={owner.notes ?? "—"} className="col-span-2" />
+              </div>
+            </Tile>
+            <Tile className="space-y-4">
+              <Eyebrow>Commission &amp; Payout</Eyebrow>
+              <div className="grid grid-cols-2 gap-4">
+                <Field
+                  label="Commission"
+                  value={
+                    owner.commission_type === "percentage"
+                      ? `${owner.commission_value}% of revenue`
+                      : `${formatCurrency(owner.commission_value, currency)} per ${owner.flat_fee_period === "per_month" ? "month" : "rental"}`
+                  }
+                />
+                <Field label="Payout Frequency" value={owner.payout_frequency.replace("_", " ")} />
+                <Field label="Status" value={owner.is_active ? "Active" : "Inactive"} />
+              </div>
+            </Tile>
+          </div>
         </TabsContent>
 
         <TabsContent value="vehicles" className="space-y-4">
@@ -125,11 +180,22 @@ export default function VehicleOwnerDetailPage() {
               <Plus className="h-4 w-4 mr-2" /> Assign Vehicle
             </Button>
           </div>
-          <Card>
-            <CardContent className="p-0">
+          {vehicles.length === 0 ? (
+            <EmptyState
+              icon={<Car className="h-5 w-5" />}
+              title="No vehicles assigned"
+              description="Assign one of your own-fleet vehicles to this owner to start tracking revenue."
+              action={
+                <Button onClick={() => setAssignOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" /> Assign Vehicle
+                </Button>
+              }
+            />
+          ) : (
+            <TableTile>
               <Table>
-                <TableHeader>
-                  <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+                <TableHeader className={bentoTable.header}>
+                  <TableRow>
                     <TableHead>Reg</TableHead>
                     <TableHead>Make / Model</TableHead>
                     <TableHead>Year</TableHead>
@@ -140,17 +206,13 @@ export default function VehicleOwnerDetailPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {vehicles.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No vehicles assigned.</TableCell></TableRow>
-                  ) : (
-                    vehicles.map((v) => (
-                      <VehicleRow key={v.id} vehicle={v} ownerId={owner.id} currency={currency} />
-                    ))
-                  )}
+                  {vehicles.map((v) => (
+                    <VehicleRow key={v.id} vehicle={v} ownerId={owner.id} currency={currency} />
+                  ))}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+            </TableTile>
+          )}
         </TabsContent>
 
         <TabsContent value="revenue" className="space-y-4">
@@ -158,11 +220,22 @@ export default function VehicleOwnerDetailPage() {
         </TabsContent>
 
         <TabsContent value="payouts" className="space-y-4">
-          <Card>
-            <CardContent className="p-0">
+          {payouts.length === 0 ? (
+            <EmptyState
+              icon={<Wallet className="h-5 w-5" />}
+              title="No payouts yet"
+              description="Create a payout to snapshot this owner's revenue and commission for a period."
+              action={
+                <Button onClick={() => setCreatePayoutOpen(true)}>
+                  <Wallet className="h-4 w-4 mr-2" /> Create Payout
+                </Button>
+              }
+            />
+          ) : (
+            <TableTile>
               <Table>
-                <TableHeader>
-                  <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+                <TableHeader className={bentoTable.header}>
+                  <TableRow>
                     <TableHead>Period</TableHead>
                     <TableHead className="text-right">Gross</TableHead>
                     <TableHead className="text-right">Commission</TableHead>
@@ -174,17 +247,13 @@ export default function VehicleOwnerDetailPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payouts.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No payouts yet.</TableCell></TableRow>
-                  ) : (
-                    payouts.map((p) => (
-                      <PayoutRow key={p.id} payout={p} currency={currency} onRecord={() => setRecordPaymentFor(p)} />
-                    ))
-                  )}
+                  {payouts.map((p) => (
+                    <PayoutRow key={p.id} payout={p} currency={currency} onRecord={() => setRecordPaymentFor(p)} />
+                  ))}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+            </TableTile>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -202,11 +271,11 @@ export default function VehicleOwnerDetailPage() {
   );
 }
 
-function Field({ label, value, className }: { label: string; value: string; className?: string }) {
+function Field({ label, value, className, mono }: { label: string; value: string; className?: string; mono?: boolean }) {
   return (
     <div className={className}>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-sm text-foreground mt-0.5 whitespace-pre-wrap">{value}</div>
+      <Eyebrow>{label}</Eyebrow>
+      <div className={`text-sm text-foreground mt-1 whitespace-pre-wrap ${mono ? "font-mono tabular-nums" : ""}`}>{value}</div>
     </div>
   );
 }
@@ -219,13 +288,17 @@ function VehicleRow({ vehicle, ownerId, currency }: { vehicle: any; ownerId: str
       : `${formatCurrency(Number(vehicle.commission_value_override ?? 0), currency)} / ${vehicle.flat_fee_period_override === "per_month" ? "mo" : "rental"}`
     : "—";
   return (
-    <TableRow>
-      <TableCell className="font-medium">{vehicle.reg}</TableCell>
+    <TableRow className={bentoTable.row}>
+      <TableCell className="font-mono font-semibold tabular-nums">{vehicle.reg}</TableCell>
       <TableCell>{[vehicle.make, vehicle.model].filter(Boolean).join(" ")}</TableCell>
-      <TableCell>{vehicle.year ?? "—"}</TableCell>
-      <TableCell className="capitalize">{vehicle.status ?? "—"}</TableCell>
-      <TableCell className="text-sm">{vehicle.ownership_assigned_at ? format(new Date(vehicle.ownership_assigned_at), "yyyy-MM-dd") : "—"}</TableCell>
-      <TableCell>{override}</TableCell>
+      <TableCell className="font-mono tabular-nums">{vehicle.year ?? "—"}</TableCell>
+      <TableCell>
+        {vehicle.status ? <StatusPill tone={statusTone(vehicle.status)}>{vehicle.status}</StatusPill> : "—"}
+      </TableCell>
+      <TableCell>
+        <Money className="text-sm text-muted-foreground">{vehicle.ownership_assigned_at ? format(new Date(vehicle.ownership_assigned_at), "yyyy-MM-dd") : "—"}</Money>
+      </TableCell>
+      <TableCell className="font-mono tabular-nums">{override}</TableCell>
       <TableCell>
         <Button
           variant="ghost"
@@ -244,18 +317,22 @@ function PayoutRow({ payout, currency, onRecord }: { payout: any; currency: stri
   const cancel = useCancelPayout();
   const remaining = Number(payout.net_owed) - Number(payout.amount_paid);
   return (
-    <TableRow>
-      <TableCell className="text-sm">{payout.period_start} → {payout.period_end}</TableCell>
-      <TableCell className="text-right">{formatCurrency(Number(payout.gross_revenue), currency)}</TableCell>
-      <TableCell className="text-right">{formatCurrency(Number(payout.commission_amount), currency)}</TableCell>
-      <TableCell className="text-right font-medium">{formatCurrency(Number(payout.net_owed), currency)}</TableCell>
-      <TableCell className="text-right">{formatCurrency(Number(payout.amount_paid), currency)}</TableCell>
+    <TableRow className={bentoTable.row}>
       <TableCell>
-        <Badge variant="outline" className={statusColor(payout.status)}>
-          {PAYOUT_STATUS_LABEL[payout.status as keyof typeof PAYOUT_STATUS_LABEL]}
-        </Badge>
+        <Money className="text-xs text-muted-foreground">{payout.period_start} → {payout.period_end}</Money>
       </TableCell>
-      <TableCell className="text-sm">{payout.paid_at ? format(new Date(payout.paid_at), "yyyy-MM-dd") : "—"}</TableCell>
+      <TableCell className={bentoTable.figure}>{formatCurrency(Number(payout.gross_revenue), currency)}</TableCell>
+      <TableCell className={bentoTable.figure}>{formatCurrency(Number(payout.commission_amount), currency)}</TableCell>
+      <TableCell className={`${bentoTable.figure} font-semibold`}>{formatCurrency(Number(payout.net_owed), currency)}</TableCell>
+      <TableCell className={bentoTable.figure}>{formatCurrency(Number(payout.amount_paid), currency)}</TableCell>
+      <TableCell>
+        <StatusPill tone={statusTone(payout.status)} dot>
+          {PAYOUT_STATUS_LABEL[payout.status as keyof typeof PAYOUT_STATUS_LABEL]}
+        </StatusPill>
+      </TableCell>
+      <TableCell>
+        <Money className="text-xs text-muted-foreground">{payout.paid_at ? format(new Date(payout.paid_at), "yyyy-MM-dd") : "—"}</Money>
+      </TableCell>
       <TableCell>
         <div className="flex gap-1">
           {payout.status !== "paid" && payout.status !== "cancelled" && remaining > 0 && (
@@ -270,15 +347,6 @@ function PayoutRow({ payout, currency, onRecord }: { payout: any; currency: stri
   );
 }
 
-function statusColor(status: string) {
-  switch (status) {
-    case "paid": return "border-green-300 text-green-700 dark:border-green-800 dark:text-green-400";
-    case "partially_paid": return "border-orange-300 text-orange-700 dark:border-orange-800 dark:text-orange-400";
-    case "cancelled": return "border-gray-300 text-muted-foreground dark:border-gray-700";
-    default: return "border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-400";
-  }
-}
-
 function RevenueTab({ ownerId, currency }: { ownerId: string; currency: string }) {
   const today = new Date();
   const [from, setFrom] = useState(format(startOfMonth(subMonths(today, 1)), "yyyy-MM-dd"));
@@ -289,50 +357,60 @@ function RevenueTab({ ownerId, currency }: { ownerId: string; currency: string }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end gap-3">
-        <div>
-          <Label htmlFor="rev-from">From</Label>
-          <Input id="rev-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+      <Tile pad="compact">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <Label htmlFor="rev-from">From</Label>
+            <Input id="rev-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="rev-to">To</Label>
+            <Input id="rev-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          <div className="ml-auto text-right">
+            <Eyebrow>Total Paid Revenue</Eyebrow>
+            <div className="text-xl font-extrabold tracking-tight">
+              <Money currency={currency} value={total} />
+            </div>
+          </div>
         </div>
-        <div>
-          <Label htmlFor="rev-to">To</Label>
-          <Input id="rev-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </div>
-        <div className="ml-auto text-right">
-          <div className="text-xs text-muted-foreground">Total Paid Revenue</div>
-          <div className="text-xl font-medium text-foreground">{formatCurrency(total, currency)}</div>
-        </div>
-      </div>
-      <Card>
-        <CardContent className="p-0">
+      </Tile>
+      {isLoading ? (
+        <Tile pad="none" className="overflow-hidden">
+          <div className="divide-y divide-border">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="p-4"><Skeleton className="h-6 w-full" /></div>
+            ))}
+          </div>
+        </Tile>
+      ) : rows.length === 0 ? (
+        <EmptyState
+          icon={<Wallet className="h-5 w-5" />}
+          title="No paid revenue in this range"
+          description="Adjust the date range to see paid revenue for this owner's vehicles."
+        />
+      ) : (
+        <TableTile>
           <Table>
-            <TableHeader>
-              <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+            <TableHeader className={bentoTable.header}>
+              <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Vehicle</TableHead>
                 <TableHead className="text-right">Paid Amount</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i}><TableCell colSpan={3}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
-                ))
-              ) : rows.length === 0 ? (
-                <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">No paid revenue in this range.</TableCell></TableRow>
-              ) : (
-                rows.map((r) => (
-                  <TableRow key={r.payment_id}>
-                    <TableCell>{r.revenue_date}</TableCell>
-                    <TableCell>{r.vehicle_reg}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(Number(r.paid_amount), currency)}</TableCell>
-                  </TableRow>
-                ))
-              )}
+              {rows.map((r) => (
+                <TableRow key={r.payment_id} className={bentoTable.row}>
+                  <TableCell><Money className="text-muted-foreground">{r.revenue_date}</Money></TableCell>
+                  <TableCell className="font-mono tabular-nums">{r.vehicle_reg}</TableCell>
+                  <TableCell className={bentoTable.figure}>{formatCurrency(Number(r.paid_amount), currency)}</TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </TableTile>
+      )}
     </div>
   );
 }

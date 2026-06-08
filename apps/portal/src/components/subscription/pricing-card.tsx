@@ -1,7 +1,8 @@
 "use client";
 
-import { CalendarClock, Loader2, Sparkles, Zap } from "lucide-react";
+import { CalendarClock, Loader2, Sparkles, Zap, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tile, StatusPill, Money } from "@/components/bento";
 
 interface PricingCardProps {
   plan: {
@@ -43,21 +44,21 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan }: Pri
 
   return (
     <div className="w-full max-w-sm">
-      <div
-        className={`relative overflow-hidden rounded-2xl border bg-card shadow-lg transition-shadow hover:shadow-xl ${
-          isCurrentPlan ? "border-green-500/50 ring-1 ring-green-500/20" : "border-border"
+      <Tile
+        pad="none"
+        className={`relative overflow-hidden ${
+          isCurrentPlan
+            ? "[border-color:var(--bento-success)] ring-1 ring-[color:var(--bento-success)]/30"
+            : ""
         }`}
       >
-        {/* Decorative gradient top bar */}
-        <div className="h-1.5 bg-gradient-to-r from-primary via-primary/80 to-primary/60" />
-
         {/* Trial badge */}
         {hasTrial && !isCurrentPlan && (
           <div className="absolute top-4 right-4">
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-500 ring-1 ring-amber-500/20">
+            <StatusPill tone="warn">
               <Zap className="h-3 w-3" />
               {plan.trial_days}-day free trial
-            </span>
+            </StatusPill>
           </div>
         )}
 
@@ -75,10 +76,10 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan }: Pri
           {/* Plan name */}
           <div className="mb-6">
             <div className="inline-flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                <Sparkles className="h-4 w-4 text-primary" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-tile-sm [background:var(--bento-primary-weak)]">
+                <Sparkles className="h-4 w-4 text-[color:var(--bento-primary-weak-fg)]" />
               </div>
-              <h3 className="text-lg font-semibold">{plan.name}</h3>
+              <h3 className="text-lg font-bold tracking-tight">{plan.name}</h3>
             </div>
             {plan.description && (
               <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
@@ -90,9 +91,9 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan }: Pri
           {/* Price */}
           <div className="mb-8">
             <div className="flex items-baseline gap-1">
-              <span className="text-4xl font-bold tracking-tight">
+              <Money className="text-4xl font-extrabold tracking-tight">
                 {formatPrice(plan.amount, plan.currency)}
-              </span>
+              </Money>
               <span className="text-sm text-muted-foreground font-medium">
                 /{plan.interval}
               </span>
@@ -111,6 +112,18 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan }: Pri
               </p>
             )}
           </div>
+
+          {/* Features */}
+          {plan.features && plan.features.length > 0 && (
+            <ul className="mb-8 space-y-2.5">
+              {plan.features.map((feature, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--bento-success)]" />
+                  <span className="text-muted-foreground">{feature}</span>
+                </li>
+              ))}
+            </ul>
+          )}
 
           {/* CTA */}
           {isCurrentPlan ? (
@@ -152,7 +165,7 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan }: Pri
             </p>
           )}
         </div>
-      </div>
+      </Tile>
     </div>
   );
 }

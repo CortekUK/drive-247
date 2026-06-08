@@ -3,13 +3,11 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useCMSPages } from "@/hooks/use-cms-pages";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Globe, FileText, Edit, Eye, Clock, CheckCircle, PenLine } from "lucide-react";
+import { Globe, FileText, Edit, Eye, ArrowRight, PenLine } from "lucide-react";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { formatDistanceToNow } from "date-fns";
+import { Tile, Eyebrow, StatusPill, SectionCard, EmptyState, Shimmer } from "@/components/bento";
 
 // Order pages to match website navigation
 const PAGE_ORDER = ["home", "about", "fleet", "reviews", "promotions", "contact", "privacy", "terms", "site-settings"];
@@ -38,14 +36,18 @@ export default function CMS() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div>
-          <Skeleton className="h-8 w-48 mb-2" />
-          <Skeleton className="h-4 w-96" />
+      <div className="space-y-6 p-4 md:p-6">
+        <div className="space-y-2">
+          <Shimmer className="h-8 w-48" />
+          <Shimmer className="h-4 w-96" />
         </div>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-48" />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Tile key={i} noMotion className="flex flex-col gap-3">
+              <Shimmer className="h-5 w-32" />
+              <Shimmer className="h-4 w-full" />
+              <Shimmer className="h-9 w-full" />
+            </Tile>
           ))}
         </div>
       </div>
@@ -53,138 +55,124 @@ export default function CMS() {
   }
 
   return (
-    <div className="container mx-auto space-y-4 md:space-y-6 p-4 md:p-6">
+    <div className="container mx-auto space-y-5 md:space-y-6 p-4 md:p-6">
       <div>
-        <h1 className="text-3xl font-display font-bold text-gradient-metal mb-2">
+        <Eyebrow>Content management</Eyebrow>
+        <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-foreground">
           Website Content
         </h1>
-        <p className="text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           Manage the content displayed on the customer website
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {sortedPages.map((page) => (
-          <Card
+          <Tile
             key={page.id}
-            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50 flex flex-col h-full"
+            interactive
+            className="flex h-full flex-col gap-3"
             onClick={() => router.push(`/cms/${page.slug}`)}
           >
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle className="text-lg">{page.name}</CardTitle>
-                </div>
-                <Badge
-                  variant={page.status === "published" ? "default" : "secondary"}
-                  className={
-                    page.status === "published"
-                      ? "bg-green-500/20 text-green-600 hover:bg-green-500/30"
-                      : ""
-                  }
-                >
-                  {page.status === "published" ? (
-                    <CheckCircle className="h-3 w-3 mr-1" />
-                  ) : (
-                    <Clock className="h-3 w-3 mr-1" />
-                  )}
-                  {page.status === "published" ? "Published" : "Draft"}
-                </Badge>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-tile-sm [background:var(--bento-tile-2)] text-[color:var(--bento-text-2)]">
+                  <FileText className="h-4 w-4" />
+                </span>
+                <h3 className="text-base font-bold tracking-tight">{page.name}</h3>
               </div>
-              {page.description && (
-                <CardDescription className="mt-2">{page.description}</CardDescription>
+              <StatusPill tone={page.status === "published" ? "success" : "warn"} dot>
+                {page.status === "published" ? "Published" : "Draft"}
+              </StatusPill>
+            </div>
+            {page.description && (
+              <p className="text-sm text-muted-foreground">{page.description}</p>
+            )}
+            <div className="mt-auto space-y-1 pt-1">
+              <div className="text-xs text-muted-foreground">
+                <span className="font-medium text-[color:var(--bento-text-2)]">Updated </span>
+                {formatDistanceToNow(new Date(page.updated_at), { addSuffix: true })}
+              </div>
+              {page.published_at && (
+                <div className="text-xs text-muted-foreground">
+                  <span className="font-medium text-[color:var(--bento-text-2)]">Published </span>
+                  {formatDistanceToNow(new Date(page.published_at), { addSuffix: true })}
+                </div>
               )}
-            </CardHeader>
-            <CardContent className="flex flex-col flex-1">
-              <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">
-                  <span className="font-medium">Last updated: </span>
-                  {formatDistanceToNow(new Date(page.updated_at), { addSuffix: true })}
-                </div>
-                {page.published_at && (
-                  <div className="text-sm text-muted-foreground">
-                    <span className="font-medium">Published: </span>
-                    {formatDistanceToNow(new Date(page.published_at), { addSuffix: true })}
-                  </div>
-                )}
-              </div>
-              <Button variant="outline" className="w-full mt-auto pt-3">
-                {hasEditAccess ? (
-                  <><Edit className="h-4 w-4 mr-2" />Edit Content</>
-                ) : (
-                  <><Eye className="h-4 w-4 mr-2" />View Content</>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
+            </div>
+            <Button variant="outline" className="w-full">
+              {hasEditAccess ? (
+                <><Edit className="h-4 w-4 mr-2" />Edit Content</>
+              ) : (
+                <><Eye className="h-4 w-4 mr-2" />View Content</>
+              )}
+            </Button>
+          </Tile>
         ))}
 
-        {/* Blog Card */}
-        {(
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50 flex flex-col h-full border-primary/20"
-            onClick={() => router.push("/cms/blog")}
-          >
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
-                  <PenLine className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-lg">Blog</CardTitle>
-                </div>
-                <Badge className="bg-primary/20 text-primary hover:bg-primary/30">
-                  <PenLine className="h-3 w-3 mr-1" />
-                  Manage
-                </Badge>
-              </div>
-              <CardDescription className="mt-2">
-                Create and manage blog posts, categories, and SEO
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col flex-1">
-              <Button variant="outline" className="w-full mt-auto pt-3">
-                {hasEditAccess ? (
-                  <><Edit className="h-4 w-4 mr-2" />Manage Blog</>
-                ) : (
-                  <><Eye className="h-4 w-4 mr-2" />View Blog</>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+        {/* Blog Tile — accented feature surface */}
+        <Tile
+          variant="feature"
+          interactive
+          className="flex h-full flex-col gap-3"
+          onClick={() => router.push("/cms/blog")}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-tile-sm bg-white/10 text-white">
+                <PenLine className="h-4 w-4" />
+              </span>
+              <h3 className="text-base font-bold tracking-tight text-white">Blog</h3>
+            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11.5px] font-bold text-white">
+              <PenLine className="h-3 w-3" />
+              Manage
+            </span>
+          </div>
+          <p className="text-sm text-[color:var(--bento-feature-sub)]">
+            Create and manage blog posts, categories, and SEO
+          </p>
+          <Button className="mt-auto w-full bg-white text-[color:var(--bento-feature-bg)] hover:bg-white/90">
+            {hasEditAccess ? (
+              <><Edit className="h-4 w-4 mr-2" />Manage Blog</>
+            ) : (
+              <><Eye className="h-4 w-4 mr-2" />View Blog</>
+            )}
+            <ArrowRight className="ml-auto h-4 w-4" />
+          </Button>
+        </Tile>
 
         {sortedPages.length === 0 && (
-          <Card className="col-span-full">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Globe className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Pages Available</h3>
-              <p className="text-muted-foreground text-center">
-                No editable pages have been configured yet.
-              </p>
-            </CardContent>
-          </Card>
+          <div className="col-span-full">
+            <EmptyState
+              icon={<Globe className="h-5 w-5" />}
+              title="No Pages Available"
+              description="No editable pages have been configured yet."
+            />
+          </div>
         )}
       </div>
 
-      <Card className="bg-muted/50">
-        <CardHeader>
-          <CardTitle className="text-base">How it works</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-2">
+      <SectionCard
+        icon={<Globe className="h-4 w-4" />}
+        title="How it works"
+        description="Edit, save and publish content for your customer website."
+      >
+        <div className="space-y-2 text-sm text-muted-foreground">
           <p>
-            <strong>1. Edit Content:</strong> Click on a page card to edit its content sections.
+            <strong className="text-foreground">1. Edit Content:</strong> Click on a page card to edit its content sections.
           </p>
           <p>
-            <strong>2. Save as Draft:</strong> Your changes are automatically saved as drafts.
+            <strong className="text-foreground">2. Save as Draft:</strong> Your changes are automatically saved as drafts.
           </p>
           <p>
-            <strong>3. Publish:</strong> When ready, click "Publish" to make changes live on the website.
+            <strong className="text-foreground">3. Publish:</strong> When ready, click &ldquo;Publish&rdquo; to make changes live on the website.
           </p>
           <p>
-            <strong>4. Version History:</strong> View and restore previous versions if needed.
+            <strong className="text-foreground">4. Version History:</strong> View and restore previous versions if needed.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
     </div>
   );
 }

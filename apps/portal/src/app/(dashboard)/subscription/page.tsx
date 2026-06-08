@@ -8,10 +8,8 @@ import {
 } from "@/hooks/use-tenant-subscription";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { PricingCard } from "@/components/subscription/pricing-card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CreditCard,
   Download,
@@ -23,6 +21,16 @@ import {
   Shield,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Eyebrow,
+  Tile,
+  StatusPill,
+  type StatusTone,
+  Segmented,
+  TableTile,
+  Money,
+  EmptyState,
+} from "@/components/bento";
 
 function formatCurrency(amount: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -40,20 +48,18 @@ function formatDate(dateStr: string | null) {
   });
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const variant =
-    status === "active" || status === "paid"
-      ? "default"
-      : status === "trialing"
-        ? "secondary"
-        : status === "past_due" || status === "open"
-          ? "destructive"
-          : "outline";
+function statusToneFor(status: string): StatusTone {
+  if (status === "active" || status === "paid") return "success";
+  if (status === "trialing") return "info";
+  if (status === "past_due" || status === "open") return "danger";
+  return "neutral";
+}
 
+function StatusBadge({ status }: { status: string }) {
   return (
-    <Badge variant={variant} className="capitalize">
+    <StatusPill tone={statusToneFor(status)} dot className="capitalize">
       {status.replace("_", " ")}
-    </Badge>
+    </StatusPill>
   );
 }
 
@@ -72,6 +78,7 @@ export default function SubscriptionPage() {
   const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
 
   const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"plan" | "invoices">("plan");
 
   // Handle return from Stripe Checkout
   useEffect(() => {
@@ -121,7 +128,10 @@ export default function SubscriptionPage() {
     return (
       <div className="p-6 space-y-6">
         <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-[400px] w-full max-w-sm mx-auto rounded-2xl" />
+        <div className="grid gap-6 md:grid-cols-2">
+          <Skeleton className="h-[280px] w-full rounded-tile" />
+          <Skeleton className="h-[280px] w-full rounded-tile" />
+        </div>
       </div>
     );
   }
@@ -196,7 +206,8 @@ export default function SubscriptionPage() {
     <div className="container mx-auto p-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Subscription</h1>
+          <Eyebrow>Billing</Eyebrow>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight">Subscription</h1>
           <p className="mt-1 text-muted-foreground">
             Manage your {subscription?.plan_name || "subscription"}
           </p>
@@ -207,17 +218,21 @@ export default function SubscriptionPage() {
         </Button>
       </div>
 
-      <Tabs defaultValue="plan">
-        <TabsList>
-          <TabsTrigger value="plan">Plan</TabsTrigger>
-          <TabsTrigger value="invoices">Invoices</TabsTrigger>
-        </TabsList>
+      <Segmented
+        options={[
+          { value: "plan", label: "Plan" },
+          { value: "invoices", label: "Invoices" },
+        ]}
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as "plan" | "invoices")}
+      />
 
-        <TabsContent value="plan" className="mt-6">
+      {activeTab === "plan" && (
+        <div className="mt-6">
           <div className="grid gap-6 md:grid-cols-2">
             {/* Plan Details */}
-            <div className="rounded-lg border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Plan Details</h2>
+            <Tile pad="roomy">
+              <h2 className="text-lg font-bold tracking-tight mb-4">Plan Details</h2>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Plan</span>
@@ -231,22 +246,22 @@ export default function SubscriptionPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Amount</span>
-                  <span className="font-medium">
+                  <Money className="font-semibold">
                     {formatCurrency(
                       subscription?.amount || 0,
                       subscription?.currency || "usd"
                     )}
                     /{subscription?.interval || "month"}
-                  </span>
+                  </Money>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">
                     Current Period
                   </span>
-                  <span className="text-sm">
+                  <Money className="text-sm">
                     {formatDate(subscription?.current_period_start ?? null)} –{" "}
                     {formatDate(subscription?.current_period_end ?? null)}
-                  </span>
+                  </Money>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">
@@ -254,29 +269,29 @@ export default function SubscriptionPage() {
                   </span>
                   <div className="flex items-center gap-1.5">
                     <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">
+                    <Money className="text-sm">
                       {formatDate(subscription?.current_period_end ?? null)}
-                    </span>
+                    </Money>
                   </div>
                 </div>
               </div>
-            </div>
+            </Tile>
 
             {/* Payment Method */}
-            <div className="rounded-lg border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Payment Method</h2>
+            <Tile pad="roomy">
+              <h2 className="text-lg font-bold tracking-tight mb-4">Payment Method</h2>
               {subscription?.card_last4 ? (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-3 p-3 rounded-tile-sm [background:var(--bento-tile-2)]">
                     <CreditCard className="h-8 w-8 text-muted-foreground" />
                     <div>
-                      <p className="font-medium capitalize">
+                      <p className="font-semibold capitalize">
                         {subscription.card_brand || "Card"} ****{" "}
-                        {subscription.card_last4}
+                        <Money>{subscription.card_last4}</Money>
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        Expires {subscription.card_exp_month}/
-                        {subscription.card_exp_year}
+                        Expires <Money>{subscription.card_exp_month}/
+                        {subscription.card_exp_year}</Money>
                       </p>
                     </div>
                   </div>
@@ -311,8 +326,8 @@ export default function SubscriptionPage() {
                 </div>
               )}
 
-              <div className="mt-6 pt-4 border-t">
-                <h3 className="text-sm font-medium mb-2">
+              <div className="mt-6 pt-4 border-t border-border">
+                <h3 className="text-sm font-semibold mb-2">
                   Need to cancel?
                 </h3>
                 <p className="text-sm text-muted-foreground">
@@ -326,18 +341,23 @@ export default function SubscriptionPage() {
                   to discuss cancellation.
                 </p>
               </div>
-            </div>
+            </Tile>
           </div>
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="invoices" className="mt-6">
-          <div className="rounded-lg border bg-card">
-            <div className="p-6 pb-4">
-              <h2 className="text-lg font-semibold">Billing History</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                View and download your past invoices
-              </p>
-            </div>
+      {activeTab === "invoices" && (
+        <div className="mt-6">
+          <TableTile
+            toolbar={
+              <div>
+                <h2 className="text-lg font-bold tracking-tight">Billing History</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  View and download your past invoices
+                </p>
+              </div>
+            }
+          >
             {invoicesLoading ? (
               <div className="px-6 pb-6 space-y-3">
                 {[...Array(3)].map((_, i) => (
@@ -345,44 +365,46 @@ export default function SubscriptionPage() {
                 ))}
               </div>
             ) : invoices.length === 0 ? (
-              <div className="px-6 pb-6 text-center py-8">
-                <p className="text-sm text-muted-foreground">
-                  No invoices yet
-                </p>
+              <div className="px-6 pb-6">
+                <EmptyState
+                  icon={<CreditCard className="h-5 w-5" />}
+                  title="No invoices yet"
+                  description="Your billing history will appear here once you have invoices."
+                  className="border-none shadow-none"
+                />
               </div>
             ) : (
-              <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="text-left py-3 px-6 text-xs font-medium text-muted-foreground uppercase">
+                    <tr className="border-b border-border [background:var(--bento-tile-2)]">
+                      <th className="text-left py-3 px-6 text-[10.5px] font-bold uppercase tracking-wider text-[color:var(--bento-text-3)]">
                         Invoice
                       </th>
-                      <th className="text-left py-3 pr-4 text-xs font-medium text-muted-foreground uppercase">
+                      <th className="text-left py-3 pr-4 text-[10.5px] font-bold uppercase tracking-wider text-[color:var(--bento-text-3)]">
                         Date
                       </th>
-                      <th className="text-left py-3 pr-4 text-xs font-medium text-muted-foreground uppercase">
+                      <th className="text-right py-3 pr-4 text-[10.5px] font-bold uppercase tracking-wider text-[color:var(--bento-text-3)]">
                         Amount
                       </th>
-                      <th className="text-left py-3 pr-4 text-xs font-medium text-muted-foreground uppercase">
+                      <th className="text-left py-3 pr-4 text-[10.5px] font-bold uppercase tracking-wider text-[color:var(--bento-text-3)]">
                         Status
                       </th>
-                      <th className="text-left py-3 pr-4 text-xs font-medium text-muted-foreground uppercase">
+                      <th className="text-left py-3 pr-4 text-[10.5px] font-bold uppercase tracking-wider text-[color:var(--bento-text-3)]">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="px-6">
+                  <tbody>
                     {invoices.map((invoice) => (
-                      <tr key={invoice.id} className="border-b last:border-0">
+                      <tr key={invoice.id} className="border-b border-border last:border-0 transition-colors hover:bg-[color:var(--bento-tile-2)]">
                         <td className="py-3 px-6 text-sm">
-                          {invoice.invoice_number || "\u2014"}
+                          <Money>{invoice.invoice_number || "\u2014"}</Money>
                         </td>
                         <td className="py-3 pr-4 text-sm">
-                          {formatDate(invoice.created_at)}
+                          <Money>{formatDate(invoice.created_at)}</Money>
                         </td>
-                        <td className="py-3 pr-4 text-sm">
-                          {formatCurrency(invoice.amount_due, invoice.currency)}
+                        <td className="py-3 pr-4 text-right">
+                          <Money className="text-sm">{formatCurrency(invoice.amount_due, invoice.currency)}</Money>
                         </td>
                         <td className="py-3 pr-4">
                           <StatusBadge status={invoice.status} />
@@ -417,11 +439,10 @@ export default function SubscriptionPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
             )}
-          </div>
-        </TabsContent>
-      </Tabs>
+          </TableTile>
+        </div>
+      )}
     </div>
   );
 }
