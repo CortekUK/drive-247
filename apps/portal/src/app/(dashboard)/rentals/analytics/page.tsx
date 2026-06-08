@@ -2,11 +2,8 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tile, KpiTile, EmptyState, KpiTileSkeletonRow, Shimmer } from "@/components/bento";
 import {
   BarChart,
   Bar,
@@ -31,7 +28,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ArrowLeft, Info } from "lucide-react";
+import { ArrowLeft, Info, BarChart3 } from "lucide-react";
 import { startOfWeek, eachWeekOfInterval, subMonths, format } from "date-fns";
 import { useEnhancedRentals } from "@/hooks/use-enhanced-rentals";
 import { formatCurrency } from "@/lib/format-utils";
@@ -190,8 +187,16 @@ export default function RentalsAnalyticsPage() {
   if (isLoading) {
     return (
       <div className="container mx-auto p-4 md:p-6 space-y-6">
-        <div className="h-8 bg-muted animate-pulse rounded"></div>
-        <div className="h-96 bg-muted animate-pulse rounded"></div>
+        <div className="space-y-2">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Rentals Analytics</h1>
+          <p className="text-sm text-muted-foreground">Charts and insights for your rental data</p>
+        </div>
+        <KpiTileSkeletonRow count={4} />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Shimmer key={i} className="h-[248px] rounded-tile" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -206,21 +211,31 @@ export default function RentalsAnalyticsPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Rentals Analytics</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Rentals Analytics</h1>
           <p className="text-sm text-muted-foreground">
             Charts and insights for your rental data
           </p>
         </div>
       </div>
 
+      {/* KPI strip */}
+      {stats && allRentals.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiTile label="Total Rentals" value={stats.total} />
+          <KpiTile variant="feature" label="Active" value={stats.active} />
+          <KpiTile label="Completed" value={stats.closed} />
+          <KpiTile variant="warn" label="Pending" value={stats.pending} />
+        </div>
+      )}
+
       {allRentals.length > 0 ? (
         <TooltipProvider>
           {/* Row 1: Three charts side by side */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Chart 1: Status Distribution Donut */}
-            <Card className="rounded-lg border border-border/60 bg-card/50 p-4">
+            <Tile pad="compact">
               <div className="flex items-center gap-1.5 mb-3">
-                <h3 className="text-sm font-medium">Status Distribution</h3>
+                <h3 className="text-sm font-bold tracking-tight">Status Distribution</h3>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
@@ -259,12 +274,12 @@ export default function RentalsAnalyticsPage() {
               ) : (
                 <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">No data</div>
               )}
-            </Card>
+            </Tile>
 
             {/* Chart 2: Duration Distribution (Vertical Bar) */}
-            <Card className="rounded-lg border border-border/60 bg-card/50 p-4">
+            <Tile pad="compact">
               <div className="flex items-center gap-1.5 mb-3">
-                <h3 className="text-sm font-medium">Duration Distribution</h3>
+                <h3 className="text-sm font-bold tracking-tight">Duration Distribution</h3>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
@@ -291,12 +306,12 @@ export default function RentalsAnalyticsPage() {
               ) : (
                 <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">No data</div>
               )}
-            </Card>
+            </Tile>
 
             {/* Chart 3: Revenue by Status (Horizontal Bar) */}
-            <Card className="rounded-lg border border-border/60 bg-card/50 p-4">
+            <Tile pad="compact">
               <div className="flex items-center gap-1.5 mb-3">
-                <h3 className="text-sm font-medium">Revenue by Status</h3>
+                <h3 className="text-sm font-bold tracking-tight">Revenue by Status</h3>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
@@ -323,15 +338,15 @@ export default function RentalsAnalyticsPage() {
               ) : (
                 <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">No data</div>
               )}
-            </Card>
+            </Tile>
           </div>
 
           {/* Row 2: Area chart (2/3) + Review donut (1/3) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Chart 4: Rentals Created Over Time (Area) */}
-            <Card className={`rounded-lg border border-border/60 bg-card/50 p-4 ${reviewDonutData.length > 0 ? "md:col-span-2" : "md:col-span-3"}`}>
+            <Tile pad="compact" className={reviewDonutData.length > 0 ? "md:col-span-2" : "md:col-span-3"}>
               <div className="flex items-center gap-1.5 mb-3">
-                <h3 className="text-sm font-medium">Rentals Over Time</h3>
+                <h3 className="text-sm font-bold tracking-tight">Rentals Over Time</h3>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
@@ -366,13 +381,13 @@ export default function RentalsAnalyticsPage() {
               ) : (
                 <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">No data</div>
               )}
-            </Card>
+            </Tile>
 
             {/* Chart 5: Review Status Breakdown (Donut) */}
             {reviewDonutData.length > 0 && (
-              <Card className="rounded-lg border border-border/60 bg-card/50 p-4">
+              <Tile pad="compact">
                 <div className="flex items-center gap-1.5 mb-3">
-                  <h3 className="text-sm font-medium">Review Status</h3>
+                  <h3 className="text-sm font-bold tracking-tight">Review Status</h3>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
@@ -407,14 +422,21 @@ export default function RentalsAnalyticsPage() {
                     </text>
                   </PieChart>
                 </ChartContainer>
-              </Card>
+              </Tile>
             )}
           </div>
         </TooltipProvider>
       ) : (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">No rental data available for analytics</p>
-        </div>
+        <EmptyState
+          icon={<BarChart3 className="h-5 w-5" />}
+          title="No analytics yet"
+          description="No rental data available for analytics"
+          action={
+            <Link href="/rentals">
+              <Button variant="outline">Back to Rentals</Button>
+            </Link>
+          }
+        />
       )}
     </div>
   );

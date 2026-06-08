@@ -2,12 +2,9 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, Download, ExternalLink, X, Loader2, Search, BarChart3, Plus } from "lucide-react";
-import { EmptyState } from "@/components/shared/data-display/empty-state";
-import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useState, useCallback } from "react";
@@ -22,6 +19,20 @@ import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog
 import { DollarSign, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VerificationsTab } from "@/components/insurance/verifications-tab";
+import { cn } from "@/lib/utils";
+import {
+  KpiTile,
+  TableTile,
+  bentoTable,
+  StatusPill,
+  statusTone,
+  type StatusTone,
+  Money,
+  EmptyState,
+  KpiTileSkeletonRow,
+  TableSkeleton,
+  Shimmer,
+} from "@/components/bento";
 
 interface InsuranceDoc {
   id: string;
@@ -465,9 +476,13 @@ export default function InsurancesList() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="h-8 bg-muted animate-pulse rounded"></div>
-        <div className="h-96 bg-muted animate-pulse rounded"></div>
+      <div className="container mx-auto p-4 sm:p-6 space-y-6">
+        <div className="space-y-2">
+          <Shimmer className="h-8 w-48" />
+          <Shimmer className="h-4 w-72" />
+        </div>
+        <KpiTileSkeletonRow count={4} />
+        <TableSkeleton rows={8} cols={7} />
       </div>
     );
   }
@@ -477,13 +492,13 @@ export default function InsurancesList() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold">Insurances</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Insurances</h1>
           <p className="text-muted-foreground text-sm sm:text-base">Manage customer insurance documents and Bonzah policies</p>
         </div>
         <div className="flex items-center gap-2">
           {allInsurances.length > 0 && (
             <Link href="/insurances/analytics" className="shrink-0">
-              <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+              <Button variant="outline" size="icon">
                 <BarChart3 className="h-4 w-4" />
               </Button>
             </Link>
@@ -501,7 +516,7 @@ export default function InsurancesList() {
             )}
             Export PDFs
           </Button>
-          <Button onClick={() => setGenerateOpen(true)} className="bg-gradient-primary">
+          <Button onClick={() => setGenerateOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Generate Insurance
           </Button>
@@ -509,35 +524,30 @@ export default function InsurancesList() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20">
-          <CardContent className="p-3 sm:p-4">
-            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Total Insurances</p>
-            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{allInsurances.length}</p>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">All insurance records</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-pink-600/10 to-pink-600/5 border-pink-600/20">
-          <CardContent className="p-3 sm:p-4">
-            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Bonzah Policies</p>
-            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{allInsurances.filter(d => d.isBonzah).length}</p>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">Via Bonzah integration</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-violet-500/10 to-violet-500/5 border-violet-500/20">
-          <CardContent className="p-3 sm:p-4">
-            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Uploaded</p>
-            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{allInsurances.filter(d => !d.isBonzah).length}</p>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">Manually uploaded</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
-          <CardContent className="p-3 sm:p-4">
-            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Active Policies</p>
-            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{allInsurances.filter(d => d.status === 'active' || d.status === 'confirmed').length}</p>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">Currently active</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiTile
+          variant="hero"
+          label="Total Insurances"
+          value={allInsurances.length}
+          sub="All insurance records"
+          icon={<ShieldCheck className="h-4 w-4" />}
+        />
+        <KpiTile
+          variant="feature"
+          label="Bonzah Policies"
+          value={allInsurances.filter(d => d.isBonzah).length}
+          sub="Via Bonzah integration"
+        />
+        <KpiTile
+          label="Uploaded"
+          value={allInsurances.filter(d => !d.isBonzah).length}
+          sub="Manually uploaded"
+        />
+        <KpiTile
+          label="Active Policies"
+          value={allInsurances.filter(d => d.status === 'active' || d.status === 'confirmed').length}
+          sub="Currently active"
+        />
       </div>
 
       <Tabs defaultValue="policies" className="space-y-4">
@@ -556,12 +566,12 @@ export default function InsurancesList() {
       {/* Search + Bonzah Filter */}
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[color:var(--bento-text-3)] h-4 w-4" />
           <Input
             placeholder="Search by document name or customer..."
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-10 h-8 text-sm"
+            className="pl-10"
           />
         </div>
         <button
@@ -569,22 +579,22 @@ export default function InsurancesList() {
             setBonzahFilter(!bonzahFilter);
             setCurrentPage(1);
           }}
-          className="inline-flex items-center gap-2 px-3 h-8 rounded-md border text-xs font-medium whitespace-nowrap transition-colors shrink-0"
-          style={{
-            borderColor: bonzahFilter ? '#CC004A' : 'rgba(204, 0, 74, 0.3)',
-            backgroundColor: bonzahFilter ? '#CC004A' : 'transparent',
-            color: bonzahFilter ? '#fff' : '#CC004A',
-          }}
+          className={cn(
+            "inline-flex items-center gap-2 px-3.5 h-10 rounded-full border text-[13px] font-semibold whitespace-nowrap shrink-0",
+            bonzahFilter
+              ? "border-transparent [background:var(--bento-primary-weak)] text-[color:var(--bento-primary-weak-fg)]"
+              : "border-border text-[color:var(--bento-text-2)] hover:bg-[color:var(--bento-tile-2)]",
+          )}
         >
           <img
             src="/bonzah-logo.svg"
             alt="Bonzah"
-            className={`h-4 w-auto ${bonzahFilter ? 'brightness-0 invert' : ''} dark:hidden`}
+            className="h-4 w-auto dark:hidden"
           />
           <img
             src="/bonzah-logo-dark.svg"
             alt="Bonzah"
-            className={`h-4 w-auto ${bonzahFilter ? 'brightness-0 invert' : ''} hidden dark:block`}
+            className="h-4 w-auto hidden dark:block"
           />
           Bonzah Only
           {bonzahFilter && <X className="ml-1 h-3.5 w-3.5" />}
@@ -594,19 +604,24 @@ export default function InsurancesList() {
       {/* Insurance Table */}
       {paginatedDocuments.length === 0 ? (
         <EmptyState
-          icon={ShieldCheck}
+          icon={<ShieldCheck className="h-5 w-5" />}
           title="No insurance documents found"
           description={searchQuery || bonzahFilter
             ? "No insurance documents match your search criteria"
             : "There are no insurance documents in the system yet."}
+          action={
+            <Button onClick={() => setGenerateOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Generate Insurance
+            </Button>
+          }
         />
       ) : (
         <>
-          <Card>
-            <CardContent className="p-0">
+          <TableTile>
               <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
               <Table>
-                <TableHeader className="sticky top-0 z-10 bg-background">
+                <TableHeader className={cn("sticky top-0 z-10", bentoTable.header)}>
                   <TableRow>
                     <TableHead>Document Name</TableHead>
                     <TableHead>Customer</TableHead>
@@ -619,15 +634,12 @@ export default function InsurancesList() {
                 </TableHeader>
                 <TableBody>
                   {paginatedDocuments.map((doc) => (
-                    <TableRow key={doc.id}>
+                    <TableRow key={doc.id} className={bentoTable.row}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           {doc.document_name}
                           {doc.isBonzah && (
-                            <span
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold"
-                              style={{ backgroundColor: 'rgba(204, 0, 74, 0.1)', color: '#CC004A' }}
-                            >
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold [background:var(--bento-primary-weak)]">
                               <img src="/bonzah-logo.svg" alt="" className="h-2.5 w-auto dark:hidden" />
                               <img src="/bonzah-logo-dark.svg" alt="" className="h-2.5 w-auto hidden dark:block" />
                             </span>
@@ -637,9 +649,9 @@ export default function InsurancesList() {
                       <TableCell className="font-medium text-foreground">
                         {doc.customers?.name || "—"}
                       </TableCell>
-                      <TableCell className="text-right text-sm font-mono">
+                      <TableCell className={cn(bentoTable.figure, "text-sm")}>
                         {doc.premium_amount != null
-                          ? `$${doc.premium_amount.toFixed(2)}`
+                          ? <Money>{`$${doc.premium_amount.toFixed(2)}`}</Money>
                           : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell>
@@ -656,7 +668,7 @@ export default function InsurancesList() {
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-sm font-mono tabular-nums text-[color:var(--bento-text-2)]">
                         {format(new Date(doc.created_at), "MMM dd, yyyy HH:mm")}
                       </TableCell>
                       <TableCell className="text-right">
@@ -728,8 +740,7 @@ export default function InsurancesList() {
                 </TableBody>
               </Table>
               </div>
-            </CardContent>
-          </Card>
+          </TableTile>
 
           {/* Pagination */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -800,29 +811,17 @@ export default function InsurancesList() {
 
 function PolicyStatusBadge({ status }: { status?: string | null }) {
   if (!status) return <span className="text-xs text-muted-foreground">—</span>;
-  const variant: "default" | "secondary" | "outline" | "destructive" =
-    status === "active"
-      ? "default"
-      : status === "quoted" || status === "payment_pending"
-      ? "secondary"
-      : status === "cancelled" || status === "failed"
-      ? "destructive"
-      : "outline";
   const label = status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  return <Badge variant={variant} className="text-[10px] px-1.5 py-0 h-5">{label}</Badge>;
+  return <StatusPill tone={statusTone(status)} dot>{label}</StatusPill>;
 }
 
 function PaymentBadge({ state }: { state?: PaymentState | null }) {
   if (!state) return <span className="text-xs text-muted-foreground">—</span>;
-  const map: Record<PaymentState, { label: string; className: string }> = {
-    paid: { label: "Paid", className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30" },
-    partial: { label: "Partial", className: "bg-amber-500/10 text-amber-600 border-amber-500/30" },
-    unpaid: { label: "Unpaid", className: "bg-red-500/10 text-red-600 border-red-500/30" },
+  const map: Record<PaymentState, { label: string; tone: StatusTone }> = {
+    paid: { label: "Paid", tone: "success" },
+    partial: { label: "Partial", tone: "warn" },
+    unpaid: { label: "Unpaid", tone: "danger" },
   };
-  const { label, className } = map[state];
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[10px] font-medium ${className}`}>
-      {label}
-    </span>
-  );
+  const { label, tone } = map[state];
+  return <StatusPill tone={tone}>{label}</StatusPill>;
 }

@@ -144,7 +144,7 @@ export function AddReminderDialog({ open, onOpenChange, defaultTitle, defaultObj
               name="title"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Title <span className="text-red-500">*</span></FormLabel>
+                  <FormLabel>Title <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
                     <Input placeholder="e.g. MOT due for TX25 AAH" {...field} />
                   </FormControl>
@@ -178,7 +178,7 @@ export function AddReminderDialog({ open, onOpenChange, defaultTitle, defaultObj
                 name="date"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Date <span className="text-red-500">*</span></FormLabel>
+                    <FormLabel>Date <span className="text-destructive">*</span></FormLabel>
                     <Popover modal={true}>
                       <PopoverTrigger asChild>
                         <FormControl>
@@ -270,7 +270,7 @@ export function AddReminderDialog({ open, onOpenChange, defaultTitle, defaultObj
                 name="severity"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Severity <span className="text-red-500">*</span></FormLabel>
+                    <FormLabel>Severity <span className="text-destructive">*</span></FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -293,7 +293,7 @@ export function AddReminderDialog({ open, onOpenChange, defaultTitle, defaultObj
                 name="object_type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Type <span className="text-red-500">*</span></FormLabel>
+                    <FormLabel>Type <span className="text-destructive">*</span></FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>

@@ -4,19 +4,16 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2, Briefcase, BarChart3, ChevronDown, ShieldCheck, RefreshCw } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, UserCheck, Link2, Briefcase, BarChart3, ShieldCheck, RefreshCw } from "lucide-react";
+import { TableTile, bentoTable, Segmented, StatusPill, EmptyState, ErrorState, KpiTileSkeletonRow, TableSkeleton, Shimmer } from "@/components/bento";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { CustomerFormModal } from "@/components/customers/customer-form-modal";
@@ -60,57 +57,6 @@ interface Customer {
 
 type SortField = 'name' | 'type' | 'balance';
 type SortOrder = 'asc' | 'desc';
-
-function CustomerFilterPopover({
-  label, active, activeLabel, options, value, onChange, className
-}: {
-  label: string;
-  active: boolean;
-  activeLabel?: string;
-  options: { value: string; label: string }[];
-  value: string;
-  onChange: (v: string) => void;
-  className?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className={cn("gap-1.5", active && "border-primary", className)}
-        >
-          {active ? (
-            <span className="text-primary">{activeLabel}</span>
-          ) : (
-            label
-          )}
-          <ChevronDown className="h-3 w-3 text-muted-foreground" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-2" align="start">
-        <div className="flex flex-col gap-1">
-          {options.map(({ value: v, label: l }) => {
-            const isActive = value === v;
-            return (
-              <button
-                key={v}
-                onClick={() => { onChange(v); setOpen(false); }}
-                className={cn(
-                  "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors text-left",
-                  isActive ? "bg-primary/10 text-primary" : "hover:bg-muted"
-                )}
-              >
-                {l}
-              </button>
-            );
-          })}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 const CustomersList = () => {
   const router = useRouter();
@@ -167,7 +113,7 @@ const CustomersList = () => {
   }, [debouncedSearchTerm, statusFilter, userTypeFilter, sortField, sortOrder, currentPage, pageSize, router]);
 
   // Fetch customers
-  const { data: customers, isLoading, refetch: refetchCustomers } = useQuery({
+  const { data: customers, isLoading, isError, refetch: refetchCustomers } = useQuery({
     queryKey: ["customers-list", tenant?.id],
     queryFn: async () => {
       let query = supabase
@@ -634,31 +580,32 @@ const CustomersList = () => {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="container mx-auto p-4 sm:p-6 space-y-6">
         <div className="flex items-center justify-between">
-          <div>
-            <Skeleton className="h-8 w-48 mb-2" />
-            <Skeleton className="h-4 w-64" />
+          <div className="space-y-2">
+            <Shimmer className="h-8 w-48" />
+            <Shimmer className="h-4 w-64" />
           </div>
-          <Skeleton className="h-10 w-32" />
+          <Shimmer className="h-10 w-32 rounded-tile" />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-24" />
-          ))}
+        <KpiTileSkeletonRow count={4} />
+        <TableSkeleton rows={8} cols={6} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="container mx-auto p-4 sm:p-6 space-y-6">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Customers</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Manage customers and account balances</p>
         </div>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-48" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {[...Array(6)].map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <ErrorState
+          title="Couldn't load customers"
+          description="Something went wrong while fetching customers. Please try again."
+          onRetry={() => refetchCustomers()}
+        />
       </div>
     );
   }
@@ -668,13 +615,13 @@ const CustomersList = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold">Customers</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Customers</h1>
           <p className="text-muted-foreground text-sm sm:text-base">Manage customers and account balances</p>
         </div>
         <div className="flex items-center gap-2">
           {customers && customers.length > 0 && (
             <Link href="/customers/analytics" className="shrink-0">
-              <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+              <Button variant="outline" size="icon">
                 <BarChart3 className="h-4 w-4" />
               </Button>
             </Link>
@@ -685,7 +632,7 @@ const CustomersList = () => {
             </Button>
           )}
           {canEdit('customers') && (
-            <Button className="bg-gradient-primary flex-1 sm:flex-none" onClick={handleAddCustomer}>
+            <Button className="flex-1 sm:flex-none" onClick={handleAddCustomer}>
               <Plus className="h-4 w-4 mr-2" />
               Add Customer
             </Button>
@@ -696,68 +643,55 @@ const CustomersList = () => {
       {/* Summary Cards */}
       {customers && <CustomerSummaryCards customers={customers} />}
 
-      {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:items-center">
-        <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-          <Input
-            placeholder="Search customers..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 h-8 text-sm"
-          />
-        </div>
-
-        {/* Status + Type grouped */}
-        <div className="grid grid-cols-2 w-full sm:w-auto sm:flex sm:items-center">
-          <CustomerFilterPopover
-            label="Status"
-            active={statusFilter !== 'all'}
-            activeLabel={statusFilter !== 'all' ? statusFilter : undefined}
-            options={[
-              { value: 'all', label: 'All Statuses' },
-              { value: 'Active', label: 'Active' },
-              { value: 'Inactive', label: 'Inactive' },
-              { value: 'Rejected', label: 'Rejected' },
-            ]}
-            value={statusFilter}
-            onChange={setStatusFilter}
-            className="rounded-r-none border-r-0 w-full sm:w-auto"
-          />
-          <CustomerFilterPopover
-            label="User Type"
-            active={userTypeFilter !== 'all'}
-            activeLabel={userTypeFilter !== 'all' ? userTypeFilter : undefined}
-            options={[
-              { value: 'all', label: 'All Users' },
-              { value: 'Authenticated', label: 'Authenticated' },
-              { value: 'Guest', label: 'Guest' },
-            ]}
-            value={userTypeFilter}
-            onChange={setUserTypeFilter}
-            className="rounded-l-none w-full sm:w-auto"
-          />
-        </div>
-
-        {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 gap-1 text-muted-foreground hover:text-foreground self-start">
-            <X className="h-3.5 w-3.5" />
-            Clear
-          </Button>
-        )}
-      </div>
-
       {/* Table */}
       {paginatedCustomers.length > 0 ? (
         <>
-        <Card>
-          <CardContent className="p-0">
+        <TableTile
+          toolbar={
+            <>
+              <Segmented
+                value={statusFilter}
+                onValueChange={setStatusFilter}
+                options={[
+                  { value: 'all', label: 'All' },
+                  { value: 'Active', label: 'Active' },
+                  { value: 'Inactive', label: 'Inactive' },
+                  { value: 'Rejected', label: 'Rejected' },
+                ]}
+              />
+              <Segmented
+                value={userTypeFilter}
+                onValueChange={setUserTypeFilter}
+                options={[
+                  { value: 'all', label: 'All Users' },
+                  { value: 'Authenticated', label: 'Auth' },
+                  { value: 'Guest', label: 'Guest' },
+                ]}
+              />
+              <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:ml-auto sm:max-w-xs">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[color:var(--bento-text-3)] h-4 w-4" />
+                <Input
+                  placeholder="Search customers..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 text-sm"
+                />
+              </div>
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 text-muted-foreground hover:text-foreground">
+                  <X className="h-3.5 w-3.5" />
+                  Clear
+                </Button>
+              )}
+            </>
+          }
+        >
             <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
               <Table>
-                <TableHeader className="sticky top-0 z-10 bg-background">
+                <TableHeader className={cn("sticky top-0 z-10", bentoTable.header)}>
                   <TableRow>
                     <TableHead
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer"
                       onClick={() => handleSort('name')}
                     >
                       <div className="flex items-center gap-2">
@@ -766,7 +700,7 @@ const CustomersList = () => {
                       </div>
                     </TableHead>
                     <TableHead
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer"
                       onClick={() => handleSort('type')}
                     >
                       <div className="flex items-center gap-2">
@@ -778,7 +712,7 @@ const CustomersList = () => {
                     <TableHead>Gig Driver</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer"
                       onClick={() => handleSort('balance')}
                     >
                       <div className="flex items-center gap-2">
@@ -795,7 +729,7 @@ const CustomersList = () => {
                     const balanceData = customerBalances[customer.id];
 
                     return (
-                      <TableRow key={customer.id} className="table-row">
+                      <TableRow key={customer.id} className={bentoTable.row}>
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
                             <button
@@ -806,39 +740,32 @@ const CustomersList = () => {
                             </button>
                             {hasNextOfKin(customer) && (
                               <div title="Emergency contact on file">
-                                <Shield className="h-3 w-3 text-muted-foreground" />
+                                <Shield className="h-3 w-3 text-[color:var(--bento-text-3)]" />
                               </div>
                             )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={
-                              customer.user_type === 'Authenticated'
-                                ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
-                                : 'bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700'
-                            }
-                          >
+                          <StatusPill tone={customer.user_type === 'Authenticated' ? 'success' : 'neutral'}>
                             {customer.user_type || 'Guest'}
-                          </Badge>
+                          </StatusPill>
                         </TableCell>
                         <TableCell>
                           {(() => {
                             const status = (customer as any).identity_verification_status;
                             if (status === 'verified') {
-                              return <span className="text-green-600 text-sm font-medium">Verified</span>;
+                              return <span className="text-[color:var(--bento-success)] text-sm font-semibold">Verified</span>;
                             } else if (status === 'pending') {
-                              return <span className="text-yellow-600 text-sm font-medium">Pending</span>;
+                              return <span className="text-[color:var(--bento-warn-accent)] text-sm font-semibold">Pending</span>;
                             } else if (status === 'failed') {
-                              return <span className="text-red-600 text-sm font-medium">Failed</span>;
+                              return <span className="text-[color:var(--bento-danger-fg)] text-sm font-semibold">Failed</span>;
                             }
                             return <span className="text-muted-foreground text-sm">Unverified</span>;
                           })()}
                         </TableCell>
                         <TableCell>
                           {(customer as any).is_gig_driver ? (
-                            <span className="text-blue-600 text-sm font-medium">Yes</span>
+                            <span className="text-[color:var(--bento-info)] text-sm font-semibold">Yes</span>
                           ) : (
                             <span className="text-muted-foreground text-sm">No</span>
                           )}
@@ -908,7 +835,7 @@ const CustomersList = () => {
                                     {canEdit('customers') && (
                                       <DropdownMenuItem
                                         onClick={() => handleApproveCustomer(customer)}
-                                        className="text-green-600 focus:text-green-600"
+                                        className="text-[color:var(--bento-success)] focus:text-[color:var(--bento-success)]"
                                       >
                                         <UserCheck className="h-4 w-4 mr-2" />
                                         Approve Customer
@@ -947,7 +874,7 @@ const CustomersList = () => {
                                     {canEdit('customers') && (
                                       <DropdownMenuItem
                                         onClick={() => handleBlockClick(customer)}
-                                        className="text-orange-600 focus:text-orange-600"
+                                        className="text-[color:var(--bento-warn-accent)] focus:text-[color:var(--bento-warn-accent)]"
                                       >
                                         <Ban className="h-4 w-4 mr-2" />
                                         Block Customer
@@ -974,8 +901,7 @@ const CustomersList = () => {
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
+        </TableTile>
 
         {/* Pagination */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -1006,31 +932,30 @@ const CustomersList = () => {
         </div>
         </>
       ) : (
-        <div className="text-center py-12">
-          <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-2">
-            {hasActiveFilters ? 'No customers match your filters' : 'No customers yet'}
-          </h3>
-          <p className="text-muted-foreground mb-4">
-            {hasActiveFilters
+        <EmptyState
+          icon={<Users className="h-5 w-5" />}
+          title={hasActiveFilters ? 'No customers match your filters' : 'No customers yet'}
+          description={
+            hasActiveFilters
               ? 'Try adjusting your search or filter criteria'
               : 'Add your first customer to get started'
-            }
-          </p>
-          {hasActiveFilters ? (
-            <Button variant="outline" onClick={clearFilters}>
-              <X className="h-4 w-4 mr-2" />
-              Clear Filters
-            </Button>
-          ) : (
-            canEdit('customers') && (
-              <Button onClick={handleAddCustomer}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Customer
+          }
+          action={
+            hasActiveFilters ? (
+              <Button variant="outline" onClick={clearFilters}>
+                <X className="h-4 w-4 mr-2" />
+                Clear Filters
               </Button>
+            ) : (
+              canEdit('customers') && (
+                <Button onClick={handleAddCustomer}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Customer
+                </Button>
+              )
             )
-          )}
-        </div>
+          }
+        />
       )}
 
       <CustomerFormModal
@@ -1043,7 +968,7 @@ const CustomersList = () => {
       <Dialog open={blockDialogOpen} onOpenChange={setBlockDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-orange-600">
+            <DialogTitle className="flex items-center gap-2 text-[color:var(--bento-warn-accent)]">
               <Ban className="h-5 w-5" />
               Block Customer
             </DialogTitle>
@@ -1066,7 +991,7 @@ const CustomersList = () => {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="block-reason">Reason for blocking <span className="text-red-500">*</span></Label>
+              <Label htmlFor="block-reason">Reason for blocking <span className="text-destructive">*</span></Label>
               <Textarea
                 id="block-reason"
                 placeholder="Enter the reason for blocking this customer..."
@@ -1084,7 +1009,6 @@ const CustomersList = () => {
               variant="destructive"
               onClick={handleBlockCustomer}
               disabled={!blockReason.trim() || blockingLoading}
-              className="bg-orange-600 hover:bg-orange-700"
             >
               {blockingLoading ? "Blocking..." : "Block Customer"}
             </Button>

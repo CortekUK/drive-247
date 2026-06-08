@@ -3,44 +3,52 @@
 import React, { useState } from 'react';
 import { useReminders, useReminderStats, useReminderActions, type ReminderFilters } from '@/hooks/use-reminders';
 import { AddReminderDialog } from '@/components/reminders/add-reminder-dialog';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import {
   AlertTriangle,
   Clock,
   CheckCircle,
   XCircle,
   Bell,
-  Calendar,
   Download,
   Plus,
   MoreHorizontal,
-  Shield,
   BarChart3,
   X,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
-
-const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
+import {
+  Tile,
+  KpiTile,
+  Eyebrow,
+  StatusPill,
+  TableTile,
+  bentoTable,
+  EmptyState,
+  ErrorState,
+  TableSkeleton,
+  KpiTileSkeletonRow,
+} from '@/components/bento';
 
 const SEVERITY_ICONS = {
   critical: AlertTriangle,
   warning: Clock,
-  info: Bell
+  info: Bell,
 };
+
+const SEVERITY_TONE = {
+  critical: 'text-[color:var(--bento-danger-fg)]',
+  warning: 'text-[color:var(--bento-warn-accent)]',
+  info: 'text-[color:var(--bento-info)]',
+} as const;
 
 export default function RemindersPageEnhanced() {
   const [filters, setFilters] = useState<ReminderFilters>({});
@@ -48,7 +56,7 @@ export default function RemindersPageEnhanced() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const { canEdit } = useManagerPermissions();
 
-  const { data: reminders = [], isLoading, error } = useReminders(filters);
+  const { data: reminders = [], isLoading, error, refetch } = useReminders(filters);
   const { data: stats } = useReminderStats();
   const { markDone, dismiss, snooze, bulkUpdate, isLoading: isUpdating } = useReminderActions();
 
@@ -113,11 +121,12 @@ export default function RemindersPageEnhanced() {
 
   const getSeverityIcon = (severity: string) => {
     const Icon = SEVERITY_ICONS[severity as keyof typeof SEVERITY_ICONS] || Bell;
-    return <Icon className="h-4 w-4" />;
+    const tone = SEVERITY_TONE[severity as keyof typeof SEVERITY_TONE] || 'text-muted-foreground';
+    return <Icon className={`h-4 w-4 ${tone}`} />;
   };
 
   const getObjectLink = (reminder: any) => {
-    const baseClasses = "text-primary hover:underline";
+    const baseClasses = "text-primary hover:underline font-medium";
     const objectId = reminder.object_id;
 
     switch (reminder.object_type) {
@@ -141,28 +150,13 @@ export default function RemindersPageEnhanced() {
     }
   };
 
-  if (error) {
-    return (
-      <div className="container mx-auto py-8">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Error Loading Reminders</h3>
-              <p className="text-muted-foreground">{error.message}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="container mx-auto p-4 sm:p-6 sm:py-8 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold">Reminders</h1>
+          <Eyebrow>Compliance</Eyebrow>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">Reminders</h1>
           <p className="text-muted-foreground text-sm sm:text-base">Monitor and manage fleet compliance reminders</p>
         </div>
 
@@ -192,37 +186,29 @@ export default function RemindersPageEnhanced() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Tiles */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-        <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20 hover:border-indigo-500/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-          <CardHeader className="pb-2 p-3 sm:p-6">
-            <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Total Active</CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-            <div className="text-xl sm:text-2xl font-bold break-all">{stats?.total || 0}</div>
-            <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">All pending & snoozed</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-warning/10 to-warning/5 border-warning/20 hover:border-warning/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-          <CardHeader className="pb-2 p-3 sm:p-6">
-            <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Due Today</CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-            <div className="text-xl sm:text-2xl font-bold text-warning break-all">{stats?.due || 0}</div>
-            <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">Require attention</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-destructive/10 to-destructive/5 border-destructive/20 hover:border-destructive/40 transition-all duration-200 cursor-pointer hover:shadow-md col-span-2 md:col-span-1">
-          <CardHeader className="pb-2 p-3 sm:p-6">
-            <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Critical</CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-            <div className="text-xl sm:text-2xl font-bold text-destructive break-all">{stats?.critical || 0}</div>
-            <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">Urgent action needed</p>
-          </CardContent>
-        </Card>
+        <KpiTile
+          variant="hero"
+          label="Total Active"
+          value={stats?.total || 0}
+          sub="All pending & snoozed"
+          icon={<Bell className="h-4 w-4" />}
+        />
+        <KpiTile
+          variant="warn"
+          label="Due Today"
+          value={stats?.due || 0}
+          sub="Require attention"
+          icon={<Clock className="h-4 w-4" />}
+        />
+        <KpiTile
+          label="Critical"
+          value={stats?.critical || 0}
+          sub="Urgent action needed"
+          icon={<AlertTriangle className="h-4 w-4 text-[color:var(--bento-danger-fg)]" />}
+          className="col-span-2 md:col-span-1"
+        />
       </div>
 
       {/* Filters */}
@@ -274,179 +260,176 @@ export default function RemindersPageEnhanced() {
 
       {/* Bulk Actions */}
       {canEdit('reminders') && selectedIds.length > 0 && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                {selectedIds.length} reminder{selectedIds.length !== 1 ? 's' : ''} selected
-              </span>
+        <Tile variant="inset" className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">
+            {selectedIds.length} reminder{selectedIds.length !== 1 ? 's' : ''} selected
+          </span>
 
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => handleBulkAction('done')}
-                  disabled={isUpdating}
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Mark Done
-                </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => handleBulkAction('done')}
+              disabled={isUpdating}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Mark Done
+            </Button>
 
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleBulkAction('dismissed')}
-                  disabled={isUpdating}
-                >
-                  <XCircle className="h-4 w-4 mr-2" />
-                  Dismiss
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleBulkAction('dismissed')}
+              disabled={isUpdating}
+            >
+              <XCircle className="h-4 w-4 mr-2" />
+              Dismiss
+            </Button>
+          </div>
+        </Tile>
       )}
 
       {/* Reminders Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">
-            All Reminders ({reminders.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-              <p className="mt-4 text-muted-foreground">Loading reminders...</p>
-            </div>
-          ) : reminders.length === 0 ? (
-            <div className="text-center py-12">
-              <Bell className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Reminders</h3>
-              <p className="text-muted-foreground mb-4">No reminders match your current filters.</p>
-              {canEdit('reminders') && (
-                <Button
-                  variant="outline"
-                  onClick={() => setShowAddDialog(true)}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create a Reminder
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-md border max-h-[calc(100vh-420px)] min-h-[300px] overflow-auto relative">
-              <Table>
-                <TableHeader className="sticky top-0 z-10 bg-background">
-                  <TableRow>
-                    <TableHead className="w-[50px]">
+      {error ? (
+        <ErrorState
+          title="Error loading reminders"
+          description={error.message}
+          onRetry={() => refetch()}
+        />
+      ) : isLoading ? (
+        <TableSkeleton rows={8} cols={7} />
+      ) : reminders.length === 0 ? (
+        <EmptyState
+          icon={<Bell className="h-5 w-5" />}
+          title="No reminders"
+          description="No reminders match your current filters."
+          action={
+            canEdit('reminders') ? (
+              <Button variant="outline" onClick={() => setShowAddDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create a Reminder
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <TableTile
+          toolbar={
+            <Eyebrow>All Reminders ({reminders.length})</Eyebrow>
+          }
+        >
+          <div className="max-h-[calc(100vh-460px)] min-h-[300px] overflow-auto relative">
+            <Table>
+              <TableHeader className={`sticky top-0 z-10 ${bentoTable.header}`}>
+                <TableRow>
+                  <TableHead className="w-[50px]">
+                    {canEdit('reminders') && (
+                      <Checkbox
+                        checked={selectedIds.length === reminders.length}
+                        onCheckedChange={handleSelectAll}
+                      />
+                    )}
+                  </TableHead>
+                  <TableHead className="w-[50px]"></TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead className="text-center">Object</TableHead>
+                  <TableHead>Due On</TableHead>
+                  <TableHead>Remind On</TableHead>
+                  <TableHead className="w-[100px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reminders.map((reminder) => {
+                  const isIntegration = reminder.object_type === 'Integration';
+                  return (
+                  <TableRow key={reminder.id} className={`border-border ${isIntegration ? '[background:var(--bento-warn-bg)]' : ''}`}>
+                    <TableCell>
                       {canEdit('reminders') && (
                         <Checkbox
-                          checked={selectedIds.length === reminders.length}
-                          onCheckedChange={handleSelectAll}
+                          checked={selectedIds.includes(reminder.id)}
+                          onCheckedChange={(checked) =>
+                            handleSelectReminder(reminder.id, checked as boolean)
+                          }
                         />
                       )}
-                    </TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead className="text-center">Object</TableHead>
-                    <TableHead>Due On</TableHead>
-                    <TableHead>Remind On</TableHead>
-                    <TableHead className="w-[100px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {reminders.map((reminder) => {
-                    const isIntegration = reminder.object_type === 'Integration';
-                    return (
-                    <TableRow key={reminder.id} className={isIntegration ? 'bg-amber-50/50 dark:bg-amber-950/10' : undefined}>
-                      <TableCell>
-                        {canEdit('reminders') && (
-                          <Checkbox
-                            checked={selectedIds.includes(reminder.id)}
-                            onCheckedChange={(checked) =>
-                              handleSelectReminder(reminder.id, checked as boolean)
-                            }
-                          />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center">
+                        {getSeverityIcon(reminder.severity)}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium text-foreground">{reminder.title}</div>
+                        {!isIntegration && (
+                          <div className="text-sm text-muted-foreground truncate max-w-[300px]">
+                            {reminder.message}
+                          </div>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          {getSeverityIcon(reminder.severity)}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{reminder.title}</div>
-                          {!isIntegration && (
-                            <div className="text-sm text-muted-foreground truncate max-w-[300px]">
-                              {reminder.message}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div>
-                          <div>{getObjectLink(reminder)}</div>
-                          {!isIntegration && (
-                            <div className="text-xs text-muted-foreground">
-                              {reminder.object_type}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {isIntegration
-                            ? ''
-                            : format(parseISO(reminder.due_on), 'MMM dd, yyyy')}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {isIntegration ? (
-                            reminder.context?.alerted ? (
-                              <Badge variant="destructive" className="text-xs">Triggered</Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-xs">Monitoring</Badge>
-                            )
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div>
+                        <div>{getObjectLink(reminder)}</div>
+                        {!isIntegration && (
+                          <div className="text-xs text-muted-foreground">
+                            {reminder.object_type}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm font-mono tabular-nums text-muted-foreground">
+                        {isIntegration
+                          ? ''
+                          : format(parseISO(reminder.due_on), 'MMM dd, yyyy')}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        {isIntegration ? (
+                          reminder.context?.alerted ? (
+                            <StatusPill tone="danger" dot>Triggered</StatusPill>
                           ) : (
-                            format(parseISO(reminder.remind_on), 'MMM dd, yyyy')
+                            <StatusPill tone="info" dot>Monitoring</StatusPill>
+                          )
+                        ) : (
+                          <span className="font-mono tabular-nums text-muted-foreground">
+                            {format(parseISO(reminder.remind_on), 'MMM dd, yyyy')}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {canEdit('reminders') && (
+                            <DropdownMenuItem onClick={() => markDone(reminder.id)}>
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Mark Done
+                            </DropdownMenuItem>
                           )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {canEdit('reminders') && (
-                              <DropdownMenuItem onClick={() => markDone(reminder.id)}>
-                                <CheckCircle className="h-4 w-4 mr-2" />
-                                Mark Done
-                              </DropdownMenuItem>
-                            )}
-                            {canEdit('reminders') && (
-                              <DropdownMenuItem onClick={() => dismiss(reminder.id)}>
-                                <XCircle className="h-4 w-4 mr-2" />
-                                Dismiss
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                          {canEdit('reminders') && (
+                            <DropdownMenuItem onClick={() => dismiss(reminder.id)}>
+                              <XCircle className="h-4 w-4 mr-2" />
+                              Dismiss
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </TableTile>
+      )}
       <AddReminderDialog open={showAddDialog} onOpenChange={setShowAddDialog} />
     </div>
   );

@@ -4,17 +4,9 @@ import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Copy, Check, AlertTriangle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { Modal } from "@/components/bento";
 
 interface UserCredentials {
   name: string;
@@ -64,31 +56,38 @@ export function CredentialsModal({ open, onOpenChange, credentials }: Credential
   if (!credentials) return null;
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="sm:max-w-[500px]">
-        <AlertDialogHeader>
-          <AlertDialogTitle className="flex items-center gap-2 text-green-600">
-            <Check className="h-5 w-5" />
-            User Created Successfully
-          </AlertDialogTitle>
-          <AlertDialogDescription asChild>
-            <div className="space-y-4">
-              <p>
-                <strong>{credentials.name}</strong> has been created. Save the credentials below -
-                the password cannot be retrieved later.
+    <Modal
+      open={open}
+      onOpenChange={onOpenChange}
+      className="sm:max-w-[500px]"
+      title={
+        <span className="flex items-center gap-2 text-[color:var(--bento-success)]">
+          <Check className="h-5 w-5" />
+          User Created Successfully
+        </span>
+      }
+      footer={
+        <Button onClick={handleClose}>
+          I&apos;ve Saved the Credentials
+        </Button>
+      }
+    >
+        <div className="space-y-4">
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              <strong className="text-foreground">{credentials.name}</strong> has been created. Save the credentials below -
+              the password cannot be retrieved later.
+            </p>
+
+            <div className="[background:var(--bento-warn-bg)] [border-color:var(--bento-warn-border)] border rounded-tile-sm p-3 flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-[color:var(--bento-warn-accent)] flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-[color:var(--bento-warn-fg)]">
+                Make sure to save these credentials before closing. The password is shown only once and cannot be recovered.
               </p>
-
-              <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-3 flex items-start gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-amber-800 dark:text-amber-200">
-                  Make sure to save these credentials before closing. The password is shown only once and cannot be recovered.
-                </p>
-              </div>
             </div>
-          </AlertDialogDescription>
-        </AlertDialogHeader>
+          </div>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor="cred-email">Email</Label>
             <div className="flex gap-2">
@@ -104,7 +103,7 @@ export function CredentialsModal({ open, onOpenChange, credentials }: Credential
                 size="icon"
                 onClick={() => copyToClipboard(credentials.email, 'email')}
               >
-                {copiedEmail ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                {copiedEmail ? <Check className="h-4 w-4 text-[color:var(--bento-success)]" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
           </div>
@@ -124,7 +123,7 @@ export function CredentialsModal({ open, onOpenChange, credentials }: Credential
                 size="icon"
                 onClick={() => copyToClipboard(credentials.password, 'password')}
               >
-                {copiedPassword ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                {copiedPassword ? <Check className="h-4 w-4 text-[color:var(--bento-success)]" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -132,13 +131,7 @@ export function CredentialsModal({ open, onOpenChange, credentials }: Credential
             </p>
           </div>
         </div>
-
-        <AlertDialogFooter>
-          <AlertDialogAction onClick={handleClose} className="bg-gradient-primary">
-            I've Saved the Credentials
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+        </div>
+    </Modal>
   );
 }

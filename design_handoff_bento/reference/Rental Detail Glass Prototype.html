@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RevTek Rentals · Rental RT-1043</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; height: 100%; }
+  * { box-sizing: border-box; }
+  #root { height: 100vh; }
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--tile-border); border-radius: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  @keyframes up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes themeFade { from { opacity: .5; } to { opacity: 0; } }
+  @keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="bento-theme.js"></script>
+<script type="text/babel" src="ui.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+const T = window.BENTO_THEMES;
+const SPRING = 'cubic-bezier(.34,1.56,.64,1)';
+const M = n => '$' + (Math.round(n*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+
+const R = {
+  booking: 'RT-1043', status: 'Active',
+  vehicle: { make: 'BMW', model: 'X3', year: 2023, plate: 'BMX-2210', hue: 222 },
+  customer: { name: 'Marcus Webb', email: 'm.webb@email.com', phone: '+1 904 555 0142', verified: true, rating: 4.9, rentals: 12, hue: 222 },
+  from: 'Jun 10', to: 'Jun 24', year: '2026', days: 14, period: 'Weekly', pickupT: '09:00', returnT: '18:00',
+  location: '932 Dunn Ave, Jacksonville, FL', mileage: 250, excess: 0.35, driverAge: 34,
+  kpis: { collected: 1313.09, balance: 400, refunded: 0, net: 1313.09 },
+  breakdown: [
+    { label: 'Rental fee · 14 days', cat: 'Rental', amount: 1080, icon: 'car', paid: true },
+    { label: 'Bonzah Insurance', cat: 'Insurance', amount: 427, icon: 'shield', paid: true },
+    { label: 'GPS navigation', cat: 'Extras', amount: 112, icon: 'pin', paid: true },
+    { label: 'Tax · 8.25%', cat: 'Tax', amount: 89.10, icon: 'receipt', paid: true },
+    { label: 'Service fee', cat: 'Fee', amount: 4.99, icon: 'card', paid: true },
+    { label: 'Security deposit · hold', cat: 'Deposit', amount: 400, icon: 'lock', paid: false },
+  ],
+  ledger: [
+    { date: 'Jun 9', desc: 'Rental + insurance + extras', charge: 1619, pay: 0, bal: 1619 },
+    { date: 'Jun 9', desc: 'Tax & service fee', charge: 94.09, pay: 0, bal: 1713.09 },
+    { date: 'Jun 9', desc: 'Payment · Visa ••4242', charge: 0, pay: 1313.09, bal: 400 },
+    { date: 'Jun 9', desc: 'Security deposit · pre-auth hold', charge: 0, pay: 0, bal: 400 },
+  ],
+  agreement: [ ['Sent', 'Jun 9 · 10:02'], ['Viewed', 'Jun 9 · 10:14'], ['Signed', 'Jun 9 · 10:21'] ],
+};
+
+function App() {
+  const [dark, setDark] = useState(() => localStorage.getItem('bento_dark') === '1');
+  const [fade, setFade] = useState(0);
+  useEffect(() => { localStorage.setItem('bento_dark', dark ? '1' : '0'); }, [dark]);
+  const theme = dark ? T.dark : T.light;
+  const gv = dark ? {
+    '--glass': 'rgba(26,22,48,0.55)', '--glass-2': 'rgba(36,31,62,0.5)', '--glass-bd': 'rgba(255,255,255,0.09)',
+    '--glass-sh': '0 18px 50px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.05)',
+  } : {
+    '--glass': 'rgba(255,255,255,0.62)', '--glass-2': 'rgba(255,255,255,0.45)', '--glass-bd': 'rgba(255,255,255,0.7)',
+    '--glass-sh': '0 18px 50px rgba(60,45,120,.12), inset 0 1px 0 rgba(255,255,255,.65)',
+  };
+  return (
+    <div style={{ ...theme, ...gv, height: '100%', display: 'flex', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Sora',system-ui,sans-serif", position: 'relative', overflow: 'hidden', WebkitFontSmoothing: 'antialiased' }}>
+      <Decor dark={dark} />
+      {/* rail */}
+      <div style={{ width: 64, flexShrink: 0, background: 'var(--glass)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', borderRight: '1px solid var(--glass-bd)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '14px 0', zIndex: 3 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 11, background: 'var(--primary)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 15, marginBottom: 12 }}>R</div>
+        {['dashboard','calendar','car','users','card','receipt','settings'].map((ic) => (
+          <div key={ic} style={{ width: 40, height: 40, borderRadius: 12, display: 'grid', placeItems: 'center', margin: '3px 0', color: ic === 'calendar' ? 'var(--primary-weak-fg)' : 'var(--text-3)', background: ic === 'calendar' ? 'var(--primary-weak)' : 'transparent' }}><Icon name={ic} size={19} /></div>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, zIndex: 2 }}>
+        {/* top bar */}
+        <div style={{ height: 60, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '0 24px' }}>
+          <button style={ghostIcon}><Icon name="back" size={18} /></button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--text-3)' }}>
+            <span>Rentals</span><Icon name="chevRight" size={13} /><span style={{ color: 'var(--text-2)', fontWeight: 600 }}>#{R.booking}</span>
+          </div>
+          <div style={{ marginLeft: 'auto' }}>
+            <button onClick={() => { setDark(d => !d); setFade(x => x + 1); }} style={{ position: 'relative', width: 56, height: 31, borderRadius: 999, border: '1px solid var(--glass-bd)', background: 'var(--glass)', cursor: 'pointer' }}>
+              <span style={{ position: 'absolute', top: 3, left: dark ? 28 : 3, width: 23, height: 23, borderRadius: 999, background: 'var(--tile)', display: 'grid', placeItems: 'center', color: 'var(--primary)', boxShadow: '0 2px 5px rgba(0,0,0,.25)', transition: `left .4s ${SPRING}` }}><Icon name={dark ? 'moon' : 'sun'} size={13} /></span>
+            </button>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '4px 24px 28px' }}>
+          <div style={{ maxWidth: 1080, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Header />
+            <Kpis />
+            <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 16, alignItems: 'start' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <Trip /><Breakdown /><Ledger />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <Customer /><Insurance /><Agreement /><KeyHandover />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {fade > 0 && <div key={fade} style={{ position: 'absolute', inset: 0, background: 'var(--bg)', zIndex: 50, pointerEvents: 'none', animation: 'themeFade .46s ease forwards' }} />}
+    </div>
+  );
+}
+
+function Decor({ dark }) {
+  const b = dark
+    ? [['rgba(124,92,255,.26)', 520, -160, -120, 'top', 'left'], ['rgba(60,90,230,.20)', 440, -140, -80, 'bottom', 'right']]
+    : [['rgba(124,92,255,.24)', 520, -160, -120, 'top', 'left'], ['rgba(86,150,255,.20)', 440, -140, -80, 'bottom', 'right'], ['rgba(255,150,220,.14)', 320, '40%', '8%', 'top', 'right']];
+  return <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
+    {b.map((x, i) => <div key={i} style={{ position: 'absolute', width: x[1], height: x[1], borderRadius: 999, background: x[0], filter: 'blur(80px)', [x[4]]: x[2], [x[5]]: x[3], animation: `floaty ${10 + i * 2}s ease-in-out ${i * 0.7}s infinite` }} />)}
+  </div>;
+}
+
+const ghostIcon = { width: 38, height: 38, borderRadius: 11, border: '1px solid var(--glass-bd)', background: 'var(--glass)', color: 'var(--text-2)', cursor: 'pointer', display: 'grid', placeItems: 'center' };
+const glass = { background: 'var(--glass)', backdropFilter: 'blur(22px) saturate(150%)', WebkitBackdropFilter: 'blur(22px) saturate(150%)', border: '1px solid var(--glass-bd)', borderRadius: 22, boxShadow: 'var(--glass-sh)' };
+const eb = { fontSize: 10.5, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', color: 'var(--text-3)' };
+const bigN = { fontFamily: "'Sora'", fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text)' };
+function Card({ children, style, i = 0, pad = 18 }) { return <div style={{ ...glass, padding: pad, animation: `up .5s ${0.04 * i}s ease both`, ...style }}>{children}</div>; }
+function Pill({ tone, icon, children }) {
+  const map = { ok: ['var(--green-weak)', 'var(--green)'], info: ['var(--info-weak)', 'var(--info)'], warn: ['var(--warn-bg)', 'var(--warn-accent)'], danger: ['var(--danger-weak)', 'var(--danger-fg)'], primary: ['var(--primary-weak)', 'var(--primary-weak-fg)'] };
+  const [bg, fg] = map[tone] || ['var(--glass-2)', 'var(--text-2)'];
+  return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: bg, color: fg, fontWeight: 700, fontSize: 11.5, padding: '5px 10px', borderRadius: 999 }}>{icon && <Icon name={icon} size={12} fill={icon === 'star'} />}{children}</span>;
+}
+function Title({ icon, children, action }) {
+  return <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 14 }}>
+    <Icon name={icon} size={17} style={{ color: 'var(--primary)' }} />
+    <span style={{ fontFamily: "'Sora'", fontWeight: 700, fontSize: 14.5, letterSpacing: '-0.01em', color: 'var(--text)', flex: 1 }}>{children}</span>
+    {action}
+  </div>;
+}
+const linkBtn = { border: 'none', background: 'transparent', color: 'var(--primary-weak-fg)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' };
+
+function Header() {
+  return (
+    <Card pad={20} style={{ animation: 'up .5s ease both' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: `hsl(${R.vehicle.hue} 70% 90%)`, color: `hsl(${R.vehicle.hue} 55% 40%)`, display: 'grid', placeItems: 'center', flexShrink: 0 }}><Icon name="car" size={28} /></div>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <h1 style={{ ...bigN, margin: 0, fontSize: 24 }}>{R.vehicle.make} {R.vehicle.model} <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>{R.vehicle.year}</span></h1>
+            <Pill tone="ok" icon="dot">Active</Pill><Pill tone="info" icon="shield">Insurance active</Pill>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 6, fontSize: 12.5, color: 'var(--text-3)', flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: "'IBM Plex Mono'" }}>#{R.booking}</span>
+            <span>· {R.vehicle.plate}</span><span>· {R.from} → {R.to}, {R.year}</span><span>· {R.days} days · {R.period}</span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button style={btn2}><Icon name="send" size={15} />Send agreement</button>
+          <button style={btn2}><Icon name="calendar" size={15} />Extend</button>
+          <button style={btnP}><Icon name="key" size={15} />Hand over keys</button>
+          <button style={ghostIcon}><Icon name="grid" size={16} /></button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+const btn2 = { display: 'inline-flex', alignItems: 'center', gap: 7, height: 40, padding: '0 14px', borderRadius: 12, border: '1px solid var(--glass-bd)', background: 'var(--glass-2)', color: 'var(--text)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' };
+const btnP = { display: 'inline-flex', alignItems: 'center', gap: 7, height: 40, padding: '0 16px', borderRadius: 12, border: 'none', background: 'var(--primary)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 8px 20px var(--primary-weak)' };
+
+function Kpis() {
+  const k = R.kpis;
+  const items = [['Collected', M(k.collected), 'ok', 'card'], ['Balance due', M(k.balance), k.balance > 0 ? 'warn' : 'ok', 'receipt'], ['Refunded', M(k.refunded), 'info', 'arrowRight'], ['Net received', M(k.net), 'primary', 'dollar']];
+  return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+    {items.map((it, i) => (
+      <Card key={i} i={i + 1} pad={16}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={eb}>{it[0]}</span><Icon name={it[3]} size={15} style={{ color: 'var(--primary)' }} /></div>
+        <div style={{ ...bigN, fontSize: 27, marginTop: 12, fontFamily: "'IBM Plex Mono'", fontVariantNumeric: 'tabular-nums' }}>{it[1]}</div>
+      </Card>
+    ))}
+  </div>;
+}
+
+function Trip() {
+  const cell = (label, val, sub) => <div><div style={eb}>{label}</div><div style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--text)', marginTop: 4 }}>{val}</div>{sub && <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{sub}</div>}</div>;
+  return <Card i={1}><Title icon="calendar">Trip details</Title>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, rowGap: 18 }}>
+      {cell('Pickup', `${R.from} · ${R.pickupT}`, R.location.split(',')[0])}
+      {cell('Return', `${R.to} · ${R.returnT}`, R.location.split(',')[0])}
+      {cell('Duration', `${R.days} days`, R.period)}
+      {cell('Mileage allowance', `${R.mileage} / week`, `Excess ${M(R.excess)}/mi`)}
+      {cell('Driver age', R.driverAge, 'Verified')}
+      {cell('Pickup location', 'Jacksonville', R.location)}
+    </div>
+  </Card>;
+}
+
+function Breakdown() {
+  const total = R.breakdown.filter(b => b.cat !== 'Deposit').reduce((s, b) => s + b.amount, 0);
+  return <Card i={2} pad={0}>
+    <div style={{ padding: 18 }}><Title icon="receipt" action={<span style={linkBtn}>Add charge</span>}>Payment breakdown</Title></div>
+    {R.breakdown.map((b, i) => (
+      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', borderTop: '1px solid var(--glass-bd)' }}>
+        <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--glass-2)', color: 'var(--primary)', display: 'grid', placeItems: 'center' }}><Icon name={b.icon} size={16} /></div>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>{b.label}</div><div style={{ fontSize: 11, color: 'var(--text-3)' }}>{b.cat}</div></div>
+        {b.paid ? <Pill tone="ok" icon="check">Paid</Pill> : <Pill tone="warn">Hold</Pill>}
+        <span style={{ fontFamily: "'IBM Plex Mono'", fontWeight: 600, fontSize: 14, color: 'var(--text)', minWidth: 86, textAlign: 'right' }}>{M(b.amount)}</span>
+      </div>
+    ))}
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderTop: '1px solid var(--glass-bd)', background: 'var(--glass-2)' }}>
+      <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>Rental total</span>
+      <span style={{ ...bigN, fontSize: 19, fontFamily: "'IBM Plex Mono'" }}>{M(total)}</span>
+    </div>
+  </Card>;
+}
+
+function Ledger() {
+  const th = { textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--text-3)', padding: '10px 18px' };
+  const td = { padding: '11px 18px', borderTop: '1px solid var(--glass-bd)', fontSize: 12.5, color: 'var(--text-2)' };
+  const num = { ...td, textAlign: 'right', fontFamily: "'IBM Plex Mono'", color: 'var(--text)', fontVariantNumeric: 'tabular-nums' };
+  return <Card i={3} pad={0}>
+    <div style={{ padding: 18 }}><Title icon="scroll" action={<span style={linkBtn}>Export</span>}>Rental ledger</Title></div>
+    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <thead><tr><th style={th}>Date</th><th style={th}>Description</th><th style={{ ...th, textAlign: 'right' }}>Charge</th><th style={{ ...th, textAlign: 'right' }}>Payment</th><th style={{ ...th, textAlign: 'right' }}>Balance</th></tr></thead>
+      <tbody>{R.ledger.map((l, i) => (
+        <tr key={i}>
+          <td style={{ ...td, fontFamily: "'IBM Plex Mono'", whiteSpace: 'nowrap' }}>{l.date}</td>
+          <td style={td}>{l.desc}</td>
+          <td style={num}>{l.charge ? M(l.charge) : '—'}</td>
+          <td style={{ ...num, color: l.pay ? 'var(--green)' : 'var(--text-3)' }}>{l.pay ? '−' + M(l.pay) : '—'}</td>
+          <td style={{ ...num, fontWeight: 600 }}>{M(l.bal)}</td>
+        </tr>
+      ))}</tbody>
+    </table>
+  </Card>;
+}
+
+function Customer() {
+  const c = R.customer;
+  return <Card i={2}><Title icon="users" action={<span style={linkBtn}>Profile</span>}>Customer</Title>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ width: 44, height: 44, borderRadius: 13, background: `hsl(${c.hue} 65% 90%)`, color: `hsl(${c.hue} 50% 40%)`, display: 'grid', placeItems: 'center', fontWeight: 800, fontFamily: "'Sora'", fontSize: 15 }}>{c.name.split(' ').map(w=>w[0]).join('')}</div>
+      <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>{c.name}</div><div style={{ fontSize: 12, color: 'var(--text-3)' }}>{c.email}</div></div>
+    </div>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 13 }}>
+      <Pill tone="ok" icon="checkCircle">ID verified</Pill><Pill tone="primary" icon="star">{c.rating}</Pill><Pill icon="file">{c.rentals} rentals</Pill>
+    </div>
+    <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+      <button style={{ ...btn2, flex: 1, justifyContent: 'center', height: 38 }}><Icon name="chat" size={15} />Message</button>
+      <button style={{ ...btn2, flex: 1, justifyContent: 'center', height: 38 }}><Icon name="card" size={15} />Charge</button>
+    </div>
+  </Card>;
+}
+
+function Insurance() {
+  return <Card i={3}><Title icon="shield" action={<Pill tone="ok" icon="dot">Active</Pill>}>Insurance</Title>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+      <Row k="Provider" v="Bonzah" />
+      <Row k="Coverage" v="CDW · RCLI" />
+      <Row k="Valid through" v="Jun 24, 2026" />
+      <Row k="Premium" v={M(427)} mono />
+    </div>
+    <button style={{ ...btn2, width: '100%', justifyContent: 'center', height: 38, marginTop: 14 }}><Icon name="file" size={15} />View policy</button>
+  </Card>;
+}
+function Row({ k, v, mono }) { return <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-3)' }}>{k}</span><span style={{ fontWeight: 600, color: 'var(--text)', fontFamily: mono ? "'IBM Plex Mono'" : 'inherit' }}>{v}</span></div>; }
+
+function Agreement() {
+  return <Card i={4}><Title icon="file" action={<Pill tone="ok" icon="check">Signed</Pill>}>Agreement</Title>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {R.agreement.map((a, i) => (
+        <div key={i} style={{ display: 'flex', gap: 11, paddingBottom: i < 2 ? 14 : 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ width: 22, height: 22, borderRadius: 99, background: 'var(--green-weak)', color: 'var(--green)', display: 'grid', placeItems: 'center' }}><Icon name="check" size={13} stroke={3} /></div>
+            {i < 2 && <div style={{ width: 2, flex: 1, background: 'var(--glass-bd)', marginTop: 2 }} />}
+          </div>
+          <div style={{ paddingBottom: 2 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)' }}>{a[0]}</div><div style={{ fontSize: 11.5, color: 'var(--text-3)', fontFamily: "'IBM Plex Mono'" }}>{a[1]}</div></div>
+        </div>
+      ))}
+    </div>
+    <button style={{ ...btn2, width: '100%', justifyContent: 'center', height: 38, marginTop: 14 }}><Icon name="download" size={15} />Download PDF</button>
+  </Card>;
+}
+
+function KeyHandover() {
+  return <Card i={5}><Title icon="key">Key handover</Title>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 14, background: 'var(--glass-2)' }}>
+      <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--primary-weak)', color: 'var(--primary-weak-fg)', display: 'grid', placeItems: 'center' }}><Icon name="lock" size={18} /></div>
+      <div style={{ flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)' }}>Lockbox · code 4821</div><div style={{ fontSize: 11.5, color: 'var(--green)' }}>Released to customer</div></div>
+      <Pill tone="ok" icon="check">Done</Pill>
+    </div>
+  </Card>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

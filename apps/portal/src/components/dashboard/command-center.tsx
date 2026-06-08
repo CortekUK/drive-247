@@ -78,13 +78,13 @@ function ProgressRing({
             x2="100%"
             y2="100%"
           >
-            <stop offset="0%" stopColor="#818cf8" />
-            <stop offset="100%" stopColor="#6366f1" />
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.65} />
+            <stop offset="100%" stopColor="hsl(var(--primary))" />
           </linearGradient>
         </defs>
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <Rocket className="h-4 w-4 text-indigo-400" />
+        <Rocket className="h-4 w-4 text-primary" />
       </div>
     </div>
   );
@@ -292,10 +292,10 @@ export function CommandCenter({
   const nextStep = sortedActive.find((i) => !i.isComplete);
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card overflow-hidden relative">
+    <div className="rounded-tile border border-border bg-bento-tile shadow-bento overflow-hidden relative">
       {/* Top accent progress line */}
       <div
-        className="absolute top-0 left-0 h-[2px] bg-gradient-to-r from-indigo-500 via-indigo-400 to-violet-500 transition-all duration-700 ease-out"
+        className="absolute top-0 left-0 h-[2px] bg-primary transition-all duration-700 ease-out"
         style={{ width: `${checklistProgress}%` }}
       />
 

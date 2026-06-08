@@ -9,9 +9,10 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, CartesianGrid, XAxis, YAxis,
   RadialBarChart, RadialBar, PolarAngleAxis,
 } from "recharts";
-import { ArrowLeft, Info } from "lucide-react";
+import { ArrowLeft, Info, BarChart3 } from "lucide-react";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { useFinesData } from "@/hooks/use-fines-data";
+import { Tile, Eyebrow, EmptyState, Shimmer } from "@/components/bento";
 
 const STATUS_COLORS: Record<string, string> = {
   Open: "#f59e0b",
@@ -102,8 +103,15 @@ export default function FinesAnalyticsPage() {
   if (isLoading) {
     return (
       <div className="container mx-auto p-6 space-y-6">
-        <div className="h-8 bg-muted animate-pulse rounded"></div>
-        <div className="h-96 bg-muted animate-pulse rounded"></div>
+        <Shimmer className="h-8 w-64" />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Tile key={i} noMotion className="flex flex-col gap-3">
+              <Shimmer className="h-3 w-24" />
+              <Shimmer className="h-[180px] w-full" />
+            </Tile>
+          ))}
+        </div>
       </div>
     );
   }
@@ -115,7 +123,8 @@ export default function FinesAnalyticsPage() {
           <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
         </Link>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Fines Analytics</h1>
+          <Eyebrow>Insights</Eyebrow>
+          <h1 className="text-[30px] font-extrabold tracking-tight leading-tight">Fines Analytics</h1>
           <p className="text-sm text-muted-foreground">Charts and insights for fines management</p>
         </div>
       </div>
@@ -124,7 +133,7 @@ export default function FinesAnalyticsPage() {
         <TooltipProvider>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {/* Fine Status Distribution */}
-            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+            <Tile pad="compact">
               <div className="flex items-center gap-2 mb-3">
                 <h3 className="text-sm font-medium text-muted-foreground">Status Breakdown</h3>
                 <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" /></TooltipTrigger>
@@ -147,10 +156,10 @@ export default function FinesAnalyticsPage() {
               <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 justify-center">
                 {statusDonutData.map((d) => (<div key={d.name} className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: STATUS_COLORS[d.name] || "#94a3b8" }} />{d.name} ({d.value})</div>))}
               </div>
-            </div>
+            </Tile>
 
             {/* Overdue Rate Radial */}
-            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+            <Tile pad="compact">
               <div className="flex items-center gap-2 mb-3">
                 <h3 className="text-sm font-medium text-muted-foreground">Overdue Rate</h3>
                 <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" /></TooltipTrigger>
@@ -168,10 +177,10 @@ export default function FinesAnalyticsPage() {
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="h-2 w-2 rounded-full bg-red-500" />Overdue ({overdueRadialData.overdue})</div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="h-2 w-2 rounded-full bg-muted-foreground/30" />On Time ({overdueRadialData.openTotal - overdueRadialData.overdue})</div>
               </div>
-            </div>
+            </Tile>
 
             {/* Monthly Fines Trend */}
-            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+            <Tile pad="compact">
               <div className="flex items-center gap-2 mb-3">
                 <h3 className="text-sm font-medium text-muted-foreground">Monthly Trend</h3>
                 <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" /></TooltipTrigger>
@@ -190,10 +199,10 @@ export default function FinesAnalyticsPage() {
                   <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={20} />
                 </BarChart>
               </ChartContainer>
-            </div>
+            </Tile>
 
             {/* Top Fined Vehicles */}
-            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+            <Tile pad="compact">
               <div className="flex items-center gap-2 mb-3">
                 <h3 className="text-sm font-medium text-muted-foreground">Top Fined Vehicles</h3>
                 <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" /></TooltipTrigger>
@@ -212,11 +221,20 @@ export default function FinesAnalyticsPage() {
                   <Bar dataKey="count" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={18} />
                 </BarChart>
               </ChartContainer>
-            </div>
+            </Tile>
           </div>
         </TooltipProvider>
       ) : (
-        <div className="text-center py-12"><p className="text-muted-foreground">No fines data available for analytics</p></div>
+        <EmptyState
+          icon={<BarChart3 className="h-5 w-5" />}
+          title="No analytics yet"
+          description="No fines data available for analytics. Charts will appear once fines are recorded."
+          action={
+            <Link href="/fines">
+              <Button variant="outline">Back to Fines</Button>
+            </Link>
+          }
+        />
       )}
     </div>
   );

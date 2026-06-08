@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
+import { StatusPill } from "@/components/bento";
 import { Timer, Zap, AlertTriangle } from "lucide-react";
 
 interface PlatformStatusBannerProps {
@@ -24,63 +24,55 @@ export function PlatformStatusBanner({
     if (elapsed > SEVEN_DAYS_MS) return null;
   }
 
+  const tone =
+    mode === "live" ? "success" : mode === "expired" ? "danger" : "primary";
+
+  const chipBg =
+    mode === "live"
+      ? "bg-bento-success-weak"
+      : mode === "expired"
+        ? "bg-bento-danger-weak"
+        : "bg-bento-primary-weak";
+
+  const iconColor =
+    mode === "live"
+      ? "text-bento-success"
+      : mode === "expired"
+        ? "text-bento-danger-fg"
+        : "text-bento-primary-weak-fg";
+
   return (
-    <div
-      className={`flex items-center justify-between rounded-xl px-4 py-3 ${
-        mode === "live"
-          ? "bg-green-500/10"
-          : mode === "expired"
-            ? "bg-red-500/10"
-            : "bg-indigo-500/10"
-      }`}
-    >
+    <div className="flex items-center justify-between rounded-tile border border-border bg-bento-tile px-4 py-3 shadow-bento">
       <div className="flex items-center gap-3">
-        {mode === "live" ? (
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/15">
-            <Zap className="h-4 w-4 text-green-600 dark:text-green-400" />
-          </div>
-        ) : mode === "expired" ? (
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500/15">
-            <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-          </div>
-        ) : (
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500/15">
-            <Timer className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-          </div>
-        )}
+        <div
+          className={`flex h-9 w-9 items-center justify-center rounded-full ${chipBg}`}
+        >
+          {mode === "live" ? (
+            <Zap className={`h-4 w-4 ${iconColor}`} />
+          ) : mode === "expired" ? (
+            <AlertTriangle className={`h-4 w-4 ${iconColor}`} />
+          ) : (
+            <Timer className={`h-4 w-4 ${iconColor}`} />
+          )}
+        </div>
 
         <div>
           {mode === "live" && (
             <>
-              <p className="text-sm font-semibold">
+              <p className="text-sm font-bold tracking-tight text-foreground">
                 You're Live
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-bento-text-2">
                 Your platform is operational and accepting bookings
-              </p>
-            </>
-          )}
-          {mode === "trial" && (
-            <>
-              <p className="text-sm font-semibold">
-                Trial Mode{" "}
-                <span className="text-indigo-600 dark:text-indigo-400">
-                  · {trialDaysRemaining} day{trialDaysRemaining !== 1 ? "s" : ""}{" "}
-                  remaining
-                </span>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Explore the platform and set up your integrations. Everything
-                runs in test mode during your trial.
               </p>
             </>
           )}
           {mode === "expired" && (
             <>
-              <p className="text-sm font-semibold">
+              <p className="text-sm font-bold tracking-tight text-foreground">
                 Subscription Expired
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-bento-text-2">
                 Renew your subscription to continue operations
               </p>
             </>
@@ -88,18 +80,9 @@ export function PlatformStatusBanner({
         </div>
       </div>
 
-      <Badge
-        variant="secondary"
-        className={`shrink-0 text-[10px] font-bold ${
-          mode === "live"
-            ? "bg-green-500/15 text-green-600 dark:text-green-400 hover:bg-green-500/15"
-            : mode === "expired"
-              ? "bg-red-500/15 text-red-600 dark:text-red-400 hover:bg-red-500/15"
-              : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15"
-        }`}
-      >
-        {mode === "live" ? "LIVE" : mode === "expired" ? "EXPIRED" : "TRIAL"}
-      </Badge>
+      <StatusPill tone={tone} dot>
+        {mode === "live" ? "Live" : mode === "expired" ? "Expired" : "Trial"}
+      </StatusPill>
     </div>
   );
 }

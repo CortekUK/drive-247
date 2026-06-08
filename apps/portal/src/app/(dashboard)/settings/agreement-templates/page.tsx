@@ -2,9 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Tile, StatusPill } from '@/components/bento';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -135,13 +134,13 @@ function TemplateCategorySection({ category }: { category: TemplateCategory }) {
 
   if (isLoading || isInitializing) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex flex-col items-center justify-center h-64 gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="text-muted-foreground">
-            {isInitializing ? 'Setting up templates...' : 'Loading templates...'}
-          </p>
-        </div>
+      <div className="space-y-4">
+        {[1, 2].map((i) => (
+          <div key={i} className="h-40 animate-pulse rounded-tile [background:var(--bento-tile-2)]" />
+        ))}
+        <p className="text-center text-sm text-muted-foreground">
+          {isInitializing ? 'Setting up templates...' : 'Loading templates...'}
+        </p>
       </div>
     );
   }
@@ -156,20 +155,17 @@ function TemplateCategorySection({ category }: { category: TemplateCategory }) {
         disabled={isSettingActive}
       >
         {/* Default Template Card */}
-        <Card className={`relative transition-all ${activeType === 'default' ? 'border-primary ring-2 ring-primary/20' : 'hover:border-muted-foreground/30'}`}>
-          <CardHeader className="pb-3">
+        <Tile pad="roomy" className={`relative ${activeType === 'default' ? 'ring-2 ring-primary/30' : ''}`}>
+          <div className="pb-3">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3 flex-1">
                 <RadioGroupItem value="default" id="default" className="mt-1 h-5 w-5" />
                 <div className="flex-1 min-w-0">
                   <Label htmlFor="default" className="cursor-pointer">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold">{DEFAULT_TEMPLATE_NAME}</span>
+                      <span className="font-bold tracking-tight">{DEFAULT_TEMPLATE_NAME}</span>
                       {activeType === 'default' && (
-                        <Badge className="text-xs bg-primary/10 text-primary border-0">
-                          <Check className="h-3 w-3 mr-1" />
-                          Active
-                        </Badge>
+                        <StatusPill tone="primary"><Check className="h-3 w-3" /> Active</StatusPill>
                       )}
                     </div>
                   </Label>
@@ -219,22 +215,22 @@ function TemplateCategorySection({ category }: { category: TemplateCategory }) {
                 </Button>
               </div>
             </div>
-          </CardHeader>
+          </div>
           {defaultTemplate && (
-            <CardContent className="pt-0">
-              <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground line-clamp-2">
+            <div className="pt-0">
+              <div className="rounded-tile-sm [background:var(--bento-tile-2)] p-3 text-sm text-muted-foreground line-clamp-2">
                 {defaultTemplate.template_content.replace(/<[^>]+>/g, ' ').substring(0, 200)}...
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Last updated: {formatDate(defaultTemplate.updated_at)}
+                Last updated: <span className="font-mono tabular-nums">{formatDate(defaultTemplate.updated_at)}</span>
               </p>
-            </CardContent>
+            </div>
           )}
-        </Card>
+        </Tile>
 
         {/* Custom Template Card */}
-        <Card className={`relative transition-all ${activeType === 'custom' ? 'border-primary ring-2 ring-primary/20' : customTemplateIsEmpty ? 'border-dashed' : 'hover:border-muted-foreground/30'}`}>
-          <CardHeader className="pb-3">
+        <Tile pad="roomy" className={`relative ${activeType === 'custom' ? 'ring-2 ring-primary/30' : customTemplateIsEmpty ? 'border-dashed' : ''}`}>
+          <div className="pb-3">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3 flex-1">
                 <RadioGroupItem
@@ -246,17 +242,12 @@ function TemplateCategorySection({ category }: { category: TemplateCategory }) {
                 <div className="flex-1 min-w-0">
                   <Label htmlFor="custom" className={`${customTemplateIsEmpty ? '' : 'cursor-pointer'}`}>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold">{CUSTOM_TEMPLATE_NAME}</span>
+                      <span className="font-bold tracking-tight">{CUSTOM_TEMPLATE_NAME}</span>
                       {activeType === 'custom' && (
-                        <Badge className="text-xs bg-primary/10 text-primary border-0">
-                          <Check className="h-3 w-3 mr-1" />
-                          Active
-                        </Badge>
+                        <StatusPill tone="primary"><Check className="h-3 w-3" /> Active</StatusPill>
                       )}
                       {customTemplateIsEmpty && (
-                        <Badge variant="secondary" className="text-xs">
-                          Not configured
-                        </Badge>
+                        <StatusPill tone="neutral">Not configured</StatusPill>
                       )}
                     </div>
                   </Label>
@@ -319,20 +310,20 @@ function TemplateCategorySection({ category }: { category: TemplateCategory }) {
                 </Button>
               </div>
             </div>
-          </CardHeader>
+          </div>
           {customTemplate && !customTemplateIsEmpty && (
-            <CardContent className="pt-0">
-              <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground line-clamp-2">
+            <div className="pt-0">
+              <div className="rounded-tile-sm [background:var(--bento-tile-2)] p-3 text-sm text-muted-foreground line-clamp-2">
                 {customTemplate.template_content.replace(/<[^>]+>/g, ' ').substring(0, 200)}...
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Last updated: {formatDate(customTemplate.updated_at)}
+                Last updated: <span className="font-mono tabular-nums">{formatDate(customTemplate.updated_at)}</span>
               </p>
-            </CardContent>
+            </div>
           )}
           {customTemplateIsEmpty && (
-            <CardContent className="pt-0">
-              <div className="bg-muted/30 border border-dashed rounded-lg p-6 text-center">
+            <div className="pt-0">
+              <div className="border border-dashed border-border rounded-tile-sm [background:var(--bento-tile-2)] p-6 text-center">
                 <FileText className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">
                   No custom template created yet
@@ -341,23 +332,23 @@ function TemplateCategorySection({ category }: { category: TemplateCategory }) {
                   Click "Create" to build your own template
                 </p>
               </div>
-            </CardContent>
+            </div>
           )}
-        </Card>
+        </Tile>
       </RadioGroup>
 
       {/* Loading overlay for template switch */}
       {isSettingActive && (
-        <div className="fixed inset-0 bg-background/50 flex items-center justify-center z-50">
-          <div className="bg-background border rounded-lg p-6 flex items-center gap-3 shadow-lg">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span>Switching template...</span>
+        <div className="fixed inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-card border border-border rounded-tile p-6 flex items-center gap-3 shadow-bento-hero">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <span className="font-medium">Switching template...</span>
           </div>
         </div>
       )}
 
       {/* Info Section */}
-      <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/30 border">
+      <Tile variant="inset" pad="compact" className="flex items-start gap-3">
         <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
         <div className="text-sm text-muted-foreground">
           <p>
@@ -365,7 +356,7 @@ function TemplateCategorySection({ category }: { category: TemplateCategory }) {
             You can edit either template to customize the content using dynamic variables.
           </p>
         </div>
-      </div>
+      </Tile>
     </div>
   );
 }
@@ -390,7 +381,7 @@ export default function AgreementTemplatesPage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold">Agreement Templates</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight">Agreement Templates</h1>
           <p className="text-muted-foreground text-sm">
             Choose which template to use for rental agreements sent for electronic signing
           </p>

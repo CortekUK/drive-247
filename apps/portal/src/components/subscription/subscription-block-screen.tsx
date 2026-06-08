@@ -10,9 +10,9 @@ interface SubscriptionBlockScreenProps {
 export function SubscriptionBlockScreen({ onViewPlans }: SubscriptionBlockScreenProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-md">
-      <div className="mx-4 w-full max-w-md overflow-hidden rounded-2xl border bg-card shadow-2xl">
+      <div className="mx-4 w-full max-w-md overflow-hidden rounded-tile border border-border bg-card shadow-bento-hero">
         {/* Colored top bar */}
-        <div className="h-1.5 bg-gradient-to-r from-destructive via-destructive/80 to-orange-500" />
+        <div className="h-1.5 bg-destructive" />
 
         <div className="p-8">
           <div className="flex flex-col items-center text-center">

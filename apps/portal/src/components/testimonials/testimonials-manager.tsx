@@ -1,17 +1,15 @@
 import { useState, forwardRef, useImperativeHandle } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Trash2, Star, MessageSquareQuote, Edit, AlertTriangle } from "lucide-react";
 import { useTestimonials } from "@/hooks/use-testimonials";
-import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
+import { Modal, TableTile, bentoTable, EmptyState, TableSkeleton } from "@/components/bento";
 
 export interface TestimonialsManagerRef {
   openDialog: () => void;
@@ -116,8 +114,8 @@ export const TestimonialsManager = forwardRef<TestimonialsManagerRef>((props, re
             key={star}
             className={`h-4 w-4 ${
               star <= count
-                ? "fill-yellow-400 text-yellow-400"
-                : "text-gray-300"
+                ? "fill-[color:var(--bento-warn-accent)] text-[color:var(--bento-warn-accent)]"
+                : "text-[color:var(--bento-text-3)]"
             }`}
           />
         ))}
@@ -132,17 +130,16 @@ export const TestimonialsManager = forwardRef<TestimonialsManagerRef>((props, re
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>
-                {editingId ? "Edit Testimonial" : "Add New Testimonial"}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
+      <Modal
+        open={isOpen}
+        onOpenChange={setIsOpen}
+        className="max-w-2xl"
+        title={editingId ? "Edit Testimonial" : "Add New Testimonial"}
+      >
+            <div className="space-y-4">
               {/* Author Name */}
               <div className="space-y-2">
-                <Label>Author Name <span className="text-red-500">*</span></Label>
+                <Label>Author Name <span className="text-destructive">*</span></Label>
                 <Input
                   placeholder="e.g., John Smith"
                   value={author}
@@ -152,7 +149,7 @@ export const TestimonialsManager = forwardRef<TestimonialsManagerRef>((props, re
 
               {/* Company Name */}
               <div className="space-y-2">
-                <Label>Company Name <span className="text-red-500">*</span></Label>
+                <Label>Company Name <span className="text-destructive">*</span></Label>
                 <Input
                   placeholder="e.g., ABC Corporation"
                   value={companyName}
@@ -162,7 +159,7 @@ export const TestimonialsManager = forwardRef<TestimonialsManagerRef>((props, re
 
               {/* Stars Rating */}
               <div className="space-y-2">
-                <Label>Rating <span className="text-red-500">*</span></Label>
+                <Label>Rating <span className="text-destructive">*</span></Label>
                 <Select value={stars} onValueChange={setStars}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select rating" />
@@ -179,7 +176,7 @@ export const TestimonialsManager = forwardRef<TestimonialsManagerRef>((props, re
 
               {/* Review */}
               <div className="space-y-2">
-                <Label>Review <span className="text-red-500">*</span></Label>
+                <Label>Review <span className="text-destructive">*</span></Label>
                 <Textarea
                   placeholder="Write the testimonial review here..."
                   value={review}
@@ -204,80 +201,73 @@ export const TestimonialsManager = forwardRef<TestimonialsManagerRef>((props, re
                 </Button>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
+      </Modal>
 
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading testimonials...</div>
-          ) : testimonials.length === 0 ? (
-            <div className="p-6">
-              <EmptyState
-                icon={MessageSquareQuote}
-                title="No testimonials"
-                description="Add customer testimonials to showcase on your website"
-              />
-            </div>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Author</TableHead>
-                    <TableHead>Company</TableHead>
-                    <TableHead>Rating</TableHead>
-                    <TableHead>Review</TableHead>
-                    <TableHead className="">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {testimonials.map((testimonial) => (
-                    <TableRow key={testimonial.id}>
-                      <TableCell className="font-medium">
-                        {testimonial.author}
-                      </TableCell>
-                      <TableCell>
-                        {testimonial.company_name}
-                      </TableCell>
-                      <TableCell>
-                        {renderStars(testimonial.stars)}
-                      </TableCell>
-                      <TableCell className="max-w-md">
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {testimonial.review}
-                        </p>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-4">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="p-0 hover:bg-transparent hover:text-primary"
-                            onClick={() => handleOpenDialog(testimonial)}
-                            disabled={isDeleting}
-                          >
-                            <Edit className="h-4 w-4"  />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="p-0 hover:bg-transparent hover:text-destructive"
-                            onClick={() => setDeletingId(testimonial.id)}
-                            disabled={isDeleting}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {isLoading ? (
+        <TableSkeleton rows={6} cols={5} />
+      ) : testimonials.length === 0 ? (
+        <EmptyState
+          icon={<MessageSquareQuote className="h-5 w-5" />}
+          title="No testimonials"
+          description="Add customer testimonials to showcase on your website"
+        />
+      ) : (
+        <TableTile>
+          <Table>
+            <TableHeader className={bentoTable.header}>
+              <TableRow>
+                <TableHead>Author</TableHead>
+                <TableHead>Company</TableHead>
+                <TableHead>Rating</TableHead>
+                <TableHead>Review</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {testimonials.map((testimonial) => (
+                <TableRow key={testimonial.id} className={bentoTable.row}>
+                  <TableCell className="font-semibold">
+                    {testimonial.author}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {testimonial.company_name}
+                  </TableCell>
+                  <TableCell>
+                    {renderStars(testimonial.stars)}
+                  </TableCell>
+                  <TableCell className="max-w-md">
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {testimonial.review}
+                    </p>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 hover:text-primary"
+                        onClick={() => handleOpenDialog(testimonial)}
+                        disabled={isDeleting}
+                      >
+                        <Edit className="h-4 w-4"  />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 hover:text-destructive"
+                        onClick={() => setDeletingId(testimonial.id)}
+                        disabled={isDeleting}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableTile>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deletingId} onOpenChange={(open) => !open && setDeletingId(null)}>

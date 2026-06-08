@@ -18,6 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Eyebrow } from "@/components/bento";
 import { DashboardKPICards } from "@/components/dashboard/dashboard-kpi-cards";
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import { FleetOverview } from "@/components/dashboard/fleet-overview";
@@ -149,14 +150,15 @@ export default function DashboardPage() {
 
 
   return (
-    <div className="container mx-auto py-4 space-y-4 px-3 sm:px-4">
+    <div className="container mx-auto py-6 space-y-4 px-3 sm:px-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold">
+          <Eyebrow>Dashboard</Eyebrow>
+          <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
             {getGreeting()}{getFirstName() ? `, ${getFirstName()}` : ""}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-bento-text-2 mt-1">
             Here's what's happening with your business today
           </p>
         </div>

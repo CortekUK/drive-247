@@ -54,12 +54,14 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
 
   const hasDateFilter = filters.startDateFrom || filters.startDateTo;
 
+  // Functional status colors are driven by Bento status tokens so they track
+  // light/dark theming. (`color` is read from a CSS var, not a raw hex.)
   const statusOptions = [
-    { value: 'active', label: 'Active', color: '#16a34a' },
-    { value: 'upcoming', label: 'Upcoming', color: '#3b82f6' },
-    { value: 'pending', label: 'Pending', color: '#f59e0b' },
-    { value: 'completed', label: 'Completed', color: '#6b7280' },
-    { value: 'cancelled', label: 'Cancelled', color: '#ef4444' },
+    { value: 'active', label: 'Active', color: 'var(--bento-success)' },
+    { value: 'upcoming', label: 'Upcoming', color: 'var(--bento-info)' },
+    { value: 'pending', label: 'Pending', color: 'var(--bento-warn-accent)' },
+    { value: 'completed', label: 'Completed', color: 'var(--bento-text-3)' },
+    { value: 'cancelled', label: 'Cancelled', color: 'var(--bento-danger-fg)' },
   ] as const;
 
   const activeStatusOption = statusOptions.find(s => s.value === filters.status?.toLowerCase());
@@ -73,7 +75,7 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
             placeholder="Search customer, reg, rental #..."
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            className="pl-10 h-8 text-sm"
+            className="pl-10 h-9 text-sm rounded-xl [background:var(--bento-tile-2)]"
           />
         </div>
 
@@ -110,7 +112,7 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
                       }}
                       className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors text-left"
                       style={{
-                        backgroundColor: isActive ? `${color}25` : 'transparent',
+                        backgroundColor: isActive ? `color-mix(in srgb, ${color} 16%, transparent)` : 'transparent',
                         color: color,
                       }}
                     >
@@ -183,13 +185,13 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
           <div className="h-5 w-px bg-border" />
           {(() => {
             const isActive = !!filters.extensionRequested;
-            const color = '#f97316';
+            const color = 'var(--bento-warn-accent)';
             return (
               <button
                 onClick={() => updateFilter('extensionRequested', isActive ? undefined : true)}
                 className="inline-flex items-center gap-1.5 px-2.5 h-8 text-xs font-medium whitespace-nowrap transition-colors"
                 style={{
-                  backgroundColor: isActive ? `${color}25` : 'transparent',
+                  backgroundColor: isActive ? `color-mix(in srgb, ${color} 16%, transparent)` : 'transparent',
                   color: color,
                 }}
               >
@@ -202,13 +204,13 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
           <div className="h-5 w-px bg-border" />
           {(() => {
             const isActive = !!filters.cancellationRequested;
-            const color = '#ef4444';
+            const color = 'var(--bento-danger-fg)';
             return (
               <button
                 onClick={() => updateFilter('cancellationRequested', isActive ? undefined : true)}
                 className="inline-flex items-center gap-1.5 px-2.5 h-8 text-xs font-medium whitespace-nowrap transition-colors"
                 style={{
-                  backgroundColor: isActive ? `${color}25` : 'transparent',
+                  backgroundColor: isActive ? `color-mix(in srgb, ${color} 16%, transparent)` : 'transparent',
                   color: color,
                 }}
               >

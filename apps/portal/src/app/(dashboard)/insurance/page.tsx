@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { TableTile, bentoTable, ErrorState, EmptyState as BentoEmptyState, StatusPill } from "@/components/bento";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -251,9 +252,11 @@ export default function InsuranceListEnhanced() {
   if (error) {
     return (
       <div className="container mx-auto p-6">
-        <div className="text-center py-8 text-destructive">
-          Error loading insurance policies: {error.message}
-        </div>
+        <ErrorState
+          title="Error loading insurance policies"
+          description={error.message}
+          onRetry={() => queryClient.invalidateQueries({ queryKey: ["insurance-policies"] })}
+        />
       </div>
     );
   }
@@ -263,7 +266,7 @@ export default function InsuranceListEnhanced() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Insurance Management</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">Insurance Management</h1>
           <p className="text-muted-foreground">
             Comprehensive compliance tracking for customer insurance policies
           </p>
@@ -280,7 +283,7 @@ export default function InsuranceListEnhanced() {
       {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Insurance Policies</CardTitle>
+          <CardTitle className="font-bold tracking-tight">Insurance Policies</CardTitle>
           <CardDescription>
             Manage and track all customer insurance policies with compliance monitoring
           </CardDescription>
@@ -297,11 +300,10 @@ export default function InsuranceListEnhanced() {
       </Card>
 
       {/* Policies Table */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="border rounded-lg overflow-x-auto">
+      <TableTile>
+          <div className="overflow-x-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className={bentoTable.header}>
                 <TableRow>
                   <TableHead>
                     <Button
@@ -403,19 +405,21 @@ export default function InsuranceListEnhanced() {
                   ))
                 ) : sortedPolicies.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12">
-                      <div className="space-y-3">
-                        <div className="text-muted-foreground">
-                          {filters.search || filters.status !== "all" || filters.dateRange.from || filters.dateRange.to
-                            ? "No policies match your current filters"
-                            : "No insurance policies found"
-                          }
-                        </div>
-                        <Button onClick={handleAddPolicy} variant="outline" className="mt-2">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Your First Policy
-                        </Button>
-                      </div>
+                    <TableCell colSpan={9} className="p-0">
+                      <BentoEmptyState
+                        className="border-0 shadow-none"
+                        icon={<FileText className="h-5 w-5" />}
+                        title={filters.search || filters.status !== "all" || filters.dateRange.from || filters.dateRange.to
+                          ? "No policies match your current filters"
+                          : "No insurance policies found"}
+                        description="Add a policy to start tracking customer insurance compliance."
+                        action={
+                          <Button onClick={handleAddPolicy} variant="outline">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Your First Policy
+                          </Button>
+                        }
+                      />
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -423,8 +427,8 @@ export default function InsuranceListEnhanced() {
                     <TableRow
                       key={policy.id}
                       className={cn(
-                        "cursor-pointer hover:bg-muted/50",
-                        isPolicyUrgent(policy.expiry_date) && "border-l-4 border-l-amber-500"
+                        bentoTable.row,
+                        isPolicyUrgent(policy.expiry_date) && "border-l-4 [border-left-color:var(--bento-warn-accent)]"
                       )}
                       onClick={() => handleViewPolicy(policy)}
                     >
@@ -449,20 +453,20 @@ export default function InsuranceListEnhanced() {
                           <span className="text-muted-foreground text-sm">No vehicle</span>
                         )}
                       </TableCell>
-                      <TableCell className="font-mono text-sm">
+                      <TableCell className="font-mono tabular-nums text-sm">
                         {policy.policy_number}
                       </TableCell>
                       <TableCell>{policy.provider || "—"}</TableCell>
-                      <TableCell>
+                      <TableCell className="font-mono tabular-nums text-sm text-[color:var(--bento-text-2)]">
                         {format(new Date(policy.start_date), "MMM d, yyyy")}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          {format(new Date(policy.expiry_date), "MMM d, yyyy")}
+                          <span className="font-mono tabular-nums text-sm text-[color:var(--bento-text-2)]">
+                            {format(new Date(policy.expiry_date), "MMM d, yyyy")}
+                          </span>
                           {isPolicyUrgent(policy.expiry_date) && (
-                            <Badge variant="outline" className="text-xs text-amber-600">
-                              Urgent
-                            </Badge>
+                            <StatusPill tone="warn">Urgent</StatusPill>
                           )}
                         </div>
                       </TableCell>
@@ -527,8 +531,7 @@ export default function InsuranceListEnhanced() {
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+      </TableTile>
 
       {/* Dialogs */}
       <CustomerSelectionDialog

@@ -1,14 +1,11 @@
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CalendarIcon, Plus, Trash2, Ban, Calendar as CalendarIconLucide, Globe, AlertTriangle, Info } from "lucide-react";
 import { format } from "date-fns";
@@ -17,7 +14,15 @@ import { parseLocalDate } from "@/lib/date-utils";
 import { useBlockedDates } from "@/hooks/use-blocked-dates";
 import { supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { EmptyState } from "@/components/shared/data-display/empty-state";
+import {
+  SectionCard,
+  TableTile,
+  bentoTable,
+  StatusPill,
+  EmptyState as BentoEmptyState,
+  Modal,
+  Shimmer,
+} from "@/components/bento";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
@@ -166,32 +171,22 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-3">
-        <div className="min-w-0">
-          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <Ban className="h-4 w-4 text-primary" />
-            Blocked Dates
-          </CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Prevent bookings on specific dates
-          </CardDescription>
-        </div>
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          {canEdit('availability') && (
-            <DialogTrigger asChild>
-              <Button size="sm" className="flex items-center gap-2 shrink-0">
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Block Dates</span>
-                <span className="sm:hidden">Block</span>
-              </Button>
-            </DialogTrigger>
-          )}
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Block Date Range</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
+    <SectionCard
+      icon={<Ban className="h-4 w-4" />}
+      title="Blocked Dates"
+      description="Prevent bookings on specific dates"
+      action={
+        canEdit('availability') ? (
+          <Button size="sm" className="flex items-center gap-2 shrink-0" onClick={() => setIsOpen(true)}>
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Block Dates</span>
+            <span className="sm:hidden">Block</span>
+          </Button>
+        ) : undefined
+      }
+    >
+        <Modal open={isOpen} onOpenChange={setIsOpen} title="Block Date Range">
+            <div className="space-y-4">
               {/* Start Date Selection */}
               <div className="space-y-2">
                 <Label>Start Date</Label>
@@ -272,15 +267,15 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
               </div>
 
               {overlapWarning && (
-                <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
-                  <Info className="h-4 w-4 text-blue-600" />
-                  <AlertDescription className="text-sm text-blue-700 dark:text-blue-300">
+                <Alert className="[border-color:var(--bento-info)] [background:var(--bento-info-weak)]">
+                  <Info className="h-4 w-4 text-[color:var(--bento-info)]" />
+                  <AlertDescription className="text-sm text-[color:var(--bento-info)]">
                     {overlapWarning}
                   </AlertDescription>
                 </Alert>
               )}
 
-              <div className="flex justify-end gap-2 pt-4">
+              <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => { setIsOpen(false); setOverlapWarning(null); }}>
                   Cancel
                 </Button>
@@ -289,22 +284,24 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
                 </Button>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
-      </CardHeader>
-      <CardContent>
+        </Modal>
+
         {isLoading ? (
-          <div className="text-center py-8 text-muted-foreground">Loading blocked dates...</div>
+          <div className="space-y-2 py-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Shimmer key={i} className="h-12 w-full" />
+            ))}
+          </div>
         ) : blockedDates.length === 0 ? (
-          <EmptyState
-            icon={CalendarIconLucide}
+          <BentoEmptyState
+            icon={<CalendarIconLucide className="h-5 w-5" />}
             title="No blocked dates"
             description="Block date ranges to prevent rentals on specific days"
           />
         ) : (
-          <div className="rounded-md border">
+          <TableTile>
             <Table>
-              <TableHeader>
+              <TableHeader className={bentoTable.header}>
                 <TableRow>
                   <TableHead>Start Date</TableHead>
                   <TableHead>End Date</TableHead>
@@ -318,11 +315,11 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
                   const isGeneralBlock = !blockedDate.vehicle_id;
 
                   return (
-                    <TableRow key={blockedDate.id}>
-                      <TableCell className="font-medium">
+                    <TableRow key={blockedDate.id} className="border-border">
+                      <TableCell className="font-medium font-mono tabular-nums">
                         {format(new Date(blockedDate.start_date), "PPP")}
                       </TableCell>
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium font-mono tabular-nums">
                         {format(new Date(blockedDate.end_date), "PPP")}
                       </TableCell>
                       <TableCell>
@@ -332,16 +329,16 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
                       </TableCell>
                       <TableCell>
                         {isGeneralBlock ? (
-                          <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                          <StatusPill tone="primary" className="w-fit">
                             <Globe className="h-3 w-3" />
                             Global
-                          </Badge>
+                          </StatusPill>
                         ) : (
-                          <Badge variant="outline" className="flex items-center gap-1 w-fit">
+                          <StatusPill tone="neutral" className="w-fit">
                             {blockedDate.vehicles
                               ? `${blockedDate.vehicles.make} ${blockedDate.vehicles.model} (${blockedDate.vehicles.reg})`
                               : "This Vehicle"}
-                          </Badge>
+                          </StatusPill>
                         )}
                       </TableCell>
                       <TableCell>
@@ -361,16 +358,15 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
                 })}
               </TableBody>
             </Table>
-          </div>
+          </TableTile>
         )}
-      </CardContent>
 
       {/* Conflict Warning Dialog */}
       <AlertDialog open={conflictDialogOpen} onOpenChange={setConflictDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              <AlertTriangle className="h-5 w-5 text-[color:var(--bento-warn-accent)]" />
               Conflicting Rentals Found
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
@@ -389,7 +385,7 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
                     </div>
                   ))}
                 </div>
-                <p className="mt-3 text-orange-600 dark:text-orange-400 text-sm">
+                <p className="mt-3 text-[color:var(--bento-warn-accent)] text-sm">
                   Blocking these dates will not cancel existing rentals but will prevent new bookings.
                 </p>
               </div>
@@ -397,7 +393,7 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={proceedWithBlock} className="bg-orange-600 hover:bg-orange-700">
+            <AlertDialogAction onClick={proceedWithBlock} className="[background:var(--bento-warn-accent)] text-white hover:opacity-90">
               Block Anyway
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -428,6 +424,6 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </SectionCard>
   );
 };

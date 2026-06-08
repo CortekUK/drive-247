@@ -153,7 +153,7 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
             <div className="border rounded-md overflow-hidden mt-1">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+                  <TableRow className="[&_th]:bg-[color:var(--bento-tile-2)] hover:bg-[color:var(--bento-tile-2)]">
                     <TableHead>Vehicle</TableHead>
                     <TableHead className="text-right">Rentals</TableHead>
                     <TableHead className="text-right">Paid Revenue</TableHead>
@@ -167,7 +167,7 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
                       <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
                     ))
                   ) : previewError ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-6 text-red-600">Failed to load preview.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="text-center py-6 text-[color:var(--bento-danger-fg)]">Failed to load preview.</TableCell></TableRow>
                   ) : preview.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
                       {ownerId ? "No revenue data for this period." : "Select an owner to preview."}
@@ -175,10 +175,10 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
                   ) : (
                     preview.map((row) => (
                       <TableRow key={row.vehicle_id}>
-                        <TableCell className="font-medium">{row.vehicle_reg}</TableCell>
-                        <TableCell className="text-right">{row.rental_count}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(Number(row.paid_revenue), currency)}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="font-mono font-semibold tabular-nums">{row.vehicle_reg}</TableCell>
+                        <TableCell className="text-right font-mono tabular-nums">{row.rental_count}</TableCell>
+                        <TableCell className="text-right font-mono tabular-nums">{formatCurrency(Number(row.paid_revenue), currency)}</TableCell>
+                        <TableCell className="text-right font-mono tabular-nums">
                           {formatCurrency(Number(row.commission_amount), currency)}
                           <div className="text-xs text-muted-foreground">
                             {row.commission_type === "percentage"
@@ -186,7 +186,7 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
                               : `${formatCurrency(Number(row.commission_value), currency)} / ${row.flat_fee_period === "per_month" ? "mo" : "rental"}`}
                           </div>
                         </TableCell>
-                        <TableCell className="text-right">{formatCurrency(Number(row.net_to_owner), currency)}</TableCell>
+                        <TableCell className="text-right font-mono tabular-nums">{formatCurrency(Number(row.net_to_owner), currency)}</TableCell>
                       </TableRow>
                     ))
                   )}
@@ -215,7 +215,7 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
             </div>
           </div>
 
-          <div className="rounded-md border p-3 bg-[#f8fafc] dark:bg-muted/40">
+          <div className="rounded-tile border border-border p-3 [background:var(--bento-tile-2)]">
             <div className="grid grid-cols-4 text-sm gap-2">
               <Stat label="Gross Revenue" value={formatCurrency(totals.gross, currency)} />
               <Stat label="Commission" value={`- ${formatCurrency(totals.commission, currency)}`} />
@@ -223,13 +223,13 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
               <Stat label="Net Owed" value={formatCurrency(totals.net, currency)} highlight />
             </div>
             {totals.net < 0 && (
-              <p className="text-xs text-orange-700 dark:text-orange-400 mt-2">
+              <p className="text-xs text-[color:var(--bento-warn-accent)] mt-2">
                 Net is negative — owner currently owes the operator {formatCurrency(Math.abs(totals.net), currency)}. Carry forward to next payout.
               </p>
             )}
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-[color:var(--bento-danger-fg)]">{error}</p>}
         </div>
 
         <DialogFooter>
@@ -247,7 +247,7 @@ function Stat({ label, value, highlight }: { label: string; value: string; highl
   return (
     <div>
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={highlight ? "text-base font-medium text-foreground" : "text-sm text-foreground/80"}>{value}</div>
+      <div className={`font-mono tabular-nums ${highlight ? "text-base font-bold text-foreground" : "text-sm text-foreground/80"}`}>{value}</div>
     </div>
   );
 }

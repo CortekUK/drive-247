@@ -2,11 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  TableTile,
+  bentoTable,
+  Money,
+  StatusPill,
+  EmptyState,
+  TableSkeleton,
+  Eyebrow,
+} from "@/components/bento";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,7 +33,6 @@ import {
   Clock,
   Undo2,
   AlertTriangle,
-  Info,
   BarChart3,
 } from "lucide-react";
 import Link from "next/link";
@@ -47,6 +53,7 @@ import { formatCurrency } from "@/lib/format-utils";
 import { parseLocalDate } from "@/lib/date-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { cn } from "@/lib/utils";
 
 // Helper function to display user-friendly payment type names
 const getPaymentTypeDisplay = (paymentType: string): string => {
@@ -282,14 +289,15 @@ const PaymentsList = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold">Payments</h1>
+          <Eyebrow>Finance</Eyebrow>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Payments</h1>
           <p className="text-muted-foreground text-sm sm:text-base">
             Record and manage customer payments
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/payments/analytics" className="shrink-0">
-            <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+            <Button variant="outline" size="icon">
               <BarChart3 className="h-4 w-4" />
             </Button>
           </Link>
@@ -301,8 +309,8 @@ const PaymentsList = () => {
             onOpenChange={setShowAddDialog}
           />
           {canEdit('payments') && (
-            <Button onClick={() => setShowAddDialog(true)} className="bg-gradient-primary flex-1 sm:flex-none">
-              <Plus className="h-4 w-4 mr-2" />
+            <Button onClick={() => setShowAddDialog(true)} className="flex-1 sm:flex-none gap-2">
+              <Plus className="h-4 w-4" />
               Record Payment
             </Button>
           )}
@@ -320,32 +328,22 @@ const PaymentsList = () => {
 
       {/* Payments Table */}
       {isLoading ? (
-        <div className="space-y-4">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="animate-pulse flex space-x-4">
-              <div className="flex-1 space-y-2">
-                <div className="h-4 bg-muted rounded w-3/4"></div>
-                <div className="h-4 bg-muted rounded w-1/2"></div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <TableSkeleton rows={8} cols={9} />
       ) : payments && payments.length > 0 ? (
         <>
-          <Card>
-            <CardContent className="p-0">
+          <TableTile>
               <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
               <Table>
-                  <TableHeader className="sticky top-0 z-10 bg-background">
+                  <TableHeader className={cn("sticky top-0 z-10", bentoTable.header)}>
                     <TableRow>
                       <TableHead
-                        className="cursor-pointer hover:bg-muted/50"
+                        className="cursor-pointer"
                         onClick={() => handleSort('payment_date')}
                       >
                         Date {sortBy === 'payment_date' && (sortOrder === 'asc' ? '↑' : '↓')}
                       </TableHead>
                       <TableHead
-                        className="cursor-pointer hover:bg-muted/50"
+                        className="cursor-pointer"
                         onClick={() => handleSort('customer')}
                       >
                         Customer {sortBy === 'customer' && (sortOrder === 'asc' ? '↑' : '↓')}
@@ -355,7 +353,7 @@ const PaymentsList = () => {
                       <TableHead>Type</TableHead>
                       <TableHead>Method</TableHead>
                       <TableHead
-                        className="text-left cursor-pointer hover:bg-muted/50"
+                        className="text-left cursor-pointer"
                         onClick={() => handleSort('amount')}
                       >
                         Amount {sortBy === 'amount' && (sortOrder === 'asc' ? '↑' : '↓')}
@@ -367,8 +365,8 @@ const PaymentsList = () => {
                   <TableBody>
                     {payments.map((payment) => {
                       return (
-                        <TableRow key={payment.id} className="hover:bg-muted/50">
-                          <TableCell className="font-medium">
+                        <TableRow key={payment.id} className={bentoTable.row}>
+                          <TableCell className="font-mono tabular-nums text-foreground">
                             {formatInTimeZone(new Date(payment.payment_date), 'America/New_York', 'MM/dd/yyyy')}
                           </TableCell>
                           <TableCell>
@@ -385,7 +383,7 @@ const PaymentsList = () => {
                                 onClick={() => router.push(`/vehicles/${payment.vehicles!.id}`)}
                                 className="text-foreground hover:underline hover:opacity-80 font-medium"
                               >
-                                {payment.vehicles.reg}
+                                <span className="font-mono">{payment.vehicles.reg}</span>
                                 {payment.vehicles.make && payment.vehicles.model &&
                                   <span className="text-muted-foreground"> • {payment.vehicles.make} {payment.vehicles.model}</span>
                                 }
@@ -396,26 +394,25 @@ const PaymentsList = () => {
                           </TableCell>
                            <TableCell>
                              {payment.rentals ? (
-                               <Badge variant="outline" className="text-xs cursor-pointer"
+                               <StatusPill tone="primary" className="cursor-pointer font-mono"
                                  onClick={() => router.push(`/rentals/${payment.rentals!.id}`)}>
                                  {payment.rentals.rental_number || `R-${payment.rentals.id.slice(0, 6)}`}
-                               </Badge>
+                               </StatusPill>
                              ) : (
                                <span className="text-muted-foreground text-xs">No Rental</span>
                              )}
                            </TableCell>
                            <TableCell>
-                             <Badge
-                               variant={payment.payment_type === 'InitialFee' ? 'default' : 'secondary'}
-                               className={payment.payment_type === 'InitialFee' ? 'bg-purple-600 hover:bg-purple-700' : ''}
-                             >
+                             <StatusPill tone={payment.payment_type === 'InitialFee' ? 'primary' : 'neutral'}>
                                {getPaymentTypeDisplay(payment.payment_type)}
-                             </Badge>
+                             </StatusPill>
                            </TableCell>
-                           <TableCell>{payment.method ? payment.method.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '-'}</TableCell>
-                          <TableCell className="text-left font-medium">
+                           <TableCell className="text-muted-foreground">{payment.method ? payment.method.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '-'}</TableCell>
+                          <TableCell className="text-left">
                             <div>
-                              {formatCurrency(payment.amount, tenant?.currency_code || 'USD')}
+                              <Money className="font-semibold text-foreground">
+                                {formatCurrency(payment.amount, tenant?.currency_code || 'USD')}
+                              </Money>
                               {(() => {
                                 const rental = payment.rentals;
                                 const vehicle = payment.vehicles;
@@ -456,22 +453,28 @@ const PaymentsList = () => {
                               // Check if payment is reversed first
                               if (payment.status === 'Reversed' || payment.refund_reason?.includes('[REVERSED]')) {
                                 return (
-                                  <Badge className="bg-orange-100 text-orange-800 border-orange-200">
-                                    <Undo2 className="h-3 w-3 mr-1" />
+                                  <StatusPill tone="warn">
+                                    <Undo2 className="h-3 w-3" />
                                     Reversed
-                                  </Badge>
+                                  </StatusPill>
                                 );
                               }
 
                               const verificationStatus = payment.verification_status || 'auto_approved';
                               const statusInfo = getVerificationStatusInfo(verificationStatus);
+                              const tone =
+                                verificationStatus === 'pending'
+                                  ? 'warn'
+                                  : verificationStatus === 'rejected'
+                                  ? 'danger'
+                                  : 'success';
                               return (
-                                <Badge className={statusInfo.className}>
-                                  {verificationStatus === 'pending' && <Clock className="h-3 w-3 mr-1" />}
-                                  {verificationStatus === 'approved' && <CheckCircle className="h-3 w-3 mr-1" />}
-                                  {verificationStatus === 'rejected' && <XCircle className="h-3 w-3 mr-1" />}
+                                <StatusPill tone={tone}>
+                                  {verificationStatus === 'pending' && <Clock className="h-3 w-3" />}
+                                  {verificationStatus === 'approved' && <CheckCircle className="h-3 w-3" />}
+                                  {verificationStatus === 'rejected' && <XCircle className="h-3 w-3" />}
                                   {statusInfo.label}
-                                </Badge>
+                                </StatusPill>
                               );
                             })()}
                           </TableCell>
@@ -487,7 +490,7 @@ const PaymentsList = () => {
                                           <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                            className="h-8 w-8 p-0 text-[color:var(--bento-success)] hover:text-[color:var(--bento-success)] hover:[background:var(--bento-success-weak)]"
                                             onClick={() => handleApprovePayment(payment.id)}
                                             disabled={isVerifying}
                                           >
@@ -505,7 +508,7 @@ const PaymentsList = () => {
                                           <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                            className="h-8 w-8 p-0 text-[color:var(--bento-danger-fg)] hover:text-[color:var(--bento-danger-fg)] hover:[background:var(--bento-danger-weak)]"
                                             onClick={() => handleOpenRejectDialog(payment.id)}
                                             disabled={isVerifying}
                                           >
@@ -539,7 +542,7 @@ const PaymentsList = () => {
                                    payment.verification_status !== 'rejected' && (
                                     <DropdownMenuItem
                                       onClick={() => handleOpenReverseDialog(payment)}
-                                      className="text-orange-600 focus:text-orange-600"
+                                      className="text-[color:var(--bento-warn-accent)] focus:text-[color:var(--bento-warn-accent)]"
                                     >
                                       <Undo2 className="h-4 w-4 mr-2" />
                                       Reverse Payment
@@ -555,8 +558,7 @@ const PaymentsList = () => {
                   </TableBody>
                 </Table>
               </div>
-            </CardContent>
-          </Card>
+          </TableTile>
 
           {/* Pagination */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -589,22 +591,23 @@ const PaymentsList = () => {
           </div>
         </>
       ) : (
-        <div className="text-center py-12">
-          <CreditCard className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-2">No payments found</h3>
-          <p className="text-muted-foreground mb-4">
-            {Object.values(filters).some(f => f && f !== 'all' && f !== 'thisMonth') ?
-              "No payments match your current filters" :
-              "Start recording payments to track your cash flow"
-            }
-          </p>
-          {canEdit('payments') && (
-            <Button onClick={() => setShowAddDialog(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Record Payment
-            </Button>
-          )}
-        </div>
+        <EmptyState
+          icon={<CreditCard className="h-5 w-5" />}
+          title="No payments found"
+          description={
+            Object.values(filters).some(f => f && f !== 'all' && f !== 'thisMonth')
+              ? "No payments match your current filters"
+              : "Start recording payments to track your cash flow"
+          }
+          action={
+            canEdit('payments') ? (
+              <Button onClick={() => setShowAddDialog(true)} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Record Payment
+              </Button>
+            ) : undefined
+          }
+        />
       )}
 
       {/* Reject Payment Dialog */}
@@ -621,7 +624,7 @@ const PaymentsList = () => {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="reject-reason">Reason for Rejection <span className="text-red-500">*</span></Label>
+              <Label htmlFor="reject-reason">Reason for Rejection <span className="text-destructive">*</span></Label>
               <Textarea
                 id="reject-reason"
                 placeholder="Please provide a reason for rejecting this payment..."
@@ -650,7 +653,7 @@ const PaymentsList = () => {
       <Dialog open={showReverseDialog} onOpenChange={setShowReverseDialog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-orange-600">
+            <DialogTitle className="flex items-center gap-2 text-[color:var(--bento-warn-accent)]">
               <AlertTriangle className="h-5 w-5" />
               Reverse Payment
             </DialogTitle>
@@ -661,17 +664,17 @@ const PaymentsList = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 p-3">
+            <div className="rounded-lg [background:var(--bento-warn-bg)] [border-color:var(--bento-warn-border)] border p-3">
               <div className="flex gap-2">
-                <AlertTriangle className="h-4 w-4 text-orange-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-orange-800 dark:text-orange-200">
+                <AlertTriangle className="h-4 w-4 text-[color:var(--bento-warn-accent)] mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-[color:var(--bento-warn-fg)]">
                   <p className="font-medium">This action cannot be undone.</p>
                   <p className="mt-1">The payment will be marked as reversed and all allocations to charges will be removed.</p>
                 </div>
               </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="reverse-reason">Reason for Reversal <span className="text-red-500">*</span></Label>
+              <Label htmlFor="reverse-reason">Reason for Reversal <span className="text-destructive">*</span></Label>
               <Textarea
                 id="reverse-reason"
                 placeholder="e.g., Payment entered in error, duplicate payment, customer dispute..."
@@ -687,7 +690,7 @@ const PaymentsList = () => {
             </Button>
             <Button
               variant="default"
-              className="bg-orange-600 hover:bg-orange-700"
+              className="[background:var(--bento-warn-accent)] text-white hover:opacity-90"
               onClick={handleReversePayment}
               disabled={!reverseReason.trim() || isReversing}
             >

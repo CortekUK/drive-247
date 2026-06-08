@@ -2,17 +2,16 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { FileSignature, Download, ExternalLink, Loader2, Search, BarChart3, Eye, PenLine, Plus, Send, Ban } from "lucide-react";
-import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { format } from "date-fns";
 import { useState, useMemo, useCallback, useRef } from "react";
 import { useTenant } from "@/contexts/TenantContext";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
 import {
@@ -24,6 +23,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { GenerateAgreementDialog } from "@/components/agreements/generate-agreement-dialog";
+import {
+  KpiTile,
+  TableTile,
+  bentoTable,
+  StatusPill,
+  EmptyState,
+  KpiTileSkeletonRow,
+  TableSkeleton,
+  Shimmer,
+} from "@/components/bento";
 
 interface AgreementDoc {
   id: string;
@@ -641,9 +650,13 @@ export default function AgreementsList() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="h-8 bg-muted animate-pulse rounded"></div>
-        <div className="h-96 bg-muted animate-pulse rounded"></div>
+      <div className="container mx-auto p-4 sm:p-6 space-y-6">
+        <div className="space-y-2">
+          <Shimmer className="h-8 w-48" />
+          <Shimmer className="h-4 w-72" />
+        </div>
+        <KpiTileSkeletonRow count={4} />
+        <TableSkeleton rows={8} cols={6} />
       </div>
     );
   }
@@ -653,13 +666,13 @@ export default function AgreementsList() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold">Agreements</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Agreements</h1>
           <p className="text-muted-foreground text-sm sm:text-base">Manage rental agreements and signed documents</p>
         </div>
         <div className="flex items-center gap-2">
           {allAgreements.length > 0 && (
             <Link href="/agreements/analytics" className="shrink-0">
-              <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+              <Button variant="outline" size="icon">
                 <BarChart3 className="h-4 w-4" />
               </Button>
             </Link>
@@ -677,7 +690,7 @@ export default function AgreementsList() {
             )}
             Export PDFs
           </Button>
-          <Button onClick={() => setGenerateOpen(true)} className="bg-gradient-primary">
+          <Button onClick={() => setGenerateOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Generate Agreement
           </Button>
@@ -685,46 +698,41 @@ export default function AgreementsList() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20">
-          <CardContent className="p-3 sm:p-4">
-            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Total Agreements</p>
-            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{allAgreements.length}</p>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">All agreement types</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-violet-500/10 to-violet-500/5 border-violet-500/20">
-          <CardContent className="p-3 sm:p-4">
-            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Original</p>
-            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{rentalAgreements.length}</p>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">Rental agreements</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-cyan-500/10 to-cyan-500/5 border-cyan-500/20">
-          <CardContent className="p-3 sm:p-4">
-            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Extensions</p>
-            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{extensionAgreements.length}</p>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">Extension agreements</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
-          <CardContent className="p-3 sm:p-4">
-            <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Signed</p>
-            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{signedAgreements.length}</p>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">Completed signatures</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiTile
+          variant="hero"
+          label="Total Agreements"
+          value={allAgreements.length}
+          sub="All agreement types"
+          icon={<FileSignature className="h-4 w-4" />}
+        />
+        <KpiTile
+          variant="feature"
+          label="Original"
+          value={rentalAgreements.length}
+          sub="Rental agreements"
+        />
+        <KpiTile
+          label="Extensions"
+          value={extensionAgreements.length}
+          sub="Extension agreements"
+        />
+        <KpiTile
+          label="Signed"
+          value={signedAgreements.length}
+          sub="Completed signatures"
+        />
       </div>
 
       {/* Search */}
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[color:var(--bento-text-3)] h-4 w-4" />
           <Input
             placeholder="Search by agreement name or customer..."
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-10 h-8 text-sm"
+            className="pl-10"
           />
         </div>
       </div>
@@ -732,19 +740,24 @@ export default function AgreementsList() {
       {/* Agreements Table */}
       {paginatedDocuments.length === 0 ? (
         <EmptyState
-          icon={FileSignature}
+          icon={<FileSignature className="h-5 w-5" />}
           title="No agreements found"
           description={searchQuery
             ? "No agreements match your search criteria"
             : "There are no agreements in the system yet."}
+          action={
+            <Button onClick={() => setGenerateOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Generate Agreement
+            </Button>
+          }
         />
       ) : (
         <>
-          <Card>
-            <CardContent className="p-0">
+          <TableTile>
               <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
               <Table>
-                <TableHeader className="sticky top-0 z-10 bg-background">
+                <TableHeader className={cn("sticky top-0 z-10", bentoTable.header)}>
                   <TableRow>
                     <TableHead>Agreement Name</TableHead>
                     <TableHead>Customer</TableHead>
@@ -756,7 +769,7 @@ export default function AgreementsList() {
                 </TableHeader>
                 <TableBody>
                   {paginatedDocuments.map((doc) => (
-                    <TableRow key={doc.id}>
+                    <TableRow key={doc.id} className={bentoTable.row}>
                       <TableCell className="font-medium">
                         {doc.document_name}
                       </TableCell>
@@ -765,17 +778,17 @@ export default function AgreementsList() {
                       </TableCell>
                       <TableCell>
                         {justSignedIds.has(doc.id) || doc.status === "completed" || doc.status === "signed" ? (
-                          <span className="text-sm text-green-600 dark:text-green-400">Signed</span>
+                          <StatusPill tone="success" dot>Signed</StatusPill>
                         ) : doc.isRentalAgreement ? (
-                          <span className="text-sm text-orange-600 dark:text-orange-400">Pending signature</span>
+                          <StatusPill tone="warn" dot>Pending signature</StatusPill>
                         ) : (
-                          <span className="text-sm text-green-600 dark:text-green-400">Signed</span>
+                          <StatusPill tone="success" dot>Signed</StatusPill>
                         )}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-sm font-mono tabular-nums text-[color:var(--bento-text-2)]">
                         {format(new Date(doc.created_at), "MMM dd, yyyy HH:mm")}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-sm font-mono tabular-nums text-[color:var(--bento-text-2)]">
                         {doc.signed_at
                           ? format(new Date(doc.signed_at), "MMM dd, yyyy HH:mm")
                           : <span className="text-muted-foreground">—</span>}
@@ -887,8 +900,7 @@ export default function AgreementsList() {
                 </TableBody>
               </Table>
               </div>
-            </CardContent>
-          </Card>
+          </TableTile>
 
           {/* Pagination */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">

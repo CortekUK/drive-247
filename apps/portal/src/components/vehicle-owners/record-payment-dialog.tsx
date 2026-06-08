@@ -121,7 +121,7 @@ export function RecordPaymentDialog({ open, onOpenChange, payout }: RecordPaymen
             <Textarea id="payment-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-[color:var(--bento-danger-fg)]">{error}</p>}
         </div>
 
         <DialogFooter>

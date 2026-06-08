@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,13 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Tile } from "@/components/bento";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Form,
@@ -26,14 +20,25 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Loader2, AlertCircle, ArrowLeft } from "lucide-react";
+import { Loader2, AlertCircle, ArrowLeft, ArrowRight, Mail, Lock, ShieldCheck } from "lucide-react";
+import { motion, useReducedMotion, animate } from "motion/react";
 import { toast } from "@/hooks/use-toast";
 import { useRateLimiting } from "@/hooks/use-rate-limiting";
 import { supabase } from "@/integrations/supabase/client";
-import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
-import { useTheme } from "next-themes";
+import { cn } from "@/lib/utils";
+import { authUp, springs } from "@/lib/motion";
+import { AuthShell, AuthBackground } from "../_components/auth-shell";
+
+/** Google "G" mark (inline so it keeps its brand colours on glass). */
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} width="18" height="18" aria-hidden>
+      <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.24 1.4-1.6 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.9 3.4 14.7 2.4 12 2.4 6.9 2.4 2.8 6.5 2.8 11.6S6.9 20.8 12 20.8c5.5 0 9.1-3.9 9.1-9.3 0-.6-.06-1.1-.15-1.6H12z" />
+    </svg>
+  );
+}
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxvlancmftwuo.supabase.co";
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2aXFvYW9reHZsYW5jbWZ0d3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNjM2NTcsImV4cCI6MjA3NzkzOTY1N30.jwpdtizfTxl3MeCNDu-mrLI7GNK4PYWYg5gsIZy0T_Q";
@@ -55,6 +60,15 @@ function LoginPageContent() {
   const { tenant } = useTenant();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [signedIn, setSignedIn] = useState(false);
+  const [loadPct, setLoadPct] = useState(0);
+  const reduce = useReducedMotion();
+  // True only for a sign-in the user just performed here — lets us play the
+  // success animation before redirecting (vs. an already-authed visit, which
+  // redirects instantly).
+  const signingInRef = useRef(false);
+  // Destination captured at sign-in time (role/appUser can settle async).
+  const redirectTo = useRef("/");
   const [forgotStep, setForgotStep] = useState<"hidden" | "new-password">("hidden");
   const [resetEmail, setResetEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -81,11 +95,12 @@ function LoginPageContent() {
   // Show policy checkbox if tenant has policy versions configured AND hasn't accepted yet
   const requiresPolicyAcceptance = !!(tenant?.privacy_policy_version || tenant?.terms_version) && !tenant?.policies_accepted_at;
 
-  // Get logo from tenant branding or use default
-  const { resolvedTheme } = useTheme();
-  const authLogoUrl = branding?.auth_logo_url;
-  const logoUrl = (resolvedTheme === 'dark' && branding?.dark_logo_url ? branding.dark_logo_url : branding?.logo_url) || "/logo.png";
+  // Brand name for on-screen copy (logo + theme chrome handled by AuthShell)
   const appName = branding?.app_name || "Drive247";
+
+  // Frosted field styling matching the concept — tall, rounded, glass, violet focus ring.
+  const fieldClass =
+    "h-14 rounded-[16px] px-4 text-[15px] bg-[var(--glass-input-bg)] backdrop-blur-md border-[color:var(--glass-border)] placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:border-primary/60";
 
   // Role-based redirect logic
   const getRedirectPath = (): string => {
@@ -103,21 +118,53 @@ function LoginPageContent() {
 
   const from = searchParams.get("from") || getRedirectPath();
 
-  // If already authenticated, redirect to dashboard
+  // If already authenticated (e.g. revisiting /login), redirect immediately.
+  // Skip while an interactive sign-in is in flight — that path shows the success
+  // animation first, then redirects.
   useEffect(() => {
-    if (user && !loading) {
+    if (user && !loading && !signingInRef.current) {
       router.replace(from);
     }
   }, [user, loading, router, from]);
 
+  // After a successful interactive sign-in: hold on the success animation briefly,
+  // then redirect to the destination captured at sign-in time. A hard fallback
+  // guarantees we leave this screen even if SPA navigation no-ops.
+  useEffect(() => {
+    if (!signedIn) return;
+    const target = redirectTo.current || "/";
+    const t = setTimeout(() => router.replace(target), reduce ? 350 : 1500);
+    const hard = setTimeout(() => {
+      if (typeof window !== "undefined" && window.location.pathname.includes("/login")) {
+        window.location.assign(target);
+      }
+    }, reduce ? 1200 : 2800);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(hard);
+    };
+  }, [signedIn, router, reduce]);
+
+  // Drive the game-style loading bar from 0→100% over the redirect hold.
+  useEffect(() => {
+    if (!signedIn) return;
+    const controls = animate(0, 100, {
+      duration: reduce ? 0.3 : 1.45,
+      ease: [0.22, 1, 0.36, 1],
+      onUpdate: (v) => setLoadPct(Math.round(v)),
+    });
+    return () => controls.stop();
+  }, [signedIn, reduce]);
+
   // Show loading screen while checking auth
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span className="text-muted-foreground">Loading...</span>
-        </div>
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+        <AuthBackground />
+        <Tile variant="glass" pad="roomy" className="relative z-10 flex items-center gap-3">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <span className="text-sm font-medium text-muted-foreground">Loading…</span>
+        </Tile>
       </div>
     );
   }
@@ -137,6 +184,7 @@ function LoginPageContent() {
     }
 
     setIsSubmitting(true);
+    signingInRef.current = true;
 
     try {
       const { error: signInError } = await signIn(
@@ -145,6 +193,7 @@ function LoginPageContent() {
       );
 
       if (signInError) {
+        signingInRef.current = false;
         // Record failed attempt
         await recordLoginAttempt(data.email, false);
 
@@ -238,10 +287,13 @@ function LoginPageContent() {
           console.error("Failed to log audit event:", auditError);
         }
 
-        // Redirect
-        router.replace(from);
+        // Capture the destination now, play the success animation; the effect
+        // below redirects shortly after.
+        redirectTo.current = from || "/";
+        setSignedIn(true);
       }
     } catch (error) {
+      signingInRef.current = false;
       console.error("Login error:", error);
       setError("An unexpected error occurred. Please try again.");
     } finally {
@@ -300,55 +352,118 @@ function LoginPageContent() {
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      {/* Theme Toggle - positioned in top right */}
-      <div className="absolute top-4 right-4">
-        <ThemeToggle />
-      </div>
+  // Google OAuth — real Supabase method; surfaces an error if the provider
+  // isn't enabled in the project (no fake success).
+  const handleGoogle = async () => {
+    setError("");
+    try {
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}${from}` },
+      });
+      if (oauthError) setError(oauthError.message || "Google sign-in is not available.");
+    } catch (e) {
+      setError("Google sign-in is not available right now.");
+    }
+  };
 
-      <Card className="w-full max-w-md border-primary">
-        <CardHeader className="text-center space-y-4">
-          <div className="flex justify-center py-4">
-            <div className={`rounded-2xl p-8 border border-primary/40 transition-all duration-300 hover:border-primary/60 hover:shadow-[0_0_20px_rgba(198,162,86,0.15)] ${authLogoUrl ? 'bg-black' : 'bg-white dark:bg-[hsl(159,21%,15%)]/30'}`}>
-              {authLogoUrl ? (
-                <img
-                  src={authLogoUrl}
-                  alt={appName}
-                  className="h-64 w-64 object-contain transition-transform duration-300 hover:scale-105"
+  // Company SSO — resolves the SAML/SSO provider from the work-email domain.
+  const handleCompanySSO = async () => {
+    setError("");
+    const email = form.getValues("email")?.trim();
+    const domain = email?.includes("@") ? email.split("@")[1] : "";
+    if (!domain) {
+      setError("Enter your work email first to continue with Company SSO.");
+      return;
+    }
+    try {
+      const { data, error: ssoError } = await supabase.auth.signInWithSSO({ domain });
+      if (ssoError) {
+        setError(ssoError.message || "SSO isn't configured for this domain.");
+        return;
+      }
+      if (data?.url) window.location.href = data.url;
+    } catch (e) {
+      setError("SSO isn't configured for this domain.");
+    }
+  };
+
+  return (
+    <AuthShell width="max-w-[420px]">
+      <motion.div key={signedIn ? "success" : forgotStep} variants={authUp} initial="hidden" animate="show">
+        {signedIn ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <motion.div
+              className="grid h-20 w-20 place-items-center rounded-full"
+              style={{ background: "color-mix(in srgb, var(--bento-success) 16%, transparent)" }}
+              initial={reduce ? { opacity: 0 } : { scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={reduce ? { duration: 0.15 } : springs.pop}
+            >
+              <svg viewBox="0 0 52 52" className="h-11 w-11" fill="none" aria-hidden>
+                <circle cx="26" cy="26" r="23" stroke="var(--bento-success)" strokeWidth="2.5" strokeOpacity="0.25" />
+                <motion.path
+                  d="M15 27l7.5 7.5L37 19"
+                  stroke="var(--bento-success)"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  initial={{ pathLength: reduce ? 1 : 0 }}
+                  animate={{ pathLength: 1 }}
+                  transition={{ duration: reduce ? 0 : 0.5, ease: "easeOut", delay: reduce ? 0 : 0.18 }}
                 />
-              ) : logoUrl && logoUrl !== "/logo.png" ? (
-                <img
-                  src={logoUrl}
-                  alt={appName}
-                  className="h-48 w-auto max-w-[260px] object-contain transition-transform duration-300 hover:scale-105 invert dark:invert-0"
+              </svg>
+            </motion.div>
+            <h1 className="mt-6 text-[30px] font-extrabold leading-none tracking-tight">You&apos;re in</h1>
+            <p className="mt-3 text-[15px] text-muted-foreground">
+              Taking you to your {appName} dashboard…
+            </p>
+
+            {/* Game/tech-style loading bar */}
+            <div className="mt-8 w-full max-w-[340px]">
+              <div className="relative h-4 w-full overflow-hidden rounded-full border border-[color:var(--glass-border)] bg-[var(--glass-input-bg)]">
+                {/* glowing fill */}
+                <div
+                  className="absolute inset-y-0 left-0 rounded-full"
                   style={{
-                    imageRendering: "crisp-edges",
+                    width: `${loadPct}%`,
+                    background:
+                      "linear-gradient(90deg, color-mix(in srgb, var(--bento-info) 85%, transparent), hsl(var(--primary)))",
+                    boxShadow: "0 0 14px hsl(var(--primary) / 0.75)",
                   }}
                 />
-              ) : (
-                <div className="h-32 w-32 flex items-center justify-center">
-                  <span className="text-3xl font-bold text-primary text-center leading-tight">
-                    {appName}
-                  </span>
-                </div>
-              )}
+                {/* leading edge spark */}
+                <div
+                  className="absolute inset-y-0 w-[3px] rounded-full bg-white/80"
+                  style={{ left: `calc(${loadPct}% - 2px)`, opacity: loadPct > 0 && loadPct < 100 ? 1 : 0, boxShadow: "0 0 10px rgba(255,255,255,0.9)" }}
+                />
+                {/* sweeping scanline */}
+                {!reduce && (
+                  <motion.div
+                    aria-hidden
+                    className="absolute inset-y-0 w-1/3"
+                    style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)" }}
+                    initial={{ x: "-120%" }}
+                    animate={{ x: "360%" }}
+                    transition={{ duration: 1, ease: "linear", repeat: Infinity }}
+                  />
+                )}
+              </div>
             </div>
           </div>
+        ) : forgotStep === "new-password" ? (
+            <div className="space-y-5">
+              <button
+                type="button"
+                onClick={() => { setForgotStep("hidden"); setError(""); setNewPassword(""); setConfirmNewPassword(""); }}
+                className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ArrowLeft className="h-4 w-4" /> Back
+              </button>
 
-          <CardTitle className="text-2xl font-bold">Sign In</CardTitle>
-          <CardDescription>
-            Enter your email and password to access the fleet management system
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {forgotStep === "new-password" ? (
-            <div className="space-y-4">
-              <div className="text-center space-y-2">
-                <h3 className="text-lg font-semibold">Set New Password</h3>
-                <p className="text-sm text-muted-foreground">
-                  Enter a new password for {resetEmail}
-                </p>
+              <div>
+                <h1 className="text-[34px] font-extrabold leading-none tracking-tight">Set new password</h1>
+                <p className="mt-3 text-[15px] text-muted-foreground">Enter a new password for {resetEmail}.</p>
               </div>
 
               {error && (
@@ -359,34 +474,36 @@ function LoginPageContent() {
               )}
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">New Password</label>
+                <label className="text-[13px] font-bold text-foreground">New password</label>
                 <PasswordInput
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Enter new password"
+                  placeholder="••••••••"
                   disabled={isSubmitting}
+                  className={fieldClass}
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Confirm New Password</label>
+                <label className="text-[13px] font-bold text-foreground">Confirm new password</label>
                 <PasswordInput
                   value={confirmNewPassword}
                   onChange={(e) => setConfirmNewPassword(e.target.value)}
-                  placeholder="Confirm new password"
+                  placeholder="••••••••"
                   disabled={isSubmitting}
+                  className={fieldClass}
                 />
               </div>
 
               {newPassword.length > 0 && (
-                <div className="flex gap-3 text-xs">
-                  <span className={newPassword.length >= 8 ? "text-green-600" : "text-muted-foreground"}>
+                <div className="flex gap-3 text-xs font-medium">
+                  <span className={newPassword.length >= 8 ? "text-[color:var(--bento-success)]" : "text-muted-foreground"}>
                     {newPassword.length >= 8 ? "✓" : "○"} 8+ chars
                   </span>
-                  <span className={/[A-Z]/.test(newPassword) ? "text-green-600" : "text-muted-foreground"}>
+                  <span className={/[A-Z]/.test(newPassword) ? "text-[color:var(--bento-success)]" : "text-muted-foreground"}>
                     {/[A-Z]/.test(newPassword) ? "✓" : "○"} Uppercase
                   </span>
-                  <span className={/\d/.test(newPassword) ? "text-green-600" : "text-muted-foreground"}>
+                  <span className={/\d/.test(newPassword) ? "text-[color:var(--bento-success)]" : "text-muted-foreground"}>
                     {/\d/.test(newPassword) ? "✓" : "○"} Number
                   </span>
                 </div>
@@ -395,85 +512,122 @@ function LoginPageContent() {
               <Button
                 onClick={handleSetNewPassword}
                 disabled={isSubmitting || newPassword.length < 8 || newPassword !== confirmNewPassword}
-                className="w-full"
+                className="h-14 w-full gap-2 rounded-[16px] text-[15px] font-bold shadow-[0_12px_28px_hsl(var(--primary)/0.4)]"
               >
                 {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Resetting...
-                  </>
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Resetting…</>
                 ) : (
-                  "Reset Password"
+                  "Reset password"
                 )}
-              </Button>
-
-              <Button
-                variant="ghost"
-                onClick={() => { setForgotStep("hidden"); setError(""); setNewPassword(""); setConfirmNewPassword(""); }}
-                className="w-full text-sm"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Sign In
               </Button>
             </div>
           ) : (
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
+            <>
+              <h1 className="text-[34px] font-extrabold leading-none tracking-tight">Sign in</h1>
+              <p className="mt-3 text-[15px] text-muted-foreground">
+                Access your {appName} fleet dashboard.
+              </p>
 
-                {getRateLimitMessage() && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{getRateLimitMessage()}</AlertDescription>
-                  </Alert>
-                )}
+              {error && (
+                <Alert variant="destructive" className="mt-5">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              {getRateLimitMessage() && (
+                <Alert variant="destructive" className="mt-3">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{getRateLimitMessage()}</AlertDescription>
+                </Alert>
+              )}
 
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email Address</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="email"
-                          placeholder="Enter your email"
-                          disabled={isSubmitting || isLocked}
-                          autoComplete="email"
-                          autoFocus
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              {/* Google + Company SSO */}
+              <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={handleGoogle}
+                  disabled={isSubmitting || isLocked}
+                  className="glass-input flex h-12 items-center justify-center gap-2.5 rounded-[14px] border border-[color:var(--glass-border)] text-[15px] font-bold text-foreground transition-transform active:scale-[0.98] disabled:opacity-60"
+                >
+                  <GoogleIcon /> Google
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCompanySSO}
+                  disabled={isSubmitting || isLocked}
+                  className="glass-input flex h-12 items-center justify-center gap-2.5 rounded-[14px] border border-[color:var(--glass-border)] text-[15px] font-bold text-foreground transition-transform active:scale-[0.98] disabled:opacity-60"
+                >
+                  <ShieldCheck className="h-[18px] w-[18px] text-primary" /> Company SSO
+                </button>
+              </div>
 
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Password</FormLabel>
-                      <FormControl>
-                        <PasswordInput
-                          placeholder="Enter your password"
-                          disabled={isSubmitting || isLocked}
-                          autoComplete="current-password"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              {/* divider */}
+              <div className="my-6 flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">or with email</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
 
-                <div className="flex items-center justify-between">
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-[13px] font-bold text-foreground">Email address</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Mail className="pointer-events-none absolute left-4 top-1/2 z-10 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground/50" />
+                            <Input
+                              type="email"
+                              placeholder="you@company.com"
+                              disabled={isSubmitting || isLocked}
+                              autoComplete="email"
+                              autoFocus
+                              className={cn(fieldClass, "pl-12")}
+                              {...field}
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center justify-between">
+                          <FormLabel className="text-[13px] font-bold text-foreground">Password</FormLabel>
+                          <button
+                            type="button"
+                            onClick={handleForgotPassword}
+                            disabled={isSubmitting}
+                            className="text-[13px] font-bold text-primary hover:underline disabled:opacity-60"
+                          >
+                            Forgot password?
+                          </button>
+                        </div>
+                        <FormControl>
+                          <div className="relative">
+                            <Lock className="pointer-events-none absolute left-4 top-1/2 z-10 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground/50" />
+                            <PasswordInput
+                              placeholder="••••••••"
+                              disabled={isSubmitting || isLocked}
+                              autoComplete="current-password"
+                              className={cn(fieldClass, "pl-12")}
+                              {...field}
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
                   <FormField
                     control={form.control}
                     name="rememberMe"
@@ -486,96 +640,89 @@ function LoginPageContent() {
                             disabled={isSubmitting || isLocked}
                           />
                         </FormControl>
-                        <FormLabel className="text-sm font-normal cursor-pointer">
+                        <FormLabel className="cursor-pointer text-[14px] font-medium text-foreground">
                           Keep me signed in
                         </FormLabel>
                       </FormItem>
                     )}
                   />
+
+                  {requiresPolicyAcceptance && (
+                    <FormField
+                      control={form.control}
+                      name="acceptPolicies"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-2 space-y-0 rounded-tile border border-border p-4 [background:var(--bento-tile-2)]">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              disabled={isSubmitting || isLocked}
+                            />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel className="cursor-pointer text-sm font-normal">
+                              I accept the{" "}
+                              <a href="/privacy-policy" target="_blank" className="text-primary underline hover:text-primary/80">
+                                Privacy Policy
+                              </a>{" "}
+                              and{" "}
+                              <a href="/terms" target="_blank" className="text-primary underline hover:text-primary/80">
+                                Terms &amp; Conditions
+                              </a>
+                            </FormLabel>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
                   <Button
-                    type="button"
-                    variant="link"
-                    className="px-0 text-sm"
-                    onClick={handleForgotPassword}
-                    disabled={isSubmitting}
+                    type="submit"
+                    className="h-14 w-full gap-2 rounded-[16px] text-[15px] font-bold shadow-[0_12px_28px_hsl(var(--primary)/0.4)]"
+                    disabled={isSubmitting || !form.formState.isValid || (requiresPolicyAcceptance && !form.watch("acceptPolicies"))}
                   >
-                    Forgot password?
-                  </Button>
-                </div>
-
-                {requiresPolicyAcceptance && (
-                  <FormField
-                    control={form.control}
-                    name="acceptPolicies"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-start space-x-2 space-y-0 rounded-md border p-4">
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            disabled={isSubmitting || isLocked}
-                          />
-                        </FormControl>
-                        <div className="space-y-1 leading-none">
-                          <FormLabel className="text-sm font-normal cursor-pointer">
-                            I accept the{" "}
-                            <a href="/privacy-policy" target="_blank" className="text-primary underline hover:text-primary/80">
-                              Privacy Policy
-                            </a>{" "}
-                            and{" "}
-                            <a href="/terms" target="_blank" className="text-primary underline hover:text-primary/80">
-                              Terms &amp; Conditions
-                            </a>
-                          </FormLabel>
-                        </div>
-                      </FormItem>
+                    {isSubmitting ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Signing in…</>
+                    ) : (
+                      <><ArrowRight className="h-[18px] w-[18px]" /> Sign in</>
                     )}
-                  />
-                )}
+                  </Button>
 
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isSubmitting || !form.formState.isValid || (requiresPolicyAcceptance && !form.watch("acceptPolicies"))}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Signing in...
-                    </>
-                  ) : (
-                    "Sign In"
-                  )}
-                </Button>
+                  {rateLimitStatus.attemptsRemaining < 5 &&
+                    rateLimitStatus.attemptsRemaining > 0 && (
+                      <div className="text-center text-sm font-medium text-[color:var(--bento-warn-accent)]">
+                        {rateLimitStatus.attemptsRemaining} attempt
+                        {rateLimitStatus.attemptsRemaining > 1 ? "s" : ""} remaining
+                      </div>
+                    )}
+                </form>
+              </Form>
 
-                {rateLimitStatus.attemptsRemaining < 5 &&
-                  rateLimitStatus.attemptsRemaining > 0 && (
-                    <div className="text-center text-sm text-amber-600">
-                      {rateLimitStatus.attemptsRemaining} attempt
-                      {rateLimitStatus.attemptsRemaining > 1 ? "s" : ""} remaining
-                    </div>
-                  )}
-              </form>
-            </Form>
+              <p className="mt-6 text-center text-xs text-muted-foreground">
+                By continuing you agree to our{" "}
+                <a href="/terms" target="_blank" className="font-bold text-primary hover:underline">Terms</a>{" "}&amp;{" "}
+                <a href="/privacy-policy" target="_blank" className="font-bold text-primary hover:underline">Privacy Policy</a>.
+              </p>
+              <p className="mt-4 text-center text-xs text-muted-foreground">
+                © {new Date().getFullYear()} {appName} · Support · Status
+              </p>
+            </>
           )}
-
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>Need help? Contact your system administrator.</p>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+      </motion.div>
+    </AuthShell>
   );
 }
 
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span className="text-muted-foreground">Loading...</span>
-        </div>
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+        <AuthBackground />
+        <Tile variant="glass" pad="roomy" className="relative z-10 flex items-center gap-3">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <span className="text-sm font-medium text-muted-foreground">Loading…</span>
+        </Tile>
       </div>
     }>
       <LoginPageContent />

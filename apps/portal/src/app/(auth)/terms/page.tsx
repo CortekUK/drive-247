@@ -1,30 +1,27 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
+import { Tile, Eyebrow } from "@/components/bento";
+import { AuthShell } from "../_components/auth-shell";
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="absolute top-4 right-4">
-        <ThemeToggle />
-      </div>
-
-      <Card className="max-w-3xl mx-auto">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-center">
+    <AuthShell width="max-w-3xl" align="top">
+      <Tile pad="roomy">
+        <div className="mb-8 text-center space-y-2">
+          <Eyebrow className="text-center">Platform agreement</Eyebrow>
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
             DRIVE247 PLATFORM TERMS OF USE
-          </CardTitle>
-          <p className="text-sm text-muted-foreground text-center mt-2">
+          </h1>
+          <p className="text-sm text-muted-foreground mt-2">
             These Platform Terms of Use (&quot;Terms&quot;) govern access to and use of the Drive247 software platform (the &quot;System&quot;), operated by <em>Cortek Systems Ltd (&quot;Cortek&quot;)</em>.
           </p>
-          <p className="text-sm text-muted-foreground text-center">
+          <p className="text-sm text-muted-foreground">
             By accessing or using the System, the Client and its authorised users agree to be bound by these Terms.
           </p>
-        </CardHeader>
-        <CardContent className="prose prose-sm dark:prose-invert max-w-none space-y-6">
+        </div>
+        <div className="prose prose-sm dark:prose-invert max-w-none space-y-6">
           <section>
-            <h2 className="text-lg font-semibold">1. Scope of the System</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">1. Scope of the System</h2>
             <p className="text-sm text-muted-foreground">
               The System is a cloud-based software platform designed to assist vehicle rental businesses with administrative workflows, including booking management, customer record keeping, document processing, and operational automation.
             </p>
@@ -34,7 +31,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">2. Authorised Users</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">2. Authorised Users</h2>
             <p className="text-sm text-muted-foreground">Access to the System is limited to:</p>
             <ul className="list-disc pl-6 text-sm text-muted-foreground space-y-1">
               <li>The Client (vehicle rental operator); and</li>
@@ -46,7 +43,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">3. Client Operational Responsibility</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">3. Client Operational Responsibility</h2>
             <p className="text-sm text-muted-foreground">
               The Client retains full and exclusive responsibility for all vehicle rental operations, including but not limited to:
             </p>
@@ -64,7 +61,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">4. Third-Party Services</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">4. Third-Party Services</h2>
             <p className="text-sm text-muted-foreground">
               The System may integrate with third-party service providers, including but not limited to:
             </p>
@@ -81,7 +78,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">5. Payments</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">5. Payments</h2>
             <p className="text-sm text-muted-foreground">
               The System does not collect, hold, or process client funds.
             </p>
@@ -91,7 +88,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">6. Data Responsibility</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">6. Data Responsibility</h2>
             <p className="text-sm text-muted-foreground">
               The Client determines what personal and operational data is collected through the System and is solely responsible for ensuring lawful use, storage, and retention of such data.
             </p>
@@ -101,7 +98,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">7. System Availability</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">7. System Availability</h2>
             <p className="text-sm text-muted-foreground">
               The System is provided on an &quot;as available&quot; basis. Cortek does not guarantee uninterrupted operation, error-free performance, or specific uptime levels.
             </p>
@@ -111,7 +108,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">8. Acceptable Use</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">8. Acceptable Use</h2>
             <p className="text-sm text-muted-foreground">The Client and its Authorised Users must not:</p>
             <ul className="list-disc pl-6 text-sm text-muted-foreground space-y-1">
               <li>Use the System for unlawful activities;</li>
@@ -123,7 +120,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">9. Limitation of Liability</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">9. Limitation of Liability</h2>
             <p className="text-sm text-muted-foreground">
               To the maximum extent permitted by law, Cortek shall not be liable for any indirect, consequential, or business losses arising from use of the System, including loss of revenue, customers, or operational disruption.
             </p>
@@ -133,34 +130,34 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">10. No Warranty</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">10. No Warranty</h2>
             <p className="text-sm text-muted-foreground">
               The System is provided without warranties of any kind, whether express or implied, including fitness for a particular purpose or operational reliability.
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">11. Changes to Terms</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">11. Changes to Terms</h2>
             <p className="text-sm text-muted-foreground">
               Cortek may update these Terms from time to time. Continued use of the System constitutes acceptance of any updated Terms.
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">12. Governing Law</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">12. Governing Law</h2>
             <p className="text-sm text-muted-foreground">
               These Terms are governed by the laws of England and Wales.
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">13. Acceptance</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">13. Acceptance</h2>
             <p className="text-sm text-muted-foreground">
               By accessing or continuing to use the System, the Client and its Authorised Users acknowledge and agree to these Terms.
             </p>
           </section>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </Tile>
+    </AuthShell>
   );
 }

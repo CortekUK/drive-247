@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
+import { Tile } from "@/components/bento";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, X } from "lucide-react";
 import { useCreditWallet } from "@/hooks/use-credit-wallet";
@@ -31,40 +31,41 @@ export function LowCreditsBanner() {
   };
 
   return (
-    <Card className="overflow-hidden border-0 shadow-lg">
-      <div className="h-1.5 bg-gradient-to-r from-amber-400 via-orange-500 to-red-500" />
-      <CardContent className="py-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/30">
-              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            </div>
-            <div>
-              <p className="font-semibold text-base">
-                Low credit balance
-              </p>
-              <p className="text-sm text-muted-foreground">
-                You have <span className="font-medium text-foreground">{balance}</span>{" "}
-                credit{balance === 1 ? "" : "s"} remaining (threshold: {threshold}).
-                Top up to keep e-sign, SMS, and license checks running.
-              </p>
-            </div>
+    <Tile variant="warn" pad="compact">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center h-10 w-10 rounded-full bg-bento-tile/60">
+            <AlertTriangle className="h-5 w-5 text-bento-warn-accent" />
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button size="sm" onClick={() => router.push("/credits")}>
-              Buy credits
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleDismiss}
-              aria-label="Dismiss low credits banner"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+          <div>
+            <p className="font-bold tracking-tight text-base text-bento-warn-fg">
+              Low credit balance
+            </p>
+            <p className="text-sm text-bento-warn-fg/80">
+              You have{" "}
+              <span className="font-mono tabular-nums font-semibold text-bento-warn-accent">
+                {balance}
+              </span>{" "}
+              credit{balance === 1 ? "" : "s"} remaining (threshold: {threshold}).
+              Top up to keep e-sign, SMS, and license checks running.
+            </p>
           </div>
         </div>
-      </CardContent>
-    </Card>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button size="sm" onClick={() => router.push("/credits")}>
+            Buy credits
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleDismiss}
+            aria-label="Dismiss low credits banner"
+            className="text-bento-warn-fg hover:bg-bento-tile/40"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </Tile>
   );
 }

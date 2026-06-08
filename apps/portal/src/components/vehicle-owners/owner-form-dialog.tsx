@@ -221,7 +221,7 @@ export function OwnerFormDialog({ open, onOpenChange, owner, onSaved }: OwnerFor
             </div>
           )}
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-[color:var(--bento-danger-fg)]">{error}</p>}
         </div>
 
         <DialogFooter>

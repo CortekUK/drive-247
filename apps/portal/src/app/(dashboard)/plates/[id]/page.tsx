@@ -3,14 +3,22 @@
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeft, Calendar, Hash, Car, FileText, ExternalLink, DollarSign } from "lucide-react";
+import { ArrowLeft, Calendar, Hash, Car, FileText, ExternalLink } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import {
+  Tile,
+  SectionCard,
+  StatusPill,
+  statusTone,
+  Eyebrow,
+  Money,
+  ErrorState,
+  Shimmer,
+} from "@/components/bento";
 
 interface PlateDetailData {
   id: string;
@@ -79,11 +87,17 @@ export default function PlateDetail() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-muted rounded w-1/4"></div>
-          <div className="h-64 bg-muted rounded"></div>
+      <div className="container mx-auto p-6 space-y-6">
+        <Shimmer className="h-8 w-1/4" />
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Tile key={i} noMotion className="flex flex-col gap-3">
+              <Shimmer className="h-3 w-20" />
+              <Shimmer className="h-8 w-24" />
+            </Tile>
+          ))}
         </div>
+        <Shimmer className="h-64 w-full rounded-tile" />
       </div>
     );
   }
@@ -91,37 +105,19 @@ export default function PlateDetail() {
   if (error || !plate) {
     return (
       <div className="container mx-auto p-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-destructive">Plate Not Found</h1>
-          <p className="text-muted-foreground mt-2">
-            The plate you're looking for doesn't exist or you don't have permission to view it.
-          </p>
-          <Button onClick={() => router.push("/plates")} className="mt-4">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Plates
-          </Button>
-        </div>
+        <ErrorState
+          title="Plate Not Found"
+          description="The plate you're looking for doesn't exist or you don't have permission to view it."
+          onRetry={() => router.push("/plates")}
+        />
       </div>
     );
   }
 
-  const getStatusVariant = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'assigned':
-        return 'default';
-      case 'available':
-        return 'secondary';
-      case 'ordered':
-        return 'outline';
-      default:
-        return 'secondary';
-    }
-  };
-
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <TooltipProvider>
             <Tooltip>
@@ -136,197 +132,187 @@ export default function PlateDetail() {
             </Tooltip>
           </TooltipProvider>
           <div>
-            <h1 className="text-2xl font-bold">{plate.plate_number}</h1>
-            <p className="text-muted-foreground">
-              Plate Details
-            </p>
+            <h1 className="text-2xl font-extrabold tracking-tight font-mono">{plate.plate_number}</h1>
+            <p className="text-muted-foreground text-sm">Plate Details</p>
           </div>
         </div>
-        <Badge variant={getStatusVariant(plate.status)}>
-          {plate.status || 'Unknown'}
-        </Badge>
+        <StatusPill tone={statusTone(plate.status)} dot>
+          {plate.status || "Unknown"}
+        </StatusPill>
       </div>
 
-      {/* Plate Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Hash className="h-5 w-5" />
-            Plate Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div>
-              <div className="text-sm text-muted-foreground">Plate Number</div>
-              <div className="text-xl font-bold">{plate.plate_number}</div>
-            </div>
-            <div>
-              <div className="text-sm text-muted-foreground">Status</div>
-              <Badge variant={getStatusVariant(plate.status)} className="mt-1">
-                {plate.status || 'Unknown'}
-              </Badge>
-            </div>
-            {plate.cost > 0 && (
-              <div>
-                <div className="text-sm text-muted-foreground">Cost</div>
-                <div className="flex items-center gap-1">
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  {formatCurrency(plate.cost, tenant?.currency_code || 'USD')}
-                </div>
-              </div>
-            )}
-            {plate.order_date && (
-              <div>
-                <div className="text-sm text-muted-foreground">Order Date</div>
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  {formatInTimeZone(new Date(plate.order_date), 'America/New_York', 'MM/dd/yyyy')}
-                </div>
-              </div>
-            )}
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Tile className="flex flex-col gap-1.5">
+          <Eyebrow>Plate Number</Eyebrow>
+          <div className="text-xl font-extrabold tracking-tight font-mono tabular-nums">
+            {plate.plate_number}
           </div>
-
-          {plate.supplier && (
-            <div className="mt-4">
-              <div className="text-sm text-muted-foreground">Supplier</div>
-              <div>{plate.supplier}</div>
+        </Tile>
+        <Tile className="flex flex-col gap-1.5">
+          <Eyebrow>Status</Eyebrow>
+          <div className="mt-0.5">
+            <StatusPill tone={statusTone(plate.status)}>{plate.status || "Unknown"}</StatusPill>
+          </div>
+        </Tile>
+        {plate.cost > 0 && (
+          <Tile className="flex flex-col gap-1.5">
+            <Eyebrow>Cost</Eyebrow>
+            <Money className="text-xl font-bold">
+              {formatCurrency(plate.cost, tenant?.currency_code || "USD")}
+            </Money>
+          </Tile>
+        )}
+        {plate.order_date && (
+          <Tile className="flex flex-col gap-1.5">
+            <Eyebrow>Order Date</Eyebrow>
+            <div className="flex items-center gap-1.5 text-sm font-mono tabular-nums">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              {formatInTimeZone(new Date(plate.order_date), "America/New_York", "MM/dd/yyyy")}
             </div>
-          )}
+          </Tile>
+        )}
+      </div>
 
-          {plate.retention_doc_reference && (
-            <div className="mt-4">
-              <div className="text-sm text-muted-foreground">Retention Document Reference</div>
-              <div className="font-mono text-sm">{plate.retention_doc_reference}</div>
-            </div>
-          )}
-
-          {plate.notes && (
-            <div className="mt-4">
-              <div className="text-sm text-muted-foreground">Notes</div>
-              <div className="whitespace-pre-wrap">{plate.notes}</div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Assigned Vehicle */}
-      {plate.vehicles ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Car className="h-5 w-5" />
-              Assigned Vehicle
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Left: plate info + vehicle */}
+        <div className="lg:col-span-2 space-y-6">
+          <SectionCard
+            icon={<Hash className="h-4 w-4" />}
+            title="Plate Information"
+            description="Supplier, retention reference and notes"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
+              {plate.supplier && (
                 <div>
-                  <div className="text-sm text-muted-foreground">Registration</div>
-                  <div className="font-medium">{plate.vehicles.reg}</div>
+                  <Eyebrow>Supplier</Eyebrow>
+                  <div className="mt-1">{plate.supplier}</div>
+                </div>
+              )}
+              {plate.retention_doc_reference && (
+                <div>
+                  <Eyebrow>Retention Document Reference</Eyebrow>
+                  <div className="mt-1 font-mono text-sm tabular-nums">
+                    {plate.retention_doc_reference}
+                  </div>
+                </div>
+              )}
+            </div>
+            {plate.notes && (
+              <div className="mt-5">
+                <Eyebrow>Notes</Eyebrow>
+                <div className="mt-1 whitespace-pre-wrap text-sm text-[color:var(--bento-text-2)]">
+                  {plate.notes}
+                </div>
+              </div>
+            )}
+            {!plate.supplier && !plate.retention_doc_reference && !plate.notes && (
+              <p className="pt-1 text-sm text-muted-foreground">No additional details recorded.</p>
+            )}
+          </SectionCard>
+
+          {plate.vehicles ? (
+            <SectionCard
+              icon={<Car className="h-4 w-4" />}
+              title="Assigned Vehicle"
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => router.push(`/vehicles/${plate.vehicles!.id}`)}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  View Vehicle
+                </Button>
+              }
+            >
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-1">
+                <div>
+                  <Eyebrow>Registration</Eyebrow>
+                  <div className="mt-1 font-mono font-medium tabular-nums">{plate.vehicles.reg}</div>
                 </div>
                 {plate.vehicles.make && (
                   <div>
-                    <div className="text-sm text-muted-foreground">Make & Model</div>
-                    <div>{plate.vehicles.make} {plate.vehicles.model}</div>
+                    <Eyebrow>Make &amp; Model</Eyebrow>
+                    <div className="mt-1">
+                      {plate.vehicles.make} {plate.vehicles.model}
+                    </div>
                   </div>
                 )}
                 {plate.vehicles.status && (
                   <div>
-                    <div className="text-sm text-muted-foreground">Vehicle Status</div>
-                    <Badge variant="outline">{plate.vehicles.status}</Badge>
+                    <Eyebrow>Vehicle Status</Eyebrow>
+                    <div className="mt-1">
+                      <StatusPill tone={statusTone(plate.vehicles.status)}>
+                        {plate.vehicles.status}
+                      </StatusPill>
+                    </div>
                   </div>
                 )}
               </div>
-              <Button
-                variant="outline"
-                onClick={() => router.push(`/vehicles/${plate.vehicles!.id}`)}
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                View Vehicle Details
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Car className="h-5 w-5" />
-              Vehicle Assignment
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center py-8">
-              <Car className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">This plate is not currently assigned to any vehicle.</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </SectionCard>
+          ) : (
+            <SectionCard icon={<Car className="h-4 w-4" />} title="Vehicle Assignment">
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full [background:var(--bento-tile-2)] text-muted-foreground">
+                  <Car className="h-5 w-5" />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  This plate is not currently assigned to any vehicle.
+                </p>
+              </div>
+            </SectionCard>
+          )}
+        </div>
 
-      {/* Documents */}
-      {(plate.document_name || plate.document_url) && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Documents
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {plate.document_name && (
-                <div>
-                  <div className="text-sm text-muted-foreground">Document Name</div>
-                  <div>{plate.document_name}</div>
+        {/* Right: documents + system info */}
+        <div className="space-y-6">
+          {(plate.document_name || plate.document_url) && (
+            <SectionCard icon={<FileText className="h-4 w-4" />} title="Documents">
+              <div className="space-y-3 pt-1">
+                {plate.document_name && (
+                  <div>
+                    <Eyebrow>Document Name</Eyebrow>
+                    <div className="mt-1 text-sm">{plate.document_name}</div>
+                  </div>
+                )}
+                {plate.document_url && (
+                  <Button variant="outline" asChild className="w-full gap-2">
+                    <a href={plate.document_url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4" />
+                      View Document
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </SectionCard>
+          )}
+
+          <SectionCard icon={<Hash className="h-4 w-4" />} title="System Information">
+            <div className="space-y-2 pt-1 text-sm">
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">Plate ID</span>
+                <span className="font-mono text-xs tabular-nums truncate">{plate.id}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">Created</span>
+                <span className="font-mono text-xs tabular-nums">
+                  {formatInTimeZone(new Date(plate.created_at), "America/New_York", "MM/dd/yyyy HH:mm")}
+                </span>
+              </div>
+              {plate.assigned_vehicle_id && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">Assigned Vehicle ID</span>
+                  <span className="font-mono text-xs tabular-nums truncate">
+                    {plate.assigned_vehicle_id}
+                  </span>
                 </div>
               )}
-              {plate.document_url && (
-                <Button
-                  variant="outline"
-                  asChild
-                  className="w-full"
-                >
-                  <a href={plate.document_url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    View Document
-                  </a>
-                </Button>
-              )}
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* System Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Hash className="h-4 w-4" />
-            System Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Plate ID:</span>
-              <span className="font-mono">{plate.id}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Created:</span>
-              <span>{formatInTimeZone(new Date(plate.created_at), 'America/New_York', 'MM/dd/yyyy HH:mm')}</span>
-            </div>
-            {plate.assigned_vehicle_id && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Assigned Vehicle ID:</span>
-                <span className="font-mono">{plate.assigned_vehicle_id}</span>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          </SectionCard>
+        </div>
+      </div>
     </div>
   );
 }

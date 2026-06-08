@@ -4,18 +4,24 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertTriangle, ArrowLeft, FileText, DollarSign, Clock, Upload, Ban } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileText, DollarSign, Clock, Ban } from "lucide-react";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
-import { KPICard } from "@/components/ui/kpi-card";
 import { InfoGrid } from "@/components/ui/info-grid";
-import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import {
+  Tile,
+  KpiTile,
+  Eyebrow,
+  Money,
+  SectionCard,
+  EmptyState,
+  Shimmer,
+} from "@/components/bento";
 
 interface Fine {
   id: string;
@@ -186,35 +192,43 @@ const FineDetail = () => {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="container mx-auto p-6 space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="outline" disabled>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Fines
+          <Button variant="ghost" size="icon" disabled>
+            <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold">Fine Details</h1>
-            <p className="text-muted-foreground">Loading...</p>
+          <div className="space-y-2">
+            <Shimmer className="h-7 w-48" />
+            <Shimmer className="h-4 w-32" />
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <KPICard key={i} title="" value="" isLoading />
+            <Tile key={i} noMotion className="flex flex-col gap-3">
+              <Shimmer className="h-3 w-20" />
+              <Shimmer className="h-8 w-24" />
+            </Tile>
           ))}
         </div>
+        <Shimmer className="h-64 w-full rounded-tile" />
       </div>
     );
   }
 
   if (!fine) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <AlertTriangle className="h-12 w-12 text-destructive" />
-        <h2 className="text-2xl font-bold">Fine not found</h2>
-        <Button onClick={() => router.push("/fines")}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Fines
-        </Button>
+      <div className="container mx-auto p-6">
+        <EmptyState
+          icon={<AlertTriangle className="h-5 w-5" />}
+          title="Fine not found"
+          description="This fine may have been removed or the link is invalid."
+          action={
+            <Button onClick={() => router.push("/fines")}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Fines
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -260,9 +274,12 @@ const FineDetail = () => {
               </TooltipContent>
             </Tooltip>
             <div>
-              <h1 className="text-3xl font-bold">Fine Details</h1>
-              <p className="text-muted-foreground">
-                {fine.reference_no || fine.id.slice(0, 8)} • {fine.vehicles.reg}
+              <Eyebrow>Fine</Eyebrow>
+              <h1 className="text-[30px] font-extrabold tracking-tight leading-tight">Fine Details</h1>
+              <p className="text-muted-foreground text-sm">
+                <span className="font-mono tabular-nums">{fine.reference_no || fine.id.slice(0, 8)}</span>
+                {" • "}
+                <span className="font-mono tabular-nums">{fine.vehicles.reg}</span>
               </p>
             </div>
           </div>
@@ -293,34 +310,37 @@ const FineDetail = () => {
 
         {/* KPI Card Row */}
         <div className="grid gap-4 md:grid-cols-3">
-          <KPICard
-            title="Fine Amount"
-            value={formatCurrency(Number(fine.amount), tenant?.currency_code || 'USD')}
-            valueClassName="text-destructive dark:text-destructive"
-            className="bg-destructive/10 border-destructive/20"
+          <KpiTile
+            label="Fine Amount"
+            variant="feature"
+            value={Number(fine.amount)}
+            noCountUp
+            icon={<DollarSign className="h-4 w-4" />}
+            format={() => (
+              <Money value={Number(fine.amount)} currency={tenant?.currency_code || 'USD'} locale="en-US" />
+            )}
           />
 
-          <KPICard
-            title="Status"
-            value={<FineStatusBadge
-              status={fine.status}
-              dueDate={fine.due_date}
-              remainingAmount={0}
-            />}
-            className="bg-muted/50 border-muted-foreground/20"
-          />
+          <Tile className="flex flex-col gap-2">
+            <Eyebrow>Status</Eyebrow>
+            <div className="flex items-center">
+              <FineStatusBadge
+                status={fine.status}
+                dueDate={fine.due_date}
+                remainingAmount={0}
+              />
+            </div>
+          </Tile>
 
-          <KPICard
-            title="Days Until Due"
-            value={getDaysUntilDueDisplay()}
-            valueClassName={getDaysUntilDueColor() === "text-red-600" ? "text-destructive dark:text-destructive" : getDaysUntilDueColor() === "text-amber-600" ? "text-warning dark:text-warning" : "text-success dark:text-success"}
-            className={
-              getDaysUntilDueColor() === "text-red-600"
-                ? "bg-destructive/10 border-destructive/20"
-                : getDaysUntilDueColor() === "text-amber-600"
-                  ? "bg-warning/10 border-warning/20"
-                  : "bg-success/10 border-success/20"
-            }
+          <KpiTile
+            label="Days Until Due"
+            variant={getDaysUntilDueColor() === "text-red-600" ? "warn" : "default"}
+            value={0}
+            noCountUp
+            icon={<Clock className="h-4 w-4" />}
+            format={() => (
+              <span className="font-mono tabular-nums">{getDaysUntilDueDisplay()}</span>
+            )}
           />
         </div>
 
@@ -332,74 +352,68 @@ const FineDetail = () => {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-primary" />
-                  Fine Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <InfoGrid items={[
-                  { label: "Type", value: fine.type },
-                  { label: "Reference", value: fine.reference_no || '-' },
-                  { label: "Vehicle", value: `${fine.vehicles.reg} (${fine.vehicles.make} ${fine.vehicles.model})` },
-                  { label: "Customer", value: fine.customers?.name || 'No customer assigned' },
-                  { label: "Rental #", value: fine.rentals?.rental_number || '-' },
-                  { label: "Issue Date", value: new Date(fine.issue_date + 'T00:00:00').toLocaleDateString('en-US') },
-                  { label: "Due Date", value: new Date(fine.due_date + 'T00:00:00').toLocaleDateString('en-US') }
-                ]} />
-                {fine.notes && (
-                  <div className="mt-6 pt-4 border-t">
-                    <p className="text-sm font-medium text-muted-foreground mb-2">Notes</p>
-                    <div className="p-3 bg-muted rounded-lg">
-                      <p className="text-sm">{fine.notes}</p>
-                    </div>
+            <SectionCard
+              icon={<AlertTriangle className="h-4 w-4" />}
+              title="Fine Information"
+            >
+              <InfoGrid items={[
+                { label: "Type", value: fine.type },
+                { label: "Reference", value: fine.reference_no || '-' },
+                { label: "Vehicle", value: `${fine.vehicles.reg} (${fine.vehicles.make} ${fine.vehicles.model})` },
+                { label: "Customer", value: fine.customers?.name || 'No customer assigned' },
+                { label: "Rental #", value: fine.rentals?.rental_number || '-' },
+                { label: "Issue Date", value: new Date(fine.issue_date + 'T00:00:00').toLocaleDateString('en-US') },
+                { label: "Due Date", value: new Date(fine.due_date + 'T00:00:00').toLocaleDateString('en-US') }
+              ]} />
+              {fine.notes && (
+                <div className="mt-6 pt-4 border-t border-border">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Notes</p>
+                  <div className="rounded-tile-sm [background:var(--bento-tile-2)] p-3">
+                    <p className="text-sm">{fine.notes}</p>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              )}
+            </SectionCard>
           </TabsContent>
 
           <TabsContent value="documents" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-primary" />
-                  Documents
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {fineFiles && fineFiles.length > 0 ? (
-                  <div className="grid gap-4">
-                    {fineFiles.map((file) => (
-                      <div key={file.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">{file.file_name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Uploaded {new Date(file.uploaded_at).toLocaleDateString('en-US')}
-                          </p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          onClick={() => window.open(file.file_url, '_blank')}
-                        >
-                          View File
-                        </Button>
+            <SectionCard
+              icon={<FileText className="h-4 w-4" />}
+              title="Documents"
+            >
+              {fineFiles && fineFiles.length > 0 ? (
+                <div className="grid gap-3">
+                  {fineFiles.map((file) => (
+                    <div key={file.id} className="flex items-center justify-between rounded-tile-sm border border-border p-4">
+                      <div>
+                        <p className="font-medium">{file.file_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Uploaded {new Date(file.uploaded_at).toLocaleDateString('en-US')}
+                        </p>
                       </div>
-                    ))}
+                      <Button
+                        variant="outline"
+                        onClick={() => window.open(file.file_url, '_blank')}
+                      >
+                        View File
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-3 py-12 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full [background:var(--bento-primary-weak)] text-[color:var(--bento-primary-weak-fg)]">
+                    <FileText className="h-5 w-5" />
                   </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No documents</h3>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-bold tracking-tight">No documents</h3>
                     <p className="text-sm text-muted-foreground">
                       Documents related to this fine will appear here
                     </p>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              )}
+            </SectionCard>
           </TabsContent>
         </Tabs>
       </div>

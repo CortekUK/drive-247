@@ -1,8 +1,24 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
+import { Sora, IBM_Plex_Mono } from "next/font/google";
 import { Providers } from "./providers";
 import "@/global.css";
+
+// Bento type system: Sora for display/body, IBM Plex Mono for figures/codes.
+const sora = Sora({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const dynamic = "force-dynamic";
 
@@ -94,15 +110,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${sora.variable} ${plexMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
         <script dangerouslySetInnerHTML={{ __html: brandingScript }} />
       </head>
       <body suppressHydrationWarning>

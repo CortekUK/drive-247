@@ -6,9 +6,17 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import {
+  KpiTile,
+  KpiTileSkeletonRow,
+  TableTile,
+  TableSkeleton,
+  bentoTable,
+  Segmented,
+  EmptyState,
+  Money,
+} from "@/components/bento";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,7 +31,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useTenant } from "@/contexts/TenantContext";
@@ -177,6 +184,17 @@ export default function PlatesListEnhanced() {
   }, [plates, currentPage, pageSize]);
 
   const totalPages = Math.ceil(totalCount / pageSize);
+
+  // Stat tile counts (derived from the full fetched set, presentation only)
+  const stats = useMemo(() => {
+    const list = (plates ?? []) as Plate[];
+    return {
+      total: list.length,
+      assigned: list.filter((p) => !!p.vehicle_id).length,
+      unassigned: list.filter((p) => !p.vehicle_id).length,
+      expired: list.filter((p) => p.status?.toLowerCase() === "expired").length,
+    };
+  }, [plates]);
 
   // Handlers
   const handleSearch = (value: string) => {
@@ -395,78 +413,117 @@ export default function PlatesListEnhanced() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Plates Management</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">Plates Management</h1>
           <p className="text-muted-foreground">
             Manage license plates, assignments, and documentation
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={exportToCSV}>
-            <Download className="h-4 w-4 mr-2" />
+          <Button variant="outline" onClick={exportToCSV} className="gap-2">
+            <Download className="h-4 w-4" />
             Export CSV
           </Button>
-          <Button onClick={() => setAddPlateOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
+          <Button onClick={() => setAddPlateOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
             Add Plate
           </Button>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search plates, vehicles, suppliers..."
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="pl-10"
+      {/* Stat tiles */}
+      {isLoading ? (
+        <KpiTileSkeletonRow count={4} />
+      ) : (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <KpiTile label="Total Plates" value={stats.total} icon={<FileText className="h-4 w-4" />} />
+          <KpiTile label="Assigned" value={stats.assigned} sub="On a vehicle" icon={<Car className="h-4 w-4" />} />
+          <KpiTile label="Unassigned" value={stats.unassigned} sub="In stock" />
+          <KpiTile
+            label="Expired"
+            value={stats.expired}
+            variant={stats.expired > 0 ? "warn" : "default"}
+            icon={<Clock className="h-4 w-4" />}
           />
         </div>
-        <Select value={statusFilter} onValueChange={handleStatusFilter}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="ordered">Ordered</SelectItem>
-            <SelectItem value="received">Received</SelectItem>
-            <SelectItem value="assigned">Assigned</SelectItem>
-            <SelectItem value="fitted">Fitted (Legacy)</SelectItem>
-            <SelectItem value="expired">Expired</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={documentFilter} onValueChange={handleDocumentFilter}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="All Documents" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Documents</SelectItem>
-            <SelectItem value="yes">Has Document</SelectItem>
-            <SelectItem value="no">No Document</SelectItem>
-          </SelectContent>
-        </Select>
-        {hasActiveFilters && (
-          <Button variant="outline" size="sm" onClick={clearFilters}>
-            <X className="h-4 w-4 mr-1" />
-            Clear Filters
-          </Button>
-        )}
-      </div>
+      )}
 
       {/* Table */}
-      <Card>
-        <CardContent className="p-0">
+      <TableTile
+        toolbar={
+          <>
+            <Segmented
+              value={statusFilter}
+              onValueChange={handleStatusFilter}
+              options={[
+                { value: "all", label: "All" },
+                { value: "ordered", label: "Ordered" },
+                { value: "received", label: "Received" },
+                { value: "assigned", label: "Assigned" },
+                { value: "expired", label: "Expired" },
+              ]}
+            />
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search plates, vehicles, suppliers..."
+                value={searchTerm}
+                onChange={(e) => handleSearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={documentFilter} onValueChange={handleDocumentFilter}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="All Documents" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Documents</SelectItem>
+                <SelectItem value="yes">Has Document</SelectItem>
+                <SelectItem value="no">No Document</SelectItem>
+              </SelectContent>
+            </Select>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1">
+                <X className="h-4 w-4" />
+                Clear
+              </Button>
+            )}
+          </>
+        }
+      >
+        {isLoading ? (
+          <TableSkeleton rows={8} cols={9} />
+        ) : paginatedPlates.length === 0 ? (
+          <EmptyState
+            icon={<FileText className="h-5 w-5" />}
+            title={hasActiveFilters ? "No plates match your filters" : "No plates yet"}
+            description={
+              hasActiveFilters
+                ? "Try adjusting your search or filters."
+                : "Add your first plate to start tracking assignments and documentation."
+            }
+            action={
+              hasActiveFilters ? (
+                <Button variant="outline" onClick={clearFilters} className="gap-2">
+                  <X className="h-4 w-4" /> Clear filters
+                </Button>
+              ) : (
+                <Button onClick={() => setAddPlateOpen(true)} className="gap-2">
+                  <Plus className="h-4 w-4" /> Add Plate
+                </Button>
+              )
+            }
+          />
+        ) : (
           <Table>
-            <TableHeader>
+            <TableHeader className={bentoTable.header}>
               <TableRow>
                 <TableHead>Plate Number</TableHead>
                 <TableHead>Vehicle</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead>Order Date</TableHead>
-                <TableHead className="text-left">Cost</TableHead>
+                <TableHead className="text-right">Cost</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Notes</TableHead>
                 <TableHead>Document</TableHead>
@@ -474,49 +531,12 @@ export default function PlatesListEnhanced() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                [...Array(pageSize)].map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-8" /></TableCell>
-                  </TableRow>
-                ))
-              ) : paginatedPlates.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-12">
-                    <div className="text-muted-foreground">
-                      {hasActiveFilters ? (
-                        <>
-                          No plates match your filters.{" "}
-                          <Button variant="link" onClick={clearFilters} className="p-0">
-                            Clear filters
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          No plates found.{" "}
-                          <Button variant="link" onClick={() => setAddPlateOpen(true)} className="p-0">
-                            Add your first plate
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                paginatedPlates.map((plate) => (
-                  <TableRow key={plate.id}>
+              {paginatedPlates.map((plate) => (
+                  <TableRow key={plate.id} className={bentoTable.row}>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <code
-                          className="font-mono cursor-pointer hover:bg-muted px-1 rounded"
+                          className="font-mono tabular-nums cursor-pointer hover:bg-[color:var(--bento-tile-2)] px-1 rounded"
                           onClick={() => copyPlateNumber(plate.plate_number)}
                           title="Click to copy"
                         >
@@ -529,7 +549,7 @@ export default function PlatesListEnhanced() {
                       {plate.vehicles ? (
                         <Button
                           variant="link"
-                          className="p-0 h-auto"
+                          className="p-0 h-auto font-mono"
                           onClick={() => router.push(`/vehicles/${plate.vehicles?.id}`)}
                         >
                           {plate.vehicles.reg}
@@ -539,17 +559,19 @@ export default function PlatesListEnhanced() {
                       )}
                     </TableCell>
                     <TableCell>{plate.supplier || "-"}</TableCell>
-                    <TableCell>
+                    <TableCell className="font-mono tabular-nums text-[color:var(--bento-text-2)]">
                       {plate.order_date ? format(new Date(plate.order_date), "MM/dd/yyyy") : "-"}
                     </TableCell>
-                    <TableCell className="text-left">
-                      {plate.cost ? formatCurrency(Number(plate.cost), tenant?.currency_code || 'USD') : "-"}
+                    <TableCell className={bentoTable.figure}>
+                      {plate.cost ? (
+                        <Money>{formatCurrency(Number(plate.cost), tenant?.currency_code || 'USD')}</Money>
+                      ) : "-"}
                     </TableCell>
                     <TableCell>
                       <PlateStatusBadge status={plate.status} showTooltip />
                     </TableCell>
                     <TableCell>
-                      <div className="max-w-32 truncate" title={plate.notes || ""}>
+                      <div className="max-w-32 truncate text-[color:var(--bento-text-2)]" title={plate.notes || ""}>
                         {plate.notes || "-"}
                       </div>
                     </TableCell>
@@ -623,12 +645,11 @@ export default function PlatesListEnhanced() {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
+                ))}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        )}
+      </TableTile>
 
       {/* Pagination */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">

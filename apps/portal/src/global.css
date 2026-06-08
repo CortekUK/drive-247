@@ -36,151 +36,227 @@ input[type="number"] {
 }
 
 
-/* Drive247 Design System
-All colors, gradients, fonts, etc should be defined here.
-All colors MUST be HSL.
-*/
+/* ============================================================================
+   Bento Design System — Drive247 portal
+   Calm, light-first, Apple-flavoured. Single violet accent, rounded tiles,
+   Sora headings + IBM Plex Mono figures, true dark mode.
+
+   shadcn tokens are stored as HSL triplets and consumed via hsl(var(--token)).
+   --bento-* extras hold raw values (hex / rgba / gradients / shadows) and are
+   consumed directly via var(--bento-*).  Spec: design_handoff_bento/DESIGN_SYSTEM.md
+   ============================================================================ */
 
 @layer base {
   :root {
-    /* Drive247 Color System - Light Mode: Elegant Ivory, Dark Green & Gold */
-    --background: 42 30% 96%;   /* Light Ivory/Cream */
-    --foreground: 159 21% 20%;  /* Dark Forest Green Text */
+    /* --- shadcn tokens (Bento light — exact, decimal precision) --- */
+    --background: 248.6 46.7% 97.1%;
+    --foreground: 249.2 36.1% 14.1%;
 
-    --card: 42 30% 98%;         /* Very Light Cream Cards */
-    --card-foreground: 159 21% 20%;
+    --card: 0 0% 100%;
+    --card-foreground: 249.2 36.1% 14.1%;
 
-    --popover: 42 30% 98%;
-    --popover-foreground: 159 21% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 249.2 36.1% 14.1%;
 
-    /* Primary Brand: Elegant Gold */
-    --primary: 41 49% 56%;      /* Muted Gold #C6A256 */
-    --primary-foreground: 0 0% 100%;  /* White text on gold buttons */
-    --primary-hover: 41 49% 48%;
-    --primary-light: 41 49% 95%;
+    /* Primary Brand: violet #6a4ff0 */
+    --primary: 250.1 84.3% 62.5%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 250.7 64.8% 54.3%;
+    --primary-light: 255 90.9% 95.7%;
 
-    /* Secondary Brand: Gold */
-    --secondary: 41 49% 56%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 253.3 52.9% 96.7%;
+    --secondary-foreground: 250 14% 42%;
 
-    --muted: 159 15% 88%;       /* Light grayish-green */
-    --muted-foreground: 159 15% 35%;
+    --muted: 253.3 52.9% 96.7%;
+    --muted-foreground: 251.1 14.6% 63.7%;
 
-    --accent: 41 49% 56%;       /* Gold accent */
-    --accent-foreground: 0 0% 100%;
+    --accent: 255 90.9% 95.7%;
+    --accent-foreground: 250.7 64.8% 54.3%;
 
-    /* Status Colors - Adjusted for light background */
-    --success: 142 76% 36%;
+    /* Status Colors — muted so violet stays loudest */
+    --success: 156.2 67% 36.9%;
     --success-foreground: 0 0% 100%;
-    --success-light: 142 76% 94%;
+    --success-light: 153.3 50% 92.9%;
 
-    --warning: 41 92% 48%;
+    --warning: 37.1 77.7% 45.7%;
     --warning-foreground: 0 0% 100%;
-    --warning-light: 41 92% 94%;
+    --warning-light: 38.6 100% 94.5%;
 
-    --destructive: 0 84.2% 55%;
+    --destructive: 2 70.3% 59%;
     --destructive-foreground: 0 0% 100%;
-    --destructive-light: 0 84% 94%;
+    --destructive-light: 3.2 76% 95.1%;
 
     /* UI Elements */
-    --border: 159 15% 80%;      /* Soft green-gray border */
-    --input: 159 15% 80%;
-    --ring: 41 49% 56%;         /* Gold focus rings */
+    --border: 253.8 41.9% 93.9%;
+    --input: 253.8 41.9% 93.9%;
+    --ring: 250.1 84.3% 62.5%;
 
-    --radius: 0.5rem;
+    --radius: 0.85rem;
 
-    /* Drive247 Sidebar - Light Mode */
-    --sidebar-background: 42 30% 98%;
-    --sidebar-foreground: 159 21% 20%;
-    --sidebar-primary: 41 49% 56%;  /* Gold active state */
+    /* Sidebar — Bento light */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 250 14% 42%;
+    --sidebar-primary: 250.1 84.3% 62.5%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 159 15% 92%;
-    --sidebar-accent-foreground: 159 21% 20%;
-    --sidebar-border: 159 15% 80%;
-    --sidebar-ring: 41 49% 56%;
+    --sidebar-accent: 255 90.9% 95.7%;
+    --sidebar-accent-foreground: 250.7 64.8% 54.3%;
+    --sidebar-border: 252 31.3% 93.7%;
+    --sidebar-ring: 250.1 84.3% 62.5%;
 
-    /* Drive247 Gradients - Light Mode */
-    --gradient-primary: linear-gradient(135deg, hsl(41 49% 56%), hsl(41 49% 66%));
-    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 44%));
-    --gradient-warning: linear-gradient(135deg, hsl(41 92% 48%), hsl(41 92% 58%));
-    --gradient-subtle: linear-gradient(135deg, hsl(159 15% 92%), hsl(159 15% 88%));
+    /* Gradients — violet (matches --bento-hero-grad stops) */
+    --gradient-primary: linear-gradient(150deg, #7a5cff, #5a3fd6 72%);
+    --gradient-success: linear-gradient(135deg, hsl(156 67% 37%), hsl(156 67% 44%));
+    --gradient-warning: linear-gradient(135deg, hsl(37 78% 46%), hsl(37 78% 56%));
+    --gradient-subtle: linear-gradient(135deg, hsl(253 53% 97%), hsl(254 42% 94%));
 
-    /* Drive247 Shadows - Light Mode */
-    --shadow-sm: 0 1px 2px 0 hsl(159 21% 20% / 0.08);
-    --shadow-card: 0 4px 6px -1px hsl(159 21% 20% / 0.1), 0 2px 4px -1px hsl(159 21% 20% / 0.06);
-    --shadow-hover: 0 10px 15px -3px hsl(41 49% 56% / 0.15), 0 4px 6px -2px hsl(41 49% 56% / 0.1);
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(249 36% 14% / 0.05);
+    --shadow-card: 0 2px 12px rgba(40, 30, 80, 0.05);
+    --shadow-hover: 0 10px 24px -6px hsl(250 84% 63% / 0.18), 0 4px 8px -4px hsl(250 84% 63% / 0.12);
 
-    /* Smooth Drive247 Animations */
+    /* Animations */
     --transition-all: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-smooth: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
-    
-    /* Glow Effects - Gold (Light Mode) */
+
+    /* Glow Effects — violet */
     --glow-gold-subtle: 0 0 20px -5px hsl(var(--primary) / 0.15), 0 0 40px -10px hsl(var(--primary) / 0.08);
     --glow-gold-intense: 0 0 30px -5px hsl(var(--primary) / 0.25), 0 0 60px -10px hsl(var(--primary) / 0.15);
+
+    /* --- Bento-only tokens (raw values, consume via var()) --- */
+    --bento-tile: #ffffff;
+    --bento-tile-2: #f4f2fb;
+    --bento-text-2: #615c7a;
+    --bento-text-3: #9a95b0;
+    --bento-primary-weak: #efeafe;
+    --bento-primary-weak-fg: #5a3fd6;
+    --bento-feature-bg: #1b1731;
+    --bento-feature-fg: #ffffff;
+    --bento-feature-sub: #8d86b0;
+    --bento-hero-grad: linear-gradient(150deg, #7a5cff, #5a3fd6 72%);
+    --bento-warn-bg: #fff5e3;
+    --bento-warn-border: #f6e6c4;
+    --bento-warn-fg: #8a5e0e;
+    --bento-warn-accent: #b07d1a;
+    --bento-success: #1f9d6b;
+    --bento-success-weak: #e4f6ee;
+    --bento-danger-fg: #c23a36;
+    --bento-danger-weak: #fceae9;
+    --bento-info: #3d7fe0;
+    --bento-info-weak: #e9f0fd;
+    --bento-shadow: 0 2px 12px rgba(40, 30, 80, 0.05);
+    --bento-hero-shadow: 0 16px 40px rgba(106, 79, 240, 0.26);
+    --bento-plate-bg: #e9eaec;
+    --bento-plate-fg: #1a1b21;
+    --bento-plate-border: #c7c9cd;
+
+    /* --- Glass material (light) — GLASS.md §2 --- */
+    --glass: rgba(255, 255, 255, 0.60);
+    --glass-2: rgba(255, 255, 255, 0.46);
+    --glass-border: rgba(255, 255, 255, 0.70);
+    --glass-input-bg: rgba(255, 255, 255, 0.55);
+    --glass-shadow: 0 18px 50px rgba(55, 40, 110, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.62);
+    --glass-blur: 20px;
+    --glass-scrim: rgba(10, 8, 24, 0.35);
   }
 
   .dark {
-    --background: 159 21% 8%;   /* Even darker forest green */
-    --foreground: 42 30% 92%;   /* Brighter ivory for dark mode */
+    /* --- shadcn tokens (Bento dark — exact; rgba tints composited over card) --- */
+    --background: 246.7 27.3% 6.5%;
+    --foreground: 252 65.2% 95.5%;
 
-    --card: 159 21% 12%;
-    --card-foreground: 42 30% 92%;
+    --card: 248.2 35.5% 12.2%;
+    --card-foreground: 252 65.2% 95.5%;
 
-    --popover: 159 21% 12%;
-    --popover-foreground: 42 30% 92%;
+    --popover: 248.2 35.5% 12.2%;
+    --popover-foreground: 252 65.2% 95.5%;
 
-    --primary: 41 49% 60%;      /* Brighter gold for dark mode */
-    --primary-foreground: 159 21% 8%;
-    --primary-hover: 41 49% 70%;
-    --primary-light: 41 49% 22%;
+    --primary: 252.3 100% 71.4%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 254.5 100% 77.3%;
+    --primary-light: 251.4 38.2% 21.6%;
 
-    --secondary: 41 49% 60%;
-    --secondary-foreground: 159 21% 8%;
+    --secondary: 248.9 33.3% 15.9%;
+    --secondary-foreground: 249.7 24.5% 70.4%;
 
-    --muted: 159 15% 20%;
-    --muted-foreground: 42 20% 75%;
+    --muted: 248.9 33.3% 15.9%;
+    --muted-foreground: 248.1 14.9% 48.8%;
 
-    --accent: 41 49% 60%;
-    --accent-foreground: 159 21% 8%;
+    --accent: 251.4 38.2% 21.6%;
+    --accent-foreground: 252.8 100% 82.5%;
 
-    --success: 142 76% 52%;
-    --success-foreground: 159 21% 8%;
-    --success-light: 142 76% 18%;
+    --success: 153 64.5% 58%;
+    --success-foreground: 0 0% 100%;
+    --success-light: 202.2 30.3% 17.5%;
 
-    --warning: 41 92% 65%;
-    --warning-foreground: 159 21% 8%;
-    --warning-light: 41 92% 18%;
+    --warning: 37.7 85.1% 68.4%;
+    --warning-foreground: 246.7 27.3% 6.5%;
+    --warning-light: 35.5 35.5% 12.2%;
 
-    --destructive: 0 84% 70%;
-    --destructive-foreground: 159 21% 8%;
-    --destructive-light: 0 84% 18%;
+    --destructive: 2 100% 70.8%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-light: 310.9 25% 17.3%;
 
-    --border: 159 15% 25%;
-    --input: 159 15% 25%;
-    --ring: 41 49% 60%;
+    --border: 251.6 32% 19%;
+    --input: 251.6 32% 19%;
+    --ring: 252.3 100% 71.4%;
 
-    /* Drive247 Sidebar - Dark Mode */
-    --sidebar-background: 159 21% 10%;
-    --sidebar-foreground: 42 30% 92%;
-    --sidebar-primary: 41 49% 60%;
-    --sidebar-primary-foreground: 159 21% 8%;
-    --sidebar-accent: 41 49% 25%;
-    --sidebar-accent-foreground: 42 30% 92%;
-    --sidebar-border: 159 15% 25%;
-    --sidebar-ring: 41 49% 60%;
+    /* Sidebar — Bento dark */
+    --sidebar-background: 251.3 32% 9.8%;
+    --sidebar-foreground: 249.7 24.5% 70.4%;
+    --sidebar-primary: 252.3 100% 71.4%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 251.4 38.2% 21.6%;
+    --sidebar-accent-foreground: 252.8 100% 82.5%;
+    --sidebar-border: 252 28.7% 17.1%;
+    --sidebar-ring: 252.3 100% 71.4%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(41 49% 60%), hsl(41 49% 70%));
-    --gradient-success: linear-gradient(135deg, hsl(142 76% 52%), hsl(142 76% 60%));
-    --gradient-warning: linear-gradient(135deg, hsl(41 92% 65%), hsl(41 92% 75%));
-    --gradient-subtle: linear-gradient(135deg, hsl(159 15% 20%), hsl(159 15% 25%));
+    --gradient-primary: linear-gradient(150deg, #7d5fff, #4f33c4 78%);
+    --gradient-success: linear-gradient(135deg, hsl(153 64% 58%), hsl(153 64% 66%));
+    --gradient-warning: linear-gradient(135deg, hsl(38 85% 68%), hsl(38 85% 76%));
+    --gradient-subtle: linear-gradient(135deg, hsl(249 33% 16%), hsl(252 32% 19%));
 
-    --shadow-sm: 0 1px 2px 0 hsl(159 21% 4% / 0.5);
-    --shadow-card: 0 4px 6px -1px hsl(159 21% 4% / 0.5), 0 2px 4px -1px hsl(159 21% 4% / 0.4);
-    --shadow-hover: 0 10px 15px -3px hsl(41 49% 60% / 0.3), 0 4px 6px -2px hsl(41 49% 60% / 0.2);
-    
-    /* Enhanced glow for dark mode */
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.4);
+    --shadow-card: 0 2px 14px rgba(0, 0, 0, 0.4);
+    --shadow-hover: 0 10px 24px -6px hsl(0 0% 0% / 0.5), 0 4px 8px -4px hsl(0 0% 0% / 0.4);
+
     --glow-gold-subtle: 0 0 25px -5px hsl(var(--primary) / 0.35), 0 0 50px -10px hsl(var(--primary) / 0.2);
     --glow-gold-intense: 0 0 35px -5px hsl(var(--primary) / 0.55), 0 0 70px -10px hsl(var(--primary) / 0.3);
+
+    /* --- Bento-only tokens (dark) --- */
+    --bento-tile: #17142a;
+    --bento-tile-2: #1f1b36;
+    --bento-text-2: #a7a1c6;
+    --bento-text-3: #6f6a8f;
+    --bento-primary-weak: rgba(139, 109, 255, 0.16);
+    --bento-primary-weak-fg: #b9a6ff;
+    --bento-feature-bg: #221d3e;
+    --bento-feature-fg: #ffffff;
+    --bento-feature-sub: #a99fd6;
+    --bento-hero-grad: linear-gradient(150deg, #7d5fff, #4f33c4 78%);
+    --bento-warn-bg: #2a2114;
+    --bento-warn-border: #3d2f17;
+    --bento-warn-fg: #f3c878;
+    --bento-warn-accent: #f3c06a;
+    --bento-success: #4fd99b;
+    --bento-success-weak: rgba(79, 217, 155, 0.14);
+    --bento-danger-fg: #ff8b86;
+    --bento-danger-weak: rgba(255, 111, 106, 0.14);
+    --bento-info: #7aa8ff;
+    --bento-info-weak: rgba(122, 168, 255, 0.14);
+    --bento-shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
+    --bento-hero-shadow: 0 18px 44px rgba(80, 50, 200, 0.34);
+    --bento-plate-bg: #2b2740;
+    --bento-plate-fg: #e7e3f5;
+    --bento-plate-border: #3a3357;
+
+    /* --- Glass material (dark) — GLASS.md §2 --- */
+    --glass: rgba(28, 24, 52, 0.52);
+    --glass-2: rgba(40, 34, 68, 0.48);
+    --glass-border: rgba(255, 255, 255, 0.10);
+    --glass-input-bg: rgba(255, 255, 255, 0.05);
+    --glass-shadow: 0 20px 56px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    --glass-blur: 22px;
+    --glass-scrim: rgba(10, 8, 24, 0.45);
   }
 }
 
@@ -196,22 +272,28 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Drive247 Typography */
+  /* Bento Typography — Sora headings with tight tracking */
   h1 {
-    @apply text-5xl font-bold;  /* 48px */
+    @apply text-3xl font-extrabold tracking-tight;  /* 30px / 800 */
   }
 
   h2 {
-    @apply text-3xl font-semibold;  /* 32px */
+    @apply text-2xl font-bold tracking-tight;  /* 24px / 700 */
   }
 
   h3 {
-    @apply text-2xl font-medium;  /* 24px */
+    @apply text-base font-bold tracking-tight;  /* 16px / 700 */
+  }
+
+  /* Figures, plates, codes, timestamps */
+  .font-mono, .tabular {
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
   }
 
   /* Mobile typography adjustments */
@@ -231,12 +313,74 @@ All colors MUST be HSL.
   .text-metadata {
     @apply text-xs;  /* 12px */
   }
+
+  /* Eyebrow — uppercase label above KPIs / section headers */
+  .bento-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--bento-text-3);
+  }
 }
 
 @layer components {
 
+  /* ===== Glass material (GLASS.md) — frosted translucent panels =====
+     Use for floating chrome + overlays only (auth, dialogs, sheets, popovers,
+     dropdowns, command palette, toasts, detail headers). NOT for dense data. */
+  .glass {
+    position: relative;
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+  }
+
+  /* Inputs inside a glass panel */
+  .glass-input {
+    background: var(--glass-input-bg);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  /* Optional specular rim — premium lit edge (cheap, pure CSS) */
+  .glass-rim::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), transparent 45%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  /* Opaque fallback where backdrop-filter is unsupported */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass { background: hsl(var(--card)); }
+    .glass-input { background: hsl(var(--input)); }
+  }
+
+  /* Respect reduced-transparency / low-end devices → solid surface */
+  @media (prefers-reduced-transparency: reduce) {
+    .glass {
+      background: hsl(var(--card));
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+    .glass-input {
+      background: hsl(var(--input));
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+
   /* Drive247 Component Styles */
-  
+
   /* Override browser autofill styling for consistent input backgrounds */
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
@@ -247,7 +391,7 @@ All colors MUST be HSL.
     -webkit-text-fill-color: hsl(var(--foreground)) !important;
     transition: background-color 5000s ease-in-out 0s !important;
   }
-  
+
   /* Professional rotating border effect */
   .rotating-border {
     @apply relative;
@@ -269,8 +413,8 @@ All colors MUST be HSL.
       background: hsl(var(--primary) / 0.1);
     }
   }
-  
-  /* Buttons with purple focus rings and rounded-lg */
+
+  /* Buttons with violet focus rings and rounded-lg */
   .btn-primary {
     @apply bg-gradient-primary text-primary-foreground rounded-lg font-medium px-4 py-2 transition-all duration-200 focus:ring-2 focus:ring-primary focus:ring-offset-2 hover:opacity-90;
   }
@@ -297,7 +441,7 @@ All colors MUST be HSL.
     border-color: transparent !important;
   }
 
-  /* Forms with purple focus rings */
+  /* Forms with violet focus rings */
   .input-focus {
     @apply focus:ring-2 focus:ring-primary focus:border-primary rounded-md border-input;
   }
@@ -313,6 +457,15 @@ All colors MUST be HSL.
 }
 
 @layer utilities {
+  /* Ambient glass-backdrop blob drift (GLASS.md §4) */
+  @keyframes floaty {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(2%, -3%) scale(1.05); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .glass-blob { animation: none !important; }
+  }
+
   /* Scrollbar utilities */
   .scrollbar-thin {
     scrollbar-width: thin;

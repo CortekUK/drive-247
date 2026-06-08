@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Tile, StatusPill, Money } from "@/components/bento";
 import { CheckSquare, CreditCard, Ban, X, AlertTriangle } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -144,20 +143,20 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
 
   return (
     <>
-      <Card className="border-primary">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <CheckSquare className="h-5 w-5 text-primary" />
-                <span className="font-medium">{selectedFines.length} fines selected</span>
-                <Badge variant="outline">
-                  Total: {formatCurrency(totalAmount, tenant?.currency_code || 'USD')}
-                </Badge>
-              </div>
+      <Tile pad="compact" className="border-[color:var(--primary)]">
+        <div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-tile-sm [background:var(--bento-primary-weak)] text-[color:var(--bento-primary-weak-fg)]">
+                <CheckSquare className="h-4 w-4" />
+              </span>
+              <span className="font-semibold">{selectedFines.length} fines selected</span>
+              <StatusPill tone="primary">
+                Total <Money className="ml-1" value={totalAmount} currency={tenant?.currency_code || 'USD'} locale="en-US" />
+              </StatusPill>
             </div>
 
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-2">
               {/* Charge to Customer */}
               <Button
                 variant="default"
@@ -194,16 +193,16 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
 
           {/* Eligibility Info */}
           {selectedFines.length > chargeableFines.length && (
-            <div className="mt-2 p-2 bg-muted rounded text-sm text-muted-foreground flex items-center space-x-2">
-              <AlertTriangle className="h-4 w-4" />
+            <div className="mt-3 flex items-center gap-2 rounded-tile-sm [background:var(--bento-tile-2)] p-2.5 text-sm text-muted-foreground">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
               <span>
                 {selectedFines.length - chargeableFines.length} fines cannot be charged
                 (already processed)
               </span>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Tile>
 
       {/* Charge Confirmation Dialog */}
       <AlertDialog open={showChargeDialog} onOpenChange={setShowChargeDialog}>
@@ -214,13 +213,13 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
               This will create charges of {formatCurrency(chargeableFines.reduce((sum, fine) => sum + fine.amount, 0), tenant?.currency_code || 'USD')}
               to the respective customer accounts. This action cannot be undone.
 
-              <div className="mt-4 p-3 bg-muted rounded">
+              <div className="mt-4 rounded-tile-sm [background:var(--bento-tile-2)] p-3">
                 <p className="text-sm font-medium mb-2">Eligible fines ({chargeableFines.length}):</p>
                 <div className="max-h-32 overflow-y-auto space-y-1">
                   {chargeableFines.map(fine => (
                     <div key={fine.id} className="text-xs flex justify-between">
-                      <span>{fine.reference_no || fine.id.slice(0, 8)}</span>
-                      <span>{formatCurrency(fine.amount, tenant?.currency_code || 'USD')}</span>
+                      <span className="font-mono tabular-nums">{fine.reference_no || fine.id.slice(0, 8)}</span>
+                      <Money value={fine.amount} currency={tenant?.currency_code || 'USD'} locale="en-US" className="text-xs" />
                     </div>
                   ))}
                 </div>
@@ -249,13 +248,13 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
               This will waive the selected fines totaling {formatCurrency(waivableFines.reduce((sum, fine) => sum + fine.amount, 0), tenant?.currency_code || 'USD')}.
               Waived fines will not be charged to customers. This action cannot be undone.
 
-              <div className="mt-4 p-3 bg-muted rounded">
+              <div className="mt-4 rounded-tile-sm [background:var(--bento-tile-2)] p-3">
                 <p className="text-sm font-medium mb-2">Fines to waive ({waivableFines.length}):</p>
                 <div className="max-h-32 overflow-y-auto space-y-1">
                   {waivableFines.map(fine => (
                     <div key={fine.id} className="text-xs flex justify-between">
-                      <span>{fine.reference_no || fine.id.slice(0, 8)}</span>
-                      <span>{formatCurrency(fine.amount, tenant?.currency_code || 'USD')}</span>
+                      <span className="font-mono tabular-nums">{fine.reference_no || fine.id.slice(0, 8)}</span>
+                      <Money value={fine.amount} currency={tenant?.currency_code || 'USD'} locale="en-US" className="text-xs" />
                     </div>
                   ))}
                 </div>

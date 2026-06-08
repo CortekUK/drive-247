@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
+import { Tile } from "@/components/bento";
+import { AuthShell } from "../_components/auth-shell";
 
 /**
  * Reset Password Page
@@ -36,11 +38,16 @@ export default function ResetPasswordPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center space-y-4">
-        <Loader2 className="w-10 h-10 animate-spin mx-auto text-primary" />
-        <p className="text-muted-foreground">Processing...</p>
-      </div>
-    </div>
+    <AuthShell width="max-w-[400px]">
+      <Tile variant="glass" pad="roomy" className="space-y-3 text-center">
+        <Loader2 className="mx-auto h-9 w-9 animate-spin text-primary" />
+        <h1 className="text-[22px] font-extrabold tracking-tight text-foreground">
+          Password reset
+        </h1>
+        <p className="text-sm font-medium text-muted-foreground">
+          Verifying your link…
+        </p>
+      </Tile>
+    </AuthShell>
   );
 }

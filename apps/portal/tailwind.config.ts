@@ -14,7 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["Playfair Display", "serif"],
+        sans: ["var(--font-sans)", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -73,17 +74,42 @@ export default {
           foreground: "hsl(var(--warning-foreground))",
           light: "hsl(var(--warning-light))",
         },
+        /* Bento-only tokens (raw values — referenced via var, not hsl()) */
+        bento: {
+          tile: "var(--bento-tile)",
+          "tile-2": "var(--bento-tile-2)",
+          "text-2": "var(--bento-text-2)",
+          "text-3": "var(--bento-text-3)",
+          "primary-weak": "var(--bento-primary-weak)",
+          "primary-weak-fg": "var(--bento-primary-weak-fg)",
+          "feature-bg": "var(--bento-feature-bg)",
+          "feature-fg": "var(--bento-feature-fg)",
+          "feature-sub": "var(--bento-feature-sub)",
+          "warn-bg": "var(--bento-warn-bg)",
+          "warn-border": "var(--bento-warn-border)",
+          "warn-fg": "var(--bento-warn-fg)",
+          "warn-accent": "var(--bento-warn-accent)",
+          success: "var(--bento-success)",
+          "success-weak": "var(--bento-success-weak)",
+          "danger-fg": "var(--bento-danger-fg)",
+          "danger-weak": "var(--bento-danger-weak)",
+          info: "var(--bento-info)",
+          "info-weak": "var(--bento-info-weak)",
+        },
       },
       backgroundImage: {
         "gradient-primary": "var(--gradient-primary)",
         "gradient-success": "var(--gradient-success)",
         "gradient-warning": "var(--gradient-warning)",
         "gradient-subtle": "var(--gradient-subtle)",
+        "bento-hero": "var(--bento-hero-grad)",
       },
       boxShadow: {
         sm: "var(--shadow-sm)",
         card: "var(--shadow-card)",
         hover: "var(--shadow-hover)",
+        bento: "var(--bento-shadow)",
+        "bento-hero": "var(--bento-hero-shadow)",
       },
       spacing: {
         '14': '3.5rem',
@@ -94,8 +120,10 @@ export default {
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)", 
+        md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        tile: "20px",
+        "tile-sm": "14px",
       },
       transitionProperty: {
         'all': 'var(--transition-all)',

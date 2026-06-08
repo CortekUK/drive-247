@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RevTek Rentals · New Rental Agreement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; height: 100%; }
+  * { box-sizing: border-box; }
+  #root { height: 100vh; }
+  .tw { }
+  input, textarea, select, button { font-family: inherit; }
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--tile-border); border-radius: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  input[type=date]::-webkit-calendar-picker-indicator { filter: var(--cal-filter, none); cursor: pointer; }
+  @keyframes rnPop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  @keyframes themeFade { from { opacity: .5; } to { opacity: 0; } }
+  @keyframes shimmer { 0% { opacity: .55; } 50% { opacity: 1; } 100% { opacity: .55; } }
+  .rnshimmer { animation: shimmer 1.3s ease-in-out infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="rental-new-data.js"></script>
+<script src="bento-theme.js"></script>
+<script type="text/babel" src="ui.jsx"></script>
+<script type="text/babel" src="rn-controls.jsx"></script>
+<script type="text/babel" src="rn-sections.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useMemo } = React;
+const T = window.BENTO_THEMES;
+const RN = window.RN_DATA;
+const SPRING = 'cubic-bezier(.34,1.56,.64,1)';
+const M = n => '$' + (Math.round((n||0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const diffDays = (a, b) => { if (!a || !b) return 0; const d = (new Date(b) - new Date(a)) / 86400000; return d > 0 ? Math.round(d) : 0; };
+
+const INIT = {
+  customerId: '', vehicleId: '', startDate: '', endDate: '', pickupTime: '', returnTime: '',
+  driverAge: '', rate: '', promo: '', promoApplied: null, promoErr: '',
+  pickupLoc: RN.tenant.address, returnLoc: '', sameAsPickup: true, delivery: 'In person', lockbox: '',
+  insMode: 'bonzah', coverage: { cdw: true, rcli: true, sli: false, pai: false }, ownDoc: '',
+  payAsYouGo: false, autoExtend: false, extras: {}, drivers: [],
+  mileage: 250, excess: 0.35, unlimited: false,
+  deposit: '', payMode: 'Collect now', installment: 'Pay in full',
+  notes: '', sendAgreement: true, requireSign: false,
+};
+
+function App() {
+  const [dark, setDark] = useState(() => localStorage.getItem('bento_dark') === '1');
+  const [fade, setFade] = useState(0);
+  const [booting, setBooting] = useState(true);
+  const [f, setF] = useState(INIT);
+  const [tried, setTried] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [step, setStep] = useState(0);
+  const [doneCreate, setDoneCreate] = useState(false);
+  const [toast, setToast] = useState(null);
+  const refs = useRef({});
+  const scrollRef = useRef(null);
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
+  const showToast = m => { setToast(m); setTimeout(() => setToast(t => t === m ? null : t), 2400); };
+
+  useEffect(() => { const t = setTimeout(() => setBooting(false), 1250); return () => clearTimeout(t); }, []);
+  useEffect(() => { localStorage.setItem('bento_dark', dark ? '1' : '0'); }, [dark]);
+  const theme = { ...(dark ? T.dark : T.light), '--cal-filter': dark ? 'invert(1)' : 'none' };
+
+  const vehicle = RN.vehicles.find(v => v.id === f.vehicleId);
+  const customer = RN.customers.find(c => c.id === f.customerId);
+  const days = diffDays(f.startDate, f.endDate);
+  const period = days >= 30 ? 'Monthly' : days >= 7 ? 'Weekly' : days > 0 ? 'Daily' : '';
+
+  // prefill rate/deposit/mileage from vehicle + period
+  useEffect(() => {
+    if (!vehicle) return;
+    const r = period === 'Monthly' ? vehicle.monthly : period === 'Weekly' ? vehicle.weekly : vehicle.daily;
+    setF(p => ({ ...p, rate: r, deposit: p.deposit === '' ? vehicle.deposit : p.deposit, mileage: vehicle.mileage }));
+  }, [f.vehicleId, period]); // eslint-disable-line
+
+  // derived financials
+  const fin = useMemo(() => {
+    const rate = Number(f.rate) || 0;
+    let rental = 0;
+    if (days > 0 && rate > 0) rental = period === 'Monthly' ? (days / 30) * rate : period === 'Weekly' ? (days / 7) * rate : days * rate;
+    const extrasDay = RN.extras.reduce((s, e) => s + (f.extras[e.key] || 0) * e.price, 0);
+    const extras = extrasDay * (days || 0);
+    const insDay = f.insMode === 'bonzah' ? RN.coverage.reduce((s, c) => s + (f.coverage[c.key] ? c.price : 0), 0) : 0;
+    const insurance = insDay * (days || 0);
+    const unlimited = f.unlimited ? 120 : 0;
+    const sub = rental + extras + insurance + unlimited;
+    const discount = f.promoApplied ? rental * 0.10 : 0;
+    const tax = (sub - discount) * RN.taxRate;
+    const fee = sub > 0 ? RN.serviceFee : 0;
+    const total = sub - discount + tax + fee;
+    return { rental, extras, insurance, unlimited, discount, tax, fee, total, deposit: Number(f.deposit) || 0 };
+  }, [f, days, period]);
+
+  const doneMap = {
+    'sec-customer': !!(f.customerId && f.vehicleId),
+    'sec-period': !!(f.startDate && (f.payAsYouGo || f.endDate) && f.pickupTime && (f.payAsYouGo || f.returnTime) && f.driverAge),
+    'sec-location': !!f.pickupLoc,
+    'sec-insurance': true, 'sec-extras': Object.values(f.extras).some(v => v > 0),
+    'sec-drivers': f.drivers.length > 0, 'sec-mileage': true, 'sec-payment': true, 'sec-notes': true,
+  };
+
+  const validate = () => {
+    const e = {};
+    if (!f.customerId) e.customerId = 'Select a customer';
+    if (!f.vehicleId) e.vehicleId = 'Select a vehicle';
+    if (!f.startDate) e.startDate = 'Required';
+    if (!f.payAsYouGo && !f.endDate) e.endDate = 'Required';
+    if (!f.pickupTime) e.pickupTime = 'Required';
+    if (!f.payAsYouGo && !f.returnTime) e.returnTime = 'Required';
+    if (!f.driverAge) e.driverAge = 'Required';
+    if (!f.pickupLoc) e.pickupLoc = 'Required';
+    return e;
+  };
+  const errors = tried ? validate() : {};
+
+  const scrollTo = id => { const el = refs.current[id]; if (el && scrollRef.current) scrollRef.current.scrollTo({ top: el.offsetTop - 10, behavior: 'smooth' }); };
+
+  const submit = () => {
+    const e = validate();
+    setTried(true);
+    if (Object.keys(e).length) {
+      const order = ['customerId', 'vehicleId', 'startDate', 'endDate', 'pickupTime', 'returnTime', 'driverAge', 'pickupLoc'];
+      const first = order.find(k => e[k]);
+      const sec = ['customerId', 'vehicleId'].includes(first) ? 'sec-customer' : first === 'pickupLoc' ? 'sec-location' : 'sec-period';
+      scrollTo(sec);
+      showToast(`Please fix ${Object.keys(e).length} field${Object.keys(e).length > 1 ? 's' : ''}`);
+      return;
+    }
+    setSubmitting(true); setStep(0); setDoneCreate(false);
+  };
+  // run creation steps
+  useEffect(() => {
+    if (!submitting) return;
+    if (step < RN.steps.length) { const t = setTimeout(() => setStep(s => s + 1), 460); return () => clearTimeout(t); }
+    const t = setTimeout(() => setDoneCreate(true), 300); return () => clearTimeout(t);
+  }, [submitting, step]);
+
+  return (
+    <div className="tw" style={{ ...theme, height: '100%', display: 'flex', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Sora',system-ui,sans-serif", overflow: 'hidden', position: 'relative', WebkitFontSmoothing: 'antialiased' }}>
+      {/* app rail */}
+      <div style={{ width: 64, flexShrink: 0, background: 'var(--rail)', borderRight: '1px solid var(--rail-border)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '14px 0', zIndex: 5 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 11, background: 'var(--primary)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 15, marginBottom: 12 }}>R</div>
+        {['dashboard', 'calendar', 'car', 'users', 'card', 'receipt', 'settings'].map((ic, i) => (
+          <div key={ic} style={{ width: 40, height: 40, borderRadius: 12, display: 'grid', placeItems: 'center', margin: '3px 0', color: ic === 'calendar' ? 'var(--primary-weak-fg)' : 'var(--text-3)', background: ic === 'calendar' ? 'var(--primary-weak)' : 'transparent' }}><Icon name={ic} size={19} /></div>
+        ))}
+      </div>
+
+      {/* main */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        {/* top bar */}
+        <div style={{ height: 64, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14, padding: '0 22px', borderBottom: '1px solid var(--tile-border)', background: 'var(--bg)' }}>
+          <button style={{ width: 38, height: 38, borderRadius: 11, border: '1px solid var(--tile-border)', background: 'var(--tile)', color: 'var(--text-2)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><Icon name="back" size={18} /></button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 19, letterSpacing: '-0.03em' }}>New Rental Agreement</div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{RN.tenant.name} · set up a new agreement for a customer</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: 'var(--text-3)', marginRight: 4 }}><Icon name="check" size={14} style={{ color: 'var(--green)' }} />Draft saved</div>
+          <ThemeToggle dark={dark} onToggle={() => { setDark(d => !d); setFade(x => x + 1); }} />
+        </div>
+
+        {/* body */}
+        {booting ? <BootSkeleton /> : (
+          <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+            {/* checklist */}
+            <div style={{ width: 214, flexShrink: 0, borderRight: '1px solid var(--tile-border)', padding: '20px 14px', overflowY: 'auto' }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text-3)', padding: '0 8px 10px' }}>Sections</div>
+              {RN.sections.map((s, i) => {
+                const done = doneMap[s.id]; const errd = tried && s.req && !done;
+                return (
+                  <button key={s.id} onClick={() => scrollTo(s.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '9px 10px', borderRadius: 11, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', color: 'var(--text-2)' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--tile-2)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <span style={{ width: 24, height: 24, borderRadius: 8, display: 'grid', placeItems: 'center', flexShrink: 0, background: errd ? 'var(--danger-weak)' : done ? 'var(--green-weak)' : 'var(--tile-2)', color: errd ? 'var(--danger-fg)' : done ? 'var(--green)' : 'var(--text-3)' }}>
+                      {errd ? <Icon name="alert" size={13} /> : done ? <Icon name="check" size={14} stroke={3} /> : <span style={{ fontSize: 11, fontWeight: 800 }}>{i + 1}</span>}
+                    </span>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{s.label}</span>
+                    {s.req && <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-3)' }}>REQ</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* form */}
+            <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '22px 24px', position: 'relative' }}>
+              <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+                {tried && Object.keys(errors).length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '14px 16px', borderRadius: 15, background: 'var(--danger-weak)', border: '1px solid var(--danger)', color: 'var(--danger-fg)' }}>
+                    <Icon name="alert" size={19} /><div style={{ fontSize: 13.5, fontWeight: 700 }}>{Object.keys(errors).length} required field{Object.keys(errors).length > 1 ? 's' : ''} need attention before you can create this rental.</div>
+                  </div>
+                )}
+                {RN.sections.map(s => {
+                  const Comp = window.RN_SEC[s.id];
+                  return <Comp key={s.id} f={f} set={set} err={errors} derived={{ customer, vehicle, days, period, total: fin.total }} refCb={el => refs.current[s.id] = el} toast={showToast} />;
+                })}
+                <div style={{ height: 8 }} />
+              </div>
+            </div>
+
+            {/* preview */}
+            <div style={{ width: 348, flexShrink: 0, borderLeft: '1px solid var(--tile-border)', padding: 20, overflowY: 'auto', background: 'var(--bg)' }}>
+              <Preview f={f} customer={customer} vehicle={vehicle} period={period} days={days} fin={fin} onSubmit={submit} onDraft={() => showToast('Draft saved')} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {fade > 0 && <div key={fade} style={{ position: 'absolute', inset: 0, background: 'var(--bg)', zIndex: 80, pointerEvents: 'none', animation: 'themeFade .46s ease forwards' }} />}
+
+      {submitting && <CreateOverlay step={step} done={doneCreate} fin={fin} customer={customer} vehicle={vehicle}
+        onClose={() => { setSubmitting(false); }} onAnother={() => { setF(INIT); setTried(false); setSubmitting(false); setStep(0); setDoneCreate(false); scrollRef.current && scrollRef.current.scrollTo({ top: 0 }); }} />}
+
+      <div style={{ position: 'absolute', bottom: toast ? 26 : -60, left: '50%', transform: 'translateX(-50%)', background: 'var(--feature-bg)', color: 'var(--feature-fg)', padding: '13px 20px', borderRadius: 14, fontWeight: 600, fontSize: 13.5, boxShadow: '0 16px 40px rgba(0,0,0,.32)', display: 'flex', alignItems: 'center', gap: 9, opacity: toast ? 1 : 0, transition: `bottom .5s ${SPRING}, opacity .3s`, zIndex: 90, whiteSpace: 'nowrap' }}>
+        <Icon name="info" size={17} style={{ color: 'var(--warn-accent)' }} />{toast}
+      </div>
+    </div>
+  );
+}
+
+function ThemeToggle({ dark, onToggle }) {
+  return <button onClick={onToggle} style={{ position: 'relative', width: 58, height: 32, borderRadius: 999, border: '1px solid var(--tile-border)', background: 'var(--tile-2)', cursor: 'pointer', padding: 0 }}>
+    <span style={{ position: 'absolute', top: 3, left: dark ? 29 : 3, width: 24, height: 24, borderRadius: 999, background: 'var(--tile)', display: 'grid', placeItems: 'center', color: 'var(--primary)', boxShadow: '0 2px 5px rgba(0,0,0,.25)', transition: `left .4s ${SPRING}` }}><Icon name={dark ? 'moon' : 'sun'} size={14} /></span>
+  </button>;
+}
+
+function Preview({ f, customer, vehicle, period, days, fin, onSubmit, onDraft }) {
+  const PR = ({ k, v, strong }) => <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0' }}>
+    <span style={{ fontSize: strong ? 14 : 13, color: strong ? 'var(--text)' : 'var(--text-2)', fontWeight: strong ? 700 : 500 }}>{k}</span>
+    <span style={{ fontSize: strong ? 15 : 13.5, fontWeight: strong ? 800 : 700, color: 'var(--text)', fontFamily: strong ? "'Sora',sans-serif" : 'inherit', fontVariantNumeric: 'tabular-nums' }}>{v}</span>
+  </div>;
+  return (
+    <div style={{ position: 'sticky', top: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><Icon name="file" size={18} style={{ color: 'var(--primary)' }} /><span style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 16, letterSpacing: '-0.02em' }}>Rental preview</span></div>
+
+      <div style={{ background: 'var(--tile)', border: '1px solid var(--tile-border)', borderRadius: 18, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div><div style={lbl}>Customer</div><div style={{ fontSize: 13.5, fontWeight: 700, color: customer ? 'var(--text)' : 'var(--text-3)', marginTop: 3 }}>{customer ? customer.name : 'Not selected'}</div></div>
+          <div><div style={lbl}>Vehicle</div><div style={{ fontSize: 13.5, fontWeight: 700, color: vehicle ? 'var(--text)' : 'var(--text-3)', marginTop: 3 }}>{vehicle ? `${vehicle.make} ${vehicle.model}` : 'Not selected'}</div></div>
+        </div>
+        <div style={{ height: 1, background: 'var(--tile-border)' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <PR k="Period" v={f.payAsYouGo ? 'Pay as you go' : period || '—'} />
+          <PR k="Start" v={f.startDate || '—'} />
+          <PR k="End" v={f.payAsYouGo ? 'Open' : f.endDate || '—'} />
+          <PR k="Pickup" v={(f.pickupLoc || '—').length > 22 ? f.pickupLoc.slice(0, 22) + '…' : f.pickupLoc || '—'} />
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--tile)', border: '1px solid var(--tile-border)', borderRadius: 18, padding: 16 }}>
+        <div style={{ ...lbl, marginBottom: 8 }}>Financial summary</div>
+        <PR k={`Rental${days ? ` · ${days}d` : ''}`} v={M(fin.rental)} />
+        {fin.extras > 0 && <PR k="Extras" v={M(fin.extras)} />}
+        {fin.insurance > 0 && <PR k="Insurance" v={M(fin.insurance)} />}
+        {fin.unlimited > 0 && <PR k="Unlimited mileage" v={M(fin.unlimited)} />}
+        {fin.discount > 0 && <PR k="Discount" v={'−' + M(fin.discount)} />}
+        <PR k="Tax" v={M(fin.tax)} />
+        <PR k="Service fee" v={M(fin.fee)} />
+        <div style={{ height: 1, background: 'var(--tile-border)', margin: '10px 0' }} />
+        <PR k="Total" v={M(fin.total)} strong />
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 12, color: 'var(--text-3)' }}><span>Pre-authorization</span><span>{M(fin.deposit)}</span></div>
+        <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>Total excludes refundable deposit</div>
+      </div>
+
+      <button onClick={onSubmit} style={{ height: 50, borderRadius: 15, border: 'none', background: 'var(--primary)', color: '#fff', fontWeight: 800, fontSize: 14.5, fontFamily: "'Sora',sans-serif", cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, boxShadow: '0 8px 22px var(--primary-weak)' }}
+        onPointerDown={e => e.currentTarget.style.transform = 'scale(.98)'} onPointerUp={e => e.currentTarget.style.transform = ''} onPointerLeave={e => e.currentTarget.style.transform = ''}><Icon name="checkCircle" size={18} />Create rental agreement</button>
+      <button onClick={onDraft} style={{ height: 44, borderRadius: 14, border: '1px solid var(--tile-border)', background: 'var(--tile)', color: 'var(--text-2)', fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>Save as draft</button>
+    </div>
+  );
+}
+const lbl = { fontSize: 10.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-3)' };
+
+function CreateOverlay({ step, done, fin, customer, vehicle, onClose, onAnother }) {
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 70, background: 'rgba(8,6,20,.5)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', display: 'grid', placeItems: 'center', animation: 'rnPop .25s ease' }}>
+      <div style={{ width: 440, maxWidth: '92%', background: 'var(--bg)', border: '1px solid var(--tile-border)', borderRadius: 24, boxShadow: '0 40px 90px rgba(0,0,0,.5)', padding: 28, animation: `rnPop .35s ${SPRING}` }}>
+        {!done ? <>
+          <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 20, letterSpacing: '-0.03em', color: 'var(--text)' }}>Creating rental…</div>
+          <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 4 }}>{customer && vehicle ? `${customer.name} · ${vehicle.make} ${vehicle.model}` : ''}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 20 }}>
+            {RN.steps.map((s, i) => {
+              const st = i < step ? 'done' : i === step ? 'active' : 'wait';
+              return <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 4px', opacity: st === 'wait' ? .45 : 1, transition: 'opacity .3s' }}>
+                <span style={{ width: 24, height: 24, borderRadius: 999, display: 'grid', placeItems: 'center', flexShrink: 0, background: st === 'done' ? 'var(--green)' : st === 'active' ? 'transparent' : 'var(--tile-2)', color: '#fff' }}>
+                  {st === 'done' ? <Icon name="check" size={14} stroke={3} /> : st === 'active' ? <span style={{ width: 18, height: 18, borderRadius: 999, border: '2px solid var(--primary)', borderTopColor: 'transparent', animation: 'spin .7s linear infinite' }} /> : <span style={{ width: 7, height: 7, borderRadius: 9, background: 'var(--text-3)' }} />}
+                </span>
+                <span style={{ fontSize: 13.5, fontWeight: st === 'active' ? 700 : 600, color: st === 'wait' ? 'var(--text-3)' : 'var(--text)' }}>{s}</span>
+              </div>;
+            })}
+          </div>
+          <div style={{ height: 6, borderRadius: 4, background: 'var(--tile-2)', overflow: 'hidden', marginTop: 18 }}>
+            <div style={{ height: '100%', width: `${(step / RN.steps.length) * 100}%`, background: 'var(--primary)', borderRadius: 4, transition: 'width .4s ease' }} />
+          </div>
+        </> : <>
+          <div style={{ display: 'grid', placeItems: 'center', textAlign: 'center', padding: '6px 0 0' }}>
+            <div style={{ width: 64, height: 64, borderRadius: 999, background: 'var(--green-weak)', color: 'var(--green)', display: 'grid', placeItems: 'center', animation: `rnPop .4s ${SPRING}` }}><Icon name="checkCircle" size={36} /></div>
+            <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 22, letterSpacing: '-0.03em', color: 'var(--text)', marginTop: 16 }}>Rental created</div>
+            <div style={{ fontSize: 13.5, color: 'var(--text-3)', marginTop: 5 }}>Agreement #RT-1043 · {M(fin.total)} · sent to {customer ? customer.name.split(' ')[0] : 'customer'} for signing</div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
+            <button onClick={onAnother} style={{ flex: 1, height: 46, borderRadius: 14, border: '1px solid var(--tile-border)', background: 'var(--tile)', color: 'var(--text)', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>New rental</button>
+            <button onClick={onClose} style={{ flex: 1.3, height: 46, borderRadius: 14, border: 'none', background: 'var(--primary)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Icon name="arrowRight" size={16} />View rental</button>
+          </div>
+        </>}
+      </div>
+    </div>
+  );
+}
+
+function BootSkeleton() {
+  return (
+    <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      <div style={{ width: 214, flexShrink: 0, borderRight: '1px solid var(--tile-border)', padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {Array.from({ length: 9 }).map((_, i) => <div key={i} style={{ display: 'flex', gap: 11, alignItems: 'center' }}><window.Sk w={24} h={24} r={8} /><window.Sk w={i % 2 ? 110 : 90} h={12} /></div>)}
+      </div>
+      <div style={{ flex: 1, overflow: 'hidden', padding: '22px 24px' }}><div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}><window.SkCard /><window.SkCard /></div></div>
+      <div style={{ width: 348, flexShrink: 0, borderLeft: '1px solid var(--tile-border)', padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <window.Sk w={150} h={16} /><window.Sk h={120} r={18} /><window.Sk h={210} r={18} /><window.Sk h={50} r={15} />
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

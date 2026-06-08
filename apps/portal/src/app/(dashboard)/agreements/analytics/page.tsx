@@ -11,14 +11,19 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, CartesianGrid, XAxis, YAxis,
   RadialBarChart, RadialBar, PolarAngleAxis,
 } from "recharts";
-import { ArrowLeft, Info } from "lucide-react";
+import { ArrowLeft, Info, BarChart3 } from "lucide-react";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { useTenant } from "@/contexts/TenantContext";
+import { Tile, EmptyState, Shimmer } from "@/components/bento";
+
+const SUCCESS = "hsl(var(--bento-success))";
+const PRIMARY = "hsl(var(--primary))";
+const PRIMARY_2 = "hsl(258 70% 66%)";
 
 const TYPE_COLORS: Record<string, string> = {
-  "Original": "#6366f1",
-  "Extension": "#8b5cf6",
-  "Signed": "#22c55e",
+  "Original": PRIMARY,
+  "Extension": PRIMARY_2,
+  "Signed": SUCCESS,
 };
 
 const typeChartConfig: ChartConfig = {
@@ -28,15 +33,15 @@ const typeChartConfig: ChartConfig = {
 };
 
 const signedRadialConfig: ChartConfig = {
-  value: { label: "Signed", color: "#22c55e" },
+  value: { label: "Signed", color: SUCCESS },
 };
 
 const monthlyConfig: ChartConfig = {
-  count: { label: "Agreements", color: "#6366f1" },
+  count: { label: "Agreements", color: PRIMARY },
 };
 
 const customerBarConfig: ChartConfig = {
-  count: { label: "Agreements", color: "#8b5cf6" },
+  count: { label: "Agreements", color: PRIMARY_2 },
 };
 
 export default function AgreementsAnalyticsPage() {
@@ -150,8 +155,12 @@ export default function AgreementsAnalyticsPage() {
   if (isLoading) {
     return (
       <div className="container mx-auto p-6 space-y-6">
-        <div className="h-8 bg-muted animate-pulse rounded"></div>
-        <div className="h-96 bg-muted animate-pulse rounded"></div>
+        <Shimmer className="h-8 w-56" />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Shimmer key={i} className="h-[260px] w-full" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -163,7 +172,7 @@ export default function AgreementsAnalyticsPage() {
           <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
         </Link>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Agreements Analytics</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Agreements Analytics</h1>
           <p className="text-sm text-muted-foreground">Charts and insights for agreements management</p>
         </div>
       </div>
@@ -172,56 +181,56 @@ export default function AgreementsAnalyticsPage() {
         <TooltipProvider>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {/* Type Distribution */}
-            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+            <Tile pad="compact">
               <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-sm font-medium text-muted-foreground">Type Breakdown</h3>
+                <h3 className="text-sm font-semibold text-muted-foreground">Type Breakdown</h3>
                 <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" /></TooltipTrigger>
                 <TooltipContent>Distribution of agreements by type</TooltipContent></Tooltip>
               </div>
               <ChartContainer config={typeChartConfig} className="h-[180px] w-full">
                 <PieChart>
                   <Pie data={typeDonutData} cx="50%" cy="50%" innerRadius={48} outerRadius={72} dataKey="value" nameKey="name" strokeWidth={2} stroke="hsl(var(--background))">
-                    {typeDonutData.map((entry) => (<Cell key={entry.name} fill={TYPE_COLORS[entry.name] || "#94a3b8"} />))}
+                    {typeDonutData.map((entry) => (<Cell key={entry.name} fill={TYPE_COLORS[entry.name] || "hsl(var(--muted-foreground))"} />))}
                   </Pie>
                   <ChartTooltip content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload;
-                    return (<div className="rounded-lg border bg-background px-3 py-2 shadow-md"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: TYPE_COLORS[d.name] || "#94a3b8" }} /><span className="text-sm font-medium">{d.name}</span></div><p className="text-xs text-muted-foreground mt-0.5">{d.value} agreement{d.value !== 1 ? "s" : ""}</p></div>);
+                    return (<div className="rounded-lg border bg-background px-3 py-2 shadow-md"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: TYPE_COLORS[d.name] || "hsl(var(--muted-foreground))" }} /><span className="text-sm font-medium">{d.name}</span></div><p className="text-xs text-muted-foreground mt-0.5">{d.value} agreement{d.value !== 1 ? "s" : ""}</p></div>);
                   }} />
                   <text x="50%" y="46%" textAnchor="middle" className="fill-foreground text-xl font-bold">{allAgreements.length}</text>
                   <text x="50%" y="58%" textAnchor="middle" className="fill-muted-foreground text-[11px]">Total</text>
                 </PieChart>
               </ChartContainer>
               <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 justify-center">
-                {typeDonutData.map((d) => (<div key={d.name} className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: TYPE_COLORS[d.name] || "#94a3b8" }} />{d.name} ({d.value})</div>))}
+                {typeDonutData.map((d) => (<div key={d.name} className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: TYPE_COLORS[d.name] || "hsl(var(--muted-foreground))" }} />{d.name} ({d.value})</div>))}
               </div>
-            </div>
+            </Tile>
 
             {/* Signature Rate */}
-            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+            <Tile pad="compact">
               <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-sm font-medium text-muted-foreground">Signature Rate</h3>
+                <h3 className="text-sm font-semibold text-muted-foreground">Signature Rate</h3>
                 <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" /></TooltipTrigger>
                 <TooltipContent>Percentage of agreements that have been signed</TooltipContent></Tooltip>
               </div>
               <ChartContainer config={signedRadialConfig} className="h-[180px] w-full">
                 <RadialBarChart cx="50%" cy="50%" innerRadius={55} outerRadius={75} startAngle={90} endAngle={-270} data={[{ name: "Signed", value: signedRadialData.rate }]} barSize={14}>
                   <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-                  <RadialBar dataKey="value" cornerRadius={8} fill="#22c55e" background={{ fill: "hsl(var(--muted))" }} angleAxisId={0} />
+                  <RadialBar dataKey="value" cornerRadius={8} fill={SUCCESS} background={{ fill: "hsl(var(--muted))" }} angleAxisId={0} aria-hidden />
                   <text x="50%" y="44%" textAnchor="middle" className="fill-foreground text-2xl font-bold">{signedRadialData.rate}%</text>
                   <text x="50%" y="56%" textAnchor="middle" className="fill-muted-foreground text-[11px]">Signed</text>
                 </RadialBarChart>
               </ChartContainer>
               <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 justify-center">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="h-2 w-2 rounded-full bg-green-500" />Signed ({signedRadialData.signed})</div>
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="h-2 w-2 rounded-full [background:var(--bento-success)]" />Signed ({signedRadialData.signed})</div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="h-2 w-2 rounded-full bg-muted-foreground/30" />Pending ({signedRadialData.pending})</div>
               </div>
-            </div>
+            </Tile>
 
             {/* Monthly Trend */}
-            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+            <Tile pad="compact">
               <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-sm font-medium text-muted-foreground">Monthly Trend</h3>
+                <h3 className="text-sm font-semibold text-muted-foreground">Monthly Trend</h3>
                 <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" /></TooltipTrigger>
                 <TooltipContent>Number of agreements created per month (last 6 months)</TooltipContent></Tooltip>
               </div>
@@ -235,15 +244,15 @@ export default function AgreementsAnalyticsPage() {
                     const d = payload[0].payload;
                     return (<div className="rounded-lg border bg-background px-3 py-2 shadow-md"><p className="text-xs text-muted-foreground mb-0.5">{d.name}</p><p className="text-sm font-semibold">{d.count} agreement{d.count !== 1 ? "s" : ""}</p></div>);
                   }} />
-                  <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={20} />
+                  <Bar dataKey="count" fill={PRIMARY} radius={[4, 4, 0, 0]} barSize={20} />
                 </BarChart>
               </ChartContainer>
-            </div>
+            </Tile>
 
             {/* Top Customers */}
-            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+            <Tile pad="compact">
               <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-sm font-medium text-muted-foreground">Top Customers</h3>
+                <h3 className="text-sm font-semibold text-muted-foreground">Top Customers</h3>
                 <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" /></TooltipTrigger>
                 <TooltipContent>Customers with the most agreements</TooltipContent></Tooltip>
               </div>
@@ -257,14 +266,18 @@ export default function AgreementsAnalyticsPage() {
                     const d = payload[0].payload;
                     return (<div className="rounded-lg border bg-background px-3 py-2 shadow-md"><p className="text-xs text-muted-foreground mb-0.5">{d.fullName}</p><p className="text-sm font-semibold">{d.count} agreement{d.count !== 1 ? "s" : ""}</p></div>);
                   }} />
-                  <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={18} />
+                  <Bar dataKey="count" fill={PRIMARY_2} radius={[0, 4, 4, 0]} barSize={18} />
                 </BarChart>
               </ChartContainer>
-            </div>
+            </Tile>
           </div>
         </TooltipProvider>
       ) : (
-        <div className="text-center py-12"><p className="text-muted-foreground">No agreements data available for analytics</p></div>
+        <EmptyState
+          icon={<BarChart3 className="h-5 w-5" />}
+          title="No agreements data available"
+          description="Charts will appear here once agreements exist."
+        />
       )}
     </div>
   );

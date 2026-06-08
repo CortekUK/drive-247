@@ -4,13 +4,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserPlus } from "lucide-react";
 import { addUserSchema, type AddUserFormValues } from "@/client-schemas/users/add-user";
 import { ManagerPermissionsSelector } from "@/components/users/manager-permissions-selector";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
+import { Modal } from "@/components/bento";
 
 interface AddUserDialogProps {
   open: boolean;
@@ -56,17 +56,18 @@ export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading }: AddUs
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className={isManager ? "sm:max-w-[650px] max-h-[90vh] overflow-y-auto" : "sm:max-w-[425px]"}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UserPlus className="h-5 w-5 text-primary" />
-            Add New User
-          </DialogTitle>
-          <DialogDescription>
-            Create a new user account for this tenant. They will receive an email with login credentials.
-          </DialogDescription>
-        </DialogHeader>
+    <Modal
+      open={open}
+      onOpenChange={handleOpenChange}
+      className={isManager ? "sm:max-w-[650px] max-h-[90vh] overflow-y-auto" : "sm:max-w-[425px]"}
+      title={
+        <span className="flex items-center gap-2">
+          <UserPlus className="h-5 w-5 text-primary" />
+          Add New User
+        </span>
+      }
+      description="Create a new user account for this tenant. They will receive an email with login credentials."
+    >
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
             <FormField
@@ -74,7 +75,7 @@ export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading }: AddUs
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Full Name <span className="text-red-500">*</span></FormLabel>
+                  <FormLabel>Full Name <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
                     <Input placeholder="e.g. John Smith" {...field} />
                   </FormControl>
@@ -88,7 +89,7 @@ export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading }: AddUs
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email Address <span className="text-red-500">*</span></FormLabel>
+                  <FormLabel>Email Address <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
                     <Input type="email" placeholder="e.g. john@example.com" {...field} />
                   </FormControl>
@@ -102,7 +103,7 @@ export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading }: AddUs
               name="role"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Role <span className="text-red-500">*</span></FormLabel>
+                  <FormLabel>Role <span className="text-destructive">*</span></FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -127,7 +128,7 @@ export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading }: AddUs
                 name="permissions"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tab Permissions <span className="text-red-500">*</span></FormLabel>
+                    <FormLabel>Tab Permissions <span className="text-destructive">*</span></FormLabel>
                     <FormControl>
                       <ManagerPermissionsSelector
                         value={field.value || []}
@@ -140,7 +141,7 @@ export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading }: AddUs
               />
             )}
 
-            <DialogFooter className="pt-4">
+            <div className="flex justify-end gap-2 pt-4">
               <Button
                 type="button"
                 variant="outline"
@@ -152,14 +153,12 @@ export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading }: AddUs
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="bg-gradient-primary"
               >
                 {isLoading ? "Creating..." : "Create User"}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+    </Modal>
   );
 }

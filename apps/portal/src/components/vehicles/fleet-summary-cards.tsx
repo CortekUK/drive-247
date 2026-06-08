@@ -1,4 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Car, CheckCircle2, KeyRound, Gauge } from "lucide-react";
+import { KpiTile } from "@/components/bento";
 
 interface Vehicle {
   id: string;
@@ -34,59 +35,35 @@ export const FleetSummaryCards = ({ vehicles }: FleetSummaryCardsProps) => {
     ? Math.round((rentedVehicles / totalVehicles) * 100)
     : 0;
 
-  const cards = [
-    {
-      title: "Total Vehicles",
-      value: totalVehicles,
-      description: "Active fleet vehicles",
-      className: "bg-gradient-to-br from-slate-500/10 to-slate-600/5 border-slate-500/20 hover:border-slate-500/40 hover:shadow-lg",
-    },
-    {
-      title: "Available",
-      value: availableVehicles,
-      description: "Ready for rental",
-      className: "bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg",
-    },
-    {
-      title: "Currently Rented",
-      value: rentedVehicles,
-      description: "Out on rental",
-      className: "bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-amber-500/20 hover:border-amber-500/40 hover:shadow-lg",
-    },
-    {
-      title: "Utilization Rate",
-      value: `${utilizationRate}%`,
-      description: "Fleet efficiency",
-      className: utilizationRate >= 70
-        ? "bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg"
-        : utilizationRate >= 40
-        ? "bg-gradient-to-br from-orange-500/10 to-orange-600/5 border-orange-500/20 hover:border-orange-500/40 hover:shadow-lg"
-        : "bg-gradient-to-br from-red-500/10 to-red-600/5 border-red-500/20 hover:border-red-500/40 hover:shadow-lg",
-      valueClassName: utilizationRate >= 70 ? "text-emerald-600" : utilizationRate >= 40 ? "text-orange-600" : "text-red-600"
-    }
-  ];
-
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {cards.map((card) => {
-        return (
-          <Card key={card.title} className={`relative overflow-hidden transition-all duration-300 border-2 ${card.className}`}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 sm:pb-3 p-3 sm:p-6">
-              <CardTitle className="text-xs sm:text-sm font-medium text-foreground/80 leading-tight">
-                {card.title}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-              <div className={`text-2xl sm:text-3xl font-bold mb-1 ${card.valueClassName || 'text-foreground'}`}>
-                {card.value}
-              </div>
-              <p className="text-[11px] sm:text-xs text-muted-foreground font-medium leading-tight">
-                {card.description}
-              </p>
-            </CardContent>
-          </Card>
-        );
-      })}
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <KpiTile
+        label="Total Vehicles"
+        value={totalVehicles}
+        sub="Active fleet vehicles"
+        icon={<Car className="h-4 w-4" />}
+      />
+      <KpiTile
+        label="Available"
+        value={availableVehicles}
+        sub="Ready for rental"
+        icon={<CheckCircle2 className="h-4 w-4" />}
+      />
+      <KpiTile
+        variant="feature"
+        label="Currently Rented"
+        value={rentedVehicles}
+        sub="Out on rental"
+        icon={<KeyRound className="h-4 w-4" />}
+      />
+      <KpiTile
+        variant={utilizationRate >= 40 ? "default" : "warn"}
+        label="Utilization Rate"
+        value={utilizationRate}
+        format={(v) => `${v}%`}
+        sub="Fleet efficiency"
+        icon={<Gauge className="h-4 w-4" />}
+      />
     </div>
   );
 };

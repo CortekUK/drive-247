@@ -4,9 +4,9 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Tile, Eyebrow, EmptyState } from '@/components/bento';
 import { formatCurrency, getCurrencySymbol } from '@/lib/format-utils';
+import { BarChart3 } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -74,10 +74,10 @@ function ChartSkeleton({ height = 320 }: { height?: number }) {
   return (
     <div className="flex items-end gap-[3px] px-2" style={{ height }}>
       {Array.from({ length: 20 }).map((_, i) => (
-        <Skeleton
+        <div
           key={i}
-          className="flex-1 rounded-t-sm"
-          style={{ height: `${15 + Math.sin(i * 0.5) * 30 + Math.random() * 25}%`, opacity: 0.15 + i * 0.03 }}
+          className="flex-1 rounded-t-sm animate-pulse [background:var(--bento-tile-2)]"
+          style={{ height: `${15 + Math.sin(i * 0.5) * 30 + Math.random() * 25}%`, opacity: 0.4 + i * 0.02 }}
         />
       ))}
     </div>
@@ -188,15 +188,20 @@ export function DashboardCharts() {
   // Let Recharts auto-drop overlapping ticks via minTickGap
   // (explicit tickInterval removed — caused heavy overlap on mobile)
 
+  const hasData =
+    !isLoading &&
+    (totalRevenue > 0 || totalRentals > 0 || totalCustomers > 0);
+
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-2">
+      <Tile pad="roomy">
+        <div className="pb-2">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
-              <CardTitle className="text-base font-semibold tracking-tight">
-                Business Activity
-              </CardTitle>
+              <Eyebrow>Business Activity</Eyebrow>
+              <h2 className="mt-1 text-lg font-bold tracking-tight text-foreground">
+                Revenue, bookings & customers
+              </h2>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Popover>
                   <PopoverTrigger asChild>
@@ -235,33 +240,33 @@ export function DashboardCharts() {
                     </div>
                   </PopoverContent>
                 </Popover>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-bento-text-3 font-mono tabular-nums">
                   {format(dateRange.from, 'MMM dd, yyyy')} — {format(dateRange.to, 'MMM dd, yyyy')}
                 </p>
               </div>
             </div>
 
             {/* Stats */}
-            <div className="flex items-center gap-4 sm:gap-3 sm:text-right">
+            <div className="flex items-center gap-5 sm:gap-6 sm:text-right">
               <div className="sm:text-right">
-                <p className="text-[10px] text-muted-foreground">Revenue</p>
-                <span className="text-sm font-bold tabular-nums">
+                <Eyebrow>Revenue</Eyebrow>
+                <span className="text-lg font-extrabold tracking-tight tabular-nums font-mono text-foreground">
                   {formatCurrency(totalRevenue, currencyCode, { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
                 </span>
               </div>
               <div className="sm:text-right">
-                <p className="text-[10px] text-muted-foreground">Bookings</p>
-                <span className="text-sm font-bold tabular-nums">{totalRentals}</span>
+                <Eyebrow>Bookings</Eyebrow>
+                <span className="text-lg font-extrabold tracking-tight tabular-nums font-mono text-foreground">{totalRentals}</span>
               </div>
               <div className="sm:text-right">
-                <p className="text-[10px] text-muted-foreground">Customers</p>
-                <span className="text-sm font-bold tabular-nums">{totalCustomers}</span>
+                <Eyebrow>Customers</Eyebrow>
+                <span className="text-lg font-extrabold tracking-tight tabular-nums font-mono text-foreground">{totalCustomers}</span>
               </div>
             </div>
           </div>
 
           {/* Legend */}
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mt-3 text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mt-3 text-[11px] text-bento-text-2">
             <span className="flex items-center gap-1.5">
               <span className="h-[3px] w-4 rounded-full" style={{ background: CHART.gold }} />
               Revenue
@@ -275,11 +280,18 @@ export function DashboardCharts() {
               New Customers
             </span>
           </div>
-        </CardHeader>
+        </div>
 
-        <CardContent className="pt-0 pb-4">
+        <div className="pt-3">
           {isLoading ? (
             <ChartSkeleton height={320} />
+          ) : !hasData ? (
+            <EmptyState
+              icon={<BarChart3 className="h-5 w-5" />}
+              title="No activity in this range"
+              description="Once you take bookings and onboard customers, your revenue and growth trends will appear here."
+              className="border-0 shadow-none"
+            />
           ) : (
             <ResponsiveContainer width="100%" height={320}>
               <LineChart data={data?.daily || []} margin={{ top: 12, right: 12, left: -8, bottom: 0 }}>
@@ -386,8 +398,8 @@ export function DashboardCharts() {
               </LineChart>
             </ResponsiveContainer>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Tile>
     </div>
   );
 }

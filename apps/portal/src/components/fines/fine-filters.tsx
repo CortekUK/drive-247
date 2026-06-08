@@ -164,7 +164,7 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
                   onClick={() => { updateFilter('status', []); setStatusOpen(false); }}
                   className={cn(
                     "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors text-left",
-                    filters.status.length === 0 ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                    filters.status.length === 0 ? "[background:var(--bento-primary-weak)] text-[color:var(--bento-primary-weak-fg)]" : "hover:[background:var(--bento-tile-2)]"
                   )}
                 >
                   All Status
@@ -180,7 +180,7 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
                       }}
                       className={cn(
                         "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors text-left",
-                        isActive ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                        isActive ? "[background:var(--bento-primary-weak)] text-[color:var(--bento-primary-weak-fg)]" : "hover:[background:var(--bento-tile-2)]"
                       )}
                     >
                       {label}

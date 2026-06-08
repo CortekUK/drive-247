@@ -7,28 +7,20 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { ArrowLeft, AlertTriangle, Save } from "lucide-react";
+import { Tile, Eyebrow, SectionCard, Modal, Money, StatusPill } from "@/components/bento";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { DatePickerInput } from "@/components/shared/forms/date-picker-input";
 import { CurrencyInput } from "@/components/shared/forms/currency-input";
 import { EnhancedFileUpload } from "@/components/fines/enhanced-file-upload";
-import { getCurrencySymbol, formatCurrency } from "@/lib/format-utils";
+import { getCurrencySymbol } from "@/lib/format-utils";
 
 const fineSchema = z.object({
   type: z.string().min(1, "Fine type is required"),
@@ -306,13 +298,13 @@ const CreateFine = () => {
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="outline" onClick={() => router.push("/fines")}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Fines
+        <Button variant="ghost" size="icon" onClick={() => router.push("/fines")}>
+          <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold">Add New Fine</h1>
-          <p className="text-muted-foreground">Record a new traffic fine or penalty</p>
+          <Eyebrow>New Record</Eyebrow>
+          <h1 className="text-[30px] font-extrabold tracking-tight leading-tight">Add New Fine</h1>
+          <p className="text-muted-foreground text-sm">Record a new traffic fine or penalty</p>
         </div>
       </div>
 
@@ -320,17 +312,11 @@ const CreateFine = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Form */}
         <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-primary" />
-                Fine Details
-              </CardTitle>
-              <CardDescription>
-                Enter the fine information and upload any supporting evidence
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          <SectionCard
+            icon={<AlertTriangle className="h-4 w-4" />}
+            title="Fine Details"
+            description="Enter the fine information and upload any supporting evidence"
+          >
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                   {/* Type and Liability */}
@@ -340,7 +326,7 @@ const CreateFine = () => {
                       name="type"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Fine Type <span className="text-red-500">*</span></FormLabel>
+                          <FormLabel>Fine Type <span className="text-destructive">*</span></FormLabel>
                           <Select
                             value={selectedTypeOption}
                             onValueChange={(value) => {
@@ -384,7 +370,7 @@ const CreateFine = () => {
                       name="customer_id"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Customer <span className="text-red-500">*</span></FormLabel>
+                          <FormLabel>Customer <span className="text-destructive">*</span></FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger>
@@ -416,7 +402,7 @@ const CreateFine = () => {
                       name="vehicle_id"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Vehicle <span className="text-red-500">*</span></FormLabel>
+                          <FormLabel>Vehicle <span className="text-destructive">*</span></FormLabel>
                           <Select
                             onValueChange={field.onChange}
                             value={field.value}
@@ -472,7 +458,7 @@ const CreateFine = () => {
                       name="issue_date"
                       render={({ field }) => (
                         <FormItem className="flex flex-col">
-                          <FormLabel>Issue Date <span className="text-red-500">*</span></FormLabel>
+                          <FormLabel>Issue Date <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
                             <DatePickerInput
                               date={field.value}
@@ -491,7 +477,7 @@ const CreateFine = () => {
                       name="due_date"
                       render={({ field }) => (
                         <FormItem className="flex flex-col">
-                          <FormLabel>Due Date <span className="text-red-500">*</span></FormLabel>
+                          <FormLabel>Due Date <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
                             <DatePickerInput
                               date={field.value}
@@ -510,7 +496,7 @@ const CreateFine = () => {
                       name="amount"
                       render={({ field }) => (
                         <FormItem className="flex flex-col">
-                          <FormLabel>Amount ({currencySymbol}) <span className="text-red-500">*</span></FormLabel>
+                          <FormLabel>Amount ({currencySymbol}) <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
                             <CurrencyInput
                               value={field.value}
@@ -563,11 +549,10 @@ const CreateFine = () => {
                   </div>
 
                   {/* Submit */}
-                  <div className="flex items-center gap-4 pt-4">
+                  <div className="flex items-center gap-3 pt-4">
                     <Button
                       type="submit"
                       disabled={loading || !form.formState.isValid}
-                      className="bg-gradient-primary"
                     >
                       <Save className="h-4 w-4 mr-2" />
                       {loading ? "Creating..." : "Create Fine"}
@@ -583,18 +568,19 @@ const CreateFine = () => {
                   </div>
                 </form>
               </Form>
-            </CardContent>
-          </Card>
+          </SectionCard>
         </div>
 
         {/* Right Column - Preview */}
         <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Fine Preview</CardTitle>
-              <CardDescription>Review the fine details</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <Tile className="sticky top-6 space-y-4">
+            <div className="space-y-1">
+              <Eyebrow>Live Preview</Eyebrow>
+              <h3 className="text-base font-bold tracking-tight">Fine Preview</h3>
+              <p className="text-sm text-muted-foreground">Review the fine details</p>
+            </div>
+
+            <div className="space-y-4 pt-1">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Type</p>
                 <p className="font-medium">{form.watch("type") || "Not selected"}</p>
@@ -608,53 +594,52 @@ const CreateFine = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Vehicle</p>
                 <p className="font-medium">
-                  {selectedVehicle ? `${selectedVehicle.reg} • ${selectedVehicle.make} ${selectedVehicle.model}` : "Not selected"}
+                  {selectedVehicle ? (
+                    <>
+                      <span className="font-mono tabular-nums">{selectedVehicle.reg}</span>
+                      {` • ${selectedVehicle.make} ${selectedVehicle.model}`}
+                    </>
+                  ) : "Not selected"}
                 </p>
               </div>
 
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Amount</p>
-                <p className="font-medium text-lg text-destructive">
-                  {formatCurrency(form.watch("amount") || 0, tenant?.currency_code || 'USD')}
-                </p>
+                <Money
+                  value={form.watch("amount") || 0}
+                  currency={tenant?.currency_code || 'USD'}
+                  locale="en-US"
+                  className="text-lg font-bold text-[color:var(--bento-danger-fg)]"
+                />
               </div>
 
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Status After Creation</p>
-                <p className="font-medium text-amber-600">Open (Not Charged)</p>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Status After Creation</p>
+                <StatusPill tone="warn">Open (Not Charged)</StatusPill>
               </div>
 
-              <div className="pt-4 border-t">
-                <div className="p-3 bg-muted rounded-lg">
+              <div className="pt-4 border-t border-border">
+                <div className="rounded-tile-sm [background:var(--bento-tile-2)] p-3">
                   <p className="text-xs text-muted-foreground">
                     <strong>Next Steps:</strong> After creation, you can charge the fine to the customer's account
                     from the fine detail page.
                   </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </Tile>
         </div>
       </div>
 
       {/* Other Type Dialog */}
-      <Dialog open={showOtherTypeDialog} onOpenChange={setShowOtherTypeDialog}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>Custom Fine Type</DialogTitle>
-            <DialogDescription>
-              Enter a custom name for this fine type
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Input
-              placeholder="e.g., Red Light Violation, Toll Evasion..."
-              value={otherTypeValue}
-              onChange={(e) => setOtherTypeValue(e.target.value)}
-              autoFocus
-            />
-          </div>
-          <DialogFooter>
+      <Modal
+        open={showOtherTypeDialog}
+        onOpenChange={setShowOtherTypeDialog}
+        title="Custom Fine Type"
+        description="Enter a custom name for this fine type"
+        className="sm:max-w-[400px]"
+        footer={
+          <>
             <Button
               variant="outline"
               onClick={() => {
@@ -677,9 +662,16 @@ const CreateFine = () => {
             >
               Confirm
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        <Input
+          placeholder="e.g., Red Light Violation, Toll Evasion..."
+          value={otherTypeValue}
+          onChange={(e) => setOtherTypeValue(e.target.value)}
+          autoFocus
+        />
+      </Modal>
     </div>
   );
 };

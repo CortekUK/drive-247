@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { format, subDays } from "date-fns";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tile } from "@/components/bento";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -89,30 +89,28 @@ export function OwnerPayoutsExportCard() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Wallet className="h-5 w-5 text-indigo-600" />
-          <CardTitle>Owner Payouts Report</CardTitle>
+    <Tile className="flex h-full flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-tile-sm [background:var(--bento-primary-weak)] text-[color:var(--bento-primary-weak-fg)]">
+          <Wallet className="h-4 w-4" />
         </div>
-        <CardDescription>Export payouts to third-party vehicle owners as CSV.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="op-from">From</Label>
-            <Input id="op-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="op-to">To</Label>
-            <Input id="op-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </div>
+        <h3 className="text-sm font-bold tracking-tight text-foreground">Owner Payouts Report</h3>
+      </div>
+      <p className="text-xs text-muted-foreground">Export payouts to third-party vehicle owners as CSV.</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="op-from">From</Label>
+          <Input id="op-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </div>
-        <Button onClick={handleDownload} disabled={downloading} className="w-full">
-          <Download className="h-4 w-4 mr-2" />
-          {downloading ? "Preparing..." : "Download CSV"}
-        </Button>
-      </CardContent>
-    </Card>
+        <div className="space-y-1.5">
+          <Label htmlFor="op-to">To</Label>
+          <Input id="op-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        </div>
+      </div>
+      <Button onClick={handleDownload} disabled={downloading} className="mt-auto w-full">
+        <Download className="h-4 w-4 mr-2" />
+        {downloading ? "Preparing..." : "Download CSV"}
+      </Button>
+    </Tile>
   );
 }

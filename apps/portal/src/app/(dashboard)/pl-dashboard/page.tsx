@@ -3,11 +3,21 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
-import { CalendarIcon, TrendingUp, TrendingDown, DollarSign, Car, Calendar, Download, ArrowUpDown, ArrowUp, ArrowDown, BarChart3, Info } from 'lucide-react';
+import {
+  Tile,
+  KpiTile,
+  Eyebrow,
+  Money,
+  StatusPill,
+  Segmented,
+  TableTile,
+  bentoTable,
+  KpiTileSkeletonRow,
+  Shimmer,
+} from '@/components/bento';
+import { CalendarIcon, TrendingUp, TrendingDown, DollarSign, Car, Download, ArrowUpDown, ArrowUp, ArrowDown, BarChart3, Info } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -517,27 +527,18 @@ const PLDashboard: React.FC = () => {
   const getStatusBadge = (vehicle: VehiclePL) => {
     // Show disposal status first if vehicle is disposed
     if (vehicle.is_disposed) {
-      return <Badge variant="secondary" className="bg-muted text-muted-foreground">Disposed</Badge>;
+      return <StatusPill tone="neutral">Disposed</StatusPill>;
     }
-
-    // Otherwise show profit/loss status
-    const netProfit = vehicle.net_profit || 0;
-    if (netProfit > 0) {
-      return <Badge className="bg-success text-success-foreground">Profitable</Badge>;
-    } else if (netProfit < 0) {
-      return <Badge className="bg-destructive text-destructive-foreground">Loss</Badge>;
-    } else {
-      return <Badge variant="secondary">Break Even</Badge>;
-    }
+    return getTotalsBadge(vehicle.net_profit || 0);
   };
 
   const getTotalsBadge = (netProfit: number) => {
     if (netProfit > 0) {
-      return <Badge className="bg-success text-success-foreground">Profitable</Badge>;
+      return <StatusPill tone="success" dot>Profitable</StatusPill>;
     } else if (netProfit < 0) {
-      return <Badge className="bg-destructive text-destructive-foreground">Loss</Badge>;
+      return <StatusPill tone="danger" dot>Loss</StatusPill>;
     } else {
-      return <Badge variant="secondary">Break Even</Badge>;
+      return <StatusPill tone="neutral">Break Even</StatusPill>;
     }
   };
 
@@ -574,38 +575,14 @@ const PLDashboard: React.FC = () => {
     router.push(`/vehicles/${vehicleData.vehicle_id}?${params.toString()}`);
   };
 
-  const summaryCards = [
-    {
-      title: 'Total Revenue',
-      value: formatCurrency(plSummary?.total_revenue || 0, currencyCode),
-      icon: TrendingUp,
-      trend: 'positive' as const,
-    },
-    {
-      title: 'Total Costs',
-      value: formatCurrency(plSummary?.total_costs || 0, currencyCode),
-      icon: TrendingDown,
-      trend: 'negative' as const,
-    },
-    {
-      title: 'Net Profit',
-      value: formatCurrency(plSummary?.net_profit || 0, currencyCode),
-      icon: DollarSign,
-      trend: (plSummary?.net_profit || 0) > 0 ? 'positive' : (plSummary?.net_profit || 0) < 0 ? 'negative' : 'neutral' as const,
-    },
-    {
-      title: 'Vehicles Tracked',
-      value: plSummary?.vehicles_tracked?.toString() || '0',
-      icon: Car,
-      trend: 'neutral' as const,
-    },
-  ];
+  const isSummaryStillLoading = isSummaryLoading || isVehicleLoading;
 
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold">Global P&L Dashboard</h1>
+          <Eyebrow>Profit &amp; Loss</Eyebrow>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-foreground">Global P&amp;L Dashboard</h1>
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Track profitability across your entire fleet
           </p>
@@ -613,7 +590,7 @@ const PLDashboard: React.FC = () => {
 
         <Button
           onClick={exportToCSV}
-          className="bg-gradient-primary flex items-center gap-2 w-full sm:w-auto"
+          className="flex items-center gap-2 w-full sm:w-auto"
           disabled={(!vehiclePLData?.length && !monthlyPLData?.length)}
         >
           <Download className="h-4 w-4" />
@@ -621,58 +598,48 @@ const PLDashboard: React.FC = () => {
         </Button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-        {summaryCards.map((card, index) => (
-          <Card key={index} className={cn(
-            "shadow-sm transition-all duration-200 cursor-pointer hover:shadow-md",
-            card.title === 'Revenue' ? "bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40" :
-            card.title === 'Costs' ? "bg-gradient-to-br from-warning/10 to-warning/5 border-warning/20 hover:border-warning/40" :
-            card.title === 'Net Profit' && card.trend === 'positive' ? "bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40" :
-            card.title === 'Net Profit' && card.trend === 'negative' ? "bg-gradient-to-br from-destructive/10 to-destructive/5 border-destructive/20 hover:border-destructive/40" :
-            "bg-card hover:bg-accent/50 border"
-          )}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 gap-2">
-              <CardTitle className="text-xs sm:text-sm font-medium leading-tight">{card.title}</CardTitle>
-              <card.icon className={cn(
-                "h-4 w-4 shrink-0",
-                card.title === 'Revenue' ? "text-success" :
-                card.title === 'Costs' ? "text-warning" :
-                card.title === 'Net Profit' && card.trend === 'positive' ? "text-success" :
-                card.title === 'Net Profit' && card.trend === 'negative' ? "text-destructive" :
-                "text-muted-foreground"
-              )} />
-            </CardHeader>
-            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-              <div className={cn(
-                "text-lg sm:text-2xl font-bold break-all",
-                card.title === 'Net Profit' && card.trend === 'positive' ? "text-success" :
-                card.title === 'Net Profit' && card.trend === 'negative' ? "text-destructive" :
-                ""
-              )}>
-                {card.value}
-              </div>
-              <div className="flex items-center mt-2 text-xs text-muted-foreground">
-                {card.trend === 'positive' && (
-                  <>
-                    <TrendingUp className="h-3 w-3 text-success mr-1" />
-                    <span>Positive</span>
-                  </>
-                )}
-                {card.trend === 'negative' && (
-                  <>
-                    <TrendingDown className="h-3 w-3 text-destructive mr-1" />
-                    <span>Negative</span>
-                  </>
-                )}
-                {card.trend === 'neutral' && (
-                  <span>—</span>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Summary KPI tiles — hero (revenue) + feature (net) + KPIs */}
+      {isSummaryStillLoading ? (
+        <KpiTileSkeletonRow count={4} />
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiTile
+            variant="hero"
+            label="Total Revenue"
+            value={plSummary?.total_revenue || 0}
+            format={(v) => <Money value={v} currency={currencyCode} className="font-sans" />}
+            sub="Across selected range"
+            icon={<TrendingUp className="h-4 w-4" />}
+          />
+          <KpiTile
+            label="Total Costs"
+            value={plSummary?.total_costs || 0}
+            format={(v) => <Money value={v} currency={currencyCode} className="font-sans" />}
+            sub="Across selected range"
+            icon={<TrendingDown className="h-4 w-4" />}
+          />
+          <KpiTile
+            variant="feature"
+            label="Net Profit"
+            value={plSummary?.net_profit || 0}
+            format={(v) => <Money value={v} currency={currencyCode} className="font-sans" />}
+            sub={
+              (plSummary?.net_profit || 0) > 0
+                ? 'Profitable'
+                : (plSummary?.net_profit || 0) < 0
+                ? 'Operating at a loss'
+                : 'Break even'
+            }
+            icon={<DollarSign className="h-4 w-4" />}
+          />
+          <KpiTile
+            label="Vehicles Tracked"
+            value={plSummary?.vehicles_tracked || 0}
+            sub="With P&L activity"
+            icon={<Car className="h-4 w-4" />}
+          />
+        </div>
+      )}
 
       {/* Charts Section */}
       {!isSummaryLoading && !isVehicleLoading && (plSummary?.total_revenue || 0) + (plSummary?.total_costs || 0) > 0 && (
@@ -680,8 +647,8 @@ const PLDashboard: React.FC = () => {
         <div className="space-y-6">
           {/* Chart 1: Revenue vs Costs Monthly Trend */}
           {monthlyPLData && monthlyPLData.length > 1 && (
-            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-              <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+            <Tile pad="compact">
+              <h4 className="text-[15px] font-bold tracking-tight text-foreground mb-3 flex items-center gap-1.5">
                 Revenue vs Costs Trend
                 <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
                 <TooltipContent><p>Monthly revenue and cost trends over the selected date range</p></TooltipContent></Tooltip>
@@ -732,14 +699,14 @@ const PLDashboard: React.FC = () => {
                   <span className="text-muted-foreground">Costs</span>
                 </div>
               </div>
-            </div>
+            </Tile>
           )}
 
           {/* Charts 2+3: Revenue & Cost Breakdown Donuts */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Revenue Breakdown */}
-            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-              <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+            <Tile pad="compact">
+              <h4 className="text-[15px] font-bold tracking-tight text-foreground mb-3 flex items-center gap-1.5">
                 Revenue Breakdown
                 <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
                 <TooltipContent><p>Split of total revenue between rental income and fees</p></TooltipContent></Tooltip>
@@ -783,11 +750,11 @@ const PLDashboard: React.FC = () => {
                   ))}
                 </div>
               )}
-            </div>
+            </Tile>
 
             {/* Cost Breakdown */}
-            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-              <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+            <Tile pad="compact">
+              <h4 className="text-[15px] font-bold tracking-tight text-foreground mb-3 flex items-center gap-1.5">
                 Cost Breakdown
                 <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
                 <TooltipContent><p>Distribution of costs across service, fines, and acquisition</p></TooltipContent></Tooltip>
@@ -831,14 +798,14 @@ const PLDashboard: React.FC = () => {
                   ))}
                 </div>
               )}
-            </div>
+            </Tile>
           </div>
 
           {/* Chart 4: Top & Bottom Vehicles by Profit */}
           {topBottomVehicles.length > 0 && (
-            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-              <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
-                Top & Bottom Vehicles by Profit
+            <Tile pad="compact">
+              <h4 className="text-[15px] font-bold tracking-tight text-foreground mb-3 flex items-center gap-1.5">
+                Top &amp; Bottom Vehicles by Profit
                 <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
                 <TooltipContent><p>Most and least profitable vehicles by net profit</p></TooltipContent></Tooltip>
               </h4>
@@ -882,7 +849,7 @@ const PLDashboard: React.FC = () => {
                   </Bar>
                 </BarChart>
               </ChartContainer>
-            </div>
+            </Tile>
           )}
         </div>
         </TooltipProvider>
@@ -890,35 +857,35 @@ const PLDashboard: React.FC = () => {
 
       {/* Filters Bar */}
       <div className="flex flex-wrap gap-2 items-center">
+        <Segmented
+          value={groupByMonth ? 'month' : 'vehicle'}
+          onValueChange={(v) => {
+            setGroupByMonth(v === 'month');
+            setShowChart(false);
+          }}
+          options={[
+            { value: 'vehicle', label: 'By Vehicle' },
+            { value: 'month', label: 'By Month' },
+          ]}
+        />
+
         {groupByMonth && (
           <Button
             variant="outline"
             onClick={() => setShowChart(!showChart)}
-            className="flex items-center gap-2 h-8 text-sm"
+            className="flex items-center gap-2 h-9 text-sm"
           >
             <BarChart3 className="h-4 w-4" />
             {showChart ? 'Show Table' : 'Show Chart'}
           </Button>
         )}
 
-        <Button
-          variant={groupByMonth ? "default" : "outline"}
-          onClick={() => {
-            setGroupByMonth(!groupByMonth);
-            setShowChart(false);
-          }}
-          className="flex items-center gap-2 h-8 text-sm"
-        >
-          <Calendar className="h-4 w-4" />
-          Group by Month
-        </Button>
-
         <Popover>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
               className={cn(
-                "w-full sm:w-[280px] justify-start text-left font-normal h-8 text-sm",
+                "w-full sm:w-[280px] justify-start text-left font-normal h-9 text-sm",
                 !dateRange && "text-muted-foreground"
               )}
             >
@@ -955,19 +922,19 @@ const PLDashboard: React.FC = () => {
       </div>
 
       {/* Vehicle Profitability Table or Monthly View */}
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <Tile pad="none" className="overflow-hidden">
+        <div className="px-5 pt-5 pb-4">
+          <h3 className="text-base font-bold tracking-tight text-foreground">
             {groupByMonth ? 'Monthly Profitability' : 'Vehicle Profitability'}
-          </CardTitle>
-          <CardDescription>
+          </h3>
+          <p className="mt-0.5 text-sm text-muted-foreground">
             {groupByMonth
-              ? 'Profitability breakdown by month'
-              : 'Click on a vehicle row to view detailed P&L tab'
-            }
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+              ? 'Profitability breakdown by month — click a row to drill in'
+              : 'Click on a vehicle row to view its detailed P&L tab'}
+          </p>
+        </div>
+        <div className="border-t border-border" />
+        <div className="p-5">
           {groupByMonth ? (
             showChart ? (
               // Monthly chart view
@@ -1011,37 +978,37 @@ const PLDashboard: React.FC = () => {
               // Monthly table view
               <div className="relative overflow-x-auto">
                 <Table>
-                  <TableHeader className="sticky top-0 bg-background">
+                  <TableHeader className={cn("sticky top-0", bentoTable.header)}>
                     <TableRow>
                       <TableHead>Month</TableHead>
-                      <TableHead className="text-left">Revenue</TableHead>
-                      <TableHead className="text-left">Costs</TableHead>
-                      <TableHead className="text-left">Net Profit</TableHead>
-                      <TableHead className="text-left">Vehicles</TableHead>
+                      <TableHead className="text-right">Revenue</TableHead>
+                      <TableHead className="text-right">Costs</TableHead>
+                      <TableHead className="text-right">Net Profit</TableHead>
+                      <TableHead className="text-right">Vehicles</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                      {monthlyPLData?.map((month, index) => (
                         <TableRow
                           key={index}
-                          className="hover:bg-muted/50 transition-colors cursor-pointer"
+                          className={bentoTable.row}
                           onClick={() => handleMonthClick(month)}
                           role="button"
                           tabIndex={0}
                           onKeyDown={(e) => e.key === 'Enter' && handleMonthClick(month)}
                         >
-                         <TableCell className="font-medium">{month.month}</TableCell>
-                        <TableCell className="text-left">{formatCurrency(month.total_revenue, currencyCode)}</TableCell>
-                        <TableCell className="text-left">{formatCurrency(month.total_costs, currencyCode)}</TableCell>
-                        <TableCell className="text-left font-medium">
+                         <TableCell className="font-semibold text-foreground">{month.month}</TableCell>
+                        <TableCell className={bentoTable.figure}>{formatCurrency(month.total_revenue, currencyCode)}</TableCell>
+                        <TableCell className={bentoTable.figure}>{formatCurrency(month.total_costs, currencyCode)}</TableCell>
+                        <TableCell className={cn(bentoTable.figure, "font-semibold")}>
                           <span className={cn(
-                            month.net_profit > 0 ? 'text-success' :
-                            month.net_profit < 0 ? 'text-destructive' : ''
+                            month.net_profit > 0 ? 'text-[color:var(--bento-success)]' :
+                            month.net_profit < 0 ? 'text-[color:var(--bento-danger-fg)]' : ''
                           )}>
                             {formatCurrency(month.net_profit, currencyCode)}
                           </span>
                         </TableCell>
-                        <TableCell className="text-left">{month.vehicle_count}</TableCell>
+                        <TableCell className={bentoTable.figure}>{month.vehicle_count}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1052,8 +1019,8 @@ const PLDashboard: React.FC = () => {
             // Vehicle view
             <div className="space-y-4">
               <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
-                <Table className="min-w-[800px]">
-                  <TableHeader className="sticky top-0 z-10 bg-background">
+                <Table className={cn("min-w-[800px]", bentoTable.header)}>
+                  <TableHeader className="sticky top-0 z-10">
                     <TableRow>
                       <TableHead>
                         <SortButton field="vehicle_reg">Vehicle</SortButton>
@@ -1086,7 +1053,7 @@ const PLDashboard: React.FC = () => {
                     {sortedVehicleData?.map((vehicle) => (
                         <TableRow
                           key={vehicle.vehicle_id}
-                          className="hover:bg-muted/50 transition-colors cursor-pointer"
+                          className={bentoTable.row}
                           onClick={() => handleVehicleClick(vehicle)}
                           role="button"
                           tabIndex={0}
@@ -1094,20 +1061,20 @@ const PLDashboard: React.FC = () => {
                         >
                         <TableCell>
                           <div>
-                            <div className="font-medium">{vehicle.vehicle_reg}</div>
+                            <div className="font-mono font-semibold text-foreground">{vehicle.vehicle_reg}</div>
                             <div className="text-xs text-muted-foreground">{vehicle.make_model}</div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.revenue_rental || 0, currencyCode)}</TableCell>
-                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.revenue_fees || 0, currencyCode)}</TableCell>
-                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.cost_service || 0, currencyCode)}</TableCell>
-                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.cost_fines || 0, currencyCode)}</TableCell>
-                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.cost_other || 0, currencyCode)}</TableCell>
-                        <TableCell className="text-left font-mono font-medium">{formatCurrency(vehicle.total_costs || 0, currencyCode)}</TableCell>
-                        <TableCell className="text-left font-mono font-bold">
+                        <TableCell className={bentoTable.figure}>{formatCurrency(vehicle.revenue_rental || 0, currencyCode)}</TableCell>
+                        <TableCell className={bentoTable.figure}>{formatCurrency(vehicle.revenue_fees || 0, currencyCode)}</TableCell>
+                        <TableCell className={bentoTable.figure}>{formatCurrency(vehicle.cost_service || 0, currencyCode)}</TableCell>
+                        <TableCell className={bentoTable.figure}>{formatCurrency(vehicle.cost_fines || 0, currencyCode)}</TableCell>
+                        <TableCell className={bentoTable.figure}>{formatCurrency(vehicle.cost_other || 0, currencyCode)}</TableCell>
+                        <TableCell className={cn(bentoTable.figure, "font-semibold")}>{formatCurrency(vehicle.total_costs || 0, currencyCode)}</TableCell>
+                        <TableCell className={cn(bentoTable.figure, "font-bold")}>
                           <span className={cn(
-                            (vehicle.net_profit || 0) > 0 ? 'text-success' :
-                            (vehicle.net_profit || 0) < 0 ? 'text-destructive' : ''
+                            (vehicle.net_profit || 0) > 0 ? 'text-[color:var(--bento-success)]' :
+                            (vehicle.net_profit || 0) < 0 ? 'text-[color:var(--bento-danger-fg)]' : ''
                           )}>
                             {formatCurrency(vehicle.net_profit || 0, currencyCode)}
                           </span>
@@ -1117,19 +1084,19 @@ const PLDashboard: React.FC = () => {
                     ))}
                   </TableBody>
                   {categoryTotals && (
-                    <TableFooter className="bg-muted border-t-2 border-border">
-                      <TableRow className="hover:bg-muted">
-                        <TableCell className="font-bold text-base">Category Totals</TableCell>
-                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.revenue_rental, currencyCode)}</TableCell>
-                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.revenue_fees, currencyCode)}</TableCell>
-                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.cost_service, currencyCode)}</TableCell>
-                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.cost_fines, currencyCode)}</TableCell>
-                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.cost_other, currencyCode)}</TableCell>
-                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.total_costs, currencyCode)}</TableCell>
-                        <TableCell className="text-left font-mono font-bold">
+                    <TableFooter className="[background:var(--bento-tile-2)] border-t border-border">
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell className="font-bold text-foreground">Category Totals</TableCell>
+                        <TableCell className={cn(bentoTable.figure, "font-bold")}>{formatCurrency(categoryTotals.revenue_rental, currencyCode)}</TableCell>
+                        <TableCell className={cn(bentoTable.figure, "font-bold")}>{formatCurrency(categoryTotals.revenue_fees, currencyCode)}</TableCell>
+                        <TableCell className={cn(bentoTable.figure, "font-bold")}>{formatCurrency(categoryTotals.cost_service, currencyCode)}</TableCell>
+                        <TableCell className={cn(bentoTable.figure, "font-bold")}>{formatCurrency(categoryTotals.cost_fines, currencyCode)}</TableCell>
+                        <TableCell className={cn(bentoTable.figure, "font-bold")}>{formatCurrency(categoryTotals.cost_other, currencyCode)}</TableCell>
+                        <TableCell className={cn(bentoTable.figure, "font-bold")}>{formatCurrency(categoryTotals.total_costs, currencyCode)}</TableCell>
+                        <TableCell className={cn(bentoTable.figure, "font-bold")}>
                           <span className={cn(
-                            categoryTotals.net_profit > 0 ? 'text-success' :
-                            categoryTotals.net_profit < 0 ? 'text-destructive' : ''
+                            categoryTotals.net_profit > 0 ? 'text-[color:var(--bento-success)]' :
+                            categoryTotals.net_profit < 0 ? 'text-[color:var(--bento-danger-fg)]' : ''
                           )}>
                             {formatCurrency(categoryTotals.net_profit, currencyCode)}
                           </span>
@@ -1142,8 +1109,8 @@ const PLDashboard: React.FC = () => {
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Tile>
     </div>
   );
 };

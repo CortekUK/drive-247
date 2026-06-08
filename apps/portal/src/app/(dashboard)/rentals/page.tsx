@@ -2,14 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -30,7 +22,19 @@ import {
   ShieldAlert,
   BarChart3,
   Clock,
+  CheckCircle2,
+  Hourglass,
 } from "lucide-react";
+import {
+  KpiTile,
+  TableTile,
+  bentoTable,
+  StatusPill,
+  statusTone,
+  EmptyState,
+  KpiTileSkeletonRow,
+  TableSkeleton,
+} from "@/components/bento";
 
 // Format a Postgres TIME value ("HH:MM" or "HH:MM:SS") into 12-hour clock
 // notation ("10:30 AM"). Returns null when the value is missing so callers
@@ -200,9 +204,15 @@ const RentalsList = () => {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="h-8 bg-muted animate-pulse rounded"></div>
-        <div className="h-96 bg-muted animate-pulse rounded"></div>
+      <div className="container mx-auto p-4 md:p-6 space-y-6">
+        <div className="space-y-2">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Rentals</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">
+            Manage rental agreements and contracts
+          </p>
+        </div>
+        <KpiTileSkeletonRow count={4} />
+        <TableSkeleton rows={8} cols={8} />
       </div>
     );
   }
@@ -213,7 +223,7 @@ const RentalsList = () => {
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div className="min-w-0 flex items-start justify-between gap-3 sm:block">
           <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold">Rentals</h1>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Rentals</h1>
             <p className="text-muted-foreground text-sm sm:text-base">
               Manage rental agreements and contracts
             </p>
@@ -277,9 +287,9 @@ const RentalsList = () => {
           {canEdit('rentals') && (
             <Button
               onClick={() => router.push("/rentals/new")}
-              className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg flex-1 sm:flex-none"
+              className="flex-1 sm:flex-none gap-2"
             >
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className="h-4 w-4" />
               New Rental
             </Button>
           )}
@@ -288,37 +298,29 @@ const RentalsList = () => {
 
       {/* Quick Stats — list view only */}
       {currentView !== "calendar" && stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold">{stats.total}</div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Total Rentals</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold text-success">
-                {stats.active}
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Active</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold text-muted-foreground">
-                {stats.closed}
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Completed</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-amber-500/20 hover:border-amber-500/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold text-amber-500">
-                {stats.pending}
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Pending</p>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiTile
+            label="Total Rentals"
+            value={stats.total}
+            icon={<FileText className="h-4 w-4" />}
+          />
+          <KpiTile
+            variant="feature"
+            label="Active"
+            value={stats.active}
+            icon={<CheckCircle2 className="h-4 w-4" />}
+          />
+          <KpiTile
+            label="Completed"
+            value={stats.closed}
+            icon={<CalendarDays className="h-4 w-4" />}
+          />
+          <KpiTile
+            variant="warn"
+            label="Pending"
+            value={stats.pending}
+            icon={<Hourglass className="h-4 w-4" />}
+          />
         </div>
       )}
 
@@ -337,10 +339,10 @@ const RentalsList = () => {
       ) : /* Rentals Table */
       rentals.length > 0 ? (
         <>
-          <Card>
-            <CardContent className="p-0 overflow-x-auto max-h-[520px] overflow-y-auto relative">
+          <TableTile>
+            <div className="max-h-[520px] overflow-y-auto relative">
               <Table className="min-w-[700px]">
-                  <TableHeader className="sticky top-0 z-10 bg-card">
+                  <TableHeader className={`sticky top-0 z-10 ${bentoTable.header}`}>
                     <TableRow>
                       <TableHead>Rental #</TableHead>
                       <TableHead>Created</TableHead>
@@ -356,15 +358,15 @@ const RentalsList = () => {
                     {rentals.map((rental) => (
                       <TableRow
                         key={rental.id}
-                        className={`hover:bg-muted/50 cursor-pointer ${rental.is_extended ? 'bg-amber-500/10 border-l-4 border-l-amber-500' : rental.cancellation_requested ? 'bg-red-500/10 border-l-4 border-l-red-500' : (!filters.bonzahStatus && rental.bonzah_status === 'insufficient_balance') ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : (!filters.bonzahStatus && rental.bonzah_status === 'quoted') ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : ''}`}
+                        className={`${bentoTable.row} ${rental.is_extended ? '[background:var(--bento-warn-bg)] border-l-4 [border-left-color:var(--bento-warn-accent)]' : rental.cancellation_requested ? '[background:var(--bento-danger-weak)] border-l-4 [border-left-color:var(--bento-danger-fg)]' : (!filters.bonzahStatus && rental.bonzah_status === 'insufficient_balance') ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : (!filters.bonzahStatus && rental.bonzah_status === 'quoted') ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : ''}`}
                         onClick={() => router.push(`/rentals/${rental.id}`)}
                       >
-                        <TableCell className="font-medium">
+                        <TableCell className="font-mono tabular-nums font-medium">
                           {rental.is_extended ? (
                             <div className="flex flex-col">
                               <span>{rental.rental_number}</span>
                               <button
-                                className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 mt-0.5"
+                                className="text-xs font-sans text-[color:var(--bento-warn-accent)] hover:opacity-80 font-medium flex items-center gap-1 mt-0.5"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setSelectedRental(rental);
@@ -378,7 +380,7 @@ const RentalsList = () => {
                           ) : rental.cancellation_requested ? (
                             <div className="flex flex-col">
                               <span>{rental.rental_number}</span>
-                              <span className="text-xs text-red-600 font-medium flex items-center gap-1 mt-0.5">
+                              <span className="text-xs font-sans text-[color:var(--bento-danger-fg)] font-medium flex items-center gap-1 mt-0.5">
                                 <XCircle className="h-3 w-3" />
                                 Cancellation Requested
                               </span>
@@ -386,7 +388,7 @@ const RentalsList = () => {
                           ) : (!filters.bonzahStatus && rental.bonzah_status === 'insufficient_balance') ? (
                             <div className="flex flex-col">
                               <span>{rental.rental_number}</span>
-                              <span className="text-xs text-[#CC004A] font-medium flex items-center gap-1 mt-0.5">
+                              <span className="text-xs font-sans text-[#CC004A] font-medium flex items-center gap-1 mt-0.5">
                                 <ShieldAlert className="h-3 w-3" />
                                 Balance Required
                               </span>
@@ -394,7 +396,7 @@ const RentalsList = () => {
                           ) : (!filters.bonzahStatus && rental.bonzah_status === 'quoted') ? (
                             <div className="flex flex-col">
                               <span>{rental.rental_number}</span>
-                              <span className="text-xs text-[#CC004A] font-medium flex items-center gap-1 mt-0.5">
+                              <span className="text-xs font-sans text-[#CC004A] font-medium flex items-center gap-1 mt-0.5">
                                 <img src="/bonzah-logo.svg" alt="" className="h-3 w-auto dark:hidden" />
                                 <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-auto hidden dark:block" />
                                 Ins. Quoted
@@ -418,9 +420,9 @@ const RentalsList = () => {
                           {rental.customer.name.split(' ')[0]}
                         </TableCell>
                         <TableCell>
-                          <div>{formatLocalDate(rental.start_date)}</div>
+                          <div className="font-mono tabular-nums text-[13px]">{formatLocalDate(rental.start_date)}</div>
                           {formatTimeOfDay(rental.pickup_time) && (
-                            <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                            <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1 font-mono tabular-nums">
                               <Clock className="h-3 w-3" />
                               {formatTimeOfDay(rental.pickup_time)}
                             </div>
@@ -430,9 +432,9 @@ const RentalsList = () => {
                           {rental.end_date
                             ? (
                               <>
-                                <div>{formatLocalDate(rental.end_date)}</div>
+                                <div className="font-mono tabular-nums text-[13px]">{formatLocalDate(rental.end_date)}</div>
                                 {formatTimeOfDay(rental.return_time) && (
-                                  <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                  <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1 font-mono tabular-nums">
                                     <Clock className="h-3 w-3" />
                                     {formatTimeOfDay(rental.return_time)}
                                   </div>
@@ -440,7 +442,7 @@ const RentalsList = () => {
                               </>
                             )
                             : rental.is_pay_as_you_go
-                            ? <span className="text-indigo-500 text-xs font-medium">Ongoing</span>
+                            ? <span className="text-primary text-xs font-medium">Ongoing</span>
                             : "—"}
                         </TableCell>
                         <TableCell>
@@ -450,33 +452,14 @@ const RentalsList = () => {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <Badge
-                              variant={
-                                rental.computed_status === "Completed"
-                                  ? "secondary"
-                                  : rental.computed_status === "Cancelled" || rental.computed_status === "Rejected"
-                                  ? "destructive"
-                                  : "outline"
-                              }
-                              className={
-                                rental.computed_status === "Active"
-                                  ? "bg-green-600 text-white"
-                                  : rental.computed_status === "Pending"
-                                  ? "bg-amber-500/20 text-amber-600 border-amber-500"
-                                  : ""
-                              }
-                            >
+                            <StatusPill tone={statusTone(rental.computed_status)} dot>
                               {rental.computed_status}
-                            </Badge>
+                            </StatusPill>
                             {rental.is_pay_as_you_go && (
-                              <Badge variant="outline" className="text-indigo-600 border-indigo-300 bg-indigo-100 dark:text-indigo-400 dark:border-indigo-700 dark:bg-indigo-950/30 text-[10px]">
-                                PAYG
-                              </Badge>
+                              <StatusPill tone="primary">PAYG</StatusPill>
                             )}
                             {(rental as any).auto_extend_enabled && (
-                              <Badge variant="outline" className="text-violet-600 border-violet-300 bg-violet-100 dark:text-violet-400 dark:border-violet-700 dark:bg-violet-950/30 text-[10px]">
-                                Auto-Extend
-                              </Badge>
+                              <StatusPill tone="primary">Auto-Extend</StatusPill>
                             )}
                           </div>
                         </TableCell>
@@ -495,8 +478,8 @@ const RentalsList = () => {
                     ))}
                   </TableBody>
                 </Table>
-            </CardContent>
-          </Card>
+            </div>
+          </TableTile>
 
           {/* Pagination */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -569,14 +552,12 @@ const RentalsList = () => {
           </div>
         </>
       ) : (
-        <div className="text-center py-8">
-          <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-2">No rentals found</h3>
-          <p className="text-muted-foreground mb-4">
-            No rentals match your current filters
-          </p>
-          <Button onClick={handleClearFilters}>Clear Filters</Button>
-        </div>
+        <EmptyState
+          icon={<FileText className="h-5 w-5" />}
+          title="No rentals found"
+          description="No rentals match your current filters"
+          action={<Button onClick={handleClearFilters}>Clear Filters</Button>}
+        />
       )}
 
       {/* Rental Review Dialog */}

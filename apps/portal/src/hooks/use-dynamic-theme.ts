@@ -2,51 +2,52 @@ import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
 import { useTenantBranding } from './use-tenant-branding';
 
-// Default theme colors - must match index.css
+// Default theme colors — MUST match the Bento palette in global.css (DESIGN_SYSTEM.md §3).
+// Used when a tenant has no custom branding colors (and as the floor everywhere).
 const DEFAULT_COLORS = {
   light: {
-    background: '42 30% 96%',      // Light Ivory/Cream
-    foreground: '159 21% 20%',     // Dark Forest Green Text
-    card: '42 30% 98%',
-    cardForeground: '159 21% 20%',
-    muted: '159 15% 88%',
-    mutedForeground: '159 15% 35%',
-    popover: '42 30% 98%',
-    popoverForeground: '159 21% 20%',
-    primary: '41 49% 56%',         // Muted Gold
+    background: '248.6 46.7% 97.1%',
+    foreground: '249.2 36.1% 14.1%',
+    card: '0 0% 100%',
+    cardForeground: '249.2 36.1% 14.1%',
+    muted: '253.3 52.9% 96.7%',
+    mutedForeground: '251.1 14.6% 63.7%',
+    popover: '0 0% 100%',
+    popoverForeground: '249.2 36.1% 14.1%',
+    primary: '250.1 84.3% 62.5%',  // Bento violet #6a4ff0
     primaryForeground: '0 0% 100%',
-    secondary: '41 49% 56%',
-    secondaryForeground: '0 0% 100%',
-    accent: '41 49% 56%',
-    accentForeground: '0 0% 100%',
-    sidebarBackground: '42 30% 98%',
-    sidebarForeground: '159 21% 20%',
-    sidebarPrimary: '41 49% 56%',
+    secondary: '253.3 52.9% 96.7%',
+    secondaryForeground: '250 14% 42%',
+    accent: '255 90.9% 95.7%',
+    accentForeground: '250.7 64.8% 54.3%',
+    sidebarBackground: '0 0% 100%',
+    sidebarForeground: '250 14% 42%',
+    sidebarPrimary: '250.1 84.3% 62.5%',
     sidebarPrimaryForeground: '0 0% 100%',
-    sidebarAccent: '159 15% 92%',
-    sidebarAccentForeground: '159 21% 20%',
+    sidebarAccent: '255 90.9% 95.7%',
+    sidebarAccentForeground: '250.7 64.8% 54.3%',
   },
   dark: {
-    background: '159 21% 8%',      // Dark forest green
-    foreground: '42 30% 92%',      // Bright ivory
-    card: '159 21% 12%',
-    cardForeground: '42 30% 92%',
-    muted: '159 15% 20%',
-    mutedForeground: '42 20% 75%',
-    popover: '159 21% 12%',
-    popoverForeground: '42 30% 92%',
-    primary: '41 49% 60%',         // Brighter gold
-    primaryForeground: '159 21% 8%',
-    secondary: '41 49% 60%',
-    secondaryForeground: '159 21% 8%',
-    accent: '41 49% 60%',
-    accentForeground: '159 21% 8%',
-    sidebarBackground: '159 21% 10%',
-    sidebarForeground: '42 30% 92%',
-    sidebarPrimary: '41 49% 60%',
-    sidebarPrimaryForeground: '159 21% 8%',
-    sidebarAccent: '41 49% 25%',
-    sidebarAccentForeground: '42 30% 92%',
+    background: '246.7 27.3% 6.5%',
+    foreground: '252 65.2% 95.5%',
+    card: '248.2 35.5% 12.2%',
+    cardForeground: '252 65.2% 95.5%',
+    muted: '248.9 33.3% 15.9%',
+    mutedForeground: '248.1 14.9% 48.8%',
+    popover: '248.2 35.5% 12.2%',
+    popoverForeground: '252 65.2% 95.5%',
+    primary: '252.3 100% 71.4%',  // Bento violet (dark) #8b6dff
+    primaryForeground: '0 0% 100%',
+    secondary: '248.9 33.3% 15.9%',
+    secondaryForeground: '249.7 24.5% 70.4%',
+    accent: '251.4 38.2% 21.6%',
+    accentForeground: '252.8 100% 82.5%',
+    sidebarBackground: '251.3 32% 9.8%',
+    sidebarForeground: '249.7 24.5% 70.4%',
+    sidebarPrimary: '252.3 100% 71.4%',
+    sidebarPrimaryForeground: '0 0% 100%',
+    sidebarAccent: '251.4 38.2% 21.6%',
+    sidebarAccentForeground: '252.8 100% 82.5%',
   }
 };
 

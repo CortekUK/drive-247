@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bento Design System · Showcase</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; height: 100%; }
+  * { box-sizing: border-box; }
+  #root { height: 100vh; }
+  input { font-family: inherit; }
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--glass-bd); border-radius: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  .g { position: relative; background: var(--glass); border-radius: 20px;
+    -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%);
+    border: 1px solid var(--glass-bd); box-shadow: var(--glass-sh); }
+  .lgbtn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 40px; padding: 0 15px;
+    border-radius: 999px; border: 1px solid var(--glass-bd); cursor: pointer; font-family: inherit; font-weight: 700; font-size: 13px; color: var(--text);
+    background: var(--glass-2); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: var(--glass-sh-sm);
+    transition: transform .14s cubic-bezier(.34,1.56,.64,1); }
+  .lgbtn:active { transform: scale(.95); }
+  .lgbtn-p { color: #fff; border: none; background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 80%, #fff), var(--primary)); box-shadow: 0 8px 20px color-mix(in srgb, var(--primary) 30%, transparent), inset 0 1px 0 rgba(255,255,255,.4); }
+  .cmd-row:hover { background: var(--glass-2); }
+  .heat-cell:hover { transform: scale(1.18); }
+  .kan { transition: transform .2s cubic-bezier(.34,1.56,.64,1); }
+  .kan:hover { transform: translateY(-3px); }
+  .shim { background: var(--glass-2); animation: shim 1.3s ease-in-out infinite; }
+  @keyframes shim { 0%,100%{opacity:.5} 50%{opacity:1} }
+  @keyframes pop { from { opacity:0; transform: translateY(-8px) scale(.97); } to { opacity:1; transform:none; } }
+  @keyframes up { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform:none; } }
+  @keyframes upT { from { transform: translateY(16px); } to { transform:none; } }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes pulse { 0%,100%{ box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary) 24%, transparent); } 50%{ box-shadow: 0 0 0 10px color-mix(in srgb, var(--primary) 6%, transparent); } }
+  @keyframes wiggle { from { transform: rotate(-0.6deg); } to { transform: rotate(0.6deg); } }
+  @keyframes themeFade { from { opacity:.5; } to { opacity:0; } }
+  @keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="bento-theme.js"></script>
+<script type="text/babel" src="ui.jsx"></script>
+<script type="text/babel" src="showcase-a.jsx"></script>
+<script type="text/babel" src="showcase-b.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+const T = window.BENTO_THEMES;
+const A = window.RN_SHOW_A, B = window.RN_SHOW_B;
+const SPRING = 'cubic-bezier(.34,1.56,.64,1)';
+const ACCENTS = [['Violet', '#6a4ff0'], ['Ocean', '#2f6bdb'], ['Emerald', '#1f9d6b'], ['Amber', '#d98a1a'], ['Rose', '#e0526f']];
+
+function App() {
+  const [dark, setDark] = useState(() => localStorage.getItem('bento_dark') === '1');
+  const [accent, setAccent] = useState('#6a4ff0');
+  const [fade, setFade] = useState(0);
+  const [toast, setToast] = useState(null);
+  useEffect(() => { localStorage.setItem('bento_dark', dark ? '1' : '0'); }, [dark]);
+  const showToast = (msg, undo) => { const t = { msg, undo }; setToast(t); setTimeout(() => setToast(c => c === t ? null : c), undo ? 5000 : 2400); };
+
+  const base = dark ? T.dark : T.light;
+  const gv = dark ? {
+    '--glass': 'rgba(28,24,52,0.5)', '--glass-2': 'rgba(40,34,68,0.5)', '--glass-bd': 'rgba(255,255,255,0.09)',
+    '--glass-sh': '0 14px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.05)', '--glass-sh-sm': '0 5px 16px rgba(0,0,0,.4)',
+  } : {
+    '--glass': 'rgba(255,255,255,0.58)', '--glass-2': 'rgba(255,255,255,0.5)', '--glass-bd': 'rgba(80,68,140,0.13)',
+    '--glass-sh': '0 14px 40px rgba(50,38,100,.12), inset 0 1px 0 rgba(255,255,255,.6)', '--glass-sh-sm': '0 5px 14px rgba(50,38,100,.1)',
+  };
+  const accentVars = { '--primary': accent, '--primary-weak': `color-mix(in srgb, ${accent} 15%, ${dark ? '#1f1b36' : '#ffffff'})`, '--primary-weak-fg': dark ? `color-mix(in srgb, ${accent} 55%, #fff)` : accent };
+
+  const sections = [
+    ['01', 'Command palette', '⌘K to open — fuzzy-search and run any action.', () => <A.CommandPalette />],
+    ['02', 'Animated KPIs + sparklines', 'Numbers count up; trend lines draw in on load.', () => <A.KpiAnimated />],
+    ['03', 'Availability heatmap', 'Vehicle × day grid — free, booked, on hold.', () => <A.Heatmap />],
+    ['04', 'Rental lifecycle', 'Booked → Signed → Keys → Active → Returned.', () => <A.Lifecycle />],
+    ['05', 'Bookings kanban', 'Drag rentals across Upcoming / Active / Overdue / Done.', () => <A.Kanban />],
+    ['06', 'Live map panel', 'Frosted cards floating over the fleet map.', () => <A.MapPanel />],
+    ['07', 'AI insight cards', 'Proactive nudges with one-tap actions.', () => <A.Insights onAct={m => showToast(m)} />],
+    ['08', 'Natural-language search', 'Type a question; it parses into filters.', () => <B.NLSearch />],
+    ['09', 'Density toggle', 'Comfortable ↔ Compact for power users.', () => <B.DensityDemo />],
+    ['10', 'Empty · error · loading', 'First-class states, never a blank screen.', () => <B.StatesDemo />],
+    ['11', 'Undo toasts', 'Reversible destructive actions — no blocking dialogs.', () => <B.UndoToast fire={() => showToast('Rental cancelled', true)} />],
+    ['12', 'Customizable dashboard', 'Edit layout, then drag & resize tiles.', () => <B.CustomBento />],
+  ];
+
+  return (
+    <div style={{ ...base, ...gv, ...accentVars, height: '100%', overflowY: 'auto', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Sora',system-ui,sans-serif", position: 'relative', WebkitFontSmoothing: 'antialiased' }}>
+      {/* ambient */}
+      <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
+        {[[`color-mix(in srgb, ${accent} 32%, transparent)`, 560, -180, -140, 'top', 'left'], ['rgba(86,150,255,.18)', 460, -160, -100, 'bottom', 'right'], [`color-mix(in srgb, ${accent} 16%, transparent)`, 360, '46%', '4%', 'top', 'right']].map((x, i) =>
+          <div key={i} style={{ position: 'absolute', width: x[1], height: x[1], borderRadius: 999, background: x[0], filter: 'blur(80px)', [x[4]]: x[2], [x[5]]: x[3], animation: `floaty ${11 + i * 2}s ease-in-out ${i * .7}s infinite` }} />)}
+      </div>
+
+      {/* control bar */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 20 }}>
+        <div className="g" style={{ borderRadius: 0, borderLeft: 'none', borderRight: 'none', borderTop: 'none', display: 'flex', alignItems: 'center', gap: 14, padding: '12px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--primary)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 14 }}>B</div>
+            <div><div style={{ fontFamily: "'Sora'", fontWeight: 800, fontSize: 15, letterSpacing: '-0.02em' }}>Bento — Design System</div><div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>Glass components · live showcase</div></div>
+          </div>
+          {/* accent swatches */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600, marginRight: 2 }}>Brand</span>
+            {ACCENTS.map(([n, c]) => <button key={c} title={n} onClick={() => setAccent(c)} style={{ width: 24, height: 24, borderRadius: 999, border: accent === c ? '2px solid var(--text)' : '2px solid var(--glass-bd)', background: c, cursor: 'pointer', padding: 0, outline: accent === c ? '2px solid var(--bg)' : 'none', outlineOffset: -4 }} />)}
+          </div>
+          <button className="lgbtn" onClick={() => { setDark(d => !d); setFade(x => x + 1); }} style={{ width: 56, padding: 0, position: 'relative' }}>
+            <span style={{ position: 'absolute', top: 4, left: dark ? 25 : 4, width: 28, height: 28, borderRadius: 999, background: 'var(--tile)', display: 'grid', placeItems: 'center', color: 'var(--primary)', boxShadow: '0 2px 6px rgba(0,0,0,.3)', transition: `left .42s ${SPRING}` }}><Icon name={dark ? 'moon' : 'sun'} size={14} /></span>
+          </button>
+        </div>
+      </div>
+
+      {/* sections */}
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: 820, margin: '0 auto', padding: '26px 22px 80px', display: 'flex', flexDirection: 'column', gap: 30 }}>
+        {sections.map(([n, title, desc, C], i) => (
+          <section key={n} style={{ animation: `upT .5s ${i * 0.03}s both` }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
+              <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 600, color: 'var(--primary-weak-fg)' }}>{n}</span>
+              <div>
+                <h2 style={{ margin: 0, fontFamily: "'Sora'", fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em', color: 'var(--text)' }}>{title}</h2>
+                <p style={{ margin: '2px 0 0', fontSize: 13, color: 'var(--text-3)' }}>{desc}</p>
+              </div>
+            </div>
+            <C />
+          </section>
+        ))}
+        <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-3)', paddingTop: 6 }}>Try the brand swatches + theme toggle above — every component re-tints live.</div>
+      </div>
+
+      {fade > 0 && <div key={fade} style={{ position: 'fixed', inset: 0, background: 'var(--bg)', zIndex: 40, pointerEvents: 'none', animation: 'themeFade .46s ease forwards' }} />}
+
+      {/* toast */}
+      <div className="g" style={{ position: 'fixed', bottom: toast ? 24 : -70, left: '50%', transform: 'translateX(-50%)', borderRadius: 14, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, zIndex: 50, opacity: toast ? 1 : 0, transition: `bottom .5s ${SPRING}, opacity .3s`, whiteSpace: 'nowrap', boxShadow: '0 16px 40px rgba(0,0,0,.28)' }}>
+        <Icon name={toast && toast.undo ? 'x' : 'checkCircle'} size={17} style={{ color: toast && toast.undo ? 'var(--danger-fg)' : 'var(--green)' }} />
+        <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>{toast ? toast.msg : ''}</span>
+        {toast && toast.undo && <button onClick={() => setToast(null)} className="lgbtn" style={{ height: 30, padding: '0 12px', fontSize: 12.5, color: 'var(--primary-weak-fg)' }}>Undo</button>}
+      </div>
+    </div>
+  );
+}
+const mono = "'IBM Plex Mono',monospace";
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

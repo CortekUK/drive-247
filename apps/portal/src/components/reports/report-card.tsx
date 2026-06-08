@@ -1,9 +1,7 @@
 import React from 'react';
 import { LucideIcon, Download, FileSpreadsheet, FileText, Loader2 } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Tile, StatusPill } from '@/components/bento';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 interface ReportCardProps {
   id: string;
@@ -38,43 +36,37 @@ export const ReportCard: React.FC<ReportCardProps> = ({
   const isExporting = (format: string) => exportingReport === `${id}-${format}`;
 
   return (
-    <Card
-      className={cn(
-        "group cursor-pointer transition-all duration-200",
-        "hover:shadow-lg hover:shadow-primary/5 hover:scale-[1.02] hover:border-primary/20",
-        "active:scale-[0.98] h-full relative overflow-hidden"
-      )}
+    <Tile
+      interactive
       onClick={onClick}
+      className="group h-full relative overflow-hidden flex flex-col gap-3"
     >
-      <CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between space-y-2 sm:space-y-0 pb-3">
-        <div className="flex items-center space-x-2 min-w-0 flex-1">
-          <div className="p-2 rounded-md bg-primary/10 shrink-0">
-            <Icon className="h-4 w-4 text-primary" />
-          </div>
-          <CardTitle className="text-sm font-semibold truncate">{title}</CardTitle>
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-tile-sm [background:var(--bento-primary-weak)] text-[color:var(--bento-primary-weak-fg)]">
+          <Icon className="h-4 w-4" />
         </div>
-      </CardHeader>
-      
-      <CardContent className="space-y-3">
-        <div className="min-w-0">
-          <div className="text-lg sm:text-2xl font-bold text-foreground truncate" title={value}>{value}</div>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1 truncate" title={subtitle}>{subtitle}</p>
+        <h3 className="text-sm font-bold tracking-tight text-foreground truncate">{title}</h3>
+      </div>
+
+      <div className="min-w-0">
+        <div className="text-2xl font-extrabold tracking-tight text-foreground truncate" title={value}>{value}</div>
+        <p className="text-sm text-muted-foreground mt-1 truncate" title={subtitle}>{subtitle}</p>
+      </div>
+
+      {metadata && (
+        <div className="flex flex-wrap gap-1">
+          <StatusPill tone="neutral" className="truncate max-w-full font-mono tabular-nums" title={metadata}>
+            {metadata}
+          </StatusPill>
         </div>
-        
-        {metadata && (
-          <div className="flex flex-wrap gap-1">
-            <Badge variant="secondary" className="text-[10px] sm:text-xs truncate max-w-full" title={metadata}>
-              {metadata}
-            </Badge>
-          </div>
-        )}
-        
-        <CardDescription className="text-[10px] sm:text-xs line-clamp-2">
-          {description}
-        </CardDescription>
-        
-        {/* Export Icons - Bottom Right */}
-        <div className="absolute bottom-3 right-3 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      )}
+
+      <p className="text-xs text-muted-foreground line-clamp-2">
+        {description}
+      </p>
+
+      {/* Export Icons - Bottom Right */}
+      <div className="absolute bottom-4 right-4 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button
             variant="ghost"
             size="sm"
@@ -120,7 +112,6 @@ export const ReportCard: React.FC<ReportCardProps> = ({
             </Button>
           )}
         </div>
-      </CardContent>
-    </Card>
+    </Tile>
   );
 };

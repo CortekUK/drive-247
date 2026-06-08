@@ -86,9 +86,9 @@ export function AssignVehicleDialog({ open, onOpenChange, ownerId }: AssignVehic
             ) : (
               <ul className="divide-y">
                 {filtered.map((v) => (
-                  <li key={v.id} className="flex items-center justify-between p-3 hover:bg-[#f8fafc] dark:hover:bg-muted/40">
+                  <li key={v.id} className="flex items-center justify-between p-3 transition-colors hover:bg-[color:var(--bento-tile-2)]">
                     <div>
-                      <div className="font-medium">{v.reg}</div>
+                      <div className="font-mono font-semibold tabular-nums">{v.reg}</div>
                       <div className="text-xs text-muted-foreground">
                         {[v.make, v.model, v.year].filter(Boolean).join(" • ")}
                       </div>

@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -26,12 +25,21 @@ import { FileText, MoreVertical, Trash2, Mail, Search, Calendar, X, Download } f
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/format-utils";
 import { InvoiceDialog } from "@/components/shared/dialogs/invoice-dialog";
-import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { DeleteInvoiceDialog } from "@/components/invoices/delete-invoice-dialog";
 import { SendInvoiceEmailDialog } from "@/components/invoices/send-invoice-email-dialog";
 import { useTenant } from "@/contexts/TenantContext";
 import { cn } from "@/lib/utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import {
+  TableTile,
+  bentoTable,
+  Money,
+  StatusPill,
+  statusTone,
+  EmptyState,
+  TableSkeleton,
+  Eyebrow,
+} from "@/components/bento";
 
 interface Invoice {
   id: string;
@@ -232,7 +240,8 @@ const InvoicesList = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold">Invoices</h1>
+          <Eyebrow>Finance</Eyebrow>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Invoices</h1>
           <p className="text-muted-foreground text-sm sm:text-base">View and manage rental invoices</p>
         </div>
         <div className="flex items-center gap-2">
@@ -347,47 +356,56 @@ const InvoicesList = () => {
 
       {/* Invoices Table */}
       {isLoading ? (
-        <div className="text-center py-8 text-muted-foreground">Loading invoices...</div>
+        <TableSkeleton rows={8} cols={7} />
       ) : !filteredInvoices || filteredInvoices.length === 0 ? (
         <EmptyState
-          icon={FileText}
+          icon={<FileText className="h-5 w-5" />}
           title="No invoices found"
           description={hasActiveFilters ? "Try adjusting your filters" : "Invoices will appear here when rentals are created"}
         />
       ) : (
         <>
-          <Card>
-            <CardContent className="p-0">
+          <TableTile>
               <div className="max-h-[calc(100vh-340px)] min-h-[300px] overflow-auto relative">
               <Table>
-                  <TableHeader className="sticky top-0 z-10 bg-background">
+                  <TableHeader className={cn("sticky top-0 z-10", bentoTable.header)}>
                     <TableRow>
                       <TableHead>Invoice #</TableHead>
                       <TableHead>Customer</TableHead>
                       <TableHead>Vehicle</TableHead>
                       <TableHead>Invoice Date</TableHead>
                       <TableHead>Due Date</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead className="text-left">Amount</TableHead>
                       <TableHead className="w-20">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {paginatedInvoices.map((invoice) => (
-                    <TableRow key={invoice.id}>
-                      <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
+                    <TableRow key={invoice.id} className={bentoTable.row}>
+                      <TableCell className="font-mono font-medium text-foreground">{invoice.invoice_number}</TableCell>
                       <TableCell>{invoice.customers?.name || "—"}</TableCell>
                       <TableCell>
-                        {invoice.vehicles?.reg || "—"}
+                        <span className="font-mono">{invoice.vehicles?.reg || "—"}</span>
                         <span className="text-xs text-muted-foreground block">
                           {invoice.vehicles?.make} {invoice.vehicles?.model}
                         </span>
                       </TableCell>
-                      <TableCell>{format(new Date(invoice.invoice_date), "PP")}</TableCell>
-                      <TableCell>
+                      <TableCell className="font-mono tabular-nums text-muted-foreground">{format(new Date(invoice.invoice_date), "PP")}</TableCell>
+                      <TableCell className="font-mono tabular-nums text-muted-foreground">
                         {invoice.due_date ? format(new Date(invoice.due_date), "PP") : "—"}
                       </TableCell>
-                      <TableCell className="text-left font-medium">
-                        {formatCurrency(invoice.total_amount, tenant?.currency_code || 'USD')}
+                      <TableCell>
+                        {invoice.status ? (
+                          <StatusPill tone={statusTone(invoice.status)}>{invoice.status}</StatusPill>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-left">
+                        <Money className="font-semibold text-foreground">
+                          {formatCurrency(invoice.total_amount, tenant?.currency_code || 'USD')}
+                        </Money>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
@@ -430,8 +448,7 @@ const InvoicesList = () => {
                   </TableBody>
                 </Table>
               </div>
-            </CardContent>
-          </Card>
+          </TableTile>
 
           {/* Pagination */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DB Car Rentals · Rentals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; height: 100%; }
+  * { box-sizing: border-box; }
+  #root { height: 100vh; }
+  /* theme swap: do NOT transition var()-driven colors (Chromium freezes them).
+     Keep .tw as a hook; a one-shot overlay handles the crossfade instead. */
+  .tw { }
+  @keyframes themeFade { from { opacity: .55; } to { opacity: 0; } }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: var(--text-3); border-radius: 9px; opacity:.4; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  input::placeholder { color: var(--text-3); }
+  button { font-family: inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="bento-data.js"></script>
+<script src="bento-theme.js"></script>
+<script type="text/babel" src="ui.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+const T = window.BENTO_THEMES;
+const RA = window.RA_DATA;
+const SPRING = 'cubic-bezier(.34,1.56,.64,1)';
+const SHEET = 'cubic-bezier(.32,.72,0,1)';
+const money = n => '$' + n.toLocaleString();
+
+const RAIL = [
+  ['dashboard','Dashboard'],['calendar','Rentals'],['car','Fleet'],['users','Customers'],
+  ['card','Payments'],['alert','Fines'],['shield','Insurance'],['chat','Messages'],['activity','Reports'],['settings','Settings'],
+];
+const ST = {
+  Active: ['var(--green-weak)','var(--green)'], Upcoming: ['var(--info-weak)','var(--info)'],
+  Overdue: ['var(--danger-weak)','var(--danger-fg)'], Completed: ['var(--tile-2)','var(--text-3)'],
+};
+function Pill({ status, dot }) {
+  const [bg, fg] = ST[status] || ['var(--tile-2)','var(--text-2)'];
+  return <span style={{ display:'inline-flex', alignItems:'center', gap:5, background:bg, color:fg, fontWeight:700, fontSize:11.5, padding:'4px 9px', borderRadius:999, whiteSpace:'nowrap' }}>
+    {dot && <span style={{ width:6, height:6, borderRadius:9, background:fg }} />}{status}</span>;
+}
+function Press({ children, onClick, style, title }) {
+  // adds tactile press-scale to any clickable
+  return <button title={title} onClick={onClick} onPointerDown={e=>e.currentTarget.style.transform='scale(.96)'}
+    onPointerUp={e=>e.currentTarget.style.transform=''} onPointerLeave={e=>e.currentTarget.style.transform=''}
+    style={{ border:'none', background:'transparent', cursor:'pointer', transition:`transform .12s ${SPRING}`, ...style }}>{children}</button>;
+}
+
+/* ---- segmented control (sliding indicator) ---- */
+function Segmented({ options, value, onChange }) {
+  const refs = useRef([]);
+  const [ind, setInd] = useState({ left: 0, width: 0 });
+  useEffect(() => {
+    const el = refs.current[options.indexOf(value)];
+    if (el) setInd({ left: el.offsetLeft, width: el.offsetWidth });
+  }, [value, options]);
+  return (
+    <div className="tw" style={{ position:'relative', display:'inline-flex', gap:2, background:'var(--tile-2)', border:'1px solid var(--tile-border)', borderRadius:13, padding:4 }}>
+      <div style={{ position:'absolute', top:4, bottom:4, left:ind.left, width:ind.width, background:'var(--tile)', borderRadius:10, boxShadow:'var(--shadow)', transition:`left .38s ${SPRING}, width .38s ${SPRING}` }} />
+      {options.map((o, i) => (
+        <button key={o} ref={el=>refs.current[i]=el} onClick={()=>onChange(o)}
+          style={{ position:'relative', zIndex:1, border:'none', background:'transparent', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:12.5, padding:'7px 14px', borderRadius:10, color: value===o ? 'var(--text)' : 'var(--text-3)', transition:'color .25s' }}>{o}</button>
+      ))}
+    </div>
+  );
+}
+
+/* ---- dark mode toggle ---- */
+function ThemeToggle({ dark, onToggle }) {
+  return (
+    <button onClick={onToggle} title="Toggle theme" style={{ position:'relative', width:62, height:34, borderRadius:999, border:'1px solid var(--tile-border)', background:'var(--tile-2)', cursor:'pointer', padding:0, transition:`background-color .42s ease` }}>
+      <span style={{ position:'absolute', top:3, left: dark?31:3, width:26, height:26, borderRadius:999, background:'var(--tile)', boxShadow:'0 2px 6px rgba(0,0,0,.25)', display:'grid', placeItems:'center', color:'var(--primary)', transition:`left .42s ${SPRING}` }}>
+        <Icon name={dark?'moon':'sun'} size={15} />
+      </span>
+    </button>
+  );
+}
+
+/* ---- detail sheet ---- */
+function DetailSheet({ rental, onClose, toast }) {
+  const open = !!rental;
+  const [r, setR] = useState(rental);
+  useEffect(() => { if (rental) setR(rental); }, [rental]);
+  useEffect(() => {
+    const h = e => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
+  const bal = r ? r.total - r.paid : 0;
+  const paidPct = r ? Math.round((r.paid / r.total) * 100) : 0;
+  return (
+    <>
+      <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(10,8,24,.42)', backdropFilter:'blur(3px)', WebkitBackdropFilter:'blur(3px)', opacity:open?1:0, pointerEvents:open?'auto':'none', transition:'opacity .42s ease', zIndex:40 }} />
+      <div className="tw" style={{ position:'absolute', top:0, right:0, bottom:0, width:430, maxWidth:'92%', background:'var(--bg)', borderLeft:'1px solid var(--tile-border)', boxShadow:'-24px 0 60px rgba(0,0,0,.18)', transform:open?'translateX(0)':'translateX(100%)', transition:`transform .52s ${SHEET}`, zIndex:41, display:'flex', flexDirection:'column' }}>
+        {r && <>
+          <div style={{ padding:'20px 22px', display:'flex', alignItems:'flex-start', justifyContent:'space-between' }}>
+            <div>
+              <Pill status={r.status} dot />
+              <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:26, letterSpacing:'-0.03em', color:'var(--text)', marginTop:10 }}>{r.customer}</div>
+              <div style={{ fontSize:13, color:'var(--text-3)', marginTop:2 }}>Rental #{1042 + RA.rentals.indexOf(r)} · {r.days} days</div>
+            </div>
+            <Press onClick={onClose} title="Close" style={{ width:38, height:38, borderRadius:12, background:'var(--tile)', border:'1px solid var(--tile-border)', display:'grid', placeItems:'center', color:'var(--text-2)' }}><Icon name="x" size={18} /></Press>
+          </div>
+          <div style={{ flex:1, overflowY:'auto', padding:'0 22px 22px', display:'flex', flexDirection:'column', gap:14 }}>
+            {/* vehicle */}
+            <div className="tw" style={{ display:'flex', alignItems:'center', gap:13, background:'var(--tile)', border:'1px solid var(--tile-border)', borderRadius:18, padding:16 }}>
+              <div style={{ width:46, height:46, borderRadius:13, background:'var(--primary-weak)', color:'var(--primary-weak-fg)', display:'grid', placeItems:'center' }}><Icon name="car" size={24} /></div>
+              <div style={{ flex:1 }}><div style={{ fontWeight:700, fontSize:15, color:'var(--text)' }}>{r.car}</div><div style={{ fontSize:12, color:'var(--text-3)', fontFamily:"'IBM Plex Mono',monospace" }}>{r.plate}</div></div>
+              <Icon name="chevRight" size={18} style={{ color:'var(--text-3)' }} />
+            </div>
+            {/* dates */}
+            <div className="tw" style={{ display:'flex', background:'var(--tile)', border:'1px solid var(--tile-border)', borderRadius:18, padding:16 }}>
+              <DateCol label="Pickup" val={r.from} sub="09:00 AM" />
+              <div style={{ display:'grid', placeItems:'center', color:'var(--text-3)', padding:'0 10px' }}><Icon name="arrowRight" size={18} /></div>
+              <DateCol label="Return" val={r.to} sub="06:00 PM" right />
+            </div>
+            {/* payment */}
+            <div className="tw" style={{ background:'var(--tile)', border:'1px solid var(--tile-border)', borderRadius:18, padding:18 }}>
+              <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.07em', textTransform:'uppercase', color:'var(--text-3)', marginBottom:12 }}>Payment</div>
+              <Row k="Rental total" v={money(r.total)} />
+              <Row k="Paid" v={money(r.paid)} vc="var(--green)" />
+              <div style={{ height:1, background:'var(--tile-border)', margin:'10px 0' }} />
+              <Row k="Balance due" v={bal>0?money(bal):'Settled'} vc={bal>0?'var(--danger-fg)':'var(--green)'} big />
+              <div style={{ height:7, borderRadius:5, background:'var(--tile-2)', overflow:'hidden', marginTop:12 }}>
+                <div style={{ height:'100%', width:`${paidPct}%`, background:'var(--primary)', borderRadius:5, transition:`width .6s ${SHEET}` }} />
+              </div>
+              <div style={{ fontSize:11.5, color:'var(--text-3)', marginTop:6 }}>{paidPct}% collected</div>
+            </div>
+            {/* insurance */}
+            <div className="tw" style={{ display:'flex', alignItems:'center', gap:11, background:'var(--tile)', border:'1px solid var(--tile-border)', borderRadius:18, padding:16 }}>
+              <div style={{ width:40, height:40, borderRadius:12, background: r.insured?'var(--green-weak)':'var(--warn-bg)', color:r.insured?'var(--green)':'var(--warn-accent)', display:'grid', placeItems:'center' }}><Icon name="shield" size={20} /></div>
+              <div style={{ flex:1 }}><div style={{ fontWeight:700, fontSize:14, color:'var(--text)' }}>Insurance {r.insured?'verified':'missing'}</div><div style={{ fontSize:12, color:'var(--text-3)' }}>{r.insured?'Bonzah · valid through return':'Awaiting customer upload'}</div></div>
+            </div>
+          </div>
+          {/* actions */}
+          <div className="tw" style={{ display:'flex', gap:10, padding:'16px 22px', borderTop:'1px solid var(--tile-border)', background:'var(--bg)' }}>
+            <Press onClick={()=>toast('Reminder sent to '+r.customer)} style={{ flex:1, height:46, borderRadius:14, background:'var(--tile-2)', color:'var(--text)', fontWeight:700, fontSize:14, display:'inline-flex', alignItems:'center', justifyContent:'center', gap:8 }}><Icon name="send" size={16} />Send reminder</Press>
+            <Press onClick={()=>{ toast(bal>0?'Balance collected':'Marked as returned'); onClose(); }} style={{ flex:1, height:46, borderRadius:14, background:'var(--primary)', color:'var(--primary-fg)', fontWeight:700, fontSize:14, display:'inline-flex', alignItems:'center', justifyContent:'center', gap:8 }}><Icon name={bal>0?'card':'key'} size={16} />{bal>0?'Collect balance':'Mark returned'}</Press>
+          </div>
+        </>}
+      </div>
+    </>
+  );
+}
+function DateCol({ label, val, sub, right }) {
+  return <div style={{ flex:1, textAlign:right?'right':'left' }}>
+    <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color:'var(--text-3)' }}>{label}</div>
+    <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:700, fontSize:18, color:'var(--text)', marginTop:4 }}>{val}</div>
+    <div style={{ fontSize:11.5, color:'var(--text-3)' }}>{sub}</div>
+  </div>;
+}
+function Row({ k, v, vc, big }) {
+  return <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', padding:'3px 0' }}>
+    <span style={{ fontSize: big?14:13, color:'var(--text-2)', fontWeight: big?700:500 }}>{k}</span>
+    <span style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize: big?20:14.5, color:vc||'var(--text)', fontVariantNumeric:'tabular-nums' }}>{v}</span>
+  </div>;
+}
+
+/* ---- new rental modal ---- */
+function NewRental({ open, onClose, onCreate }) {
+  const [name, setName] = useState('');
+  const [veh, setVeh] = useState(RA.fleet[3].make + ' ' + RA.fleet[3].model);
+  const [days, setDays] = useState(4);
+  useEffect(()=>{ if(open){ setName(''); setVeh(RA.fleet[3].make+' '+RA.fleet[3].model); setDays(4);} },[open]);
+  useEffect(() => { const h=e=>e.key==='Escape'&&onClose(); window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); }, [onClose]);
+  const vehObj = RA.fleet.find(f => veh === f.make+' '+f.model) || RA.fleet[3];
+  const total = vehObj.rate * days;
+  const inp = { width:'100%', height:44, borderRadius:13, border:'1px solid var(--tile-border)', background:'var(--tile-2)', color:'var(--text)', padding:'0 14px', fontSize:14, fontFamily:'inherit', outline:'none' };
+  const lab = { fontSize:12, fontWeight:700, color:'var(--text-2)', marginBottom:7, display:'block' };
+  return (
+    <>
+      <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(10,8,24,.46)', backdropFilter:'blur(4px)', WebkitBackdropFilter:'blur(4px)', opacity:open?1:0, pointerEvents:open?'auto':'none', transition:'opacity .34s ease', zIndex:50 }} />
+      <div className="tw" style={{ position:'absolute', top:'50%', left:'50%', width:440, maxWidth:'92%', background:'var(--bg)', border:'1px solid var(--tile-border)', borderRadius:26, boxShadow:'0 40px 90px rgba(0,0,0,.4)', zIndex:51, transform:`translate(-50%,-50%) scale(${open?1:0.92})`, opacity:open?1:0, pointerEvents:open?'auto':'none', transition:`transform .4s ${SPRING}, opacity .28s ease`, overflow:'hidden' }}>
+        <div style={{ padding:'20px 22px 0', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:21, letterSpacing:'-0.03em', color:'var(--text)' }}>New rental</div>
+          <Press onClick={onClose} style={{ width:34, height:34, borderRadius:11, background:'var(--tile-2)', display:'grid', placeItems:'center', color:'var(--text-2)' }}><Icon name="x" size={17} /></Press>
+        </div>
+        <div style={{ padding:22, display:'flex', flexDirection:'column', gap:16 }}>
+          <div><label style={lab}>Customer</label><input style={inp} placeholder="Full name" value={name} onChange={e=>setName(e.target.value)} /></div>
+          <div><label style={lab}>Vehicle</label>
+            <select style={{...inp, appearance:'none', cursor:'pointer'}} value={veh} onChange={e=>setVeh(e.target.value)}>
+              {RA.fleet.filter(f=>f.status!=='Maintenance').map(f=><option key={f.plate}>{f.make} {f.model}</option>)}
+            </select>
+          </div>
+          <div style={{ display:'flex', gap:12 }}>
+            <div style={{ flex:1 }}><label style={lab}>Days</label>
+              <div style={{ display:'flex', alignItems:'center', gap:0, ...inp, padding:4, justifyContent:'space-between' }}>
+                <Press onClick={()=>setDays(d=>Math.max(1,d-1))} style={{ width:34, height:34, borderRadius:9, background:'var(--tile)', color:'var(--text)', fontSize:18, fontWeight:700 }}>−</Press>
+                <span style={{ fontWeight:800, fontFamily:"'Sora',sans-serif", fontSize:16 }}>{days}</span>
+                <Press onClick={()=>setDays(d=>d+1)} style={{ width:34, height:34, borderRadius:9, background:'var(--tile)', color:'var(--text)', fontSize:18, fontWeight:700 }}>+</Press>
+              </div>
+            </div>
+            <div style={{ flex:1 }}><label style={lab}>Estimated total</label>
+              <div style={{ ...inp, display:'flex', alignItems:'center', fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:18, color:'var(--primary-weak-fg)', background:'var(--primary-weak)', border:'1px solid transparent' }}>{money(total)}</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:10, padding:'0 22px 22px' }}>
+          <Press onClick={onClose} style={{ flex:1, height:46, borderRadius:14, background:'var(--tile-2)', color:'var(--text)', fontWeight:700, fontSize:14 }}>Cancel</Press>
+          <Press onClick={()=>{ if(!name.trim())return; onCreate({ customer:name.trim(), car:vehObj.make+' '+vehObj.model+' '+vehObj.year, plate:vehObj.plate, from:'Jun 6', to:'Jun '+(6+days), days, total, paid:0, status:'Upcoming', insured:false }); }}
+            style={{ flex:1.4, height:46, borderRadius:14, background: name.trim()?'var(--primary)':'var(--tile-2)', color: name.trim()?'var(--primary-fg)':'var(--text-3)', fontWeight:700, fontSize:14, display:'inline-flex', alignItems:'center', justifyContent:'center', gap:8, cursor: name.trim()?'pointer':'default' }}><Icon name="plus" size={16} />Create rental</Press>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ---- app ---- */
+function App() {
+  const [dark, setDark] = useState(() => localStorage.getItem('bento_dark') === '1');
+  const [filter, setFilter] = useState('All');
+  const [q, setQ] = useState('');
+  const [rentals, setRentals] = useState(RA.rentals);
+  const [sel, setSel] = useState(null);
+  const [showNew, setShowNew] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [fade, setFade] = useState(0);
+  useEffect(() => { localStorage.setItem('bento_dark', dark ? '1' : '0'); }, [dark]);
+  const theme = dark ? T.dark : T.light;
+  const showToast = msg => { setToast(msg); setTimeout(()=>setToast(t=>t===msg?null:t), 2400); };
+
+  const shown = rentals.filter(r =>
+    (filter==='All' || r.status===filter) &&
+    (!q || r.customer.toLowerCase().includes(q.toLowerCase()) || r.car.toLowerCase().includes(q.toLowerCase()) || r.plate.toLowerCase().includes(q.toLowerCase())));
+
+  const th = { textAlign:'left', fontSize:10.5, fontWeight:700, letterSpacing:'.05em', textTransform:'uppercase', color:'var(--text-3)', padding:'12px 18px' };
+  const td = { padding:'13px 18px', borderTop:'1px solid var(--tile-border)', fontSize:13, color:'var(--text-2)', verticalAlign:'middle' };
+
+  return (
+    <div className="tw" style={{ ...theme, height:'100%', display:'flex', background:'var(--bg)', color:'var(--text)', fontFamily:"'Sora',system-ui,sans-serif", overflow:'hidden', position:'relative', WebkitFontSmoothing:'antialiased' }}>
+      {/* rail */}
+      <div className="tw" style={{ width:66, flexShrink:0, background:'var(--rail)', borderRight:'1px solid var(--rail-border)', display:'flex', flexDirection:'column', alignItems:'center', padding:'14px 0', zIndex:10 }}>
+        <div style={{ width:36, height:36, borderRadius:12, background:'var(--primary)', color:'var(--primary-fg)', display:'grid', placeItems:'center', fontWeight:800, fontSize:16, marginBottom:12 }}>D</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:4, flex:1 }}>
+          {RAIL.map(([ic,label],i)=>{ const on=label==='Rentals'; return (
+            <Press key={label} title={label} onClick={()=> on?null:showToast(label+' — not in this prototype')} style={{ width:42, height:42, borderRadius:13, display:'grid', placeItems:'center', color:on?'var(--primary-weak-fg)':'var(--text-3)', background:on?'var(--primary-weak)':'transparent' }}><Icon name={ic} size={20} stroke={on?2:1.7} /></Press>
+          );})}
+        </div>
+        <div style={{ width:34, height:34, borderRadius:99, background:'var(--tile-2)', color:'var(--text-2)', display:'grid', placeItems:'center', fontWeight:700, fontSize:12, marginTop:8, border:'1px solid var(--tile-border)' }}>DR</div>
+      </div>
+
+      {/* main */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
+        {/* header */}
+        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', padding:'20px 26px 16px', gap:16 }}>
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.07em', textTransform:'uppercase', color:'var(--primary-weak-fg)' }}>DB Car Rentals · Miami</div>
+            <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:30, letterSpacing:'-0.04em', marginTop:5 }}>Rentals</div>
+            <div style={{ fontSize:13.5, color:'var(--text-2)', marginTop:4 }}>{rentals.filter(r=>r.status==='Active').length} active · {rentals.filter(r=>r.status==='Overdue').length} overdue</div>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div className="tw" style={{ display:'flex', alignItems:'center', gap:8, height:40, padding:'0 13px', borderRadius:13, background:'var(--tile)', border:'1px solid var(--tile-border)', color:'var(--text-3)' }}>
+              <Icon name="search" size={15} />
+              <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search rentals" style={{ border:'none', background:'transparent', outline:'none', color:'var(--text)', fontSize:13.5, width:150, fontFamily:'inherit' }} />
+            </div>
+            <ThemeToggle dark={dark} onToggle={()=>{ setDark(d=>!d); setFade(f=>f+1); }} />
+            <Press onClick={()=>setShowNew(true)} style={{ display:'inline-flex', alignItems:'center', gap:7, height:40, padding:'0 16px', borderRadius:13, background:'var(--primary)', color:'var(--primary-fg)', fontWeight:700, fontSize:13.5 }}><Icon name="plus" size={16} />New rental</Press>
+          </div>
+        </div>
+
+        {/* toolbar */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 26px 14px' }}>
+          <Segmented options={['All','Active','Upcoming','Overdue','Completed']} value={filter} onChange={setFilter} />
+          <span style={{ fontSize:12.5, color:'var(--text-3)' }}>{shown.length} of {rentals.length} rentals</span>
+        </div>
+
+        {/* table */}
+        <div style={{ flex:1, minHeight:0, padding:'0 26px 26px' }}>
+          <div className="tw" style={{ height:'100%', background:'var(--tile)', border:'1px solid var(--tile-border)', borderRadius:22, boxShadow:'var(--shadow)', overflow:'hidden', display:'flex', flexDirection:'column' }}>
+            <div style={{ overflowY:'auto', flex:1 }}>
+              <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                <thead style={{ position:'sticky', top:0, zIndex:1 }}><tr className="tw" style={{ background:'var(--tile-2)' }}>
+                  <th style={th}>Customer</th><th style={th}>Vehicle</th><th style={th}>Pickup → Return</th>
+                  <th style={{...th, textAlign:'right'}}>Total</th><th style={{...th, textAlign:'right'}}>Balance</th>
+                  <th style={th}>Insurance</th><th style={th}>Status</th><th style={{...th, width:30}}></th>
+                </tr></thead>
+                <tbody>
+                  {shown.map((r, i) => {
+                    const bal = r.total - r.paid;
+                    return (
+                      <tr key={r.plate+i} onClick={()=>setSel(r)} className="rrow"
+                        style={{ cursor:'pointer', transition:'background-color .16s' }}
+                        onMouseEnter={e=>e.currentTarget.style.background='var(--tile-2)'}
+                        onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                        <td style={td}><span style={{ fontWeight:700, color:'var(--text)' }}>{r.customer}</span></td>
+                        <td style={td}>{r.car}<div style={{ fontSize:11, color:'var(--text-3)', fontFamily:"'IBM Plex Mono',monospace" }}>{r.plate}</div></td>
+                        <td style={{...td, fontFamily:"'IBM Plex Mono',monospace", fontSize:12}}>{r.from} → {r.to} <span style={{ color:'var(--text-3)' }}>· {r.days}d</span></td>
+                        <td style={{...td, textAlign:'right', fontWeight:700, color:'var(--text)', fontVariantNumeric:'tabular-nums'}}>{money(r.total)}</td>
+                        <td style={{...td, textAlign:'right', fontWeight:700, fontVariantNumeric:'tabular-nums', color: bal>0?'var(--danger-fg)':'var(--green)'}}>{bal>0?money(bal):'Paid'}</td>
+                        <td style={td}>{r.insured ? <span style={{ color:'var(--green)', display:'inline-flex', alignItems:'center', gap:5, fontSize:12, fontWeight:600 }}><Icon name="checkCircle" size={14} />Verified</span> : <span style={{ color:'var(--warn-accent)', display:'inline-flex', alignItems:'center', gap:5, fontSize:12, fontWeight:600 }}><Icon name="alert" size={13} />Missing</span>}</td>
+                        <td style={td}><Pill status={r.status} dot /></td>
+                        <td style={td}><Icon name="chevRight" size={16} style={{ color:'var(--text-3)' }} /></td>
+                      </tr>
+                    );
+                  })}
+                  {shown.length===0 && <tr><td colSpan={8} style={{ ...td, textAlign:'center', padding:'48px', color:'var(--text-3)' }}>No rentals match.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {fade>0 && <div key={fade} style={{ position:'absolute', inset:0, background:'var(--bg)', zIndex:55, pointerEvents:'none', animation:'themeFade .46s ease forwards' }} />}
+
+      <DetailSheet rental={sel} onClose={()=>setSel(null)} toast={showToast} />
+      <NewRental open={showNew} onClose={()=>setShowNew(false)} onCreate={(r)=>{ setRentals(p=>[r,...p]); setShowNew(false); showToast('Rental created for '+r.customer); }} />
+
+      {/* toast */}
+      <div style={{ position:'absolute', bottom: toast?28:-60, left:'50%', transform:'translateX(-50%)', background:'var(--feature-bg)', color:'var(--feature-fg)', padding:'13px 20px', borderRadius:14, fontWeight:600, fontSize:13.5, boxShadow:'0 16px 40px rgba(0,0,0,.32)', display:'flex', alignItems:'center', gap:9, opacity:toast?1:0, transition:`bottom .5s ${SPRING}, opacity .3s ease`, zIndex:60, whiteSpace:'nowrap' }}>
+        <Icon name="checkCircle" size={17} style={{ color:'var(--green)' }} />{toast}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

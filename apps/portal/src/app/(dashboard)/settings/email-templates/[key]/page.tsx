@@ -5,8 +5,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { StatusPill } from '@/components/bento';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -189,13 +189,13 @@ export default function EditEmailTemplatePage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-xl font-semibold flex items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
               {templateType.name}
               {isCustomized && (
-                <Badge variant="outline" className="text-xs">Customized</Badge>
+                <StatusPill tone="primary">Customized</StatusPill>
               )}
               {hasChanges && (
-                <Badge variant="secondary" className="text-xs">Unsaved changes</Badge>
+                <StatusPill tone="warn" dot>Unsaved changes</StatusPill>
               )}
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -275,7 +275,7 @@ export default function EditEmailTemplatePage() {
           <div className="px-4 py-2 border-b bg-muted/30 flex items-center gap-2">
             <Eye className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Preview</span>
-            <Badge variant="secondary" className="text-xs">Sample Data</Badge>
+            <StatusPill tone="neutral">Sample Data</StatusPill>
           </div>
           <ScrollArea className="flex-1">
             <div className="p-6">

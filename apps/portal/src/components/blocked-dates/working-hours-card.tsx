@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { SectionCard, Tile, Shimmer } from '@/components/bento';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -359,28 +359,29 @@ export function WorkingHoursCard() {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </CardContent>
-      </Card>
+      <Tile className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Shimmer className="h-9 w-9 rounded-full" />
+          <div className="space-y-2">
+            <Shimmer className="h-4 w-40" />
+            <Shimmer className="h-3 w-64" />
+          </div>
+        </div>
+        <Shimmer className="h-20 w-full" />
+        <Shimmer className="h-12 w-full" />
+      </Tile>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Clock className="h-5 w-5 text-primary" />
-          Working Hours
-        </CardTitle>
-        <CardDescription>
-          Set when your business accepts bookings. Customers can only select pickup and drop-off times during open hours.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <SectionCard
+      icon={<Clock className="h-4 w-4" />}
+      title="Working Hours"
+      description="Set when your business accepts bookings. Customers can only select pickup and drop-off times during open hours."
+    >
+      <div className="space-y-6">
         {/* Always Open Toggle */}
-        <div className="flex items-center justify-between p-4 border rounded-lg">
+        <div className="flex items-center justify-between p-4 [background:var(--bento-tile-2)] rounded-tile-sm border border-border">
           <div className="space-y-1">
             <h4 className="font-medium">24/7 Always Open</h4>
             <p className="text-sm text-muted-foreground">
@@ -588,7 +589,7 @@ export function WorkingHoursCard() {
             </Button>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </SectionCard>
   );
 }

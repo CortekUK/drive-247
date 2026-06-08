@@ -310,7 +310,7 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId, prese
                 name="type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Fine Type <span className="text-red-500">*</span></FormLabel>
+                    <FormLabel>Fine Type <span className="text-destructive">*</span></FormLabel>
                     <Select
                       value={selectedTypeOption}
                       onValueChange={(value) => {
@@ -352,7 +352,7 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId, prese
                 name="customer_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Customer <span className="text-red-500">*</span></FormLabel>
+                    <FormLabel>Customer <span className="text-destructive">*</span></FormLabel>
                     <Select onValueChange={(val) => {
                           field.onChange(val);
                           setSelectedCustomerId(val);
@@ -393,7 +393,7 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId, prese
                   const selectedRental = customerRentals?.find((r: any) => r.id === field.value);
                   return (
                     <FormItem>
-                      <FormLabel>Rental <span className="text-red-500">*</span></FormLabel>
+                      <FormLabel>Rental <span className="text-destructive">*</span></FormLabel>
                       <Select
                         onValueChange={(rentalId) => {
                           field.onChange(rentalId);
@@ -462,7 +462,7 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId, prese
                   name="issue_date"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>Issue Date <span className="text-red-500">*</span></FormLabel>
+                      <FormLabel>Issue Date <span className="text-destructive">*</span></FormLabel>
                       <FormControl>
                         <DatePickerInput
                           date={field.value}
@@ -481,7 +481,7 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId, prese
                   name="due_date"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>Due Date <span className="text-red-500">*</span></FormLabel>
+                      <FormLabel>Due Date <span className="text-destructive">*</span></FormLabel>
                       <FormControl>
                         <DatePickerInput
                           date={field.value}
@@ -502,7 +502,7 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId, prese
                 name="amount"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Amount ({currencySymbol}) <span className="text-red-500">*</span></FormLabel>
+                    <FormLabel>Amount ({currencySymbol}) <span className="text-destructive">*</span></FormLabel>
                     <FormControl>
                       <CurrencyInput
                         value={field.value}
@@ -565,7 +565,6 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId, prese
                 <Button
                   type="submit"
                   disabled={loading || !form.formState.isValid}
-                  className="bg-gradient-primary"
                 >
                   <Save className="h-4 w-4 mr-2" />
                   {loading ? "Creating..." : "Create Fine"}

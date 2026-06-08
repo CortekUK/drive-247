@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RevTek Rentals · Sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; height: 100%; }
+  * { box-sizing: border-box; }
+  #root { height: 100vh; }
+  input, button { font-family: inherit; }
+  input::placeholder { color: var(--text-3); }
+  @keyframes authUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes authPop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+  @keyframes shake { 10%,90%{transform:translateX(-1px)} 20%,80%{transform:translateX(2px)} 30%,50%,70%{transform:translateX(-4px)} 40%,60%{transform:translateX(4px)} }
+  @keyframes themeFade { from { opacity: .5; } to { opacity: 0; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
+  @keyframes drawCheck { from { stroke-dashoffset: 30; } to { stroke-dashoffset: 0; } }
+  @media (prefers-reduced-motion: reduce) { *{animation-duration:.01ms!important} }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="bento-theme.js"></script>
+<script type="text/babel" src="ui.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+const T = window.BENTO_THEMES;
+const SPRING = 'cubic-bezier(.34,1.56,.64,1)';
+const TENANT = { name: 'RevTek Rentals', code: 'RT', tagline: 'Fleet Portal' };
+
+function Logo({ size = 40, on = 'light' }) {
+  return <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+    <div style={{ width: size, height: size, borderRadius: size * 0.3, background: on === 'panel' ? 'rgba(255,255,255,.16)' : 'var(--primary)', color: '#fff', display: 'grid', placeItems: 'center', fontFamily: "'Sora'", fontWeight: 800, fontSize: size * 0.42, border: on === 'panel' ? '1px solid rgba(255,255,255,.25)' : 'none' }}>{TENANT.code}</div>
+    <div style={{ lineHeight: 1.1 }}>
+      <div style={{ fontFamily: "'Sora'", fontWeight: 800, fontSize: size * 0.4, letterSpacing: '-0.03em', color: on === 'panel' ? '#fff' : 'var(--text)' }}>{TENANT.name}</div>
+      <div style={{ fontSize: size * 0.26, color: on === 'panel' ? 'rgba(255,255,255,.7)' : 'var(--text-3)', fontWeight: 600 }}>{TENANT.tagline}</div>
+    </div>
+  </div>;
+}
+
+// ---- form atoms ----
+const fieldBase = { width: '100%', height: 50, borderRadius: 14, border: '1px solid var(--glass-border)', background: 'var(--glass-input-bg)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', color: 'var(--text)', fontSize: 15, outline: 'none' };
+function TextField({ label, value, onChange, placeholder, type = 'text', icon, error, trailing, onEnter, autoFocus }) {
+  const [foc, setFoc] = useState(false);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      {label && <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-2)' }}>{label}</label>}
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', animation: error ? 'shake .4s' : 'none' }}>
+        <span style={{ position: 'absolute', left: 15, color: error ? 'var(--danger-fg)' : foc ? 'var(--primary)' : 'var(--text-3)', display: 'flex', transition: 'color .2s' }}><Icon name={icon} size={18} /></span>
+        <input type={type} value={value} autoFocus={autoFocus} placeholder={placeholder}
+          onChange={e => onChange(e.target.value)} onFocus={() => setFoc(true)} onBlur={() => setFoc(false)}
+          onKeyDown={e => { if (e.key === 'Enter' && onEnter) onEnter(); }}
+          style={{ ...fieldBase, paddingLeft: 44, paddingRight: trailing ? 46 : 14,
+            borderColor: error ? 'var(--danger)' : foc ? 'var(--primary)' : 'var(--tile-border)',
+            boxShadow: error ? '0 0 0 3px var(--danger-weak)' : foc ? '0 0 0 3px var(--primary-weak)' : 'none', transition: 'border-color .2s, box-shadow .2s' }} />
+        {trailing && <div style={{ position: 'absolute', right: 8 }}>{trailing}</div>}
+      </div>
+      {error && <span style={{ fontSize: 12.5, color: 'var(--danger-fg)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="alert" size={13} />{error}</span>}
+    </div>
+  );
+}
+function PrimaryBtn({ children, onClick, loading, disabled }) {
+  return <button onClick={onClick} disabled={loading || disabled}
+    onPointerDown={e => !loading && (e.currentTarget.style.transform = 'scale(.98)')} onPointerUp={e => e.currentTarget.style.transform = ''} onPointerLeave={e => e.currentTarget.style.transform = ''}
+    style={{ height: 52, borderRadius: 15, border: 'none', background: 'var(--primary)', color: '#fff', fontFamily: "'Sora'", fontWeight: 700, fontSize: 15, cursor: loading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, boxShadow: '0 10px 24px var(--primary-weak)', opacity: disabled ? .6 : 1, transition: `transform .12s ${SPRING}` }}>
+    {loading ? <><span style={{ width: 18, height: 18, borderRadius: 99, border: '2.5px solid rgba(255,255,255,.4)', borderTopColor: '#fff', animation: 'spin .7s linear infinite' }} />Please wait…</> : children}
+  </button>;
+}
+function Banner({ tone, icon, title, sub }) {
+  const c = tone === 'danger' ? ['var(--danger-weak)', 'var(--danger-fg)', 'var(--danger)'] : ['var(--warn-bg)', 'var(--warn-fg)', 'var(--warn-border)'];
+  return <div style={{ display: 'flex', gap: 11, padding: '13px 15px', borderRadius: 14, background: c[0], border: `1px solid ${c[2]}`, color: c[1], animation: 'shake .4s' }}>
+    <Icon name={icon} size={19} style={{ flexShrink: 0, marginTop: 1 }} />
+    <div><div style={{ fontSize: 13.5, fontWeight: 700 }}>{title}</div>{sub && <div style={{ fontSize: 12.5, opacity: .9, marginTop: 2 }}>{sub}</div>}</div>
+  </div>;
+}
+function Check({ on, onChange, label }) {
+  return <button onClick={() => onChange(!on)} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}>
+    <span style={{ width: 21, height: 21, borderRadius: 7, border: on ? 'none' : '2px solid var(--tile-border)', background: on ? 'var(--primary)' : 'transparent', display: 'grid', placeItems: 'center', transition: 'background-color .15s' }}>{on && <Icon name="check" size={13} stroke={3} style={{ color: '#fff' }} />}</span>
+    <span style={{ fontSize: 13.5, color: 'var(--text-2)', fontWeight: 500 }}>{label}</span>
+  </button>;
+}
+function Link({ children, onClick }) { return <button onClick={onClick} style={{ border: 'none', background: 'transparent', color: 'var(--primary-weak-fg)', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', padding: 0 }}>{children}</button>; }
+
+function strength(pw) { if (!pw) return 0; let s = 0; if (pw.length >= 8) s++; if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) s++; if (/\d/.test(pw) || /[^A-Za-z0-9]/.test(pw)) s++; return s; }
+
+// ---- screens ----
+function SignIn({ go, onSuccess }) {
+  const [email, setEmail] = useState(''); const [pw, setPw] = useState('');
+  const [show, setShow] = useState(false); const [remember, setRemember] = useState(true);
+  const [err, setErr] = useState({}); const [loading, setLoading] = useState(false);
+  const [banner, setBanner] = useState(null);
+  const submit = () => {
+    const e = {};
+    if (!email) e.email = 'Email is required'; else if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) e.email = 'Enter a valid email address';
+    if (!pw) e.password = 'Password is required';
+    setErr(e); setBanner(null);
+    if (Object.keys(e).length) return;
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      if (pw.toLowerCase() === 'wrong' || email.includes('wrong')) { setBanner({ tone: 'danger', icon: 'alert', title: 'Invalid email or password', sub: 'Please check your details and try again.' }); }
+      else onSuccess();
+    }, 1300);
+  };
+  return (
+    <Screen>
+      <h1 style={h1}>Sign in</h1>
+      <p style={sub}>Access your {TENANT.name} fleet dashboard.</p>
+      {banner && <div style={{ marginBottom: 4 }}><Banner {...banner} /></div>}
+      <TextField label="Email address" icon="mail" value={email} onChange={v => { setEmail(v); setErr(p => ({ ...p, email: '' })); }} placeholder="you@company.com" error={err.email} onEnter={submit} autoFocus />
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: -1 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-2)' }}>Password</span>
+          <Link onClick={() => go('forgot')}>Forgot password?</Link>
+        </div>
+        <TextField icon="lock" type={show ? 'text' : 'password'} value={pw} onChange={v => { setPw(v); setErr(p => ({ ...p, password: '' })); }} placeholder="••••••••" error={err.password} onEnter={submit}
+          trailing={<button onClick={() => setShow(s => !s)} style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><Icon name={show ? 'eyeOff' : 'eye'} size={18} /></button>} />
+      </div>
+      <div style={{ marginTop: 2 }}><Check on={remember} onChange={setRemember} label="Keep me signed in" /></div>
+      <PrimaryBtn onClick={submit} loading={loading}><Icon name="arrowRight" size={18} />Sign in</PrimaryBtn>
+      <div style={{ textAlign: 'center', fontSize: 12.5, color: 'var(--text-3)', marginTop: 2 }}>By continuing you agree to our <Link>Terms</Link> & <Link>Privacy Policy</Link>.</div>
+    </Screen>
+  );
+}
+function Forgot({ go }) {
+  const [email, setEmail] = useState(''); const [err, setErr] = useState(''); const [loading, setLoading] = useState(false);
+  const submit = () => { if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) { setErr('Enter a valid email address'); return; } setLoading(true); setTimeout(() => { setLoading(false); go('sent', email); }, 1200); };
+  return (
+    <Screen>
+      <BackLink onClick={() => go('signin')} />
+      <h1 style={h1}>Reset password</h1>
+      <p style={sub}>Enter your account email and we'll send you a secure reset link.</p>
+      <TextField label="Email address" icon="mail" value={email} onChange={v => { setEmail(v); setErr(''); }} placeholder="you@company.com" error={err} onEnter={submit} autoFocus />
+      <PrimaryBtn onClick={submit} loading={loading}><Icon name="send" size={17} />Send reset link</PrimaryBtn>
+      <div style={{ textAlign: 'center' }}><Link onClick={() => go('signin')}>Back to sign in</Link></div>
+    </Screen>
+  );
+}
+function Sent({ go, email }) {
+  return (
+    <Screen>
+      <div style={{ width: 60, height: 60, borderRadius: 18, background: 'var(--primary-weak)', color: 'var(--primary-weak-fg)', display: 'grid', placeItems: 'center', animation: `authPop .4s ${SPRING}` }}><Icon name="mail" size={30} /></div>
+      <h1 style={{ ...h1, marginTop: 4 }}>Check your email</h1>
+      <p style={sub}>We sent a reset link to <b style={{ color: 'var(--text)' }}>{email || 'your inbox'}</b>. It expires in 30 minutes.</p>
+      <PrimaryBtn onClick={() => go('reset')}><Icon name="arrowRight" size={18} />Open reset link</PrimaryBtn>
+      <div style={{ textAlign: 'center', fontSize: 13.5, color: 'var(--text-3)' }}>Didn't get it? <Link>Resend email</Link></div>
+      <div style={{ textAlign: 'center' }}><Link onClick={() => go('signin')}>Back to sign in</Link></div>
+    </Screen>
+  );
+}
+function Reset({ go }) {
+  const [pw, setPw] = useState(''); const [c, setC] = useState(''); const [show, setShow] = useState(false);
+  const [err, setErr] = useState({}); const [loading, setLoading] = useState(false);
+  const s = strength(pw); const sLabel = ['', 'Weak', 'Fair', 'Strong'][s]; const sColor = ['var(--tile-border)', 'var(--danger)', 'var(--warn-accent)', 'var(--green)'][s];
+  const submit = () => { const e = {}; if (s < 2) e.pw = 'Use 8+ chars with mixed case and a number'; if (pw !== c) e.c = 'Passwords do not match'; setErr(e); if (Object.keys(e).length) return; setLoading(true); setTimeout(() => { setLoading(false); go('done'); }, 1200); };
+  return (
+    <Screen>
+      <BackLink onClick={() => go('signin')} />
+      <h1 style={h1}>Set a new password</h1>
+      <p style={sub}>Choose a strong password you don't use elsewhere.</p>
+      <div>
+        <TextField label="New password" icon="lock" type={show ? 'text' : 'password'} value={pw} onChange={v => { setPw(v); setErr(p => ({ ...p, pw: '' })); }} placeholder="••••••••" error={err.pw}
+          trailing={<button onClick={() => setShow(s => !s)} style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><Icon name={show ? 'eyeOff' : 'eye'} size={18} /></button>} />
+        {pw && <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+          <div style={{ flex: 1, display: 'flex', gap: 4 }}>{[1, 2, 3].map(i => <div key={i} style={{ flex: 1, height: 5, borderRadius: 3, background: i <= s ? sColor : 'var(--tile-2)', transition: 'background-color .25s' }} />)}</div>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: sColor }}>{sLabel}</span>
+        </div>}
+      </div>
+      <TextField label="Confirm password" icon="lock" type={show ? 'text' : 'password'} value={c} onChange={v => { setC(v); setErr(p => ({ ...p, c: '' })); }} placeholder="••••••••" error={err.c} onEnter={submit} />
+      <PrimaryBtn onClick={submit} loading={loading}><Icon name="check" size={18} />Update password</PrimaryBtn>
+    </Screen>
+  );
+}
+function Done({ go }) {
+  useEffect(() => { const t = setTimeout(() => go('signin'), 2600); return () => clearTimeout(t); }, []);
+  return (
+    <Screen>
+      <div style={{ display: 'grid', placeItems: 'center', textAlign: 'center', gap: 4, padding: '10px 0' }}>
+        <div style={{ width: 76, height: 76, borderRadius: 99, background: 'var(--green-weak)', display: 'grid', placeItems: 'center', animation: `authPop .45s ${SPRING}` }}>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 4.5 4.5L19 7" style={{ strokeDasharray: 30, animation: 'drawCheck .5s .15s ease forwards', strokeDashoffset: 30 }} /></svg>
+        </div>
+        <h1 style={{ ...h1, marginTop: 14 }}>You're in</h1>
+        <p style={{ ...sub, textAlign: 'center' }}>Taking you to your dashboard…</p>
+        <span style={{ width: 22, height: 22, borderRadius: 99, border: '2.5px solid var(--tile-border)', borderTopColor: 'var(--primary)', animation: 'spin .7s linear infinite', marginTop: 6 }} />
+      </div>
+    </Screen>
+  );
+}
+function Locked({ go }) {
+  const [t, setT] = useState(298);
+  useEffect(() => { const id = setInterval(() => setT(x => Math.max(0, x - 1)), 1000); return () => clearInterval(id); }, []);
+  const mm = String(Math.floor(t / 60)), ss = String(t % 60).padStart(2, '0');
+  return (
+    <Screen>
+      <h1 style={h1}>Sign in</h1>
+      <p style={sub}>Access your {TENANT.name} fleet dashboard.</p>
+      <Banner tone="warn" icon="lock" title="Account temporarily locked" sub={`Too many failed attempts. Try again in ${mm}:${ss}.`} />
+      <TextField label="Email address" icon="mail" value="" onChange={() => {}} placeholder="you@company.com" />
+      <PrimaryBtn disabled><Icon name="lock" size={17} />Locked</PrimaryBtn>
+      <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-3)' }}>Need help now? <Link>Contact support</Link></div>
+    </Screen>
+  );
+}
+
+function BgDecor({ dark }) {
+  const blobs = dark
+    ? [['rgba(124,92,255,.30)', 460, -120, -90, 'top', 'left'], ['rgba(60,90,230,.24)', 400, -120, -70, 'bottom', 'right'], ['rgba(180,90,255,.16)', 300, '30%', '40%', 'top', 'right']]
+    : [['rgba(124,92,255,.30)', 460, -120, -90, 'top', 'left'], ['rgba(86,150,255,.26)', 400, -110, -60, 'bottom', 'right'], ['rgba(255,150,220,.18)', 300, '38%', '46%', 'top', 'right']];
+  return (
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
+      {blobs.map((b, i) => (
+        <div key={i} style={{ position: 'absolute', width: b[1], height: b[1], borderRadius: 999, background: b[0], filter: 'blur(70px)', [b[4]]: b[2], [b[5]]: b[3], animation: `floaty ${9 + i * 2}s ease-in-out ${i * 0.6}s infinite` }} />
+      ))}
+    </div>
+  );
+}
+
+const h1 = { margin: 0, fontFamily: "'Sora'", fontWeight: 800, fontSize: 28, letterSpacing: '-0.04em', color: 'var(--text)' };
+const sub = { margin: '6px 0 4px', fontSize: 14, color: 'var(--text-2)', lineHeight: 1.5 };
+function Screen({ children }) { return <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>{children}</div>; }
+function BackLink({ onClick }) { return <button onClick={onClick} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: 'var(--text-3)', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: -4 }}><Icon name="back" size={16} />Back</button>; }
+
+// ---- brand panel ----
+function BrandPanel() {
+  const stats = [['1,284', 'active rentals'], ['42 cars', '78% utilized'], ['$284k', 'this month']];
+  return (
+    <div style={{ flex: '1.05', position: 'relative', overflow: 'hidden', background: 'var(--hero-grad)', display: 'flex', flexDirection: 'column', padding: '40px 44px', color: '#fff' }}>
+      <div style={{ position: 'absolute', width: 380, height: 380, borderRadius: 999, background: 'rgba(255,255,255,.12)', filter: 'blur(20px)', top: -120, right: -90 }} />
+      <div style={{ position: 'absolute', width: 300, height: 300, borderRadius: 999, background: 'rgba(0,0,0,.12)', filter: 'blur(30px)', bottom: -100, left: -60 }} />
+      <div style={{ position: 'relative', animation: 'authUp .5s ease' }}><Logo size={42} on="panel" /></div>
+      <div style={{ position: 'relative', marginTop: 'auto', marginBottom: 'auto' }}>
+        <div style={{ fontFamily: "'Sora'", fontWeight: 800, fontSize: 40, lineHeight: 1.08, letterSpacing: '-0.04em', maxWidth: 440, animation: 'authUp .5s .05s ease both' }}>Run your whole fleet from one calm place.</div>
+        <p style={{ fontSize: 15.5, color: 'rgba(255,255,255,.82)', maxWidth: 400, lineHeight: 1.6, marginTop: 16, animation: 'authUp .5s .12s ease both' }}>Bookings, payments, insurance and customers — every part of {TENANT.name} in one dashboard.</p>
+        <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
+          {stats.map((s, i) => (
+            <div key={i} style={{ flex: 1, background: 'rgba(255,255,255,.13)', border: '1px solid rgba(255,255,255,.18)', backdropFilter: 'blur(8px)', borderRadius: 16, padding: '14px 15px', animation: `authUp .5s ${0.2 + i * 0.07}s ease both` }}>
+              <div style={{ fontFamily: "'Sora'", fontWeight: 800, fontSize: 21, letterSpacing: '-0.03em' }}>{s[0]}</div>
+              <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,.78)', marginTop: 2 }}>{s[1]}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'rgba(255,255,255,.7)', animation: 'authUp .5s .4s ease both' }}>
+        <Icon name="shield" size={15} />Bank-level encryption · trusted by 10+ rental companies
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [dark, setDark] = useState(() => localStorage.getItem('bento_dark') === '1');
+  const [fade, setFade] = useState(0);
+  const [screen, setScreen] = useState('signin');
+  const [email, setEmail] = useState('');
+  useEffect(() => { localStorage.setItem('bento_dark', dark ? '1' : '0'); }, [dark]);
+  const theme = dark ? T.dark : T.light;
+  const gv = dark ? {
+    '--glass-card-bg': 'rgba(26,22,48,0.55)', '--glass-border': 'rgba(255,255,255,0.10)',
+    '--glass-input-bg': 'rgba(255,255,255,0.05)',
+    '--glass-shadow': '0 28px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06)',
+  } : {
+    '--glass-card-bg': 'rgba(255,255,255,0.60)', '--glass-border': 'rgba(255,255,255,0.75)',
+    '--glass-input-bg': 'rgba(255,255,255,0.55)',
+    '--glass-shadow': '0 28px 80px rgba(70,50,130,.16), inset 0 1px 0 rgba(255,255,255,.7)',
+  };
+  const glassCard = { background: 'var(--glass-card-bg)', backdropFilter: 'blur(24px) saturate(150%)', WebkitBackdropFilter: 'blur(24px) saturate(150%)', border: '1px solid var(--glass-border)', borderRadius: 26, boxShadow: 'var(--glass-shadow)', padding: '34px 32px' };
+  const go = (s, e) => { if (e !== undefined) setEmail(e); setScreen(s); };
+
+  const screens = {
+    signin: <SignIn go={go} onSuccess={() => go('done')} />,
+    forgot: <Forgot go={go} />,
+    sent: <Sent go={go} email={email} />,
+    reset: <Reset go={go} />,
+    done: <Done go={go} />,
+    locked: <Locked go={go} />,
+  };
+
+  return (
+    <div style={{ ...theme, ...gv, height: '100%', display: 'flex', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Sora',system-ui,sans-serif", position: 'relative', overflow: 'hidden', WebkitFontSmoothing: 'antialiased' }}>
+      <div className="brandcol" style={{ display: 'flex', flex: '1.05' }}><BrandPanel /></div>
+
+      {/* form column */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
+        <BgDecor dark={dark} />
+        <div style={{ position: 'absolute', top: 22, right: 24, zIndex: 4 }}>
+          <button onClick={() => { setDark(d => !d); setFade(x => x + 1); }} style={{ position: 'relative', width: 58, height: 32, borderRadius: 999, border: '1px solid var(--tile-border)', background: 'var(--tile-2)', cursor: 'pointer', padding: 0 }}>
+            <span style={{ position: 'absolute', top: 3, left: dark ? 29 : 3, width: 24, height: 24, borderRadius: 999, background: 'var(--tile)', display: 'grid', placeItems: 'center', color: 'var(--primary)', boxShadow: '0 2px 5px rgba(0,0,0,.25)', transition: `left .4s ${SPRING}` }}><Icon name={dark ? 'moon' : 'sun'} size={14} /></span>
+          </button>
+        </div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 28px', overflowY: 'auto', position: 'relative', zIndex: 2 }}>
+          <div style={{ width: '100%', maxWidth: 414 }}>
+            <div className="mlogo" style={{ marginBottom: 22, display: 'flex', justifyContent: 'center' }}><Logo size={38} /></div>
+            <div style={glassCard}>
+              <div key={screen} style={{ animation: `authUp .42s ${SPRING}` }}>{screens[screen]}</div>
+            </div>
+          </div>
+        </div>
+        {/* footer */}
+        <div style={{ padding: '0 28px 22px', display: 'flex', justifyContent: 'center', gap: 16, fontSize: 12, color: 'var(--text-3)', position: 'relative', zIndex: 2 }}>
+          <span>© 2026 {TENANT.name}</span><span>·</span><span>Support</span><span>·</span><span>Status</span>
+        </div>
+      </div>
+
+      {fade > 0 && <div key={fade} style={{ position: 'absolute', inset: 0, background: 'var(--bg)', zIndex: 50, pointerEvents: 'none', animation: 'themeFade .46s ease forwards' }} />}
+
+      {/* prototype state previewer */}
+      <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 4, background: 'var(--feature-bg)', borderRadius: 999, padding: '6px 8px', boxShadow: '0 12px 30px rgba(0,0,0,.3)', zIndex: 40 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--feature-sub)', padding: '0 8px' }}>Preview</span>
+        {[['signin', 'Sign in'], ['forgot', 'Forgot'], ['sent', 'Email sent'], ['reset', 'Reset'], ['locked', 'Locked'], ['done', 'Success']].map(([id, l]) => (
+          <button key={id} onClick={() => go(id, email)} style={{ border: 'none', cursor: 'pointer', borderRadius: 999, padding: '6px 11px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', background: screen === id ? 'var(--primary)' : 'transparent', color: screen === id ? '#fff' : 'rgba(255,255,255,.62)' }}>{l}</button>
+        ))}
+      </div>
+
+      <style>{`
+        @media (max-width: 880px) { .brandcol { display: none !important; } }
+        @media (min-width: 881px) { .mlogo { display: none; } }
+      `}</style>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

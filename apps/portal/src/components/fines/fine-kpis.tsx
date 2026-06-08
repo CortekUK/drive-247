@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
+import { KpiTile, KpiTileSkeletonRow } from "@/components/bento";
+import { AlertTriangle, Coins, CalendarClock, Clock } from "lucide-react";
 
 export const FineKPIs = () => {
   const { tenant } = useTenant();
@@ -55,71 +56,43 @@ export const FineKPIs = () => {
   });
 
   if (isLoading) {
-    return (
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Loading...</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">-</div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
+    return <KpiTileSkeletonRow count={4} />;
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card className="bg-gradient-to-br from-warning/10 to-warning/5 border-warning/20 hover:border-warning/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
-          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Open Fines</CardTitle>
-        </CardHeader>
-        <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-          <div className="text-xl sm:text-2xl font-bold break-all">{kpiData?.openFines || 0}</div>
-          <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">
-            Awaiting action
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className="bg-gradient-to-br from-destructive/10 to-destructive/5 border-destructive/20 hover:border-destructive/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
-          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Outstanding Amount</CardTitle>
-        </CardHeader>
-        <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-          <div className="text-xl sm:text-2xl font-bold break-all">{formatCurrency(kpiData?.outstandingAmount || 0, currencyCode)}</div>
-          <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">
-            To collect from customers
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className="bg-gradient-to-br from-warning/10 to-warning/5 border-warning/20 hover:border-warning/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
-          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Due This Week</CardTitle>
-        </CardHeader>
-        <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-          <div className="text-xl sm:text-2xl font-bold break-all">{kpiData?.dueThisWeek || 0}</div>
-          <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">
-            Next 7 days
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className="bg-gradient-to-br from-destructive/10 to-destructive/5 border-destructive/20 hover:border-destructive/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
-          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Overdue</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-xl sm:text-2xl font-bold text-destructive break-all">{kpiData?.overdue || 0}</div>
-          <p className="text-[11px] sm:text-xs text-muted-foreground leading-tight">
-            Past due date
-          </p>
-        </CardContent>
-      </Card>
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <KpiTile
+        label="Open Fines"
+        value={kpiData?.openFines || 0}
+        sub="Awaiting action"
+        icon={<AlertTriangle className="h-4 w-4" />}
+      />
+      <KpiTile
+        label="Outstanding Amount"
+        variant="feature"
+        value={kpiData?.outstandingAmount || 0}
+        noCountUp
+        format={(v) => (
+          <span className="font-mono tabular-nums">
+            {formatCurrency(v, currencyCode)}
+          </span>
+        )}
+        sub="To collect from customers"
+        icon={<Coins className="h-4 w-4" />}
+      />
+      <KpiTile
+        label="Due This Week"
+        value={kpiData?.dueThisWeek || 0}
+        sub="Next 7 days"
+        icon={<CalendarClock className="h-4 w-4" />}
+      />
+      <KpiTile
+        label="Overdue"
+        variant={(kpiData?.overdue || 0) > 0 ? "warn" : "default"}
+        value={kpiData?.overdue || 0}
+        sub="Past due date"
+        icon={<Clock className="h-4 w-4" />}
+      />
     </div>
   );
 };

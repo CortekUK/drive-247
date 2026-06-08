@@ -2,10 +2,9 @@
 
 import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Tile, StatusPill, EmptyState, Eyebrow } from '@/components/bento';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -73,10 +72,11 @@ export default function EmailTemplatesPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+      <div className="container mx-auto p-6 space-y-4">
+        <div className="h-9 w-56 animate-pulse rounded-md [background:var(--bento-tile-2)]" />
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-24 animate-pulse rounded-tile [background:var(--bento-tile-2)]" />
+        ))}
       </div>
     );
   }
@@ -94,7 +94,7 @@ export default function EmailTemplatesPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">Email Templates</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight">Email Templates</h1>
             <p className="text-muted-foreground mt-1">
               Customize the emails sent to your customers
             </p>
@@ -113,19 +113,15 @@ export default function EmailTemplatesPage() {
       </div>
 
       {/* Info Card */}
-      <Card className="bg-muted/50">
-        <CardContent className="pt-6">
-          <div className="flex items-start gap-3">
-            <Mail className="h-5 w-5 text-primary mt-0.5" />
-            <div>
-              <p className="text-sm">
-                Customize each email type to match your brand. Templates not customized will use the default content.
-                Use variables like <code className="bg-muted px-1 py-0.5 rounded text-xs">{'{{customer_name}}'}</code> to personalize emails.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <Tile variant="inset" pad="default">
+        <div className="flex items-start gap-3">
+          <Mail className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+          <p className="text-sm text-muted-foreground">
+            Customize each email type to match your brand. Templates not customized will use the default content.
+            Use variables like <code className="rounded bg-background px-1 py-0.5 font-mono text-xs text-foreground">{'{{customer_name}}'}</code> to personalize emails.
+          </p>
+        </div>
+      </Tile>
 
       {/* Search Bar */}
       <div className="relative">
@@ -141,67 +137,57 @@ export default function EmailTemplatesPage() {
       {/* Templates List */}
       <div className="grid gap-4">
         {filteredTemplates.length === 0 && (
-          <Card className="p-8 text-center">
-            <p className="text-muted-foreground">No templates match your search.</p>
-          </Card>
+          <EmptyState
+            icon={<Search className="h-5 w-5" />}
+            title="No templates found"
+            description="No templates match your search. Try a different term."
+          />
         )}
         {filteredTemplates.map((templateType) => {
           const customized = isCustomized(templateType.key);
           const customTemplate = customTemplates.find(t => t.template_key === templateType.key);
 
           return (
-            <Card key={templateType.key} className={customized ? 'border-primary/50' : ''}>
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${customized ? 'bg-primary/10' : 'bg-muted'}`}>
-                      <FileText className={`h-5 w-5 ${customized ? 'text-primary' : 'text-muted-foreground'}`} />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        {templateType.name}
-                        {customized && (
-                          <Badge variant="outline" className="text-xs border-primary text-primary">
-                            <Check className="h-3 w-3 mr-1" />
-                            Customized
-                          </Badge>
-                        )}
-                        {!customized && (
-                          <Badge variant="secondary" className="text-xs">
-                            Default
-                          </Badge>
-                        )}
-                      </CardTitle>
-                      <CardDescription className="mt-1">
-                        {templateType.description}
-                      </CardDescription>
-                    </div>
+            <Tile
+              key={templateType.key}
+              interactive
+              onClick={() => router.push(`/settings/email-templates/${templateType.key}`)}
+              className={customized ? 'ring-1 ring-primary/40' : ''}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-tile-sm ${customized ? '[background:var(--bento-primary-weak)] text-[color:var(--bento-primary-weak-fg)]' : '[background:var(--bento-tile-2)] text-muted-foreground'}`}>
+                    <FileText className="h-4 w-4" />
                   </div>
-                  <Button
-                    variant={customized ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => router.push(`/settings/email-templates/${templateType.key}`)}
-                  >
-                    <Pencil className="h-4 w-4 mr-1" />
-                    {customized ? 'Edit' : 'Customize'}
-                  </Button>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base font-bold tracking-tight">{templateType.name}</h3>
+                      {customized ? (
+                        <StatusPill tone="primary"><Check className="h-3 w-3" /> Customized</StatusPill>
+                      ) : (
+                        <StatusPill tone="neutral">Default</StatusPill>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-sm text-muted-foreground">{templateType.description}</p>
+                  </div>
                 </div>
-              </CardHeader>
-              {customized && customTemplate && (
-                <CardContent className="pt-0">
-                  <div className="text-xs text-muted-foreground">
-                    Subject: <span className="font-medium text-foreground">{customTemplate.subject}</span>
-                  </div>
-                </CardContent>
-              )}
-              {!customized && (
-                <CardContent className="pt-0">
-                  <div className="text-xs text-muted-foreground">
-                    Subject: <span className="font-medium text-foreground">{templateType.defaultSubject}</span>
-                  </div>
-                </CardContent>
-              )}
-            </Card>
+                <Button
+                  variant={customized ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={(e) => { e.stopPropagation(); router.push(`/settings/email-templates/${templateType.key}`); }}
+                  className="shrink-0"
+                >
+                  <Pencil className="h-4 w-4 mr-1" />
+                  {customized ? 'Edit' : 'Customize'}
+                </Button>
+              </div>
+              <div className="mt-3 border-t border-border pt-3">
+                <Eyebrow>Subject</Eyebrow>
+                <p className="mt-0.5 text-sm font-medium text-foreground">
+                  {customized && customTemplate ? customTemplate.subject : templateType.defaultSubject}
+                </p>
+              </div>
+            </Tile>
           );
         })}
       </div>

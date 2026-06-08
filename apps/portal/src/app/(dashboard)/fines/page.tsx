@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,6 +9,15 @@ import Link from "next/link";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertTriangle, Plus, Eye, MoreVertical, DollarSign, Ban, ArrowUpDown, BarChart3 } from "lucide-react";
+import {
+  TableTile,
+  bentoTable,
+  Money,
+  Eyebrow,
+  EmptyState,
+  ErrorState,
+  TableSkeleton,
+} from "@/components/bento";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { FineKPIs } from "@/components/fines/fine-kpis";
@@ -21,7 +29,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import AddFineDialog from "@/components/fines/add-fine-dialog";
@@ -220,9 +227,8 @@ const FinesList = () => {
       <TableRow
         key={fine.id}
         className={cn(
-          "hover:bg-muted/50",
-          fine.isOverdue && "border-l-4 border-l-destructive",
-          selectedFines.includes(fine.id) && "bg-primary/5"
+          bentoTable.row,
+          selectedFines.includes(fine.id) && "[background:var(--bento-primary-weak)]"
         )}
       >
         <TableCell className="w-12">
@@ -234,27 +240,28 @@ const FinesList = () => {
           )}
         </TableCell>
 
-        <TableCell className="font-medium">
+        <TableCell className="font-mono tabular-nums font-medium text-foreground">
           {fine.reference_no || fine.id.slice(0, 8)}
         </TableCell>
 
-        <TableCell>
+        <TableCell className="font-mono tabular-nums text-muted-foreground">
           {fine.rentals?.rental_number || ''}
         </TableCell>
 
         <TableCell>
-          {fine.vehicles.reg} • {fine.vehicles.make} {fine.vehicles.model}
+          <span className="font-mono tabular-nums font-medium">{fine.vehicles.reg}</span>
+          <span className="text-muted-foreground"> • {fine.vehicles.make} {fine.vehicles.model}</span>
         </TableCell>
 
-        <TableCell>
+        <TableCell className="text-foreground">
           {fine.customers?.name || '-'}
         </TableCell>
 
-        <TableCell>
+        <TableCell className="font-mono tabular-nums text-muted-foreground">
           {new Date(fine.issue_date + 'T00:00:00').toLocaleDateString('en-US')}
         </TableCell>
 
-        <TableCell className={cn(fine.isOverdue && "text-destructive font-medium")}>
+        <TableCell className={cn("font-mono tabular-nums", fine.isOverdue ? "text-[color:var(--bento-danger-fg)] font-medium" : "text-muted-foreground")}>
           {new Date(fine.due_date + 'T00:00:00').toLocaleDateString('en-US')}
           {fine.isOverdue && (
             <Badge variant="destructive" className="ml-2 text-xs">
@@ -271,8 +278,8 @@ const FinesList = () => {
           />
         </TableCell>
 
-        <TableCell className="text-left font-medium">
-          {formatCurrency(Number(fine.amount), tenant?.currency_code || 'USD')}
+        <TableCell className={cn(bentoTable.figure, "font-medium text-foreground")}>
+          <Money value={Number(fine.amount)} currency={tenant?.currency_code || 'USD'} locale="en-US" />
         </TableCell>
 
         <TableCell>
@@ -323,7 +330,7 @@ const FinesList = () => {
   const renderFinesTable = (fines: EnhancedFine[]) => (
     <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
       <Table>
-        <TableHeader className="sticky top-0 z-10 bg-background">
+        <TableHeader className={cn("sticky top-0 z-10", bentoTable.header)}>
           <TableRow>
             <TableHead className="w-12">
               {canEdit('fines') && (
@@ -339,22 +346,22 @@ const FinesList = () => {
             <TableHead>Customer</TableHead>
             <TableHead>Issue Date</TableHead>
             <TableHead
-              className="cursor-pointer hover:bg-muted/50"
+              className="cursor-pointer hover:text-foreground"
               onClick={() => handleSort('due_date')}
             >
               <div className="flex items-center gap-1">
                 Due Date
-                <ArrowUpDown className="h-4 w-4" />
+                <ArrowUpDown className="h-3.5 w-3.5" />
               </div>
             </TableHead>
             <TableHead>Status</TableHead>
             <TableHead
-              className="text-left cursor-pointer hover:bg-muted/50"
+              className="text-right cursor-pointer hover:text-foreground"
               onClick={() => handleSort('amount')}
             >
-              <div className="flex items-center gap-1">
+              <div className="flex items-center justify-end gap-1">
                 Amount
-                <ArrowUpDown className="h-4 w-4" />
+                <ArrowUpDown className="h-3.5 w-3.5" />
               </div>
             </TableHead>
             <TableHead className="w-12">View</TableHead>
@@ -365,17 +372,27 @@ const FinesList = () => {
           {fines.length > 0 ? (
             fines.map(renderFineRow)
           ) : (
-            <TableRow>
-              <TableCell colSpan={11} className="text-center py-8">
-                <div className="flex flex-col items-center space-y-2">
-                  <AlertTriangle className="h-12 w-12 text-muted-foreground" />
-                  <p className="text-lg font-medium">No fines found</p>
-                  <p className="text-muted-foreground">
-                    {filters.status.length > 0 || filters.vehicleSearch || filters.customerSearch || filters.search
-                      ? "Try adjusting your filters"
-                      : "Get started by adding your first fine"
-                    }
-                  </p>
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={11} className="py-12">
+                <div className="flex flex-col items-center gap-3 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full [background:var(--bento-primary-weak)] text-[color:var(--bento-primary-weak-fg)]">
+                    <AlertTriangle className="h-5 w-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-base font-bold tracking-tight">No fines found</p>
+                    <p className="text-sm text-muted-foreground">
+                      {filters.status.length > 0 || filters.vehicleSearch || filters.customerSearch || filters.search
+                        ? "Try adjusting your filters"
+                        : "Get started by adding your first fine"
+                      }
+                    </p>
+                  </div>
+                  {canEdit('fines') && !(filters.status.length > 0 || filters.vehicleSearch || filters.customerSearch || filters.search) && (
+                    <Button onClick={() => setShowAddFineDialog(true)} className="mt-1">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Fine
+                    </Button>
+                  )}
                 </div>
               </TableCell>
             </TableRow>
@@ -387,12 +404,12 @@ const FinesList = () => {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-center">
-          <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
-          <h2 className="text-lg font-semibold mb-2">Failed to load fines</h2>
-          <p className="text-muted-foreground">Please try refreshing the page</p>
-        </div>
+      <div className="container mx-auto p-4 sm:p-6">
+        <ErrorState
+          title="Failed to load fines"
+          description="Please try refreshing the page."
+          onRetry={() => queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] })}
+        />
       </div>
     );
   }
@@ -403,15 +420,16 @@ const FinesList = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold">Fines Management</h1>
-          <p className="text-muted-foreground text-sm sm:text-base">
+          <Eyebrow>Compliance</Eyebrow>
+          <h1 className="text-[30px] font-extrabold tracking-tight leading-tight">Fines Management</h1>
+          <p className="text-muted-foreground text-sm">
             Track and manage traffic fines
           </p>
         </div>
         <div className="flex items-center gap-2">
           {allFines.length > 0 && (
             <Link href="/fines/analytics" className="shrink-0">
-              <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+              <Button variant="outline" size="icon">
                 <BarChart3 className="h-4 w-4" />
               </Button>
             </Link>
@@ -419,7 +437,7 @@ const FinesList = () => {
           {canEdit('fines') && (
             <Button
               onClick={() => setShowAddFineDialog(true)}
-              className="bg-gradient-primary flex-1 sm:flex-none"
+              className="flex-1 sm:flex-none"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Fine
@@ -444,14 +462,12 @@ const FinesList = () => {
 
       {/* Fines Table */}
       {isLoading ? (
-        <div className="text-center py-8">Loading fines...</div>
+        <TableSkeleton rows={8} cols={7} />
       ) : (
         <>
-          <Card>
-            <CardContent className="p-0">
-              {renderFinesTable(filteredFines)}
-            </CardContent>
-          </Card>
+          <TableTile>
+            {renderFinesTable(filteredFines)}
+          </TableTile>
 
           {/* Pagination */}
           {totalFines > 0 && (

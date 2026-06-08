@@ -63,8 +63,10 @@ export const CustomerBalanceChip = ({
             className
           )}>
             <span className={cn(
-              "font-semibold tabular-nums",
-              isDebt ? "text-red-500" : "text-green-500",
+              "font-mono font-semibold tabular-nums",
+              isDebt
+                ? "text-[color:var(--bento-danger-fg)]"
+                : "text-[color:var(--bento-success)]",
               isSmall ? "text-xs" : "text-sm"
             )}>
               {formatCurrency(balance, currencyCode)}

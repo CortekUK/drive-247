@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TraxAIDialog } from "@/components/chat";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
 import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
+import { RouteTransition } from "@/components/bento/route-transition";
 
 function LoadingSkeleton() {
   return (
@@ -164,8 +165,8 @@ export default function DashboardLayout({
           </header>
           <MaintenanceBanner />
 
-          <main className="flex flex-1 flex-col gap-4 p-4 pt-0">
-            {children}
+          <main className="flex flex-1 flex-col gap-4 p-4 pt-0 sm:p-6 sm:pt-2">
+            <RouteTransition>{children}</RouteTransition>
           </main>
         </SidebarInset>
 

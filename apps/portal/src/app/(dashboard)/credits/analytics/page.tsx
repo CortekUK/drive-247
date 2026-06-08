@@ -3,12 +3,12 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ArrowLeft } from "lucide-react";
 import { useCreditWallet } from "@/hooks/use-credit-wallet";
+import { Tile, Shimmer } from "@/components/bento";
 
 function formatMonthLabel(monthStr: string) {
   const [year, month] = monthStr.split("-");
@@ -69,61 +69,66 @@ export default function CreditsAnalyticsPage() {
   }, [transactions, timeRange, integrationFilter]);
 
   if (isLoading) {
-    return (<div className="container mx-auto p-6 space-y-6"><div className="h-8 bg-muted animate-pulse rounded"></div><div className="h-96 bg-muted animate-pulse rounded"></div></div>);
+    return (
+      <div className="space-y-6">
+        <Shimmer className="h-9 w-64" />
+        <Shimmer className="h-[460px] rounded-tile" />
+      </div>
+    );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/credits"><Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button></Link>
+        <Link href="/credits">
+          <Button variant="ghost" size="icon">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+        </Link>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Credits Analytics</h1>
-          <p className="text-sm text-muted-foreground">Credit usage trends and insights</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Credits Analytics</h1>
+          <p className="text-sm text-muted-foreground mt-1">Credit usage trends and insights</p>
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-sm font-medium">Usage History</CardTitle>
-              <CardDescription>Live credit usage over time</CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <Select value={integrationFilter} onValueChange={(v) => setIntegrationFilter(v as IntegrationFilter)}>
-                <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Services</SelectItem>
-                  <SelectItem value="esign">E-Sign</SelectItem>
-                  <SelectItem value="twilio">Twilio</SelectItem>
-                  <SelectItem value="verification">Verification</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
-                <SelectTrigger className="w-[110px] h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7d">7 days</SelectItem>
-                  <SelectItem value="30d">30 days</SelectItem>
-                  <SelectItem value="3m">3 months</SelectItem>
-                  <SelectItem value="6m">6 months</SelectItem>
-                  <SelectItem value="12m">12 months</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      <Tile className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 className="text-base font-bold tracking-tight">Usage History</h3>
+            <p className="text-sm text-muted-foreground mt-0.5">Live credit usage over time</p>
           </div>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer config={chartConfig} className="h-[400px] w-full">
-            <BarChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-              <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} allowDecimals={false} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="usage" fill="var(--color-usage)" radius={[4, 4, 0, 0]} maxBarSize={48} />
-            </BarChart>
-          </ChartContainer>
-        </CardContent>
-      </Card>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Select value={integrationFilter} onValueChange={(v) => setIntegrationFilter(v as IntegrationFilter)}>
+              <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Services</SelectItem>
+                <SelectItem value="esign">E-Sign</SelectItem>
+                <SelectItem value="twilio">Twilio</SelectItem>
+                <SelectItem value="verification">Verification</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
+              <SelectTrigger className="w-[110px] h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">7 days</SelectItem>
+                <SelectItem value="30d">30 days</SelectItem>
+                <SelectItem value="3m">3 months</SelectItem>
+                <SelectItem value="6m">6 months</SelectItem>
+                <SelectItem value="12m">12 months</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <ChartContainer config={chartConfig} className="h-[400px] w-full">
+          <BarChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+            <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} allowDecimals={false} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Bar dataKey="usage" fill="var(--color-usage)" radius={[4, 4, 0, 0]} maxBarSize={48} />
+          </BarChart>
+        </ChartContainer>
+      </Tile>
     </div>
   );
 }

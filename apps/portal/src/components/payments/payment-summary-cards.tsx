@@ -1,14 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
+import { CalendarRange, CalendarDays, Hash } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
+import { KpiTile, KpiTileSkeletonRow } from "@/components/bento";
 
 export const PaymentSummaryCards = () => {
   const { tenant } = useTenant();
   const currencyCode = tenant?.currency_code || 'USD';
 
-  const { data: summaryData } = useQuery({
+  const { data: summaryData, isLoading } = useQuery({
     queryKey: ["payment-summary", tenant?.id],
     queryFn: async () => {
       if (!tenant) throw new Error("No tenant context available");
@@ -47,35 +48,34 @@ export const PaymentSummaryCards = () => {
     enabled: !!tenant,
   });
 
+  if (isLoading) {
+    return <KpiTileSkeletonRow count={3} />;
+  }
+
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
-      <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
-          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Today's Payments</CardTitle>
-        </CardHeader>
-        <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-          <div className="text-lg sm:text-2xl font-bold break-all">{formatCurrency(summaryData?.todaysTotal || 0, currencyCode)}</div>
-        </CardContent>
-      </Card>
-
-      <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
-          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">This Month</CardTitle>
-        </CardHeader>
-        <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-          <div className="text-lg sm:text-2xl font-bold break-all">{formatCurrency(summaryData?.monthsTotal || 0, currencyCode)}</div>
-        </CardContent>
-      </Card>
-
-      <Card className="bg-card hover:bg-accent/50 border shadow-sm transition-all duration-200 cursor-pointer hover:shadow-md col-span-2 md:col-span-1">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
-          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Payment Count</CardTitle>
-        </CardHeader>
-        <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-          <div className="text-xl sm:text-2xl font-bold">{summaryData?.paymentCount || 0}</div>
-          <p className="text-[11px] sm:text-xs text-muted-foreground">This Month</p>
-        </CardContent>
-      </Card>
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+      <KpiTile
+        label="Today's Payments"
+        value={summaryData?.todaysTotal || 0}
+        format={(v) => formatCurrency(v, currencyCode)}
+        icon={<CalendarDays className="h-4 w-4" />}
+        sub="Collected today"
+      />
+      <KpiTile
+        label="This Month"
+        value={summaryData?.monthsTotal || 0}
+        format={(v) => formatCurrency(v, currencyCode)}
+        variant="feature"
+        icon={<CalendarRange className="h-4 w-4" />}
+        sub="Total collected this month"
+      />
+      <KpiTile
+        label="Payment Count"
+        value={summaryData?.paymentCount || 0}
+        icon={<Hash className="h-4 w-4" />}
+        sub="This month"
+        className="col-span-2 md:col-span-1"
+      />
     </div>
   );
 };

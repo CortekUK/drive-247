@@ -76,7 +76,7 @@ export function InsuranceFilters({
       <div className="flex flex-wrap gap-4">
         {/* Search */}
         <div className="flex-1 min-w-[300px] relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[color:var(--bento-text-3)] h-4 w-4" />
           <Input
             placeholder="Search by policy number, provider, customer, or vehicle..."
             value={filters.search}

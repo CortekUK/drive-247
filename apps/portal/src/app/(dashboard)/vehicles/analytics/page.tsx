@@ -12,6 +12,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { VehiclePLData } from "@/lib/vehicle-utils";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { Eyebrow, EmptyState, Shimmer } from "@/components/bento";
+import { BarChart3 } from "lucide-react";
 
 // Chart configs
 const statusChartConfig = {
@@ -158,8 +160,13 @@ export default function VehiclesAnalyticsPage() {
   if (isLoading) {
     return (
       <div className="container mx-auto p-6 space-y-6">
-        <div className="h-8 bg-muted animate-pulse rounded"></div>
-        <div className="h-96 bg-muted animate-pulse rounded"></div>
+        <Shimmer className="h-9 w-64 rounded-tile" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => (
+            <Shimmer key={i} className="h-64 rounded-tile" />
+          ))}
+        </div>
+        <Shimmer className="h-80 rounded-tile" />
       </div>
     );
   }
@@ -174,7 +181,8 @@ export default function VehiclesAnalyticsPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Fleet Analytics</h1>
+          <Eyebrow>Fleet</Eyebrow>
+          <h1 className="text-3xl font-extrabold tracking-tight">Fleet Analytics</h1>
           <p className="text-sm text-muted-foreground">
             Charts and insights for your vehicle fleet
           </p>
@@ -188,8 +196,8 @@ export default function VehiclesAnalyticsPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Fleet Status Distribution */}
               {statusDonutData.length > 0 && (
-                <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-                  <h3 className="text-sm font-medium mb-3 flex items-center gap-1.5">
+                <div className="rounded-tile border border-border bg-card shadow-bento p-4">
+                  <h3 className="text-sm font-bold tracking-tight mb-3 flex items-center gap-1.5">
                     Fleet Status
                     <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
                     <TooltipContent><p>Distribution of vehicles by current status</p></TooltipContent></Tooltip>
@@ -215,8 +223,8 @@ export default function VehiclesAnalyticsPage() {
 
               {/* Profitability Distribution */}
               {profitabilityDonutData.length > 0 && (
-                <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-                  <h3 className="text-sm font-medium mb-3 flex items-center gap-1.5">
+                <div className="rounded-tile border border-border bg-card shadow-bento p-4">
+                  <h3 className="text-sm font-bold tracking-tight mb-3 flex items-center gap-1.5">
                     Profitability
                     <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
                     <TooltipContent><p>How many vehicles are profitable vs loss-making</p></TooltipContent></Tooltip>
@@ -242,8 +250,8 @@ export default function VehiclesAnalyticsPage() {
 
               {/* Cost Breakdown */}
               {costDonutData.length > 0 && (
-                <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-                  <h3 className="text-sm font-medium mb-3 flex items-center gap-1.5">
+                <div className="rounded-tile border border-border bg-card shadow-bento p-4">
+                  <h3 className="text-sm font-bold tracking-tight mb-3 flex items-center gap-1.5">
                     Cost Breakdown
                     <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
                     <TooltipContent><p>Total fleet costs split by category</p></TooltipContent></Tooltip>
@@ -267,8 +275,8 @@ export default function VehiclesAnalyticsPage() {
 
             {/* Vehicle P&L Profile Radar */}
             {radarData.length > 0 && radarVehicles.length >= 2 && (
-              <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-                <h3 className="text-sm font-medium mb-3 flex items-center gap-1.5">
+              <div className="rounded-tile border border-border bg-card shadow-bento p-4">
+                <h3 className="text-sm font-bold tracking-tight mb-3 flex items-center gap-1.5">
                   Vehicle P&L Profile
                   <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
                   <TooltipContent><p>Financial profile comparison of top revenue vehicles (normalized 0-100)</p></TooltipContent></Tooltip>
@@ -304,8 +312,8 @@ export default function VehiclesAnalyticsPage() {
 
             {/* Top 10 Vehicles by Revenue */}
             {topVehiclesByRevenue.length > 0 && (
-              <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-                <h3 className="text-sm font-medium mb-3 flex items-center gap-1.5">
+              <div className="rounded-tile border border-border bg-card shadow-bento p-4">
+                <h3 className="text-sm font-bold tracking-tight mb-3 flex items-center gap-1.5">
                   Top Vehicles by Revenue
                   <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
                   <TooltipContent><p>Highest revenue-generating vehicles in your fleet</p></TooltipContent></Tooltip>
@@ -334,9 +342,16 @@ export default function VehiclesAnalyticsPage() {
           </div>
         </TooltipProvider>
       ) : (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">No vehicle data available for analytics</p>
-        </div>
+        <EmptyState
+          icon={<BarChart3 className="h-5 w-5" />}
+          title="No analytics yet"
+          description="No vehicle data available for analytics. Add vehicles and record rentals to see fleet insights."
+          action={
+            <Link href="/vehicles">
+              <Button variant="outline">Back to Fleet</Button>
+            </Link>
+          }
+        />
       )}
     </div>
   );

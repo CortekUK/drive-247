@@ -5,9 +5,8 @@ import { format, subDays } from 'date-fns';
 import { BarChart3, Download, FileText, TrendingUp, Users, Car, CreditCard, Clock, AlertTriangle, Info } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Tile, Eyebrow, KpiTileSkeletonRow } from '@/components/bento';
 import { FilterSidebar } from '@/components/reports/filter-sidebar';
 import { ReportCard } from '@/components/reports/report-card';
 import { DataTable } from '@/components/reports/data-table';
@@ -373,29 +372,18 @@ const Reports = () => {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <div className="mb-2">
-              <h1 className="text-xl font-semibold">Reports & Exports</h1>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Generate detailed reports and export data across your fleet
-            </p>
-          </div>
+      <div className="container mx-auto p-6 space-y-6">
+        <div>
+          <Eyebrow>Insights</Eyebrow>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-foreground">Reports &amp; Exports</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Generate detailed reports and export data across your fleet
+          </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 h-full">
+        <KpiTileSkeletonRow count={4} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i} className="animate-pulse h-48">
-              <CardHeader>
-                <div className="h-4 bg-muted rounded w-3/4"></div>
-                <div className="h-3 bg-muted rounded w-1/2"></div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 bg-muted rounded w-1/3 mb-2"></div>
-                <div className="h-3 bg-muted rounded w-2/3"></div>
-              </CardContent>
-            </Card>
+            <Tile key={i} noMotion className="h-44 animate-pulse" />
           ))}
         </div>
       </div>
@@ -405,10 +393,9 @@ const Reports = () => {
   return (
     <div className="container mx-auto p-6">
       <div className="mb-6">
-        <div className="mb-2">
-          <h1 className="text-3xl font-bold whitespace-nowrap">Reports & Exports</h1>
-        </div>
-        <p className="text-sm text-muted-foreground">
+        <Eyebrow>Insights</Eyebrow>
+        <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-foreground whitespace-nowrap">Reports &amp; Exports</h1>
+        <p className="text-sm text-muted-foreground mt-1">
           Generate detailed reports and export data across your fleet
         </p>
       </div>
@@ -444,7 +431,7 @@ const Reports = () => {
               ) : (
                 <>
                   <div className="mb-6">
-                    <h2 className="text-lg font-medium mb-2">Available Reports</h2>
+                    <h2 className="text-base font-bold tracking-tight text-foreground mb-1">Available Reports</h2>
                     <p className="text-muted-foreground text-sm">
                       Click on a report card to preview data or use export icons for direct downloads.
                       All amounts shown in {tenant?.currency_code || 'USD'} with America/NewYork timezone.
@@ -455,9 +442,9 @@ const Reports = () => {
                   <TooltipProvider>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                       {/* P&L Comparison */}
-                      <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+                      <Tile pad="compact">
                         <div className="flex items-center gap-1.5 mb-3">
-                          <h3 className="text-sm font-medium">P&L Overview</h3>
+                          <h3 className="text-[13px] font-bold tracking-tight text-foreground">P&amp;L Overview</h3>
                           <Tooltip>
                             <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
                             <TooltipContent>Revenue, costs, and net profit</TooltipContent>
@@ -492,12 +479,12 @@ const Reports = () => {
                         ) : (
                           <p className="text-sm text-muted-foreground text-center py-10">No data</p>
                         )}
-                      </div>
+                      </Tile>
 
                       {/* Payment Split Donut */}
-                      <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+                      <Tile pad="compact">
                         <div className="flex items-center gap-1.5 mb-3">
-                          <h3 className="text-sm font-medium">Payment Allocation</h3>
+                          <h3 className="text-[13px] font-bold tracking-tight text-foreground">Payment Allocation</h3>
                           <Tooltip>
                             <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
                             <TooltipContent>Applied vs unapplied payments</TooltipContent>
@@ -537,12 +524,12 @@ const Reports = () => {
                             </div>
                           ))}
                         </div>
-                      </div>
+                      </Tile>
 
                       {/* Collection Rate Radial */}
-                      <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+                      <Tile pad="compact">
                         <div className="flex items-center gap-1.5 mb-3">
-                          <h3 className="text-sm font-medium">Collection Rate</h3>
+                          <h3 className="text-[13px] font-bold tracking-tight text-foreground">Collection Rate</h3>
                           <Tooltip>
                             <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
                             <TooltipContent>Percentage of payments applied</TooltipContent>
@@ -568,12 +555,12 @@ const Reports = () => {
                             </text>
                           </RadialBarChart>
                         </ChartContainer>
-                      </div>
+                      </Tile>
 
                       {/* Outstanding Overview */}
-                      <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+                      <Tile pad="compact">
                         <div className="flex items-center gap-1.5 mb-3">
-                          <h3 className="text-sm font-medium">Outstanding</h3>
+                          <h3 className="text-[13px] font-bold tracking-tight text-foreground">Outstanding</h3>
                           <Tooltip>
                             <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
                             <TooltipContent>Outstanding balances across categories</TooltipContent>
@@ -608,11 +595,11 @@ const Reports = () => {
                         ) : (
                           <p className="text-sm text-muted-foreground text-center py-10">No data</p>
                         )}
-                      </div>
+                      </Tile>
                     </div>
                   </TooltipProvider>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {reportCards.map((report) => (
                       <ReportCard
                         key={report.id}
