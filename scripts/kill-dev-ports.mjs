@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// Kills any process holding dev ports 3000-3005 before `npm run dev` starts.
+// STAGING branch: dev servers run on ports 4000-4005 (hard rule — keeps the
+// staging worktree from clashing with the main worktree, which uses 3000-3005).
+// Kills any process holding dev ports 4000-4005 before `npm run dev` starts.
 // Hooked into the root package.json dev scripts via `&&` so it runs every time.
 
 import { execSync } from 'node:child_process';
 
-const PORTS = [3000, 3001, 3002, 3003, 3004, 3005];
+const PORTS = [4000, 4001, 4002, 4003, 4004, 4005];
 const killed = [];
 
 for (const port of PORTS) {
@@ -22,7 +24,7 @@ for (const port of PORTS) {
 }
 
 if (killed.length === 0) {
-  console.log('[ports 3000-3005] all free ✓');
+  console.log('[ports 4000-4005] all free ✓');
 } else {
-  console.log(`[ports 3000-3005] freed: ${killed.join(', ')}`);
+  console.log(`[ports 4000-4005] freed: ${killed.join(', ')}`);
 }
