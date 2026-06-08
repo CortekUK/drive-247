@@ -14,18 +14,18 @@ const DEFAULT_COLORS = {
     mutedForeground: '251.1 14.6% 63.7%',
     popover: '0 0% 100%',
     popoverForeground: '249.2 36.1% 14.1%',
-    primary: '250.1 84.3% 62.5%',  // Bento violet #6a4ff0
+    primary: '262 84% 63%',  // CORTEK violet #a470ff
     primaryForeground: '0 0% 100%',
     secondary: '253.3 52.9% 96.7%',
     secondaryForeground: '250 14% 42%',
-    accent: '255 90.9% 95.7%',
-    accentForeground: '250.7 64.8% 54.3%',
+    accent: '262 91% 96%',
+    accentForeground: '262 70% 56%',
     sidebarBackground: '0 0% 100%',
     sidebarForeground: '250 14% 42%',
-    sidebarPrimary: '250.1 84.3% 62.5%',
+    sidebarPrimary: '262 84% 63%',
     sidebarPrimaryForeground: '0 0% 100%',
-    sidebarAccent: '255 90.9% 95.7%',
-    sidebarAccentForeground: '250.7 64.8% 54.3%',
+    sidebarAccent: '262 91% 96%',
+    sidebarAccentForeground: '262 70% 56%',
   },
   dark: {
     background: '246.7 27.3% 6.5%',
@@ -36,18 +36,18 @@ const DEFAULT_COLORS = {
     mutedForeground: '248.1 14.9% 48.8%',
     popover: '248.2 35.5% 12.2%',
     popoverForeground: '252 65.2% 95.5%',
-    primary: '252.3 100% 71.4%',  // Bento violet (dark) #8b6dff
+    primary: '262 100% 72%',  // CORTEK violet #a470ff
     primaryForeground: '0 0% 100%',
     secondary: '248.9 33.3% 15.9%',
     secondaryForeground: '249.7 24.5% 70.4%',
-    accent: '251.4 38.2% 21.6%',
-    accentForeground: '252.8 100% 82.5%',
+    accent: '262 40% 22%',
+    accentForeground: '262 100% 82%',
     sidebarBackground: '251.3 32% 9.8%',
     sidebarForeground: '249.7 24.5% 70.4%',
-    sidebarPrimary: '252.3 100% 71.4%',
+    sidebarPrimary: '262 100% 72%',
     sidebarPrimaryForeground: '0 0% 100%',
-    sidebarAccent: '251.4 38.2% 21.6%',
-    sidebarAccentForeground: '252.8 100% 82.5%',
+    sidebarAccent: '262 40% 22%',
+    sidebarAccentForeground: '262 100% 82%',
   }
 };
 

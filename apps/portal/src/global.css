@@ -58,11 +58,11 @@ input[type="number"] {
     --popover: 0 0% 100%;
     --popover-foreground: 249.2 36.1% 14.1%;
 
-    /* Primary Brand: violet #6a4ff0 */
-    --primary: 250.1 84.3% 62.5%;
+    /* Primary Brand: CORTEK violet #a470ff */
+    --primary: 262 84% 63%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 250.7 64.8% 54.3%;
-    --primary-light: 255 90.9% 95.7%;
+    --primary-hover: 262 70% 56%;
+    --primary-light: 262 91% 96%;
 
     --secondary: 253.3 52.9% 96.7%;
     --secondary-foreground: 250 14% 42%;
@@ -70,8 +70,8 @@ input[type="number"] {
     --muted: 253.3 52.9% 96.7%;
     --muted-foreground: 251.1 14.6% 63.7%;
 
-    --accent: 255 90.9% 95.7%;
-    --accent-foreground: 250.7 64.8% 54.3%;
+    --accent: 262 91% 96%;
+    --accent-foreground: 262 70% 56%;
 
     /* Status Colors — muted so violet stays loudest */
     --success: 156.2 67% 36.9%;
@@ -89,22 +89,22 @@ input[type="number"] {
     /* UI Elements */
     --border: 253.8 41.9% 93.9%;
     --input: 253.8 41.9% 93.9%;
-    --ring: 250.1 84.3% 62.5%;
+    --ring: 262 84% 63%;
 
     --radius: 0.85rem;
 
     /* Sidebar — Bento light */
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 250 14% 42%;
-    --sidebar-primary: 250.1 84.3% 62.5%;
+    --sidebar-primary: 262 84% 63%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 255 90.9% 95.7%;
-    --sidebar-accent-foreground: 250.7 64.8% 54.3%;
+    --sidebar-accent: 262 91% 96%;
+    --sidebar-accent-foreground: 262 70% 56%;
     --sidebar-border: 252 31.3% 93.7%;
-    --sidebar-ring: 250.1 84.3% 62.5%;
+    --sidebar-ring: 262 84% 63%;
 
     /* Gradients — violet (matches --bento-hero-grad stops) */
-    --gradient-primary: linear-gradient(150deg, #7a5cff, #5a3fd6 72%);
+    --gradient-primary: linear-gradient(150deg, #a470ff, #6d3fd6 72%);
     --gradient-success: linear-gradient(135deg, hsl(156 67% 37%), hsl(156 67% 44%));
     --gradient-warning: linear-gradient(135deg, hsl(37 78% 46%), hsl(37 78% 56%));
     --gradient-subtle: linear-gradient(135deg, hsl(253 53% 97%), hsl(254 42% 94%));
@@ -128,11 +128,11 @@ input[type="number"] {
     --bento-text-2: #615c7a;
     --bento-text-3: #9a95b0;
     --bento-primary-weak: #efeafe;
-    --bento-primary-weak-fg: #5a3fd6;
+    --bento-primary-weak-fg: #7c4ddd;
     --bento-feature-bg: #1b1731;
     --bento-feature-fg: #ffffff;
     --bento-feature-sub: #8d86b0;
-    --bento-hero-grad: linear-gradient(150deg, #7a5cff, #5a3fd6 72%);
+    --bento-hero-grad: linear-gradient(150deg, #a470ff, #6d3fd6 72%);
     --bento-warn-bg: #fff5e3;
     --bento-warn-border: #f6e6c4;
     --bento-warn-fg: #8a5e0e;
@@ -144,7 +144,7 @@ input[type="number"] {
     --bento-info: #3d7fe0;
     --bento-info-weak: #e9f0fd;
     --bento-shadow: 0 2px 12px rgba(40, 30, 80, 0.05);
-    --bento-hero-shadow: 0 16px 40px rgba(106, 79, 240, 0.26);
+    --bento-hero-shadow: 0 16px 40px rgba(164, 112, 255, 0.26);
     --bento-plate-bg: #e9eaec;
     --bento-plate-fg: #1a1b21;
     --bento-plate-border: #c7c9cd;
@@ -170,10 +170,10 @@ input[type="number"] {
     --popover: 248.2 35.5% 12.2%;
     --popover-foreground: 252 65.2% 95.5%;
 
-    --primary: 252.3 100% 71.4%;
+    --primary: 262 100% 72%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 254.5 100% 77.3%;
-    --primary-light: 251.4 38.2% 21.6%;
+    --primary-hover: 262 100% 78%;
+    --primary-light: 262 40% 22%;
 
     --secondary: 248.9 33.3% 15.9%;
     --secondary-foreground: 249.7 24.5% 70.4%;
@@ -181,8 +181,8 @@ input[type="number"] {
     --muted: 248.9 33.3% 15.9%;
     --muted-foreground: 248.1 14.9% 48.8%;
 
-    --accent: 251.4 38.2% 21.6%;
-    --accent-foreground: 252.8 100% 82.5%;
+    --accent: 262 40% 22%;
+    --accent-foreground: 262 100% 82%;
 
     --success: 153 64.5% 58%;
     --success-foreground: 0 0% 100%;
@@ -198,19 +198,19 @@ input[type="number"] {
 
     --border: 251.6 32% 19%;
     --input: 251.6 32% 19%;
-    --ring: 252.3 100% 71.4%;
+    --ring: 262 100% 72%;
 
     /* Sidebar — Bento dark */
     --sidebar-background: 251.3 32% 9.8%;
     --sidebar-foreground: 249.7 24.5% 70.4%;
-    --sidebar-primary: 252.3 100% 71.4%;
+    --sidebar-primary: 262 100% 72%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 251.4 38.2% 21.6%;
-    --sidebar-accent-foreground: 252.8 100% 82.5%;
+    --sidebar-accent: 262 40% 22%;
+    --sidebar-accent-foreground: 262 100% 82%;
     --sidebar-border: 252 28.7% 17.1%;
-    --sidebar-ring: 252.3 100% 71.4%;
+    --sidebar-ring: 262 100% 72%;
 
-    --gradient-primary: linear-gradient(150deg, #7d5fff, #4f33c4 78%);
+    --gradient-primary: linear-gradient(150deg, #a470ff, #5a33c0 78%);
     --gradient-success: linear-gradient(135deg, hsl(153 64% 58%), hsl(153 64% 66%));
     --gradient-warning: linear-gradient(135deg, hsl(38 85% 68%), hsl(38 85% 76%));
     --gradient-subtle: linear-gradient(135deg, hsl(249 33% 16%), hsl(252 32% 19%));
@@ -232,7 +232,7 @@ input[type="number"] {
     --bento-feature-bg: #221d3e;
     --bento-feature-fg: #ffffff;
     --bento-feature-sub: #a99fd6;
-    --bento-hero-grad: linear-gradient(150deg, #7d5fff, #4f33c4 78%);
+    --bento-hero-grad: linear-gradient(150deg, #a470ff, #5a33c0 78%);
     --bento-warn-bg: #2a2114;
     --bento-warn-border: #3d2f17;
     --bento-warn-fg: #f3c878;
