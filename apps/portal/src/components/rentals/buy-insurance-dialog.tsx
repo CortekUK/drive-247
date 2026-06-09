@@ -228,9 +228,19 @@ export function BuyInsuranceDialog({
       });
 
       if (quoteError) {
-        // Extract actual error message from edge function response body
-        const contextError = typeof quoteError.context === 'object' && quoteError.context?.error;
-        throw new Error(contextError || quoteError.message || 'Failed to create Bonzah quote');
+        // Extract the actual error message from the edge function response body.
+        // quoteError.context is a Response object — must call .json() to read it
+        // (mirrors the confirm-payment error handling below).
+        let bodyError: string | null = null;
+        try {
+          if (quoteError.context instanceof Response) {
+            const parsed = await quoteError.context.json();
+            bodyError = parsed?.error ?? null;
+          } else if (quoteError.context && typeof quoteError.context === 'object') {
+            bodyError = (quoteError.context as any)?.error ?? null;
+          }
+        } catch { /* ignore parse errors */ }
+        throw new Error(bodyError || quoteError.message || 'Failed to create Bonzah quote');
       }
 
       // 5. Confirm payment with Bonzah to issue the policy

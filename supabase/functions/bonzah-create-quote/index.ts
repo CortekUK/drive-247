@@ -300,6 +300,19 @@ serve(async (req) => {
     const chunks = splitDateRange(tripStart, tripEnd)
     console.log(`[Bonzah Quote] Date range ${tripStart} → ${tripEnd}: ${chunks.length} chunk(s)`)
 
+    // Guard: Bonzah won't insure today, so the start is clamped to tomorrow. If
+    // the rental has already ended (or ends today/tomorrow), that clamp collapses
+    // the window to a single day → zero chunks → no quote is ever created. Without
+    // this guard the function would fall through and return HTTP 200 with a null
+    // policy_record_id, which the UI reads as "Quote created. Complete it from the
+    // rental page" — a misleading success for something that never happened.
+    if (chunks.length === 0) {
+      return errorResponse(
+        `Insurance can't be added to this rental. Bonzah policies must start tomorrow (${pacificTomorrow}) or later, but this rental ends ${body.trip_dates.end}. A rental that has already ended — or ends today/tomorrow — has no insurable days left.`,
+        400
+      )
+    }
+
     // Common fields for all quotes (everything except trip dates)
     const commonFields: Record<string, unknown> = {
       product_id: PRODUCT_ID,
