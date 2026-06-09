@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -146,6 +147,12 @@ export const AddPaymentDialog = ({
   const [stripeLoading, setStripeLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  // Operator-controllable override for the post-payment deposit hold. Seeded
+  // from the `placeDepositHoldAfter` prop (true in the new-rental flow when the
+  // tenant has a deposit configured) but the operator can UNCHECK it per guest
+  // — e.g. auto-extend guests who don't pay a deposit. When unchecked, the
+  // Charge-via-Stripe / Email-Stripe-Link paths omit the hold entirely.
+  const [depositHoldEnabled, setDepositHoldEnabled] = useState(Boolean(placeDepositHoldAfter));
   // Pending action awaiting operator confirmation in the deposit-hold popup.
   // Only used when placeDepositHoldAfter+tenant deposit is configured; in every
   // other context the buttons run their handlers immediately as before.
@@ -198,13 +205,15 @@ export const AddPaymentDialog = ({
   // Update form values when props change
   useEffect(() => {
     if (open) {
+      // Re-seed the deposit-hold toggle from the prop each time the dialog opens.
+      setDepositHoldEnabled(Boolean(placeDepositHoldAfter));
       if (customer_id) form.setValue("customer_id", customer_id);
       if (vehicle_id) form.setValue("vehicle_id", vehicle_id);
       // Prefer breakdown total > defaultAmount > outstanding
       if (breakdownTotal && breakdownTotal > 0) form.setValue("amount", Math.round(breakdownTotal * 100) / 100);
       else if (defaultAmount) form.setValue("amount", Math.round(defaultAmount * 100) / 100);
     }
-  }, [open, customer_id, vehicle_id, defaultAmount, breakdownTotal, form]);
+  }, [open, customer_id, vehicle_id, defaultAmount, breakdownTotal, form, placeDepositHoldAfter]);
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -376,9 +385,15 @@ export const AddPaymentDialog = ({
     ? depositHoldAmountProp
     : Number(tenant?.global_deposit_amount) || 0;
 
-  const shouldConfirmMode = !!placeDepositHoldAfter
+  // True when a deposit hold COULD apply in this context (new-rental flow with a
+  // configured deposit) — gates whether we render the operator opt-out checkbox.
+  const depositHoldApplicable = !!placeDepositHoldAfter
     && !!tenant?.security_deposit_enabled
     && effectiveDepositAmount > 0;
+
+  // The hold only actually rides along when applicable AND the operator left the
+  // checkbox checked. Everything downstream keys off this, not the raw prop.
+  const shouldConfirmMode = depositHoldApplicable && depositHoldEnabled;
 
   // Manual payment submit
   const onSubmit = async (data: PaymentFormData) => {
@@ -589,7 +604,7 @@ export const AddPaymentDialog = ({
           // First-rental flow: after the rental payment captures, the webhook
           // invokes place-deposit-hold to authorise the deposit off-session on
           // the same saved card.
-          ...(placeDepositHoldAfter ? { placeDepositHoldAfter: true } : {}),
+          ...(depositHoldEnabled ? { placeDepositHoldAfter: true } : {}),
         },
       });
 
@@ -675,7 +690,7 @@ export const AddPaymentDialog = ({
           // First-rental flow: after the rental payment captures, the webhook
           // invokes place-deposit-hold to authorise the deposit off-session on
           // the same saved card.
-          ...(placeDepositHoldAfter ? { placeDepositHoldAfter: true } : {}),
+          ...(depositHoldEnabled ? { placeDepositHoldAfter: true } : {}),
         },
       });
 
@@ -702,7 +717,7 @@ export const AddPaymentDialog = ({
           // hold amount so the email template can render the transparency
           // notice for the customer alongside the Pay Now button. Uses the
           // per-rental override when set, falls back to tenant default.
-          ...(placeDepositHoldAfter && tenant?.security_deposit_enabled && effectiveDepositAmount > 0
+          ...(depositHoldEnabled && tenant?.security_deposit_enabled && effectiveDepositAmount > 0
             ? { depositHoldAmount: effectiveDepositAmount }
             : {}),
           ...(targetCategories && targetCategories.length > 0
@@ -991,6 +1006,23 @@ export const AddPaymentDialog = ({
                 )}
               </Button>
 
+
+              {/* Deposit-hold opt-out — only when a hold could apply (new-rental
+                  flow + configured deposit). Lets the operator skip the hold per
+                  guest, e.g. auto-extend guests who don't pay a deposit. */}
+              {depositHoldApplicable && (
+                <label className="flex items-start gap-2.5 rounded-md border bg-background px-3 py-2.5 cursor-pointer select-none">
+                  <Checkbox
+                    checked={depositHoldEnabled}
+                    onCheckedChange={(v) => setDepositHoldEnabled(v === true)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-xs leading-snug text-muted-foreground">
+                    Place a {formatCurrency(effectiveDepositAmount, tenant?.currency_code || 'USD')} security deposit hold after the customer pays.
+                    {' '}Uncheck for guests who don&apos;t pay a deposit (e.g. auto-extend guests).
+                  </span>
+                </label>
+              )}
 
               {/* Stripe options row */}
               {selectedCustomerId && (
