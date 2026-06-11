@@ -24,9 +24,10 @@ export function getTierMileage(vehicle: VehicleMileage, tier: MileageTier): numb
 
 /**
  * Calculate total mileage allowance for a rental.
+ * Allowance is pro-rata by day (rounded to a whole number):
  * daily (<7d): days × daily_mileage
- * weekly (7 to monthlyTierDays-1): (days/7) × weekly_mileage
- * monthly (>= monthlyTierDays): (days/monthlyTierDays) × monthly_mileage
+ * weekly (7 to monthlyTierDays-1): (weekly_mileage / 7) × days
+ * monthly (>= monthlyTierDays): (monthly_mileage / monthlyTierDays) × days
  * Returns null if the tier has unlimited mileage.
  */
 export function calculateTotalMileageAllowance(vehicle: VehicleMileage, rentalDays: number, monthlyTierDays: number = 30): number | null {
@@ -35,9 +36,9 @@ export function calculateTotalMileageAllowance(vehicle: VehicleMileage, rentalDa
   if (perUnit === null) return null;
 
   switch (tier) {
-    case 'daily': return rentalDays * perUnit;
-    case 'weekly': return Math.ceil(rentalDays / 7) * perUnit;
-    case 'monthly': return Math.ceil(rentalDays / monthlyTierDays) * perUnit;
+    case 'daily': return Math.round(rentalDays * perUnit);
+    case 'weekly': return Math.round((perUnit / 7) * rentalDays);
+    case 'monthly': return Math.round((perUnit / monthlyTierDays) * rentalDays);
   }
 }
 

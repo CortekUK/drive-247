@@ -4369,7 +4369,7 @@ const CreateRental = () => {
                 const perUnit = getTierMileage(effVehicle, tier);
                 const totalAllowance = calculateTotalMileageAllowance(effVehicle, days, mtd);
                 const unlimited = isUnlimitedMileage(effVehicle);
-                const tierMultiplier = tier === 'daily' ? days : tier === 'weekly' ? Math.ceil(days / 7) : Math.ceil(days / mtd);
+                const tierPeriodDays = tier === 'daily' ? 1 : tier === 'weekly' ? 7 : mtd;
                 const tierUnitLabel = tier === 'daily' ? 'day' : tier === 'weekly' ? 'week' : 'month';
                 const hasMileageOverrides = dailyMileageOverride !== null || weeklyMileageOverride !== null || monthlyMileageOverride !== null || excessRateOverride !== null;
                 const tierItems: { key: 'daily' | 'weekly' | 'monthly'; label: string; vehicleVal: number | null; override: number | null; setOverride: (v: number | null) => void }[] = [
@@ -4506,7 +4506,7 @@ const CreateRental = () => {
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">This Rental ({days} days — {tier} tier)</p>
                           {perUnit != null ? (
                             <div className="flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">{perUnit.toLocaleString()} {unitShort}/{tierUnitLabel} × {tierMultiplier} {tierUnitLabel}{tierMultiplier !== 1 ? 's' : ''}</span>
+                              <span className="text-sm text-muted-foreground">{tier === 'daily' ? `${perUnit.toLocaleString()} ${unitShort}/day × ${days} day${days !== 1 ? 's' : ''}` : `≈ ${perUnit.toLocaleString()} ${unitShort}/${tierUnitLabel} ÷ ${tierPeriodDays} × ${days} day${days !== 1 ? 's' : ''}`}</span>
                               <span className="text-sm font-bold">{formatDistance(totalAllowance!, distUnit)}</span>
                             </div>
                           ) : (

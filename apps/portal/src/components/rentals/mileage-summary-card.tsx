@@ -191,7 +191,7 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
   const tier = rentalDays > 0 ? getMileageTier(rentalDays, mtd) : null;
   const tierLabel = tier ? getMileageTierLabel(tier, distanceUnit) : null;
   const perUnitMileage = effectiveVehicle && tier ? getTierMileage(effectiveVehicle, tier) : null;
-  const tierUnits = tier === 'daily' ? rentalDays : tier === 'weekly' ? Math.ceil(rentalDays / 7) : tier === 'monthly' ? Math.ceil(rentalDays / mtd) : 0;
+  const tierPeriodDays = tier === 'daily' ? 1 : tier === 'weekly' ? 7 : tier === 'monthly' ? mtd : 1;
   const tierUnitLabel = tier === 'daily' ? 'day' : tier === 'weekly' ? 'week' : 'month';
   const excessRate = effectiveExcessRate;
 
@@ -348,7 +348,9 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">How Allowance is Calculated</p>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               <span className="text-muted-foreground">
-                {perUnitMileage.toLocaleString()} {getDistanceUnitShort(distanceUnit)}/{tierUnitLabel} × {tierUnits} {tierUnitLabel}{tierUnits !== 1 ? 's' : ''} = <span className="font-semibold text-foreground">{allowedMileage?.toLocaleString()} {getDistanceUnitShort(distanceUnit)} total</span>
+                {tier === 'daily'
+                  ? `${perUnitMileage.toLocaleString()} ${getDistanceUnitShort(distanceUnit)}/day × ${rentalDays} day${rentalDays !== 1 ? 's' : ''}`
+                  : `≈ ${perUnitMileage.toLocaleString()} ${getDistanceUnitShort(distanceUnit)}/${tierUnitLabel} ÷ ${tierPeriodDays} × ${rentalDays} day${rentalDays !== 1 ? 's' : ''}`} = <span className="font-semibold text-foreground">{allowedMileage?.toLocaleString()} {getDistanceUnitShort(distanceUnit)} total</span>
               </span>
               {excessRate != null && excessRate > 0 && (
                 <span className="text-muted-foreground">

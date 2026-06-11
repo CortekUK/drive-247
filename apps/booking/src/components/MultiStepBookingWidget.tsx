@@ -2416,26 +2416,62 @@ const MultiStepBookingWidget = () => {
     const weeklyRent = vehicle.weekly_rent || 0;
     const monthlyRent = vehicle.monthly_rent || 0;
 
+    // Shared weekend/holiday surcharge config (used across all tiers)
+    const weekendConfig = (tenant?.weekend_surcharge_percent && tenant.weekend_surcharge_percent > 0)
+      ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0] }
+      : null;
+
     // Determine primary price based on duration (matching pricing tiers)
     if (days >= _mtd && monthlyRent > 0) {
-      // Monthly rental - show monthly price as primary
+      // Monthly rental - show monthly price as primary, surcharge-adjusted when dates set
+      let effectiveMonthlyRate = monthlyRent;
+      if (formData.pickupDate && formData.dropoffDate && (weekendConfig || holidays.length > 0)) {
+        const result = calculateRentalPriceBreakdown(
+          formData.pickupDate,
+          formData.dropoffDate,
+          { daily_rent: dailyRent, weekly_rent: weeklyRent, monthly_rent: monthlyRent },
+          weekendConfig,
+          holidays,
+          vehicle.id === formData.vehicleId ? vehicleOverrides : [],
+          vehicle.id,
+          _mtd
+        );
+        if (result.pricingTier === 'monthly' && result.rentalDays > 0) {
+          // Scale total to an effective per-month figure (mtd days = 1 month)
+          effectiveMonthlyRate = Math.round((result.rentalPrice / result.rentalDays) * _mtd * 100) / 100;
+        }
+      }
       const secondaryPrices: string[] = [];
       if (weeklyRent > 0) secondaryPrices.push(`${formatCurrency(weeklyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / week`);
       if (dailyRent > 0) secondaryPrices.push(`${formatCurrency(dailyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / day`);
-      return { price: monthlyRent, label: '/ month', secondaryPrices };
+      return { price: effectiveMonthlyRate, label: '/ month', secondaryPrices };
     } else if (days >= 7 && days < _mtd && weeklyRent > 0) {
-      // Weekly rental - show weekly price as primary
+      // Weekly rental - show weekly price as primary, surcharge-adjusted when dates set
+      let effectiveWeeklyRate = weeklyRent;
+      if (formData.pickupDate && formData.dropoffDate && (weekendConfig || holidays.length > 0)) {
+        const result = calculateRentalPriceBreakdown(
+          formData.pickupDate,
+          formData.dropoffDate,
+          { daily_rent: dailyRent, weekly_rent: weeklyRent, monthly_rent: monthlyRent },
+          weekendConfig,
+          holidays,
+          vehicle.id === formData.vehicleId ? vehicleOverrides : [],
+          vehicle.id,
+          _mtd
+        );
+        if (result.pricingTier === 'weekly' && result.rentalDays > 0) {
+          // Scale total to an effective per-week figure (7 days = 1 week)
+          effectiveWeeklyRate = Math.round((result.rentalPrice / result.rentalDays) * 7 * 100) / 100;
+        }
+      }
       const secondaryPrices: string[] = [];
       if (dailyRent > 0) secondaryPrices.push(`${formatCurrency(dailyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / day`);
       if (monthlyRent > 0) secondaryPrices.push(`${formatCurrency(monthlyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / month`);
-      return { price: weeklyRent, label: '/ week', secondaryPrices };
+      return { price: effectiveWeeklyRate, label: '/ week', secondaryPrices };
     } else if (dailyRent > 0) {
       // Daily rental - apply dynamic pricing to show effective average daily rate
       let effectiveDailyRate = dailyRent;
       if (formData.pickupDate && formData.dropoffDate) {
-        const weekendConfig = (tenant?.weekend_surcharge_percent && tenant.weekend_surcharge_percent > 0)
-          ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0] }
-          : null;
         if (weekendConfig || holidays.length > 0) {
           const result = calculateRentalPriceBreakdown(
             formData.pickupDate,

@@ -14,6 +14,8 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { formatInTimeZone } from "date-fns-tz";
+import { calculateRentalPriceBreakdown } from "@/lib/calculate-rental-price";
+import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -43,6 +45,8 @@ const BookingVehiclesContent = () => {
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
   const { updateContext } = useBookingStore();
+  // Tenant-level holidays for surcharge-aware price displays (no vehicleId → tenant holidays only)
+  const { holidays } = useDynamicPricing();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
@@ -210,11 +214,37 @@ const BookingVehiclesContent = () => {
 
   const calculatePrice = (vehicle: Vehicle) => {
     const days = calculateRentalDays();
-    // Use monthly_rent if available, otherwise estimate
+
+    // If we have a rate and valid dates, compute the tier-correct,
+    // surcharge-inclusive total via the shared pricing engine.
+    const hasRate = vehicle.daily_rent || vehicle.weekly_rent || vehicle.monthly_rent;
+    if (hasRate && pickupDate && returnDate) {
+      const weekendConfig = (tenant?.weekend_surcharge_percent && tenant.weekend_surcharge_percent > 0)
+        ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0] }
+        : null;
+      const result = calculateRentalPriceBreakdown(
+        pickupDate,
+        returnDate,
+        {
+          daily_rent: vehicle.daily_rent || 0,
+          weekly_rent: vehicle.weekly_rent || 0,
+          monthly_rent: vehicle.monthly_rent || 0,
+        },
+        weekendConfig,
+        holidays,
+        // Page renders many vehicles — per-vehicle overrides aren't fetched here;
+        // tenant-level weekend + holiday surcharges still apply.
+        [],
+        vehicle.id,
+        tenant?.monthly_tier_days ?? 30
+      );
+      return result.rentalPrice;
+    }
+
+    // Fallback: tier-correct base rate when no dates, else estimate $50/day
     if (vehicle.monthly_rent) {
       return vehicle.monthly_rent;
     }
-    // Fallback: estimate $50/day if no rate exists
     return days * 50;
   };
 
@@ -355,7 +385,7 @@ const BookingVehiclesContent = () => {
                           {formatCurrency(calculatePrice(vehicle), tenant?.currency_code || 'USD')}
                         </span>
                         <span className="text-sm text-muted-foreground">
-                          monthly
+                          {pickupDate && returnDate ? `total / ${calculateRentalDays()} days` : 'monthly'}
                         </span>
                       </div>
                       <Button

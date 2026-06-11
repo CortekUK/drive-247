@@ -213,7 +213,7 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
                 let tier: 'daily' | 'weekly' | 'monthly' = days >= _mtd ? 'monthly' : days >= 7 ? 'weekly' : 'daily';
                 const perUnit = tier === 'daily' ? vehicle.daily_mileage : tier === 'weekly' ? vehicle.weekly_mileage : vehicle.monthly_mileage;
                 if (perUnit == null) return 'Unlimited';
-                const total = tier === 'daily' ? days * perUnit : tier === 'weekly' ? Math.ceil(days / 7) * perUnit : Math.ceil(days / _mtd) * perUnit;
+                const total = Math.round(tier === 'daily' ? days * perUnit : tier === 'weekly' ? (perUnit / 7) * days : (perUnit / _mtd) * days);
                 return total.toString();
             }
             return vehicle?.monthly_mileage?.toString() || '';

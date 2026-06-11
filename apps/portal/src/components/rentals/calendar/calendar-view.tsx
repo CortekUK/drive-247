@@ -93,12 +93,12 @@ export function CalendarView({ filters }: CalendarViewProps) {
   // matching rentals OR any blocks (blocks aren't subject to the status filter).
   const filteredGrouped = useMemo(() => {
     if (!data?.grouped) return [];
-    return data.grouped
-      .map((v) => ({
-        ...v,
-        rentals: v.rentals.filter((r) => activeStatuses.has(r.computed_status)),
-      }))
-      .filter((v) => v.rentals.length > 0 || v.blocks.length > 0);
+    // Show the whole fleet — every vehicle row stays visible. The status filter
+    // only hides individual rental bars, never the vehicle row itself.
+    return data.grouped.map((v) => ({
+      ...v,
+      rentals: v.rentals.filter((r) => activeStatuses.has(r.computed_status)),
+    }));
   }, [data?.grouped, activeStatuses]);
 
   const handleCreateBlock = (
@@ -108,6 +108,19 @@ export function CalendarView({ filters }: CalendarViewProps) {
   ) => {
     setPendingBlock({ vehicleId, startDate, endDate, reason: "" });
   };
+
+  // Open the block dialog from the "+ Block" button (no drag) — prefill today,
+  // operator types the real dates.
+  const handleAddBlockForVehicle = (vehicleId: string) => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    setPendingBlock({ vehicleId, startDate: today, endDate: today, reason: "" });
+  };
+
+  const blockDatesInvalid =
+    !!pendingBlock &&
+    !!pendingBlock.startDate &&
+    !!pendingBlock.endDate &&
+    pendingBlock.endDate < pendingBlock.startDate;
 
   const handleRemoveBlock = (block: CalendarBlock) => {
     removeBlock.mutate(block.id);
@@ -304,6 +317,7 @@ export function CalendarView({ filters }: CalendarViewProps) {
                       index={index}
                       dates={dates}
                       onCreateBlock={handleCreateBlock}
+                      onAddBlock={handleAddBlockForVehicle}
                       onRemoveBlock={handleRemoveBlock}
                       removingBlockId={removeBlock.isPending ? (removeBlock.variables as string) : null}
                     />
@@ -323,29 +337,47 @@ export function CalendarView({ filters }: CalendarViewProps) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Block these dates?</AlertDialogTitle>
+            <AlertDialogTitle>Block dates</AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingBlock && (
-                <>
-                  This vehicle will be marked unavailable from{" "}
-                  <span className="font-semibold text-foreground">
-                    {format(new Date(pendingBlock.startDate + "T00:00:00"), "MMM d, yyyy")}
-                  </span>{" "}
-                  to{" "}
-                  <span className="font-semibold text-foreground">
-                    {format(new Date(pendingBlock.endDate + "T00:00:00"), "MMM d, yyyy")}
-                  </span>
-                  . Customers won't be able to book it for that window.
-                </>
-              )}
+              Mark this vehicle unavailable so customers can&apos;t book it for the window
+              below. Type the exact dates, or drag on the calendar to fill them in.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="py-1">
+
+          {/* Editable dates — typed entry is the precise method (handles long
+              bookings the drag can't reach, and lets the operator correct the
+              drag selection before saving). */}
+          <div className="grid grid-cols-2 gap-3 py-1">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Start date</label>
+              <Input
+                type="date"
+                value={pendingBlock?.startDate ?? ""}
+                max={pendingBlock?.endDate || undefined}
+                onChange={(e) =>
+                  setPendingBlock((p) => (p ? { ...p, startDate: e.target.value } : p))
+                }
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">End date</label>
+              <Input
+                type="date"
+                value={pendingBlock?.endDate ?? ""}
+                min={pendingBlock?.startDate || undefined}
+                onChange={(e) =>
+                  setPendingBlock((p) => (p ? { ...p, endDate: e.target.value } : p))
+                }
+                className="mt-1"
+              />
+            </div>
+          </div>
+          <div className="pb-1">
             <label className="text-xs font-medium text-muted-foreground">
               Reason (optional)
             </label>
             <Input
-              autoFocus
               placeholder="e.g. Rented on Turo, maintenance…"
               value={pendingBlock?.reason ?? ""}
               onChange={(e) =>
@@ -354,9 +386,20 @@ export function CalendarView({ filters }: CalendarViewProps) {
               className="mt-1"
             />
           </div>
+          {blockDatesInvalid && (
+            <p className="text-xs text-destructive">End date must be on or after the start date.</p>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmCreateBlock}>
+            <AlertDialogAction
+              onClick={(e) => {
+                if (blockDatesInvalid || !pendingBlock?.startDate || !pendingBlock?.endDate) {
+                  e.preventDefault();
+                  return;
+                }
+                confirmCreateBlock();
+              }}
+            >
               Block dates
             </AlertDialogAction>
           </AlertDialogFooter>

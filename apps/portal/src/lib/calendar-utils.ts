@@ -107,12 +107,12 @@ type VehicleInfo = VehicleTimelineData["vehicle"];
 /**
  * Build the per-vehicle timeline from rentals + manual blocks.
  *
- * A vehicle row is created if it has at least one rental OR one block.
- * Blocks with vehicle_id = null are tenant-wide and are attached to every
- * vehicle row (so an operator's "all cars off" block shows across the fleet).
+ * EVERY vehicle in `vehicleLookup` gets a row — the whole fleet is always
+ * visible, even idle cars with no rentals or blocks. Rentals/blocks are layered
+ * onto those rows. Blocks with vehicle_id = null are tenant-wide and attach to
+ * every vehicle row (so an operator's "all cars off" block shows across the fleet).
  *
- * `vehicleLookup` supplies reg/make/model/photo for vehicles that only have
- * blocks (no rentals) — those vehicle details aren't carried on a block row.
+ * `vehicleLookup` supplies reg/make/model/photo for all tenant vehicles.
  */
 export function groupTimelineByVehicle(
   rentals: CalendarRental[],
@@ -127,6 +127,11 @@ export function groupTimelineByVehicle(
     }
     return vehicleMap.get(vehicle.id)!;
   };
+
+  // Seed a row for every vehicle so the full fleet always shows.
+  for (const vehicle of vehicleLookup.values()) {
+    ensureRow(vehicle);
+  }
 
   for (const rental of rentals) {
     ensureRow(rental.vehicle).rentals.push(rental);

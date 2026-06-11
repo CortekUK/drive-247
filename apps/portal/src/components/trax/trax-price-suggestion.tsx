@@ -22,6 +22,8 @@ import {
   type TraxTier,
   type TraxConfidence,
 } from "@/hooks/use-trax-price";
+import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
+import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -54,9 +56,9 @@ const MATCH_LABEL: Record<string, string> = {
 };
 
 const CONFIDENCE_STYLE: Record<TraxConfidence, string> = {
-  high: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
-  medium: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300",
-  low: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
+  high: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  medium: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+  low: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   none: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
 };
 
@@ -103,6 +105,8 @@ export function TraxPriceSuggestion({
     year: draftYear,
   });
   const why = useTraxWhy();
+  const { settings: weekendSettings } = useWeekendPricing();
+  const { holidays } = useTenantHolidays();
   const [open, setOpen] = useState(false);
   const [reasoning, setReasoning] = useState<string>("");
 
@@ -220,6 +224,45 @@ export function TraxPriceSuggestion({
   const comps = data!.comps!;
   const util = data!.utilization!;
 
+  // ── seasonal markups (applied automatically on top of the base at booking) ──
+  // Trax's number is a clean BASE — weekend/holiday surcharges stack on top.
+  // Surface the resulting FINAL prices so the operator isn't surprised.
+  const base = suggested!;
+  const weekendPct = Number(weekendSettings?.weekend_surcharge_percent) || 0;
+  const seasonalLines: { key: string; label: string; pct: number; final: number; tone: string }[] = [];
+  if (weekendPct > 0) {
+    seasonalLines.push({
+      key: "weekend",
+      label: "Weekends",
+      pct: weekendPct,
+      final: base * (1 + weekendPct / 100),
+      tone: "text-amber-600 dark:text-amber-400",
+    });
+  }
+  for (const h of holidays) {
+    const hp = Number(h.surcharge_percent) || 0;
+    if (hp > 0) {
+      seasonalLines.push({
+        key: `holiday-${h.id ?? h.name}`,
+        label: h.name,
+        pct: hp,
+        final: base * (1 + hp / 100),
+        tone: "text-orange-600 dark:text-orange-400",
+      });
+    }
+    if (seasonalLines.length >= 4) break; // weekend + up to 3 holidays
+  }
+  const holidayLines = seasonalLines.filter((l) => l.key !== "weekend").slice(0, 3);
+  const finalLines = [
+    ...seasonalLines.filter((l) => l.key === "weekend"),
+    ...holidayLines,
+  ];
+
+  const seasonalBlock =
+    finalLines.length > 0 ? (
+      <SeasonalMarkups lines={finalLines} tier={tier} />
+    ) : null;
+
   const dialog = (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-md dark:bg-gray-900 dark:border-gray-800">
@@ -325,17 +368,19 @@ export function TraxPriceSuggestion({
       <>
         <div
           className={cn(
-            "group relative flex h-full flex-col overflow-hidden rounded-2xl border border-[#f1f5f9] bg-white p-5 transition-all hover:border-[#e2e8f0] hover:shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700",
+            "group relative overflow-hidden rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 via-white to-white p-4 transition-shadow hover:shadow-[0_0_0_1px_rgba(99,102,241,0.25)] dark:border-indigo-500/20 dark:from-indigo-950/30 dark:via-gray-900 dark:to-gray-900",
             className,
           )}
         >
-          {/* header */}
+          {/* ambient glow */}
+          <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-indigo-400/10 blur-2xl dark:bg-indigo-500/10" />
+
           <div className="relative flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/10">
-                <TraxIcon size={16} />
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-sm">
+                <TraxIcon size={15} color="#ffffff" />
               </span>
-              <span className="text-[15px] font-semibold text-[#080812] dark:text-gray-100">
+              <span className="text-sm font-semibold text-[#080812] dark:text-gray-100">
                 {label ?? tier}
               </span>
             </div>
@@ -350,62 +395,63 @@ export function TraxPriceSuggestion({
             </span>
           </div>
 
-          {/* price */}
-          <div className="relative mt-4 flex items-end gap-2 tabular-nums">
-            <span className="text-[34px] font-bold leading-none tracking-tight text-[#080812] dark:text-gray-50">
+          <div className="relative mt-3 flex flex-wrap items-end gap-x-2 gap-y-1 tabular-nums">
+            <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-3xl font-bold tracking-tight text-transparent dark:from-indigo-400 dark:to-violet-300">
               {money(suggested)}
             </span>
-            <span className="pb-0.5 text-xs text-[#737373] dark:text-gray-500">
+            <span className="pb-1 text-xs text-[#737373] dark:text-gray-500">
               {TIER_LABEL[tier]}
             </span>
-            <span className="ml-auto">
-              {direction === "hold" ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                  <Check className="h-2.5 w-2.5" /> Aligned
-                </span>
-              ) : (
-                delta != null && (
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                      dirChip,
-                    )}
-                  >
-                    <DirIcon className="h-3 w-3" />
-                    {delta > 0 ? "+" : ""}
-                    {delta}%
-                  </span>
-                )
-              )}
-            </span>
-          </div>
-
-          {/* stat cells — clean, no mid-number wrapping */}
-          <div className="relative mt-4 grid grid-cols-3 gap-2 border-t border-indigo-100/70 pt-3 dark:border-gray-800">
-            {direction !== "hold" ? (
-              <Stat label="Was" value={money(current)} strike />
+            {direction === "hold" ? (
+              <span className="mb-0.5 ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                <Check className="h-2.5 w-2.5" /> Well aligned
+              </span>
             ) : (
-              <Stat label="Your rate" value={money(current)} />
+              delta != null && (
+                <span
+                  className={cn(
+                    "mb-0.5 ml-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold",
+                    dirChip,
+                  )}
+                >
+                  <DirIcon className="h-3 w-3" />
+                  {delta > 0 ? "+" : ""}
+                  {delta}%
+                </span>
+              )
             )}
-            <Stat label="Network median" value={money(comps.median)} />
-            <Stat label="Comparables" value={String(comps.count)} />
           </div>
 
-          {/* actions */}
-          <div className="relative mt-4 flex items-center gap-3 pt-1">
+          {/* the substance — real insight, not filler */}
+          <div className="relative mt-1 text-[11px] leading-relaxed text-[#737373] dark:text-gray-500">
+            {direction !== "hold" && (
+              <>
+                was{" "}
+                <span className="line-through">{money(current)}</span>
+                <span className="px-1">·</span>
+              </>
+            )}
+            {comps.count} similar {comps.count === 1 ? "vehicle" : "vehicles"} on the network
+            <span className="px-1">·</span>
+            median {money(comps.median)}
+          </div>
+
+          {seasonalBlock && <div className="relative">{seasonalBlock}</div>}
+
+          <div className="relative mt-3 flex items-center gap-2">
             {onImplement && direction !== "hold" && (
               <Button
                 size="sm"
                 onClick={() => onImplement(suggested!)}
-                className="h-8 bg-gradient-to-r from-indigo-600 to-violet-600 px-3.5 text-xs font-medium text-white shadow-sm shadow-indigo-500/30 hover:from-indigo-500 hover:to-violet-500"
+                className="h-7 bg-gradient-to-r from-indigo-600 to-violet-600 px-3 text-[11px] text-white hover:from-indigo-500 hover:to-violet-500"
               >
-                <Check className="mr-1 h-3.5 w-3.5" /> Apply {money(suggested)}
+                <Check className="mr-1 h-3 w-3" /> Apply {money(suggested)}
               </Button>
             )}
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 transition-colors hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:underline dark:text-indigo-400"
             >
               <Sparkles className="h-3 w-3" /> Why this price?
             </button>
@@ -418,11 +464,10 @@ export function TraxPriceSuggestion({
 
   // ── inline variant ──────────────────────────────────────────────────────
   return (
-    <>
+    <div className={cn("inline-block", className)}>
       <span
         className={cn(
           "inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs",
-          className,
         )}
       >
         <TraxIcon size={15} />
@@ -457,32 +502,35 @@ export function TraxPriceSuggestion({
           Why?
         </button>
       </span>
+      {seasonalBlock}
       {dialog}
-    </>
+    </div>
   );
 }
 
-function Stat({
-  label,
-  value,
-  strike,
+function SeasonalMarkups({
+  lines,
+  tier,
 }: {
-  label: string;
-  value: string;
-  strike?: boolean;
+  lines: { key: string; label: string; pct: number; final: number; tone: string }[];
+  tier: TraxTier;
 }) {
   return (
-    <div className="min-w-0">
-      <div className="truncate text-[10px] uppercase tracking-wide text-[#9ca3af] dark:text-gray-500">
-        {label}
-      </div>
-      <div
-        className={cn(
-          "truncate text-sm font-semibold tabular-nums text-[#080812] dark:text-gray-200",
-          strike && "font-normal text-[#9ca3af] line-through dark:text-gray-500",
-        )}
-      >
-        {value}
+    <div className="mt-2 rounded-md border border-border bg-muted/40 px-2.5 py-2 text-[11px] leading-relaxed">
+      <div className="font-medium text-foreground">With your seasonal markups</div>
+      <div className="mt-1 space-y-0.5">
+        {lines.map((l) => (
+          <div key={l.key} className="flex items-baseline justify-between gap-2 tabular-nums">
+            <span className="truncate text-muted-foreground">
+              <span className={cn("font-medium", l.tone)}>{l.label}</span>{" "}
+              (+{l.pct}%)
+            </span>
+            <span className="shrink-0 font-semibold text-foreground">
+              {money(l.final)}
+              <span className="font-normal text-muted-foreground">{TIER_LABEL[tier]}</span>
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
