@@ -19,6 +19,16 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
 
 interface BuyInsuranceDialogProps {
@@ -83,6 +93,10 @@ export function BuyInsuranceDialog({
   const [premium, setPremium] = useState(0);
   const [purchasing, setPurchasing] = useState(false);
   const [customerState, setCustomerState] = useState('FL');
+  // Holds the backend's duplicate-policy message when an active policy already
+  // covers these dates. Surfacing it as an explicit confirm prevents accidental
+  // double-issuance (which charges the Bonzah balance twice).
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   // Load customer's state when dialog opens (for accurate premium calculation)
   useEffect(() => {
@@ -137,7 +151,7 @@ export function BuyInsuranceDialog({
     onOpenChange(false);
   };
 
-  const handlePurchase = async () => {
+  const handlePurchase = async (forceDuplicate = false) => {
     if (!tenant?.id || !rental.customers?.id) return;
 
     setPurchasing(true);
@@ -205,6 +219,7 @@ export function BuyInsuranceDialog({
           trip_dates: tripDates,
           ...(isExtension && { policy_type: 'extension' }),
           ...(isExtension && extensionId ? { extension_id: extensionId } : {}),
+          ...(forceDuplicate ? { force_duplicate: true } : {}),
           pickup_state: pickupState,
           coverage,
           renter: {
@@ -228,18 +243,29 @@ export function BuyInsuranceDialog({
       });
 
       if (quoteError) {
-        // Extract the actual error message from the edge function response body.
-        // quoteError.context is a Response object — must call .json() to read it
-        // (mirrors the confirm-payment error handling below).
+        // Extract the actual error message + status from the edge function
+        // response body. quoteError.context is a Response object — read .status
+        // first (non-consuming), then .json() for the body.
         let bodyError: string | null = null;
+        let status: number | null = null;
         try {
           if (quoteError.context instanceof Response) {
+            status = quoteError.context.status;
             const parsed = await quoteError.context.json();
             bodyError = parsed?.error ?? null;
           } else if (quoteError.context && typeof quoteError.context === 'object') {
             bodyError = (quoteError.context as any)?.error ?? null;
           }
         } catch { /* ignore parse errors */ }
+
+        // 409 = duplicate-policy guard. Don't error out — ask the operator to
+        // explicitly confirm, then retry with force_duplicate.
+        if (status === 409) {
+          setDuplicateWarning(bodyError || 'This rental already has an active insurance policy covering these dates.');
+          setPurchasing(false);
+          return;
+        }
+
         throw new Error(bodyError || quoteError.message || 'Failed to create Bonzah quote');
       }
 
@@ -393,6 +419,7 @@ export function BuyInsuranceDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => { if (!purchasing) handleClose(); }}>
       <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
@@ -622,7 +649,7 @@ export function BuyInsuranceDialog({
                 <Button variant="outline" onClick={handleClose} disabled={purchasing}>
                   Cancel
                 </Button>
-                <Button onClick={handlePurchase} disabled={purchasing}>
+                <Button onClick={() => handlePurchase()} disabled={purchasing}>
                   {purchasing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
@@ -641,5 +668,37 @@ export function BuyInsuranceDialog({
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Duplicate-policy guard: the rental already has an active policy covering
+        these dates. Force a deliberate confirmation before issuing a second one. */}
+    <AlertDialog open={!!duplicateWarning} onOpenChange={(v) => { if (!v) setDuplicateWarning(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            Already insured for these dates
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {duplicateWarning}
+            {' '}Issuing another policy will charge your Bonzah balance a second time for the same period.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={purchasing}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={purchasing}
+            className="bg-amber-600 hover:bg-amber-700"
+            onClick={(e) => {
+              e.preventDefault();
+              setDuplicateWarning(null);
+              handlePurchase(true);
+            }}
+          >
+            Issue anyway
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

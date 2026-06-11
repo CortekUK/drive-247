@@ -92,6 +92,9 @@ interface CreateQuoteRequest {
   renter: RenterDetails
   policy_type?: 'original' | 'extension'
   extension_id?: string
+  // When true, bypass the duplicate-policy guard and issue a second policy for
+  // an already-covered period. Only set after the operator explicitly confirms.
+  force_duplicate?: boolean
 }
 
 // Response from /Bonzah/quote endpoint with finalize=1
@@ -311,6 +314,37 @@ serve(async (req) => {
         `Insurance can't be added to this rental. Bonzah policies must start tomorrow (${pacificTomorrow}) or later, but this rental ends ${body.trip_dates.end}. A rental that has already ended — or ends today/tomorrow — has no insurable days left.`,
         400
       )
+    }
+
+    // Guard: duplicate-policy prevention. Two operators working the same rental
+    // (or one operator retrying after a confusing earlier attempt) can issue a
+    // second Bonzah policy covering the SAME period — charging the Bonzah balance
+    // twice for coverage needed once. Block when an existing non-terminal policy
+    // overlaps the requested window, unless the operator explicitly forces it.
+    // Overlap = existing.start <= new.end AND existing.end >= new.start, so
+    // legitimately back-to-back extension policies (non-overlapping) still pass.
+    if (!body.force_duplicate) {
+      const { data: existingPolicies, error: dupCheckError } = await supabase
+        .from('bonzah_insurance_policies')
+        .select('policy_no, status, trip_start_date, trip_end_date, premium_amount')
+        .eq('rental_id', body.rental_id)
+        .in('status', ['active', 'quoted', 'payment_pending', 'payment_confirmed'])
+        .lte('trip_start_date', tripEnd)
+        .gte('trip_end_date', tripStart)
+
+      if (dupCheckError) {
+        // Fail open on a read error rather than blocking a legitimate purchase,
+        // but log it so we notice if the guard is silently not running.
+        console.error('[Bonzah Quote] Duplicate-check query failed (allowing purchase):', dupCheckError)
+      } else if (existingPolicies && existingPolicies.length > 0) {
+        const existing = existingPolicies[0]
+        const label = existing.policy_no || `(${existing.status})`
+        console.warn(`[Bonzah Quote] Duplicate blocked: rental ${body.rental_id} already has policy ${label} covering ${existing.trip_start_date}→${existing.trip_end_date}`)
+        return errorResponse(
+          `This rental already has an insurance policy (${label}, ${existing.status}) covering ${existing.trip_start_date} → ${existing.trip_end_date}, which overlaps the requested dates. Issuing another would charge the Bonzah balance a second time for the same period. If you genuinely intend to add a second policy, confirm to proceed.`,
+          409
+        )
+      }
     }
 
     // Common fields for all quotes (everything except trip dates)
