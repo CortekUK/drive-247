@@ -109,7 +109,43 @@ export const formatDuration = (value: number, periodType: string = 'Monthly'): s
   }
 };
 
-export const getRentalStatus = (startDate: string, endDate: string | null, status: string): string => {
+export interface RentalStatusOptions {
+  /** The rental's return_time (e.g. "14:30:00"); null/undefined = no specific time */
+  returnTime?: string | null;
+  /** Whether the rental is set to auto-extend (weekly auto-renew) */
+  autoExtendEnabled?: boolean | null;
+  /** The auto-extend lifecycle status ('active' | 'awaiting_payment' | 'paused' | 'ended' | ...) */
+  autoExtendStatus?: string | null;
+}
+
+/**
+ * Resolve the precise moment a rental actually ends.
+ *
+ * `end_date` is a date-only Postgres column, so `parseISO` lands it on LOCAL
+ * midnight at the START of the final day. A rental ending "2026-06-09" should
+ * stay Active for the whole of June 9 (until the return time, or end-of-day if
+ * none) — NOT flip to Completed at 00:00 that morning. We therefore push the
+ * boundary to the return time on the end date, or to the next midnight when no
+ * return time is recorded.
+ */
+const getRentalEndBoundary = (endDate: string, returnTime?: string | null): Date => {
+  const end = parseISO(endDate);
+  if (returnTime && /^\d{1,2}:\d{2}/.test(returnTime)) {
+    const [h, m, s] = returnTime.split(":").map((n) => Number(n));
+    end.setHours(h || 0, m || 0, s || 0, 0);
+    return end;
+  }
+  // No return time → keep Active through the entire final day (until next midnight).
+  end.setDate(end.getDate() + 1);
+  return end;
+};
+
+export const getRentalStatus = (
+  startDate: string,
+  endDate: string | null,
+  status: string,
+  options: RentalStatusOptions = {}
+): string => {
   // If explicitly set to Cancelled in database, respect that (rental was cancelled)
   if (status === "Cancelled") {
     return "Cancelled";
@@ -138,9 +174,22 @@ export const getRentalStatus = (startDate: string, endDate: string | null, statu
     return "Upcoming";
   }
 
-  // If there's an end date and it's in the past, it's completed
+  // Auto-extending rentals keep renewing weekly, so their end_date constantly
+  // trails "now" between renewals. They must NOT auto-complete on date alone —
+  // only an explicit Closed/Cancelled status (handled above) or a stopped
+  // auto-extend lifecycle ends them. Otherwise they stay Active.
+  const autoExtendActive =
+    options.autoExtendEnabled === true &&
+    options.autoExtendStatus !== "ended" &&
+    options.autoExtendStatus !== "cancelled";
+  if (autoExtendActive) {
+    return "Active";
+  }
+
+  // If there's an end date and the rental has fully ended (past the return time /
+  // end of its final day), it's completed.
   if (endDate) {
-    const end = parseISO(endDate);
+    const end = getRentalEndBoundary(endDate, options.returnTime);
     if (!isAfter(end, today)) {
       return "Completed";
     }

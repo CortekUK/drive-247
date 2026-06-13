@@ -141,6 +141,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           is_extended,
           is_pay_as_you_go,
           auto_extend_enabled,
+          auto_extend_status,
           previous_end_date,
           cancellation_requested,
           customers!rentals_customer_id_fkey(id, name),
@@ -214,7 +215,11 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
         .map((rental: any) => {
           const periodType = 'Monthly';
           const durationMonths = calculateDuration(rental.start_date, rental.end_date, periodType);
-          const computedStatus = getRentalStatus(rental.start_date, rental.end_date, rental.status);
+          const computedStatus = getRentalStatus(rental.start_date, rental.end_date, rental.status, {
+            returnTime: rental.return_time,
+            autoExtendEnabled: rental.auto_extend_enabled,
+            autoExtendStatus: rental.auto_extend_status,
+          });
           const initialPaymentData = initialPaymentMap.get(rental.id);
           const initialPaymentAmount = initialPaymentData?.amount || null;
           const paymentCaptureStatus = initialPaymentData?.capture_status || null;

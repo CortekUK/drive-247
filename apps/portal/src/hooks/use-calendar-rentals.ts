@@ -51,9 +51,12 @@ export const useCalendarRentals = (
           rental_number,
           start_date,
           end_date,
+          return_time,
           monthly_amount,
           status,
           payment_mode,
+          auto_extend_enabled,
+          auto_extend_status,
           customers!rentals_customer_id_fkey(id, name),
           vehicles!rentals_vehicle_id_fkey(id, reg, make, model, vehicle_photos(photo_url))
         `
@@ -123,7 +126,12 @@ export const useCalendarRentals = (
           computed_status: getRentalStatus(
             rental.start_date,
             rental.end_date,
-            rental.status
+            rental.status,
+            {
+              returnTime: rental.return_time,
+              autoExtendEnabled: rental.auto_extend_enabled,
+              autoExtendStatus: rental.auto_extend_status,
+            }
           ),
           customer: rental.customers as any,
           vehicle: {
