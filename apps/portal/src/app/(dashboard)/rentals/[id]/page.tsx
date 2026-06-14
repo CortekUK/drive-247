@@ -3433,6 +3433,18 @@ const RentalDetail = () => {
                               Charge
                             </button>
                           </div>
+                        ) : category === 'Security Deposit' && rental.deposit_hold_status === 'expired' ? (
+                          // Hold expired (Stripe ~7-day boundary). Charge opens the
+                          // two-step dialog: explain → Refresh hold → Charge.
+                          <button
+                            className="text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowChargeDepositDialog(true);
+                            }}
+                          >
+                            Refresh &amp; Charge
+                          </button>
                         ) : category === 'Security Deposit' && !rental.deposit_hold_status ? (
                           // No hold placed yet — open the Add Hold dialog which offers
                           // "Place via Stripe" (new tab) and "Send email link" options.
@@ -6009,6 +6021,7 @@ const RentalDetail = () => {
           onOpenChange={setShowChargeDepositDialog}
           rentalId={rental.id}
           holdAmount={Number(rental.deposit_hold_amount) || 0}
+          holdStatus={rental.deposit_hold_status}
         />
       )}
 

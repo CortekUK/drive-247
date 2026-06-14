@@ -11,7 +11,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getStripeClient, getConnectAccountId, type StripeMode } from "../_shared/stripe-client.ts";
+import { getStripeClient, getConnectAccountId, resolveHoldExpiry, DEPOSIT_HOLD_CARD_OPTIONS, type StripeMode } from "../_shared/stripe-client.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -75,6 +75,38 @@ Deno.serve(async (req) => {
       rental.deposit_hold_payment_intent_id,
       stripeOptions
     );
+
+    // SELF-HEAL: the DB said "held", but the auth may have expired (Stripe
+    // auto-cancels card holds after ~7 days). Capturing a dead PI throws and
+    // surfaces to the operator as a useless "Edge Function returned a non-2xx
+    // status code". Detect it, reconcile the DB to the truth, and return an
+    // honest, actionable message instead.
+    if (preCaptureIntent.status !== "requires_capture") {
+      console.warn(
+        "[DEPOSIT-CAPTURE] Hold no longer capturable. PI",
+        preCaptureIntent.id,
+        "status:",
+        preCaptureIntent.status
+      );
+      await supabase
+        .from("rentals")
+        .update({ deposit_hold_status: "expired" })
+        .eq("id", rentalId);
+      // Structured signal (HTTP 200 so supabase-js doesn't swallow the body):
+      // the UI uses this to switch to the two-step "Refresh hold → Charge" flow
+      // instead of showing a raw error. The expired auth is dead and can't be
+      // captured — a fresh hold must be placed first.
+      return jsonResponse(
+        {
+          success: false,
+          code: "hold_expired",
+          error:
+            "This deposit hold expired (Stripe card holds last ~7 days) and the funds were released back to the customer. Refresh the hold to place a new one, then charge it.",
+        },
+        200
+      );
+    }
+
     const multicaptureStatus = (preCaptureIntent as any)?.payment_method_options?.card?.multicapture;
     const multicaptureAvailable = multicaptureStatus === "available";
     console.log("[DEPOSIT-CAPTURE] PI", preCaptureIntent.id, "multicapture:", multicaptureStatus ?? "n/a");
@@ -135,11 +167,13 @@ Deno.serve(async (req) => {
             confirm: true,
             off_session: true,
             description: `Security deposit hold (rollover after partial capture) for rental ${rentalId.substring(0, 8).toUpperCase()}`,
-            // Ask for multicapture on the rollover PI too so future captures
-            // can stay on this one PI.
+            // Ask for extended authorization + multicapture on the rollover PI
+            // so it lasts as long as the card allows and future captures can
+            // stay on this one PI. Expand the charge to read the real expiry.
             payment_method_options: {
-              card: { request_multicapture: "if_available" },
+              card: DEPOSIT_HOLD_CARD_OPTIONS,
             },
+            expand: ["latest_charge"],
             metadata: {
               rental_id: rentalId,
               tenant_id: effectiveTenantId,
@@ -151,9 +185,7 @@ Deno.serve(async (req) => {
         );
         if (newHold.status === "requires_capture") {
           newHoldPiId = newHold.id;
-          const exp = new Date();
-          exp.setDate(exp.getDate() + 31);
-          newHoldExpiresAt = exp.toISOString();
+          newHoldExpiresAt = await resolveHoldExpiry(stripe, newHold, stripeOptions);
           console.log("[DEPOSIT-CAPTURE] Rolled remainder", remainder, "into new hold", newHoldPiId);
         } else {
           console.warn("[DEPOSIT-CAPTURE] Rollover hold landed in unexpected status", newHold.status);

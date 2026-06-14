@@ -10,6 +10,7 @@ import {
   getStripeClient,
   getConnectAccountId,
   getStripeOptions,
+  resolveHoldExpiry,
   type StripeMode,
 } from '../_shared/stripe-client.ts'
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
@@ -61,7 +62,7 @@ Deno.serve(async (req) => {
 
     const session = await stripe.checkout.sessions.retrieve(
       sessionId,
-      { expand: ['payment_intent'] },
+      { expand: ['payment_intent', 'payment_intent.latest_charge'] },
       stripeOptions
     )
 
@@ -81,8 +82,8 @@ Deno.serve(async (req) => {
     const stripeCustomerId =
       typeof pi.customer === 'string' ? pi.customer : pi.customer?.id || null
 
-    const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + 31)
+    // Read the REAL expiry from Stripe (capture_before) rather than assuming 31 days.
+    const expiresAtIso = await resolveHoldExpiry(stripe, pi, stripeOptions)
 
     // Persist hold details on the rental. Also backfill customer.stripe_customer_id
     // if the customer didn't have one yet (Checkout creates/links one).
@@ -93,7 +94,7 @@ Deno.serve(async (req) => {
         deposit_hold_status: 'held',
         deposit_hold_amount: amount,
         deposit_hold_placed_at: new Date().toISOString(),
-        deposit_hold_expires_at: expiresAt.toISOString(),
+        deposit_hold_expires_at: expiresAtIso,
         deposit_hold_payment_method_id: pmId,
         deposit_hold_stripe_customer_id: stripeCustomerId,
       })

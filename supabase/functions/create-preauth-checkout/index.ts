@@ -151,6 +151,11 @@ serve(async (req) => {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
+      // Request extended authorization so the booking pre-auth survives longer
+      // than the ~7-day card default while it waits for operator approval.
+      payment_method_options: {
+        card: { request_extended_authorization: 'if_available' },
+      },
       payment_intent_data: paymentIntentData,
       line_items: lineItems,
       customer_email: body.customerEmail,

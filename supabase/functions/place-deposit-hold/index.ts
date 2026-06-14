@@ -3,7 +3,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getStripeClient, getConnectAccountId, type StripeMode } from "../_shared/stripe-client.ts";
+import { getStripeClient, getConnectAccountId, resolveHoldExpiry, DEPOSIT_HOLD_CARD_OPTIONS, type StripeMode } from "../_shared/stripe-client.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -33,6 +33,11 @@ Deno.serve(async (req) => {
     if (rentalError || !rental) {
       return errorResponse("Rental not found", 404);
     }
+
+    // Remember the prior state: a re-collection after an expired/released hold
+    // needs a fresh Stripe idempotency key so it doesn't get handed back the
+    // old (dead) PaymentIntent.
+    const priorHoldStatus = rental.deposit_hold_status as string | null;
 
     // Don't place a hold if one already exists
     if (rental.deposit_hold_status === "held") {
@@ -140,11 +145,13 @@ Deno.serve(async (req) => {
     // two real PaymentIntents on the same card — exactly the duplicate we saw
     // for R-f07370. Combined with the Stripe idempotency key below, this gives
     // belt-and-braces protection.
+    // Claim from a placeable state: never placed (null) OR a dead hold that can
+    // be re-collected (expired/released). 'held'/'processing' are handled above.
     const { data: claimed, error: claimError } = await supabase
       .from("rentals")
       .update({ deposit_hold_status: "processing" })
       .eq("id", rentalId)
-      .is("deposit_hold_status", null)
+      .or("deposit_hold_status.is.null,deposit_hold_status.eq.expired,deposit_hold_status.eq.released")
       .select("id");
     if (claimError) {
       return errorResponse(`Failed to claim hold slot: ${claimError.message}`, 500);
@@ -186,21 +193,28 @@ Deno.serve(async (req) => {
       confirm: true,
       off_session: true,
       description: `Security deposit hold for rental ${rentalId.substring(0, 8).toUpperCase()}`,
+      // Expand the authorising charge so we can read the REAL expiry deadline
+      // (payment_method_details.card.capture_before) instead of guessing.
+      expand: ["latest_charge"],
       metadata: {
         rental_id: rentalId,
         tenant_id: effectiveTenantId,
         type: "deposit_hold",
       },
     };
-    const requestOpts = { ...(stripeOptions ?? {}), idempotencyKey: `deposit-hold-${rentalId}` };
+    // Re-collections (prior hold expired/released) get a distinct idempotency
+    // key so Stripe creates a NEW hold instead of returning the dead PI.
+    const idemSuffix = priorHoldStatus === "expired" || priorHoldStatus === "released" ? `-recollect-${priorHoldStatus}` : "";
+    const requestOpts = { ...(stripeOptions ?? {}), idempotencyKey: `deposit-hold-${rentalId}${idemSuffix}` };
 
     let paymentIntent;
     try {
       paymentIntent = await stripe.paymentIntents.create(
         {
           ...basePayload,
+          // Request extended authorization (up to ~30 days) + multicapture.
           payment_method_options: {
-            card: { request_multicapture: "if_available" as const },
+            card: DEPOSIT_HOLD_CARD_OPTIONS,
           },
         },
         requestOpts
@@ -251,9 +265,11 @@ Deno.serve(async (req) => {
       return errorResponse(`Hold failed with status: ${paymentIntent.status}. The card may have been declined.`, 400);
     }
 
-    // Calculate expiry (Stripe holds last up to 31 days for cards)
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 31);
+    // Read the REAL expiry from Stripe (capture_before on the charge). With
+    // extended authorization this can be ~30 days; otherwise ~7 days. Never
+    // hardcode 31 — that lie is what let holds die silently while the DB still
+    // showed "held".
+    const expiresAtIso = await resolveHoldExpiry(stripe, paymentIntent, stripeOptions);
 
     // Update rental with deposit hold info
     const { error: updateError } = await supabase
@@ -263,7 +279,7 @@ Deno.serve(async (req) => {
         deposit_hold_status: "held",
         deposit_hold_amount: depositAmount,
         deposit_hold_placed_at: new Date().toISOString(),
-        deposit_hold_expires_at: expiresAt.toISOString(),
+        deposit_hold_expires_at: expiresAtIso,
         deposit_hold_payment_method_id: paymentMethodId,
         deposit_hold_stripe_customer_id: customer.stripe_customer_id,
       })
@@ -282,13 +298,13 @@ Deno.serve(async (req) => {
       return errorResponse("Failed to save deposit hold record", 500);
     }
 
-    console.log("[DEPOSIT-HOLD] Hold placed successfully. Amount:", depositAmount, "Expires:", expiresAt.toISOString());
+    console.log("[DEPOSIT-HOLD] Hold placed successfully. Amount:", depositAmount, "Expires:", expiresAtIso);
 
     return jsonResponse({
       success: true,
       paymentIntentId: paymentIntent.id,
       amount: depositAmount,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: expiresAtIso,
     });
   } catch (error: any) {
     console.error("[DEPOSIT-HOLD] Error:", error);

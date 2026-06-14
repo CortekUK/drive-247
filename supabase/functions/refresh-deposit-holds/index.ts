@@ -1,10 +1,12 @@
-// Auto-refresh deposit holds that are about to expire (within 6 days)
-// Runs daily via cron. Cancels old hold, places new one using saved payment method.
-// Stripe holds last max 31 days for card payments.
+// Auto-refresh deposit holds that are about to expire (within 2 days of the
+// REAL Stripe deadline). Runs daily via cron. Cancels the old hold, places a
+// new one on the saved payment method, and records the true expiry.
+// NOTE: standard card auths expire ~7 days out; only cards granted extended
+// authorization last up to ~30. We track the actual deadline per hold.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getStripeClient, getConnectAccountId, type StripeMode } from "../_shared/stripe-client.ts";
+import { getStripeClient, getConnectAccountId, resolveHoldExpiry, DEPOSIT_HOLD_CARD_OPTIONS, type StripeMode } from "../_shared/stripe-client.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -18,9 +20,12 @@ Deno.serve(async (req) => {
 
     console.log("[DEPOSIT-REFRESH] Starting deposit hold refresh check...");
 
-    // Find active rentals with deposit holds expiring within 6 days
-    const sixDaysFromNow = new Date();
-    sixDaysFromNow.setDate(sixDaysFromNow.getDate() + 6);
+    // Find active rentals with deposit holds expiring within 2 days of the real
+    // Stripe deadline. Running daily, this gives ~1 cron cycle of buffer before
+    // the auth dies — tight enough to avoid needless churn on 7-day holds, early
+    // enough to never miss the window.
+    const refreshThreshold = new Date();
+    refreshThreshold.setDate(refreshThreshold.getDate() + 2);
 
     const { data: rentalsToRefresh, error: queryError } = await supabase
       .from("rentals")
@@ -34,7 +39,7 @@ Deno.serve(async (req) => {
       `)
       .eq("status", "Active")
       .eq("deposit_hold_status", "held")
-      .lt("deposit_hold_expires_at", sixDaysFromNow.toISOString())
+      .lt("deposit_hold_expires_at", refreshThreshold.toISOString())
       .not("deposit_hold_payment_intent_id", "is", null);
 
     if (queryError) {
@@ -115,6 +120,10 @@ Deno.serve(async (req) => {
             confirm: true,
             off_session: true,
             description: `Security deposit hold (refreshed) for rental ${rental.id.substring(0, 8).toUpperCase()}`,
+            // Request extended authorization so the refreshed hold lasts as long
+            // as the card allows, and expand the charge to read the real expiry.
+            payment_method_options: { card: DEPOSIT_HOLD_CARD_OPTIONS },
+            expand: ["latest_charge"],
             metadata: {
               rental_id: rental.id,
               tenant_id: rental.tenant_id,
@@ -129,9 +138,8 @@ Deno.serve(async (req) => {
           throw new Error(`New hold failed with status: ${newIntent.status}`);
         }
 
-        // Step 3: Update rental with new hold info
-        const newExpiresAt = new Date();
-        newExpiresAt.setDate(newExpiresAt.getDate() + 31);
+        // Step 3: Update rental with the new hold info + its REAL expiry.
+        const newExpiresAt = await resolveHoldExpiry(stripe, newIntent, stripeOptions);
 
         await supabase
           .from("rentals")
@@ -139,7 +147,7 @@ Deno.serve(async (req) => {
             deposit_hold_payment_intent_id: newIntent.id,
             deposit_hold_status: "held",
             deposit_hold_placed_at: new Date().toISOString(),
-            deposit_hold_expires_at: newExpiresAt.toISOString(),
+            deposit_hold_expires_at: newExpiresAt,
           })
           .eq("id", rental.id);
 

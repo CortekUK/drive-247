@@ -71,6 +71,15 @@ Deno.serve(async (req) => {
     const sessionParams: any = {
       mode: 'payment',
       payment_method_types: ['card'],
+      // Ask the card network to extend the hold lifetime (up to ~30 days) and
+      // allow multicapture. Without extended authorization the hold dies at the
+      // ~7-day default. "if_available" is ignored where unsupported.
+      payment_method_options: {
+        card: {
+          request_extended_authorization: 'if_available',
+          request_multicapture: 'if_available',
+        },
+      },
       line_items: [
         {
           price_data: {
