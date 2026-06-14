@@ -147,12 +147,20 @@ Deno.serve(async (req) => {
     // belt-and-braces protection.
     // Claim from a placeable state: never placed (null) OR a dead hold that can
     // be re-collected (expired/released). 'held'/'processing' are handled above.
-    const { data: claimed, error: claimError } = await supabase
+    // We match on the EXACT prior status we read, which keeps the claim atomic
+    // (only wins if nothing changed underneath us). NOTE: a PostgREST `.or()`
+    // filter on `.update()` mis-qualifies the column and errors with
+    // "column rentals.deposit_hold_status does not exist", so we branch on the
+    // proven `.is(null)` / `.eq()` filters instead.
+    let claimQuery = supabase
       .from("rentals")
       .update({ deposit_hold_status: "processing" })
-      .eq("id", rentalId)
-      .or("deposit_hold_status.is.null,deposit_hold_status.eq.expired,deposit_hold_status.eq.released")
-      .select("id");
+      .eq("id", rentalId);
+    claimQuery =
+      priorHoldStatus === null || priorHoldStatus === undefined
+        ? claimQuery.is("deposit_hold_status", null)
+        : claimQuery.eq("deposit_hold_status", priorHoldStatus);
+    const { data: claimed, error: claimError } = await claimQuery.select("id");
     if (claimError) {
       return errorResponse(`Failed to claim hold slot: ${claimError.message}`, 500);
     }
