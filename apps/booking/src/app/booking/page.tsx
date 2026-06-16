@@ -12,6 +12,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
+import LocationAutocompleteWithRadius from "@/components/LocationAutocompleteWithRadius";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useBookingStore } from "@/stores/booking-store";
 import { formatCurrency, kmToDisplayUnit, getDistanceUnitShort } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
+import { parseDateString } from "@/lib/calculate-rental-price";
+import { resolveDeliveryFee, getTierFeeRange, hasActiveTiers, normalizeTiers } from "@/lib/delivery-tiers";
 
 const TIMEZONE = "America/Los_Angeles";
 
@@ -116,6 +119,18 @@ export default function Booking() {
   const { locations: deliveryLocations, isLoading: isLoadingDeliveryLocations } = useDeliveryLocations();
   const [deliveryOption, setDeliveryOption] = useState<'fixed' | 'location' | 'area' | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+  // Distance (km) from operator's center to the customer's area-delivery address,
+  // used to resolve the tiered delivery fee. null until an address is picked.
+  const [areaDistanceKm, setAreaDistanceKm] = useState<number | null>(null);
+
+  // Tiered (distance-banded) delivery pricing config for area mode
+  const tierCfg = {
+    delivery_tiers_enabled: tenant?.delivery_tiers_enabled,
+    delivery_distance_tiers: tenant?.delivery_distance_tiers,
+    area_delivery_fee: tenant?.area_delivery_fee,
+  };
+  const tiersOn = hasActiveTiers(tierCfg);
+  const tierRange = getTierFeeRange(tierCfg);
 
   // Legacy state for backward compatibility during transition
   const [requestDelivery, setRequestDelivery] = useState(false);
@@ -153,13 +168,13 @@ export default function Booking() {
     if (bookingContext.pickupDate || bookingContext.pickupLocation) {
       // Restore form from store
       const formData: any = {};
-      if (bookingContext.pickupDate) formData.pickupDate = parseISO(bookingContext.pickupDate);
-      if (bookingContext.returnDate) formData.returnDate = parseISO(bookingContext.returnDate);
+      if (bookingContext.pickupDate) formData.pickupDate = parseDateString(String(bookingContext.pickupDate).split("T")[0]);
+      if (bookingContext.returnDate) formData.returnDate = parseDateString(String(bookingContext.returnDate).split("T")[0]);
       if (bookingContext.pickupTime) formData.pickupTime = bookingContext.pickupTime;
       if (bookingContext.returnTime) formData.returnTime = bookingContext.returnTime;
       if (bookingContext.pickupLocation) formData.pickupLocation = bookingContext.pickupLocation;
       if (bookingContext.returnLocation) formData.returnLocation = bookingContext.returnLocation;
-      if (bookingContext.driverDOB) formData.driverDOB = parseISO(bookingContext.driverDOB);
+      if (bookingContext.driverDOB) formData.driverDOB = parseDateString(String(bookingContext.driverDOB).split("T")[0]);
       if (bookingContext.promoCode) formData.promoCode = bookingContext.promoCode;
       formData.sameAsPickup = bookingContext.sameAsPickup;
 
@@ -250,21 +265,21 @@ export default function Booking() {
         return selectedLocation.delivery_fee || 0;
       }
       if (deliveryOption === 'area') {
-        return tenant?.area_delivery_fee || 0;
+        return resolveDeliveryFee(areaDistanceKm, tierCfg).fee;
       }
       return 0;
     };
 
     // Save to Zustand store
     updateContext({
-      pickupDate: data.pickupDate.toISOString(),
-      returnDate: data.returnDate.toISOString(),
+      pickupDate: format(data.pickupDate, "yyyy-MM-dd"),
+      returnDate: format(data.returnDate, "yyyy-MM-dd"),
       pickupTime: data.pickupTime,
       returnTime: data.returnTime,
       pickupLocation: data.pickupLocation,
       returnLocation: data.returnLocation,
       sameAsPickup: data.sameAsPickup,
-      driverDOB: data.driverDOB ? data.driverDOB.toISOString() : null,
+      driverDOB: data.driverDOB ? format(data.driverDOB, "yyyy-MM-dd") : null,
       driverAge: driverAge,
       promoCode: data.promoCode || null,
       // Delivery option data
@@ -422,7 +437,7 @@ export default function Booking() {
                           return location?.delivery_fee || 0;
                         }
                         if (deliveryOption === 'area') {
-                          return tenant?.area_delivery_fee || 0;
+                          return resolveDeliveryFee(areaDistanceKm, tierCfg).fee;
                         }
                         return 0;
                       };
@@ -644,11 +659,15 @@ export default function Booking() {
                                           Area Delivery
                                         </Label>
                                         <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
-                                          +{fmtCurrency(tenant?.area_delivery_fee || 0)}
+                                          {tiersOn
+                                            ? `from ${fmtCurrency(tierRange?.min ?? 0)}`
+                                            : `+${fmtCurrency(tenant?.area_delivery_fee || 0)}`}
                                         </span>
                                       </div>
                                       <p className="text-sm text-muted-foreground mt-1">
-                                        We deliver and collect anywhere within {kmToDisplayUnit(tenant?.pickup_area_radius_km || 25, distanceUnit)} {getDistanceUnitShort(distanceUnit)}
+                                        {tiersOn
+                                          ? 'We deliver and collect to your address — fee depends on distance'
+                                          : `We deliver and collect anywhere within ${kmToDisplayUnit(tenant?.pickup_area_radius_km || 25, distanceUnit)} ${getDistanceUnitShort(distanceUnit)}`}
                                       </p>
 
                                       {deliveryOption === 'area' && (
@@ -660,19 +679,44 @@ export default function Booking() {
                                               <FormItem>
                                                 <FormLabel className="text-sm">Delivery Address *</FormLabel>
                                                 <FormControl>
-                                                  <LocationAutocomplete
+                                                  <LocationAutocompleteWithRadius
                                                     id="pickupLocation"
                                                     value={field.value}
-                                                    onChange={(value) => {
+                                                    onChange={(value, _lat, _lon, distanceKm) => {
                                                       field.onChange(value);
+                                                      if (distanceKm !== undefined) setAreaDistanceKm(distanceKm);
+                                                      else if (!value) setAreaDistanceKm(null);
                                                       if (sameAsPickup) {
                                                         form.setValue('returnLocation', value);
                                                       }
                                                     }}
                                                     placeholder="Enter your delivery address"
                                                     className="h-12"
+                                                    radiusKm={tenant?.pickup_area_radius_km ?? 25}
+                                                    centerLat={tenant?.area_center_lat}
+                                                    centerLon={tenant?.area_center_lon}
+                                                    distanceUnit={distanceUnit}
+                                                    allowOutOfRadius={tiersOn}
                                                   />
                                                 </FormControl>
+                                                {tiersOn && (
+                                                  <div className="rounded-lg bg-muted/40 px-3 py-2 mt-2">
+                                                    <ul className="space-y-0.5">
+                                                      {normalizeTiers(tierCfg.delivery_distance_tiers)
+                                                        .sort((a, b) => (a.up_to_km ?? Infinity) - (b.up_to_km ?? Infinity))
+                                                        .map((t, i) => (
+                                                          <li key={i} className="flex items-center justify-between text-xs">
+                                                            <span className="text-muted-foreground">
+                                                              {t.up_to_km === null
+                                                                ? 'Anywhere further'
+                                                                : `Up to ${kmToDisplayUnit(t.up_to_km, distanceUnit)}${getDistanceUnitShort(distanceUnit)}`}
+                                                            </span>
+                                                            <span className="font-semibold text-foreground">{fmtCurrency(t.fee)}</span>
+                                                          </li>
+                                                        ))}
+                                                    </ul>
+                                                  </div>
+                                                )}
                                                 <FormMessage />
                                               </FormItem>
                                             )}

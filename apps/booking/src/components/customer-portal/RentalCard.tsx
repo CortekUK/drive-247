@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, AlertTriangle, Pencil, CalendarPlus, XCircle, RefreshCw, ExternalLink, Lock, FileSignature, Gauge, Zap, Loader2 } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday } from 'date-fns';
+import { parseDateString } from '@/lib/calculate-rental-price';
 import { CustomerRental } from '@/hooks/use-customer-rentals';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -107,7 +108,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
   const canCancel = rental.status === 'Pending' && !rental.cancellation_requested;
   const hasCancellationPending = rental.cancellation_requested === true;
   // Check if rental can be renewed (Closed/completed status)
-  const canRenew = rental.status === 'Closed' || (rental.status === 'Active' && isPast(new Date(rental.end_date)) && !isToday(new Date(rental.end_date)));
+  const canRenew = rental.status === 'Closed' || (rental.status === 'Active' && isPast(parseDateString(rental.end_date)) && !isToday(parseDateString(rental.end_date)));
   // Check if agreement needs signing
   const hasSignedAgreement = !!rental.docusign_envelope_id &&
     (rental.document_status === 'signed' || rental.document_status === 'completed' || !!rental.signed_document_id);
@@ -124,8 +125,8 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
     '/placeholder.svg';
 
   const durationDays = differenceInDays(
-    new Date(rental.end_date),
-    new Date(rental.start_date)
+    parseDateString(rental.end_date),
+    parseDateString(rental.start_date)
   );
 
   const mtd = tenant?.monthly_tier_days ?? 30;
@@ -173,7 +174,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
         .sort((a, b) => a.due_date.localeCompare(b.due_date))[0]
     : null;
 
-  const isOverdue = nextInstallment && isPast(new Date(nextInstallment.due_date)) && !isToday(new Date(nextInstallment.due_date));
+  const isOverdue = nextInstallment && isPast(parseDateString(nextInstallment.due_date)) && !isToday(parseDateString(nextInstallment.due_date));
   const isFailed = nextInstallment?.status === 'failed';
 
   return (
@@ -290,8 +291,8 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="h-4 w-4" />
                 <span>
-                  {format(new Date(rental.start_date), 'MMM dd, yyyy')} -{' '}
-                  {format(new Date(rental.end_date), 'MMM dd, yyyy')}
+                  {format(parseDateString(rental.start_date), 'MMM dd, yyyy')} -{' '}
+                  {format(parseDateString(rental.end_date), 'MMM dd, yyyy')}
                 </span>
               </div>
 
@@ -301,7 +302,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                   <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
                     <CalendarPlus className="h-4 w-4" />
                     <span className="text-sm">
-                      Requested: {format(new Date(rental.previous_end_date), 'MMM dd, yyyy')}
+                      Requested: {format(parseDateString(rental.previous_end_date), 'MMM dd, yyyy')}
                     </span>
                   </div>
                   <Button
@@ -405,7 +406,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                     </span>
                   </div>
                   <p className="text-xs text-blue-600 dark:text-blue-400">
-                    Extended from {format(new Date(rental.previous_end_date), 'MMM dd')} to {format(new Date(rental.end_date), 'MMM dd, yyyy')}
+                    Extended from {format(parseDateString(rental.previous_end_date), 'MMM dd')} to {format(parseDateString(rental.end_date), 'MMM dd, yyyy')}
                   </p>
                   <button
                     className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
@@ -502,7 +503,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                               {isOverdue ? 'Overdue' : isFailed ? 'Payment Failed' : 'Next Payment'}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {format(new Date(nextInstallment.due_date), 'MMM dd, yyyy')}
+                              {format(parseDateString(nextInstallment.due_date), 'MMM dd, yyyy')}
                             </p>
                           </div>
                         </div>
@@ -610,7 +611,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
           <AlertDialogHeader>
             <AlertDialogTitle>Cancel Extension Request?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will cancel your request to extend until {rental.previous_end_date ? format(new Date(rental.previous_end_date), 'MMM dd, yyyy') : ''}. You can submit a new extension request later.
+              This will cancel your request to extend until {rental.previous_end_date ? format(parseDateString(rental.previous_end_date), 'MMM dd, yyyy') : ''}. You can submit a new extension request later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

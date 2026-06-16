@@ -19,7 +19,7 @@ import { z } from "zod";
 import BookingConfirmation from "@/components/BookingConfirmation";
 import { formatCurrency } from "@/lib/format-utils";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
-import { calculateRentalPriceBreakdown } from "@/lib/calculate-rental-price";
+import { calculateRentalPriceBreakdown, parseDateString } from "@/lib/calculate-rental-price";
 
 const checkoutSchema = z.object({
   customerName: z.string().min(2, "Name must be at least 2 characters"),
@@ -105,8 +105,9 @@ const BookingCheckout = () => {
   };
 
   const calculateRentalDays = () => {
-    const pickup = new Date(pickupDate);
-    const dropoff = new Date(returnDate);
+    // Local date parse (not UTC) so the day-count/charge matches the dates picked.
+    const pickup = parseDateString(pickupDate);
+    const dropoff = parseDateString(returnDate);
     const diffTime = Math.abs(dropoff.getTime() - pickup.getTime());
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };

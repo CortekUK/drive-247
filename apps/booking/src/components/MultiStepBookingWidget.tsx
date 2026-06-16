@@ -1820,7 +1820,7 @@ const MultiStepBookingWidget = () => {
           // Cast to any as date_of_birth is not in the generated types yet
           await (supabase as any)
             .from("customers")
-            .update({ date_of_birth: formData.driverDOB })
+            .update({ date_of_birth: String(formData.driverDOB).split("T")[0] })
             .eq("id", existingCustomer.id);
         }
       } else {
@@ -1830,7 +1830,7 @@ const MultiStepBookingWidget = () => {
           email: sanitizeEmail(formData.customerEmail),
           phone: sanitizePhone(formData.customerPhone),
           status: "Active",
-          date_of_birth: formData.driverDOB || null
+          date_of_birth: formData.driverDOB ? String(formData.driverDOB).split("T")[0] : null
         };
 
         if (tenant?.id) {
@@ -3183,7 +3183,7 @@ const MultiStepBookingWidget = () => {
           address_zip: values.addressZip,
           license_number: values.licenseNumber,
           license_state: values.licenseState,
-          date_of_birth: values.driverDOB,
+          date_of_birth: values.driverDOB ? String(values.driverDOB).split("T")[0] : values.driverDOB,
         })
         .eq('id', customerUser.customer.id)
         .then(({ error }) => {
@@ -5495,7 +5495,7 @@ const MultiStepBookingWidget = () => {
                 {verificationStatus === 'verified' && formData.driverDOB ? (
                   <div className="space-y-2">
                     <Input
-                      value={formData.driverDOB ? format(new Date(formData.driverDOB), "MMMM d, yyyy") : ""}
+                      value={formData.driverDOB ? format(parseDateString(String(formData.driverDOB).split("T")[0]), "MMMM d, yyyy") : ""}
                       readOnly
                       className="h-12 bg-muted/50"
                     />
@@ -5504,7 +5504,7 @@ const MultiStepBookingWidget = () => {
                       {isAuthenticated && customerHasDOB ? 'From your account profile' : 'From your ID document'}
                     </p>
                     {formData.driverDOB && (
-                      <p className="text-sm text-muted-foreground">Age: <span className="font-medium text-foreground">{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                      <p className="text-sm text-muted-foreground">Age: <span className="font-medium text-foreground">{calculateAge(parseDateString(String(formData.driverDOB).split("T")[0]))} years old</span></p>
                     )}
                   </div>
                 ) : (
@@ -5512,9 +5512,9 @@ const MultiStepBookingWidget = () => {
                     <div className="grid grid-cols-3 gap-2">
                       {/* Month Select */}
                       <Select
-                        value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
+                        value={formData.driverDOB ? (parseDateString(String(formData.driverDOB).split("T")[0]).getMonth() + 1).toString().padStart(2, '0') : ""}
                         onValueChange={(month) => {
-                          const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                          const currentDate = formData.driverDOB ? parseDateString(String(formData.driverDOB).split("T")[0]) : new Date(2000, 0, 1);
                           const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
                           const dateStr = format(newDate, "yyyy-MM-dd");
                           setFormData({ ...formData, driverDOB: dateStr });
@@ -5532,9 +5532,9 @@ const MultiStepBookingWidget = () => {
                       </Select>
                       {/* Day Select */}
                       <Select
-                        value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
+                        value={formData.driverDOB ? parseDateString(String(formData.driverDOB).split("T")[0]).getDate().toString() : ""}
                         onValueChange={(day) => {
-                          const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                          const currentDate = formData.driverDOB ? parseDateString(String(formData.driverDOB).split("T")[0]) : new Date(2000, 0, 1);
                           const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
                           const dateStr = format(newDate, "yyyy-MM-dd");
                           setFormData({ ...formData, driverDOB: dateStr });
@@ -5552,9 +5552,9 @@ const MultiStepBookingWidget = () => {
                       </Select>
                       {/* Year Select */}
                       <Select
-                        value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
+                        value={formData.driverDOB ? parseDateString(String(formData.driverDOB).split("T")[0]).getFullYear().toString() : ""}
                         onValueChange={(year) => {
-                          const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                          const currentDate = formData.driverDOB ? parseDateString(String(formData.driverDOB).split("T")[0]) : new Date(2000, 0, 1);
                           const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
                           const dateStr = format(newDate, "yyyy-MM-dd");
                           setFormData({ ...formData, driverDOB: dateStr });
@@ -5572,7 +5572,7 @@ const MultiStepBookingWidget = () => {
                       </Select>
                     </div>
                     {formData.driverDOB && (
-                      <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                      <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(parseDateString(String(formData.driverDOB).split("T")[0]))} years old</span></p>
                     )}
                     {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
                     <p className="text-xs text-muted-foreground">Driver must be at least {tenant?.minimum_rental_age || 21} years old</p>

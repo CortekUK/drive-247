@@ -20,7 +20,7 @@ import InstallmentSelector, { InstallmentOption, InstallmentConfig } from "@/com
 import { useBookingStore } from "@/stores/booking-store";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
-import { calculateRentalPriceBreakdown } from "@/lib/calculate-rental-price";
+import { calculateRentalPriceBreakdown, parseDateString } from "@/lib/calculate-rental-price";
 import { getUnlimitedMileageOption } from "@/lib/mileage-utils";
 import { Infinity as InfinityIcon } from "lucide-react";
 const checkoutSchema = z.object({
@@ -188,8 +188,10 @@ const BookingCheckoutContent = () => {
   };
 
   const calculateRentalDays = () => {
-    const pickup = new Date(pickupDate);
-    const dropoff = new Date(returnDate);
+    // Parse date-only strings as LOCAL dates (parseDateString), not UTC (new Date),
+    // so a Denver customer's 4-day rental doesn't slip to 3 days and undercharge.
+    const pickup = parseDateString(pickupDate);
+    const dropoff = parseDateString(returnDate);
     const diffTime = Math.abs(dropoff.getTime() - pickup.getTime());
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
@@ -590,7 +592,7 @@ const BookingCheckoutContent = () => {
             const lastRental = recentRentals[0];
             const rentalEnd = new Date(`${lastRental.end_date}T${lastRental.return_time || '23:59'}`);
             const bufferDeadline = new Date(rentalEnd.getTime() + bufferMinutes * 60 * 1000);
-            const pickupDateTime = new Date(pickupDate);
+            const pickupDateTime = parseDateString(pickupDate);
 
             if (pickupDateTime < bufferDeadline && pickupDateTime >= rentalEnd) {
               throw new Error(

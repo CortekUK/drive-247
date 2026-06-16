@@ -14,7 +14,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { formatInTimeZone } from "date-fns-tz";
-import { calculateRentalPriceBreakdown } from "@/lib/calculate-rental-price";
+import { calculateRentalPriceBreakdown, parseDateString } from "@/lib/calculate-rental-price";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 
 interface VehiclePhoto {
@@ -124,7 +124,7 @@ const BookingVehiclesContent = () => {
 
         if (rentalsData && rentalsData.length > 0) {
           const bufferMs = bufferMinutes * 60 * 1000;
-          const pickupDateTime = new Date(pickupDate);
+          const pickupDateTime = parseDateString(pickupDate);
 
           filteredData = filteredData.filter(vehicle => {
             const vehicleRentals = rentalsData.filter(r => r.vehicle_id === vehicle.id);
@@ -205,8 +205,8 @@ const BookingVehiclesContent = () => {
   };
 
   const calculateRentalDays = () => {
-    const pickup = new Date(pickupDate);
-    const dropoff = new Date(returnDate);
+    const pickup = parseDateString(pickupDate);
+    const dropoff = parseDateString(returnDate);
     const diffTime = Math.abs(dropoff.getTime() - pickup.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
