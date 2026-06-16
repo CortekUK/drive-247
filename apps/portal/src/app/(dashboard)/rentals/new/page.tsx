@@ -5401,10 +5401,14 @@ const CreateRental = () => {
         // post-creation flow; the dialog when reused elsewhere defaults to false.
         placeDepositHoldAfter={Boolean(
           tenant?.security_deposit_enabled &&
-          (
-            (depositOverride !== null && depositOverride > 0) ||
-            Number(tenant?.global_deposit_amount) > 0
-          )
+          // A per-rental override wins — including an explicit 0 (operator
+          // unchecked the deposit), which must leave the box UNticked. Only use
+          // the tenant default when no override is set. Previously a 0 override
+          // fell through to `global_deposit_amount > 0`, pre-ticking the box and
+          // making the system attempt a deposit the operator had opted out of.
+          (depositOverride !== null
+            ? depositOverride > 0
+            : Number(tenant?.global_deposit_amount) > 0)
         )}
         // Honour the operator's per-rental Pre-Auth override; falls back to the
         // tenant default inside the dialog when undefined.

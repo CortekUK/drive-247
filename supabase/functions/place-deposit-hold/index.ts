@@ -74,7 +74,12 @@ Deno.serve(async (req) => {
     const overrideAmount = rental.deposit_amount_override !== null && rental.deposit_amount_override !== undefined
       ? Number(rental.deposit_amount_override)
       : null;
-    const depositAmount = overrideAmount !== null && overrideAmount > 0
+    // A numeric override ALWAYS wins — including an explicit 0, which means the
+    // operator unchecked the deposit for this rental and wants NO hold. Only fall
+    // back to the tenant default when the override is NULL ("not set"). Previously
+    // this required `overrideAmount > 0`, so a 0 was treated as "unset" and a $150
+    // default hold was placed despite the operator opting out.
+    const depositAmount = overrideAmount !== null
       ? overrideAmount
       : (Number(tenant.global_deposit_amount) || 0);
     if (depositAmount <= 0) {
