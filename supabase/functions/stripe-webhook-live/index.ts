@@ -561,6 +561,43 @@ serve(async (req) => {
               if (finalizeErr) console.error("[LIVE MODE] finalize_rental_extension error:", finalizeErr);
               else console.log("Extension finalized via webhook:", extIdMeta);
             }
+
+            // Auto-extension: a paid pay-link must return the rental to "active"
+            // right away. finalize_rental_extension rolls end_date forward and
+            // marks the extension paid, but it does NOT touch the auto_extend_*
+            // columns — so without this the rental lingered in "awaiting_payment"
+            // (pending id still set) until the next 15-min cron tick, and the
+            // charge_count that drives auto_extend_max_periods never advanced for
+            // pay-link renewals. Guarded by pending_extension_id === extIdMeta so
+            // webhook retries can't double-increment.
+            if (extIdMeta) {
+              try {
+                const { data: aeRental } = await supabase
+                  .from("rentals")
+                  .select("auto_extend_enabled, auto_extend_pending_extension_id, auto_extend_charge_count")
+                  .eq("id", rentalId)
+                  .maybeSingle();
+                if (
+                  aeRental?.auto_extend_enabled &&
+                  aeRental.auto_extend_pending_extension_id &&
+                  aeRental.auto_extend_pending_extension_id === extIdMeta
+                ) {
+                  await supabase
+                    .from("rentals")
+                    .update({
+                      auto_extend_pending_extension_id: null,
+                      auto_extend_status: "active",
+                      auto_extend_charge_count: (aeRental.auto_extend_charge_count || 0) + 1,
+                      auto_extend_failed_attempts: 0,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq("id", rentalId);
+                  console.log("Auto-extend rental returned to active after payment:", rentalId);
+                }
+              } catch (aeErr) {
+                console.error("Auto-extend post-payment sync error:", aeErr);
+              }
+            }
           } else {
             console.error("No extension payment found for session:", session.id, extPaymentError?.message);
           }

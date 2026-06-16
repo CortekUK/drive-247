@@ -120,7 +120,13 @@ serve(async (req) => {
         .eq('id', rentalId)
         .single()
       const override = rentalRow?.deposit_amount_override
-      if (override !== null && override !== undefined && Number(override) > 0) {
+      // Any non-null override wins — including an explicit 0, which means the
+      // operator unchecked the deposit for this rental. Previously the `> 0`
+      // guard treated 0 as "unset" and kept the $150 tenant default, so the
+      // customer was shown a deposit notice and a hold was placed despite the
+      // opt-out. The `depositHoldAmount > 0` notice gate below now suppresses
+      // the disclosure correctly when the override is 0.
+      if (override !== null && override !== undefined) {
         depositHoldAmount = Number(override)
         console.log('Deposit amount override applied:', depositHoldAmount, 'for rental', rentalId)
       }

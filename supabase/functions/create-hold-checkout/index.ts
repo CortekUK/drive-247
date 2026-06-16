@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
 
     const { data: rental, error: rentalError } = await supabase
       .from('rentals')
-      .select('id, tenant_id, customer_id, deposit_hold_status')
+      .select('id, tenant_id, customer_id, deposit_hold_status, deposit_amount_override')
       .eq('id', rentalId)
       .single()
     if (rentalError || !rental) return errorResponse('Rental not found', 404)
@@ -50,7 +50,17 @@ Deno.serve(async (req) => {
     if (!tenant.security_deposit_enabled) {
       return jsonResponse({ skipped: 'deposit_disabled_for_tenant' })
     }
-    const depositAmount = Number(tenant.global_deposit_amount) || 0
+    // Per-rental override beats the tenant default — including an explicit 0,
+    // which means the operator unchecked the deposit for this rental and wants
+    // NO hold. This function previously ignored deposit_amount_override entirely
+    // and always used global_deposit_amount, so it placed a $150 hold even when
+    // the operator opted out (and got every custom override wrong too).
+    const overrideAmount = rental.deposit_amount_override !== null && rental.deposit_amount_override !== undefined
+      ? Number(rental.deposit_amount_override)
+      : null
+    const depositAmount = overrideAmount !== null
+      ? overrideAmount
+      : (Number(tenant.global_deposit_amount) || 0)
     if (depositAmount <= 0) {
       return jsonResponse({ skipped: 'deposit_amount_is_zero' })
     }
