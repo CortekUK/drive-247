@@ -392,6 +392,7 @@ export function CalendarView({ filters }: CalendarViewProps) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              disabled={blockDatesInvalid || !pendingBlock?.startDate || !pendingBlock?.endDate}
               onClick={(e) => {
                 if (blockDatesInvalid || !pendingBlock?.startDate || !pendingBlock?.endDate) {
                   e.preventDefault();

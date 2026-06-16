@@ -1303,10 +1303,10 @@ const CustomerDetail = () => {
                             </div>
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            {format(new Date(history.start_date), "MM/dd/yyyy")}
+                            {format(parseLocalDate(history.start_date), "MM/dd/yyyy")}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            {history.end_date ? format(new Date(history.end_date), "MM/dd/yyyy") : "Ongoing"}
+                            {history.end_date ? format(parseLocalDate(history.end_date), "MM/dd/yyyy") : "Ongoing"}
                           </TableCell>
                           <TableCell className="text-right font-medium">
                             {formatCurrency(history.monthly_amount, currencyCode)}

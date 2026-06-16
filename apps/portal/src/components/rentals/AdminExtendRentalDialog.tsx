@@ -483,7 +483,7 @@ export function AdminExtendRentalDialog({
           const _mtd = tenant?.monthly_tier_days ?? 30;
           const newCombinedDays = Math.max(
             1,
-            Math.ceil((new Date(newEndDate).getTime() - new Date(rentalSnap.start_date).getTime()) / (1000 * 60 * 60 * 24)),
+            Math.ceil((parseLocalDate(newEndDate).getTime() - parseLocalDate(rentalSnap.start_date).getTime()) / (1000 * 60 * 60 * 24)),
           );
           const newTier = getMileageTier(newCombinedDays, _mtd);
 

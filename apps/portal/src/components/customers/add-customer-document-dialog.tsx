@@ -38,6 +38,7 @@ import { CalendarIcon, Upload, X } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import { addCustomerDocumentSchema, type AddCustomerDocumentFormValues } from "@/client-schemas/customers/add-customer-document";
 
@@ -126,8 +127,8 @@ export default function AddCustomerDocumentDialog({
         vehicle_id: existingDocument.vehicle_id || "none",
         insurance_provider: existingDocument.insurance_provider || "",
         policy_number: existingDocument.policy_number || "",
-        start_date: existingDocument.start_date ? new Date(existingDocument.start_date) : undefined,
-        end_date: existingDocument.end_date ? new Date(existingDocument.end_date) : undefined,
+        start_date: existingDocument.start_date ? parseLocalDate(existingDocument.start_date) : undefined,
+        end_date: existingDocument.end_date ? parseLocalDate(existingDocument.end_date) : undefined,
         notes: existingDocument.notes || "",
       });
     } else if (open && !documentId) {

@@ -410,7 +410,7 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId, prese
                           <SelectTrigger>
                             <SelectValue placeholder={!selectedCustomerId ? "Select customer first" : "Select rental"}>
                               {selectedRental
-                                ? `${(selectedRental as any).rental_number || selectedRental.id.slice(0, 8)} — ${new Date((selectedRental as any).start_date).toLocaleDateString('en-US')} to ${new Date((selectedRental as any).end_date).toLocaleDateString('en-US')}`
+                                ? `${(selectedRental as any).rental_number || selectedRental.id.slice(0, 8)} — ${formatLocalDate((selectedRental as any).start_date)} to ${formatLocalDate((selectedRental as any).end_date)}`
                                 : (!selectedCustomerId ? "Select customer first" : "Select rental")}
                             </SelectValue>
                           </SelectTrigger>

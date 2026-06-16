@@ -48,6 +48,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { CalendarIcon, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInsuranceValidation } from "@/hooks/use-insurance-data";
@@ -144,8 +145,8 @@ export function InsurancePolicyDialog({
       form.reset({
         policy_number: existingPolicy.policy_number,
         provider: existingPolicy.provider || "",
-        start_date: new Date(existingPolicy.start_date),
-        expiry_date: new Date(existingPolicy.expiry_date),
+        start_date: parseLocalDate(existingPolicy.start_date),
+        expiry_date: parseLocalDate(existingPolicy.expiry_date),
         vehicle_id: existingPolicy.vehicle_id || "none",
         status: existingPolicy.status as PolicyFormData["status"],
         notes: existingPolicy.notes || "",
@@ -486,7 +487,7 @@ export function InsurancePolicyDialog({
                   <div key={overlap.overlapping_policy_id} className="p-3 border rounded bg-muted">
                     <div className="font-medium">Policy: {overlap.overlapping_policy_number}</div>
                     <div className="text-sm text-muted-foreground">
-                      Period: {format(new Date(overlap.overlapping_start_date), "MMM d, yyyy")} - {format(new Date(overlap.overlapping_expiry_date), "MMM d, yyyy")}
+                      Period: {format(parseLocalDate(overlap.overlapping_start_date), "MMM d, yyyy")} - {format(parseLocalDate(overlap.overlapping_expiry_date), "MMM d, yyyy")}
                     </div>
                   </div>
                 ))}

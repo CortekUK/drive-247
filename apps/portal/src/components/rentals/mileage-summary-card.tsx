@@ -8,6 +8,7 @@ import { formatDistance, formatDistanceLong, getDistanceUnitShort, getMileageTie
 import { formatCurrency } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
 import { calculateTotalMileageAllowance, getMileageTier, getTierMileage } from "@/lib/mileage-utils";
+import { parseLocalDate } from "@/lib/date-utils";
 
 interface MileageSummaryCardProps {
   rentalId: string;
@@ -180,7 +181,7 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
   // Calculate rental days and tier-based allowance
   let rentalDays = 0;
   if (startDate && endDate) {
-    rentalDays = Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)));
+    rentalDays = Math.max(1, Math.ceil((parseLocalDate(endDate).getTime() - parseLocalDate(startDate).getTime()) / (1000 * 60 * 60 * 24)));
   }
 
   const allowedMileage = effectiveVehicle && rentalDays > 0

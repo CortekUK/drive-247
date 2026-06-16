@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
+import { parseLocalDate } from '@/lib/date-utils';
 
 interface UseExtensionConflictsParams {
   vehicleId?: string;
@@ -91,7 +92,7 @@ export function useExtensionConflicts({
 
       return data
         .filter((r: any) => r.id !== excludeRentalId)
-        .filter((r: any) => new Date(r.start_date) < bufferDeadline)
+        .filter((r: any) => parseLocalDate(r.start_date) < bufferDeadline)
         .map((r: any) => ({
           rentalId: r.id,
           start_date: r.start_date,

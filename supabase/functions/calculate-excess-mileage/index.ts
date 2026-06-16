@@ -25,10 +25,14 @@ function calculateTotalMileageAllowance(
   }
   if (perUnit === null || perUnit === undefined) return null;
 
+  // Pro-rata by day, rounded — MUST match the UI util
+  // (apps/{portal,booking}/src/lib/mileage-utils.ts calculateTotalMileageAllowance).
+  // Previously ceil-per-tier, which over-counted the allowance the server charged
+  // against vs what the operator saw in the UI (e.g. 1mo+1day gave 2 months of miles).
   switch (tier) {
-    case 'daily': return rentalDays * perUnit;
-    case 'weekly': return Math.ceil(rentalDays / 7) * perUnit;
-    case 'monthly': return Math.ceil(rentalDays / monthlyTierDays) * perUnit;
+    case 'daily': return Math.round(rentalDays * perUnit);
+    case 'weekly': return Math.round((perUnit / 7) * rentalDays);
+    case 'monthly': return Math.round((perUnit / monthlyTierDays) * rentalDays);
   }
 }
 

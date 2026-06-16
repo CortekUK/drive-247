@@ -104,7 +104,7 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
         });
         if (existingOverlap) {
           setOverlapWarning(
-            `Note: This overlaps with an existing block (${format(new Date(existingOverlap.start_date), 'MMM dd, yyyy')} – ${format(new Date(existingOverlap.end_date), 'MMM dd, yyyy')}).`
+            `Note: This overlaps with an existing block (${format(parseLocalDate(existingOverlap.start_date), 'MMM dd, yyyy')} – ${format(parseLocalDate(existingOverlap.end_date), 'MMM dd, yyyy')}).`
           );
         }
       }
@@ -320,10 +320,10 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
                   return (
                     <TableRow key={blockedDate.id}>
                       <TableCell className="font-medium">
-                        {format(new Date(blockedDate.start_date), "PPP")}
+                        {format(parseLocalDate(blockedDate.start_date), "PPP")}
                       </TableCell>
                       <TableCell className="font-medium">
-                        {format(new Date(blockedDate.end_date), "PPP")}
+                        {format(parseLocalDate(blockedDate.end_date), "PPP")}
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-muted-foreground">
@@ -413,8 +413,8 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
               {itemToDelete && (
                 <>
                   This will unblock the date range from{" "}
-                  <strong>{format(new Date(itemToDelete.startDate), "PPP")}</strong> to{" "}
-                  <strong>{format(new Date(itemToDelete.endDate), "PPP")}</strong>.
+                  <strong>{format(parseLocalDate(itemToDelete.startDate), "PPP")}</strong> to{" "}
+                  <strong>{format(parseLocalDate(itemToDelete.endDate), "PPP")}</strong>.
                   This action cannot be undone.
                 </>
               )}
