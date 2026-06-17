@@ -44,6 +44,12 @@ export interface UpdatePickupLocationInput {
 
 export type LocationMode = 'fixed' | 'custom' | 'multiple' | 'area_around';
 
+export interface DeliveryTier {
+  /** Inclusive upper bound in km. `null` = open-ended catch-all. */
+  up_to_km: number | null;
+  fee: number;
+}
+
 export interface LocationSettings {
   // Legacy single-select modes (kept for backward compatibility)
   pickup_location_mode: LocationMode;
@@ -59,6 +65,9 @@ export interface LocationSettings {
   multiple_locations_enabled: boolean;
   area_around_enabled: boolean;
   area_delivery_fee: number;
+  // Tiered (distance-banded) delivery pricing
+  delivery_tiers_enabled: boolean;
+  delivery_distance_tiers: DeliveryTier[];
   // Separate pickup/return settings
   pickup_fixed_enabled: boolean;
   return_fixed_enabled: boolean;
@@ -81,6 +90,8 @@ const DEFAULT_LOCATION_SETTINGS: LocationSettings = {
   multiple_locations_enabled: false,
   area_around_enabled: false,
   area_delivery_fee: 0,
+  delivery_tiers_enabled: false,
+  delivery_distance_tiers: [],
   // Separate pickup/return settings
   pickup_fixed_enabled: true,
   return_fixed_enabled: true,
@@ -131,6 +142,8 @@ export const usePickupLocations = () => {
           multiple_locations_enabled,
           area_around_enabled,
           area_delivery_fee,
+          delivery_tiers_enabled,
+          delivery_distance_tiers,
           pickup_fixed_enabled,
           return_fixed_enabled,
           pickup_multiple_locations_enabled,
@@ -159,6 +172,10 @@ export const usePickupLocations = () => {
         multiple_locations_enabled: data?.multiple_locations_enabled ?? false,
         area_around_enabled: data?.area_around_enabled ?? false,
         area_delivery_fee: data?.area_delivery_fee ?? 0,
+        delivery_tiers_enabled: data?.delivery_tiers_enabled ?? false,
+        delivery_distance_tiers: Array.isArray(data?.delivery_distance_tiers)
+          ? (data.delivery_distance_tiers as unknown as DeliveryTier[])
+          : [],
         pickup_fixed_enabled: data?.pickup_fixed_enabled ?? true,
         return_fixed_enabled: data?.return_fixed_enabled ?? true,
         pickup_multiple_locations_enabled: data?.pickup_multiple_locations_enabled ?? false,
@@ -227,6 +244,8 @@ export const usePickupLocations = () => {
       if (updates.multiple_locations_enabled !== undefined) updateData.multiple_locations_enabled = updates.multiple_locations_enabled;
       if (updates.area_around_enabled !== undefined) updateData.area_around_enabled = updates.area_around_enabled;
       if (updates.area_delivery_fee !== undefined) updateData.area_delivery_fee = updates.area_delivery_fee;
+      if (updates.delivery_tiers_enabled !== undefined) updateData.delivery_tiers_enabled = updates.delivery_tiers_enabled;
+      if (updates.delivery_distance_tiers !== undefined) updateData.delivery_distance_tiers = updates.delivery_distance_tiers;
       // Separate pickup/return settings
       if (updates.pickup_fixed_enabled !== undefined) updateData.pickup_fixed_enabled = updates.pickup_fixed_enabled;
       if (updates.return_fixed_enabled !== undefined) updateData.return_fixed_enabled = updates.return_fixed_enabled;
@@ -252,6 +271,8 @@ export const usePickupLocations = () => {
           multiple_locations_enabled,
           area_around_enabled,
           area_delivery_fee,
+          delivery_tiers_enabled,
+          delivery_distance_tiers,
           pickup_fixed_enabled,
           return_fixed_enabled,
           pickup_multiple_locations_enabled,
@@ -279,6 +300,10 @@ export const usePickupLocations = () => {
         multiple_locations_enabled: data?.multiple_locations_enabled ?? false,
         area_around_enabled: data?.area_around_enabled ?? false,
         area_delivery_fee: data?.area_delivery_fee ?? 0,
+        delivery_tiers_enabled: data?.delivery_tiers_enabled ?? false,
+        delivery_distance_tiers: Array.isArray(data?.delivery_distance_tiers)
+          ? (data.delivery_distance_tiers as unknown as DeliveryTier[])
+          : [],
         pickup_fixed_enabled: data?.pickup_fixed_enabled ?? true,
         return_fixed_enabled: data?.return_fixed_enabled ?? true,
         pickup_multiple_locations_enabled: data?.pickup_multiple_locations_enabled ?? false,

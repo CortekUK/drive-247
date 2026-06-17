@@ -12481,7 +12481,9 @@ export type Database = {
           dark_primary_color: string | null
           dark_secondary_color: string | null
           date_format: string | null
+          delivery_distance_tiers: Json
           delivery_enabled: boolean | null
+          delivery_tiers_enabled: boolean
           deposit_mode: string | null
           distance_unit: string | null
           enquiries_enabled: boolean
@@ -12690,7 +12692,9 @@ export type Database = {
           dark_primary_color?: string | null
           dark_secondary_color?: string | null
           date_format?: string | null
+          delivery_distance_tiers?: Json
           delivery_enabled?: boolean | null
+          delivery_tiers_enabled?: boolean
           deposit_mode?: string | null
           distance_unit?: string | null
           enquiries_enabled?: boolean
@@ -12899,7 +12903,9 @@ export type Database = {
           dark_primary_color?: string | null
           dark_secondary_color?: string | null
           date_format?: string | null
+          delivery_distance_tiers?: Json
           delivery_enabled?: boolean | null
+          delivery_tiers_enabled?: boolean
           deposit_mode?: string | null
           distance_unit?: string | null
           enquiries_enabled?: boolean
@@ -13809,6 +13815,7 @@ export type Database = {
           owner_id: string | null
           ownership_assigned_at: string | null
           photo_url: string | null
+          pickup_location_id: string | null
           purchase_price: number | null
           reg: string
           sale_proceeds: number | null
@@ -13879,6 +13886,7 @@ export type Database = {
           owner_id?: string | null
           ownership_assigned_at?: string | null
           photo_url?: string | null
+          pickup_location_id?: string | null
           purchase_price?: number | null
           reg: string
           sale_proceeds?: number | null
@@ -13949,6 +13957,7 @@ export type Database = {
           owner_id?: string | null
           ownership_assigned_at?: string | null
           photo_url?: string | null
+          pickup_location_id?: string | null
           purchase_price?: number | null
           reg?: string
           sale_proceeds?: number | null
@@ -13980,6 +13989,13 @@ export type Database = {
             columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "vehicle_owners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_pickup_location_id_fkey"
+            columns: ["pickup_location_id"]
+            isOneToOne: false
+            referencedRelation: "pickup_locations"
             referencedColumns: ["id"]
           },
           {

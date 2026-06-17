@@ -30,6 +30,9 @@ verify_jwt = false
 [functions.stripe-webhook-live]
 verify_jwt = false
 
+[functions.platform-rental-notify]
+verify_jwt = false
+
 [functions.twilio-inbound-sms]
 verify_jwt = false
 

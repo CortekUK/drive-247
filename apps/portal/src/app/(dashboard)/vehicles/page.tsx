@@ -23,6 +23,7 @@ import { VehiclePhotoThumbnail } from "@/components/vehicles/vehicle-photo-thumb
 import { VehicleStatus, VehiclePLData } from "@/lib/vehicle-utils";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
 
@@ -57,6 +58,7 @@ interface Vehicle {
   description?: string;
   owner_id?: string | null;
   vehicle_owners?: { full_name: string } | null;
+  pickup_location_id?: string | null;
 }
 
 type SortField = 'reg' | 'make_model' | 'year' | 'status';
@@ -133,6 +135,12 @@ export default function VehiclesListEnhanced() {
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
   const { data: vehicleOwnersList = [] } = useVehicleOwners({ includeInactive: false });
+  const { locations: pickupLocationsList } = usePickupLocations();
+  const locationNameById = useMemo(
+    () => new Map((pickupLocationsList || []).map((l) => [l.id, l.name])),
+    [pickupLocationsList]
+  );
+  const hasPickupLocations = (pickupLocationsList || []).length > 0;
 
   // State from URL params
   const [filters, setFilters] = useState<FiltersState>({
@@ -591,6 +599,7 @@ export default function VehiclesListEnhanced() {
                   <TableHead>Year</TableHead>
                   <TableHead>Color</TableHead>
                   <TableHead>Owner</TableHead>
+                  {hasPickupLocations && <TableHead>Location</TableHead>}
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -644,6 +653,15 @@ export default function VehiclesListEnhanced() {
                         <Badge variant="outline" className="text-xs border-gray-300 text-[#737373]">Own fleet</Badge>
                       )}
                     </TableCell>
+                    {hasPickupLocations && (
+                      <TableCell>
+                        {vehicle.pickup_location_id ? (
+                          <span className="text-sm text-foreground">{locationNameById.get(vehicle.pickup_location_id) ?? "—"}</span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">Any</span>
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell className="text-center">
                       <VehicleStatusBadge status={vehicle.status} />
                     </TableCell>

@@ -2573,6 +2573,15 @@ const MultiStepBookingWidget = () => {
       });
     }
 
+    // Pickup-location filter: when the customer picked a specific delivery location,
+    // show only vehicles assigned to it plus unassigned ones (null = any location).
+    if (formData.pickupLocationId) {
+      filtered = filtered.filter(v => {
+        const loc = (v as any).pickup_location_id;
+        return !loc || loc === formData.pickupLocationId;
+      });
+    }
+
     // Search filter - search in make, model, reg, and color
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();

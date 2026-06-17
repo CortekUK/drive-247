@@ -17,6 +17,7 @@ import { MapPin, Building2, Navigation, Check, Truck, Lock, Info } from 'lucide-
 import { cn } from '@/lib/utils';
 import { formatCurrency, kmToDisplayUnit, getDistanceUnitShort } from '@/lib/format-utils';
 import type { DistanceUnit } from '@/lib/format-utils';
+import { resolveDeliveryFee, getTierFeeRange, hasActiveTiers, normalizeTiers, type DeliveryTierConfig } from '@/lib/delivery-tiers';
 
 interface LocationPickerProps {
   type: 'pickup' | 'return';
@@ -71,6 +72,19 @@ export default function LocationPicker({
   // Count enabled options
   const enabledOptions = [fixedEnabled, multipleEnabled, areaEnabled].filter(Boolean);
   const showRadioOptions = enabledOptions.length > 1;
+
+  // Tiered (distance-banded) delivery pricing config — applies to area mode
+  const tierCfg = {
+    delivery_tiers_enabled: tenant?.delivery_tiers_enabled,
+    delivery_distance_tiers: tenant?.delivery_distance_tiers,
+    area_delivery_fee: tenant?.area_delivery_fee,
+  };
+  const tiersOn = hasActiveTiers(tierCfg);
+  const tierRange = getTierFeeRange(tierCfg);
+  // Fee shown on the area card before an address is picked: "from $X" when tiered
+  const areaBadgeFee = tiersOn ? (tierRange?.min ?? 0) : (tenant?.area_delivery_fee || 0);
+  const areaBadgeLabel = (amount: number) =>
+    `${tiersOn ? 'from ' : '+'}${formatCurrency(amount, tenant?.currency_code)}`;
 
   // Track selected delivery method
   const [selectedMethod, setSelectedMethod] = useState<DeliveryMethod>('fixed');
@@ -206,8 +220,8 @@ export default function LocationPicker({
           <LocationAutocompleteWithRadius
             id={`${type}Location`}
             value={value}
-            onChange={(address, lat, lon) =>
-              onChange(address, undefined, lat, lon, tenant?.area_delivery_fee || 0)
+            onChange={(address, lat, lon, distanceKm) =>
+              onChange(address, undefined, lat, lon, resolveDeliveryFee(distanceKm, tierCfg).fee)
             }
             placeholder={placeholder || `Enter ${type} address`}
             className={className}
@@ -216,12 +230,17 @@ export default function LocationPicker({
             centerLat={tenant?.area_center_lat}
             centerLon={tenant?.area_center_lon}
             distanceUnit={distanceUnit}
+            allowOutOfRadius={tiersOn}
           />
-          {tenant?.area_delivery_fee && tenant.area_delivery_fee > 0 && (
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Truck className="w-3 h-3" />
-              Delivery fee: <span className="font-semibold text-foreground">{formatCurrency(tenant.area_delivery_fee, tenant.currency_code)}</span>
-            </p>
+          {tiersOn ? (
+            <TierFeeNote tierCfg={tierCfg} distanceUnit={distanceUnit} currencyCode={tenant?.currency_code} />
+          ) : (
+            tenant?.area_delivery_fee && tenant.area_delivery_fee > 0 ? (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Truck className="w-3 h-3" />
+                Delivery fee: <span className="font-semibold text-foreground">{formatCurrency(tenant.area_delivery_fee, tenant.currency_code)}</span>
+              </p>
+            ) : null
           )}
           {tenant?.lockbox_enabled && type === 'pickup' && (
             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -350,24 +369,26 @@ export default function LocationPicker({
                 {type === 'pickup' ? 'Deliver to my address' : 'Collect from my address'}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Within {kmToDisplayUnit(type === 'pickup' ? tenant?.pickup_area_radius_km ?? 25 : tenant?.return_area_radius_km ?? 25, distanceUnit)}{getDistanceUnitShort(distanceUnit)} service area
+                {tiersOn
+                  ? 'Delivery priced by distance'
+                  : `Within ${kmToDisplayUnit(type === 'pickup' ? tenant?.pickup_area_radius_km ?? 25 : tenant?.return_area_radius_km ?? 25, distanceUnit)}${getDistanceUnitShort(distanceUnit)} service area`}
               </p>
             </div>
-            {tenant?.area_delivery_fee && tenant.area_delivery_fee > 0 && (
+            {areaBadgeFee > 0 && (
               <span className="text-xs font-semibold text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full flex-shrink-0">
-                + {formatCurrency(tenant.area_delivery_fee, tenant.currency_code)}
+                {areaBadgeLabel(areaBadgeFee)}
               </span>
             )}
           </div>
 
           {/* Expanded address input */}
           {selectedMethod === 'area' && (
-            <div className="mt-3 pt-3 border-t border-border/50" onClick={(e) => e.stopPropagation()}>
+            <div className="mt-3 pt-3 border-t border-border/50 space-y-2" onClick={(e) => e.stopPropagation()}>
               <LocationAutocompleteWithRadius
                 id={`${type}Location`}
                 value={value}
-                onChange={(address, lat, lon) =>
-                  onChange(address, undefined, lat, lon, tenant?.area_delivery_fee || 0)
+                onChange={(address, lat, lon, distanceKm) =>
+                  onChange(address, undefined, lat, lon, resolveDeliveryFee(distanceKm, tierCfg).fee)
                 }
                 placeholder={placeholder || `Enter your address`}
                 className="h-11"
@@ -376,7 +397,11 @@ export default function LocationPicker({
                 centerLat={tenant?.area_center_lat}
                 centerLon={tenant?.area_center_lon}
                 distanceUnit={distanceUnit}
+                allowOutOfRadius={tiersOn}
               />
+              {tiersOn && (
+                <TierFeeNote tierCfg={tierCfg} distanceUnit={distanceUnit} currencyCode={tenant?.currency_code} />
+              )}
             </div>
           )}
         </OptionCard>
@@ -389,6 +414,47 @@ export default function LocationPicker({
           Vehicle keys will be placed in a secure lockbox at your delivery location
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * Compact list of distance bands shown under the area address input so the
+ * customer can see how the delivery fee scales before picking an address.
+ */
+function TierFeeNote({
+  tierCfg,
+  distanceUnit,
+  currencyCode,
+}: {
+  tierCfg: DeliveryTierConfig;
+  distanceUnit: DistanceUnit;
+  currencyCode?: string | null;
+}) {
+  const tiers = normalizeTiers(tierCfg.delivery_distance_tiers).sort((a, b) => {
+    const av = a.up_to_km ?? Number.POSITIVE_INFINITY;
+    const bv = b.up_to_km ?? Number.POSITIVE_INFINITY;
+    return av - bv;
+  });
+  if (tiers.length === 0) return null;
+  const unit = getDistanceUnitShort(distanceUnit);
+  return (
+    <div className="rounded-lg bg-muted/40 px-3 py-2">
+      <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1 mb-1">
+        <Truck className="w-3 h-3" /> Delivery priced by distance
+      </p>
+      <ul className="space-y-0.5">
+        {tiers.map((t, i) => (
+          <li key={i} className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">
+              {t.up_to_km === null
+                ? 'Anywhere further'
+                : `Up to ${kmToDisplayUnit(t.up_to_km, distanceUnit)}${unit}`}
+            </span>
+            <span className="font-semibold text-foreground">{formatCurrency(t.fee, currencyCode)}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

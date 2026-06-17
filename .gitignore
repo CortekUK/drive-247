@@ -31,6 +31,8 @@ out/
 *.sw?
 .vercel
 .env*.local
+.env*.local.prod.bak
+*.prod.bak
 .env
 .env.example
 .claude/

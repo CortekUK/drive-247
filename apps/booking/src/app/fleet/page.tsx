@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useDeliveryLocations } from "@/hooks/useDeliveryLocations";
 import Link from "next/link";
 import SEO from "@/components/SEO";
 import { usePageContent, defaultFleetContent, mergeWithDefaults } from "@/hooks/usePageContent";
@@ -67,6 +68,7 @@ interface Vehicle {
   vehicle_photos?: VehiclePhoto[];
   created_at?: string;
   description?: string | null;
+  pickup_location_id?: string | null;
 }
 
 // Helper to get vehicle display name
@@ -129,6 +131,8 @@ const Pricing = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [makeFilter, setMakeFilter] = useState<string>("all");
   const [colourFilter, setColourFilter] = useState<string>("all");
+  const [locationFilter, setLocationFilter] = useState<string>("all");
+  const { pickupLocations } = useDeliveryLocations();
   const [sortBy, setSortBy] = useState<string>("daily_asc");
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
 
@@ -233,7 +237,13 @@ const Pricing = () => {
       // Colour filter
       const colourMatch = colourFilter === "all" || vehicle.colour === colourFilter;
 
-      return makeMatch && colourMatch;
+      // Location filter: a vehicle with no location is available everywhere
+      const locationMatch =
+        locationFilter === "all" ||
+        !vehicle.pickup_location_id ||
+        vehicle.pickup_location_id === locationFilter;
+
+      return makeMatch && colourMatch && locationMatch;
     })
     .sort((a, b) => {
       switch (sortBy) {
@@ -294,6 +304,23 @@ const Pricing = () => {
                 </SelectContent>
               </Select>
             </div>
+            {pickupLocations.length > 0 && (
+              <div className="flex-1">
+                <Select value={locationFilter} onValueChange={setLocationFilter}>
+                  <SelectTrigger className="w-full bg-card/50 border-accent/20">
+                    <SelectValue placeholder="Filter by Location" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-accent/20 z-50">
+                    <SelectItem value="all">All Locations</SelectItem>
+                    {pickupLocations.map((loc) => (
+                      <SelectItem key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="flex-1">
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-full bg-card/50 border-accent/20">

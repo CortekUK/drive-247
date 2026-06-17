@@ -9,7 +9,7 @@ import type { DistanceUnit } from "@/lib/format-utils";
 interface LocationAutocompleteWithRadiusProps {
   id: string;
   value: string;
-  onChange: (value: string, lat?: number, lon?: number) => void;
+  onChange: (value: string, lat?: number, lon?: number, distanceKm?: number) => void;
   placeholder: string;
   className?: string;
   disabled?: boolean;
@@ -17,6 +17,8 @@ interface LocationAutocompleteWithRadiusProps {
   centerLat?: number | null;
   centerLon?: number | null;
   distanceUnit?: DistanceUnit;
+  /** When true, addresses beyond the radius are shown (not filtered out) — used for open-ended tiered pricing. */
+  allowOutOfRadius?: boolean;
 }
 
 interface Suggestion {
@@ -60,6 +62,7 @@ const LocationAutocompleteWithRadius = ({
   centerLat,
   centerLon,
   distanceUnit = 'miles',
+  allowOutOfRadius = false,
 }: LocationAutocompleteWithRadiusProps) => {
   const { isLoaded } = useGoogleMapsLoader();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -155,10 +158,11 @@ const LocationAutocompleteWithRadius = ({
 
       let results = await Promise.all(detailsPromises);
 
-      // Filter by radius if we have a center point
+      // Filter by radius if we have a center point.
+      // When allowOutOfRadius (tiered open-ended pricing), keep far results too.
       if (center) {
         results = results
-          .filter((s) => s.distance !== undefined && s.distance <= radiusKm)
+          .filter((s) => s.distance !== undefined && (allowOutOfRadius || s.distance <= radiusKm))
           .sort((a, b) => a.distance! - b.distance!);
       }
 
@@ -201,8 +205,8 @@ const LocationAutocompleteWithRadius = ({
   };
 
   const handleSelectSuggestion = (suggestion: Suggestion) => {
-    // Coordinates were already fetched during prediction filtering
-    onChange(suggestion.fullText, suggestion.lat, suggestion.lng);
+    // Coordinates + distance were already computed during prediction filtering
+    onChange(suggestion.fullText, suggestion.lat, suggestion.lng, suggestion.distance);
     setSuggestions([]);
     setShowSuggestions(false);
   };

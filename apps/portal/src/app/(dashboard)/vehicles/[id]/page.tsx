@@ -58,6 +58,7 @@ interface Vehicle {
   reg: string;
   make: string;
   model: string;
+  pickup_location_id?: string | null;
   year?: number;
   colour: string;
   fuel_type?: string;
@@ -751,33 +752,43 @@ export default function VehicleDetail() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="space-y-3">
                   {([
                     ["daily", "Daily", "daily_rent"],
                     ["weekly", "Weekly", "weekly_rent"],
                     ["monthly", "Monthly", "monthly_rent"],
                   ] as const).map(([tier, label, col]) => (
-                    <TraxPriceSuggestion
+                    <div
                       key={tier}
-                      variant="card"
-                      label={label}
-                      vehicleId={vehicle.id}
-                      tier={tier}
-                      currentPrice={vehicle[col] ?? undefined}
-                      showEmpty
-                      onImplement={async (price) => {
-                        await supabase
-                          .from("vehicles")
-                          .update({ [col]: price })
-                          .eq("id", vehicle.id);
-                        queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
-                        queryClient.invalidateQueries({ queryKey: ["trax-price"] });
-                        toast({
-                          title: "Price updated",
-                          description: `${label} rate set to $${price}.`,
-                        });
-                      }}
-                    />
+                      className="flex flex-col gap-1.5 border-b border-[#f1f5f9] dark:border-gray-800 pb-3 last:border-0 last:pb-0"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-[#080812] dark:text-gray-100">
+                          {label}
+                        </span>
+                        <span className="text-sm tabular-nums text-[#404040] dark:text-gray-300">
+                          {vehicle[col] != null ? `$${vehicle[col]}` : "—"}
+                        </span>
+                      </div>
+                      <TraxPriceSuggestion
+                        vehicleId={vehicle.id}
+                        tier={tier}
+                        currentPrice={vehicle[col] ?? undefined}
+                        showEmpty
+                        onImplement={async (price) => {
+                          await supabase
+                            .from("vehicles")
+                            .update({ [col]: price })
+                            .eq("id", vehicle.id);
+                          queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                          queryClient.invalidateQueries({ queryKey: ["trax-price"] });
+                          toast({
+                            title: "Price updated",
+                            description: `${label} rate set to $${price}.`,
+                          });
+                        }}
+                      />
+                    </div>
                   ))}
                 </div>
               </CardContent>

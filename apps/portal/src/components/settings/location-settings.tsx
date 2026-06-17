@@ -45,6 +45,7 @@ import { toast } from '@/hooks/use-toast';
 import {
   usePickupLocations,
   PickupLocation,
+  DeliveryTier,
 } from '@/hooks/use-pickup-locations';
 import { useTenant } from '@/contexts/TenantContext';
 import { cn } from '@/lib/utils';
@@ -124,6 +125,13 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
   const [areaCenterLat, setAreaCenterLat] = useState<number | null>(null);
   const [areaCenterLon, setAreaCenterLon] = useState<number | null>(null);
 
+  // Tiered (distance-banded) delivery pricing.
+  // up_to is held in the tenant's DISPLAY unit (mi/km) for editing; converted to
+  // km on save. up_to === null is the open-ended "anywhere further" band (last only).
+  type TierRow = { up_to: number | null; fee: number };
+  const [deliveryTiersEnabled, setDeliveryTiersEnabled] = useState(false);
+  const [tiers, setTiers] = useState<TierRow[]>([]);
+
   const [hasChanges, setHasChanges] = useState(false);
 
   // Report dirty state to parent
@@ -164,6 +172,13 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
       );
       setAreaRadius(locationSettings.pickup_area_radius_km != null ? kmToDisplayUnit(locationSettings.pickup_area_radius_km, distanceUnit) : 100);
       setAreaDeliveryFee(locationSettings.area_delivery_fee ?? 0);
+      setDeliveryTiersEnabled(locationSettings.delivery_tiers_enabled ?? false);
+      setTiers(
+        (locationSettings.delivery_distance_tiers ?? []).map((t) => ({
+          up_to: t.up_to_km == null ? null : kmToDisplayUnit(t.up_to_km, distanceUnit),
+          fee: t.fee,
+        }))
+      );
       setAreaCenterLat(locationSettings.area_center_lat);
       setAreaCenterLon(locationSettings.area_center_lon);
       if (locationSettings.area_center_lat && locationSettings.area_center_lon && !areaCenterAddress) {
@@ -176,7 +191,7 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
   useEffect(() => {
     if (!locationSettings) return;
     setHasChanges(true);
-  }, [pickupFixedEnabled, pickupMultipleEnabled, pickupAreaEnabled, returnFixedEnabled, returnMultipleEnabled, returnAreaEnabled, fixedPickupAddress, fixedReturnAddress, sameReturnAddress, areaRadius, areaDeliveryFee, areaCenterLat, areaCenterLon]);
+  }, [pickupFixedEnabled, pickupMultipleEnabled, pickupAreaEnabled, returnFixedEnabled, returnMultipleEnabled, returnAreaEnabled, fixedPickupAddress, fixedReturnAddress, sameReturnAddress, areaRadius, areaDeliveryFee, areaCenterLat, areaCenterLon, deliveryTiersEnabled, tiers]);
 
   const pickupLocations = locations.filter(loc => loc.is_pickup_enabled);
   const returnLocations = locations.filter(loc => loc.is_return_enabled);
@@ -261,6 +276,39 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
       return;
     }
 
+    // Validate tiered pricing bands and convert display units → km
+    const tiersActive = areaUsed && deliveryTiersEnabled;
+    let tiersForSave: DeliveryTier[] = [];
+    if (tiersActive) {
+      if (tiers.length === 0) {
+        toast({ title: 'Error', description: 'Add at least one delivery price band, or turn off tiered pricing.', variant: 'destructive' });
+        return;
+      }
+      const bounded = tiers.filter((t) => t.up_to !== null);
+      for (const t of tiers) {
+        if (!Number.isFinite(t.fee) || t.fee < 0) {
+          toast({ title: 'Error', description: 'Each band needs a valid fee.', variant: 'destructive' });
+          return;
+        }
+        if (t.up_to !== null && (!Number.isFinite(t.up_to) || t.up_to <= 0)) {
+          toast({ title: 'Error', description: 'Each distance band needs a positive distance.', variant: 'destructive' });
+          return;
+        }
+      }
+      // bounded distances must be strictly ascending
+      const sortedBounded = [...bounded].sort((a, b) => (a.up_to as number) - (b.up_to as number));
+      for (let i = 1; i < sortedBounded.length; i++) {
+        if ((sortedBounded[i].up_to as number) <= (sortedBounded[i - 1].up_to as number)) {
+          toast({ title: 'Error', description: 'Band distances must increase (e.g. 20, then 40).', variant: 'destructive' });
+          return;
+        }
+      }
+      tiersForSave = tiers.map((t) => ({
+        up_to_km: t.up_to === null ? null : displayUnitToKm(t.up_to, distanceUnit),
+        fee: t.fee,
+      }));
+    }
+
     try {
       await updateSettings({
         // Legacy combined flags (for backwards compatibility)
@@ -282,9 +330,49 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
         area_delivery_fee: areaUsed ? (areaDeliveryFee ?? 0) : 0,
         area_center_lat: areaUsed ? areaCenterLat : null,
         area_center_lon: areaUsed ? areaCenterLon : null,
+        delivery_tiers_enabled: tiersActive,
+        delivery_distance_tiers: tiersForSave,
       });
       setHasChanges(false);
     } catch (error) {}
+  };
+
+  // ---- Tiered pricing row helpers ----
+  const boundedTiers = tiers.filter((t) => t.up_to !== null);
+  const hasOpenBand = tiers.some((t) => t.up_to === null);
+
+  const addBand = () => {
+    const lastBound = boundedTiers.reduce((max, t) => Math.max(max, t.up_to as number), 0);
+    const newRow: TierRow = { up_to: lastBound + 10, fee: areaDeliveryFee ?? 0 };
+    // keep the open-ended band (if any) at the end
+    setTiers((prev) => {
+      const open = prev.filter((t) => t.up_to === null);
+      const bounded = prev.filter((t) => t.up_to !== null);
+      return [...bounded, newRow, ...open];
+    });
+    setHasChanges(true);
+  };
+
+  const removeBand = (index: number) => {
+    setTiers((prev) => prev.filter((_, i) => i !== index));
+    setHasChanges(true);
+  };
+
+  const updateBand = (index: number, patch: Partial<TierRow>) => {
+    setTiers((prev) => prev.map((t, i) => (i === index ? { ...t, ...patch } : t)));
+    setHasChanges(true);
+  };
+
+  const toggleOpenBand = (checked: boolean) => {
+    setTiers((prev) => {
+      const bounded = prev.filter((t) => t.up_to !== null);
+      if (checked) {
+        const existingOpen = prev.find((t) => t.up_to === null);
+        return [...bounded, existingOpen ?? { up_to: null, fee: areaDeliveryFee ?? 0 }];
+      }
+      return bounded;
+    });
+    setHasChanges(true);
   };
 
   const handleCenterAddressChange = (address: string, lat?: number, lon?: number) => {
@@ -760,24 +848,113 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
 
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Fee</Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{currencySymbol}</span>
-                    <Input
-                      type="number"
-                      value={areaDeliveryFee ?? ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setAreaDeliveryFee(val === '' ? null : parseFloat(val) || null);
-                        setHasChanges(true);
-                      }}
-                      className="pl-7"
-                      min={0}
-                      step={0.01}
-                      placeholder="0"
-                    />
-                  </div>
+                  {deliveryTiersEnabled ? (
+                    <div className="flex items-center h-10 px-3 rounded-md border bg-muted/40 text-xs text-muted-foreground">
+                      Set by distance bands below
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{currencySymbol}</span>
+                      <Input
+                        type="number"
+                        value={areaDeliveryFee ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAreaDeliveryFee(val === '' ? null : parseFloat(val) || null);
+                          setHasChanges(true);
+                        }}
+                        className="pl-7"
+                        min={0}
+                        step={0.01}
+                        placeholder="0"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
+            </div>
+
+            {/* Tiered (distance-banded) pricing */}
+            <div className="mt-6 rounded-lg border">
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-b bg-muted/20">
+                <div>
+                  <p className="text-sm font-medium">Tiered pricing by distance</p>
+                  <p className="text-xs text-muted-foreground">Charge more the further you deliver, instead of one flat fee.</p>
+                </div>
+                <Switch
+                  checked={deliveryTiersEnabled}
+                  onCheckedChange={(checked) => {
+                    setDeliveryTiersEnabled(checked);
+                    // seed a sensible first band the first time it's turned on
+                    if (checked && tiers.length === 0) {
+                      setTiers([{ up_to: 20, fee: areaDeliveryFee ?? 0 }, { up_to: null, fee: (areaDeliveryFee ?? 0) + 25 }]);
+                    }
+                    setHasChanges(true);
+                  }}
+                />
+              </div>
+
+              {deliveryTiersEnabled && (
+                <div className="p-4 space-y-3">
+                  {tiers.map((tier, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      {tier.up_to === null ? (
+                        <div className="flex-1 flex items-center h-10 px-3 rounded-md border bg-muted/30 text-sm text-foreground">
+                          Anywhere further
+                        </div>
+                      ) : (
+                        <div className="flex-1 relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">Up to</span>
+                          <Input
+                            type="number"
+                            value={tier.up_to ?? ''}
+                            onChange={(e) => updateBand(index, { up_to: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
+                            className="pl-12 pr-10"
+                            min={1}
+                            placeholder="20"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{distanceUnitLabel}</span>
+                        </div>
+                      )}
+                      <span className="text-muted-foreground text-sm">→</span>
+                      <div className="relative w-32">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{currencySymbol}</span>
+                        <Input
+                          type="number"
+                          value={Number.isFinite(tier.fee) ? tier.fee : ''}
+                          onChange={(e) => updateBand(index, { fee: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
+                          className="pl-7"
+                          min={0}
+                          step={0.01}
+                          placeholder="0"
+                        />
+                      </div>
+                      <Button type="button" variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeBand(index)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+
+                  <div className="flex items-center justify-between pt-1">
+                    <Button type="button" variant="outline" size="sm" onClick={addBand}>
+                      <Plus className="mr-1.5 h-3.5 w-3.5" /> Add band
+                    </Button>
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                      <Checkbox checked={hasOpenBand} onCheckedChange={(c) => toggleOpenBand(!!c)} />
+                      Charge a flat fee for anywhere beyond the last band
+                    </label>
+                  </div>
+
+                  {!hasOpenBand && (
+                    <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
+                      <p className="text-[11px] text-amber-500 leading-relaxed">
+                        Without an open-ended band, addresses beyond your furthest band are charged that furthest band&apos;s fee.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {(areaRadius ?? 0) > Math.floor(kmToDisplayUnit(50, distanceUnit)) && (
@@ -791,8 +968,12 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
 
             <div className="mt-4 p-3 rounded-lg bg-muted/50 border">
               <p className="text-sm text-muted-foreground">
-                Customers can enter any address within <strong className="text-foreground">{areaRadius ?? 100}{distanceUnitLabel}</strong> of your center point.
-                A fee of <strong className="text-foreground">{formatCurrency(areaDeliveryFee ?? 0, currencyCode)}</strong> will apply per delivery/collection.
+                Customers can enter any address {deliveryTiersEnabled ? 'measured from' : 'within '}
+                {!deliveryTiersEnabled && <strong className="text-foreground">{areaRadius ?? 100}{distanceUnitLabel} of</strong>}
+                {' '}your center point.{' '}
+                {deliveryTiersEnabled
+                  ? 'The delivery fee is picked automatically from the distance bands above.'
+                  : <>A fee of <strong className="text-foreground">{formatCurrency(areaDeliveryFee ?? 0, currencyCode)}</strong> will apply per delivery/collection.</>}
               </p>
             </div>
           </CardContent>

@@ -11,7 +11,7 @@ import type { DistanceUnit } from "@/lib/format-utils";
 interface LocationAutocompleteWithRadiusProps {
   id: string;
   value: string;
-  onChange: (value: string, lat?: number, lon?: number, outOfRadius?: boolean) => void;
+  onChange: (value: string, lat?: number, lon?: number, outOfRadius?: boolean, distanceKm?: number) => void;
   placeholder: string;
   className?: string;
   disabled?: boolean;
@@ -198,7 +198,7 @@ export function LocationAutocompleteWithRadius({
   };
 
   const handleSelectSuggestion = (suggestion: Suggestion) => {
-    onChange(suggestion.fullText, suggestion.lat, suggestion.lng, suggestion.outOfRadius);
+    onChange(suggestion.fullText, suggestion.lat, suggestion.lng, suggestion.outOfRadius, suggestion.distance);
     setSuggestions([]);
     setShowSuggestions(false);
   };

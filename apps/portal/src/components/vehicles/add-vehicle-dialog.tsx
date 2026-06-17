@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
+import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { format, startOfDay } from "date-fns";
@@ -46,6 +47,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { activeLocations } = usePickupLocations();
   const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');
   const { logAction } = useAuditLog();
   const currentOpen = open !== undefined ? open : isOpen;
@@ -86,6 +88,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
       weekly_mileage: undefined,
       monthly_mileage: undefined,
       excess_mileage_rate: undefined,
+      pickup_location_id: "",
     },
   });
 
@@ -237,6 +240,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
         available_daily: data.available_daily,
         available_weekly: data.available_weekly,
         available_monthly: data.available_monthly,
+        pickup_location_id: data.pickup_location_id || null,
       };
 
       // Add type-specific fields
@@ -1032,6 +1036,38 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                     )}
                   />
                 </div>
+
+                {activeLocations.length > 0 && (
+                  <FormField
+                    control={form.control}
+                    name="pickup_location_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Pickup Location</FormLabel>
+                        <Select
+                          value={field.value || "__any__"}
+                          onValueChange={(v) => field.onChange(v === "__any__" ? "" : v)}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Any location" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="__any__">Any location</SelectItem>
+                            {activeLocations.map((loc) => (
+                              <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Only show this vehicle when the customer picks this pickup location. Leave as &quot;Any location&quot; to show it everywhere.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <FormField

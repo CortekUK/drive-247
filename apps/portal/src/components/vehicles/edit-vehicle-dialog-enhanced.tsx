@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Edit, Car, DollarSign, CalendarIcon, Lock, RefreshCw } from "lucide-react";
@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { getContractTotal } from "@/lib/vehicle-utils";
 import { editVehicleEnhancedSchema, type EditVehicleEnhancedFormValues } from "@/client-schemas/vehicles/edit-vehicle-enhanced";
 import { useTenant } from "@/contexts/TenantContext";
+import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { getCurrencySymbol } from "@/lib/format-utils";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
@@ -72,6 +73,7 @@ interface Vehicle {
   available_daily?: boolean;
   available_weekly?: boolean;
   available_monthly?: boolean;
+  pickup_location_id?: string | null;
 }
 
 interface EditVehicleDialogProps {
@@ -87,6 +89,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
   const queryClient = useQueryClient();
   const { logAction } = useAuditLog();
   const { tenant } = useTenant();
+  const { activeLocations } = usePickupLocations();
   const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
   const { settings: rentalSettings } = useRentalSettings();
   const [lockboxCode, setLockboxCode] = useState(vehicle.lockbox_code || '');
@@ -144,6 +147,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
       available_daily: vehicle.available_daily ?? true,
       available_weekly: vehicle.available_weekly ?? true,
       available_monthly: vehicle.available_monthly ?? true,
+      pickup_location_id: vehicle.pickup_location_id || "",
     },
   });
 
@@ -203,6 +207,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
         available_daily: data.available_daily,
         available_weekly: data.available_weekly,
         available_monthly: data.available_monthly,
+        pickup_location_id: data.pickup_location_id || null,
       };
 
       // Add type-specific fields
@@ -958,6 +963,38 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                   )}
                 />
               </div>
+
+              {activeLocations.length > 0 && (
+                <FormField
+                  control={form.control}
+                  name="pickup_location_id"
+                  render={({ field }) => (
+                    <FormItem className="mt-4">
+                      <FormLabel>Pickup Location</FormLabel>
+                      <Select
+                        value={field.value || "__any__"}
+                        onValueChange={(v) => field.onChange(v === "__any__" ? "" : v)}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Any location" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="__any__">Any location</SelectItem>
+                          {activeLocations.map((loc) => (
+                            <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Only show this vehicle when the customer picks this pickup location. Leave as &quot;Any location&quot; to show it everywhere.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
 
             {/* Finance Section */}

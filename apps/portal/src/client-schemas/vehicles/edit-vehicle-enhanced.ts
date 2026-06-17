@@ -52,6 +52,8 @@ export const editVehicleEnhancedSchema = z.object({
   available_daily: z.boolean().default(true),
   available_weekly: z.boolean().default(true),
   available_monthly: z.boolean().default(true),
+  // Optional pickup location assignment ("" / undefined = available from any location)
+  pickup_location_id: z.string().optional(),
   // Description
   description: z.string().optional(),
 }).superRefine((data, ctx) => {

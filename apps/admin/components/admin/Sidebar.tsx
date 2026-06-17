@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   AlertTriangle,
   TrendingUp,
+  Activity,
 } from 'lucide-react';
 
 interface NavItem {
@@ -49,6 +50,13 @@ function useNavigation() {
       label: 'Overview',
       items: [
         { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
+      ],
+    },
+    {
+      label: 'Monitoring',
+      items: [
+        { name: 'Platform Rentals', href: '/admin/platform-rentals', icon: Activity },
+        { name: 'Tenant Readiness', href: '/admin/readiness', icon: ShieldCheck },
       ],
     },
     {

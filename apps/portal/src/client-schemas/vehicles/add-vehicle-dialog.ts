@@ -51,6 +51,8 @@ export const addVehicleDialogSchema = z.object({
   available_daily: z.boolean().default(true),
   available_weekly: z.boolean().default(true),
   available_monthly: z.boolean().default(true),
+  // Optional pickup location assignment ("" / undefined = available from any location)
+  pickup_location_id: z.string().optional(),
   description: z.string().optional(),
   photo_file: z.instanceof(File).optional(),
 }).superRefine((data, ctx) => {

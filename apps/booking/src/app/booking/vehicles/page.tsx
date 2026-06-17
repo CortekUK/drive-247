@@ -44,7 +44,10 @@ const BookingVehiclesContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
-  const { updateContext } = useBookingStore();
+  const { updateContext, context } = useBookingStore();
+  // The customer's chosen pickup location (multiple-locations mode). Used to show
+  // only vehicles assigned to that location (plus unassigned "any location" cars).
+  const selectedLocationId = context.deliveryOption === 'location' ? context.selectedLocationId : null;
   // Tenant-level holidays for surcharge-aware price displays (no vehicleId → tenant holidays only)
   const { holidays } = useDynamicPricing();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -100,6 +103,12 @@ const BookingVehiclesContent = () => {
 
       if (tenant?.id) {
         query = query.eq("tenant_id", tenant.id);
+      }
+
+      // Location filter: when the customer chose a specific pickup location, show
+      // only vehicles assigned to it plus unassigned ones (null = any location).
+      if (selectedLocationId) {
+        query = query.or(`pickup_location_id.is.null,pickup_location_id.eq.${selectedLocationId}`);
       }
 
       const { data, error } = await query.order("monthly_rent", { ascending: true });

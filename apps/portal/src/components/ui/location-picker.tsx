@@ -16,6 +16,7 @@ import { Building2, MapPin, Navigation, AlertTriangle, PenLine } from 'lucide-re
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format-utils';
 import type { DistanceUnit } from '@/lib/format-utils';
+import { resolveDeliveryFee, getTierFeeRange, hasActiveTiers } from '@/lib/delivery-tiers';
 
 export type LocationMethod = 'fixed' | 'location' | 'area';
 
@@ -80,7 +81,17 @@ export function LocationPicker({
     ? locationSettings.pickup_area_enabled
     : locationSettings.return_area_enabled;
 
+  // Tiered (distance-banded) delivery pricing config for area mode
+  const tierCfg = {
+    delivery_tiers_enabled: locationSettings.delivery_tiers_enabled,
+    delivery_distance_tiers: locationSettings.delivery_distance_tiers,
+    area_delivery_fee: locationSettings.area_delivery_fee,
+  };
+  const tiersOn = hasActiveTiers(tierCfg);
+  const tierRange = getTierFeeRange(tierCfg);
   const areaFee = locationSettings.area_delivery_fee || 0;
+  // Fee shown on the area method card: cheapest band when tiered, else the flat fee
+  const areaCardFee = tiersOn ? (tierRange?.min ?? 0) : areaFee;
   const radiusKm = type === 'pickup'
     ? locationSettings.pickup_area_radius_km || 25
     : locationSettings.return_area_radius_km || 25;
@@ -123,10 +134,10 @@ export function LocationPicker({
     {
       key: 'area',
       label: 'Area Delivery',
-      description: 'Deliver to customer address',
+      description: tiersOn ? 'Priced by distance' : 'Deliver to customer address',
       icon: Navigation,
       enabled: isAreaEnabled,
-      fee: areaFee,
+      fee: areaCardFee,
     },
   ];
 
@@ -154,7 +165,7 @@ export function LocationPicker({
                 } else {
                   // Area, or location with 0 / 2+ entries — clear address so
                   // the dropdown / area input is empty until the user picks.
-                  onChange('', undefined, key === 'area' ? areaFee : undefined);
+                  onChange('', undefined, key === 'area' ? areaCardFee : undefined);
                 }
               }}
               className={cn(
@@ -238,20 +249,28 @@ export function LocationPicker({
       )}
 
       {method === 'area' && (
-        <LocationAutocompleteWithRadius
-          id={`${type}LocationArea`}
-          value={value}
-          onChange={(address, lat, lon, outOfRadius) => {
-            onChange(address, undefined, areaFee, outOfRadius);
-          }}
-          placeholder={placeholder || `Enter ${type === 'pickup' ? 'delivery' : 'collection'} address`}
-          radiusKm={radiusKm}
-          centerLat={locationSettings.area_center_lat}
-          centerLon={locationSettings.area_center_lon}
-          distanceUnit={distanceUnit}
-          disabled={disabled}
-          allowOutOfRadius={true}
-        />
+        <div className="space-y-2">
+          <LocationAutocompleteWithRadius
+            id={`${type}LocationArea`}
+            value={value}
+            onChange={(address, lat, lon, outOfRadius, distanceKm) => {
+              const fee = tiersOn ? resolveDeliveryFee(distanceKm, tierCfg).fee : areaFee;
+              onChange(address, undefined, fee, outOfRadius);
+            }}
+            placeholder={placeholder || `Enter ${type === 'pickup' ? 'delivery' : 'collection'} address`}
+            radiusKm={radiusKm}
+            centerLat={locationSettings.area_center_lat}
+            centerLon={locationSettings.area_center_lon}
+            distanceUnit={distanceUnit}
+            disabled={disabled}
+            allowOutOfRadius={true}
+          />
+          {tiersOn && (
+            <p className="text-[11px] text-muted-foreground">
+              Tiered pricing on — fee is set automatically from the address distance. You can still override it below.
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
