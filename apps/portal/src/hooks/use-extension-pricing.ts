@@ -27,22 +27,29 @@ interface ExtensionPricingResult {
 }
 
 /**
- * Derive an effective daily rate from the rental's period type.
- * Monthly → monthly_rent / monthlyTierDays, Weekly → weekly_rent / 7, Daily → daily_rent.
- * Falls back to daily_rent if the tier rate is missing.
+ * Derive an effective daily rate from the EXTENSION's own length — NOT the
+ * original rental's period type. A 7-day extension should get the weekly rate
+ * even if the original booking was a short daily rental (operators expect the
+ * weekly/monthly discount to kick in by duration, like a fresh booking). The
+ * tier the customer originally booked under is irrelevant to how long they're
+ * now extending for.
+ *
+ * ≥ monthlyTierDays → monthly_rent / monthlyTierDays
+ * ≥ 7 days          → weekly_rent / 7
+ * otherwise         → daily_rent
+ * Falls back to a smaller tier (and finally daily_rent) when a tier rate is missing.
  */
-function getEffectiveDailyRate(
-  rentalPeriodType: string | undefined,
+function getEffectiveDailyRateForDuration(
+  extensionDays: number,
   dailyRent: number | null,
   weeklyRent: number | null,
   monthlyRent: number | null,
   monthlyTierDays: number = 30
 ): number | null {
-  const type = (rentalPeriodType || '').toLowerCase();
-  if (type === 'monthly' && monthlyRent && monthlyRent > 0) {
+  if (extensionDays >= monthlyTierDays && monthlyRent && monthlyRent > 0) {
     return Math.round((monthlyRent / monthlyTierDays) * 100) / 100;
   }
-  if (type === 'weekly' && weeklyRent && weeklyRent > 0) {
+  if (extensionDays >= 7 && weeklyRent && weeklyRent > 0) {
     return Math.round((weeklyRent / 7) * 100) / 100;
   }
   return dailyRent;
@@ -116,8 +123,15 @@ export function useExtensionPricing({
 
   const result = useMemo(() => {
     const mtd = tenant?.monthly_tier_days ?? 30;
-    const effectiveDailyRate = getEffectiveDailyRate(
-      rentalPeriodType,
+    // Length of THIS extension (inclusive day-count is handled in
+    // calculateExtensionPrice; here we just need a tier selector).
+    const extensionDays = currentEndDate && newEndDate
+      ? Math.max(0, Math.round(
+          (new Date(`${newEndDate}T00:00:00`).getTime() - new Date(`${currentEndDate}T00:00:00`).getTime()) / 86_400_000
+        ))
+      : 0;
+    const effectiveDailyRate = getEffectiveDailyRateForDuration(
+      extensionDays,
       pricingData?.dailyRent ?? null,
       pricingData?.weeklyRent ?? null,
       pricingData?.monthlyRent ?? null,

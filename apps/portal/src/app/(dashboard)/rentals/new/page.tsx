@@ -999,6 +999,10 @@ const CreateRental = () => {
       vehiclePricingOverrides,
       selectedVehicleId,
       mtd,
+      // Auto-extend rentals advertise a flat "set price" — skip weekend/holiday
+      // surcharges so they don't ride into the stored monthly_amount (which the
+      // renewal cron then bills every cycle). Markups stay on short-term rentals.
+      isAutoExtend,
     );
     const amount = breakdown.rentalPrice;
 
@@ -1006,7 +1010,7 @@ const CreateRental = () => {
       form.setValue("monthly_amount", amount, { shouldValidate: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perPeriodRate, selectedVehicleId, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles, weekendPricingSettings, tenantHolidays, vehiclePricingOverrides]);
+  }, [perPeriodRate, selectedVehicleId, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles, weekendPricingSettings, tenantHolidays, vehiclePricingOverrides, isAutoExtend]);
 
   // PAYG: monthly_amount IS the per-period billing amount (Weekly or Monthly).
   // The duration-based effect above never fires for PAYG (no end_date), so we

@@ -79,6 +79,9 @@ export function AdminExtendRentalDialog({
   const { settings: rentalSettings } = useRentalSettings();
 
   const [newEndDate, setNewEndDate] = useState('');
+  // Optional manual price override — operator types an exact extension RENTAL
+  // price (e.g. a negotiated $500/week). Empty = use the auto-calculated price.
+  const [manualPriceOverride, setManualPriceOverride] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionStep, setSubmissionStep] = useState('');
   const [step, setStep] = useState<1 | 2>(1);
@@ -324,8 +327,16 @@ export function AdminExtendRentalDialog({
 
   // Apply promo discount to the extension rental fee. Tax and service fee
   // recompute on the discounted base — matches the new-rental flow.
-  const extensionDiscount = calculateExtensionDiscount(extensionCost);
-  const discountedExtensionCost = Math.max(0, extensionCost - extensionDiscount);
+  // Manual price override: when the operator types an exact extension rental
+  // price it REPLACES the auto-calculated base, and promo discounts don't stack
+  // on top (the figure they entered is the extension rental amount). Tax and
+  // service fee still apply per tenant config, matching the calculated path.
+  const manualOverrideNum = manualPriceOverride.trim() !== '' && !isNaN(Number(manualPriceOverride)) && Number(manualPriceOverride) >= 0
+    ? Math.round(Number(manualPriceOverride) * 100) / 100
+    : null;
+  const baseExtensionCost = manualOverrideNum !== null ? manualOverrideNum : extensionCost;
+  const extensionDiscount = manualOverrideNum !== null ? 0 : calculateExtensionDiscount(extensionCost);
+  const discountedExtensionCost = Math.max(0, baseExtensionCost - extensionDiscount);
   const extensionTaxAmount = rentalSettings?.tax_enabled && rentalSettings?.tax_percentage
     ? Math.round(discountedExtensionCost * (rentalSettings.tax_percentage / 100) * 100) / 100
     : 0;
@@ -612,6 +623,7 @@ export function AdminExtendRentalDialog({
             extensionPreviousEndDate: rental.end_date,
             extensionNewEndDate: newEndDate,
             extensionNumber: extNum,
+            extensionAmount: extensionTotalAmount,
           }),
         });
         const esignData = await esignResponse.json();
@@ -870,7 +882,11 @@ export function AdminExtendRentalDialog({
                         {currencySymbol}{extensionTotalAmount.toFixed(2)}
                       </p>
                       <div className="space-y-0.5 mt-1">
-                        {hasSurcharges ? (
+                        {manualOverrideNum !== null ? (
+                          <p className="text-xs text-blue-600 dark:text-blue-400">
+                            Rental (custom price): {currencySymbol}{baseExtensionCost.toFixed(2)}
+                          </p>
+                        ) : hasSurcharges ? (
                           <>
                             {(() => {
                               const groups: Record<string, { count: number; rate: number; label: string }> = {};
@@ -916,6 +932,36 @@ export function AdminExtendRentalDialog({
                       {extensionDays} day{extensionDays !== 1 ? 's' : ''} (daily rate not available)
                     </p>
                   )}
+                </div>
+              )}
+
+              {/* Manual price override */}
+              {extensionDays > 0 && (
+                <div className="space-y-1.5">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                    Custom Price (optional)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">{currencySymbol}</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      inputMode="decimal"
+                      placeholder={`Auto: ${extensionCost.toFixed(2)}`}
+                      value={manualPriceOverride}
+                      onChange={(e) => setManualPriceOverride(e.target.value)}
+                      className="max-w-[160px]"
+                    />
+                    {manualPriceOverride.trim() !== '' && (
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setManualPriceOverride('')}>
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Set an exact extension rental price (e.g. a negotiated weekly rate). Tax/fees still apply. Leave blank to use the auto price.
+                  </p>
                 </div>
               )}
 
@@ -1240,8 +1286,8 @@ export function AdminExtendRentalDialog({
                 {extensionTotalAmount > 0 && (
                   <div className="border-t pt-3 space-y-1.5">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Rental Fee</span>
-                      <span className="text-sm font-medium">{currencySymbol}{extensionCost.toFixed(2)}</span>
+                      <span className="text-sm text-muted-foreground">Rental Fee{manualOverrideNum !== null ? ' (custom)' : ''}</span>
+                      <span className="text-sm font-medium">{currencySymbol}{baseExtensionCost.toFixed(2)}</span>
                     </div>
                     {extensionDiscount > 0 && (
                       <div className="flex justify-between items-center">

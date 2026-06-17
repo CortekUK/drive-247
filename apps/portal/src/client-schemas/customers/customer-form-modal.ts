@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 export const customerFormModalSchema = z.object({
+  // Individual (default) or Company. For a Company, `name` is the contact person
+  // and the business details live in the company_* fields below.
+  customer_type: z.enum(['Individual', 'Company']).optional(),
+  company_name: z.string().optional(),
+  company_registration: z.string().optional(),
   name: z.string()
     .min(1, "Name is required")
     .refine((val) => !/\d/.test(val), "Name cannot contain numbers"),
@@ -27,6 +32,13 @@ export const customerFormModalSchema = z.object({
   nok_email: z.string().email("Invalid email format").optional().or(z.literal("")),
   nok_address: z.string().optional(),
 }).superRefine((data, ctx) => {
+  if (data.customer_type === 'Company' && !data.company_name?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Company name is required",
+      path: ["company_name"],
+    });
+  }
   if (!data.email && !data.phone) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

@@ -25,6 +25,7 @@ interface ESignRequest {
     extensionPreviousEndDate?: string;
     extensionNewEndDate?: string;
     extensionNumber?: number;
+    extensionAmount?: number;
 }
 
 // ============================================================================
@@ -146,7 +147,7 @@ function buildAdditionalDriverSlotFields(drivers: AdditionalDriverRow[]): Record
     return fields;
 }
 
-function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number }, installment?: InstallmentData | null): string {
+function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number; extensionAmount?: number }, installment?: InstallmentData | null): string {
     // Compose full address from separate fields (DB stores street/city/state/zip separately)
     const customerAddress = [
         customer?.address_street,
@@ -282,6 +283,8 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
             return '';
         })(),
         extension_number: extensionData?.extensionNumber ? extensionData.extensionNumber.toString() : '',
+        extension_amount: extensionData?.extensionAmount != null ? formatCurrency(extensionData.extensionAmount, currencyCode) : '',
+        extension_total: extensionData?.extensionAmount != null ? formatCurrency(extensionData.extensionAmount, currencyCode) : '',
 
         // Installment payment schedule (legacy variables — kept for old templates)
         installment_schedule: installment ? buildInstallmentScheduleHtml(installment, currencyCode) : '',
@@ -886,7 +889,7 @@ function renderTextToPdf(ctx: PdfCtx, text: string) {
 // DEFAULT TEXT TEMPLATE (when tenant has no custom template)
 // ============================================================================
 
-function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number }): string {
+function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number; extensionAmount?: number }): string {
     const companyName = tenant?.company_name || 'Drive 247';
     const line = (label: string, value: string | null | undefined) => value ? `${label}: ${value}` : '';
     const lines = (...parts: string[]) => parts.filter(Boolean).join('\n');
@@ -956,7 +959,8 @@ ${lines(
             return diff > 0 ? `Extension Duration: ${diff} day${diff !== 1 ? 's' : ''}` : '';
         }
         return '';
-    })()
+    })(),
+    extensionData!.extensionAmount != null ? line('Extension Fee', formatCurrency(extensionData!.extensionAmount, currencyCode)) : ''
 )}` : ''}
 
 ${'='.repeat(70)}
@@ -1180,7 +1184,7 @@ export async function POST(request: NextRequest) {
                 console.log('Using admin template (structured HTML → PDF)');
                 hasCustomTemplate = true;
                 processedHtml = removeEmptyFields(
-                    processTemplate(templateData.template_content, rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber } : undefined, installment)
+                    processTemplate(templateData.template_content, rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined, installment)
                 );
 
                 // Ensure a signature tag exists
@@ -1197,7 +1201,7 @@ export async function POST(request: NextRequest) {
 
         if (!hasCustomTemplate) {
             console.log('Using default template (text → PDF)');
-            let textContent = generateDefaultAgreement(rental, customer, vehicle, tenant, currencyCode, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber } : undefined);
+            let textContent = generateDefaultAgreement(rental, customer, vehicle, tenant, currencyCode, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined);
 
             // Inject sig tag
             const hasSig = /\{\{@sig1\}\}/.test(textContent);

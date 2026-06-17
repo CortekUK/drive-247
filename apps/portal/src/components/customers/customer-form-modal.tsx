@@ -98,6 +98,9 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
   const form = useForm<CustomerFormData>({
     resolver: zodResolver(customerFormModalSchema),
     defaultValues: {
+      customer_type: "Individual",
+      company_name: "",
+      company_registration: "",
       name: "",
       email: "",
       phone: "",
@@ -125,6 +128,9 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       setShowNextOfKin(!!hasNextOfKin);
 
       form.reset({
+        customer_type: ((customer as any).customer_type || (customer as any).type || "Individual") === "Company" ? "Company" : "Individual",
+        company_name: (customer as any).company_name || "",
+        company_registration: (customer as any).company_registration || "",
         name: customer.name,
         email: customer.email || "",
         phone: customer.phone || "",
@@ -144,6 +150,9 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
     } else {
       setShowNextOfKin(false);
       form.reset({
+        customer_type: "Individual",
+        company_name: "",
+        company_registration: "",
         name: "",
         email: "",
         phone: "",
@@ -386,7 +395,10 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         name: data.name,
         email: data.email || null,
         phone: data.phone || null,
-        type: "Individual",
+        type: data.customer_type || "Individual",
+        customer_type: data.customer_type || "Individual",
+        company_name: data.customer_type === "Company" ? (data.company_name || null) : null,
+        company_registration: data.customer_type === "Company" ? (data.company_registration || null) : null,
         date_of_birth: data.date_of_birth || null,
         license_number: data.license_number || null,
         id_number: data.id_number || null,
@@ -638,13 +650,66 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
 
             <FormField
               control={form.control}
+              name="customer_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Customer Type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || "Individual"}>
+                    <FormControl>
+                      <SelectTrigger className="input-focus">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Individual">Individual</SelectItem>
+                      <SelectItem value="Company">Company</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {form.watch("customer_type") === "Company" && (
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="company_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company Name *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Acme Corp" {...field} className="input-focus" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="company_registration"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tax ID / Reg. No.</FormLabel>
+                      <FormControl>
+                        <Input placeholder="EIN / registration number" {...field} className="input-focus" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+
+            <FormField
+              control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name *</FormLabel>
+                  <FormLabel>{form.watch("customer_type") === "Company" ? "Contact Person *" : "Name *"}</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="Enter customer name"
+                      placeholder={form.watch("customer_type") === "Company" ? "Primary contact name" : "Enter customer name"}
                       {...field}
                       className="input-focus"
                       autoFocus
