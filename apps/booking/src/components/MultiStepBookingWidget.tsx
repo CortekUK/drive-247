@@ -4872,7 +4872,7 @@ const MultiStepBookingWidget = () => {
                         </h3>
 
                         <p className="text-base md:text-lg text-muted-foreground max-w-lg">
-                          Your insurance certificate is being reviewed by our team
+                          Upload received — we'll review your insurance once you complete your booking.
                         </p>
 
                         {/* Progress Bar at 100% */}
@@ -6070,15 +6070,15 @@ const MultiStepBookingWidget = () => {
 
           if (error) {
             console.error('Document review error:', error);
-            toast.success("Document uploaded! It will be reviewed by our team.");
+            toast.success("Document uploaded — we'll review it once you complete your booking.");
           } else if (data?.data?.requiresManualReview) {
-            toast.success("Document uploaded! It will be reviewed by our team.");
+            toast.success("Document uploaded — we'll review it once you complete your booking.");
           } else {
             toast.success("Insurance document verified successfully!");
           }
         } catch (error) {
           console.error('Document review error:', error);
-          toast.success("Document uploaded! It will be reviewed by our team.");
+          toast.success("Document uploaded — we'll review it once you complete your booking.");
         } finally {
           setScanningDocument(false);
         }
