@@ -1097,6 +1097,13 @@ export async function POST(request: NextRequest) {
             additionalDrivers = (addlRows || []) as AdditionalDriverRow[];
             console.log(`Additional drivers: ${additionalDrivers.length}`);
         }
+        // Only drivers WITH an email can be BoldSign signers (a phone-only driver
+        // can't receive a signing link). This filtered list drives the extra
+        // Signers[], the {{@sigN}} tags, the TextTagDefinitions, and the
+        // signing_status stamping below — they must all use the SAME list/order
+        // so SignerIndex stays aligned. Guarded everywhere on length > 0 so a
+        // rental with no additional drivers takes the byte-identical old path.
+        const signingDrivers = additionalDrivers.filter((d) => d.email && String(d.email).trim());
         if (rental && additionalDrivers.length >= 0) {
             Object.assign(rental, buildAdditionalDriverSlotFields(additionalDrivers));
         }
@@ -1192,6 +1199,16 @@ export async function POST(request: NextRequest) {
                     processedHtml += '<hr><h3>Signature</h3><p>Customer Signature: {{@sig1}}</p>';
                 }
 
+                // Additional-driver signature blocks ({{@sig2}}, {{@sig3}}, ...).
+                if (signingDrivers.length > 0) {
+                    let driverSigHtml = '<hr><h3>Additional Driver Signatures</h3>';
+                    signingDrivers.forEach((d, i) => {
+                        const safeName = String(d.name || 'Additional Driver').replace(/[<>]/g, '');
+                        driverSigHtml += `<p>${safeName} Signature: {{@sig${i + 2}}}</p>`;
+                    });
+                    processedHtml += driverSigHtml;
+                }
+
                 const blocks = parseHtmlToBlocks(processedHtml);
                 // Append platform disclaimer
                 blocks.push(...PLATFORM_DISCLAIMER_BLOCKS);
@@ -1212,6 +1229,16 @@ export async function POST(request: NextRequest) {
                     textContent += '\n\nCustomer Signature: {{@sig1}}';
                 }
             }
+
+            // Additional-driver signature lines ({{@sig2}}, {{@sig3}}, ...).
+            if (signingDrivers.length > 0) {
+                textContent += '\n\nADDITIONAL DRIVER SIGNATURES:';
+                signingDrivers.forEach((d, i) => {
+                    const safeName = String(d.name || 'Additional Driver').replace(/[<>]/g, '');
+                    textContent += `\n\n${safeName} Signature: {{@sig${i + 2}}}`;
+                });
+            }
+
             processedHtml = textContent; // for tag detection below
 
             renderTextToPdf(ctx, textContent);
@@ -1293,6 +1320,15 @@ export async function POST(request: NextRequest) {
         formData.append('Signers[0][EmailAddress]', body.customerEmail);
         formData.append('Signers[0][SignerType]', 'Signer');
 
+        // Additional drivers as extra signers (Signers[1..]). Array is 0-based,
+        // so driver i lands at Signers[i+1] and gets SignerIndex i+2 (primary=1).
+        signingDrivers.forEach((d, i) => {
+            const idx = i + 1;
+            formData.append(`Signers[${idx}][Name]`, String(d.name || 'Additional Driver'));
+            formData.append(`Signers[${idx}][EmailAddress]`, String(d.email));
+            formData.append(`Signers[${idx}][SignerType]`, 'Signer');
+        });
+
         // Text tags: BoldSign finds {{@sig1}}, {{@date1}}, {{@init1}} in the PDF
         formData.append('UseTextTags', 'true');
 
@@ -1329,6 +1365,20 @@ export async function POST(request: NextRequest) {
             formData.append(`TextTagDefinitions[${tagIdx}][Size][Height]`, '40');
             tagIdx++;
         }
+
+        // One Signature field per additional driver, anchored to the {{@sigN}}
+        // tags injected into the document above. SignerIndex matches Signers[]:
+        // primary=1, first additional driver=2, etc.
+        signingDrivers.forEach((_d, i) => {
+            const n = i + 2;
+            formData.append(`TextTagDefinitions[${tagIdx}][DefinitionId]`, `sig${n}`);
+            formData.append(`TextTagDefinitions[${tagIdx}][Type]`, 'Signature');
+            formData.append(`TextTagDefinitions[${tagIdx}][SignerIndex]`, n.toString());
+            formData.append(`TextTagDefinitions[${tagIdx}][IsRequired]`, 'true');
+            formData.append(`TextTagDefinitions[${tagIdx}][Size][Width]`, '250');
+            formData.append(`TextTagDefinitions[${tagIdx}][Size][Height]`, '50');
+            tagIdx++;
+        });
 
         formData.append('EnableSigningOrder', 'false');
         formData.append('DisableEmails', 'true');
@@ -1424,6 +1474,26 @@ export async function POST(request: NextRequest) {
 
         const boldSignResult = await boldSignResponse.json();
         const documentId = boldSignResult.documentId;
+
+        // Stamp each additional driver as sent-for-signing so the BoldSign webhook
+        // can match the signed-back signer by email and flip their status. Without
+        // this, drivers were added to the PDF but never recorded as signers and
+        // their "Signing" badge stayed "Not Sent" forever. Best-effort: a failure
+        // here must not fail the whole send (the agreement already went out).
+        if (signingDrivers.length > 0) {
+            try {
+                await Promise.all(signingDrivers.map((d) =>
+                    supabase
+                        .from('rental_additional_drivers')
+                        .update({ signing_status: 'sent', boldsign_signer_email: String(d.email).toLowerCase() })
+                        .eq('id', d.id)
+                ));
+                console.log(`Stamped ${signingDrivers.length} additional driver(s) as signing 'sent'`);
+            } catch (stampErr) {
+                console.error('Failed to stamp additional drivers signing_status:', stampErr);
+            }
+        }
+
         // PAYG and installment are template variants of the original — they share
         // the same downstream lifecycle (one per rental, tracked on rentals.document_status),
         // so we collapse them to 'original' for storage. Only 'extension' is distinct.
