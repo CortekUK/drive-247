@@ -687,6 +687,18 @@ export default function Booking() {
                                                     id="pickupLocation"
                                                     value={field.value}
                                                     onChange={(value, _lat, _lon, distanceKm) => {
+                                                      // Reject addresses beyond the hard delivery cap.
+                                                      if (resolveDeliveryFee(distanceKm, tierCfg).blocked) {
+                                                        const within = areaMaxDistanceKm != null
+                                                          ? ` We deliver within ${kmToDisplayUnit(areaMaxDistanceKm, distanceUnit)}${getDistanceUnitShort(distanceUnit)} of our location.`
+                                                          : '';
+                                                        form.setError('pickupLocation', { type: 'manual', message: `Sorry, that address is outside our delivery range.${within}` });
+                                                        field.onChange('');
+                                                        setAreaDistanceKm(null);
+                                                        if (sameAsPickup) form.setValue('returnLocation', '');
+                                                        return;
+                                                      }
+                                                      form.clearErrors('pickupLocation');
                                                       field.onChange(value);
                                                       if (distanceKm !== undefined) setAreaDistanceKm(distanceKm);
                                                       else if (!value) setAreaDistanceKm(null);

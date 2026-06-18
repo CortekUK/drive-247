@@ -95,6 +95,30 @@ export default function LocationPicker({
 
   // Track selected delivery method
   const [selectedMethod, setSelectedMethod] = useState<DeliveryMethod>('fixed');
+  // Set when the customer picks an area address beyond the operator's delivery range.
+  const [areaError, setAreaError] = useState<string | null>(null);
+
+  // Resolve an area address: reject (and surface a message) when it falls beyond
+  // the hard delivery cap, otherwise commit the address + its tiered fee.
+  const handleAreaAddress = (
+    address: string,
+    lat?: number,
+    lon?: number,
+    distanceKm?: number,
+  ) => {
+    const resolved = resolveDeliveryFee(distanceKm, tierCfg);
+    if (resolved.blocked) {
+      const within = maxDistanceKm != null
+        ? ` We deliver within ${kmToDisplayUnit(maxDistanceKm, distanceUnit)}${getDistanceUnitShort(distanceUnit)} of our location.`
+        : '';
+      setAreaError(`Sorry, that address is outside our delivery range.${within}`);
+      // Reject the out-of-range address so the booking cannot proceed with it.
+      onChange('', undefined, undefined, undefined, undefined);
+      return;
+    }
+    setAreaError(null);
+    onChange(address, undefined, lat, lon, resolved.fee);
+  };
 
   // Get fixed address based on type
   const fixedAddress =
@@ -158,6 +182,7 @@ export default function LocationPicker({
   const handleMethodChange = (method: DeliveryMethod) => {
     if (method === selectedMethod) return; // Don't reset if already selected
     setSelectedMethod(method);
+    setAreaError(null);
 
     // Clear current value when switching methods
     if (method === 'fixed' && fixedAddress) {
@@ -227,9 +252,7 @@ export default function LocationPicker({
           <LocationAutocompleteWithRadius
             id={`${type}Location`}
             value={value}
-            onChange={(address, lat, lon, distanceKm) =>
-              onChange(address, undefined, lat, lon, resolveDeliveryFee(distanceKm, tierCfg).fee)
-            }
+            onChange={handleAreaAddress}
             placeholder={placeholder || `Enter ${type} address`}
             className={className}
             disabled={disabled}
@@ -239,6 +262,7 @@ export default function LocationPicker({
             distanceUnit={distanceUnit}
             allowOutOfRadius={effectiveRadius.allowOutOfRadius}
           />
+          {areaError && <p className="text-xs text-destructive">{areaError}</p>}
           {tiersOn ? (
             <TierFeeNote tierCfg={tierCfg} distanceUnit={distanceUnit} currencyCode={tenant?.currency_code} />
           ) : (
@@ -394,9 +418,7 @@ export default function LocationPicker({
               <LocationAutocompleteWithRadius
                 id={`${type}Location`}
                 value={value}
-                onChange={(address, lat, lon, distanceKm) =>
-                  onChange(address, undefined, lat, lon, resolveDeliveryFee(distanceKm, tierCfg).fee)
-                }
+                onChange={handleAreaAddress}
                 placeholder={placeholder || `Enter your address`}
                 className="h-11"
                 disabled={disabled}
@@ -406,6 +428,7 @@ export default function LocationPicker({
                 distanceUnit={distanceUnit}
                 allowOutOfRadius={effectiveRadius.allowOutOfRadius}
               />
+              {areaError && <p className="text-xs text-destructive">{areaError}</p>}
               {tiersOn && (
                 <TierFeeNote tierCfg={tierCfg} distanceUnit={distanceUnit} currencyCode={tenant?.currency_code} />
               )}
