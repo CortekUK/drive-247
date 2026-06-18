@@ -8,6 +8,7 @@ import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { useTenantSubscriptionRealtime } from "@/hooks/use-tenant-subscription-realtime";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useSubscriptionGateDisabled } from "@/hooks/use-subscription-gate-disabled";
 import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { HeaderSearch } from "@/components/shared/layout/header-search";
@@ -76,6 +77,10 @@ export default function DashboardLayout({
   } = useTenantSubscription();
   const { isManager, canAccessRoute, isLoading: permissionsLoading } = useManagerPermissions();
   const { data: plans, isSuccess: plansResolved } = useSubscriptionPlans();
+
+  // Global super-admin kill-switch: when on, never show the subscription
+  // blocker to any tenant (everything else stays as-is).
+  const subscriptionGateDisabled = useSubscriptionGateDisabled();
 
   // Keep subscription state fresh via Supabase realtime — webhook updates
   // invalidate the query immediately instead of waiting for a refresh.
@@ -177,7 +182,7 @@ export default function DashboardLayout({
             `open` so we avoid Radix mount/unmount races that previously
             caused the modal to fail to appear without a page refresh. */}
         <SubscriptionGateDialog
-          open={showSetupGate || showExpiredGate}
+          open={(showSetupGate || showExpiredGate) && !subscriptionGateDisabled}
           variant={showExpiredGate ? "expired" : "setup"}
         />
       </SidebarProvider>

@@ -29,6 +29,7 @@ interface AdminSettings {
   maintenance_banner_enabled: boolean;
   maintenance_banner_message: string;
   maintenance_banner_type: 'info' | 'warning' | 'critical';
+  subscription_gate_disabled: boolean;
   updated_at?: string;
 }
 
@@ -39,6 +40,7 @@ export default function SettingsPage() {
     maintenance_banner_enabled: false,
     maintenance_banner_message: 'We are currently performing scheduled maintenance. Some features may be temporarily unavailable.',
     maintenance_banner_type: 'warning',
+    subscription_gate_disabled: false,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -71,6 +73,7 @@ export default function SettingsPage() {
           maintenance_banner_enabled: data.maintenance_banner_enabled ?? false,
           maintenance_banner_message: data.maintenance_banner_message || 'We are currently performing scheduled maintenance. Some features may be temporarily unavailable.',
           maintenance_banner_type: data.maintenance_banner_type || 'warning',
+          subscription_gate_disabled: (data as any).subscription_gate_disabled ?? false,
           updated_at: data.updated_at,
         });
       }
@@ -93,19 +96,23 @@ export default function SettingsPage() {
             maintenance_banner_enabled: settings.maintenance_banner_enabled,
             maintenance_banner_message: settings.maintenance_banner_message,
             maintenance_banner_type: settings.maintenance_banner_type,
+            subscription_gate_disabled: settings.subscription_gate_disabled,
             updated_at: new Date().toISOString(),
-          })
+          } as any)
           .eq('id', settings.id);
 
         if (error) throw error;
 
+        // Keep the global flags consistent across every admin_settings row,
+        // since the portal/edge read them as "true if ANY row is true".
         await supabase
           .from('admin_settings')
           .update({
             maintenance_banner_enabled: settings.maintenance_banner_enabled,
             maintenance_banner_message: settings.maintenance_banner_message,
             maintenance_banner_type: settings.maintenance_banner_type,
-          })
+            subscription_gate_disabled: settings.subscription_gate_disabled,
+          } as any)
           .neq('id', settings.id);
       } else {
         const { data, error } = await supabase
@@ -116,7 +123,8 @@ export default function SettingsPage() {
             maintenance_banner_enabled: settings.maintenance_banner_enabled,
             maintenance_banner_message: settings.maintenance_banner_message,
             maintenance_banner_type: settings.maintenance_banner_type,
-          })
+            subscription_gate_disabled: settings.subscription_gate_disabled,
+          } as any)
           .select()
           .single();
 
@@ -342,6 +350,47 @@ export default function SettingsPage() {
               </div>
             )}
           </CardContent>
+        </Card>
+
+        {/* Subscription Blocker (global kill-switch) */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Hide Subscription Blocker</CardTitle>
+                <CardDescription className="mt-1">
+                  When ON, no tenant is shown the &ldquo;Finish Setup&rdquo; / subscription-expired
+                  blocking dialog. Their subscription status, plans and billing are left exactly
+                  as-is — this only hides the blocking screen, for all tenants.
+                </CardDescription>
+              </div>
+              <label className="flex items-center cursor-pointer ml-4 shrink-0">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={settings.subscription_gate_disabled}
+                    onChange={(e) => setSettings({ ...settings, subscription_gate_disabled: e.target.checked })}
+                    className="sr-only"
+                  />
+                  <div className={cn(
+                    "w-11 h-6 rounded-full transition-colors",
+                    settings.subscription_gate_disabled ? 'bg-emerald-500' : 'bg-muted'
+                  )}>
+                    <div className={cn(
+                      "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform",
+                      settings.subscription_gate_disabled && 'translate-x-5'
+                    )} />
+                  </div>
+                </div>
+                <Badge
+                  variant={settings.subscription_gate_disabled ? 'success' : 'outline'}
+                  className="ml-2 whitespace-nowrap"
+                >
+                  {settings.subscription_gate_disabled ? 'Blocker Hidden' : 'Blocker Active'}
+                </Badge>
+              </label>
+            </div>
+          </CardHeader>
         </Card>
 
         {/* Contact Form */}
