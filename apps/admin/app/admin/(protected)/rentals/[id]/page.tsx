@@ -101,6 +101,7 @@ interface Tenant {
   bonzah_username: string | null;
   boldsign_mode: string;
   integration_tesla_fleet: boolean;
+  subscription_gate_disabled: boolean | null;
 }
 
 interface TenantSubscription {
@@ -336,6 +337,7 @@ export default function TenantDetailsPage() {
 
   // Integration mode state
   const [modeUpdating, setModeUpdating] = useState(false);
+  const [gateUpdating, setGateUpdating] = useState(false);
   const [showModeConfirm, setShowModeConfirm] = useState(false);
   const [pendingModeChange, setPendingModeChange] = useState<{ type: 'stripe' | 'bonzah' | 'boldsign' | 'subscription_stripe'; newMode: 'test' | 'live' } | null>(null);
   const [showSubscriptionDetail, setShowSubscriptionDetail] = useState(false);
@@ -666,6 +668,29 @@ export default function TenantDetailsPage() {
       toast.error(`Failed to update banner: ${error.message}`);
     } finally {
       setBannerSaving(false);
+    }
+  };
+
+  // Per-tenant subscription-blocker override. When on, this tenant is never
+  // shown the "Finish Setup" / subscription-expired blocker (status/plans/
+  // billing untouched).
+  const handleToggleSubscriptionGate = async (next: boolean) => {
+    if (!tenant) return;
+    setGateUpdating(true);
+    try {
+      const { error } = await supabase
+        .from('tenants')
+        .update({ subscription_gate_disabled: next } as any)
+        .eq('id', tenant.id);
+      if (error) throw error;
+      setTenant({ ...tenant, subscription_gate_disabled: next });
+      toast.success(next
+        ? 'Subscription blocker hidden for this tenant'
+        : 'Subscription blocker restored for this tenant');
+    } catch (error: any) {
+      toast.error(`Failed to update: ${error.message}`);
+    } finally {
+      setGateUpdating(false);
     }
   };
 
@@ -1638,6 +1663,40 @@ export default function TenantDetailsPage() {
                   )}
                 </div>
               )}
+
+              {/* Per-tenant blocker override */}
+              <div className="mt-5 pt-4 border-t border-border/40 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium">Hide subscription blocker</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    When on, this tenant is never shown the &ldquo;Finish Setup&rdquo; / subscription-expired
+                    blocker. Their status, plans and billing stay unchanged.
+                  </p>
+                </div>
+                <label className="flex items-center cursor-pointer shrink-0">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={!!tenant.subscription_gate_disabled}
+                      disabled={gateUpdating}
+                      onChange={(e) => handleToggleSubscriptionGate(e.target.checked)}
+                      className="sr-only"
+                    />
+                    <div className={cn(
+                      "w-11 h-6 rounded-full transition-colors",
+                      tenant.subscription_gate_disabled ? 'bg-emerald-500' : 'bg-muted'
+                    )}>
+                      <div className={cn(
+                        "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform",
+                        tenant.subscription_gate_disabled && 'translate-x-5'
+                      )} />
+                    </div>
+                  </div>
+                  <Badge variant={tenant.subscription_gate_disabled ? 'success' : 'outline'} className="ml-2 whitespace-nowrap">
+                    {tenant.subscription_gate_disabled ? 'Hidden' : 'Active'}
+                  </Badge>
+                </label>
+              </div>
             </CardContent>
           </Card>
 

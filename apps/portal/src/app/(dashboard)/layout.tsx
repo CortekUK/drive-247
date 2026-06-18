@@ -182,7 +182,11 @@ export default function DashboardLayout({
             `open` so we avoid Radix mount/unmount races that previously
             caused the modal to fail to appear without a page refresh. */}
         <SubscriptionGateDialog
-          open={(showSetupGate || showExpiredGate) && !subscriptionGateDisabled}
+          open={
+            (showSetupGate || showExpiredGate) &&
+            !subscriptionGateDisabled &&
+            !tenant?.subscription_gate_disabled
+          }
           variant={showExpiredGate ? "expired" : "setup"}
         />
       </SidebarProvider>
