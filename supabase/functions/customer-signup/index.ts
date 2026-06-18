@@ -58,13 +58,16 @@ Deno.serve(async (req) => {
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
     const existingAuthUser = existingUsers?.users?.find(u => u.email === email);
 
+    let authUserId: string;
+
     if (existingAuthUser) {
-      // Check if they already have a customer_users record
-      const { data: existingCustomerUser } = await supabaseAdmin
+      // Already linked to a customer for THIS tenant? Then it's a real account.
+      let alreadyLinkedQuery = supabaseAdmin
         .from('customer_users')
         .select('id')
-        .eq('auth_user_id', existingAuthUser.id)
-        .single();
+        .eq('auth_user_id', existingAuthUser.id);
+      if (tenant_id) alreadyLinkedQuery = alreadyLinkedQuery.eq('tenant_id', tenant_id);
+      const { data: existingCustomerUser } = await alreadyLinkedQuery.maybeSingle();
 
       if (existingCustomerUser) {
         return new Response(
@@ -73,63 +76,99 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Auth user exists but no customer_users record - this might be an admin
-      // Don't allow creating a customer account
-      return new Response(
-        JSON.stringify({ error: 'This email is already associated with another account type' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      // SELF-HEAL: an auth user exists but has NO customer record for this tenant
+      // (an orphaned / half-completed signup that previously dead-ended in a loop:
+      // signup said "exists", login said "no customer"). Reclaim it instead of
+      // erroring — reset the password to the one just provided, confirm the email,
+      // and fall through to create the customer + customer_users link below.
+      const { error: reclaimError } = await supabaseAdmin.auth.admin.updateUserById(
+        existingAuthUser.id,
+        {
+          password,
+          email_confirm: true,
+          user_metadata: {
+            ...(existingAuthUser.user_metadata || {}),
+            name: customer_name || existingAuthUser.user_metadata?.name || email.split('@')[0],
+            type: 'customer',
+          },
+        }
       );
-    }
 
-    // Create new user in Supabase Auth
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true, // Auto-confirm email
-      user_metadata: {
-        name: customer_name || email.split('@')[0],
-        type: 'customer'
-      }
-    });
-
-    if (authError || !authData.user) {
-      console.error('Failed to create auth user:', authError);
-      return new Response(
-        JSON.stringify({ error: authError?.message || 'Failed to create account' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const authUserId = authData.user.id;
-    let finalCustomerId = customer_id;
-
-    // If no existing customer_id provided, create a new customer record
-    if (!finalCustomerId) {
-      const { data: newCustomer, error: customerError } = await supabaseAdmin
-        .from('customers')
-        .insert({
-          email,
-          name: customer_name || email.split('@')[0],
-          phone: customer_phone || null,
-          tenant_id: tenant_id || null,
-          type: 'Individual',
-          status: 'Active',
-        })
-        .select()
-        .single();
-
-      if (customerError) {
-        console.error('Failed to create customer record:', customerError);
-        // Clean up auth user
-        await supabaseAdmin.auth.admin.deleteUser(authUserId);
+      if (reclaimError) {
+        console.error('Failed to reclaim orphaned auth user:', reclaimError);
         return new Response(
-          JSON.stringify({ error: 'Failed to create customer profile' }),
+          JSON.stringify({ error: 'Failed to recover your account. Please contact support.' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      finalCustomerId = newCustomer.id;
-      console.log('Created new customer:', finalCustomerId);
+      authUserId = existingAuthUser.id;
+      console.log('Reclaimed orphaned auth user:', authUserId);
+    } else {
+      // Create new user in Supabase Auth
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true, // Auto-confirm email
+        user_metadata: {
+          name: customer_name || email.split('@')[0],
+          type: 'customer'
+        }
+      });
+
+      if (authError || !authData.user) {
+        console.error('Failed to create auth user:', authError);
+        return new Response(
+          JSON.stringify({ error: authError?.message || 'Failed to create account' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      authUserId = authData.user.id;
+    }
+
+    let finalCustomerId = customer_id;
+
+    // If no existing customer_id provided, reuse an existing customer for this
+    // email+tenant if present (another orphan shape), else create a new one.
+    if (!finalCustomerId) {
+      let existingCustomerQuery = supabaseAdmin
+        .from('customers')
+        .select('id')
+        .eq('email', email);
+      if (tenant_id) existingCustomerQuery = existingCustomerQuery.eq('tenant_id', tenant_id);
+      const { data: existingCustomer } = await existingCustomerQuery.maybeSingle();
+
+      if (existingCustomer) {
+        finalCustomerId = existingCustomer.id;
+        console.log('Reusing existing customer for tenant:', finalCustomerId);
+      } else {
+        const { data: newCustomer, error: customerError } = await supabaseAdmin
+          .from('customers')
+          .insert({
+            email,
+            name: customer_name || email.split('@')[0],
+            phone: customer_phone || null,
+            tenant_id: tenant_id || null,
+            type: 'Individual',
+            status: 'Active',
+          })
+          .select()
+          .single();
+
+        if (customerError) {
+          console.error('Failed to create customer record:', customerError);
+          // Clean up only a freshly-created auth user, never a reclaimed orphan
+          if (!existingAuthUser) await supabaseAdmin.auth.admin.deleteUser(authUserId);
+          return new Response(
+            JSON.stringify({ error: 'Failed to create customer profile' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        finalCustomerId = newCustomer.id;
+        console.log('Created new customer:', finalCustomerId);
+      }
     } else {
       // Verify the customer exists and belongs to the tenant
       const { data: existingCustomer, error: fetchError } = await supabaseAdmin
@@ -140,7 +179,7 @@ Deno.serve(async (req) => {
 
       if (fetchError || !existingCustomer) {
         console.error('Customer not found:', fetchError);
-        await supabaseAdmin.auth.admin.deleteUser(authUserId);
+        if (!existingAuthUser) await supabaseAdmin.auth.admin.deleteUser(authUserId);
         return new Response(
           JSON.stringify({ error: 'Customer record not found' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -163,8 +202,8 @@ Deno.serve(async (req) => {
 
     if (linkError) {
       console.error('Failed to create customer_users link:', linkError);
-      // Clean up auth user
-      await supabaseAdmin.auth.admin.deleteUser(authUserId);
+      // Clean up only a freshly-created auth user, never a reclaimed orphan
+      if (!existingAuthUser) await supabaseAdmin.auth.admin.deleteUser(authUserId);
       return new Response(
         JSON.stringify({ error: 'Failed to link account to customer profile' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

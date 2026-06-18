@@ -210,6 +210,45 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
       });
 
       if (authError) {
+        // With email auto-confirm enabled, supabase.auth.signUp returns a
+        // "User already registered" error for an existing email instead of the
+        // empty-identities response. That email may be an ORPHAN (auth user with
+        // no customer record for this tenant) which previously trapped the user in
+        // a signup<->login loop. Route it through customer-signup, which self-heals
+        // the orphan (creates the customer + link, resets the password), then send
+        // the OTP — exactly like the cross-tenant path below.
+        const authMsg = (authError.message || '').toLowerCase();
+        const alreadyRegistered =
+          authMsg.includes('already registered') ||
+          authMsg.includes('already been registered') ||
+          authMsg.includes('user already exists');
+
+        if (alreadyRegistered && options.tenantId) {
+          const { data: signupResult, error: fnError } = await supabase.functions.invoke('customer-signup', {
+            body: {
+              email,
+              password,
+              customer_id: options.customerId || undefined,
+              tenant_id: options.tenantId,
+              customer_name: options.customerName || undefined,
+              customer_phone: options.customerPhone || undefined,
+            },
+          });
+
+          if (fnError) {
+            return { error: { message: fnError.message || 'Failed to create account' } };
+          }
+          if (signupResult?.error) {
+            return { error: { message: signupResult.error } };
+          }
+
+          await supabase.functions.invoke('send-verification-otp', {
+            body: { email, tenant_id: options.tenantId },
+          });
+
+          return { error: null, data: { user: null, session: null, needsOTPVerification: true, email } };
+        }
+
         console.error('Sign up error:', authError);
         return { error: authError };
       }
