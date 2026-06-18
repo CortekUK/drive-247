@@ -324,6 +324,7 @@ export type Database = {
           maintenance_banner_message: string
           maintenance_banner_type: string
           notification_emails: string[] | null
+          subscription_gate_disabled: boolean
           updated_at: string | null
         }
         Insert: {
@@ -334,6 +335,7 @@ export type Database = {
           maintenance_banner_message?: string
           maintenance_banner_type?: string
           notification_emails?: string[] | null
+          subscription_gate_disabled?: boolean
           updated_at?: string | null
         }
         Update: {
@@ -344,6 +346,7 @@ export type Database = {
           maintenance_banner_message?: string
           maintenance_banner_type?: string
           notification_emails?: string[] | null
+          subscription_gate_disabled?: boolean
           updated_at?: string | null
         }
         Relationships: []
@@ -3854,6 +3857,8 @@ export type Database = {
           address_zip: string | null
           blocked_at: string | null
           blocked_reason: string | null
+          company_name: string | null
+          company_registration: string | null
           created_at: string | null
           customer_type: string | null
           date_of_birth: string | null
@@ -3892,6 +3897,8 @@ export type Database = {
           address_zip?: string | null
           blocked_at?: string | null
           blocked_reason?: string | null
+          company_name?: string | null
+          company_registration?: string | null
           created_at?: string | null
           customer_type?: string | null
           date_of_birth?: string | null
@@ -3930,6 +3937,8 @@ export type Database = {
           address_zip?: string | null
           blocked_at?: string | null
           blocked_reason?: string | null
+          company_name?: string | null
+          company_registration?: string | null
           created_at?: string | null
           customer_type?: string | null
           date_of_birth?: string | null
@@ -12483,6 +12492,7 @@ export type Database = {
           date_format: string | null
           delivery_distance_tiers: Json
           delivery_enabled: boolean | null
+          delivery_max_distance_km: number | null
           delivery_tiers_enabled: boolean
           deposit_mode: string | null
           distance_unit: string | null
@@ -12593,6 +12603,7 @@ export type Database = {
           stripe_mode: string
           stripe_onboarding_complete: boolean | null
           stripe_subscription_customer_id: string | null
+          subscription_gate_disabled: boolean
           subscription_plan: string | null
           subscription_stripe_mode: string
           sunday_close: string | null
@@ -12694,6 +12705,7 @@ export type Database = {
           date_format?: string | null
           delivery_distance_tiers?: Json
           delivery_enabled?: boolean | null
+          delivery_max_distance_km?: number | null
           delivery_tiers_enabled?: boolean
           deposit_mode?: string | null
           distance_unit?: string | null
@@ -12804,6 +12816,7 @@ export type Database = {
           stripe_mode?: string
           stripe_onboarding_complete?: boolean | null
           stripe_subscription_customer_id?: string | null
+          subscription_gate_disabled?: boolean
           subscription_plan?: string | null
           subscription_stripe_mode?: string
           sunday_close?: string | null
@@ -12905,6 +12918,7 @@ export type Database = {
           date_format?: string | null
           delivery_distance_tiers?: Json
           delivery_enabled?: boolean | null
+          delivery_max_distance_km?: number | null
           delivery_tiers_enabled?: boolean
           deposit_mode?: string | null
           distance_unit?: string | null
@@ -13015,6 +13029,7 @@ export type Database = {
           stripe_mode?: string
           stripe_onboarding_complete?: boolean | null
           stripe_subscription_customer_id?: string | null
+          subscription_gate_disabled?: boolean
           subscription_plan?: string | null
           subscription_stripe_mode?: string
           sunday_close?: string | null

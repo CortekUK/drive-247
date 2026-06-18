@@ -134,6 +134,7 @@ export interface Tenant {
   // Tiered (distance-banded) delivery pricing for area mode
   delivery_tiers_enabled: boolean | null;
   delivery_distance_tiers: unknown;
+  delivery_max_distance_km: number | null;
 
   // Separate pickup/return location settings
   pickup_fixed_enabled: boolean | null;
@@ -429,6 +430,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           area_delivery_fee,
           delivery_tiers_enabled,
           delivery_distance_tiers,
+          delivery_max_distance_km,
           pickup_fixed_enabled,
           return_fixed_enabled,
           pickup_multiple_locations_enabled,

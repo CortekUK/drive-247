@@ -131,6 +131,8 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
   type TierRow = { up_to: number | null; fee: number };
   const [deliveryTiersEnabled, setDeliveryTiersEnabled] = useState(false);
   const [tiers, setTiers] = useState<TierRow[]>([]);
+  // Optional hard cap on delivery distance (held in display unit; null = no limit).
+  const [maxDeliveryDistance, setMaxDeliveryDistance] = useState<number | null>(null);
 
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -179,6 +181,11 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
           fee: t.fee,
         }))
       );
+      setMaxDeliveryDistance(
+        locationSettings.delivery_max_distance_km != null
+          ? kmToDisplayUnit(locationSettings.delivery_max_distance_km, distanceUnit)
+          : null
+      );
       setAreaCenterLat(locationSettings.area_center_lat);
       setAreaCenterLon(locationSettings.area_center_lon);
       if (locationSettings.area_center_lat && locationSettings.area_center_lon && !areaCenterAddress) {
@@ -191,7 +198,7 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
   useEffect(() => {
     if (!locationSettings) return;
     setHasChanges(true);
-  }, [pickupFixedEnabled, pickupMultipleEnabled, pickupAreaEnabled, returnFixedEnabled, returnMultipleEnabled, returnAreaEnabled, fixedPickupAddress, fixedReturnAddress, sameReturnAddress, areaRadius, areaDeliveryFee, areaCenterLat, areaCenterLon, deliveryTiersEnabled, tiers]);
+  }, [pickupFixedEnabled, pickupMultipleEnabled, pickupAreaEnabled, returnFixedEnabled, returnMultipleEnabled, returnAreaEnabled, fixedPickupAddress, fixedReturnAddress, sameReturnAddress, areaRadius, areaDeliveryFee, areaCenterLat, areaCenterLon, deliveryTiersEnabled, tiers, maxDeliveryDistance]);
 
   const pickupLocations = locations.filter(loc => loc.is_pickup_enabled);
   const returnLocations = locations.filter(loc => loc.is_return_enabled);
@@ -279,6 +286,7 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
     // Validate tiered pricing bands and convert display units → km
     const tiersActive = areaUsed && deliveryTiersEnabled;
     let tiersForSave: DeliveryTier[] = [];
+    let maxDistanceForSave: number | null = null;
     if (tiersActive) {
       if (tiers.length === 0) {
         toast({ title: 'Error', description: 'Add at least one delivery price band, or turn off tiered pricing.', variant: 'destructive' });
@@ -307,6 +315,20 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
         up_to_km: t.up_to === null ? null : displayUnitToKm(t.up_to, distanceUnit),
         fee: t.fee,
       }));
+
+      // Optional hard cap on delivery distance.
+      if (maxDeliveryDistance != null) {
+        if (!Number.isFinite(maxDeliveryDistance) || maxDeliveryDistance <= 0) {
+          toast({ title: 'Error', description: 'Maximum delivery distance must be a positive number, or leave it blank.', variant: 'destructive' });
+          return;
+        }
+        const furthestBounded = bounded.reduce((max, t) => Math.max(max, t.up_to as number), 0);
+        if (furthestBounded > 0 && maxDeliveryDistance < furthestBounded) {
+          toast({ title: 'Error', description: 'Maximum delivery distance must be at least your furthest price band.', variant: 'destructive' });
+          return;
+        }
+        maxDistanceForSave = displayUnitToKm(maxDeliveryDistance, distanceUnit);
+      }
     }
 
     try {
@@ -332,6 +354,7 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
         area_center_lon: areaUsed ? areaCenterLon : null,
         delivery_tiers_enabled: tiersActive,
         delivery_distance_tiers: tiersForSave,
+        delivery_max_distance_km: maxDistanceForSave,
       });
       setHasChanges(false);
     } catch (error) {}
@@ -945,11 +968,36 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
                     </label>
                   </div>
 
-                  {!hasOpenBand && (
+                  {/* Optional hard cap on delivery distance */}
+                  <div className="flex items-center justify-between gap-3 pt-2 mt-1 border-t">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">Maximum delivery distance</p>
+                      <p className="text-xs text-muted-foreground">
+                        Beyond this we won&apos;t deliver — those addresses can&apos;t be booked. Leave blank for no limit.
+                      </p>
+                    </div>
+                    <div className="relative w-32 shrink-0">
+                      <Input
+                        type="number"
+                        value={maxDeliveryDistance ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setMaxDeliveryDistance(val === '' ? null : parseFloat(val) || null);
+                          setHasChanges(true);
+                        }}
+                        className="pr-10"
+                        min={1}
+                        placeholder="None"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{distanceUnitLabel}</span>
+                    </div>
+                  </div>
+
+                  {!hasOpenBand && maxDeliveryDistance == null && (
                     <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2">
                       <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
                       <p className="text-[11px] text-amber-500 leading-relaxed">
-                        Without an open-ended band, addresses beyond your furthest band are charged that furthest band&apos;s fee.
+                        Without an open-ended band, your furthest band is the limit — addresses beyond it can&apos;t be booked for delivery.
                       </p>
                     </div>
                   )}

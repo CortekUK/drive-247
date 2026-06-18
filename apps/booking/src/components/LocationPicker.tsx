@@ -17,7 +17,7 @@ import { MapPin, Building2, Navigation, Check, Truck, Lock, Info } from 'lucide-
 import { cn } from '@/lib/utils';
 import { formatCurrency, kmToDisplayUnit, getDistanceUnitShort } from '@/lib/format-utils';
 import type { DistanceUnit } from '@/lib/format-utils';
-import { resolveDeliveryFee, getTierFeeRange, hasActiveTiers, normalizeTiers, type DeliveryTierConfig } from '@/lib/delivery-tiers';
+import { resolveDeliveryFee, getTierFeeRange, hasActiveTiers, normalizeTiers, getEffectiveDeliveryRadius, getMaxDistanceKm, type DeliveryTierConfig } from '@/lib/delivery-tiers';
 
 interface LocationPickerProps {
   type: 'pickup' | 'return';
@@ -78,9 +78,16 @@ export default function LocationPicker({
     delivery_tiers_enabled: tenant?.delivery_tiers_enabled,
     delivery_distance_tiers: tenant?.delivery_distance_tiers,
     area_delivery_fee: tenant?.area_delivery_fee,
+    delivery_max_distance_km: tenant?.delivery_max_distance_km,
   };
   const tiersOn = hasActiveTiers(tierCfg);
   const tierRange = getTierFeeRange(tierCfg);
+  // Address suggestions are filtered to only what the operator will deliver to.
+  const areaRadiusKm = type === 'pickup'
+    ? tenant?.pickup_area_radius_km ?? 25
+    : tenant?.return_area_radius_km ?? 25;
+  const effectiveRadius = getEffectiveDeliveryRadius(tierCfg, areaRadiusKm);
+  const maxDistanceKm = getMaxDistanceKm(tierCfg);
   // Fee shown on the area card before an address is picked: "from $X" when tiered
   const areaBadgeFee = tiersOn ? (tierRange?.min ?? 0) : (tenant?.area_delivery_fee || 0);
   const areaBadgeLabel = (amount: number) =>
@@ -226,11 +233,11 @@ export default function LocationPicker({
             placeholder={placeholder || `Enter ${type} address`}
             className={className}
             disabled={disabled}
-            radiusKm={type === 'pickup' ? tenant?.pickup_area_radius_km ?? 25 : tenant?.return_area_radius_km ?? 25}
+            radiusKm={effectiveRadius.radiusKm}
             centerLat={tenant?.area_center_lat}
             centerLon={tenant?.area_center_lon}
             distanceUnit={distanceUnit}
-            allowOutOfRadius={tiersOn}
+            allowOutOfRadius={effectiveRadius.allowOutOfRadius}
           />
           {tiersOn ? (
             <TierFeeNote tierCfg={tierCfg} distanceUnit={distanceUnit} currencyCode={tenant?.currency_code} />
@@ -393,11 +400,11 @@ export default function LocationPicker({
                 placeholder={placeholder || `Enter your address`}
                 className="h-11"
                 disabled={disabled}
-                radiusKm={type === 'pickup' ? tenant?.pickup_area_radius_km ?? 25 : tenant?.return_area_radius_km ?? 25}
+                radiusKm={effectiveRadius.radiusKm}
                 centerLat={tenant?.area_center_lat}
                 centerLon={tenant?.area_center_lon}
                 distanceUnit={distanceUnit}
-                allowOutOfRadius={tiersOn}
+                allowOutOfRadius={effectiveRadius.allowOutOfRadius}
               />
               {tiersOn && (
                 <TierFeeNote tierCfg={tierCfg} distanceUnit={distanceUnit} currencyCode={tenant?.currency_code} />
@@ -438,6 +445,7 @@ function TierFeeNote({
   });
   if (tiers.length === 0) return null;
   const unit = getDistanceUnitShort(distanceUnit);
+  const maxKm = getMaxDistanceKm(tierCfg);
   return (
     <div className="rounded-lg bg-muted/40 px-3 py-2">
       <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1 mb-1">
@@ -455,6 +463,11 @@ function TierFeeNote({
           </li>
         ))}
       </ul>
+      {maxKm !== null && (
+        <p className="text-[11px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border/40">
+          We deliver within {kmToDisplayUnit(maxKm, distanceUnit)}{unit} of our location.
+        </p>
+      )}
     </div>
   );
 }

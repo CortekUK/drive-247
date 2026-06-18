@@ -68,6 +68,8 @@ export interface LocationSettings {
   // Tiered (distance-banded) delivery pricing
   delivery_tiers_enabled: boolean;
   delivery_distance_tiers: DeliveryTier[];
+  /** Optional hard cap (km) on area delivery distance. null = no limit. */
+  delivery_max_distance_km: number | null;
   // Separate pickup/return settings
   pickup_fixed_enabled: boolean;
   return_fixed_enabled: boolean;
@@ -92,6 +94,7 @@ const DEFAULT_LOCATION_SETTINGS: LocationSettings = {
   area_delivery_fee: 0,
   delivery_tiers_enabled: false,
   delivery_distance_tiers: [],
+  delivery_max_distance_km: null,
   // Separate pickup/return settings
   pickup_fixed_enabled: true,
   return_fixed_enabled: true,
@@ -144,6 +147,7 @@ export const usePickupLocations = () => {
           area_delivery_fee,
           delivery_tiers_enabled,
           delivery_distance_tiers,
+          delivery_max_distance_km,
           pickup_fixed_enabled,
           return_fixed_enabled,
           pickup_multiple_locations_enabled,
@@ -176,6 +180,7 @@ export const usePickupLocations = () => {
         delivery_distance_tiers: Array.isArray(data?.delivery_distance_tiers)
           ? (data.delivery_distance_tiers as unknown as DeliveryTier[])
           : [],
+        delivery_max_distance_km: data?.delivery_max_distance_km ?? null,
         pickup_fixed_enabled: data?.pickup_fixed_enabled ?? true,
         return_fixed_enabled: data?.return_fixed_enabled ?? true,
         pickup_multiple_locations_enabled: data?.pickup_multiple_locations_enabled ?? false,
@@ -246,6 +251,7 @@ export const usePickupLocations = () => {
       if (updates.area_delivery_fee !== undefined) updateData.area_delivery_fee = updates.area_delivery_fee;
       if (updates.delivery_tiers_enabled !== undefined) updateData.delivery_tiers_enabled = updates.delivery_tiers_enabled;
       if (updates.delivery_distance_tiers !== undefined) updateData.delivery_distance_tiers = updates.delivery_distance_tiers;
+      if (updates.delivery_max_distance_km !== undefined) updateData.delivery_max_distance_km = updates.delivery_max_distance_km;
       // Separate pickup/return settings
       if (updates.pickup_fixed_enabled !== undefined) updateData.pickup_fixed_enabled = updates.pickup_fixed_enabled;
       if (updates.return_fixed_enabled !== undefined) updateData.return_fixed_enabled = updates.return_fixed_enabled;
@@ -273,6 +279,7 @@ export const usePickupLocations = () => {
           area_delivery_fee,
           delivery_tiers_enabled,
           delivery_distance_tiers,
+          delivery_max_distance_km,
           pickup_fixed_enabled,
           return_fixed_enabled,
           pickup_multiple_locations_enabled,
@@ -304,6 +311,7 @@ export const usePickupLocations = () => {
         delivery_distance_tiers: Array.isArray(data?.delivery_distance_tiers)
           ? (data.delivery_distance_tiers as unknown as DeliveryTier[])
           : [],
+        delivery_max_distance_km: data?.delivery_max_distance_km ?? null,
         pickup_fixed_enabled: data?.pickup_fixed_enabled ?? true,
         return_fixed_enabled: data?.return_fixed_enabled ?? true,
         pickup_multiple_locations_enabled: data?.pickup_multiple_locations_enabled ?? false,

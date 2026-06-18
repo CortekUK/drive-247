@@ -31,7 +31,7 @@ import { useBookingStore } from "@/stores/booking-store";
 import { formatCurrency, kmToDisplayUnit, getDistanceUnitShort } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
 import { parseDateString } from "@/lib/calculate-rental-price";
-import { resolveDeliveryFee, getTierFeeRange, hasActiveTiers, normalizeTiers } from "@/lib/delivery-tiers";
+import { resolveDeliveryFee, getTierFeeRange, hasActiveTiers, normalizeTiers, getEffectiveDeliveryRadius, getMaxDistanceKm } from "@/lib/delivery-tiers";
 
 const TIMEZONE = "America/Los_Angeles";
 
@@ -128,9 +128,13 @@ export default function Booking() {
     delivery_tiers_enabled: tenant?.delivery_tiers_enabled,
     delivery_distance_tiers: tenant?.delivery_distance_tiers,
     area_delivery_fee: tenant?.area_delivery_fee,
+    delivery_max_distance_km: tenant?.delivery_max_distance_km,
   };
   const tiersOn = hasActiveTiers(tierCfg);
   const tierRange = getTierFeeRange(tierCfg);
+  // Only surface delivery addresses the operator will actually deliver to.
+  const areaEffectiveRadius = getEffectiveDeliveryRadius(tierCfg, tenant?.pickup_area_radius_km ?? 25);
+  const areaMaxDistanceKm = getMaxDistanceKm(tierCfg);
 
   // Legacy state for backward compatibility during transition
   const [requestDelivery, setRequestDelivery] = useState(false);
@@ -692,11 +696,11 @@ export default function Booking() {
                                                     }}
                                                     placeholder="Enter your delivery address"
                                                     className="h-12"
-                                                    radiusKm={tenant?.pickup_area_radius_km ?? 25}
+                                                    radiusKm={areaEffectiveRadius.radiusKm}
                                                     centerLat={tenant?.area_center_lat}
                                                     centerLon={tenant?.area_center_lon}
                                                     distanceUnit={distanceUnit}
-                                                    allowOutOfRadius={tiersOn}
+                                                    allowOutOfRadius={areaEffectiveRadius.allowOutOfRadius}
                                                   />
                                                 </FormControl>
                                                 {tiersOn && (
@@ -715,6 +719,11 @@ export default function Booking() {
                                                           </li>
                                                         ))}
                                                     </ul>
+                                                    {areaMaxDistanceKm !== null && (
+                                                      <p className="text-[11px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border/40">
+                                                        We deliver within {kmToDisplayUnit(areaMaxDistanceKm, distanceUnit)}{getDistanceUnitShort(distanceUnit)} of our location.
+                                                      </p>
+                                                    )}
                                                   </div>
                                                 )}
                                                 <FormMessage />
