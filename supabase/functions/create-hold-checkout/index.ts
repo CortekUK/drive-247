@@ -31,10 +31,16 @@ Deno.serve(async (req) => {
 
     const { data: rental, error: rentalError } = await supabase
       .from('rentals')
-      .select('id, tenant_id, customer_id, deposit_hold_status, deposit_amount_override')
+      .select('id, tenant_id, customer_id, deposit_hold_status, deposit_amount_override, auto_extend_enabled')
       .eq('id', rentalId)
       .single()
     if (rentalError || !rental) return errorResponse('Rental not found', 404)
+
+    // Auto-extend rentals never carry a deposit hold (flat advertised renewal
+    // price). Skip on the flag so it's removed from all of them at once.
+    if ((rental as any).auto_extend_enabled) {
+      return jsonResponse({ skipped: 'auto_extend_rental' })
+    }
 
     if (rental.deposit_hold_status === 'held') {
       return jsonResponse({ skipped: 'hold_already_active' })

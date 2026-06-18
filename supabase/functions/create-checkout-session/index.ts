@@ -116,7 +116,7 @@ serve(async (req) => {
     if (rentalId) {
       const { data: rentalRow } = await supabaseClient
         .from('rentals')
-        .select('deposit_amount_override')
+        .select('deposit_amount_override, auto_extend_enabled')
         .eq('id', rentalId)
         .single()
       const override = rentalRow?.deposit_amount_override
@@ -129,6 +129,11 @@ serve(async (req) => {
       if (override !== null && override !== undefined) {
         depositHoldAmount = Number(override)
         console.log('Deposit amount override applied:', depositHoldAmount, 'for rental', rentalId)
+      }
+      // Auto-extend rentals carry NO deposit — this wins over any override so no
+      // notice is shown and no hold is placed (place-deposit-hold skips them too).
+      if ((rentalRow as any)?.auto_extend_enabled) {
+        depositHoldAmount = 0
       }
     }
 

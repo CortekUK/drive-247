@@ -26,12 +26,24 @@ Deno.serve(async (req) => {
     // Fetch rental details
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
-      .select("customer_id, vehicle_id, tenant_id, deposit_hold_status, deposit_amount_override")
+      .select("customer_id, vehicle_id, tenant_id, deposit_hold_status, deposit_amount_override, auto_extend_enabled")
       .eq("id", rentalId)
       .single();
 
     if (rentalError || !rental) {
       return errorResponse("Rental not found", 404);
+    }
+
+    // Auto-extend rentals NEVER carry a deposit hold. The operator advertises a
+    // flat all-in renewal price, so a security hold makes no sense — yet without
+    // a per-rental override (deposit_amount_override stays NULL) the code fell
+    // back to the tenant's $150 default and re-authorised the customer's card on
+    // every renewal payment (RevTek/Jeffrey, who hit it twice). Skipping on the
+    // auto_extend flag removes it from ALL auto-extend rentals at once,
+    // regardless of who created them or whether an override was ever set.
+    if ((rental as any).auto_extend_enabled) {
+      console.log("[DEPOSIT-HOLD] Skipped — auto-extend rental:", rentalId);
+      return jsonResponse({ success: true, skipped: true, message: "Auto-extend rental — deposit hold skipped" });
     }
 
     // Remember the prior state: a re-collection after an expired/released hold
