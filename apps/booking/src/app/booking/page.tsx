@@ -67,6 +67,7 @@ const createRentalDetailsSchema = (minimumAge: number = 18, leadTimeHours: numbe
   customerName: z.string().min(2, "Name must be at least 2 characters"),
   customerEmail: z.string().email("Please enter a valid email address"),
   customerPhone: z.string().regex(/^[\d\s\-\+\(\)]{10,}$/, "Please enter a valid phone number (min 10 digits)"),
+  smsConsent: z.boolean().optional(),
 }).refine((data) => {
   // Combine date and time for comparison
   const pickup = new Date(`${format(data.pickupDate, "yyyy-MM-dd")}T${data.pickupTime}`);
@@ -164,6 +165,7 @@ export default function Booking() {
       customerName: "",
       customerEmail: "",
       customerPhone: "",
+      smsConsent: false,
     },
   });
 
@@ -1057,6 +1059,39 @@ export default function Booking() {
                           )}
                         />
                       </div>
+
+                      {/* SMS consent — only when this tenant uses SMS messaging */}
+                      {tenant?.integration_twilio_sms && (
+                        <FormField
+                          control={form.control}
+                          name="smsConsent"
+                          render={({ field }) => (
+                            <FormItem className="mb-4 flex flex-row items-start gap-3 rounded-lg border border-border/60 bg-muted/20 p-4">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                  className="mt-0.5"
+                                />
+                              </FormControl>
+                              <FormLabel className="text-sm font-normal leading-relaxed text-muted-foreground">
+                                I agree to receive SMS text messages from {tenant?.app_name || "this rental company"} about
+                                my rental — booking confirmations, vehicle collection/pickup details, lockbox codes and
+                                e-signing links. Message &amp; data rates may apply. Message frequency varies. Reply STOP
+                                to opt out, HELP for help. See our{" "}
+                                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">
+                                  Privacy Policy
+                                </a>{" "}
+                                and{" "}
+                                <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">
+                                  Terms
+                                </a>
+                                . Consent is not a condition of rental.
+                              </FormLabel>
+                            </FormItem>
+                          )}
+                        />
+                      )}
 
                     </div>
 

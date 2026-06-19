@@ -77,6 +77,7 @@ export interface Tenant {
   // Integration settings
   integration_veriff: boolean | null;
   integration_bonzah: boolean | null;
+  integration_twilio_sms: boolean | null;
   bonzah_brochure_url: string | null;
 
   // Tax settings
@@ -388,6 +389,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           area_center_lon,
           integration_veriff,
           integration_bonzah,
+          integration_twilio_sms,
           bonzah_brochure_url,
           tax_enabled,
           tax_percentage,
