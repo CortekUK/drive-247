@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
+import { useHasFaqs } from '@/hooks/useHasFaqs';
 import { useTenant } from '@/contexts/TenantContext';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { AuthPromptDialog } from '@/components/booking/AuthPromptDialog';
@@ -66,6 +67,7 @@ const Navigation = () => {
   }, []);
 
   const blogEnabled = !!tenant?.blog_enabled;
+  const hasFaqs = useHasFaqs();
 
   const navLinks = [
     { path: '/', label: 'Home' },
@@ -73,6 +75,7 @@ const Navigation = () => {
     { path: '/fleet', label: 'Fleet & Pricing' },
     { path: '/testimonials', label: 'Reviews' },
     { path: '/promotions', label: 'Promotions' },
+    ...(hasFaqs ? [{ path: '/faq', label: 'FAQ' }] : []),
     { path: '/contact', label: 'Contact' },
     ...(blogEnabled ? [{ path: '/blog', label: 'Blog' }] : []),
   ];

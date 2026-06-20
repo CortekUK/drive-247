@@ -3882,6 +3882,8 @@ export type Database = {
           rejected_at: string | null
           rejected_by: string | null
           rejection_reason: string | null
+          sms_consent: boolean
+          sms_consent_at: string | null
           status: string | null
           stripe_customer_id: string | null
           tenant_id: string | null
@@ -3922,6 +3924,8 @@ export type Database = {
           rejected_at?: string | null
           rejected_by?: string | null
           rejection_reason?: string | null
+          sms_consent?: boolean
+          sms_consent_at?: string | null
           status?: string | null
           stripe_customer_id?: string | null
           tenant_id?: string | null
@@ -3962,6 +3966,8 @@ export type Database = {
           rejected_at?: string | null
           rejected_by?: string | null
           rejection_reason?: string | null
+          sms_consent?: boolean
+          sms_consent_at?: string | null
           status?: string | null
           stripe_customer_id?: string | null
           tenant_id?: string | null
@@ -11049,6 +11055,8 @@ export type Database = {
           return_time: string | null
           schedule: string | null
           signed_document_id: string | null
+          sms_consent: boolean
+          sms_consent_at: string | null
           source: string | null
           start_date: string
           status: string | null
@@ -11161,6 +11169,8 @@ export type Database = {
           return_time?: string | null
           schedule?: string | null
           signed_document_id?: string | null
+          sms_consent?: boolean
+          sms_consent_at?: string | null
           source?: string | null
           start_date: string
           status?: string | null
@@ -11273,6 +11283,8 @@ export type Database = {
           return_time?: string | null
           schedule?: string | null
           signed_document_id?: string | null
+          sms_consent?: boolean
+          sms_consent_at?: string | null
           source?: string | null
           start_date?: string
           status?: string | null

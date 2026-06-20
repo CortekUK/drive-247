@@ -288,6 +288,9 @@ export default function Booking() {
       driverDOB: data.driverDOB ? format(data.driverDOB, "yyyy-MM-dd") : null,
       driverAge: driverAge,
       promoCode: data.promoCode || null,
+      // SMS opt-in consent (only meaningful when the tenant has SMS enabled —
+      // the checkbox is gated on tenant.integration_twilio_sms)
+      smsConsent: !!tenant?.integration_twilio_sms && !!data.smsConsent,
       // Delivery option data
       deliveryOption: deliveryOption || 'fixed',
       selectedLocationId,

@@ -79,6 +79,10 @@ export interface BookingContext {
   // Gig driver
   isGigDriver: boolean;
 
+  // SMS opt-in consent (A2P 10DLC) — captured on the booking form when the
+  // tenant has Twilio SMS enabled. Persisted to customers + rentals at checkout.
+  smsConsent: boolean;
+
   // Step 3: Extras & Insurance
   selectedExtras: Record<string, number>;
   insuranceOption: string | null;
@@ -220,6 +224,7 @@ const initialContext: BookingContext = {
   collectionLocationId: null,
   collectionLocation: null,
   isGigDriver: false,
+  smsConsent: false,
   promoCode: null,
   selectedVehicleId: null,
   selectedExtras: {},

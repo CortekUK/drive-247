@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { Phone, Mail, MapPin } from "lucide-react";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { useHasFaqs } from "@/hooks/useHasFaqs";
 
 const Footer = () => {
   const { settings } = useSiteSettings();
+  const hasFaqs = useHasFaqs();
 
   // Format phone for tel: link
   const phoneLink = settings.phone.replace(/[^\d+]/g, '');
@@ -109,6 +111,13 @@ const Footer = () => {
                   Contact
                 </Link>
               </li>
+              {hasFaqs && (
+                <li>
+                  <Link href="/faq" className="text-xs md:text-sm footer-link">
+                    FAQ
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
 

@@ -373,6 +373,10 @@ const BookingCheckoutContent = () => {
       const customerName = (bookingContext as any).customerName;
       const customerEmail = (bookingContext as any).customerEmail;
       const customerPhone = (bookingContext as any).customerPhone;
+      // SMS opt-in consent (A2P 10DLC). Only true when the tenant has SMS
+      // enabled and the customer ticked the box on the booking form.
+      const smsConsent = (bookingContext as any).smsConsent === true;
+      const smsConsentAt = smsConsent ? new Date().toISOString() : null;
 
       if (!customerEmail) {
         throw new Error("Customer information not found. Please restart booking.");
@@ -394,6 +398,18 @@ const BookingCheckoutContent = () => {
       if (existingCustomer) {
         customer = existingCustomer;
         toast.info("Welcome back! Using your existing account.");
+
+        // Record a freshly given SMS opt-in on the returning customer.
+        // Never auto-revoke an existing consent — only upgrade to opted-in.
+        if (smsConsent && !(existingCustomer as any).sms_consent) {
+          const { data: updatedCustomer } = await supabase
+            .from("customers")
+            .update({ sms_consent: true, sms_consent_at: smsConsentAt } as any)
+            .eq("id", existingCustomer.id)
+            .select()
+            .single();
+          if (updatedCustomer) customer = updatedCustomer;
+        }
       } else {
         // Create new customer
         const { data: newCustomer, error: createError } = await supabase
@@ -403,8 +419,10 @@ const BookingCheckoutContent = () => {
             email: customerEmail,
             phone: customerPhone,
             status: "Active",
-            tenant_id: tenant?.id
-          })
+            tenant_id: tenant?.id,
+            sms_consent: smsConsent,
+            sms_consent_at: smsConsentAt,
+          } as any)
           .select()
           .single();
 
@@ -719,6 +737,9 @@ const BookingCheckoutContent = () => {
           collection_address: null,
           collection_fee: 0, // Same fee applies for both
           is_gig_driver: isGigDriver,
+          // SMS opt-in consent snapshot (A2P 10DLC proof tied to this booking)
+          sms_consent: smsConsent,
+          sms_consent_at: smsConsentAt,
           // Promo code discount
           promo_code: promoDetails?.code || null,
           discount_applied: currentTotals.discountAmount > 0 ? currentTotals.discountAmount : null,
