@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -3460,7 +3461,21 @@ const Settings = () => {
 
               {/* Auto-apply by duration (optional) */}
               <div className="space-y-2">
-                <Label htmlFor="promo_min_duration">Auto-apply for rentals of N+ days <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="promo_min_duration">Auto-apply for rentals of N+ days <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <TooltipProvider delayDuration={150}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-muted-foreground hover:text-foreground" aria-label="About auto-apply duration discounts">
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs text-xs leading-relaxed">
+                        Set a number of days to turn this into an automatic duration discount — it applies on its own when a customer&apos;s rental is at least that long (the highest matching tier wins), with no code to type. Applies to fixed rentals paid in full only — never to installment plans, pay-as-you-go, or auto-extension renewals. The Max Users limit still caps total redemptions; once a tier is used up it falls through to the next one down. Leave blank to keep it a normal code customers enter at checkout.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Input
                   id="promo_min_duration"
                   type="text"
@@ -3474,12 +3489,6 @@ const Settings = () => {
                     setPromoForm(prev => ({ ...prev, min_duration_days: rawValue }));
                   }}
                 />
-                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400 max-w-md">
-                  <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span>
-                    Set a number of days to turn this into an <strong>automatic duration discount</strong> — it applies on its own when a customer&apos;s rental is at least that long (the highest matching tier wins), with no code to type. Applies to <strong>fixed rentals paid in full only</strong> — it is never applied to installment plans, pay-as-you-go, or auto-extension renewals. The <strong>Max Users</strong> limit above still caps total redemptions; once a tier is used up it falls through to the next one down. Leave blank to keep it a normal code customers enter at checkout.
-                  </span>
-                </div>
               </div>
 
               {/* Add Button */}
