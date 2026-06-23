@@ -8979,13 +8979,17 @@ export type Database = {
           code: string
           created_at: string
           created_by: string | null
+          description: string | null
           expires_at: string
           id: string
+          image_url: string | null
           max_users: number
           min_duration_days: number | null
           name: string
           promo_id: number | null
+          show_on_promotions: boolean
           tenant_id: string | null
+          title: string | null
           type: string
           value: number
         }
@@ -8993,13 +8997,17 @@ export type Database = {
           code: string
           created_at?: string
           created_by?: string | null
+          description?: string | null
           expires_at: string
           id?: string
+          image_url?: string | null
           max_users?: number
           min_duration_days?: number | null
           name: string
           promo_id?: number | null
+          show_on_promotions?: boolean
           tenant_id?: string | null
+          title?: string | null
           type: string
           value: number
         }
@@ -9007,13 +9015,17 @@ export type Database = {
           code?: string
           created_at?: string
           created_by?: string | null
+          description?: string | null
           expires_at?: string
           id?: string
+          image_url?: string | null
           max_users?: number
           min_duration_days?: number | null
           name?: string
           promo_id?: number | null
+          show_on_promotions?: boolean
           tenant_id?: string | null
+          title?: string | null
           type?: string
           value?: number
         }

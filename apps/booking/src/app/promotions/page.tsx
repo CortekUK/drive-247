@@ -76,23 +76,10 @@ const Promotions = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load promotions with tenant filtering
-      let promoQuery = supabase
-        .from("promotions")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (tenant?.id) {
-        promoQuery = promoQuery.eq("tenant_id", tenant.id);
-      }
-
-      const { data: promoData, error: promoError } = await promoQuery;
-
-      if (promoError) throw promoError;
-
-      // Also surface the tenant's active promo codes as auto-generated cards, so
-      // adding a code in Settings → Promos instantly advertises it here — no need
-      // to hand-build a matching banner. (promocodes isn't in the generated types.)
+      // Promotions are driven entirely by promo codes now. A code appears here when
+      // its "Show on promotions page" flag is on (and it hasn't expired). The card's
+      // image, title and description are set on the code itself in Settings → Promos;
+      // anything left blank falls back to friendly auto-generated copy.
       let codeQuery = (supabase as any)
         .from("promocodes")
         .select("*")
@@ -105,17 +92,9 @@ const Promotions = () => {
       const { data: codeData } = await codeQuery;
 
       const now = new Date();
-      // Codes already advertised by a manually-built promotion — skip those so we
-      // don't show the same code twice.
-      const referencedCodes = new Set(
-        (promoData || [])
-          .map((p: any) => (p.promo_code || "").trim().toLowerCase())
-          .filter(Boolean)
-      );
-
       const codePromotions: Promotion[] = (codeData || [])
+        .filter((c: any) => c.show_on_promotions)
         .filter((c: any) => !c.expires_at || new Date(c.expires_at) >= now)
-        .filter((c: any) => !referencedCodes.has((c.code || "").trim().toLowerCase()))
         .map((c: any) => {
           // promocodes.type is 'percentage' or 'value' (fixed amount)
           const isPercentage = c.type !== "value";
@@ -125,32 +104,33 @@ const Promotions = () => {
           // as such instead of as a code to enter.
           const minDays = Number(c.min_duration_days) || 0;
           const isDuration = minDays > 0;
-          const friendlyName = isDuration
+          const fallbackTitle = isDuration
             ? `Rent ${minDays}+ days and save ${amountLabel}`
             : c.name && c.name.trim().toLowerCase() !== (c.code || "").trim().toLowerCase()
               ? c.name
               : `Save ${amountLabel} on your rental`;
+          const fallbackDesc = isDuration
+            ? `Automatically applied to rentals of ${minDays} days or more — ${amountLabel} off, no code needed.`
+            : `Enter code ${c.code} at checkout to get ${amountLabel} off your booking.`;
 
           return {
             id: `promocode-${c.id}`,
-            title: friendlyName,
-            description: isDuration
-              ? `Automatically applied to rentals of ${minDays} days or more — ${amountLabel} off, no code needed.`
-              : `Enter code ${c.code} at checkout to get ${amountLabel} off your booking.`,
+            title: (c.title && String(c.title).trim()) || fallbackTitle,
+            description: (c.description && String(c.description).trim()) || fallbackDesc,
             discount_type: isPercentage ? "percentage" : "fixed",
             discount_value: value,
             start_date: c.created_at,
             end_date: c.expires_at || null,
             promo_code: c.code,
             min_duration_days: isDuration ? minDays : null,
-            image_url: null,
+            image_url: c.image_url || null,
             is_active: true,
             created_at: c.created_at,
             source: "promo_code",
           } as Promotion;
         });
 
-      setPromotions([...((promoData || []) as Promotion[]), ...codePromotions]);
+      setPromotions(codePromotions);
 
       // Load vehicles with tenant filtering
       let vehicleQuery = supabase
