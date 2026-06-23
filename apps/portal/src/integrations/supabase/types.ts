@@ -8982,6 +8982,7 @@ export type Database = {
           expires_at: string
           id: string
           max_users: number
+          min_duration_days: number | null
           name: string
           promo_id: number | null
           tenant_id: string | null
@@ -8995,6 +8996,7 @@ export type Database = {
           expires_at: string
           id?: string
           max_users?: number
+          min_duration_days?: number | null
           name: string
           promo_id?: number | null
           tenant_id?: string | null
@@ -9008,6 +9010,7 @@ export type Database = {
           expires_at?: string
           id?: string
           max_users?: number
+          min_duration_days?: number | null
           name?: string
           promo_id?: number | null
           tenant_id?: string | null

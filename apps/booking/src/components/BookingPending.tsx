@@ -209,7 +209,7 @@ const BookingPending = () => {
                       Return Home
                     </Button>
                   </Link>
-                  <Link href="/booking">
+                  <Link href="/">
                     <Button className="w-full sm:w-auto gradient-accent">
                       Book Another Vehicle
                     </Button>

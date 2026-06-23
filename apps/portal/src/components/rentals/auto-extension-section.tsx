@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatInTimeZone } from "date-fns-tz";
 import {
   RefreshCw, Pause, Play, Zap, Ban, CreditCard, CalendarClock, Clock, AlertTriangle,
-  Send, Eye, History, User, Loader2, Pencil,
+  Send, Eye, History, User, Loader2, Pencil, Info,
 } from "lucide-react";
 import { CadenceEditorDialog } from "@/components/rentals/cadence-editor-dialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -192,6 +192,14 @@ export function AutoExtensionSection({
           <Stat icon={<CreditCard className="h-4 w-4" />} label={`Per-${periodLabel} rate`} value={formatCurrency(perPeriodRate, currencyCode)} />
           <Stat icon={<RefreshCw className="h-4 w-4" />} label="Periods billed" value={String(rental.auto_extend_charge_count ?? exts.length + 1)} />
           <Stat icon={<Clock className="h-4 w-4" />} label="Next renewal" value={isPaused ? "Paused" : nextChargeAt} />
+        </div>
+
+        {/* Promo discounts never apply to renewal cycles — only to the original fixed term. */}
+        <div className="flex items-start gap-2 rounded-md border border-muted bg-muted/40 p-3 text-xs text-muted-foreground">
+          <Info className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            Promo &amp; duration discounts apply only to the original fixed booking. Each auto-extension renewal is billed at the full per-{periodLabel} rate above — discounts are never carried into renewal cycles.
+          </span>
         </div>
 
         {/* Next renewal (automation only). The per-extension payment breakdown,

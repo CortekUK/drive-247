@@ -314,15 +314,19 @@ const Contact = () => {
                 </div>
               </Card>
 
-              {/* Trust Badges */}
+              {/* Trust Badges — hidden entirely when a tenant configures no badges */}
+              {(() => {
+                const trustBadges = content.trust_badges?.badges ?? [
+                  { icon: "shield", label: "Secure", tooltip: "Your data and booking details are encrypted and secure" },
+                  { icon: "lock", label: "Confidential", tooltip: "All information is kept strictly confidential" },
+                  { icon: "clock", label: "24/7 Support", tooltip: "Our concierge team is available around the clock" }
+                ];
+                if (trustBadges.length === 0) return null;
+                return (
               <TooltipProvider>
                 <Card className="p-4 sm:p-6 shadow-metal bg-gradient-to-br from-card via-secondary/20 to-card backdrop-blur border-accent/20">
                   <div className="flex items-center justify-around text-center gap-4">
-                    {(content.trust_badges?.badges || [
-                      { icon: "shield", label: "Secure", tooltip: "Your data and booking details are encrypted and secure" },
-                      { icon: "lock", label: "Confidential", tooltip: "All information is kept strictly confidential" },
-                      { icon: "clock", label: "24/7 Support", tooltip: "Our concierge team is available around the clock" }
-                    ]).map((badge, index, arr) => {
+                    {trustBadges.map((badge, index, arr) => {
                       const iconMap: Record<string, any> = { shield: Shield, lock: Lock, clock: Clock, award: Award, star: Star, heart: Heart, zap: Zap, check: CheckCircle };
                       const IconComponent = iconMap[badge.icon?.toLowerCase()] || Shield;
                       return (
@@ -345,6 +349,8 @@ const Contact = () => {
                   </div>
                 </Card>
               </TooltipProvider>
+                );
+              })()}
             </div>
 
             {/* Right Column - Contact Form */}

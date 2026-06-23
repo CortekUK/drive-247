@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -695,6 +695,7 @@ const Settings = () => {
     created_at: new Date(),
     expires_at: new Date(new Date().setMonth(new Date().getMonth() + 1)),
     max_users: '',
+    min_duration_days: '',
   });
   const [promoCodeError, setPromoCodeError] = useState('');
   const [editPromoCodeError, setEditPromoCodeError] = useState('');
@@ -791,6 +792,7 @@ const Settings = () => {
           created_at: format(newPromo.created_at, 'yyyy-MM-dd'),
           expires_at: format(newPromo.expires_at, 'yyyy-MM-dd'),
           max_users: parseInt(newPromo.max_users) || 1,
+          min_duration_days: parseInt(newPromo.min_duration_days) || null,
           tenant_id: tenant.id
         })
         .select();
@@ -814,6 +816,7 @@ const Settings = () => {
         created_at: new Date(),
         expires_at: new Date(new Date().setMonth(new Date().getMonth() + 1)),
         max_users: '',
+        min_duration_days: '',
       });
       // generatePromoCode(); // useEffect will trigger this
       refetchPromos();
@@ -929,7 +932,8 @@ const Settings = () => {
           type: updatedPromo.type,
           value: parseFloat(updatedPromo.value),
           expires_at: format(new Date(updatedPromo.expires_at), 'yyyy-MM-dd'),
-          max_users: parseInt(updatedPromo.max_users) || 1
+          max_users: parseInt(updatedPromo.max_users) || 1,
+          min_duration_days: parseInt(updatedPromo.min_duration_days) || null
         })
         .eq('id', updatedPromo.id)
         .eq('tenant_id', tenant.id)
@@ -2708,13 +2712,28 @@ const Settings = () => {
                       inputMode="decimal"
                       value={rentalForm.tax_percentage ?? ''}
                       onChange={(e) => {
-                        const rawValue = e.target.value.replace(/[^0-9.]/g, '');
-                        if (rawValue === '' || rawValue === '.') {
-                          setRentalForm(prev => ({ ...prev, tax_percentage: rawValue as any }));
-                        } else {
-                          const numValue = Math.max(0, Math.min(100, parseFloat(rawValue) || 0));
-                          setRentalForm(prev => ({ ...prev, tax_percentage: numValue }));
+                        // Keep the raw string while typing so decimals (e.g. "9.35")
+                        // can be entered — converting to a number per-keystroke would
+                        // drop the trailing "." before the decimals can be typed.
+                        let rawValue = e.target.value.replace(/[^0-9.]/g, '');
+                        // Collapse multiple dots to a single decimal point
+                        const firstDot = rawValue.indexOf('.');
+                        if (firstDot !== -1) {
+                          rawValue =
+                            rawValue.slice(0, firstDot + 1) +
+                            rawValue.slice(firstDot + 1).replace(/\./g, '');
                         }
+                        // Limit to 2 decimal places (column is numeric(5,2))
+                        const [whole, decimals] = rawValue.split('.');
+                        if (decimals !== undefined) {
+                          rawValue = `${whole}.${decimals.slice(0, 2)}`;
+                        }
+                        // Soft-clamp the max while typing
+                        const numValue = parseFloat(rawValue);
+                        if (!isNaN(numValue) && numValue > 100) {
+                          rawValue = '100';
+                        }
+                        setRentalForm(prev => ({ ...prev, tax_percentage: rawValue as any }));
                       }}
                       onBlur={(e) => {
                         const value = parseFloat(e.target.value);
@@ -3439,6 +3458,30 @@ const Settings = () => {
                 />
               </div>
 
+              {/* Auto-apply by duration (optional) */}
+              <div className="space-y-2">
+                <Label htmlFor="promo_min_duration">Auto-apply for rentals of N+ days <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input
+                  id="promo_min_duration"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="e.g. 14 — leave blank for a code customers type"
+                  className="max-w-md"
+                  value={promoForm.min_duration_days}
+                  onChange={(e) => {
+                    const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                    setPromoForm(prev => ({ ...prev, min_duration_days: rawValue }));
+                  }}
+                />
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400 max-w-md">
+                  <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>
+                    Set a number of days to turn this into an <strong>automatic duration discount</strong> — it applies on its own when a customer&apos;s rental is at least that long (the highest matching tier wins), with no code to type. Applies to <strong>fixed rentals paid in full only</strong> — it is never applied to installment plans, pay-as-you-go, or auto-extension renewals. The <strong>Max Users</strong> limit above still caps total redemptions; once a tier is used up it falls through to the next one down. Leave blank to keep it a normal code customers enter at checkout.
+                  </span>
+                </div>
+              </div>
+
               {/* Add Button */}
               {canEditSettings('promos') && (
                 <div className="pt-2">
@@ -3478,6 +3521,7 @@ const Settings = () => {
                           <th className="p-3 text-left font-semibold">Created</th>
                           <th className="p-3 text-left font-semibold">Expires</th>
                           <th className="p-3 text-left font-semibold">Max Users</th>
+                          <th className="p-3 text-left font-semibold">Auto-apply</th>
                           <th className="p-3 text-left font-semibold">Code</th>
                           <th className="p-3 text-center font-semibold">Actions</th>
                         </tr>
@@ -3485,7 +3529,7 @@ const Settings = () => {
                       <tbody>
                         {isLoadingPromos ? (
                           <tr>
-                            <td colSpan={8} className="p-4 text-center text-muted-foreground">
+                            <td colSpan={9} className="p-4 text-center text-muted-foreground">
                               <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
                               Loading promo codes...
                             </td>
@@ -3501,6 +3545,13 @@ const Settings = () => {
                               <td className="p-3 text-muted-foreground">{promo.created_at}</td>
                               <td className="p-3 text-muted-foreground">{promo.expires_at}</td>
                               <td className="p-3">{promo.max_users}</td>
+                              <td className="p-3">
+                                {promo.min_duration_days > 0 ? (
+                                  <Badge variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-400">{promo.min_duration_days}+ days</Badge>
+                                ) : (
+                                  <span className="text-muted-foreground">Manual</span>
+                                )}
+                              </td>
                               <td className="p-3">
                                 <div className="flex items-center gap-2">
                                   <Badge variant="outline" className="font-mono">{promo.code}</Badge>
@@ -3545,7 +3596,7 @@ const Settings = () => {
                           ))
                         ) : (
                           <tr>
-                            <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                            <td colSpan={9} className="p-8 text-center text-muted-foreground">
                               No promo codes found. Create one to get started.
                             </td>
                           </tr>
@@ -3646,6 +3697,25 @@ const Settings = () => {
                         }}
                       />
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_min_duration">Auto-apply for rentals of N+ days <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                    <Input
+                      id="edit_min_duration"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="e.g. 14 — leave blank for a code customers type"
+                      value={editingPromo.min_duration_days ?? ''}
+                      onChange={(e) => {
+                        const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                        setEditingPromo({ ...editingPromo, min_duration_days: rawValue });
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Auto duration discounts apply to fixed rentals paid in full only — never to installment, pay-as-you-go, or auto-extension bookings.
+                    </p>
                   </div>
 
                   <div className="space-y-2">

@@ -1,0 +1,23 @@
+{
+  "_README": "Client onboarding inputs, keyed by tenant slug. Fill from the onboarding Google Sheet. The script derives timezone, branding palette, business hours, SEO copy and addresses from these fields. 'branding' accepts a color-name string ('Black', 'Blue, White, Gold'), an array of hex codes ['#111','#fff','#d4af37'], or 'default'/'none' for a professional default. Run: node scripts/tenant-onboarding.mjs <slug>",
+  "tenants": {
+    "ejlbllc": {
+      "company_name": "EJLB LLC",
+      "contact_email": "ejlbgroup@gmail.com",
+      "phone": "+1 (786) 925-9853",
+      "city": "Atlanta",
+      "state": "GA",
+      "hours": "",
+      "branding": "default"
+    },
+    "flowautorentals": {
+      "company_name": "Flow Auto Rentals",
+      "contact_email": "flowautorentals@gmail.com",
+      "phone": "+1 (813) 413-5849",
+      "city": "Tampa",
+      "state": "FL",
+      "hours": "24/7",
+      "branding": "Black"
+    }
+  }
+}

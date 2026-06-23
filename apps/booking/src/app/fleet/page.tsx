@@ -610,7 +610,7 @@ const Pricing = () => {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-              <Link href="/booking">
+              <Link href="/">
                 <Button size="lg" className="text-base px-8 py-6" aria-label="Start your booking">
                   Start Your Booking
                 </Button>

@@ -27,6 +27,16 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },
+  // The multi-page /booking flow is deprecated — the only booking path is the
+  // home-page widget. Redirect any stray link into that dead flow back home so
+  // customers can never get stranded in it. (Note: /booking-enquiry-submitted is
+  // a separate route and is intentionally NOT matched here.)
+  async redirects() {
+    return [
+      { source: '/booking', destination: '/', permanent: false },
+      { source: '/booking/:path*', destination: '/', permanent: false },
+    ];
+  },
   // Standalone output for Vercel deployment
   output: 'standalone',
   // Set workspace root to fix monorepo lockfile detection

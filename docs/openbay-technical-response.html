@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: #1a1a2e; font-size: 12.5px; line-height: 1.55; margin: 0;
+  }
+  .head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 3px solid #6366f1; padding-bottom: 14px; margin-bottom: 22px;
+  }
+  .brand { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; color: #0f172a; }
+  .brand span { color: #6366f1; }
+  .dept { font-size: 11px; color: #64748b; margin-top: 2px; letter-spacing: 0.3px; text-transform: uppercase; }
+  .meta { text-align: right; font-size: 11px; color: #64748b; line-height: 1.7; }
+  h1 { font-size: 17px; margin: 0 0 4px; color: #0f172a; }
+  .sub { color: #64748b; font-size: 12px; margin-bottom: 18px; }
+  .intro { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 20px; font-size: 12px; }
+  .item { border: 1px solid #e9eaf0; border-radius: 8px; padding: 12px 14px; margin-bottom: 11px; page-break-inside: avoid; }
+  .item-head { display: flex; align-items: center; gap: 9px; margin-bottom: 5px; }
+  .num { background: #0f172a; color: #fff; font-weight: 700; font-size: 11px; min-width: 22px; height: 22px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; }
+  .item-title { font-weight: 700; font-size: 13px; color: #0f172a; flex: 1; }
+  .badge { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+  .b-done   { background: #dcfce7; color: #15803d; }
+  .b-fixed  { background: #dbeafe; color: #1d4ed8; }
+  .b-action { background: #fef3c7; color: #b45309; }
+  .b-info   { background: #ede9fe; color: #6d28d9; }
+  .item p { margin: 4px 0 0; font-size: 12px; color: #334155; }
+  .item .q { margin-top: 6px; padding-left: 12px; border-left: 2px solid #fbbf24; }
+  .item .q b { color: #0f172a; }
+  .closing { margin-top: 20px; font-size: 12px; color: #334155; }
+  .sig { margin-top: 14px; font-size: 12px; }
+  .sig b { color: #0f172a; }
+  code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+</style>
+</head>
+<body>
+
+  <div class="head">
+    <div>
+      <div class="brand">Drive<span>-247</span></div>
+      <div class="dept">Technical Department</div>
+    </div>
+    <div class="meta">
+      <div><b>To:</b> Victor Masivi — Open Bay Rental</div>
+      <div><b>Date:</b> 18 June 2026</div>
+      <div><b>Ref:</b> Support Response</div>
+    </div>
+  </div>
+
+  <h1>Response to Your Requests</h1>
+  <div class="sub">Below is a point-by-point update on the nine items you raised.</div>
+
+  <div class="intro">
+    Hi Victor — thank you for the detailed list. We've worked through each point. Items already actioned are marked
+    <b>Done</b> / <b>Fixed</b>; two points need a quick confirmation from you before we proceed.
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="num">1</span><span class="item-title">Customer Database Management</span><span class="badge b-action">Need Info</span></div>
+    <div class="q">
+      <b>Quick question:</b> what would you like here — (a) importing an existing customer list into your portal,
+      (b) guidance on adding/editing/managing customers day-to-day, or (c) a specific issue that isn't working?
+      Let us know and we'll action it.
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="num">2</span><span class="item-title">Turo Availability Synchronisation</span><span class="badge b-info">Answered</span></div>
+    <p>
+      Turo has <b>discontinued their calendar-sync API</b>, so automatic Turo availability syncing is no longer possible
+      on any platform — this is a Turo-side change, not a Drive-247 limitation. As a workaround, you can use the
+      <b>Blocked Dates / Fleet Calendar</b> tool in your portal to manually mark a vehicle unavailable for the dates it's
+      booked on Turo; your booking site will respect those blocks and prevent double-bookings.
+    </p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="num">3</span><span class="item-title">Account Creation — "Invalid Passcode"</span><span class="badge b-fixed">Fixed</span></div>
+    <p>
+      Resolved. The system was sending <b>two competing verification codes</b> (one from the sign-in service and one from
+      our own email), and entering the wrong one produced the "invalid passcode" error every time. We've reconfigured it to
+      send a <b>single code</b>. Account creation now works on the next attempt — this fix applies platform-wide.
+    </p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="num">4</span><span class="item-title">Insurance Stuck on "Being Reviewed"</span><span class="badge b-fixed">Fixed</span></div>
+    <p>
+      The review process works — but the certificate is only saved and reviewed <b>once the booking is completed</b>.
+      If a booking is abandoned before checkout, nothing is saved, which is why your test upload left no trace.
+      We've <b>reworded the message</b> so it no longer implies a review is happening before the booking is placed.
+      Once a booking is placed: the insurance is saved, automatically scanned, and you can
+      <b>Approve / Reject / Rescan</b> it on the rental detail page.
+    </p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="num">5</span><span class="item-title">Username Change</span><span class="badge b-done">Done</span></div>
+    <p>
+      Your login has been changed from <code>admin@openbayrental.com</code> to <code>admin@obrental.com</code>.
+      Use your existing password — nothing else changed. The old address no longer works as a login.
+    </p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="num">6</span><span class="item-title">Support Email</span><span class="badge b-done">Done</span></div>
+    <p>
+      Your support/contact email has been changed from <code>support@zighida.com</code> to <code>admin@obrental.com</code>.
+      It now appears wherever your booking site shows a contact email.
+    </p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="num">7</span><span class="item-title">Footer — "DALLAS" → "Los Angeles"</span><span class="badge b-done">Done</span></div>
+    <p>
+      Your footer now reads <b>"Reliable Car Rentals in Los Angeles"</b> and your address shows <b>Los Angeles, CA</b>.
+      You can edit footer content yourself anytime in the portal under <b>CMS → Site Settings</b>.
+    </p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="num">8</span><span class="item-title">SMS Opt-In Page</span><span class="badge b-action">Need Info</span></div>
+    <p>
+      To send text messages (SMS) to customers in the US, the phone carriers require a public <b>SMS opt-in / consent page</b>
+      that shows how customers agree to receive texts — this is part of <b>Twilio's 10DLC compliance</b>, and registration is
+      rejected without it.
+    </p>
+    <div class="q">
+      <b>Please confirm:</b> (1) Do you plan to send SMS to your customers? (2) If so, would you like us to build the
+      opt-in page so you can register with Twilio? (3) Do you already have a Twilio account, or would you start fresh?
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="num">9</span><span class="item-title">Mobile Phone App</span><span class="badge b-info">Roadmap</span></div>
+    <p>Noted — a dedicated mobile app is on our future roadmap. We'll keep you updated as it progresses.</p>
+  </div>
+
+  <div class="closing">
+    In short: items 3, 4, 5, 6 and 7 are <b>complete</b>, item 2 is <b>answered</b>, and we just need your reply on
+    <b>items 1 and 8</b> to finish those off. Anything unclear, just reply and we'll be happy to help.
+  </div>
+
+  <div class="sig">
+    Kind regards,<br>
+    <b>Technical Department</b><br>
+    Drive-247
+  </div>
+
+</body>
+</html>

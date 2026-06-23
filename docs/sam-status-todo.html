@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #1a1a1a; font-size: 10.5pt; line-height: 1.45; margin: 0; }
+  .head { border-bottom: 3px solid #223331; padding-bottom: 12px; margin-bottom: 18px; }
+  h1 { font-size: 19pt; margin: 0; color: #223331; letter-spacing: -0.3px; }
+  .accent { color: #E9B63E; }
+  .sub { color: #666; font-size: 9.5pt; margin-top: 4px; }
+  h2 { font-size: 11.5pt; margin: 20px 0 8px; padding: 6px 11px; border-radius: 6px; color: #fff; }
+  .done h2 { background: #16a34a; }
+  .prog h2 { background: #d97706; }
+  .todo h2 { background: #2563eb; }
+  .park h2 { background: #64748b; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 6px 9px; vertical-align: top; border-bottom: 1px solid #ececec; font-size: 9.5pt; }
+  td.ask { width: 38%; font-weight: 600; color: #223331; }
+  td.note { color: #444; }
+  .tag { display: inline-block; font-size: 7.5pt; font-weight: 700; padding: 1px 6px; border-radius: 10px; color: #fff; }
+  .t-done { background: #16a34a; } .t-prog { background: #d97706; } .t-todo { background: #2563eb; } .t-park { background: #64748b; }
+  .footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 8.5pt; color: #999; }
+  .legend { font-size: 8.5pt; color: #666; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <h1>Jangram <span class="accent">— Sam's Requests: Status</span></h1>
+    <div class="sub">What Sam asked · what's done · what's left · and why — a shared to-do list</div>
+  </div>
+
+  <div class="done">
+    <h2>✅ DONE — shipped</h2>
+    <table>
+      <tr><td class="ask">Holiday / weekend pricing</td><td class="note">Markups now apply to <b>every</b> rental length (weekly/monthly too), not just short ones. <span class="tag t-done">DONE</span></td></tr>
+      <tr><td class="ask">Blocked cars still bookable</td><td class="note">Cars you block (e.g. on Turo) are now hidden from those dates everywhere — no more manual rejecting. <span class="tag t-done">DONE</span></td></tr>
+      <tr><td class="ask">Duplicate booking requests</td><td class="note">A double-click / re-submit can no longer create the same request twice. <span class="tag t-done">DONE</span></td></tr>
+      <tr><td class="ask">Inquiry form dates required</td><td class="note">Start & end dates are required on the inquiry form, with a clearer message. <span class="tag t-done">DONE</span></td></tr>
+      <tr><td class="ask">Turo-style calendar</td><td class="note">Blocks show on the calendar, drag-to-block, per-day price markers, click a booking to open it. <span class="tag t-done">DONE</span></td></tr>
+      <tr><td class="ask">AI pricing suggestions</td><td class="note">Each car shows a suggested price + a "Why?" explanation. A suggestion, you stay in control. <span class="tag t-done">DONE</span></td></tr>
+    </table>
+  </div>
+
+  <div class="prog">
+    <h2>🔨 IN PROGRESS — Sam's latest feedback (this batch)</h2>
+    <table>
+      <tr><td class="ask">Calendar: show all cars always</td><td class="note">Was only showing blocked/booked cars. Now shows the whole fleet. <span class="tag t-done">DONE</span></td></tr>
+      <tr><td class="ask">Calendar: type-in block dates</td><td class="note">Drag couldn't reach long bookings — adding date fields so you can type exact dates. <span class="tag t-prog">BUILDING</span></td></tr>
+      <tr><td class="ask">Calendar: drag blocks wrong dates</td><td class="note">"Have to select 2 days early." Fixed by letting you confirm/edit exact dates in the dialog. <span class="tag t-prog">BUILDING</span></td></tr>
+    </table>
+  </div>
+
+  <div class="todo">
+    <h2>📋 TO DO — this batch (not started yet)</h2>
+    <table>
+      <tr><td class="ask">Weekly/monthly/season price not applying</td><td class="note">Engine fix is live, so this is a display issue on the screen you use — need to reproduce & fix. <span class="tag t-todo">TO DO</span></td></tr>
+      <tr><td class="ask">Mileage bug (1mo+1day = 2× miles)</td><td class="note">Will count mileage per-day so 1 month + 1 day = 1,550 not 3,000. <span class="tag t-todo">TO DO</span></td></tr>
+      <tr><td class="ask">AI: show final (seasonal) price too</td><td class="note">Show the seasonal-adjusted price next to the AI's base suggestion. <span class="tag t-todo">TO DO</span></td></tr>
+    </table>
+  </div>
+
+  <div class="park">
+    <h2>🅿️ NOT DOING YET — parked (with reasons)</h2>
+    <table>
+      <tr><td class="ask">Book car first, then ask for ID + insurance</td><td class="note">Sam said "hold that one for now." Will revisit. <span class="tag t-park">DEFERRED</span></td></tr>
+      <tr><td class="ask">Reserve-with-card-hold + deadlines + auto-release</td><td class="note">Touches calendar, payments, insurance & refunds — too risky to rush. Needs careful design first. <span class="tag t-park">PARKED</span></td></tr>
+      <tr><td class="ask">Reduce booking friction / optional account</td><td class="note">Agreed to do — keep ID check, make account optional, fewer steps. Planned for a future update. <span class="tag t-park">PLANNED</span></td></tr>
+      <tr><td class="ask">AI using outside market data (PriceLabs/Red Scout)</td><td class="note">Outside data is unreliable / gray-area legally. AI uses platform comparables + demand instead. <span class="tag t-park">NOT BUILT</span></td></tr>
+      <tr><td class="ask">AI fully owns seasonal pricing</td><td class="note">Chose the simpler route instead: keep your manual seasonal control + show the final price. <span class="tag t-park">N/A</span></td></tr>
+    </table>
+  </div>
+
+  <div class="legend"><b>Legend:</b> DONE = shipped · BUILDING = in progress now · TO DO = next in this batch · DEFERRED/PARKED/PLANNED = not now, with reason.</div>
+  <div class="footer">Drive247 · Jangram Car Rental · Working to-do — review together. Nothing in this batch is on the live site until Ghulam tests it.</div>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 16mm 15mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #1a1a1a; font-size: 10.5pt; line-height: 1.45; margin: 0; }
+  .head { border-bottom: 3px solid #223331; padding-bottom: 12px; margin-bottom: 16px; }
+  h1 { font-size: 19pt; margin: 0; color: #223331; letter-spacing: -0.3px; }
+  .accent { color: #E9B63E; }
+  .sub { color: #666; font-size: 9.5pt; margin-top: 4px; }
+  .item { border: 1px solid #ececec; border-left: 3px solid #E9B63E; border-radius: 6px; padding: 9px 12px; margin-bottom: 9px; background: #fafafa; }
+  .item h3 { margin: 0 0 4px; font-size: 11pt; color: #223331; }
+  .item .row { font-size: 9.5pt; margin: 2px 0; }
+  .lbl { display: inline-block; width: 58px; font-weight: 700; color: #888; font-size: 8pt; vertical-align: top; text-transform: uppercase; letter-spacing: .3px; }
+  .said { color: #555; font-style: italic; }
+  .did { color: #16a34a; font-weight: 600; }
+  .eg { color: #444; }
+  .pill { float: right; font-size: 7.5pt; font-weight: 700; background: #16a34a; color: #fff; padding: 1px 7px; border-radius: 10px; }
+  h2 { font-size: 11.5pt; margin: 18px 0 8px; padding: 6px 11px; border-radius: 6px; background: #223331; color: #fff; }
+  .status { background: #f1f5f9; border-radius: 6px; padding: 9px 12px; font-size: 9.5pt; }
+  .status b { color: #223331; }
+  .slack { border: 1px dashed #cbd5e1; border-radius: 6px; padding: 10px 12px; font-size: 9.5pt; background: #fff; }
+  .slack p { margin: 4px 0; }
+  .footer { margin-top: 18px; padding-top: 9px; border-top: 1px solid #ddd; font-size: 8.5pt; color: #999; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <h1>Jangram <span class="accent">— Sam's Feedback Fixes (Round 2)</span></h1>
+    <div class="sub">What Sam asked · what we did · a simple example — 6 fixes, all complete</div>
+  </div>
+
+  <div class="item"><span class="pill">DONE</span><h3>1 · Calendar — show all cars</h3>
+    <div class="row"><span class="lbl">Asked</span><span class="said">"It only shows cars that are blocked off."</span></div>
+    <div class="row"><span class="lbl">Did</span><span class="did">Calendar now shows the whole fleet — every car, all the time.</span></div>
+    <div class="row"><span class="lbl">Example</span><span class="eg">An available Tesla with no bookings still gets its own row, ready to block.</span></div>
+  </div>
+
+  <div class="item"><span class="pill">DONE</span><h3>2 · Type-in dates to block</h3>
+    <div class="row"><span class="lbl">Asked</span><span class="said">"Drag won't reach my long bookings."</span></div>
+    <div class="row"><span class="lbl">Did</span><span class="did">Block popup now has Start/End date fields to type, plus a "+ Block" button on each car.</span></div>
+    <div class="row"><span class="lbl">Example</span><span class="eg">Blocking a car for 3 months — just type the dates instead of dragging across screens.</span></div>
+  </div>
+
+  <div class="item"><span class="pill">DONE</span><h3>3 · Drag blocked the wrong dates</h3>
+    <div class="row"><span class="lbl">Asked</span><span class="said">"I have to select 2 days early to block the right ones."</span></div>
+    <div class="row"><span class="lbl">Did</span><span class="did">Drag now pre-fills the dates; you see &amp; confirm the exact dates before saving.</span></div>
+    <div class="row"><span class="lbl">Example</span><span class="eg">Drag roughly over June → popup shows "Jun 5 → Jun 6" → fix if needed → save. No guessing.</span></div>
+  </div>
+
+  <div class="item"><span class="pill">DONE</span><h3>4 · Mileage bug</h3>
+    <div class="row"><span class="lbl">Asked</span><span class="said">"1 month + 1 day gives 3000 miles instead of 1550."</span></div>
+    <div class="row"><span class="lbl">Did</span><span class="did">Mileage is now counted per day.</span></div>
+    <div class="row"><span class="lbl">Example</span><span class="eg">1,500 mi/month = 50 mi/day → 31 days = 50 × 31 = <b>1,550</b> (was wrongly 3,000).</span></div>
+  </div>
+
+  <div class="item"><span class="pill">DONE</span><h3>5 · Weekly / monthly / season prices</h3>
+    <div class="row"><span class="lbl">Asked</span><span class="said">"Season prices still not applying."</span></div>
+    <div class="row"><span class="lbl">Did</span><span class="did">The price customers see (car list + booking widget) now includes the right weekly/monthly rate AND the seasonal markup.</span></div>
+    <div class="row"><span class="lbl">Example</span><span class="eg">A $100/week car during her +60% summer now shows ~$160 for that week, not $100.</span></div>
+  </div>
+
+  <div class="item"><span class="pill">DONE</span><h3>6 · AI pricing — show the final price</h3>
+    <div class="row"><span class="lbl">Asked</span><span class="said">"Does the AI include my summer markup? It looks too high."</span></div>
+    <div class="row"><span class="lbl">Did</span><span class="did">AI still suggests a clean base price; we now show the final price with her markups underneath.</span></div>
+    <div class="row"><span class="lbl">Example</span><span class="eg">"AI suggests $100/day · Summer (+60%): $160/day" — she sees both, no confusion.</span></div>
+  </div>
+
+  <h2>Status</h2>
+  <div class="status">
+    <b>All 6 fixes complete</b> and code-checked (no new errors). Applied for <b>all rental companies</b>, not just Jangram.
+    Every new screen works in <b>dark &amp; light mode</b>.
+    <br><br>
+    <b>Not on the live site yet</b> — held for Ghulam's testing first, exactly as requested.
+    <br>
+    <b>Held for later</b> (Sam said "hold for now"): book the car first, then ask for ID + insurance.
+  </div>
+
+  <h2>Message for Sam</h2>
+  <div class="slack">
+    <p>Hey Sam! Worked through your feedback — here's what's fixed 🎉</p>
+    <p>🗓️ <b>Calendar</b> — shows <i>all</i> your cars now, you can type exact dates to block (or use the new "+ Block" button), and blocking lands on the right dates — you confirm them before saving.</p>
+    <p>💲 <b>Pricing</b> — weekly/monthly + seasonal prices now show in what customers see, and the mileage bug is fixed (1 month + 1 day = 1,550 miles, not 3,000 🙌).</p>
+    <p>🤖 <b>AI pricing</b> — suggests a clean base price, and now shows the final price with your seasonal markup right under it (e.g. "Summer +60% = $160").</p>
+    <p>All in testing on our side first — we'll get it to you once it's checked. Thanks for the detailed notes! 👍</p>
+  </div>
+
+  <div class="footer">Drive247 · Jangram Car Rental · Round-2 feedback fixes · Internal status — not yet live.</div>
+</body>
+</html>

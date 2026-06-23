@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2, ArrowDown, CircleDot, Check, Infinity as InfinityIcon } from "lucide-react";
+import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2, ArrowDown, CircleDot, Check, Infinity as InfinityIcon, Info } from "lucide-react";
 import { getUnlimitedMileageOption } from "@/lib/mileage-utils";
 import type { PricingTier, DayBreakdown } from "@/lib/calculate-rental-price";
+import { parseDateString } from "@/lib/calculate-rental-price";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
@@ -31,6 +32,10 @@ interface PromoDetails {
   type: "percentage" | "fixed_amount";
   value: number;
   id: string;
+  // "duration" = auto-applied by rental length; only valid for fixed pay-in-full
+  // rentals, so it is stripped out when an installment plan is selected.
+  source?: "manual" | "duration";
+  minDurationDays?: number;
 }
 
 interface BonzahCoverage {
@@ -182,9 +187,18 @@ export default function BookingCheckoutStep({
     return 0;
   };
 
+  // A duration discount was auto-applied, but the customer has chosen an installment
+  // plan. Duration discounts are for fixed pay-in-full rentals only, so it does not
+  // apply here (see disclaimer by the installment selector).
+  const isInstallmentPlanSelected =
+    !!selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled;
+  const durationDiscountBlocked =
+    promoDetails?.source === 'duration' && isInstallmentPlanSelected;
+
   // Calculate promo discount amount
   const calculatePromoDiscount = (): number => {
     if (!promoDetails) return 0;
+    if (durationDiscountBlocked) return 0;
 
     if (promoDetails.type === 'fixed_amount') {
       // Fixed amount discount, but not more than the vehicle total
@@ -199,6 +213,17 @@ export default function BookingCheckoutStep({
   // Calculate discounted vehicle total (after promo code)
   const calculateDiscountedVehicleTotal = (): number => {
     return vehicleTotal - calculatePromoDiscount();
+  };
+
+  // Promo discount that may reduce an installment plan: MANUAL codes only.
+  // A duration auto-discount is a fixed-pay-in-full perk, so it never feeds the
+  // installment base. Computed independently of which plan is selected so the
+  // InstallmentSelector's plan amounts stay stable (it caches them by type).
+  const installmentPromoDiscount = (): number => {
+    if (!promoDetails || promoDetails.source === 'duration') return 0;
+    if (promoDetails.type === 'fixed_amount') return Math.min(promoDetails.value, vehicleTotal);
+    if (promoDetails.type === 'percentage') return (vehicleTotal * promoDetails.value) / 100;
+    return 0;
   };
 
   // Calculate tax amount based on tenant settings (applied to discounted price)
@@ -273,12 +298,25 @@ export default function BookingCheckoutStep({
   // Calculate installment breakdown based on what_gets_split setting
   const whatGetsSplit = installmentConfig.what_gets_split || 'rental_only';
   const { installUpfrontAmount, installableAmount } = (() => {
-    let upfront = calculateServiceFee(); // Deposit is a hold, not upfront charge
-    let installable = 0;
-    const discountedVehicle = calculateDiscountedVehicleTotal();
+    // Installment plans use a vehicle total that excludes any duration auto-discount
+    // (fixed-pay-in-full only). Manual codes still apply, matching prior behaviour.
+    const discountedVehicle = vehicleTotal - installmentPromoDiscount();
     const extrasTotal = calculateExtrasTotal();
-    const taxAmount = calculateTaxAmount();
+    const taxAmount = (tenant?.tax_enabled && tenant?.tax_percentage)
+      ? discountedVehicle * (tenant.tax_percentage / 100)
+      : 0;
     const deliveryFees = calculateDeliveryFees();
+    // Service fee — percentage variant is computed on this same vehicle base.
+    const feeType = (tenant as any)?.service_fee_type || 'fixed_amount';
+    const feeValue = (tenant as any)?.service_fee_value ?? tenant?.service_fee_amount ?? 0;
+    const serviceFee = !tenant?.service_fee_enabled
+      ? 0
+      : feeType === 'percentage'
+        ? (discountedVehicle * feeValue) / 100
+        : feeValue;
+
+    let upfront = serviceFee; // Deposit is a hold, not upfront charge
+    let installable = 0;
 
     switch (whatGetsSplit) {
       case 'rental_only':
@@ -1132,7 +1170,7 @@ export default function BookingCheckoutStep({
         customer_id: customer.id,
         vehicle_id: selectedVehicle.id,
         invoice_date: new Date(),
-        due_date: new Date(formData.pickupDate),
+        due_date: parseDateString(formData.pickupDate),
         subtotal: vehicleTotal, // Original price before discount
         rental_fee: discountedVehicleTotal, // Discounted rental fee
         protection_fee: 0,
@@ -1497,7 +1535,7 @@ export default function BookingCheckoutStep({
                 <div>
                   <p className="font-medium">{rentalDuration.formatted}</p>
                   <p className="text-sm text-muted-foreground">
-                    {format(new Date(formData.pickupDate), 'MMM dd, yyyy')} - {format(new Date(formData.dropoffDate), 'MMM dd, yyyy')}
+                    {format(parseDateString(formData.pickupDate), 'MMM dd, yyyy')} - {format(parseDateString(formData.dropoffDate), 'MMM dd, yyyy')}
                   </p>
                 </div>
               </div>
@@ -1515,7 +1553,7 @@ export default function BookingCheckoutStep({
                       return loc?.description ? <p className="text-xs text-muted-foreground/70 mt-0.5">{loc.description}</p> : null;
                     })()}
                     <p className="text-xs text-muted-foreground mt-1">
-                      {format(new Date(formData.pickupDate), 'MMM dd, yyyy')} at {formData.pickupTime}
+                      {format(parseDateString(formData.pickupDate), 'MMM dd, yyyy')} at {formData.pickupTime}
                     </p>
                   </div>
                 </div>
@@ -1530,7 +1568,7 @@ export default function BookingCheckoutStep({
                       return loc?.description ? <p className="text-xs text-muted-foreground/70 mt-0.5">{loc.description}</p> : null;
                     })()}
                     <p className="text-xs text-muted-foreground mt-1">
-                      {format(new Date(formData.dropoffDate), 'MMM dd, yyyy')} at {formData.dropoffTime}
+                      {format(parseDateString(formData.dropoffDate), 'MMM dd, yyyy')} at {formData.dropoffTime}
                     </p>
                   </div>
                 </div>
@@ -1683,6 +1721,15 @@ export default function BookingCheckoutStep({
 
           {/* Installment Payment Options */}
           {rentalDuration.days >= Math.min(installmentConfig.minimum_days_weekly ?? installmentConfig.min_days_for_weekly ?? 7, installmentConfig.minimum_days_monthly ?? installmentConfig.min_days_for_monthly ?? 30) && (
+            <>
+            {promoDetails?.source === 'duration' && installmentsEnabled && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400 mb-3">
+                <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>
+                  Your <strong>{promoDetails.value}% long-rental discount</strong> applies when you pay in full. It does <strong>not</strong> apply to installment plans — choosing one below will remove it.
+                </span>
+              </div>
+            )}
             <InstallmentSelector
               rentalDays={rentalDuration.days}
               installableAmount={installableAmount}
@@ -1694,6 +1741,7 @@ export default function BookingCheckoutStep({
               selectedPlan={selectedInstallmentPlan}
               formatCurrency={fmt}
             />
+            </>
           )}
         </div>
 
@@ -1806,7 +1854,7 @@ export default function BookingCheckoutStep({
                       <div className="space-y-1">
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Rental ({rentalDuration.formatted})</span>
-                          <span className={`font-medium ${promoDetails ? 'line-through text-muted-foreground' : ''}`}>
+                          <span className={`font-medium ${calculatePromoDiscount() > 0 ? 'line-through text-muted-foreground' : ''}`}>
                             {fmt(vehicleTotal)}
                           </span>
                         </div>
@@ -1833,7 +1881,7 @@ export default function BookingCheckoutStep({
                   {promoDetails && calculatePromoDiscount() > 0 && (
                     <div className="flex justify-between text-sm text-green-600">
                       <span>
-                        Promo ({promoDetails.code})
+                        {promoDetails.source === 'duration' ? 'Long-rental discount' : `Promo (${promoDetails.code})`}
                         <span className="text-xs ml-1">
                           ({promoDetails.type === 'percentage' ? `${promoDetails.value}%` : fmt(promoDetails.value)} off)
                         </span>
@@ -2005,7 +2053,9 @@ export default function BookingCheckoutStep({
               {promoDetails && (
                 <p className="text-xs text-green-600 font-medium flex items-center gap-1">
                   <Check className="w-3 h-3" />
-                  {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `${fmt(promoDetails.value)} off`}
+                  {promoDetails.source === 'duration'
+                    ? `${promoDetails.value}% long-rental discount applied automatically${durationDiscountBlocked ? ' (removed for installment plans)' : ''}`
+                    : promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `${fmt(promoDetails.value)} off`}
                 </p>
               )}
             </div>

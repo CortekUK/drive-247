@@ -432,6 +432,11 @@ const MultiStepBookingWidget = () => {
     type: "percentage" | "fixed_amount";
     value: number;
     id: string;
+    // "manual" = customer typed the code; "duration" = auto-applied by rental length.
+    // Duration discounts apply to fixed pay-in-full rentals only (gated out of
+    // installments downstream in BookingCheckoutStep).
+    source?: "manual" | "duration";
+    minDurationDays?: number;
   } | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [locationCoords, setLocationCoords] = useState({
@@ -651,8 +656,10 @@ const MultiStepBookingWidget = () => {
     if (savedPromoCode && savedPromoDetails) {
       try {
         const promoDetailsData = JSON.parse(savedPromoDetails);
+        // Only manual codes are persisted; treat a restored code as manual so the
+        // duration auto-apply never silently overrides a code the customer entered.
         setFormData(prev => ({ ...prev, promoCode: savedPromoCode }));
-        setPromoDetails(promoDetailsData);
+        setPromoDetails({ ...promoDetailsData, source: promoDetailsData.source || "manual" });
         console.log('✅ Restored promo code from localStorage:', savedPromoCode);
       } catch (e) {
         console.error('Failed to parse saved promo details:', e);
@@ -1751,9 +1758,10 @@ const MultiStepBookingWidget = () => {
 
       const promoDetailsToSave = {
         code: promoData.code,
-        type: promoData.type === 'value' ? 'fixed_amount' : 'percentage', // Map DB type to internal type
+        type: (promoData.type === 'value' ? 'fixed_amount' : 'percentage') as "percentage" | "fixed_amount", // Map DB type to internal type
         value: promoData.value,
-        id: promoData.id
+        id: promoData.id,
+        source: "manual" as const,
       };
       setPromoDetails(promoDetailsToSave);
       // Persist promo details to localStorage
@@ -1768,6 +1776,86 @@ const MultiStepBookingWidget = () => {
       setLoading(false);
     }
   };
+
+  // Auto-apply duration-based promo codes.
+  // When the tenant has codes with `min_duration_days` set, the longest-qualifying tier
+  // is applied automatically based on the rental length — no code typing. This is for
+  // FIXED, pay-in-full rentals only; installment bookings strip it back out in
+  // BookingCheckoutStep, and PAYG / auto-extend never flow through this widget.
+  // A code the customer typed themselves (source: "manual") always wins and is never
+  // overridden here.
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!tenant?.id) return;
+      // Never override a code the customer entered by hand.
+      if (promoDetails?.source === "manual") return;
+
+      const rentalDays = calculateRentalDuration()?.days ?? 0;
+
+      if (!rentalDays) {
+        if (promoDetails?.source === "duration") setPromoDetails(null);
+        return;
+      }
+
+      const { data } = await (supabase as any)
+        .from("promocodes")
+        .select("*")
+        .eq("tenant_id", tenant.id)
+        .gt("min_duration_days", 0)
+        .lte("min_duration_days", rentalDays)
+        .order("min_duration_days", { ascending: false });
+
+      if (cancelled) return;
+
+      const now = new Date();
+      // Walk tiers high → low and pick the first that is live AND under its usage cap.
+      // max_users counts total redemptions (invoices carrying the code), same rule as
+      // a typed code — so a maxed-out tier falls through to the next one down.
+      let best: any = null;
+      for (const c of (data || [])) {
+        if (c.expires_at && new Date(c.expires_at) < now) continue;
+        if (c.max_users && c.max_users > 0) {
+          const { count } = await (supabase as any)
+            .from("invoices")
+            .select("*", { count: "exact", head: true })
+            .eq("promo_code", c.code)
+            .eq("tenant_id", tenant.id);
+          if (cancelled) return;
+          if (count !== null && count >= c.max_users) continue;
+        }
+        best = c;
+        break;
+      }
+
+      if (best) {
+        // Skip redundant updates so this effect settles instead of looping.
+        if (promoDetails?.source === "duration" && promoDetails.id === best.id) return;
+        setPromoDetails({
+          code: best.code,
+          type: best.type === "value" ? "fixed_amount" : "percentage",
+          value: Number(best.value) || 0,
+          id: best.id,
+          source: "duration",
+          minDurationDays: best.min_duration_days,
+        });
+      } else if (promoDetails?.source === "duration") {
+        // The rental no longer reaches any tier (e.g. dates shortened) — drop it.
+        setPromoDetails(null);
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    tenant?.id,
+    formData.pickupDate,
+    formData.dropoffDate,
+    formData.pickupTime,
+    formData.dropoffTime,
+    promoDetails?.source,
+    promoDetails?.id,
+  ]);
 
   const handleSubmit = async () => {
     // Re-entrancy lock: a fast double-click can call handleSubmit twice before the
@@ -2282,8 +2370,19 @@ const MultiStepBookingWidget = () => {
     const pickup = new Date(`${formData.pickupDate}T${formData.pickupTime}:00`);
     const dropoff = new Date(`${formData.dropoffDate}T${formData.dropoffTime}:00`);
     const hours = differenceInHours(dropoff, pickup);
-    // Ceiling the days - any hours beyond full days count as another day
-    const days = Math.ceil(hours / 24);
+    // Day count is DATE-based (calendar-day span), matching the pricing engine
+    // (calculateRentalPriceBreakdown) and the admin "set up a rental" page. Using
+    // the hour-based ceil here made the duration shown at selection (e.g. "4 days"
+    // for 3 days + a few hours) disagree with what checkout actually charges
+    // (date-based, 3 days). `hours` is still used below for min-rental validation.
+    const days = Math.max(
+      1,
+      Math.ceil(
+        (parseDateString(formData.dropoffDate).getTime() -
+          parseDateString(formData.pickupDate).getTime()) /
+          (1000 * 60 * 60 * 24)
+      )
+    );
     const remainingHours = hours % 24;
 
     // Format duration with proper grammar - only show whole days (ceiling)

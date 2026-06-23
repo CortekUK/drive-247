@@ -25,12 +25,18 @@ interface Promotion {
   description: string;
   discount_type: string;
   discount_value: number;
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  end_date: string | null;
   promo_code: string | null;
+  // When set, the code auto-applies by rental length — it is advertised as automatic
+  // and must NOT be stashed as a manual code (that would bypass the duration gate).
+  min_duration_days?: number | null;
   image_url: string | null;
   is_active: boolean;
   created_at: string;
+  // "promo_code" = auto-generated card sourced from an active promo code
+  // (so operators don't have to hand-build a banner for every code).
+  source?: "promotion" | "promo_code";
 }
 
 interface Vehicle {
@@ -83,7 +89,68 @@ const Promotions = () => {
       const { data: promoData, error: promoError } = await promoQuery;
 
       if (promoError) throw promoError;
-      setPromotions(promoData || []);
+
+      // Also surface the tenant's active promo codes as auto-generated cards, so
+      // adding a code in Settings → Promos instantly advertises it here — no need
+      // to hand-build a matching banner. (promocodes isn't in the generated types.)
+      let codeQuery = (supabase as any)
+        .from("promocodes")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (tenant?.id) {
+        codeQuery = codeQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: codeData } = await codeQuery;
+
+      const now = new Date();
+      // Codes already advertised by a manually-built promotion — skip those so we
+      // don't show the same code twice.
+      const referencedCodes = new Set(
+        (promoData || [])
+          .map((p: any) => (p.promo_code || "").trim().toLowerCase())
+          .filter(Boolean)
+      );
+
+      const codePromotions: Promotion[] = (codeData || [])
+        .filter((c: any) => !c.expires_at || new Date(c.expires_at) >= now)
+        .filter((c: any) => !referencedCodes.has((c.code || "").trim().toLowerCase()))
+        .map((c: any) => {
+          // promocodes.type is 'percentage' or 'value' (fixed amount)
+          const isPercentage = c.type !== "value";
+          const value = Number(c.value) || 0;
+          const amountLabel = isPercentage ? `${value}%` : `$${value}`;
+          // A duration code auto-applies by rental length (no typing) — advertise it
+          // as such instead of as a code to enter.
+          const minDays = Number(c.min_duration_days) || 0;
+          const isDuration = minDays > 0;
+          const friendlyName = isDuration
+            ? `Rent ${minDays}+ days and save ${amountLabel}`
+            : c.name && c.name.trim().toLowerCase() !== (c.code || "").trim().toLowerCase()
+              ? c.name
+              : `Save ${amountLabel} on your rental`;
+
+          return {
+            id: `promocode-${c.id}`,
+            title: friendlyName,
+            description: isDuration
+              ? `Automatically applied to rentals of ${minDays} days or more — ${amountLabel} off, no code needed.`
+              : `Enter code ${c.code} at checkout to get ${amountLabel} off your booking.`,
+            discount_type: isPercentage ? "percentage" : "fixed",
+            discount_value: value,
+            start_date: c.created_at,
+            end_date: c.expires_at || null,
+            promo_code: c.code,
+            min_duration_days: isDuration ? minDays : null,
+            image_url: null,
+            is_active: true,
+            created_at: c.created_at,
+            source: "promo_code",
+          } as Promotion;
+        });
+
+      setPromotions([...((promoData || []) as Promotion[]), ...codePromotions]);
 
       // Load vehicles with tenant filtering
       let vehicleQuery = supabase
@@ -108,12 +175,11 @@ const Promotions = () => {
 
   const getPromotionStatus = (promo: Promotion) => {
     const now = new Date();
-    const start = new Date(promo.start_date);
-    const end = new Date(promo.end_date);
-
     if (!promo.is_active) return "inactive";
-    if (isAfter(now, end)) return "expired";
-    if (isBefore(now, start)) return "scheduled";
+    const start = promo.start_date ? new Date(promo.start_date) : null;
+    const end = promo.end_date ? new Date(promo.end_date) : null;
+    if (end && isAfter(now, end)) return "expired";
+    if (start && isBefore(now, start)) return "scheduled";
     return "active";
   };
 
@@ -139,14 +205,38 @@ const Promotions = () => {
     setFilteredPromotions(filtered);
   };
 
-  const handleApplyBooking = (promo: Promotion) => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams();
-      if (promo.promo_code) {
-        params.set("promo", promo.promo_code);
+  const handleApplyBooking = async (promo: Promotion) => {
+    if (typeof window === "undefined") return;
+
+    // The home-page booking widget is the only booking flow. It restores any
+    // applied promo from localStorage on mount, so we stash the (validated) code
+    // there and send the customer home — never into the deprecated /booking pages.
+    //
+    // Duration codes are the exception: they apply automatically based on rental
+    // length. Stashing one as a manual code would bypass the duration gate (e.g. give
+    // a 14-day discount on a 3-day booking), so we just send the customer to the
+    // widget and let its auto-apply pick the right tier from the actual dates.
+    if (promo.promo_code && !promo.min_duration_days) {
+      const { data } = await (supabase as any)
+        .from("promocodes")
+        .select("*")
+        .ilike("code", promo.promo_code)
+        .eq("tenant_id", tenant?.id)
+        .maybeSingle();
+
+      if (data && (!data.expires_at || new Date(data.expires_at) >= new Date())) {
+        const promoDetails = {
+          code: data.code,
+          type: data.type === "value" ? "fixed_amount" : "percentage",
+          value: Number(data.value) || 0,
+          id: data.id,
+        };
+        localStorage.setItem("appliedPromoCode", promoDetails.code);
+        localStorage.setItem("appliedPromoDetails", JSON.stringify(promoDetails));
       }
-      window.location.href = `/booking/vehicles?${params.toString()}`;
     }
+
+    window.location.href = "/";
   };
 
   const getDiscountBadge = (promo: Promotion) => {
@@ -294,7 +384,11 @@ const Promotions = () => {
                           <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
                             <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                             <span>
-                              Valid: {format(new Date(promo.start_date), "MMM dd")} – {format(new Date(promo.end_date), "MMM dd, yyyy")}
+                              {promo.start_date && promo.end_date
+                                ? `Valid: ${format(new Date(promo.start_date), "MMM dd")} – ${format(new Date(promo.end_date), "MMM dd, yyyy")}`
+                                : promo.end_date
+                                  ? `Valid until ${format(new Date(promo.end_date), "MMM dd, yyyy")}`
+                                  : "Available now — no expiry"}
                             </span>
                           </div>
 
@@ -444,7 +538,11 @@ const Promotions = () => {
                 <div>
                   <h4 className="font-bold mb-2">Validity Period</h4>
                   <p className="text-muted-foreground">
-                    {format(new Date(selectedPromotion.start_date), "MMMM dd, yyyy")} – {format(new Date(selectedPromotion.end_date), "MMMM dd, yyyy")}
+                    {selectedPromotion.start_date && selectedPromotion.end_date
+                      ? `${format(new Date(selectedPromotion.start_date), "MMMM dd, yyyy")} – ${format(new Date(selectedPromotion.end_date), "MMMM dd, yyyy")}`
+                      : selectedPromotion.end_date
+                        ? `Valid until ${format(new Date(selectedPromotion.end_date), "MMMM dd, yyyy")}`
+                        : "Available now — no expiry"}
                   </p>
                 </div>
 
