@@ -103,6 +103,8 @@ export default function BookingCheckoutStep({
   const { locations: allDeliveryLocations } = useDeliveryLocations();
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreeCharges, setAgreeCharges] = useState(false);
+  // SMS opt-in (A2P 10DLC) — only surfaced when the tenant uses Twilio SMS.
+  const [smsConsent, setSmsConsent] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
 
@@ -828,6 +830,8 @@ export default function BookingCheckoutStep({
       }
 
       let customer;
+      // Timestamp the SMS opt-in once so customer + rental records agree.
+      const smsConsentAt = smsConsent ? new Date().toISOString() : null;
 
       if (existingCustomer) {
         // Customer exists - update their details and optionally assign to tenant
@@ -842,6 +846,12 @@ export default function BookingCheckoutStep({
         // Also update tenant_id if not already set
         if (tenant?.id && !existingCustomer.tenant_id) {
           updateData.tenant_id = tenant.id;
+        }
+
+        // Record SMS opt-in if they checked it (never clear an existing consent).
+        if (smsConsent) {
+          updateData.sms_consent = true;
+          updateData.sms_consent_at = smsConsentAt;
         }
 
         const { data: updatedCustomer, error: updateError } = await supabase
@@ -868,6 +878,8 @@ export default function BookingCheckoutStep({
           customer_type: "Individual",
           status: "Active",
           is_blocked: false,
+          sms_consent: smsConsent,
+          sms_consent_at: smsConsentAt,
         };
 
         if (tenant?.id) {
@@ -1060,6 +1072,9 @@ export default function BookingCheckoutStep({
         is_unlimited_mileage: unlimitedMileageEffective,
         unlimited_mileage_tier: unlimitedMileageEffective ? unlimitedOption.tier : null,
         unlimited_mileage_total: unlimitedMileageEffective ? unlimitedMileageTotal : null,
+        // SMS opt-in captured at checkout (A2P 10DLC compliance).
+        sms_consent: smsConsent,
+        sms_consent_at: smsConsentAt,
       };
 
       if (tenant?.id) {
@@ -1717,6 +1732,26 @@ export default function BookingCheckoutStep({
             <p className="text-xs text-muted-foreground">
               Additional post-rental charges may apply as described in the rental agreement.
             </p>
+
+            {/* SMS opt-in — only when this tenant uses SMS messaging (A2P 10DLC) */}
+            {tenant?.integration_twilio_sms && (
+              <div className="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/20 p-4">
+                <Checkbox
+                  id="sms-consent"
+                  checked={smsConsent}
+                  onCheckedChange={(checked) => setSmsConsent(checked as boolean)}
+                  className="mt-0.5"
+                />
+                <Label htmlFor="sms-consent" className="text-sm font-normal leading-relaxed text-muted-foreground cursor-pointer">
+                  I agree to receive SMS text messages from {tenant?.app_name || tenant?.company_name || "this rental company"} about
+                  my rental — booking confirmations, vehicle collection/pickup details, lockbox codes and e-signing links.
+                  Message &amp; data rates may apply. Message frequency varies. Reply STOP to opt out, HELP for help. See our{" "}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-accent underline">Privacy Policy</a> and{" "}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-accent underline">Terms</a>.
+                  Consent is not a condition of rental.
+                </Label>
+              </div>
+            )}
           </Card>
 
           {/* Installment Payment Options */}
