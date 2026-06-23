@@ -3725,7 +3725,7 @@ const Settings = () => {
 
           {/* Edit Promo Dialog */}
           <Dialog open={!!editingPromo} onOpenChange={(open) => !open && setEditingPromo(null)}>
-            <DialogContent className="sm:max-w-[600px]">
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Edit Promo Code</DialogTitle>
                 <DialogDescription>
