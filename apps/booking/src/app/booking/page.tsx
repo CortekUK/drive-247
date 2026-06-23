@@ -340,7 +340,18 @@ export default function Booking() {
     try {
       const pickup = new Date(`${format(pickupDate, "yyyy-MM-dd")}T${pickupTime}`);
       const returnDt = new Date(`${format(returnDate, "yyyy-MM-dd")}T${returnTime}`);
-      const days = differenceInDays(returnDt, pickup);
+      // Day count is the calendar-day span (date-only), matching what checkout
+      // charges (calculateRentalDays) and the admin side — so the duration shown
+      // here never disagrees with the price. `hours` (below) still drives the
+      // min-rental-hours validation.
+      const days = Math.max(
+        1,
+        Math.ceil(
+          (parseDateString(format(returnDate, "yyyy-MM-dd")).getTime() -
+            parseDateString(format(pickupDate, "yyyy-MM-dd")).getTime()) /
+            (1000 * 60 * 60 * 24)
+        )
+      );
 
       const hours = (returnDt.getTime() - pickup.getTime()) / (1000 * 60 * 60);
       if (hours < minRentalHours) {

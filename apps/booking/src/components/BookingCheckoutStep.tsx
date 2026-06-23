@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2, ArrowDown, CircleDot, Check, Infinity as InfinityIcon } from "lucide-react";
 import { getUnlimitedMileageOption } from "@/lib/mileage-utils";
 import type { PricingTier, DayBreakdown } from "@/lib/calculate-rental-price";
+import { parseDateString } from "@/lib/calculate-rental-price";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
@@ -1132,7 +1133,7 @@ export default function BookingCheckoutStep({
         customer_id: customer.id,
         vehicle_id: selectedVehicle.id,
         invoice_date: new Date(),
-        due_date: new Date(formData.pickupDate),
+        due_date: parseDateString(formData.pickupDate),
         subtotal: vehicleTotal, // Original price before discount
         rental_fee: discountedVehicleTotal, // Discounted rental fee
         protection_fee: 0,
@@ -1497,7 +1498,7 @@ export default function BookingCheckoutStep({
                 <div>
                   <p className="font-medium">{rentalDuration.formatted}</p>
                   <p className="text-sm text-muted-foreground">
-                    {format(new Date(formData.pickupDate), 'MMM dd, yyyy')} - {format(new Date(formData.dropoffDate), 'MMM dd, yyyy')}
+                    {format(parseDateString(formData.pickupDate), 'MMM dd, yyyy')} - {format(parseDateString(formData.dropoffDate), 'MMM dd, yyyy')}
                   </p>
                 </div>
               </div>
@@ -1515,7 +1516,7 @@ export default function BookingCheckoutStep({
                       return loc?.description ? <p className="text-xs text-muted-foreground/70 mt-0.5">{loc.description}</p> : null;
                     })()}
                     <p className="text-xs text-muted-foreground mt-1">
-                      {format(new Date(formData.pickupDate), 'MMM dd, yyyy')} at {formData.pickupTime}
+                      {format(parseDateString(formData.pickupDate), 'MMM dd, yyyy')} at {formData.pickupTime}
                     </p>
                   </div>
                 </div>
@@ -1530,7 +1531,7 @@ export default function BookingCheckoutStep({
                       return loc?.description ? <p className="text-xs text-muted-foreground/70 mt-0.5">{loc.description}</p> : null;
                     })()}
                     <p className="text-xs text-muted-foreground mt-1">
-                      {format(new Date(formData.dropoffDate), 'MMM dd, yyyy')} at {formData.dropoffTime}
+                      {format(parseDateString(formData.dropoffDate), 'MMM dd, yyyy')} at {formData.dropoffTime}
                     </p>
                   </div>
                 </div>

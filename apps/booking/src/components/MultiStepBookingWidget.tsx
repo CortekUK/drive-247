@@ -2282,8 +2282,19 @@ const MultiStepBookingWidget = () => {
     const pickup = new Date(`${formData.pickupDate}T${formData.pickupTime}:00`);
     const dropoff = new Date(`${formData.dropoffDate}T${formData.dropoffTime}:00`);
     const hours = differenceInHours(dropoff, pickup);
-    // Ceiling the days - any hours beyond full days count as another day
-    const days = Math.ceil(hours / 24);
+    // Day count is DATE-based (calendar-day span), matching the pricing engine
+    // (calculateRentalPriceBreakdown) and the admin "set up a rental" page. Using
+    // the hour-based ceil here made the duration shown at selection (e.g. "4 days"
+    // for 3 days + a few hours) disagree with what checkout actually charges
+    // (date-based, 3 days). `hours` is still used below for min-rental validation.
+    const days = Math.max(
+      1,
+      Math.ceil(
+        (parseDateString(formData.dropoffDate).getTime() -
+          parseDateString(formData.pickupDate).getTime()) /
+          (1000 * 60 * 60 * 24)
+      )
+    );
     const remainingHours = hours % 24;
 
     // Format duration with proper grammar - only show whole days (ceiling)
