@@ -1,15 +1,20 @@
 /**
- * submit-enquiry — REPOINTED to write into `leads` per Spec Section 8.2 + 9.1.
+ * submit-enquiry — routes a quick enquiry to the right store based on the tenant.
  *
  * The quick-enquiry path is the lighter alternative to /apply (no driver details,
  * no documents, no financial info — just contact + dates + free-text description).
- * Both write to the same `leads` table; differentiated by `source` column:
- *   - source='application' — full 7-step Apply form (submit-application)
- *   - source='quick_enquiry' — this function
+ *
+ *   - lead_management_enabled = true  → write to `leads` (source='quick_enquiry'),
+ *     full leads pipeline (conversation, lead_activity, lead.created trigger).
+ *   - lead_management_enabled != true → write to `enquiries` (the simpler inbox the
+ *     portal Enquiries page reads). This is the default for tenants not yet on Leads.
+ *
+ * Both paths notify tenant staff (in-portal notification + admin email).
  *
  * Behaviour:
  *  - Honeypot check (silent success)
- *  - Tenant resolution by slug; rejects if lead_management_enabled = false
+ *  - Tenant resolution by slug; rejects only if BOTH lead_management_enabled and
+ *    enquiries_enabled are off
  *  - Lightweight validation
  *  - Rate-limit by IP (5/hour, mirrors prior pattern, now using leads.ip_address)
  *  - Dedup: if same tenant + (phone or email) has a non-terminal lead, append submission
@@ -138,6 +143,108 @@ Deno.serve(async (req) => {
     const ipAddress = fwd.split(",")[0]?.trim() || null;
     const userAgent = req.headers.get("user-agent")?.slice(0, 500) || null;
 
+    // Fire-and-forget admin email — shared by both the enquiries and leads paths.
+    const sendAdminEmail = async () => {
+      if (!tenant.admin_email) return;
+      try {
+        const { sendResendEmail, getTenantBranding, wrapWithBrandedTemplate } = await import("../_shared/resend-service.ts");
+        const branding = await getTenantBranding(tenant.id, supabase);
+        const inner = `
+          <tr><td style="padding:30px;color:#333;line-height:1.6;font-size:15px;">
+            <p>You have received a new enquiry from your booking site.</p>
+            <p><strong>Name:</strong> ${escapeHtml(name)}<br/>
+            <strong>Email:</strong> ${escapeHtml(email)}<br/>
+            <strong>Phone:</strong> ${escapeHtml(phone)}<br/>
+            <strong>Requested dates:</strong> ${escapeHtml(startDate)} → ${escapeHtml(endDate)}</p>
+            <p><strong>Message:</strong><br/>${escapeHtml(description).replace(/\n/g, "<br/>")}</p>
+            <p>Open in the portal to respond.</p>
+          </td></tr>`;
+        const html = wrapWithBrandedTemplate(inner, branding);
+        await sendResendEmail(
+          { to: tenant.admin_email, subject: `New enquiry — ${name}`, html, tenantId: tenant.id },
+          supabase,
+        );
+      } catch (emailErr) {
+        console.error("submit-enquiry admin email failed (non-fatal):", emailErr);
+      }
+    };
+
+    // ── Enquiries mode (Leads/Automations OFF) ───────────────────────────────
+    // When lead_management is not enabled, this tenant uses the simpler enquiries
+    // inbox: write to the `enquiries` table (which the portal Enquiries page reads)
+    // rather than the leads pipeline. Leads mode keeps the original behaviour below.
+    if (tenant.lead_management_enabled !== true) {
+      // Rate-limit by IP against the enquiries table.
+      if (ipAddress) {
+        const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        const { count } = await supabase
+          .from("enquiries")
+          .select("id", { count: "exact", head: true })
+          .eq("ip_address", ipAddress)
+          .gte("created_at", since);
+        if (count !== null && count >= RATE_LIMIT_PER_HOUR) {
+          return errorResponse("Too many enquiries from this address. Please try again later.", 429);
+        }
+      }
+
+      let enqCustomerId: string | null = null;
+      const { data: existingEnqCustomer } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("email", email)
+        .eq("tenant_id", tenant.id)
+        .limit(1)
+        .maybeSingle();
+      if (existingEnqCustomer?.id) enqCustomerId = existingEnqCustomer.id;
+
+      const { data: enq, error: enqErr } = await supabase
+        .from("enquiries")
+        .insert({
+          tenant_id: tenant.id,
+          customer_id: enqCustomerId,
+          customer_name: name,
+          customer_email: email,
+          customer_phone: phone,
+          vehicle_id: vehicleId,
+          start_date: startDate,
+          end_date: endDate,
+          description,
+          status: "new",
+          source: sourceMeta,
+          ip_address: ipAddress,
+          user_agent: userAgent,
+        })
+        .select("id")
+        .single();
+
+      if (enqErr || !enq) {
+        console.error("submit-enquiry enquiries insert error:", enqErr);
+        return errorResponse("Failed to save enquiry. Please try again.", 500);
+      }
+
+      const titleSnippet = name.length > 60 ? name.slice(0, 57) + "..." : name;
+      const messageSnippet = description.length > 140 ? description.slice(0, 137) + "..." : description;
+      await supabase.from("notifications").insert({
+        user_id: null,
+        tenant_id: tenant.id,
+        title: `New enquiry from ${titleSnippet}`,
+        message: messageSnippet,
+        type: "enquiry",
+        link: `/enquiries`,
+        metadata: {
+          enquiryId: enq.id,
+          vehicleId: vehicleId ?? null,
+          customerEmail: email,
+          startDate,
+          endDate,
+        },
+      });
+
+      await sendAdminEmail();
+
+      return jsonResponse({ success: true, enquiryId: enq.id });
+    }
+
     if (ipAddress) {
       const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
       const { count } = await supabase
@@ -261,34 +368,7 @@ Deno.serve(async (req) => {
     });
 
     // Optional admin email via Resend (fire-and-forget — never block the response)
-    if (tenant.admin_email) {
-      try {
-        const { sendResendEmail, getTenantBranding, wrapWithBrandedTemplate } = await import("../_shared/resend-service.ts");
-        const branding = await getTenantBranding(tenant.id, supabase);
-        const inner = `
-          <tr><td style="padding:30px;color:#333;line-height:1.6;font-size:15px;">
-            <p>You have received a new enquiry from your booking site.</p>
-            <p><strong>Name:</strong> ${escapeHtml(name)}<br/>
-            <strong>Email:</strong> ${escapeHtml(email)}<br/>
-            <strong>Phone:</strong> ${escapeHtml(phone)}<br/>
-            <strong>Requested dates:</strong> ${escapeHtml(startDate)} → ${escapeHtml(endDate)}</p>
-            <p><strong>Message:</strong><br/>${escapeHtml(description).replace(/\n/g, "<br/>")}</p>
-            <p>Open in the portal to respond.</p>
-          </td></tr>`;
-        const html = wrapWithBrandedTemplate(inner, branding);
-        await sendResendEmail(
-          {
-            to: tenant.admin_email,
-            subject: `New enquiry — ${name}`,
-            html,
-            tenantId: tenant.id,
-          },
-          supabase,
-        );
-      } catch (emailErr) {
-        console.error("submit-enquiry admin email failed (non-fatal):", emailErr);
-      }
-    }
+    await sendAdminEmail();
 
     return jsonResponse({ success: true, leadId: inserted.id, enquiryId: inserted.id });
   } catch (error) {
