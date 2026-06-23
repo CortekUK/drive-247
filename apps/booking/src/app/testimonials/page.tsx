@@ -98,7 +98,7 @@ const Testimonials = () => {
             <div className="flex items-center justify-center mb-4 sm:mb-6 md:mb-8">
               <div className="h-[1px] w-20 sm:w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
             </div>
-            <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+            <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed whitespace-pre-line">
               {content.hero?.subtitle || "What our customers say about their vehicle rental experience."}
             </p>
           </div>
@@ -134,7 +134,7 @@ const Testimonials = () => {
                       </div>
 
                       {/* Testimonial Content */}
-                      <blockquote className="text-base sm:text-lg md:text-xl text-muted-foreground mb-5 sm:mb-6 md:mb-8 italic text-center leading-relaxed max-w-3xl mx-auto break-words">
+                      <blockquote className="text-base sm:text-lg md:text-xl text-muted-foreground mb-5 sm:mb-6 md:mb-8 italic text-center leading-relaxed max-w-3xl mx-auto break-words whitespace-pre-line">
                         "{testimonial.review}"
                       </blockquote>
 
@@ -233,7 +233,7 @@ const Testimonials = () => {
               <h2 className="text-xl sm:text-3xl md:text-4xl font-display font-bold mb-3 sm:mb-4 text-gradient-silver break-words">
                 {content.feedback_cta?.title || "Would you like to share your experience?"}
               </h2>
-              <p className="text-sm sm:text-base md:text-lg text-muted-foreground mb-5 sm:mb-8 max-w-xl mx-auto leading-relaxed">
+              <p className="text-sm sm:text-base md:text-lg text-muted-foreground mb-5 sm:mb-8 max-w-xl mx-auto leading-relaxed whitespace-pre-line">
                 {content.feedback_cta?.description || "We value your feedback and would love to hear about your rental experience."}
               </p>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">

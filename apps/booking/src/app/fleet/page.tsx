@@ -415,7 +415,7 @@ const Pricing = () => {
                           {/* Description */}
                           {vehicle.description && (
                             <div className="space-y-1 mt-2">
-                              <p className="text-xs text-muted-foreground leading-relaxed">
+                              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
                                 {getDisplayDescription(vehicle)}
                               </p>
                               {vehicle.description.length > MAX_DESCRIPTION_LENGTH && (
@@ -522,19 +522,19 @@ const Pricing = () => {
                 <div className="text-5xl font-display font-bold text-gradient-metal mb-4 group-hover:scale-105 transition-transform duration-300">
                   {content.rental_rates?.daily?.title || "Daily"}
                 </div>
-                <p className="text-muted-foreground leading-relaxed">{content.rental_rates?.daily?.description || "Ideal for short stays and one-day hires."}</p>
+                <p className="text-muted-foreground leading-relaxed whitespace-pre-line">{content.rental_rates?.daily?.description || "Ideal for short stays and one-day hires."}</p>
               </Card>
               <Card className="p-8 bg-card/50 backdrop-blur shadow-metal border-accent/20 text-center group hover:shadow-glow transition-all duration-500">
                 <div className="text-5xl font-display font-bold text-gradient-metal mb-4 group-hover:scale-105 transition-transform duration-300">
                   {content.rental_rates?.weekly?.title || "Weekly"}
                 </div>
-                <p className="text-muted-foreground leading-relaxed">{content.rental_rates?.weekly?.description || "Perfect balance of flexibility and value."}</p>
+                <p className="text-muted-foreground leading-relaxed whitespace-pre-line">{content.rental_rates?.weekly?.description || "Perfect balance of flexibility and value."}</p>
               </Card>
               <Card className="p-8 bg-card/50 backdrop-blur shadow-metal border-accent/20 text-center group hover:shadow-glow transition-all duration-500">
                 <div className="text-5xl font-display font-bold text-gradient-metal mb-4 group-hover:scale-105 transition-transform duration-300">
                   {content.rental_rates?.monthly?.title || "Monthly"}
                 </div>
-                <p className="text-muted-foreground leading-relaxed">{content.rental_rates?.monthly?.description || "Exclusive long-term rates for regular clients."}</p>
+                <p className="text-muted-foreground leading-relaxed whitespace-pre-line">{content.rental_rates?.monthly?.description || "Exclusive long-term rates for regular clients."}</p>
               </Card>
             </div>
 
@@ -593,7 +593,7 @@ const Pricing = () => {
                         <div>
                           <span className="block">{extra.name}</span>
                           {extra.description && (
-                            <span className="text-xs text-muted-foreground/70">{extra.description}</span>
+                            <span className="text-xs text-muted-foreground/70 whitespace-pre-line">{extra.description}</span>
                           )}
                         </div>
                       </div>

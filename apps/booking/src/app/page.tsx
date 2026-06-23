@@ -158,7 +158,7 @@ export default function Home() {
                 </h1>
 
                 {/* Subheadline */}
-                <p className="text-lg md:text-xl lg:text-2xl text-white/90 max-w-3xl mx-auto font-light leading-relaxed">
+                <p className="text-lg md:text-xl lg:text-2xl text-white/90 max-w-3xl mx-auto font-light leading-relaxed whitespace-pre-line">
                   {content.home_hero?.subheading || 'Quality vehicles. Transparent pricing. Exceptional service.'}
                 </p>
 
@@ -209,7 +209,7 @@ export default function Home() {
                 <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-primary to-transparent" />
               </div>
             </div>
-            <p className="text-xl text-foreground/80 max-w-3xl mx-auto leading-relaxed text-center">
+            <p className="text-xl text-foreground/80 max-w-3xl mx-auto leading-relaxed text-center whitespace-pre-line">
               {content.home_cta?.description || 'Quick, easy, and affordable car rentals across Dallas and the DFW area. Friendly service, transparent pricing, and clean vehicles every time.'}
             </p>
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center pt-4">

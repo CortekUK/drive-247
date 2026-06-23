@@ -66,7 +66,7 @@ const EnhancedServiceHighlights = () => {
                     <h3 className="text-lg sm:text-2xl font-display font-bold text-foreground leading-tight">
                       {service.title}
                     </h3>
-                    <p className="text-foreground/70 leading-relaxed text-sm sm:text-[15px]">
+                    <p className="text-foreground/70 leading-relaxed text-sm sm:text-[15px] whitespace-pre-line">
                       {service.description}
                     </p>
                   </div>

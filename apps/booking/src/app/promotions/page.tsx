@@ -356,7 +356,7 @@ const Promotions = () => {
                         <CardContent className="p-4 sm:p-5 md:p-6">
                           <h3 className="font-serif text-lg sm:text-xl md:text-2xl font-bold mb-2 sm:mb-3 break-words">{promo.title}</h3>
 
-                          <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 line-clamp-2">
+                          <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 line-clamp-2 whitespace-pre-line">
                             {promo.description}
                           </p>
 
@@ -512,7 +512,7 @@ const Promotions = () => {
 
                 <div>
                   <h4 className="font-bold mb-2">Description</h4>
-                  <p className="text-muted-foreground">{selectedPromotion.description}</p>
+                  <p className="text-muted-foreground whitespace-pre-line">{selectedPromotion.description}</p>
                 </div>
 
                 <div>

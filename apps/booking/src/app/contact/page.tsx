@@ -210,7 +210,7 @@ const Contact = () => {
             <div className="flex items-center justify-center mb-4 sm:mb-6 md:mb-8">
               <div className="h-[1px] w-20 sm:w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
             </div>
-            <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+            <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed whitespace-pre-line">
               {content.hero?.subtitle || "Get in touch for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles."}
             </p>
           </div>

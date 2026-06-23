@@ -1550,7 +1550,7 @@ export default function BookingCheckoutStep({
                     <p className="font-medium text-sm">{formData.pickupLocation}</p>
                     {formData.pickupLocationId && (() => {
                       const loc = allDeliveryLocations.find(l => l.id === formData.pickupLocationId);
-                      return loc?.description ? <p className="text-xs text-muted-foreground/70 mt-0.5">{loc.description}</p> : null;
+                      return loc?.description ? <p className="text-xs text-muted-foreground/70 mt-0.5 whitespace-pre-line">{loc.description}</p> : null;
                     })()}
                     <p className="text-xs text-muted-foreground mt-1">
                       {format(parseDateString(formData.pickupDate), 'MMM dd, yyyy')} at {formData.pickupTime}
@@ -1565,7 +1565,7 @@ export default function BookingCheckoutStep({
                     <p className="font-medium text-sm">{formData.dropoffLocation}</p>
                     {formData.returnLocationId && (() => {
                       const loc = allDeliveryLocations.find(l => l.id === formData.returnLocationId);
-                      return loc?.description ? <p className="text-xs text-muted-foreground/70 mt-0.5">{loc.description}</p> : null;
+                      return loc?.description ? <p className="text-xs text-muted-foreground/70 mt-0.5 whitespace-pre-line">{loc.description}</p> : null;
                     })()}
                     <p className="text-xs text-muted-foreground mt-1">
                       {format(parseDateString(formData.dropoffDate), 'MMM dd, yyyy')} at {formData.dropoffTime}

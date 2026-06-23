@@ -306,7 +306,7 @@ const About = () => {
                           <h4 className="text-base sm:text-xl font-display font-semibold text-foreground mb-1.5 sm:mb-3">
                             {item.title}
                           </h4>
-                          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+                          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed whitespace-pre-line">
                             {item.description}
                           </p>
                         </div>
@@ -350,7 +350,7 @@ const About = () => {
                             {faq.question}
                           </span>
                         </AccordionTrigger>
-                        <AccordionContent className="text-muted-foreground leading-relaxed pb-5">
+                        <AccordionContent className="text-muted-foreground leading-relaxed pb-5 whitespace-pre-line">
                           {faq.answer}
                         </AccordionContent>
                       </AccordionItem>
@@ -369,7 +369,7 @@ const About = () => {
                 <h3 className="text-2xl md:text-3xl font-display font-bold mb-4 text-gradient-silver">
                   {content.faq_cta?.title || "Still have questions?"}
                 </h3>
-                <p className="text-muted-foreground mb-8 text-lg max-w-xl mx-auto leading-relaxed">
+                <p className="text-muted-foreground mb-8 text-lg max-w-xl mx-auto leading-relaxed whitespace-pre-line">
                   {content.faq_cta?.description || "Our team is here to help. Contact us for personalized assistance."}
                 </p>
                 <Button
@@ -391,7 +391,7 @@ const About = () => {
               <h2 className="text-4xl md:text-5xl font-display font-bold mb-6 text-gradient-metal">
                 {content.final_cta?.title || "Ready to Experience Premium Luxury?"}
               </h2>
-              <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
+              <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed whitespace-pre-line">
                 {content.final_cta?.description || "Join our distinguished clients and enjoy world-class vehicle rental service."}
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">

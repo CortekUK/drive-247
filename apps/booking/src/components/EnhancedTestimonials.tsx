@@ -92,7 +92,7 @@ const EnhancedTestimonials = () => {
                 ))}
               </div>
 
-              <p className="text-foreground/80 mb-4 sm:mb-6 italic leading-relaxed md:min-h-[7rem] text-sm sm:text-base break-words overflow-wrap-anywhere hyphens-auto">
+              <p className="text-foreground/80 mb-4 sm:mb-6 italic leading-relaxed md:min-h-[7rem] text-sm sm:text-base break-words overflow-wrap-anywhere hyphens-auto whitespace-pre-line">
                 "{testimonial.review}"
               </p>
 
