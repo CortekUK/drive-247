@@ -47,6 +47,7 @@ import {
 } from '@/components/ui/alert';
 import { useCustomerVerification } from '@/hooks/use-customer-verification';
 import { format } from 'date-fns';
+import { parseDateString } from "@/lib/calculate-rental-price";
 
 export default function SettingsPage() {
   const { customerUser, user, refetchCustomerUser } = useCustomerAuthStore();
@@ -421,7 +422,7 @@ export default function SettingsPage() {
                   {dob ? (
                     <>
                       <Input
-                        value={format(new Date(dob), 'MMMM d, yyyy')}
+                        value={format(parseDateString(String(dob).split('T')[0]), 'MMMM d, yyyy')}
                         readOnly
                         className="bg-muted/50 cursor-default"
                       />

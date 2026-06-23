@@ -34,6 +34,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { format, differenceInYears } from 'date-fns';
+import { parseDateString } from "@/lib/calculate-rental-price";
 import {
   Table,
   TableBody,
@@ -550,7 +551,7 @@ export default function VerificationPage() {
                       <div>
                         <p className="text-sm text-muted-foreground">Date of Birth</p>
                         <p className="font-medium">
-                          {format(new Date(currentVerification.date_of_birth), 'PPP')} ({differenceInYears(new Date(), new Date(currentVerification.date_of_birth))} years old)
+                          {format(parseDateString(String(currentVerification.date_of_birth).split('T')[0]), 'PPP')} ({differenceInYears(new Date(), parseDateString(String(currentVerification.date_of_birth).split('T')[0]))} years old)
                         </p>
                       </div>
                     </div>
