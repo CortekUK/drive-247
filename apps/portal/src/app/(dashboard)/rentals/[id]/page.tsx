@@ -4781,7 +4781,7 @@ const RentalDetail = () => {
                       {!isBonzahEligible
                         ? `${rental.vehicles?.make} ${rental.vehicles?.model} is not eligible for Bonzah coverage`
                         : !bonzahHasInsurableDays
-                        ? 'No insurable days left — the trip ends today or earlier. Bonzah policies must start tomorrow or later.'
+                        ? "Bonzah must be added before the trip's last day — this rental's final day is today, so there are no upcoming days left to cover."
                         : 'CDW, Liability, Supplemental & Personal Accident coverage powered by Bonzah'}
                     </p>
                   </div>
@@ -4792,7 +4792,7 @@ const RentalDetail = () => {
                     className={(!isBonzahEligible || !bonzahHasInsurableDays) ? "flex-shrink-0 opacity-50" : "bg-[#CC004A] hover:bg-[#A80040] text-white hover:text-white flex-shrink-0 group-hover:shadow-md transition-shadow"}
                     variant={(!isBonzahEligible || !bonzahHasInsurableDays) ? "outline" : undefined}
                     disabled={!isBonzahEligible || !bonzahHasInsurableDays || isBonzahEligibilityLoading}
-                    title={!isBonzahEligible ? "This vehicle is not eligible for Bonzah insurance" : !bonzahHasInsurableDays ? "Trip has no insurable days left — Bonzah policies must start tomorrow or later, and this rental ends today or earlier." : undefined}
+                    title={!isBonzahEligible ? "This vehicle is not eligible for Bonzah insurance" : !bonzahHasInsurableDays ? "Bonzah must be added before the trip's last day. This rental's final day is today, so there are no upcoming days left to cover — use Upload to attach a policy manually." : undefined}
                     onClick={(e) => {
                       e.stopPropagation();
                       setBuyInsuranceMode('original');
@@ -5299,7 +5299,7 @@ const RentalDetail = () => {
                       variant="outline"
                       className="h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10 hover:text-[#CC004A]"
                       disabled={isBonzahEligibilityLoading || !bonzahHasInsurableDays}
-                      title={!bonzahHasInsurableDays ? 'Trip has no insurable days left — Bonzah policies must start tomorrow or later, and this rental ends today or earlier.' : undefined}
+                      title={!bonzahHasInsurableDays ? "Bonzah must be added before the trip's last day. This rental's final day is today, so there are no upcoming days left to cover — use Upload to attach a policy manually." : undefined}
                       onClick={() => { setBuyInsuranceMode('original'); setBuyInsuranceExtensionId(null); setShowBuyInsurance(true); }}
                     >
                       <img src="/bonzah-logo.svg" alt="" className="h-3 w-3 mr-1 dark:hidden" />

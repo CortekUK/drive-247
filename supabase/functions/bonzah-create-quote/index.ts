@@ -311,7 +311,7 @@ serve(async (req) => {
     // rental page" — a misleading success for something that never happened.
     if (chunks.length === 0) {
       return errorResponse(
-        `Insurance can't be added to this rental. Bonzah policies must start tomorrow (${pacificTomorrow}) or later, but this rental ends ${body.trip_dates.end}. A rental that has already ended — or ends today/tomorrow — has no insurable days left.`,
+        `Bonzah insurance must be added before the trip's last day. This rental's final day is ${body.trip_dates.end}, so there are no upcoming days left for Bonzah to cover. To keep a policy on file for this trip, use "Upload" to attach one manually instead.`,
         400
       )
     }
