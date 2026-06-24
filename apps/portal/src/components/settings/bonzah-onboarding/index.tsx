@@ -45,7 +45,8 @@ const DRAFT_KEY = (tenantId: string) => `bonzah_onboarding_draft_${tenantId}`;
 
 export function BonzahOnboardingForm() {
   const { tenant } = useTenant();
-  const { activeSubmission, lastSubmission, isLoading, submit } = useBonzahOnboarding();
+  const { activeSubmission, lastSubmission, isLoading, submit, fetchDraft, saveDraft, deleteDraft } =
+    useBonzahOnboarding();
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [fileUrls, setFileUrls] = useState<FileUrls>({});
@@ -61,44 +62,77 @@ export function BonzahOnboardingForm() {
   });
 
   const draftKey = tenant?.id ? DRAFT_KEY(tenant.id) : null;
+  // Gate saving until the initial load resolves, so the empty default form
+  // doesn't overwrite a stored draft before it has been hydrated.
+  const draftLoadedRef = useRef(false);
 
-  // Load draft on mount
+  const applyDraft = (parsed: {
+    values?: BonzahOnboardingFormData;
+    step?: number;
+    completed?: number[];
+    fileUrls?: FileUrls;
+  }) => {
+    if (parsed?.values) form.reset(parsed.values);
+    if (typeof parsed?.step === 'number') setCurrentStep(parsed.step);
+    if (parsed?.completed) setCompletedSteps(new Set(parsed.completed));
+    if (parsed?.fileUrls) setFileUrls(parsed.fileUrls);
+  };
+
+  // Load draft on mount: DB is the source of truth (cross-device), with
+  // localStorage as an instant fallback if the DB has nothing / is offline.
   useEffect(() => {
-    if (!draftKey) return;
-    try {
-      const raw = localStorage.getItem(draftKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (parsed?.values) form.reset(parsed.values);
-      if (typeof parsed?.step === 'number') setCurrentStep(parsed.step);
-      if (parsed?.completed) setCompletedSteps(new Set(parsed.completed));
-      if (parsed?.fileUrls) setFileUrls(parsed.fileUrls);
-    } catch {
-      // ignore corrupt drafts
-    }
+    if (!draftKey || !tenant?.id) return;
+    let cancelled = false;
+    (async () => {
+      let hydrated = false;
+      try {
+        const dbDraft = await fetchDraft();
+        if (!cancelled && dbDraft) {
+          applyDraft(dbDraft);
+          hydrated = true;
+        }
+      } catch {
+        // fall through to localStorage
+      }
+      if (!cancelled && !hydrated) {
+        try {
+          const raw = localStorage.getItem(draftKey);
+          if (raw) applyDraft(JSON.parse(raw));
+        } catch {
+          // ignore corrupt drafts
+        }
+      }
+      if (!cancelled) draftLoadedRef.current = true;
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftKey]);
+  }, [draftKey, tenant?.id]);
 
-  // Save draft on every change
+  // Save draft on every change — to localStorage (instant) and the DB (durable,
+  // cross-device). Debounced; DB write is best-effort and never blocks the UI.
   const watched = form.watch();
   useEffect(() => {
-    if (!draftKey) return;
+    if (!draftKey || !draftLoadedRef.current) return;
+    const snapshot = {
+      values: watched,
+      step: currentStep,
+      completed: Array.from(completedSteps),
+      fileUrls,
+    };
     const handle = setTimeout(() => {
       try {
-        localStorage.setItem(
-          draftKey,
-          JSON.stringify({
-            values: watched,
-            step: currentStep,
-            completed: Array.from(completedSteps),
-            fileUrls,
-          }),
-        );
+        localStorage.setItem(draftKey, JSON.stringify(snapshot));
       } catch {
         // ignore quota errors
       }
-    }, 400);
+      void saveDraft(snapshot as never).catch(() => {
+        // best-effort; localStorage still holds the draft
+      });
+    }, 600);
     return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watched, currentStep, completedSteps, fileUrls, draftKey]);
 
   const stepInfo = useMemo(() => STEPS.find((s) => s.id === currentStep), [currentStep]);
@@ -190,8 +224,9 @@ export function BonzahOnboardingForm() {
           .update({ file_urls: movedFiles as unknown as Json })
           .eq('id', row.id);
       }
-      // Clear draft
+      // Clear draft (both stores)
       if (draftKey) localStorage.removeItem(draftKey);
+      await deleteDraft().catch(() => {});
       form.reset(DEFAULT_VALUES as BonzahOnboardingFormData);
       setFileUrls({});
       setCurrentStep(1);

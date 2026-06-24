@@ -32,10 +32,51 @@ export interface BonzahSubmissionRow {
   updated_at: string;
 }
 
+export interface BonzahDraftPayload {
+  values: BonzahOnboardingFormData;
+  step: number;
+  completed: number[];
+  fileUrls: FileUrls;
+}
+
 export function useBonzahOnboarding() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
   const { appUser } = useAuth();
+
+  // DB-backed draft so a paused onboarding survives across browsers/devices.
+  // The `bonzah_onboarding_drafts` table holds one row per tenant.
+  const fetchDraft = async (): Promise<BonzahDraftPayload | null> => {
+    if (!tenant?.id) return null;
+    const { data, error } = await supabase
+      .from('bonzah_onboarding_drafts' as never)
+      .select('draft')
+      .eq('tenant_id', tenant.id)
+      .maybeSingle();
+    if (error || !data) return null;
+    const draft = (data as { draft?: BonzahDraftPayload }).draft;
+    return draft && typeof draft === 'object' && 'values' in draft ? draft : null;
+  };
+
+  const saveDraft = async (payload: BonzahDraftPayload): Promise<void> => {
+    if (!tenant?.id) return;
+    await supabase.from('bonzah_onboarding_drafts' as never).upsert(
+      {
+        tenant_id: tenant.id,
+        draft: payload as unknown as Json,
+        updated_by: appUser?.id ?? null,
+      } as never,
+      { onConflict: 'tenant_id' },
+    );
+  };
+
+  const deleteDraft = async (): Promise<void> => {
+    if (!tenant?.id) return;
+    await supabase
+      .from('bonzah_onboarding_drafts' as never)
+      .delete()
+      .eq('tenant_id', tenant.id);
+  };
 
   const submissionsQuery = useQuery({
     queryKey: ['bonzah-onboarding-submissions', tenant?.id],
@@ -102,5 +143,8 @@ export function useBonzahOnboarding() {
     lastSubmission,
     isLoading: submissionsQuery.isLoading,
     submit,
+    fetchDraft,
+    saveDraft,
+    deleteDraft,
   };
 }
