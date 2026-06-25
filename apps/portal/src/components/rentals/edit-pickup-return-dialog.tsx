@@ -27,13 +27,10 @@ import {
 } from "@/components/ui/form";
 import { LocationAutocomplete } from "@/components/ui/location-autocomplete";
 import { TimePicker } from "@/components/ui/time-picker";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { useTenant } from "@/contexts/TenantContext";
 import { parseLocalDate } from "@/lib/date-utils";
-import { cn } from "@/lib/utils";
 
 const timeRegex = /^\d{2}:\d{2}(:\d{2})?$/;
 
@@ -142,24 +139,12 @@ export function EditPickupReturnDialog({
     mutationFn: async (values: EditPickupReturnValues) => {
       if (!rental) throw new Error("No rental selected");
 
-      // Format Date back to YYYY-MM-DD before writing to the rentals table.
-      // parseLocalDate gave us a Date at local midnight, so the calendar day is
-      // exactly what the operator picked — formatting it via toISOString would
-      // shift it back to UTC and re-introduce the off-by-one we just fixed.
-      const ymd = (d?: Date | null) => {
-        if (!d) return null;
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        return `${y}-${m}-${day}`;
-      };
-
+      // Dates are intentionally NOT written here — they're locked after creation
+      // (changing them would desync price/insurance/agreement). This dialog only
+      // updates times and locations.
       let query = supabase
         .from("rentals")
         .update({
-          start_date: ymd(values.start_date)!,
-          // PAYG rentals stay open-ended even if the operator briefly picked a date
-          end_date: isPayg ? null : ymd(values.end_date),
           pickup_location: values.pickup_location,
           return_location: values.return_location,
           pickup_time: values.pickup_time || null,
@@ -181,7 +166,7 @@ export function EditPickupReturnDialog({
     onSuccess: (_data, values) => {
       toast({
         title: "Rental period updated",
-        description: "Dates, locations and times have been saved.",
+        description: "Locations and times have been saved.",
       });
       if (rental) {
         queryClient.invalidateQueries({ queryKey: ["rental", rental.id] });
@@ -232,9 +217,16 @@ export function EditPickupReturnDialog({
             Edit Rental Period
           </DialogTitle>
           <DialogDescription>
-            Update the pickup and return dates, times, and locations for this rental. Times are shown in <span className="font-medium">{tz}</span>.
+            Update the pickup and return times and locations for this rental. Times are shown in <span className="font-medium">{tz}</span>.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Rental dates are fixed once the rental is created — changing them would
+            desync the price, insurance and signed agreement. */}
+        <div className="rounded-md border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+          Rental dates can&apos;t be changed after creation. To use different dates,
+          cancel this rental and create a new one.
+        </div>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
@@ -243,36 +235,25 @@ export function EditPickupReturnDialog({
                 Pickup
               </p>
 
+              {/* Dates are locked after creation. Changing them would leave the
+                  price, Bonzah insurance, and signed agreement out of sync with
+                  the new dates (all are computed/issued at creation). To change
+                  dates, the operator cancels and creates a fresh rental. */}
               <FormField
                 control={form.control}
                 name="start_date"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Date</FormLabel>
-                    <Popover modal>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled
+                      className="w-full pl-3 text-left font-normal opacity-70 cursor-not-allowed"
+                    >
+                      {field.value ? format(field.value, "PPP") : <span>—</span>}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -329,30 +310,15 @@ export function EditPickupReturnDialog({
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel>Date</FormLabel>
-                      <Popover modal>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full pl-3 text-left font-normal",
-                                !field.value && "text-muted-foreground"
-                              )}
-                            >
-                              {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value ?? undefined}
-                            onSelect={(d) => field.onChange(d ?? null)}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled
+                        className="w-full pl-3 text-left font-normal opacity-70 cursor-not-allowed"
+                      >
+                        {field.value ? format(field.value, "PPP") : <span>—</span>}
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                      </Button>
                       <FormMessage />
                     </FormItem>
                   )}
