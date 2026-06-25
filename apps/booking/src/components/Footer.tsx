@@ -169,6 +169,9 @@ const Footer = () => {
             <Link href="/terms" className="text-[11px] md:text-sm footer-link-muted">
               Terms of Service
             </Link>
+            <Link href="/sms-opt-in" className="text-[11px] md:text-sm footer-link-muted">
+              SMS Terms
+            </Link>
           </div>
         </div>
       </div>
