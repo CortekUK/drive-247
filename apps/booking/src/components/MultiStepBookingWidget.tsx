@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, AlertTriangle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase, ExternalLink, Mail, Phone as PhoneIcon } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, AlertTriangle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase, ExternalLink, Mail, Phone as PhoneIcon, Maximize2 } from "lucide-react";
 import { BlurredImage } from "@/components/ui/blurred-image";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -49,6 +49,7 @@ import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/t
 import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
 import { useGigDriverImages } from "@/hooks/use-gig-driver-images";
 import GigDriverUploadDialog from "@/components/booking/gig-driver-upload-dialog";
+import VehicleImageLightbox from "@/components/booking/VehicleImageLightbox";
 import { formatCurrency, getEarthRadius, metersToUnit, getPerMonthLabel, getUnlimitedLabel, getDistanceUnitLong, getDistanceUnitShort, getMileageTierLabel, formatDistance } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
 import { getMileageTier, getTierMileage, calculateTotalMileageAllowance, isUnlimitedMileage, getUnlimitedMileageOption } from "@/lib/mileage-utils";
@@ -274,6 +275,9 @@ const MultiStepBookingWidget = () => {
   }, [isAuthenticated, customerUser?.customer_id, customerUser?.customer?.phone]);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
   const [vehicleImageIndex, setVehicleImageIndex] = useState<Record<string, number>>({});
+  // Vehicle photo lightbox (full-screen gallery)
+  const [lightboxVehicleId, setLightboxVehicleId] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   // formData comes from useBookingStore (persisted to sessionStorage)
 
   // Fetch rental extras for the selected vehicle
@@ -4171,6 +4175,23 @@ const MultiStepBookingWidget = () => {
                               <Car className="w-16 h-16 opacity-20 text-muted-foreground" />
                             </div>
 
+                            {/* Expand button - open full-screen photo gallery */}
+                            {((vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0) || vehicle.photo_url) && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLightboxIndex(getVehicleImageIndex(vehicle.id));
+                                  setLightboxVehicleId(vehicle.id);
+                                }}
+                                className="absolute top-3 left-3 flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/75 z-20"
+                                aria-label="View larger photos"
+                              >
+                                <Maximize2 className="w-3.5 h-3.5" />
+                                <span>View photos</span>
+                              </button>
+                            )}
+
                             {/* Registration Chip - hide when selected, show tick instead */}
                             {!isSelected ? (
                               <div className="absolute top-3 right-3 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full z-20">
@@ -6212,6 +6233,26 @@ const MultiStepBookingWidget = () => {
       open={showBlockedDialog}
       onOpenChange={setShowBlockedDialog}
     />
+
+    {(() => {
+      const lbVehicle = vehicles.find(v => v.id === lightboxVehicleId);
+      if (!lbVehicle) return null;
+      const lbImages = (lbVehicle.vehicle_photos && lbVehicle.vehicle_photos.length > 0)
+        ? lbVehicle.vehicle_photos.map(p => p.photo_url).filter(Boolean)
+        : (lbVehicle.photo_url ? [lbVehicle.photo_url] : []);
+      if (lbImages.length === 0) return null;
+      const lbName = [lbVehicle.make, lbVehicle.model].filter(Boolean).join(" ") || "Vehicle";
+      return (
+        <VehicleImageLightbox
+          open={!!lightboxVehicleId}
+          onOpenChange={(open) => { if (!open) setLightboxVehicleId(null); }}
+          images={lbImages}
+          title={lbName}
+          subtitle={lbVehicle.colour || null}
+          initialIndex={lightboxIndex}
+        />
+      );
+    })()}
   </>;
 };
 export default MultiStepBookingWidget;
