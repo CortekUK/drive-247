@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface VehicleImageLightboxProps {
@@ -19,6 +19,10 @@ interface VehicleImageLightboxProps {
  * Full-screen vehicle photo gallery. Big image at the top, a clickable
  * thumbnail strip at the bottom. Arrow keys / on-screen chevrons navigate,
  * Esc or clicking outside closes.
+ *
+ * Loading UX: the current image shows a spinner until it decodes, and the
+ * neighbouring images are preloaded in the background so left/right feels
+ * instant. Already-decoded images skip the spinner entirely.
  */
 export default function VehicleImageLightbox({
   open,
@@ -29,7 +33,12 @@ export default function VehicleImageLightbox({
   initialIndex = 0,
 }: VehicleImageLightboxProps) {
   const [index, setIndex] = React.useState(initialIndex);
+  const [loaded, setLoaded] = React.useState<Record<string, boolean>>({});
   const thumbsRef = React.useRef<HTMLDivElement>(null);
+
+  const markLoaded = React.useCallback((src: string) => {
+    setLoaded((prev) => (prev[src] ? prev : { ...prev, [src]: true }));
+  }, []);
 
   // Reset to the requested image each time the lightbox is opened
   React.useEffect(() => {
@@ -46,6 +55,19 @@ export default function VehicleImageLightbox({
     },
     [total],
   );
+
+  // Preload the current image + its neighbours so navigation is instant.
+  React.useEffect(() => {
+    if (!open || total === 0) return;
+    const toPreload = [index, (index + 1) % total, (index - 1 + total) % total];
+    for (const i of toPreload) {
+      const src = images[i];
+      if (!src || loaded[src]) continue;
+      const img = new Image();
+      img.onload = () => markLoaded(src);
+      img.src = src;
+    }
+  }, [open, index, total, images, loaded, markLoaded]);
 
   // Keep the active thumbnail in view
   React.useEffect(() => {
@@ -68,6 +90,9 @@ export default function VehicleImageLightbox({
   }, [open, go]);
 
   if (total === 0) return null;
+
+  const currentSrc = images[index];
+  const isLoading = !loaded[currentSrc];
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -106,18 +131,32 @@ export default function VehicleImageLightbox({
 
           {/* Big image */}
           <div className="relative flex-1 overflow-hidden rounded-xl bg-white/5">
+            {/* Loading spinner — shown until the current image decodes */}
+            {isLoading && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 text-white/70">
+                <Loader2 className="h-8 w-8 animate-spin" />
+                <span className="text-xs">Loading photo…</span>
+              </div>
+            )}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={images[index]}
+              key={currentSrc}
+              src={currentSrc}
               alt={`${title} — photo ${index + 1}`}
-              className="h-full w-full object-contain"
+              decoding="async"
+              fetchPriority="high"
+              onLoad={() => markLoaded(currentSrc)}
+              className={cn(
+                "h-full w-full object-contain transition-opacity duration-300",
+                isLoading ? "opacity-0" : "opacity-100",
+              )}
             />
             {total > 1 && (
               <>
                 <button
                   type="button"
                   onClick={() => go(-1)}
-                  className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
+                  className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
                   aria-label="Previous photo"
                 >
                   <ChevronLeft className="h-6 w-6" />
@@ -125,7 +164,7 @@ export default function VehicleImageLightbox({
                 <button
                   type="button"
                   onClick={() => go(1)}
-                  className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
+                  className="absolute right-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
                   aria-label="Next photo"
                 >
                   <ChevronRight className="h-6 w-6" />
@@ -147,7 +186,7 @@ export default function VehicleImageLightbox({
                   data-thumb-index={idx}
                   onClick={() => setIndex(idx)}
                   className={cn(
-                    "relative h-14 w-20 shrink-0 overflow-hidden rounded-md transition-all sm:h-16 sm:w-24",
+                    "relative h-14 w-20 shrink-0 overflow-hidden rounded-md bg-white/5 transition-all sm:h-16 sm:w-24",
                     idx === index
                       ? "ring-2 ring-primary ring-offset-2 ring-offset-black"
                       : "opacity-60 hover:opacity-100",
@@ -155,7 +194,14 @@ export default function VehicleImageLightbox({
                   aria-label={`View photo ${idx + 1}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={src}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    onLoad={() => markLoaded(src)}
+                    className="h-full w-full object-cover"
+                  />
                 </button>
               ))}
             </div>
