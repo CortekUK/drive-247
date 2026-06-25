@@ -901,6 +901,10 @@ export const defaultPrivacyContent: PageContent = {
 <li>Data portability</li>
 </ul>
 
+<h2>SMS Text Messaging</h2>
+<p>When you opt in by checking the SMS consent box on our booking form, we may send you SMS text messages about your rental — booking confirmations, vehicle pickup and collection details, lockbox codes, e-signing links, trip and return reminders, payment notifications, and customer support. Message frequency varies. Message and data rates may apply. Reply STOP to opt out at any time, or HELP for help.</p>
+<p>Consent to receive SMS is not a condition of any rental or purchase. No mobile information or SMS opt-in consent will be shared with third parties or affiliates for marketing or promotional purposes.</p>
+
 <h2>Contact Us</h2>
 <p>For any privacy-related questions or requests, please contact us at <a href="mailto:privacy@drive247.com">privacy@drive247.com</a></p>`,
     last_updated: new Date().toISOString().split('T')[0],
