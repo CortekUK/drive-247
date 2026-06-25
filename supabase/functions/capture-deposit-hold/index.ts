@@ -11,7 +11,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getStripeClient, getConnectAccountId, resolveHoldExpiry, DEPOSIT_HOLD_CARD_OPTIONS, type StripeMode } from "../_shared/stripe-client.ts";
+import { getStripeClient, getConnectAccountId, resolveHoldExpiry, createDepositHoldIntentWithFallback, type StripeMode } from "../_shared/stripe-client.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
       .select(
-        "deposit_hold_payment_intent_id, deposit_hold_status, deposit_hold_amount, deposit_hold_payment_method_id, deposit_hold_stripe_customer_id, tenant_id, customer_id, vehicle_id"
+        "deposit_hold_payment_intent_id, deposit_hold_status, deposit_hold_amount, deposit_hold_payment_method_id, deposit_hold_stripe_customer_id, tenant_id, customer_id, vehicle_id, auto_extend_enabled"
       )
       .eq("id", rentalId)
       .single();
@@ -155,9 +155,26 @@ Deno.serve(async (req) => {
     //      remainder on the saved card.
     let newHoldPiId: string | null = null;
     let newHoldExpiresAt: string | null = null;
-    if (!usedMulticapture && remainder > 0 && rental.deposit_hold_payment_method_id && rental.deposit_hold_stripe_customer_id) {
+    // Belt-and-braces: never RE-HOLD the remainder on a long-running rental
+    // (auto-extend or extended). The operator's capture above still completes —
+    // we just don't spin up a fresh hold for the uncaptured remainder, keeping the
+    // invariant "no deposit hold ever lives on an auto-extend/extended rental".
+    let isLongRunning = (rental as any).auto_extend_enabled === true;
+    if (!isLongRunning) {
+      const { count } = await supabase
+        .from("rental_extensions")
+        .select("id", { count: "exact", head: true })
+        .eq("rental_id", rentalId);
+      isLongRunning = (count ?? 0) > 0;
+    }
+    if (!usedMulticapture && remainder > 0 && !isLongRunning && rental.deposit_hold_payment_method_id && rental.deposit_hold_stripe_customer_id) {
       try {
-        const newHold = await stripe.paymentIntents.create(
+        // Ask for extended authorization + multicapture on the rollover PI so it
+        // lasts as long as the card allows and future captures can stay on this
+        // one PI. The shared helper downgrades these features for accounts not
+        // approved for them (e.g. GMT) so the rollover never 500s.
+        const newHold = await createDepositHoldIntentWithFallback(
+          stripe,
           {
             amount: Math.round(remainder * 100),
             currency,
@@ -167,12 +184,6 @@ Deno.serve(async (req) => {
             confirm: true,
             off_session: true,
             description: `Security deposit hold (rollover after partial capture) for rental ${rentalId.substring(0, 8).toUpperCase()}`,
-            // Ask for extended authorization + multicapture on the rollover PI
-            // so it lasts as long as the card allows and future captures can
-            // stay on this one PI. Expand the charge to read the real expiry.
-            payment_method_options: {
-              card: DEPOSIT_HOLD_CARD_OPTIONS,
-            },
             expand: ["latest_charge"],
             metadata: {
               rental_id: rentalId,
@@ -181,7 +192,7 @@ Deno.serve(async (req) => {
               previous_hold_pi: rental.deposit_hold_payment_intent_id,
             },
           },
-          stripeOptions
+          { ...(stripeOptions ?? {}), idempotencyKey: `deposit-rollover-${rentalId}-${rental.deposit_hold_payment_intent_id ?? "x"}` }
         );
         if (newHold.status === "requires_capture") {
           newHoldPiId = newHold.id;

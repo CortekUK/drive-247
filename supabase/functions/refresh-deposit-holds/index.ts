@@ -6,7 +6,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getStripeClient, getConnectAccountId, resolveHoldExpiry, DEPOSIT_HOLD_CARD_OPTIONS, type StripeMode } from "../_shared/stripe-client.ts";
+import { getStripeClient, getConnectAccountId, resolveHoldExpiry, createDepositHoldIntentWithFallback, type StripeMode } from "../_shared/stripe-client.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -31,6 +31,7 @@ Deno.serve(async (req) => {
       .from("rentals")
       .select(`
         id, tenant_id, customer_id,
+        auto_extend_enabled,
         deposit_hold_payment_intent_id,
         deposit_hold_amount,
         deposit_hold_payment_method_id,
@@ -106,11 +107,42 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Auto-extend / extended rentals must NOT carry a deposit. If one has a
+        // 'held' deposit from before the place-deposit-hold guard existed, RELEASE
+        // it here (the old hold was already cancelled in Step 1) instead of
+        // re-placing it — never re-authorise a long-running rental's card.
+        let isLongRunning = (rental as any).auto_extend_enabled === true;
+        if (!isLongRunning) {
+          const { count } = await supabase
+            .from("rental_extensions")
+            .select("id", { count: "exact", head: true })
+            .eq("rental_id", rental.id);
+          isLongRunning = (count ?? 0) > 0;
+        }
+        if (isLongRunning) {
+          await supabase
+            .from("rentals")
+            .update({
+              deposit_hold_status: "released",
+              deposit_hold_payment_intent_id: null,
+              deposit_hold_expires_at: null,
+            })
+            .eq("id", rental.id);
+          console.log("[DEPOSIT-REFRESH] Released (auto-extend/extended — not refreshed):", rental.id);
+          continue;
+        }
+
         // Step 2: Create new hold
         const currencyCode = (tenant.currency_code || "usd").toLowerCase();
         const amountInCents = Math.round((rental.deposit_hold_amount || 0) * 100);
 
-        const newIntent = await stripe.paymentIntents.create(
+        // Request extended authorization so the refreshed hold lasts as long as
+        // the card allows, and expand the charge to read the real expiry. The
+        // shared helper downgrades card features for accounts not approved for
+        // them (e.g. GMT) so the refresh never 500s and silently lets the hold
+        // die — the whole reason this cron exists.
+        const newIntent = await createDepositHoldIntentWithFallback(
+          stripe,
           {
             amount: amountInCents,
             currency: currencyCode,
@@ -120,9 +152,6 @@ Deno.serve(async (req) => {
             confirm: true,
             off_session: true,
             description: `Security deposit hold (refreshed) for rental ${rental.id.substring(0, 8).toUpperCase()}`,
-            // Request extended authorization so the refreshed hold lasts as long
-            // as the card allows, and expand the charge to read the real expiry.
-            payment_method_options: { card: DEPOSIT_HOLD_CARD_OPTIONS },
             expand: ["latest_charge"],
             metadata: {
               rental_id: rental.id,
@@ -131,7 +160,7 @@ Deno.serve(async (req) => {
               refreshed: "true",
             },
           },
-          stripeOptions
+          { ...(stripeOptions ?? {}), idempotencyKey: `deposit-refresh-${rental.id}-${rental.deposit_hold_payment_intent_id ?? "new"}` }
         );
 
         if (newIntent.status !== "requires_capture") {
