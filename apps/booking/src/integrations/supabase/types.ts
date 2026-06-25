@@ -1963,6 +1963,52 @@ export type Database = {
           },
         ]
       }
+      bonzah_onboarding_drafts: {
+        Row: {
+          created_at: string
+          draft: Json
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          draft?: Json
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          draft?: Json
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonzah_onboarding_drafts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_onboarding_drafts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "bonzah_onboarding_drafts_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bonzah_onboarding_submissions: {
         Row: {
           admin_note: string | null
@@ -8979,17 +9025,13 @@ export type Database = {
           code: string
           created_at: string
           created_by: string | null
-          description: string | null
           expires_at: string
           id: string
-          image_url: string | null
           max_users: number
           min_duration_days: number | null
           name: string
           promo_id: number | null
-          show_on_promotions: boolean
           tenant_id: string | null
-          title: string | null
           type: string
           value: number
         }
@@ -8997,17 +9039,13 @@ export type Database = {
           code: string
           created_at?: string
           created_by?: string | null
-          description?: string | null
           expires_at: string
           id?: string
-          image_url?: string | null
           max_users?: number
           min_duration_days?: number | null
           name: string
           promo_id?: number | null
-          show_on_promotions?: boolean
           tenant_id?: string | null
-          title?: string | null
           type: string
           value: number
         }
@@ -9015,17 +9053,13 @@ export type Database = {
           code?: string
           created_at?: string
           created_by?: string | null
-          description?: string | null
           expires_at?: string
           id?: string
-          image_url?: string | null
           max_users?: number
           min_duration_days?: number | null
           name?: string
           promo_id?: number | null
-          show_on_promotions?: boolean
           tenant_id?: string | null
-          title?: string | null
           type?: string
           value?: number
         }

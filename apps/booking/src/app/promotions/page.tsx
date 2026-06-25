@@ -28,15 +28,9 @@ interface Promotion {
   start_date: string | null;
   end_date: string | null;
   promo_code: string | null;
-  // When set, the code auto-applies by rental length — it is advertised as automatic
-  // and must NOT be stashed as a manual code (that would bypass the duration gate).
-  min_duration_days?: number | null;
   image_url: string | null;
   is_active: boolean;
   created_at: string;
-  // "promo_code" = auto-generated card sourced from an active promo code
-  // (so operators don't have to hand-build a banner for every code).
-  source?: "promotion" | "promo_code";
 }
 
 interface Vehicle {
@@ -76,61 +70,22 @@ const Promotions = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Promotions are driven entirely by promo codes now. A code appears here when
-      // its "Show on promotions page" flag is on (and it hasn't expired). The card's
-      // image, title and description are set on the code itself in Settings → Promos;
-      // anything left blank falls back to friendly auto-generated copy.
-      let codeQuery = (supabase as any)
-        .from("promocodes")
+      // The Promotions page is pure advertisement — operator-authored cards managed in
+      // the portal CMS (the `promotions` table). It is intentionally decoupled from promo
+      // codes: duration discounts apply automatically at checkout and are never shown here.
+      let promoQuery = supabase
+        .from("promotions")
         .select("*")
         .order("created_at", { ascending: false });
 
       if (tenant?.id) {
-        codeQuery = codeQuery.eq("tenant_id", tenant.id);
+        promoQuery = promoQuery.eq("tenant_id", tenant.id);
       }
 
-      const { data: codeData } = await codeQuery;
+      const { data: promoData, error: promoError } = await promoQuery;
+      if (promoError) throw promoError;
 
-      const now = new Date();
-      const codePromotions: Promotion[] = (codeData || [])
-        .filter((c: any) => c.show_on_promotions)
-        .filter((c: any) => !c.expires_at || new Date(c.expires_at) >= now)
-        .map((c: any) => {
-          // promocodes.type is 'percentage' or 'value' (fixed amount)
-          const isPercentage = c.type !== "value";
-          const value = Number(c.value) || 0;
-          const amountLabel = isPercentage ? `${value}%` : `$${value}`;
-          // A duration code auto-applies by rental length (no typing) — advertise it
-          // as such instead of as a code to enter.
-          const minDays = Number(c.min_duration_days) || 0;
-          const isDuration = minDays > 0;
-          const fallbackTitle = isDuration
-            ? `Rent ${minDays}+ days and save ${amountLabel}`
-            : c.name && c.name.trim().toLowerCase() !== (c.code || "").trim().toLowerCase()
-              ? c.name
-              : `Save ${amountLabel} on your rental`;
-          const fallbackDesc = isDuration
-            ? `Automatically applied to rentals of ${minDays} days or more — ${amountLabel} off, no code needed.`
-            : `Enter code ${c.code} at checkout to get ${amountLabel} off your booking.`;
-
-          return {
-            id: `promocode-${c.id}`,
-            title: (c.title && String(c.title).trim()) || fallbackTitle,
-            description: (c.description && String(c.description).trim()) || fallbackDesc,
-            discount_type: isPercentage ? "percentage" : "fixed",
-            discount_value: value,
-            start_date: c.created_at,
-            end_date: c.expires_at || null,
-            promo_code: c.code,
-            min_duration_days: isDuration ? minDays : null,
-            image_url: c.image_url || null,
-            is_active: true,
-            created_at: c.created_at,
-            source: "promo_code",
-          } as Promotion;
-        });
-
-      setPromotions(codePromotions);
+      setPromotions((promoData || []) as Promotion[]);
 
       // Load vehicles with tenant filtering
       let vehicleQuery = supabase
@@ -185,37 +140,11 @@ const Promotions = () => {
     setFilteredPromotions(filtered);
   };
 
-  const handleApplyBooking = async (promo: Promotion) => {
+  const handleApplyBooking = (_promo: Promotion) => {
     if (typeof window === "undefined") return;
-
-    // The home-page booking widget is the only booking flow. It restores any
-    // applied promo from localStorage on mount, so we stash the (validated) code
-    // there and send the customer home — never into the deprecated /booking pages.
-    //
-    // Duration codes are the exception: they apply automatically based on rental
-    // length. Stashing one as a manual code would bypass the duration gate (e.g. give
-    // a 14-day discount on a 3-day booking), so we just send the customer to the
-    // widget and let its auto-apply pick the right tier from the actual dates.
-    if (promo.promo_code && !promo.min_duration_days) {
-      const { data } = await (supabase as any)
-        .from("promocodes")
-        .select("*")
-        .ilike("code", promo.promo_code)
-        .eq("tenant_id", tenant?.id)
-        .maybeSingle();
-
-      if (data && (!data.expires_at || new Date(data.expires_at) >= new Date())) {
-        const promoDetails = {
-          code: data.code,
-          type: data.type === "value" ? "fixed_amount" : "percentage",
-          value: Number(data.value) || 0,
-          id: data.id,
-        };
-        localStorage.setItem("appliedPromoCode", promoDetails.code);
-        localStorage.setItem("appliedPromoDetails", JSON.stringify(promoDetails));
-      }
-    }
-
+    // Promotions are advertisements only — "Book Now" just sends the customer to the
+    // booking flow. Any applicable discount (duration auto-discount, or a manual code
+    // the customer enters) is handled in the booking widget itself, not here.
     window.location.href = "/";
   };
 
@@ -389,7 +318,7 @@ const Promotions = () => {
                               disabled={!isActive}
                               className="flex-1"
                             >
-                              {isScheduled ? "Starts Soon" : isActive ? "Apply & Book" : "Offer Ended"}
+                              {isScheduled ? "Starts Soon" : isActive ? "Book Now" : "Offer Ended"}
                               {isActive && <ChevronRight className="w-4 h-4 ml-2" />}
                             </Button>
                             <Button
@@ -550,7 +479,7 @@ const Promotions = () => {
                   size="lg"
                   disabled={getPromotionStatus(selectedPromotion) !== "active"}
                 >
-                  Apply & Book Now
+                  Book Now
                   <ChevronRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>

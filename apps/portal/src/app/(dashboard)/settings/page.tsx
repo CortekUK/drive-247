@@ -21,7 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -697,31 +697,8 @@ const Settings = () => {
     expires_at: new Date(new Date().setMonth(new Date().getMonth() + 1)),
     max_users: '',
     min_duration_days: '',
-    title: '',
-    description: '',
-    image_url: '',
-    show_on_promotions: false,
   });
   const [promoCodeError, setPromoCodeError] = useState('');
-  const [uploadingPromoImage, setUploadingPromoImage] = useState(false);
-  const [uploadingEditPromoImage, setUploadingEditPromoImage] = useState(false);
-
-  // Upload a promo card image to the shared cms-media bucket and return its public URL.
-  const uploadPromoImage = async (file: File): Promise<string | null> => {
-    if (!tenant?.id) return null;
-    if (!file.type.startsWith('image/')) {
-      toast({ title: 'Invalid file', description: 'Please choose an image file.', variant: 'destructive' });
-      return null;
-    }
-    const ext = file.name.split('.').pop() || 'jpg';
-    const path = `promo-codes/${tenant.id}/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('cms-media').upload(path, file, { upsert: true, cacheControl: '3600' });
-    if (error) {
-      toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
-      return null;
-    }
-    return supabase.storage.from('cms-media').getPublicUrl(path).data.publicUrl;
-  };
   const [editPromoCodeError, setEditPromoCodeError] = useState('');
 
   // Fetch Promo Codes (moved up for use in generator)
@@ -817,10 +794,6 @@ const Settings = () => {
           expires_at: format(newPromo.expires_at, 'yyyy-MM-dd'),
           max_users: parseInt(newPromo.max_users) || 1,
           min_duration_days: parseInt(newPromo.min_duration_days) || null,
-          title: newPromo.title?.trim() || null,
-          description: newPromo.description?.trim() || null,
-          image_url: newPromo.image_url || null,
-          show_on_promotions: !!newPromo.show_on_promotions,
           tenant_id: tenant.id
         })
         .select();
@@ -845,10 +818,6 @@ const Settings = () => {
         expires_at: new Date(new Date().setMonth(new Date().getMonth() + 1)),
         max_users: '',
         min_duration_days: '',
-        title: '',
-        description: '',
-        image_url: '',
-        show_on_promotions: false,
       });
       // generatePromoCode(); // useEffect will trigger this
       refetchPromos();
@@ -965,11 +934,7 @@ const Settings = () => {
           value: parseFloat(updatedPromo.value),
           expires_at: format(new Date(updatedPromo.expires_at), 'yyyy-MM-dd'),
           max_users: parseInt(updatedPromo.max_users) || 1,
-          min_duration_days: parseInt(updatedPromo.min_duration_days) || null,
-          title: updatedPromo.title?.trim() || null,
-          description: updatedPromo.description?.trim() || null,
-          image_url: updatedPromo.image_url || null,
-          show_on_promotions: !!updatedPromo.show_on_promotions
+          min_duration_days: parseInt(updatedPromo.min_duration_days) || null
         })
         .eq('id', updatedPromo.id)
         .eq('tenant_id', tenant.id)
@@ -3526,76 +3491,6 @@ const Settings = () => {
                 />
               </div>
 
-              {/* ── Promotions card (public booking page) ───────────────── */}
-              <div className="space-y-4 rounded-lg border p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="promo_show">Show on promotions page</Label>
-                    <p className="text-xs text-muted-foreground">Advertise this code as a card on your public booking promotions page.</p>
-                  </div>
-                  <Switch
-                    id="promo_show"
-                    checked={promoForm.show_on_promotions}
-                    onCheckedChange={(v) => setPromoForm(prev => ({ ...prev, show_on_promotions: v }))}
-                  />
-                </div>
-
-                {promoForm.show_on_promotions && (
-                  <div className="space-y-4 pt-1">
-                    <div className="space-y-2">
-                      <Label htmlFor="promo_title">Card title <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                      <Input
-                        id="promo_title"
-                        placeholder="e.g. Rent 2+ weeks and save"
-                        className="max-w-md"
-                        value={promoForm.title}
-                        onChange={(e) => setPromoForm(prev => ({ ...prev, title: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="promo_description">Card description <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                      <Textarea
-                        id="promo_description"
-                        placeholder="A short line describing the offer. Leave blank to use an auto-generated description."
-                        className="max-w-md"
-                        rows={2}
-                        value={promoForm.description}
-                        onChange={(e) => setPromoForm(prev => ({ ...prev, description: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Card image <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                      {promoForm.image_url ? (
-                        <div className="relative w-full max-w-md">
-                          <img src={promoForm.image_url} alt="Promo card" className="w-full h-40 object-cover rounded-md border" />
-                          <Button type="button" variant="secondary" size="sm" className="absolute top-2 right-2" onClick={() => setPromoForm(prev => ({ ...prev, image_url: '' }))}>Remove</Button>
-                        </div>
-                      ) : (
-                        <label className="flex flex-col items-center justify-center gap-1 w-full max-w-md h-32 border border-dashed rounded-md cursor-pointer hover:bg-muted/40 text-muted-foreground">
-                          {uploadingPromoImage ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
-                          <span className="text-xs">{uploadingPromoImage ? 'Uploading…' : 'Click to upload an image'}</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            disabled={uploadingPromoImage}
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              setUploadingPromoImage(true);
-                              const url = await uploadPromoImage(file);
-                              if (url) setPromoForm(prev => ({ ...prev, image_url: url }));
-                              setUploadingPromoImage(false);
-                              e.target.value = '';
-                            }}
-                          />
-                        </label>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Add Button */}
               {canEditSettings('promos') && (
                 <div className="pt-2">
@@ -3830,74 +3725,6 @@ const Settings = () => {
                     <p className="text-xs text-muted-foreground">
                       Auto duration discounts apply to fixed rentals paid in full only — never to installment, pay-as-you-go, or auto-extension bookings.
                     </p>
-                  </div>
-
-                  {/* ── Promotions card (public booking page) ───────────────── */}
-                  <div className="space-y-4 rounded-lg border p-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="space-y-0.5">
-                        <Label htmlFor="edit_promo_show">Show on promotions page</Label>
-                        <p className="text-xs text-muted-foreground">Advertise this code as a card on your public booking promotions page.</p>
-                      </div>
-                      <Switch
-                        id="edit_promo_show"
-                        checked={!!editingPromo.show_on_promotions}
-                        onCheckedChange={(v) => setEditingPromo({ ...editingPromo, show_on_promotions: v })}
-                      />
-                    </div>
-
-                    {editingPromo.show_on_promotions && (
-                      <div className="space-y-4 pt-1">
-                        <div className="space-y-2">
-                          <Label htmlFor="edit_promo_title">Card title <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                          <Input
-                            id="edit_promo_title"
-                            placeholder="e.g. Rent 2+ weeks and save"
-                            value={editingPromo.title ?? ''}
-                            onChange={(e) => setEditingPromo({ ...editingPromo, title: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="edit_promo_description">Card description <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                          <Textarea
-                            id="edit_promo_description"
-                            placeholder="A short line describing the offer. Leave blank to use an auto-generated description."
-                            rows={2}
-                            value={editingPromo.description ?? ''}
-                            onChange={(e) => setEditingPromo({ ...editingPromo, description: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Card image <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                          {editingPromo.image_url ? (
-                            <div className="relative w-full">
-                              <img src={editingPromo.image_url} alt="Promo card" className="w-full h-40 object-cover rounded-md border" />
-                              <Button type="button" variant="secondary" size="sm" className="absolute top-2 right-2" onClick={() => setEditingPromo({ ...editingPromo, image_url: '' })}>Remove</Button>
-                            </div>
-                          ) : (
-                            <label className="flex flex-col items-center justify-center gap-1 w-full h-32 border border-dashed rounded-md cursor-pointer hover:bg-muted/40 text-muted-foreground">
-                              {uploadingEditPromoImage ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
-                              <span className="text-xs">{uploadingEditPromoImage ? 'Uploading…' : 'Click to upload an image'}</span>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                disabled={uploadingEditPromoImage}
-                                onChange={async (e) => {
-                                  const file = e.target.files?.[0];
-                                  if (!file) return;
-                                  setUploadingEditPromoImage(true);
-                                  const url = await uploadPromoImage(file);
-                                  if (url) setEditingPromo({ ...editingPromo, image_url: url });
-                                  setUploadingEditPromoImage(false);
-                                  e.target.value = '';
-                                }}
-                              />
-                            </label>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   <div className="space-y-2">

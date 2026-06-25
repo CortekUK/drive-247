@@ -1739,8 +1739,16 @@ const MultiStepBookingWidget = () => {
         return;
       }
 
+      const promoData = data as { code: string; type: string; value: number; expires_at: string | null; id: string; max_users?: number; min_duration_days?: number | null };
+
+      // Duration codes apply automatically by trip length — they must NOT be claimable
+      // by typing the code (that would let a short rental grab a higher tier).
+      if (promoData.min_duration_days && promoData.min_duration_days > 0) {
+        setPromoError("This discount is applied automatically based on your trip length — no code needed.");
+        return;
+      }
+
       // Check expiry
-      const promoData = data as { code: string; type: string; value: number; expires_at: string | null; id: string; max_users?: number };
       if (promoData.expires_at && new Date(promoData.expires_at) < new Date()) {
         setPromoError("Promo code has expired");
         return;
