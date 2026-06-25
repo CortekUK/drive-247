@@ -4409,6 +4409,23 @@ const MultiStepBookingWidget = () => {
                           <Car className={cn("w-16 h-16 mb-2 opacity-20", isRollsRoyce ? "text-primary" : "text-muted-foreground")} />
                         </div>
 
+                        {/* Expand button - open full-screen photo gallery */}
+                        {((vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0) || vehicle.photo_url) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLightboxIndex(getVehicleImageIndex(vehicle.id));
+                              setLightboxVehicleId(vehicle.id);
+                            }}
+                            className="absolute top-3 left-3 flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/75 z-20"
+                            aria-label="View larger photos"
+                          >
+                            <Maximize2 className="w-3.5 h-3.5" />
+                            <span>View photos</span>
+                          </button>
+                        )}
+
                       </div>
 
                       {/* Content */}
