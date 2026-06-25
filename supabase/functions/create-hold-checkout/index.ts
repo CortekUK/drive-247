@@ -12,6 +12,8 @@ import {
   getStripeClient,
   getConnectAccountId,
   getStripeOptions,
+  DEPOSIT_HOLD_CARD_VARIANTS,
+  isCardFeatureIneligibleError,
   type StripeMode,
 } from '../_shared/stripe-client.ts'
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
@@ -36,10 +38,16 @@ Deno.serve(async (req) => {
       .single()
     if (rentalError || !rental) return errorResponse('Rental not found', 404)
 
-    // Auto-extend rentals never carry a deposit hold (flat advertised renewal
-    // price). Skip on the flag so it's removed from all of them at once.
-    if ((rental as any).auto_extend_enabled) {
-      return jsonResponse({ skipped: 'auto_extend_rental' })
+    // A deposit hold is one-time, placed at handover — never (re)attempted on a
+    // long-running rental: auto-extend OR any rental that's been extended.
+    {
+      const { count } = await supabase
+        .from('rental_extensions')
+        .select('id', { count: 'exact', head: true })
+        .eq('rental_id', rentalId)
+      if ((rental as any).auto_extend_enabled || (count ?? 0) > 0) {
+        return jsonResponse({ skipped: 'auto_extend_or_extended_rental' })
+      }
     }
 
     if (rental.deposit_hold_status === 'held') {
@@ -87,15 +95,6 @@ Deno.serve(async (req) => {
     const sessionParams: any = {
       mode: 'payment',
       payment_method_types: ['card'],
-      // Ask the card network to extend the hold lifetime (up to ~30 days) and
-      // allow multicapture. Without extended authorization the hold dies at the
-      // ~7-day default. "if_available" is ignored where unsupported.
-      payment_method_options: {
-        card: {
-          request_extended_authorization: 'if_available',
-          request_multicapture: 'if_available',
-        },
-      },
       line_items: [
         {
           price_data: {
@@ -136,7 +135,43 @@ Deno.serve(async (req) => {
       sessionParams.customer_email = customer.email
     }
 
-    const session = await stripe.checkout.sessions.create(sessionParams, stripeOptions)
+    // Ask the card network to extend the hold lifetime (up to ~30 days) and
+    // allow multicapture. Without extended authorization the hold dies at the
+    // ~7-day default — exactly what silently killed GMT's holds before.
+    //
+    // "if_available" is *supposed* to be ignored where unsupported, but Connect
+    // accounts not approved for these features actually 500 with "This account
+    // is not eligible for the requested card features." (GMT's live account,
+    // acct_1SrIFEPcUIaEGCY0, does this). place-deposit-hold already handles this;
+    // create-hold-checkout (used by the portal "Add Hold" button) did not, so the
+    // manual hold button broke for those accounts.
+    //
+    // Graduated fallback: try both features → keep extended_authorization only
+    // (preserves the 30-day hold GMT relies on for long rentals) → drop both.
+    let session: any = null
+    let lastErr: unknown = null
+    for (let i = 0; i < DEPOSIT_HOLD_CARD_VARIANTS.length; i++) {
+      const card = DEPOSIT_HOLD_CARD_VARIANTS[i]
+      const params = card
+        ? { ...sessionParams, payment_method_options: { card } }
+        : sessionParams
+      try {
+        session = await stripe.checkout.sessions.create(params, stripeOptions)
+        if (i > 0) {
+          console.warn(
+            `create-hold-checkout: card features downgraded to variant ${i} for tenant ${rental.tenant_id} (account not eligible for full set)`
+          )
+        }
+        break
+      } catch (err) {
+        if (isCardFeatureIneligibleError(err) && i < DEPOSIT_HOLD_CARD_VARIANTS.length - 1) {
+          lastErr = err
+          continue
+        }
+        throw err
+      }
+    }
+    if (!session) throw lastErr ?? new Error('Failed to create hold checkout session')
 
     return jsonResponse({
       url: session.url,

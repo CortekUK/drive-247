@@ -34,16 +34,26 @@ Deno.serve(async (req) => {
       return errorResponse("Rental not found", 404);
     }
 
-    // Auto-extend rentals NEVER carry a deposit hold. The operator advertises a
-    // flat all-in renewal price, so a security hold makes no sense — yet without
-    // a per-rental override (deposit_amount_override stays NULL) the code fell
-    // back to the tenant's $150 default and re-authorised the customer's card on
-    // every renewal payment (RevTek/Jeffrey, who hit it twice). Skipping on the
-    // auto_extend flag removes it from ALL auto-extend rentals at once,
-    // regardless of who created them or whether an override was ever set.
-    if ((rental as any).auto_extend_enabled) {
-      console.log("[DEPOSIT-HOLD] Skipped — auto-extend rental:", rentalId);
-      return jsonResponse({ success: true, skipped: true, message: "Auto-extend rental — deposit hold skipped" });
+    // A deposit hold is a ONE-TIME authorisation placed at handover. It must
+    // never be (re)attempted on a long-running rental — neither an auto-extend
+    // rental (flat advertised renewal price) NOR a rental that has been EXTENDED.
+    // Without a per-rental override the code fell back to the tenant's $150
+    // default and re-authorised the customer's card on every renewal/extension
+    // payment: RevTek/Jeffrey (auto-extend) hit it twice, and RevTek/Fabri (a
+    // 1-day rental manually extended 5× — NOT flagged auto-extend) racked up 16
+    // failed attempts. Guard on BOTH signals so it's removed from every
+    // long-running rental regardless of the auto-extend flag or override state.
+    let hasExtensions = false;
+    {
+      const { count } = await supabase
+        .from("rental_extensions")
+        .select("id", { count: "exact", head: true })
+        .eq("rental_id", rentalId);
+      hasExtensions = (count ?? 0) > 0;
+    }
+    if ((rental as any).auto_extend_enabled || hasExtensions) {
+      console.log("[DEPOSIT-HOLD] Skipped — auto-extend/extended rental:", rentalId);
+      return jsonResponse({ success: true, skipped: true, message: "Auto-extend or extended rental — deposit hold skipped" });
     }
 
     // Remember the prior state: a re-collection after an expired/released hold
