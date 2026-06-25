@@ -50,6 +50,7 @@ import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-do
 import { useGigDriverImages } from "@/hooks/use-gig-driver-images";
 import GigDriverUploadDialog from "@/components/booking/gig-driver-upload-dialog";
 import VehicleImageLightbox from "@/components/booking/VehicleImageLightbox";
+import { optimizedImageUrl } from "@/lib/optimize-image";
 import { formatCurrency, getEarthRadius, metersToUnit, getPerMonthLabel, getUnlimitedLabel, getDistanceUnitLong, getDistanceUnitShort, getMileageTierLabel, formatDistance } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
 import { getMileageTier, getTierMileage, calculateTotalMileageAllowance, isUnlimitedMileage, getUnlimitedMileageOption } from "@/lib/mileage-utils";
@@ -4122,7 +4123,7 @@ const MultiStepBookingWidget = () => {
                             {vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? (
                               <>
                                 <img
-                                  src={vehicle.vehicle_photos[getVehicleImageIndex(vehicle.id)]?.photo_url || vehicle.vehicle_photos[0].photo_url}
+                                  src={optimizedImageUrl(vehicle.vehicle_photos[getVehicleImageIndex(vehicle.id)]?.photo_url || vehicle.vehicle_photos[0].photo_url, { width: 800, quality: 65, resize: "cover" })}
                                   alt={vehicleName}
                                   className="w-full h-full object-cover"
                                   loading="lazy"
@@ -4162,7 +4163,7 @@ const MultiStepBookingWidget = () => {
                               </>
                             ) : vehicle.photo_url ? (
                               <img
-                                src={vehicle.photo_url}
+                                src={optimizedImageUrl(vehicle.photo_url, { width: 800, quality: 65, resize: "cover" })}
                                 alt={vehicleName}
                                 className="w-full h-full object-cover"
                                 loading="lazy"
@@ -4396,7 +4397,7 @@ const MultiStepBookingWidget = () => {
                           </>
                         ) : vehicle.photo_url ? (
                           <img
-                            src={vehicle.photo_url}
+                            src={optimizedImageUrl(vehicle.photo_url, { width: 800, quality: 65, resize: "cover" })}
                             alt={vehicleName}
                             className="w-full h-full object-cover"
                             loading="lazy"

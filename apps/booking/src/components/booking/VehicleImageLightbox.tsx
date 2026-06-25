@@ -4,6 +4,11 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { optimizedImageUrl } from "@/lib/optimize-image";
+
+// Full image sized for a large viewport; thumbnails kept tiny.
+const fullUrl = (src: string) => optimizedImageUrl(src, { width: 1600, quality: 75, resize: "contain" });
+const thumbUrl = (src: string) => optimizedImageUrl(src, { width: 200, quality: 50, resize: "cover" });
 
 interface VehicleImageLightboxProps {
   open: boolean;
@@ -61,8 +66,10 @@ export default function VehicleImageLightbox({
     if (!open || total === 0) return;
     const toPreload = [index, (index + 1) % total, (index - 1 + total) % total];
     for (const i of toPreload) {
-      const src = images[i];
-      if (!src || loaded[src]) continue;
+      const raw = images[i];
+      if (!raw) continue;
+      const src = fullUrl(raw);
+      if (loaded[src]) continue;
       const img = new Image();
       img.onload = () => markLoaded(src);
       img.src = src;
@@ -91,7 +98,7 @@ export default function VehicleImageLightbox({
 
   if (total === 0) return null;
 
-  const currentSrc = images[index];
+  const currentSrc = fullUrl(images[index]);
   const isLoading = !loaded[currentSrc];
 
   return (
@@ -195,11 +202,10 @@ export default function VehicleImageLightbox({
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={src}
+                    src={thumbUrl(src)}
                     alt=""
                     loading="lazy"
                     decoding="async"
-                    onLoad={() => markLoaded(src)}
                     className="h-full w-full object-cover"
                   />
                 </button>
