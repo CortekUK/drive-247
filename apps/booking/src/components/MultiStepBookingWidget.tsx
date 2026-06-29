@@ -5411,7 +5411,8 @@ const MultiStepBookingWidget = () => {
           {/* Form Fields (shared between authenticated & guest) */}
           <div className="space-y-8">
 
-            {/* Gig Driver Checkbox */}
+            {/* Gig Driver Checkbox — hidden when the tenant disables the gig driver option */}
+            {tenant?.gig_driver_enabled !== false && (
             <div className="flex items-start gap-3 pt-2">
               <Checkbox
                 id="isGigDriver"
@@ -5444,6 +5445,7 @@ const MultiStepBookingWidget = () => {
                 )}
               </div>
             </div>
+            )}
 
             <GigDriverUploadDialog
               open={showGigDriverUpload}

@@ -172,6 +172,9 @@ export interface Tenant {
 
   // PAYG upfront payment gate
   payg_upfront_required: boolean | null;
+
+  // Gig driver booking option (hide the "Are you a gig driver?" checkbox when false)
+  gig_driver_enabled: boolean | null;
 }
 
 interface TenantContextType {
@@ -450,7 +453,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           maintenance_banner_message,
           buffer_time_minutes,
           enquiries_enabled,
-          payg_upfront_required
+          payg_upfront_required,
+          gig_driver_enabled
         `)
         .eq('slug', slug)
         .eq('status', 'active')

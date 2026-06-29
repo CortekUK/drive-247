@@ -130,6 +130,33 @@ const Settings = () => {
     }
   };
 
+  // Gig Driver booking option toggle (shows "Are you a gig driver?" on the booking page)
+  const gigDriverEnabled = (tenant as { gig_driver_enabled?: boolean } | null)?.gig_driver_enabled !== false;
+  const [savingGigDriver, setSavingGigDriver] = useState(false);
+  const handleToggleGigDriver = async (next: boolean) => {
+    if (!tenant?.id) return;
+    setSavingGigDriver(true);
+    try {
+      const { error } = await supabase
+        .from("tenants")
+        .update({ gig_driver_enabled: next })
+        .eq("id", tenant.id);
+      if (error) throw error;
+      await refetchTenant();
+      toast({
+        title: next ? "Gig Driver option enabled" : "Gig Driver option disabled",
+        description: next
+          ? "Customers now see the “Are you a gig driver?” option on your booking page."
+          : "The “Are you a gig driver?” option is now hidden on your booking page.",
+      });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      toast({ title: "Failed to update", description: msg, variant: "destructive" });
+    } finally {
+      setSavingGigDriver(false);
+    }
+  };
+
   useAuditLogOnOpen({
     open: resetGeneralDialogOpen,
     action: "settings_reset_warning_shown",
@@ -1474,6 +1501,22 @@ const Settings = () => {
                   disabled={savingVehicleOwners}
                   className="flex-shrink-0"
                   aria-label="Toggle Vehicle Owners feature"
+                />
+              </div>
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <h4 className="font-medium">Gig Driver Option</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Shows an &quot;Are you a gig driver?&quot; option on your booking page so customers who drive
+                    for Uber, Lyft, DoorDash, etc. can flag it and upload proof. Turn off to hide it from booking.
+                  </p>
+                </div>
+                <Switch
+                  checked={gigDriverEnabled}
+                  onCheckedChange={handleToggleGigDriver}
+                  disabled={savingGigDriver}
+                  className="flex-shrink-0"
+                  aria-label="Toggle Gig Driver booking option"
                 />
               </div>
             </CardContent>
