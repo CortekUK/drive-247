@@ -18,6 +18,26 @@
       "state": "FL",
       "hours": "24/7",
       "branding": "Black"
+    },
+    "surerideinc": {
+      "company_name": "Sure Ride inc.",
+      "contact_email": "admin@surerideinc.com",
+      "phone": "+1 (667) 455-3453",
+      "city": "",
+      "state": "MD",
+      "hours": "",
+      "specialty": "Reliable economy car rentals",
+      "branding": ["#047857", "#065F46", "#10B981"]
+    },
+    "hezkee": {
+      "company_name": "Hezkee",
+      "contact_email": "admin@hezkee.com",
+      "phone": "+1 (806) 729-2642",
+      "city": "Lubbock",
+      "state": "TX",
+      "hours": "8am - 7pm",
+      "specialty": "Affordable economy car rentals",
+      "branding": ["#1E40AF", "#64748B", "#3B82F6"]
     }
   }
 }

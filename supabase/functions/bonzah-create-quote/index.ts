@@ -16,11 +16,12 @@ const PRODUCT_ID = 'M000000000006'
 // Bonzah max policy duration in days
 const MAX_POLICY_DAYS = 30
 
-// Insurance rates per 24 hours (fallback calculation)
+// Insurance rates per 24 hours (fallback calculation only — used when Bonzah's
+// quote response omits total_amount). Matches Bonzah's live rate card.
 const RATES = {
   CDW: 26.95,
-  RCLI: 20.18,
-  SLI: 11.20,
+  RCLI: 23.18,
+  SLI: 20.18,
   PAI: 6.90,
 }
 

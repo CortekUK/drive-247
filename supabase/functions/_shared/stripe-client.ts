@@ -137,6 +137,70 @@ export const DEPOSIT_HOLD_CARD_OPTIONS = {
 };
 
 /**
+ * Ordered card-feature variants for a deposit hold, richest → plainest.
+ *
+ * "if_available" is *supposed* to make Stripe silently ignore a feature the
+ * card/account doesn't support, but Connect accounts not approved for these
+ * features actually throw "This account is not eligible for the requested card
+ * features." (GMT's live account, acct_1SrIFEPcUIaEGCY0, does exactly this).
+ * Any function that requests these features must downgrade through this list
+ * until one succeeds, otherwise the whole call 500s.
+ *
+ * Order matters: we keep request_extended_authorization as long as possible so
+ * eligible accounts retain the ~30-day hold lifetime; only the final `null`
+ * falls back to the ~7-day network default (still kept alive by the
+ * refresh-deposit-holds cron).
+ */
+export const DEPOSIT_HOLD_CARD_VARIANTS: Array<Record<string, string> | null> = [
+  { request_extended_authorization: 'if_available', request_multicapture: 'if_available' },
+  { request_extended_authorization: 'if_available' },
+  null,
+];
+
+/** True when Stripe rejected a request because the account lacks a requested card feature. */
+export function isCardFeatureIneligibleError(err: unknown): boolean {
+  return String(err instanceof Error ? err.message : err)
+    .toLowerCase()
+    .includes('not eligible for the requested card features');
+}
+
+/**
+ * Create a deposit-hold PaymentIntent, gracefully downgrading premium card
+ * features (extended authorization, multicapture) when the Connect account is
+ * not eligible for them. `basePayload` must NOT include payment_method_options
+ * — this adds the right card block per attempt. `idempotencyKey` is suffixed
+ * per variant so each downgraded retry is its own idempotent request.
+ */
+export async function createDepositHoldIntentWithFallback(
+  stripe: Stripe,
+  basePayload: Record<string, unknown>,
+  requestOpts: Stripe.RequestOptions & { idempotencyKey: string }
+): Promise<Stripe.PaymentIntent> {
+  let lastErr: unknown = null;
+  for (let i = 0; i < DEPOSIT_HOLD_CARD_VARIANTS.length; i++) {
+    const card = DEPOSIT_HOLD_CARD_VARIANTS[i];
+    const payload = card
+      ? { ...basePayload, payment_method_options: { card } }
+      : basePayload;
+    const opts = i === 0
+      ? requestOpts
+      : { ...requestOpts, idempotencyKey: `${requestOpts.idempotencyKey}-cf${i}` };
+    try {
+      const pi = await stripe.paymentIntents.create(payload as any, opts);
+      if (i > 0) console.warn(`[deposit-hold] card features downgraded to variant ${i} (account not eligible for full set)`);
+      return pi;
+    } catch (err) {
+      if (isCardFeatureIneligibleError(err) && i < DEPOSIT_HOLD_CARD_VARIANTS.length - 1) {
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr ?? new Error('Failed to create deposit-hold PaymentIntent');
+}
+
+/**
  * Work out when a deposit-hold PaymentIntent ACTUALLY expires.
  *
  * Stripe surfaces the real deadline on the authorising charge as

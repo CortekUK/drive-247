@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
-import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts'
+import { getStripeClient, getConnectAccountId, DEPOSIT_HOLD_CARD_VARIANTS, isCardFeatureIneligibleError, type StripeMode } from '../_shared/stripe-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -147,15 +147,12 @@ serve(async (req) => {
       })
     }
 
-    // Create Stripe Checkout Session (this creates the PaymentIntent internally)
-    const session = await stripe.checkout.sessions.create({
+    // Create Stripe Checkout Session (this creates the PaymentIntent internally).
+    // Request extended authorization so the booking pre-auth survives longer than
+    // the ~7-day card default while it waits for operator approval.
+    const baseSessionParams: any = {
       payment_method_types: ['card'],
       mode: 'payment',
-      // Request extended authorization so the booking pre-auth survives longer
-      // than the ~7-day card default while it waits for operator approval.
-      payment_method_options: {
-        card: { request_extended_authorization: 'if_available' },
-      },
       payment_intent_data: paymentIntentData,
       line_items: lineItems,
       customer_email: body.customerEmail,
@@ -171,7 +168,32 @@ serve(async (req) => {
         stripe_mode: stripeMode, // Track which mode was used
         ...(body.bonzahPolicyId ? { bonzah_policy_id: body.bonzahPolicyId } : {}),
       },
-    }, stripeOptions)
+    }
+
+    // Some Connect accounts aren't approved for extended_authorization and 500
+    // with "not eligible for the requested card features" even on "if_available".
+    // Downgrade through the shared variants so booking pre-auths never break for
+    // those accounts (e.g. GMT). Falls back to the ~7-day default at worst.
+    let session: any = null
+    let lastErr: unknown = null
+    for (let i = 0; i < DEPOSIT_HOLD_CARD_VARIANTS.length; i++) {
+      const card = DEPOSIT_HOLD_CARD_VARIANTS[i]
+      const params = card
+        ? { ...baseSessionParams, payment_method_options: { card } }
+        : baseSessionParams
+      try {
+        session = await stripe.checkout.sessions.create(params, stripeOptions)
+        if (i > 0) console.warn(`create-preauth-checkout: card features downgraded to variant ${i} (account not eligible for full set)`)
+        break
+      } catch (err) {
+        if (isCardFeatureIneligibleError(err) && i < DEPOSIT_HOLD_CARD_VARIANTS.length - 1) {
+          lastErr = err
+          continue
+        }
+        throw err
+      }
+    }
+    if (!session) throw lastErr ?? new Error('Failed to create pre-auth checkout session')
 
     console.log('Pre-auth checkout session created:', session.id)
 

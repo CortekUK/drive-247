@@ -2,11 +2,14 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { type PremiumResponse } from '../_shared/bonzah-client.ts'
 import { corsHeaders, handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
-// Bonzah insurance rates per 24 hours (from Bonzah API)
+// Bonzah insurance rates per 24 hours (matches Bonzah's live rate card,
+// verified against the /Bonzah/quote response — "$X / 24 hours" fields).
+// Bonzah prices strictly per 24h with no multi-day/monthly discount, so the
+// estimate is rate × days; the binding amount still comes from the quote API.
 const RATES = {
   CDW: 26.95,   // Collision Damage Waiver
-  RCLI: 20.18,  // Renter's Contingent Liability Insurance
-  SLI: 11.20,   // Supplemental Liability Insurance
+  RCLI: 23.18,  // Renter's Contingent Liability Insurance
+  SLI: 20.18,   // Supplemental Liability Insurance
   PAI: 6.90,    // Personal Accident Insurance
 }
 
