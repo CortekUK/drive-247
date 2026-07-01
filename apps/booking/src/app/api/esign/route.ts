@@ -59,7 +59,20 @@ interface EnvelopeRequest {
 // Format date
 function formatDate(date: string | Date | null): string {
     if (!date) return 'N/A';
-    const d = typeof date === 'string' ? new Date(date) : date;
+    let d: Date;
+    if (typeof date === 'string') {
+        // Date-only values (DOB, licence expiry, rental start/end are DATE
+        // columns) arrive as "YYYY-MM-DD". `new Date("YYYY-MM-DD")` parses as UTC
+        // midnight, which renders one day EARLY in negative-UTC-offset timezones
+        // (this is the "birthday shows a day before" bug). Parse the date part as
+        // LOCAL midnight instead. Full timestamps keep native parsing.
+        const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date.split('T')[0]);
+        d = dateOnly
+            ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+            : new Date(date);
+    } else {
+        d = date;
+    }
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 

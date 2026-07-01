@@ -14,6 +14,7 @@ import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
+import { parseDateOnly } from "@/lib/date-utils";
 
 const BookingPendingContent = () => {
   const searchParams = useSearchParams();
@@ -69,8 +70,8 @@ const BookingPendingContent = () => {
             customer_email: rental.customer.email,
             vehicle_name: vehicleName,
             vehicle_reg: rental.vehicle.reg,
-            pickup_date: format(new Date(rental.start_date), "MMM dd, yyyy"),
-            return_date: format(new Date(rental.end_date), "MMM dd, yyyy"),
+            pickup_date: format(parseDateOnly(rental.start_date), "MMM dd, yyyy"),
+            return_date: format(parseDateOnly(rental.end_date), "MMM dd, yyyy"),
             rental_period_type: rental.rental_period_type,
             monthly_amount: rental.monthly_amount,
             status: rental.status,

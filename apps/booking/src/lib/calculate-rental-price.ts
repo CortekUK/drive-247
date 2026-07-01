@@ -1,4 +1,14 @@
 /**
+ * ⚠️  DUPLICATED FILE — KEEP IN SYNC ⚠️
+ * This exact file exists twice: apps/booking/src/lib/calculate-rental-price.ts
+ * and apps/portal/src/lib/calculate-rental-price.ts.
+ * Any change to one MUST be mirrored to the other or the customer
+ * (booking) and staff (portal) prices will silently disagree. The two files
+ * must remain byte-identical: `diff apps/booking/src/lib/calculate-rental-price.ts
+ * apps/portal/src/lib/calculate-rental-price.ts` should print nothing.
+ * TODO: extract into a shared workspace package (packages/pricing) to remove
+ * this duplication for good.
+ *
  * Dynamic Pricing Calculation Utility
  *
  * Centralizes rental pricing logic with support for weekend/holiday surcharges.
@@ -296,7 +306,12 @@ export function calculateRentalPriceBreakdown(
   holidays?: Holiday[],
   overrides?: VehicleOverride[],
   vehicleId?: string,
-  monthlyTierDays: number = 30
+  monthlyTierDays: number = 30,
+  // When true, all weekend/holiday surcharges are ignored and every day uses the
+  // flat tier base rate. Used for auto-extend ("set price") rentals, where the
+  // operator advertises a fixed rate and the seasonal markups should apply to
+  // short-term rentals only.
+  skipSurcharges: boolean = false
 ): RentalPriceResult {
   const pickup = parseDateString(pickupDate);
   const dropoff = parseDateString(dropoffDate);
@@ -306,8 +321,10 @@ export function calculateRentalPriceBreakdown(
   const weeklyRent = rates.weekly_rent || 0;
   const monthlyRent = rates.monthly_rent || 0;
 
-  const safeHolidays = holidays || [];
-  const safeOverrides = overrides || [];
+  // Blanking the surcharge inputs makes every day resolve to the plain tier rate.
+  const effectiveWeekendConfig = skipSurcharges ? null : (weekendConfig || null);
+  const safeHolidays = skipSurcharges ? [] : (holidays || []);
+  const safeOverrides = skipSurcharges ? [] : (overrides || []);
 
   // Run the per-day surcharge loop for any tier given its per-day base rate.
   // Non-surcharge days cost `perDayRate`; weekend/holiday days carry the surcharge.
@@ -321,7 +338,7 @@ export function calculateRentalPriceBreakdown(
       const dayInfo = getDayRate(
         currentDate,
         perDayRate,
-        weekendConfig || null,
+        effectiveWeekendConfig,
         safeHolidays,
         safeOverrides,
         vehicleId

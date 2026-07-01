@@ -15,6 +15,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
 import { formatCurrency } from "@/lib/format-utils";
+import { parseDateOnly } from "@/lib/date-utils";
 
 const InvoicePaymentSuccess = () => {
   const { tenant } = useTenant();
@@ -434,8 +435,8 @@ const BookingSuccessContent = () => {
                           vehicleMake: rentalForNotify.vehicle.make,
                           vehicleModel: rentalForNotify.vehicle.model,
                           vehicleReg: rentalForNotify.vehicle.reg,
-                          pickupDate: new Date(rentalForNotify.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                          returnDate: new Date(rentalForNotify.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                          pickupDate: parseDateOnly(rentalForNotify.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                          returnDate: parseDateOnly(rentalForNotify.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
                           amount: rentalForNotify.monthly_amount || paymentDetails.amount,
                           bookingRef: rentalId.substring(0, 8).toUpperCase(),
                         }
@@ -554,8 +555,8 @@ const BookingSuccessContent = () => {
               customer_email: rental.customer.email,
               vehicle_name: vehicleName,
               vehicle_reg: rental.vehicle.reg,
-              pickup_date: format(new Date(rental.start_date), "MMM dd, yyyy"),
-              return_date: format(new Date(rental.end_date), "MMM dd, yyyy"),
+              pickup_date: format(parseDateOnly(rental.start_date), "MMM dd, yyyy"),
+              return_date: format(parseDateOnly(rental.end_date), "MMM dd, yyyy"),
               rental_period_type: rental.rental_period_type,
               monthly_amount: rental.monthly_amount,
               status: rental.status,

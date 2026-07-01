@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
+import { parseDateOnly } from '@/lib/date-utils';
 
 export interface CustomerInvoice {
   id: string;
@@ -114,7 +115,7 @@ export function useCustomerInvoices(limit?: number) {
       const today = new Date();
       const enrichedInvoices = invoices.map(invoice => {
         const paidAmount = invoice.rental_id ? (paidByRental.get(invoice.rental_id) || 0) : 0;
-        const dueDate = invoice.due_date ? new Date(invoice.due_date) : null;
+        const dueDate = invoice.due_date ? parseDateOnly(invoice.due_date) : null;
 
         let computedStatus: 'paid' | 'partial' | 'pending' | 'overdue';
         if (paidAmount >= invoice.total_amount) {

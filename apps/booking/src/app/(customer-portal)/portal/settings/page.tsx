@@ -451,7 +451,7 @@ export default function SettingsPage() {
                     <>
                       <div className="relative">
                         <Input
-                          value={format(new Date(docExpiry), 'MMMM d, yyyy')}
+                          value={format(parseDateString(String(docExpiry).split('T')[0]), 'MMMM d, yyyy')}
                           readOnly
                           className="bg-muted/50 cursor-default pr-16"
                         />

@@ -6,6 +6,7 @@ import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
+import { parseDateOnly } from "@/lib/date-utils";
 
 interface InvoiceDialogProps {
   open: boolean;
@@ -91,9 +92,9 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, se
           <h3 className="font-semibold mb-2">Invoice Details:</h3>
           <div className="text-sm space-y-1">
             <p><span className="text-gray-600">Invoice #:</span> <strong>{invoice.invoice_number}</strong></p>
-            <p><span className="text-gray-600">Date:</span> {format(new Date(invoice.invoice_date), 'PPP')}</p>
+            <p><span className="text-gray-600">Date:</span> {format(parseDateOnly(invoice.invoice_date), 'PPP')}</p>
             {invoice.due_date && (
-              <p><span className="text-gray-600">Due Date:</span> {format(new Date(invoice.due_date), 'PPP')}</p>
+              <p><span className="text-gray-600">Due Date:</span> {format(parseDateOnly(invoice.due_date), 'PPP')}</p>
             )}
           </div>
         </div>
@@ -111,7 +112,7 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, se
           <div>
             <p className="text-gray-600">Rental Period:</p>
             <p className="font-medium">
-              {format(new Date(rental.start_date), 'PP')} - {format(new Date(rental.end_date), 'PP')}
+              {format(parseDateOnly(rental.start_date), 'PP')} - {format(parseDateOnly(rental.end_date), 'PP')}
             </p>
           </div>
         </div>
@@ -358,9 +359,9 @@ export const InvoiceDialog = ({
                 <h3 className="font-semibold mb-2">Invoice Details:</h3>
                 <div className="text-sm space-y-1">
                   <p><span className="text-muted-foreground">Invoice #:</span> <strong>{invoice.invoice_number}</strong></p>
-                  <p><span className="text-muted-foreground">Date:</span> {format(new Date(invoice.invoice_date), 'PPP')}</p>
+                  <p><span className="text-muted-foreground">Date:</span> {format(parseDateOnly(invoice.invoice_date), 'PPP')}</p>
                   {invoice.due_date && (
-                    <p><span className="text-muted-foreground">Due Date:</span> {format(new Date(invoice.due_date), 'PPP')}</p>
+                    <p><span className="text-muted-foreground">Due Date:</span> {format(parseDateOnly(invoice.due_date), 'PPP')}</p>
                   )}
                 </div>
               </div>
@@ -378,7 +379,7 @@ export const InvoiceDialog = ({
                 <div>
                   <p className="text-muted-foreground">Rental Period:</p>
                   <p className="font-medium">
-                    {format(new Date(rental.start_date), 'PP')} - {format(new Date(rental.end_date), 'PP')}
+                    {format(parseDateOnly(rental.start_date), 'PP')} - {format(parseDateOnly(rental.end_date), 'PP')}
                   </p>
                 </div>
               </div>

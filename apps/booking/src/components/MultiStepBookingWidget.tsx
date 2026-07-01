@@ -56,6 +56,7 @@ import type { DistanceUnit } from "@/lib/format-utils";
 import { getMileageTier, getTierMileage, calculateTotalMileageAllowance, isUnlimitedMileage, getUnlimitedMileageOption } from "@/lib/mileage-utils";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown, parseDateString as parseDateStringSafe } from "@/lib/calculate-rental-price";
+import { parseDateOnly } from "@/lib/date-utils";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -4831,7 +4832,7 @@ const MultiStepBookingWidget = () => {
                                     <SelectItem key={doc.id} value={doc.id}>
                                       {doc.insurance_provider || doc.document_name}
                                       {doc.policy_number && ` - ${doc.policy_number}`}
-                                      {doc.end_date && ` (Expires: ${new Date(doc.end_date).toLocaleDateString('en-US')})`}
+                                      {doc.end_date && ` (Expires: ${parseDateOnly(doc.end_date).toLocaleDateString('en-US')})`}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
@@ -5743,7 +5744,7 @@ const MultiStepBookingWidget = () => {
                   <Label className="font-medium">ID Document Expiry</Label>
                   <div className="flex items-center gap-2">
                     <Input
-                      value={format(new Date(customerVerification.document_expiry_date), "MMMM d, yyyy")}
+                      value={format(parseDateOnly(customerVerification.document_expiry_date), "MMMM d, yyyy")}
                       readOnly
                       className="h-12 bg-muted/50 flex-1"
                     />

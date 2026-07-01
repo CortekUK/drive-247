@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useBookingStore } from "@/stores/booking-store";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { parseDateOnly } from "@/lib/date-utils";
 
 const BookingEnquirySubmittedContent = () => {
   const searchParams = useSearchParams();
@@ -69,8 +70,8 @@ const BookingEnquirySubmittedContent = () => {
             customer_email: rental.customer?.email,
             vehicle_name: vehicleName,
             vehicle_reg: rental.vehicle?.reg,
-            pickup_date: rental.start_date ? format(new Date(rental.start_date), "MMM dd, yyyy") : 'TBD',
-            return_date: rental.end_date ? format(new Date(rental.end_date), "MMM dd, yyyy") : 'TBD',
+            pickup_date: rental.start_date ? format(parseDateOnly(rental.start_date), "MMM dd, yyyy") : 'TBD',
+            return_date: rental.end_date ? format(parseDateOnly(rental.end_date), "MMM dd, yyyy") : 'TBD',
             rental_period_type: rental.rental_period_type,
             status: rental.status,
           });

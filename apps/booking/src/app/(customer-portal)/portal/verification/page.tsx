@@ -602,7 +602,7 @@ export default function VerificationPage() {
                         <p className="text-sm text-muted-foreground">Expiration</p>
                         <div className="flex items-center gap-2">
                           <p className="font-medium">
-                            {format(new Date(currentVerification.document_expiry_date), 'PPP')}
+                            {format(parseDateString(String(currentVerification.document_expiry_date).split('T')[0]), 'PPP')}
                           </p>
                           {new Date(currentVerification.document_expiry_date) < new Date() ? (
                             <span className="text-xs text-destructive font-medium px-2 py-0.5 bg-destructive/10 rounded">Expired</span>

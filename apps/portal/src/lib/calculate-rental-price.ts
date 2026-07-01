@@ -1,4 +1,14 @@
 /**
+ * ⚠️  DUPLICATED FILE — KEEP IN SYNC ⚠️
+ * This exact file exists twice: apps/booking/src/lib/calculate-rental-price.ts
+ * and apps/portal/src/lib/calculate-rental-price.ts.
+ * Any change to one MUST be mirrored to the other or the customer
+ * (booking) and staff (portal) prices will silently disagree. The two files
+ * must remain byte-identical: `diff apps/booking/src/lib/calculate-rental-price.ts
+ * apps/portal/src/lib/calculate-rental-price.ts` should print nothing.
+ * TODO: extract into a shared workspace package (packages/pricing) to remove
+ * this duplication for good.
+ *
  * Dynamic Pricing Calculation Utility
  *
  * Centralizes rental pricing logic with support for weekend/holiday surcharges.

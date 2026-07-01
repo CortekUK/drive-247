@@ -5,6 +5,7 @@ import { Shield, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
+import { parseDateOnly } from '@/lib/date-utils';
 import { useRentalInsurancePolicies } from '@/hooks/use-rental-insurance-policies';
 
 interface InsurancePoliciesSectionProps {
@@ -78,7 +79,7 @@ export function InsurancePoliciesSection({ rentalId }: InsurancePoliciesSectionP
                 </Badge>
               ))}
               <span className="text-[10px] text-muted-foreground ml-1">
-                {format(new Date(policy.trip_start_date), 'MMM dd')} – {format(new Date(policy.trip_end_date), 'MMM dd, yyyy')}
+                {format(parseDateOnly(policy.trip_start_date), 'MMM dd')} – {format(parseDateOnly(policy.trip_end_date), 'MMM dd, yyyy')}
               </span>
             </div>
           </div>

@@ -70,6 +70,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
+import { parseDateOnly } from '@/lib/date-utils';
 
 // Mock data for demo installments
 const mockInstallmentPlans = [
@@ -181,7 +182,7 @@ function NextPaymentCard({
 }) {
   const { tenant } = useTenant();
   const currencyCode = tenant?.currency_code || 'USD';
-  const dueDate = new Date(installment.due_date);
+  const dueDate = parseDateOnly(installment.due_date);
   const isOverdue = isPast(dueDate) && !isToday(dueDate);
   const isDueToday = isToday(dueDate);
   const isFailed = installment.status === 'failed';
@@ -469,7 +470,7 @@ function InstallmentPlanCard({
                   const isPaid = inst.status === 'paid';
                   const isFailed = inst.status === 'failed';
                   const isScheduled = inst.status === 'scheduled';
-                  const dueDate = new Date(inst.due_date);
+                  const dueDate = parseDateOnly(inst.due_date);
                   const isInstOverdue = isScheduled && isPast(dueDate) && !isToday(dueDate);
 
                   return (
@@ -601,7 +602,7 @@ function PaymentHistoryList() {
                   {vehicleName && <span className="text-muted-foreground"> • {vehicleName}</span>}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {format(new Date(payment.payment_date), 'MMM dd, yyyy')} • {payment.method}
+                  {format(parseDateOnly(payment.payment_date), 'MMM dd, yyyy')} • {payment.method}
                 </p>
               </div>
             </div>
@@ -724,7 +725,7 @@ function InvoiceList({
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
                   {vehicleName && <span>{vehicleName} • </span>}
-                  {format(new Date(invoice.invoice_date), 'MMM dd, yyyy')}
+                  {format(parseDateOnly(invoice.invoice_date), 'MMM dd, yyyy')}
                 </p>
               </div>
             </div>
@@ -764,7 +765,7 @@ function InvoiceDetailSheet({
     ? `${vehicle.reg} ${vehicle.make || ''} ${vehicle.model || ''}`.trim()
     : 'Vehicle';
 
-  const dueDate = invoice.due_date ? new Date(invoice.due_date) : null;
+  const dueDate = invoice.due_date ? parseDateOnly(invoice.due_date) : null;
   const isPaid = invoice.computed_status === 'paid';
   const isOverdue = invoice.computed_status === 'overdue';
 
@@ -807,7 +808,7 @@ function InvoiceDetailSheet({
             {invoice.invoice_number}
           </SheetTitle>
           <SheetDescription>
-            {vehicleName} • {format(new Date(invoice.invoice_date), 'MMM dd, yyyy')}
+            {vehicleName} • {format(parseDateOnly(invoice.invoice_date), 'MMM dd, yyyy')}
           </SheetDescription>
         </SheetHeader>
 
@@ -886,7 +887,7 @@ function InvoiceDetailSheet({
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Period</span>
                   <span>
-                    {format(new Date(invoice.rentals.start_date), 'MMM dd')} - {format(new Date(invoice.rentals.end_date), 'MMM dd, yyyy')}
+                    {format(parseDateOnly(invoice.rentals.start_date), 'MMM dd')} - {format(parseDateOnly(invoice.rentals.end_date), 'MMM dd, yyyy')}
                   </span>
                 </div>
               </div>
@@ -983,7 +984,7 @@ function DemoInstallmentTimeline({
             {plan.vehicleName}
           </SheetTitle>
           <SheetDescription>
-            {plan.planType} Installment Plan • Started {format(new Date(plan.startDate), 'MMM dd, yyyy')}
+            {plan.planType} Installment Plan • Started {format(parseDateOnly(plan.startDate), 'MMM dd, yyyy')}
           </SheetDescription>
         </SheetHeader>
 

@@ -39,6 +39,7 @@ import {
   type CustomerAgreement,
 } from '@/hooks/use-customer-agreements';
 import { formatCurrency } from '@/lib/format-utils';
+import { parseDateOnly } from '@/lib/date-utils';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -95,7 +96,10 @@ function toCustomerAgreement(a: RentalAgreement): CustomerAgreement {
 function formatDate(date: string | null | undefined): string {
   if (!date) return '-';
   try {
-    return format(new Date(date), 'dd MMM yyyy');
+    // Rental dates are DATE columns — parse as local midnight so they don't
+    // render a day early in negative-UTC-offset timezones. formatDateTime below
+    // keeps new Date() because it renders timestamptz values (with time).
+    return format(parseDateOnly(date), 'dd MMM yyyy');
   } catch {
     return '-';
   }
@@ -1418,7 +1422,7 @@ export default function BookingDetailPage() {
             <AlertDialogDescription>
               This will cancel your request to extend
               {rental?.previous_end_date
-                ? ` until ${format(new Date(rental.previous_end_date), 'MMM dd, yyyy')}`
+                ? ` until ${format(parseDateOnly(rental.previous_end_date), 'MMM dd, yyyy')}`
                 : ''}
               . You can submit a new extension request later.
             </AlertDialogDescription>

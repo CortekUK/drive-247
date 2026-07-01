@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { format } from 'date-fns';
+import { parseDateOnly } from '@/lib/date-utils';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 
 interface CancelBookingDialogProps {
@@ -139,8 +140,8 @@ export function CancelBookingDialog({ open, onOpenChange, rental }: CancelBookin
                   <div>
                     <p className="text-sm text-muted-foreground">Booking Period</p>
                     <p className="text-sm font-medium">
-                      {format(new Date(rental.start_date), 'MMM dd, yyyy')} -{' '}
-                      {format(new Date(rental.end_date), 'MMM dd, yyyy')}
+                      {format(parseDateOnly(rental.start_date), 'MMM dd, yyyy')} -{' '}
+                      {format(parseDateOnly(rental.end_date), 'MMM dd, yyyy')}
                     </p>
                   </div>
                 </div>
@@ -214,7 +215,7 @@ export function CancelBookingDialog({ open, onOpenChange, rental }: CancelBookin
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Dates</span>
                   <span className="font-medium">
-                    {format(new Date(rental.start_date), 'MMM dd')} - {format(new Date(rental.end_date), 'MMM dd, yyyy')}
+                    {format(parseDateOnly(rental.start_date), 'MMM dd')} - {format(parseDateOnly(rental.end_date), 'MMM dd, yyyy')}
                   </span>
                 </div>
                 <div className="border-t pt-3">

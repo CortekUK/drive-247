@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { Car, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
+import { parseDateOnly } from '@/lib/date-utils';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { BookingReference } from './BookingPicker';
@@ -134,8 +135,8 @@ export function BookingReferenceCard({ booking, isOwnMessage }: BookingReference
           >
             <Calendar className="h-3 w-3" />
             <span>
-              {format(new Date(booking.startDate), 'MMM d')} -{' '}
-              {format(new Date(booking.endDate), 'MMM d, yyyy')}
+              {format(parseDateOnly(booking.startDate), 'MMM d')} -{' '}
+              {format(parseDateOnly(booking.endDate), 'MMM d, yyyy')}
             </span>
           </div>
         </div>

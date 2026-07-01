@@ -40,6 +40,7 @@ import {
 import { format } from 'date-fns';
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
+import { parseDateOnly } from '@/lib/date-utils';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -152,13 +153,13 @@ function DocumentCard({
               {document.start_date && (
                 <div className="min-w-0">
                   <span className="text-muted-foreground">Start:</span>{' '}
-                  {format(new Date(document.start_date), 'MMM d, yyyy')}
+                  {format(parseDateOnly(document.start_date), 'MMM d, yyyy')}
                 </div>
               )}
               {document.end_date && (
                 <div className="min-w-0">
                   <span className="text-muted-foreground">Expires:</span>{' '}
-                  {format(new Date(document.end_date), 'MMM d, yyyy')}
+                  {format(parseDateOnly(document.end_date), 'MMM d, yyyy')}
                 </div>
               )}
             </div>
@@ -328,11 +329,11 @@ function InsurancePolicyCard({ policy, currencyCode, tenantId }: { policy: Custo
             <div className="mt-2 grid grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-1 text-xs sm:text-sm">
               <div className="min-w-0">
                 <span className="text-muted-foreground">Start:</span>{' '}
-                {format(new Date(policy.trip_start_date), 'MMM d, yyyy')}
+                {format(parseDateOnly(policy.trip_start_date), 'MMM d, yyyy')}
               </div>
               <div className="min-w-0">
                 <span className="text-muted-foreground">End:</span>{' '}
-                {format(new Date(policy.trip_end_date), 'MMM d, yyyy')}
+                {format(parseDateOnly(policy.trip_end_date), 'MMM d, yyyy')}
               </div>
               <div className="min-w-0">
                 <span className="text-muted-foreground">Premium:</span>{' '}
