@@ -161,10 +161,10 @@ async function sendForRental(supabase: any, rental: any, opts: { customAmount?: 
 const RENTAL_SELECT = `
   id, customer_id, vehicle_id, tenant_id, auto_extend_enabled, auto_extend_status,
   auto_extend_reminder_enabled, auto_extend_reminder_interval_days, auto_extend_reminder_max,
-  auto_extend_reminder_count, auto_extend_last_reminder_at, auto_extend_pending_extension_id,
+  auto_extend_reminder_count, auto_extend_reminder_send_weekday, auto_extend_last_reminder_at, auto_extend_pending_extension_id,
   customers!rentals_customer_id_fkey ( id, name, email ),
   vehicles ( make, model, reg ),
-  tenants ( id, slug, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete )
+  tenants ( id, slug, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, timezone )
 `;
 
 Deno.serve(async (req) => {
@@ -189,10 +189,33 @@ Deno.serve(async (req) => {
       .eq("auto_extend_enabled", true).eq("auto_extend_status", "awaiting_payment")
       .eq("auto_extend_reminder_enabled", true).eq("auto_extend_paused", false);
     let sent = 0, skipped = 0;
+    // Intl weekday name -> number (0=Sunday .. 6=Saturday), matches DB convention.
+    const WEEKDAY_NUM: Record<string, number> = {
+      Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6,
+    };
     for (const r of (rentals as any[]) || []) {
-      const interval = (Number(r.auto_extend_reminder_interval_days) || 2) * 86400000;
-      const last = r.auto_extend_last_reminder_at ? new Date(r.auto_extend_last_reminder_at).getTime() : 0;
-      if (nowMs - last < interval) { skipped++; continue; }
+      const weekday = r.auto_extend_reminder_send_weekday;
+      if (weekday !== null && weekday !== undefined) {
+        // Weekday mode: nudge only on the operator-chosen day, evaluated in the
+        // tenant's local timezone, at most once that day. The N-day interval is
+        // not used here — the weekday itself is the (weekly) cadence.
+        const tz = r.tenants?.timezone || "UTC";
+        const localWeekday = WEEKDAY_NUM[
+          new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long" }).format(new Date())
+        ];
+        if (localWeekday !== Number(weekday)) { skipped++; continue; }
+        if (r.auto_extend_last_reminder_at) {
+          const dayFmt = new Intl.DateTimeFormat("en-CA", { timeZone: tz }); // YYYY-MM-DD
+          if (dayFmt.format(new Date(r.auto_extend_last_reminder_at)) === dayFmt.format(new Date())) {
+            skipped++; continue; // already nudged today (tenant-local)
+          }
+        }
+      } else {
+        // Interval mode (unchanged): nudge every N days since the last reminder.
+        const interval = (Number(r.auto_extend_reminder_interval_days) || 2) * 86400000;
+        const last = r.auto_extend_last_reminder_at ? new Date(r.auto_extend_last_reminder_at).getTime() : 0;
+        if (nowMs - last < interval) { skipped++; continue; }
+      }
       if ((r.auto_extend_reminder_count || 0) >= (Number(r.auto_extend_reminder_max) || 3)) { skipped++; continue; }
       const res = await sendForRental(supabase, r, { isNudge: true });
       res.ok ? sent++ : skipped++;

@@ -126,6 +126,8 @@ export function AutoExtensionSection({
   const reminderInterval = Number(rental.auto_extend_reminder_interval_days ?? 2);
   const reminderMax = Number(rental.auto_extend_reminder_max ?? 3);
   const remindersSent = Number(rental.auto_extend_reminder_count ?? 0);
+  // Optional fixed send day (0=Sun..6=Sat). null/undefined = interval-based cadence.
+  const reminderWeekday = rental.auto_extend_reminder_send_weekday;
 
   // Send a pay-link reminder now (optionally a custom amount) via the edge function.
   const sendReminder = async (amount?: number) => {
@@ -287,6 +289,25 @@ export function AutoExtensionSection({
                 <Label className="text-xs">Max reminders</Label>
                 <Input type="number" min={0} max={20} defaultValue={reminderMax} className="h-8 w-24"
                   onBlur={(e) => { const v = Math.max(0, Math.min(20, Number(e.target.value) || 3)); if (v !== reminderMax) update({ auto_extend_reminder_max: v }, "Reminder cap updated"); }} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Reminder day</Label>
+                <Select
+                  value={reminderWeekday === null || reminderWeekday === undefined ? "any" : String(reminderWeekday)}
+                  onValueChange={(v) => update({ auto_extend_reminder_send_weekday: v === "any" ? null : Number(v) }, "Reminder day updated")}
+                >
+                  <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Any day (interval)</SelectItem>
+                    <SelectItem value="0">Sunday</SelectItem>
+                    <SelectItem value="1">Monday</SelectItem>
+                    <SelectItem value="2">Tuesday</SelectItem>
+                    <SelectItem value="3">Wednesday</SelectItem>
+                    <SelectItem value="4">Thursday</SelectItem>
+                    <SelectItem value="5">Friday</SelectItem>
+                    <SelectItem value="6">Saturday</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex items-center gap-2 ml-auto">
                 <Switch checked={reminderEnabled} onCheckedChange={(v) => update({ auto_extend_reminder_enabled: v }, v ? "Auto-reminders on" : "Auto-reminders off")} />
