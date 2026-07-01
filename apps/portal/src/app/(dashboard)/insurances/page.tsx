@@ -9,6 +9,7 @@ import { ShieldCheck, Download, ExternalLink, X, Loader2, Search, BarChart3, Plu
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import Link from "next/link";
 import { useState, useCallback } from "react";
 import { useTenant } from "@/contexts/TenantContext";
@@ -343,8 +344,8 @@ export default function InsurancesList() {
         if (policy.policy_type) addRow("Policy Type", policy.policy_type);
         if (policy.premium_amount) addRow("Premium", `$${Number(policy.premium_amount).toFixed(2)}`);
         if (policy.pickup_state) addRow("Pickup State", policy.pickup_state);
-        if (policy.trip_start_date) addRow("Trip Start", format(new Date(policy.trip_start_date), "MMM dd, yyyy"));
-        if (policy.trip_end_date) addRow("Trip End", format(new Date(policy.trip_end_date), "MMM dd, yyyy"));
+        if (policy.trip_start_date) addRow("Trip Start", format(parseLocalDate(policy.trip_start_date), "MMM dd, yyyy"));
+        if (policy.trip_end_date) addRow("Trip End", format(parseLocalDate(policy.trip_end_date), "MMM dd, yyyy"));
         if (policy.policy_issued_at) addRow("Policy Issued", format(new Date(policy.policy_issued_at), "MMM dd, yyyy HH:mm"));
 
         // Coverage types

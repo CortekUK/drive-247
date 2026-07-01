@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, ExternalLink, FileText } from "lucide-react";
 import { AddPlateDialog } from "@/components/plates/add-plate-dialog";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 
 interface Plate {
   id: string;
@@ -127,7 +128,7 @@ export const VehiclePlatesPanel = ({ vehicleId, vehicleReg }: VehiclePlatesPanel
                       <TableCell className="font-medium">{plate.plate_number}</TableCell>
                       <TableCell>{plate.supplier || "—"}</TableCell>
                       <TableCell>
-                        {plate.order_date ? format(new Date(plate.order_date), "MM/dd/yyyy") : "—"}
+                        {plate.order_date ? format(parseLocalDate(plate.order_date), "MM/dd/yyyy") : "—"}
                       </TableCell>
                       <TableCell>
                         {plate.cost > 0 ? `$${Number(plate.cost).toLocaleString()}` : "—"}

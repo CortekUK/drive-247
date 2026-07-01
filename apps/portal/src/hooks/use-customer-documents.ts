@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { parseLocalDate } from "@/lib/date-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
@@ -160,7 +161,7 @@ export function getDocumentStatus(endDate?: string): 'Active' | 'Expired' | 'Exp
   if (!endDate) return 'Unknown';
   
   const today = new Date();
-  const expiry = new Date(endDate);
+  const expiry = parseLocalDate(endDate);
   const daysUntilExpiry = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   
   if (daysUntilExpiry < 0) return 'Expired';

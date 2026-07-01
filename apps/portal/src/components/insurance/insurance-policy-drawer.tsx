@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { DocumentUploadDialog } from "./document-upload-dialog";
 import { format, differenceInDays } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import Link from "next/link";
 import { InsurancePolicyStatusChip } from "./insurance-policy-status-chip";
 import { InsurancePolicyDialog } from "./insurance-policy-dialog";
@@ -169,7 +170,7 @@ export function InsurancePolicyDrawer({
   }
 
   const daysUntilExpiry = policy 
-    ? differenceInDays(new Date(policy.expiry_date), new Date())
+    ? differenceInDays(parseLocalDate(policy.expiry_date), new Date())
     : 0;
 
   return (
@@ -254,12 +255,12 @@ export function InsurancePolicyDrawer({
                     </div>
                     <div>
                       <div className="text-sm font-medium text-muted-foreground">Start Date</div>
-                      <div>{format(new Date(policy.start_date), "MMM d, yyyy")}</div>
+                      <div>{format(parseLocalDate(policy.start_date), "MMM d, yyyy")}</div>
                     </div>
                     <div>
                       <div className="text-sm font-medium text-muted-foreground">Expiry Date</div>
                       <div className="flex items-center gap-2">
-                        {format(new Date(policy.expiry_date), "MMM d, yyyy")}
+                        {format(parseLocalDate(policy.expiry_date), "MMM d, yyyy")}
                         {daysUntilExpiry >= 0 && daysUntilExpiry <= 30 && (
                           <Badge variant="outline" className="text-xs">
                             {daysUntilExpiry === 0 ? "Today" : `${daysUntilExpiry}d`}

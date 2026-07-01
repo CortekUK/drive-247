@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { parseLocalDate } from "@/lib/date-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
@@ -104,7 +105,7 @@ export const useCustomerBalance = (customerId: string | undefined) => {
         if (entry.rental_id && excludedRentalIds.has(entry.rental_id)) return sum;
         if (entry.rental_id && paygRentalIds.has(entry.rental_id)) return sum;
         // For rental charges, only include if currently due (due_date <= today)
-        if (entry.category === 'Rental' && entry.due_date && new Date(entry.due_date) > new Date()) {
+        if (entry.category === 'Rental' && entry.due_date && parseLocalDate(entry.due_date) > new Date()) {
           return sum;
         }
         // Include all other charges (fines, etc.) regardless of due date
@@ -184,7 +185,7 @@ export const useCustomerBalanceWithStatus = (customerId: string | undefined) => 
           if (entry.rental_id && paygRentalIds.has(entry.rental_id)) return;
 
           // For rental charges, only include remaining if currently due
-          if (entry.category === 'Rental' && entry.due_date && new Date(entry.due_date) > new Date()) {
+          if (entry.category === 'Rental' && entry.due_date && parseLocalDate(entry.due_date) > new Date()) {
             // Future charge - don't add to outstanding
             return;
           }

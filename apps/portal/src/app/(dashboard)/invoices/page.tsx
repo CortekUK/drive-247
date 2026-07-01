@@ -24,6 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { FileText, MoreVertical, Trash2, Mail, Search, Calendar, X, Download } from "lucide-react";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { formatCurrency } from "@/lib/format-utils";
 import { InvoiceDialog } from "@/components/shared/dialogs/invoice-dialog";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
@@ -158,13 +159,13 @@ const InvoicesList = () => {
     // Date range filter
     if (filters.dateFrom) {
       result = result.filter(invoice =>
-        new Date(invoice.invoice_date) >= filters.dateFrom!
+        parseLocalDate(invoice.invoice_date) >= filters.dateFrom!
       );
     }
 
     if (filters.dateTo) {
       result = result.filter(invoice =>
-        new Date(invoice.invoice_date) <= filters.dateTo!
+        parseLocalDate(invoice.invoice_date) <= filters.dateTo!
       );
     }
 
@@ -382,9 +383,9 @@ const InvoicesList = () => {
                           {invoice.vehicles?.make} {invoice.vehicles?.model}
                         </span>
                       </TableCell>
-                      <TableCell>{format(new Date(invoice.invoice_date), "PP")}</TableCell>
+                      <TableCell>{format(parseLocalDate(invoice.invoice_date), "PP")}</TableCell>
                       <TableCell>
-                        {invoice.due_date ? format(new Date(invoice.due_date), "PP") : "—"}
+                        {invoice.due_date ? format(parseLocalDate(invoice.due_date), "PP") : "—"}
                       </TableCell>
                       <TableCell className="text-left font-medium">
                         {formatCurrency(invoice.total_amount, tenant?.currency_code || 'USD')}

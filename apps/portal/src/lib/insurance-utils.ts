@@ -1,4 +1,5 @@
 import { differenceInDays } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { formatCurrency as _formatCurrency } from "@/lib/format-utils";
 
 export type InsurancePolicyStatus = "Active" | "ExpiringSoon" | "Expired" | "Suspended" | "Cancelled" | "Inactive";
@@ -16,7 +17,7 @@ export function getInsuranceStatusInfo(
   expiryDate: string
 ): InsuranceStatusInfo {
   const today = new Date();
-  const expiry = new Date(expiryDate);
+  const expiry = parseLocalDate(expiryDate);
   const daysUntilExpiry = differenceInDays(expiry, today);
 
   // Handle explicit statuses first (not date-derived)
@@ -112,5 +113,5 @@ export function validatePolicyNumber(policyNumber: string): boolean {
 
 export function validateDateRange(startDate: string, expiryDate: string): boolean {
   if (!startDate || !expiryDate) return false;
-  return new Date(expiryDate) > new Date(startDate);
+  return parseLocalDate(expiryDate) > new Date(startDate);
 }

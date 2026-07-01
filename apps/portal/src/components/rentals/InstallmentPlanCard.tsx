@@ -22,6 +22,7 @@ import {
   Ban,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { parseLocalDate } from "@/lib/date-utils";
 import { useInstallmentPlan, InstallmentPlanWithSchedule, ScheduledInstallment } from '@/hooks/use-installment-plan';
 
 interface InstallmentPlanCardProps {
@@ -162,7 +163,7 @@ export default function InstallmentPlanCard({ rentalId, formatCurrency }: Instal
           <div className="flex items-center gap-2 p-3 border rounded-lg bg-blue-50 dark:bg-blue-950">
             <Calendar className="h-4 w-4 text-blue-600" />
             <span className="text-sm">
-              Next payment due: <strong>{format(new Date(plan.next_due_date), 'MMM d, yyyy')}</strong>
+              Next payment due: <strong>{format(parseLocalDate(plan.next_due_date), 'MMM d, yyyy')}</strong>
             </span>
           </div>
         )}
@@ -183,7 +184,7 @@ export default function InstallmentPlanCard({ rentalId, formatCurrency }: Instal
               {plan.scheduled_installments.map((installment) => (
                 <TableRow key={installment.id}>
                   <TableCell className="font-medium">{installment.installment_number}</TableCell>
-                  <TableCell>{format(new Date(installment.due_date), 'MMM d, yyyy')}</TableCell>
+                  <TableCell>{format(parseLocalDate(installment.due_date), 'MMM d, yyyy')}</TableCell>
                   <TableCell className="text-right">{formatCurrency(installment.amount)}</TableCell>
                   <TableCell className="text-center">
                     <TooltipProvider>

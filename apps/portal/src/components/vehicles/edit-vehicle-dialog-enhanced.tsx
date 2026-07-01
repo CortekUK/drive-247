@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { format, startOfDay } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import { getContractTotal } from "@/lib/vehicle-utils";
 import { editVehicleEnhancedSchema, type EditVehicleEnhancedFormValues } from "@/client-schemas/vehicles/edit-vehicle-enhanced";
@@ -120,16 +121,16 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
       fuel_type: (vehicle.fuel_type as 'Petrol' | 'Diesel' | 'Hybrid' | 'Electric') || 'Petrol',
       purchase_price: vehicle.purchase_price,
       contract_total: existingContractTotal,
-      acquisition_date: vehicle.acquisition_date ? new Date(vehicle.acquisition_date) : new Date(),
+      acquisition_date: vehicle.acquisition_date ? parseLocalDate(vehicle.acquisition_date) : new Date(),
       acquisition_type: vehicle.acquisition_type ? (vehicle.acquisition_type as 'Purchase' | 'Finance') : undefined,
       daily_rent: vehicle.daily_rent ?? 0,
       weekly_rent: vehicle.weekly_rent ?? 0,
       monthly_rent: vehicle.monthly_rent ?? 0,
       category: vehicle.category,
-      mot_due_date: vehicle.mot_due_date ? new Date(vehicle.mot_due_date) : undefined,
-      tax_due_date: vehicle.tax_due_date ? new Date(vehicle.tax_due_date) : undefined,
-      warranty_start_date: vehicle.warranty_start_date ? new Date(vehicle.warranty_start_date) : undefined,
-      warranty_end_date: vehicle.warranty_end_date ? new Date(vehicle.warranty_end_date) : undefined,
+      mot_due_date: vehicle.mot_due_date ? parseLocalDate(vehicle.mot_due_date) : undefined,
+      tax_due_date: vehicle.tax_due_date ? parseLocalDate(vehicle.tax_due_date) : undefined,
+      warranty_start_date: vehicle.warranty_start_date ? parseLocalDate(vehicle.warranty_start_date) : undefined,
+      warranty_end_date: vehicle.warranty_end_date ? parseLocalDate(vehicle.warranty_end_date) : undefined,
       has_logbook: vehicle.has_logbook || false,
       has_service_plan: vehicle.has_service_plan || false,
       has_spare_key: vehicle.has_spare_key || false,

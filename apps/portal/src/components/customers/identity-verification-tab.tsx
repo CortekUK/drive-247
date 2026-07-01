@@ -7,6 +7,7 @@ import { Shield, CheckCircle2, AlertCircle, XCircle, Clock, ExternalLink, Refres
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { useTenant } from "@/contexts/TenantContext";
 import { VerificationQRModal } from "./verification-qr-modal";
@@ -287,7 +288,7 @@ export function IdentityVerificationTab({ customerId }: IdentityVerificationTabP
                           )}
                           {verification.document_expiry_date && (
                             <div className="text-muted-foreground text-xs">
-                              Exp: {format(new Date(verification.document_expiry_date), 'MMM d, yyyy')}
+                              Exp: {format(parseLocalDate(verification.document_expiry_date), 'MMM d, yyyy')}
                             </div>
                           )}
                         </div>
@@ -306,7 +307,7 @@ export function IdentityVerificationTab({ customerId }: IdentityVerificationTabP
                     </TableCell>
                     <TableCell>
                       {verification.date_of_birth ? (
-                        format(new Date(verification.date_of_birth), 'MMM d, yyyy')
+                        format(parseLocalDate(verification.date_of_birth), 'MMM d, yyyy')
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}

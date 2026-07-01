@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { parseLocalDate } from "@/lib/date-utils";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -163,7 +164,7 @@ export default function BonzahInsuranceSelector({
     }
 
     // Validate age 21+
-    const dob = new Date(detailsForm.date_of_birth);
+    const dob = parseLocalDate(detailsForm.date_of_birth);
     const today = new Date();
     let age = today.getFullYear() - dob.getFullYear();
     const monthDiff = today.getMonth() - dob.getMonth();

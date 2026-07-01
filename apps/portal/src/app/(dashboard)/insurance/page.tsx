@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 
 // Components
@@ -243,7 +244,7 @@ export default function InsuranceListEnhanced() {
   // Check if policy is expiring within 7 days for visual indicator
   const isPolicyUrgent = (expiryDate: string) => {
     const today = new Date();
-    const expiry = new Date(expiryDate);
+    const expiry = parseLocalDate(expiryDate);
     const daysUntilExpiry = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     return daysUntilExpiry <= 7 && daysUntilExpiry >= 0;
   };
@@ -454,11 +455,11 @@ export default function InsuranceListEnhanced() {
                       </TableCell>
                       <TableCell>{policy.provider || "—"}</TableCell>
                       <TableCell>
-                        {format(new Date(policy.start_date), "MMM d, yyyy")}
+                        {format(parseLocalDate(policy.start_date), "MMM d, yyyy")}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          {format(new Date(policy.expiry_date), "MMM d, yyyy")}
+                          {format(parseLocalDate(policy.expiry_date), "MMM d, yyyy")}
                           {isPolicyUrgent(policy.expiry_date) && (
                             <Badge variant="outline" className="text-xs text-amber-600">
                               Urgent

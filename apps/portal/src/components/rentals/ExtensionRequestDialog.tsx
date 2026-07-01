@@ -121,9 +121,9 @@ export function ExtensionRequestDialog({
   }
   prevOpenRef.current = open;
 
-  const currentEndDate = new Date(snapshotEndDate);
+  const currentEndDate = parseLocalDate(snapshotEndDate);
   const requestedEndDate = snapshotRequestedDate
-    ? new Date(snapshotRequestedDate)
+    ? parseLocalDate(snapshotRequestedDate)
     : null;
 
   // Detect stale request: the requested date is on or before the current end date

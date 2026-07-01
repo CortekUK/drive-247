@@ -15,6 +15,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowLeft, Info } from "lucide-react";
 import { startOfWeek, eachWeekOfInterval, subMonths, format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { useTenant } from "@/contexts/TenantContext";
 
 const statusChartConfig = {
@@ -84,7 +85,7 @@ export default function CustomersAnalyticsPage() {
         entries.forEach((entry: any) => {
           if (entry.type === 'Charge') {
             if (entry.rental_id && excludedRentalIds.has(entry.rental_id)) return;
-            if (entry.category === 'Rental' && entry.due_date && new Date(entry.due_date) > new Date()) return;
+            if (entry.category === 'Rental' && entry.due_date && parseLocalDate(entry.due_date) > new Date()) return;
             balance += (entry.remaining_amount || 0);
           }
         });

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { parseLocalDate } from "@/lib/date-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -137,7 +138,7 @@ export const PaymentManagement = () => {
                 {payments.map((payment) => (
                   <TableRow key={payment.id} className="hover:bg-muted/50">
                     <TableCell className="font-medium">
-                      {formatInTimeZone(new Date(payment.payment_date), 'America/New_York', "MM/dd/yyyy")}
+                      {formatInTimeZone(parseLocalDate(payment.payment_date), 'America/New_York', "MM/dd/yyyy")}
                     </TableCell>
                     <TableCell>{payment.customers?.name}</TableCell>
                     <TableCell>{payment.vehicles?.reg}</TableCell>

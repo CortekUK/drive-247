@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { parseLocalDate } from "@/lib/date-utils";
 
 interface FineStatusBadgeProps {
   status: string;
@@ -18,7 +19,7 @@ export const FineStatusBadge = ({ status, dueDate, remainingAmount }: FineStatus
     
     // Check if overdue for open fines
     if (status === 'Open') {
-      const due = new Date(dueDate);
+      const due = parseLocalDate(dueDate);
       const today = new Date();
       const isOverdue = due < today && remainingAmount > 0;
       
@@ -44,7 +45,7 @@ export const FineStatusBadge = ({ status, dueDate, remainingAmount }: FineStatus
     
     // For Open status, check if overdue
     if (status === 'Open') {
-      const due = new Date(dueDate);
+      const due = parseLocalDate(dueDate);
       const today = new Date();
       const isOverdue = due < today && remainingAmount > 0;
       

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
+import { parseLocalDate } from "@/lib/date-utils";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, CheckCircle, AlertCircle, FileCheck, AlertTriangle, Shield, ShieldCheck } from "lucide-react";
@@ -86,7 +87,7 @@ export function AIScanProgress({ documentId }: AIScanProgressProps) {
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return null;
     try {
-      return new Date(dateStr).toLocaleDateString('en-US', {
+      return parseLocalDate(dateStr).toLocaleDateString('en-US', {
         month: 'short', day: 'numeric', year: 'numeric'
       });
     } catch {

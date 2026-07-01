@@ -88,9 +88,9 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
           <h3 className="font-semibold mb-2">Invoice Details:</h3>
           <div className="text-sm space-y-1">
             <p><span className="text-gray-600">Invoice #:</span> <strong>{invoice.invoice_number}</strong></p>
-            <p><span className="text-gray-600">Date:</span> {format(new Date(invoice.invoice_date), 'PPP')}</p>
+            <p><span className="text-gray-600">Date:</span> {format(parseLocalDate(invoice.invoice_date), 'PPP')}</p>
             {invoice.due_date && (
-              <p><span className="text-gray-600">Due Date:</span> {format(new Date(invoice.due_date), 'PPP')}</p>
+              <p><span className="text-gray-600">Due Date:</span> {format(parseLocalDate(invoice.due_date), 'PPP')}</p>
             )}
           </div>
         </div>
@@ -344,9 +344,9 @@ export const InvoiceDialog = ({
                 <h3 className="font-semibold mb-2">Invoice Details:</h3>
                 <div className="text-sm space-y-1">
                   <p><span className="text-muted-foreground">Invoice #:</span> <strong>{invoice.invoice_number}</strong></p>
-                  <p><span className="text-muted-foreground">Date:</span> {format(new Date(invoice.invoice_date), 'PPP')}</p>
+                  <p><span className="text-muted-foreground">Date:</span> {format(parseLocalDate(invoice.invoice_date), 'PPP')}</p>
                   {invoice.due_date && (
-                    <p><span className="text-muted-foreground">Due Date:</span> {format(new Date(invoice.due_date), 'PPP')}</p>
+                    <p><span className="text-muted-foreground">Due Date:</span> {format(parseLocalDate(invoice.due_date), 'PPP')}</p>
                   )}
                 </div>
               </div>

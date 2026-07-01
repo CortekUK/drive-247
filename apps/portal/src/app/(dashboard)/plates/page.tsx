@@ -48,6 +48,7 @@ import {
   X
 } from "lucide-react";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 
 interface Plate {
   id: string;
@@ -364,7 +365,7 @@ export default function PlatesListEnhanced() {
       'Plate Number': plate.plate_number,
       'Vehicle': plate.vehicles?.reg || 'Not Assigned',
       'Supplier': plate.supplier || '',
-      'Order Date': plate.order_date ? format(new Date(plate.order_date), 'MM/dd/yyyy') : '',
+      'Order Date': plate.order_date ? format(parseLocalDate(plate.order_date), 'MM/dd/yyyy') : '',
       'Cost': plate.cost || '',
       'Status': plate.status,
       'Retention Ref': plate.retention_doc_reference || '',
@@ -540,7 +541,7 @@ export default function PlatesListEnhanced() {
                     </TableCell>
                     <TableCell>{plate.supplier || "-"}</TableCell>
                     <TableCell>
-                      {plate.order_date ? format(new Date(plate.order_date), "MM/dd/yyyy") : "-"}
+                      {plate.order_date ? format(parseLocalDate(plate.order_date), "MM/dd/yyyy") : "-"}
                     </TableCell>
                     <TableCell className="text-left">
                       {plate.cost ? formatCurrency(Number(plate.cost), tenant?.currency_code || 'USD') : "-"}

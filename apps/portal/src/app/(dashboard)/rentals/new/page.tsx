@@ -807,7 +807,7 @@ const CreateRental = () => {
   // Auto-fill driver age from customer's date of birth
   useEffect(() => {
     if (customerDetails?.date_of_birth) {
-      const dob = new Date(customerDetails.date_of_birth);
+      const dob = parseLocalDate(customerDetails.date_of_birth);
       const today = new Date();
       let age = today.getFullYear() - dob.getFullYear();
       const monthDiff = today.getMonth() - dob.getMonth();

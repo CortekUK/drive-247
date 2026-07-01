@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { ArrowLeft, Info } from "lucide-react";
 import { format, subMonths, startOfMonth } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { useFinesData } from "@/hooks/use-fines-data";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -77,7 +78,7 @@ export default function FinesAnalyticsPage() {
     return months.map((m, i) => {
       const nextStart = i < months.length - 1 ? months[i + 1].start : new Date(now.getFullYear(), now.getMonth() + 1, 1);
       const count = allFines.filter(f => {
-        const d = new Date(f.issue_date);
+        const d = parseLocalDate(f.issue_date);
         return d >= m.start && d < nextStart;
       }).length;
       return { name: format(m.start, 'MMM'), count };

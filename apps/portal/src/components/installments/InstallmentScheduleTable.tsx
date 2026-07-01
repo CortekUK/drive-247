@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, Clock, AlertCircle, XCircle, Receipt } from "lucide-react";
+import { parseLocalDate } from "@/lib/date-utils";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +39,7 @@ function fmt(amount: number, code = "USD") {
 
 function fmtDate(s: string) {
   try {
-    return new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    return parseLocalDate(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   } catch {
     return s;
   }
@@ -55,7 +56,7 @@ function visualStatus(row: ScheduleRow): {
   if (row.invoice_status === "superseded") return { label: "Superseded", tone: "text-muted-foreground/70", Icon: XCircle };
   const today = new Date().toISOString().split("T")[0];
   if (row.due_date < today) {
-    const days = Math.floor((Date.now() - new Date(row.due_date).getTime()) / (1000 * 60 * 60 * 24));
+    const days = Math.floor((Date.now() - parseLocalDate(row.due_date).getTime()) / (1000 * 60 * 60 * 24));
     return { label: `Overdue ${days}d`, tone: "text-red-600 dark:text-red-400", Icon: AlertCircle };
   }
   if (row.due_date === today) return { label: "Due today", tone: "text-indigo-600 dark:text-indigo-400 font-semibold", Icon: Clock };

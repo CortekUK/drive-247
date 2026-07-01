@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import { parseLocalDate } from "@/lib/date-utils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -181,7 +182,7 @@ export default function PlateDetail() {
                 <div className="text-sm text-muted-foreground">Order Date</div>
                 <div className="flex items-center gap-1">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
-                  {formatInTimeZone(new Date(plate.order_date), 'America/New_York', 'MM/dd/yyyy')}
+                  {formatInTimeZone(parseLocalDate(plate.order_date), 'America/New_York', 'MM/dd/yyyy')}
                 </div>
               </div>
             )}

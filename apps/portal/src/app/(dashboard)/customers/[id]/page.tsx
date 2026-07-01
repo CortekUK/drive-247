@@ -562,7 +562,7 @@ const CustomerDetail = () => {
                     <div className="flex items-center gap-1 group">
                       <span className="text-sm font-semibold">
                         {(customer.date_of_birth || latestVerification?.date_of_birth)
-                          ? format(new Date((customer.date_of_birth || latestVerification?.date_of_birth)!), 'MMM d, yyyy')
+                          ? format(parseLocalDate((customer.date_of_birth || latestVerification?.date_of_birth)!), 'MMM d, yyyy')
                           : "Not set"}
                       </span>
                       <button
@@ -716,7 +716,7 @@ const CustomerDetail = () => {
                       {cmdResults.license.licenseExpiryDate && (
                         <DetailRow
                           label="Expires"
-                          value={format(new Date(cmdResults.license.licenseExpiryDate), 'MMM d, yyyy')}
+                          value={format(parseLocalDate(cmdResults.license.licenseExpiryDate), 'MMM d, yyyy')}
                         />
                       )}
                       {cmdResults.license.licenseState && (
@@ -1064,7 +1064,7 @@ const CustomerDetail = () => {
                       {payments.slice((paymentsPage - 1) * PAGE_SIZE, paymentsPage * PAGE_SIZE).map((payment) => (
                         <TableRow key={payment.id} className="hover:bg-muted/50 transition-colors">
                           <TableCell className="whitespace-nowrap">
-                            {format(new Date(payment.payment_date), "MM/dd/yyyy")}
+                            {format(parseLocalDate(payment.payment_date), "MM/dd/yyyy")}
                           </TableCell>
                           <TableCell className="text-right font-medium">
                             {formatCurrency(payment.amount, currencyCode)}
@@ -1215,10 +1215,10 @@ const CustomerDetail = () => {
                             {formatCurrency(fine.amount, currencyCode)}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            {format(new Date(fine.issue_date), "MM/dd/yyyy")}
+                            {format(parseLocalDate(fine.issue_date), "MM/dd/yyyy")}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            {format(new Date(fine.due_date), "MM/dd/yyyy")}
+                            {format(parseLocalDate(fine.due_date), "MM/dd/yyyy")}
                           </TableCell>
                           <TableCell>
                             <FineStatusBadge

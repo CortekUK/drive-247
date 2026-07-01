@@ -34,7 +34,7 @@ interface ESignRequest {
 
 function formatDate(date: string | Date | null): string {
     if (!date) return 'N/A';
-    const d = typeof date === 'string' ? new Date(date) : date;
+    const d = typeof date === 'string' ? parseLocalDate(date) : date;
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 

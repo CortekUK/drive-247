@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import { parseLocalDate } from "@/lib/date-utils";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -224,7 +225,7 @@ const FineDetail = () => {
   const canWaive = fine.status === 'Open';
 
   const getDaysUntilDueDisplay = () => {
-    const dueDate = new Date(fine.due_date);
+    const dueDate = parseLocalDate(fine.due_date);
     const today = new Date();
     const daysDiff = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -234,7 +235,7 @@ const FineDetail = () => {
   };
 
   const getDaysUntilDueColor = () => {
-    const dueDate = new Date(fine.due_date);
+    const dueDate = parseLocalDate(fine.due_date);
     const today = new Date();
     const daysDiff = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 

@@ -31,6 +31,7 @@ import {
   FileText
 } from "lucide-react";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 
 interface Plate {
   id: string;
@@ -193,7 +194,7 @@ export const EnhancedVehiclePlatesPanel = ({ vehicleId, vehicleReg }: EnhancedVe
                       </div>
                       <div className="text-sm text-green-600 mt-1">
                         {currentPlate.supplier && `Supplier: ${currentPlate.supplier}`}
-                        {currentPlate.order_date && ` • Ordered: ${format(new Date(currentPlate.order_date), "MM/dd/yyyy")}`}
+                        {currentPlate.order_date && ` • Ordered: ${format(parseLocalDate(currentPlate.order_date), "MM/dd/yyyy")}`}
                       </div>
                     </div>
                     <DropdownMenu>
@@ -245,7 +246,7 @@ export const EnhancedVehiclePlatesPanel = ({ vehicleId, vehicleReg }: EnhancedVe
                       </TableCell>
                       <TableCell>{plate.supplier || "-"}</TableCell>
                       <TableCell>
-                        {plate.order_date ? format(new Date(plate.order_date), "MM/dd/yyyy") : "-"}
+                        {plate.order_date ? format(parseLocalDate(plate.order_date), "MM/dd/yyyy") : "-"}
                       </TableCell>
                       <TableCell className="text-right">
                         {plate.cost ? formatCurrency(Number(plate.cost), tenant?.currency_code || 'USD') : "-"}

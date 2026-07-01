@@ -35,6 +35,7 @@ import { CalendarIcon, Upload, X, FileText } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { enhancedAddPlateSchema, type EnhancedAddPlateFormValues } from "@/client-schemas/plates/enhanced-add-plate";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
@@ -110,7 +111,7 @@ export const EnhancedAddPlateDialog = ({
           plate_number: editPlate.plate_number,
           vehicle_id: editPlate.vehicle_id || "none",
           supplier: editPlate.supplier || "",
-          order_date: editPlate.order_date ? new Date(editPlate.order_date) : undefined,
+          order_date: editPlate.order_date ? parseLocalDate(editPlate.order_date) : undefined,
           cost: (editPlate.cost?.toString() || "0") as any,
           status: (editPlate.status as any) || 'ordered',
           retention_doc_reference: editPlate.retention_doc_reference || "",

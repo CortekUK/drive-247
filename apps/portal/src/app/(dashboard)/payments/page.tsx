@@ -369,7 +369,7 @@ const PaymentsList = () => {
                       return (
                         <TableRow key={payment.id} className="hover:bg-muted/50">
                           <TableCell className="font-medium">
-                            {formatInTimeZone(new Date(payment.payment_date), 'America/New_York', 'MM/dd/yyyy')}
+                            {formatInTimeZone(parseLocalDate(payment.payment_date), 'America/New_York', 'MM/dd/yyyy')}
                           </TableCell>
                           <TableCell>
                             <button

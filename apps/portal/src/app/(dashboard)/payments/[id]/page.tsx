@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import { parseLocalDate } from "@/lib/date-utils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -169,7 +170,7 @@ export default function PaymentDetail() {
               <div className="text-sm text-muted-foreground">Payment Date</div>
               <div className="flex items-center gap-1">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
-                {formatInTimeZone(new Date(payment.payment_date), 'America/New_York', 'MM/dd/yyyy')}
+                {formatInTimeZone(parseLocalDate(payment.payment_date), 'America/New_York', 'MM/dd/yyyy')}
               </div>
             </div>
             <div>

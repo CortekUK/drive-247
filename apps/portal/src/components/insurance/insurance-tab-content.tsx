@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Shield, Plus, Edit, FileText, Calendar } from "lucide-react";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { InsurancePolicyDialog } from "./insurance-policy-dialog";
 import { InsurancePolicyStatusChip } from "./insurance-policy-status-chip";
 import { InsuranceDocumentUpload } from "./insurance-document-upload";
@@ -136,7 +137,7 @@ export function InsuranceTabContent({ customerId }: InsuranceTabContentProps) {
                             <div className="text-sm">
                               <div className="flex items-center gap-2">
                                 <Calendar className="h-4 w-4 text-muted-foreground" />
-                                <span>Expires: {format(new Date(policy.expiry_date), "MMM d, yyyy")}</span>
+                                <span>Expires: {format(parseLocalDate(policy.expiry_date), "MMM d, yyyy")}</span>
                               </div>
                               {policy.vehicles && (
                                 <div className="text-muted-foreground mt-1">
@@ -173,7 +174,7 @@ export function InsuranceTabContent({ customerId }: InsuranceTabContentProps) {
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <label className="font-medium text-muted-foreground">Start Date</label>
-                          <p>{format(new Date(policy.start_date), "MMM d, yyyy")}</p>
+                          <p>{format(parseLocalDate(policy.start_date), "MMM d, yyyy")}</p>
                         </div>
                         <div>
                           <label className="font-medium text-muted-foreground">Status</label>

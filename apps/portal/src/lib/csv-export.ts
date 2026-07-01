@@ -1,5 +1,6 @@
 import { type InsurancePolicy } from "@/hooks/use-insurance-data";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 
 export function exportInsuranceToCSV(policies: InsurancePolicy[], filename?: string) {
   const headers = [
@@ -26,8 +27,8 @@ export function exportInsuranceToCSV(policies: InsurancePolicy[], filename?: str
     policy.vehicles?.reg || "",
     policy.vehicles ? `${policy.vehicles.make} ${policy.vehicles.model}` : "",
     policy.provider || "",
-    format(new Date(policy.start_date), "yyyy-MM-dd"),
-    format(new Date(policy.expiry_date), "yyyy-MM-dd"),
+    format(parseLocalDate(policy.start_date), "yyyy-MM-dd"),
+    format(parseLocalDate(policy.expiry_date), "yyyy-MM-dd"),
     policy.status,
     policy.docs_count.toString(),
     policy.notes || "",

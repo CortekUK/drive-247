@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { parseLocalDate } from "@/lib/date-utils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { type InsurancePolicyStatus } from "@/lib/insurance-utils";
@@ -90,7 +91,7 @@ export function useInsuranceData(filters: InsuranceFilters) {
       // Date range filter (by expiry date)
       let dateMatch = true;
       if (filters.dateRange.from || filters.dateRange.to) {
-        const expiryDate = new Date(policy.expiry_date);
+        const expiryDate = parseLocalDate(policy.expiry_date);
         if (filters.dateRange.from && expiryDate < filters.dateRange.from) {
           dateMatch = false;
         }
@@ -111,7 +112,7 @@ export function useInsuranceData(filters: InsuranceFilters) {
       total: filtered.length,
       active: filtered.filter(p => p.status === "Active").length,
       expiringSoon: filtered.filter(p => {
-        const daysUntil = Math.ceil((new Date(p.expiry_date).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const daysUntil = Math.ceil((parseLocalDate(p.expiry_date).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         return (p.status === "Active" || p.status === "ExpiringSoon") && daysUntil <= 30 && daysUntil >= 0;
       }).length,
       expired: filtered.filter(p => p.status === "Expired").length,

@@ -4190,7 +4190,7 @@ const RentalDetail = () => {
                                 {inst.paid_at ? (
                                   <span className="text-green-600">Paid on {new Date(inst.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                 ) : (
-                                  <>Due {new Date(inst.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
+                                  <>Due {parseLocalDate(inst.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
                                 )}
                               </p>
                             </div>
@@ -4237,7 +4237,7 @@ const RentalDetail = () => {
                 <div className="flex items-center gap-2 p-3 border rounded-lg bg-blue-50 dark:bg-blue-950">
                   <Calendar className="h-4 w-4 text-blue-600" />
                   <span className="text-sm">
-                    Next payment: <strong>{new Date(installmentPlan.next_due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</strong>
+                    Next payment: <strong>{parseLocalDate(installmentPlan.next_due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</strong>
                   </span>
                 </div>
               )}
@@ -4262,7 +4262,7 @@ const RentalDetail = () => {
               <p className="text-lg font-semibold">{rental.customers?.name}</p>
               {identityVerification?.date_of_birth && (
                 <p className="text-sm text-muted-foreground">
-                  DOB: {new Date(identityVerification.date_of_birth).toLocaleDateString('en-US')} ({Math.floor((Date.now() - new Date(identityVerification.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} yrs)
+                  DOB: {parseLocalDate(identityVerification.date_of_birth).toLocaleDateString('en-US')} ({Math.floor((Date.now() - parseLocalDate(identityVerification.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} yrs)
                 </p>
               )}
             </div>
@@ -5484,7 +5484,7 @@ const RentalDetail = () => {
                     {identityVerification.date_of_birth && (
                       <div>
                         <span className="text-muted-foreground">Date of Birth:</span>
-                        <p className="font-medium">{showSensitiveInfo ? new Date(identityVerification.date_of_birth).toLocaleDateString('en-US') : '••/••/••••'}</p>
+                        <p className="font-medium">{showSensitiveInfo ? parseLocalDate(identityVerification.date_of_birth).toLocaleDateString('en-US') : '••/••/••••'}</p>
                       </div>
                     )}
                   </div>
@@ -5520,7 +5520,7 @@ const RentalDetail = () => {
                     {identityVerification.document_expiry_date && (
                       <div>
                         <span className="text-muted-foreground">Expiry:</span>
-                        <p className="font-medium">{showSensitiveInfo ? new Date(identityVerification.document_expiry_date).toLocaleDateString('en-US') : '••/••/••••'}</p>
+                        <p className="font-medium">{showSensitiveInfo ? parseLocalDate(identityVerification.document_expiry_date).toLocaleDateString('en-US') : '••/••/••••'}</p>
                       </div>
                     )}
                   </div>

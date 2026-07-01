@@ -1,6 +1,7 @@
 "use client";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { parseLocalDate } from "@/lib/date-utils";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Star, FileText } from "lucide-react";
 import { useCustomerReviews } from "@/hooks/use-customer-reviews";
@@ -76,8 +77,8 @@ export function CustomerReviewsDialog({
                   <p className="text-xs text-muted-foreground">
                     {review.rental.vehicle.make} {review.rental.vehicle.model} ({review.rental.vehicle.reg})
                     {" — "}
-                    {new Date(review.rental.start_date).toLocaleDateString('en-US')}
-                    {review.rental.end_date && ` to ${new Date(review.rental.end_date).toLocaleDateString('en-US')}`}
+                    {parseLocalDate(review.rental.start_date).toLocaleDateString('en-US')}
+                    {review.rental.end_date && ` to ${parseLocalDate(review.rental.end_date).toLocaleDateString('en-US')}`}
                   </p>
                 )}
 

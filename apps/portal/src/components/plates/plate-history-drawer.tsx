@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { History, Car, FileText, Plus, Trash2 } from "lucide-react";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
 
@@ -161,7 +162,7 @@ export const PlateHistoryDrawer = ({
                 <div>
                   <span className="text-muted-foreground">Order Date:</span>
                   <span className="ml-2">
-                    {format(new Date(plate.order_date), "MM/dd/yyyy")}
+                    {format(parseLocalDate(plate.order_date), "MM/dd/yyyy")}
                   </span>
                 </div>
               )}

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { parseLocalDate } from "@/lib/date-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { FineFilterState } from "@/components/fines/fine-filters";
 import { useTenant } from "@/contexts/TenantContext";
@@ -139,7 +140,7 @@ export const useFinesData = ({
       // Enhance the data with computed fields
       const today = new Date();
       let enhancedFines: EnhancedFine[] = (data || []).map(fine => {
-        const dueDate = new Date(fine.due_date);
+        const dueDate = parseLocalDate(fine.due_date);
         const isOverdue = dueDate < today && (fine.status === 'Open' || fine.status === 'Charged');
         const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 

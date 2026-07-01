@@ -17,6 +17,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency, getPerDayLabelLong, getPerWeekLabelLong, getPerMonthLabelLong, getUnlimitedLabel } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { AcquisitionBadge } from "@/components/vehicles/acquisition-badge";
 import { MOTTaxStatusChip } from "@/components/vehicles/mot-tax-status-chip";
@@ -426,10 +427,10 @@ export default function VehicleDetail() {
 
   const getBackLabel = () => {
     if (selectedMonth && fromMonthlyDrilldown) {
-      return `Back to ${format(new Date(selectedMonth + '-01'), 'MMMM yyyy')}`;
+      return `Back to ${format(parseLocalDate(selectedMonth + '-01'), 'MMMM yyyy')}`;
     }
     if (selectedMonth) {
-      return `Back to ${format(new Date(selectedMonth + '-01'), 'MMMM yyyy')}`;
+      return `Back to ${format(parseLocalDate(selectedMonth + '-01'), 'MMMM yyyy')}`;
     }
     return 'Back to Vehicles';
   };
@@ -441,7 +442,7 @@ export default function VehicleDetail() {
     if (selectedMonth) {
       items.push(
         { label: "Global P&L Dashboard", href: "/pl-dashboard" },
-        { label: format(new Date(selectedMonth + '-01'), 'MMMM yyyy'), href: `/pl-dashboard/monthly/${selectedMonth}` }
+        { label: format(parseLocalDate(selectedMonth + '-01'), 'MMMM yyyy'), href: `/pl-dashboard/monthly/${selectedMonth}` }
       );
     }
 
@@ -1192,7 +1193,7 @@ export default function VehicleDetail() {
                       <MetricItem label="Balloon Payment" value={Number(vehicle.balloon)} isAmount />
                     )}
                     {vehicle.finance_start_date && (
-                      <MetricItem label="Finance Start" value={format(new Date(vehicle.finance_start_date), "MM/dd/yyyy")} />
+                      <MetricItem label="Finance Start" value={format(parseLocalDate(vehicle.finance_start_date), "MM/dd/yyyy")} />
                     )}
                     <MetricItem
                       label="Contract Total"
@@ -1308,7 +1309,7 @@ export default function VehicleDetail() {
                         {serviceRecords.map((service) => (
                           <TableRow key={service.id} className="hover:bg-muted/50">
                             <TableCell className="whitespace-nowrap">
-                              {format(new Date(service.service_date), "MM/dd/yyyy")}
+                              {format(parseLocalDate(service.service_date), "MM/dd/yyyy")}
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline">{service.service_type}</Badge>

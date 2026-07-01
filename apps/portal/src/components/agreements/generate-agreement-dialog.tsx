@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, FileSignature } from "lucide-react";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
@@ -271,8 +272,8 @@ export function GenerateAgreementDialog({
                         Extension #{ext.sequence_number}
                         {ext.previous_end_date && ext.new_end_date && (
                           <span className="text-muted-foreground ml-2">
-                            ({format(new Date(ext.previous_end_date), "MMM d")} →{" "}
-                            {format(new Date(ext.new_end_date), "MMM d, yyyy")})
+                            ({format(parseLocalDate(ext.previous_end_date), "MMM d")} →{" "}
+                            {format(parseLocalDate(ext.new_end_date), "MMM d, yyyy")})
                           </span>
                         )}
                       </SelectItem>
