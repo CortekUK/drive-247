@@ -100,7 +100,8 @@ export const EnhancedAssignPlateDialog = ({
       const { data: vehiclesData, error: vehiclesError } = await supabase
         .from("vehicles")
         .select("*")
-        .eq("status", "Available")
+        // Case-insensitive so lowercase "available" rows aren't dropped.
+        .or("status.ilike.Available,status.ilike.available")
         .order("reg");
       
       if (vehiclesError) throw vehiclesError;

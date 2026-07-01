@@ -228,7 +228,7 @@ const MultiStepBookingWidget = () => {
     return () => { clearTimeout(transitionTimerRef.current); clearTimeout(transitionTimer2Ref.current); };
   }, []);
   const [existingRentals, setExistingRentals] = useState<ExistingRental[]>([]); // Completed rentals for buffer time checking
-  const [overlappingVehicleIds, setOverlappingVehicleIds] = useState<Set<string>>(new Set()); // Vehicles with Pending/Active rentals overlapping selected dates
+  const [liveRentalRanges, setLiveRentalRanges] = useState<{ vehicle_id: string; start_date: string; end_date: string | null }[]>([]); // Live rentals with dates — excludes ONLY vehicles booked over the chosen window
   const [blockedDateRanges, setBlockedDateRanges] = useState<{ vehicle_id: string | null; start_date: string; end_date: string }[]>([]); // Manual blocked_dates (e.g. car rented on Turo); filtered by date overlap at render time
   const submitInFlightRef = useRef(false); // Synchronous re-entrancy lock — blocks double-click duplicate submits before `loading` state updates
   const [errors, setErrors] = useState<{
@@ -1134,21 +1134,19 @@ const MultiStepBookingWidget = () => {
       }
     }
 
-    // Hide any vehicle that has a live booking (Pending, Active, or upcoming
-    // reservation) regardless of dates. We treat anything NOT in
-    // Cancelled/Rejected/Closed/Completed as "live" — that covers pending
-    // approvals, active rentals, and future scheduled ones.
-    const { data: blockedRentals } = await supabase
+    // Load live rentals WITH their dates so the render-time filter can hide only
+    // the vehicles whose booking overlaps the customer's chosen window. A car
+    // booked Jan 1-5 must still show for a March search. Anything NOT in
+    // Cancelled/Rejected/Closed/Completed is "live" (pending, active, upcoming).
+    // A NULL end_date is an open-ended/PAYG rental — it blocks from start onward.
+    const { data: liveRentals } = await supabase
       .from("rentals")
-      .select("vehicle_id")
+      .select("vehicle_id, start_date, end_date")
       .eq("tenant_id", tenant.id)
-      .not("status", "in", "(Cancelled,Rejected,Closed,Completed)");
+      .not("status", "in", "(Cancelled,Rejected,Closed,Completed)")
+      .not("vehicle_id", "is", null);
 
-    if (blockedRentals) {
-      setOverlappingVehicleIds(new Set(blockedRentals.map(r => r.vehicle_id).filter(Boolean) as string[]));
-    } else {
-      setOverlappingVehicleIds(new Set());
-    }
+    setLiveRentalRanges((liveRentals as { vehicle_id: string; start_date: string; end_date: string | null }[]) || []);
 
     // Manual blocks (blocked_dates) — operator-marked unavailable windows such as a
     // car rented out on Turo. Loaded once here; the date-overlap filter runs at
@@ -2751,9 +2749,19 @@ const MultiStepBookingWidget = () => {
         });
       }
 
-      // Filter out vehicles with overlapping Pending/Active rentals (clash prevention)
-      if (overlappingVehicleIds.size > 0) {
-        filtered = filtered.filter(vehicle => !overlappingVehicleIds.has(vehicle.id));
+      // Filter out vehicles whose LIVE rental overlaps the chosen window.
+      // Overlap: rental.start <= dropoff AND (rental.end >= pickup OR rental.end is null).
+      // NULL end_date = open-ended/PAYG rental, which blocks from its start onward.
+      if (liveRentalRanges.length > 0) {
+        const bookedIds = new Set(
+          liveRentalRanges
+            .filter(r => r.start_date <= formData.dropoffDate && (r.end_date == null || r.end_date >= formData.pickupDate))
+            .map(r => r.vehicle_id)
+            .filter(Boolean) as string[]
+        );
+        if (bookedIds.size > 0) {
+          filtered = filtered.filter(vehicle => !bookedIds.has(vehicle.id));
+        }
       }
 
       // Filter out vehicles manually blocked (blocked_dates) for the chosen window.

@@ -145,7 +145,8 @@ export const EnhancedAddPlateDialog = ({
       const { data, error } = await supabase
         .from("vehicles")
         .select("id, reg, make, model, status")
-        .in("status", ["Available", "Rented"])
+        // Case-insensitive so lowercase "available"/"rented" rows aren't dropped.
+        .or("status.ilike.Available,status.ilike.available,status.ilike.Rented,status.ilike.rented")
         .order("reg");
       
       if (error) throw error;

@@ -89,7 +89,9 @@ const BookingVehiclesContent = () => {
             display_order
           )
         `)
-        .in("status", ["Available", "Rented"]);
+        // Case-insensitive status match so rows saved as lowercase "available"/"rented"
+        // aren't silently dropped (mirrors the homepage MultiStepBookingWidget query).
+        .or("status.ilike.Available,status.ilike.available,status.ilike.Rented,status.ilike.rented");
 
       // Filter by availability based on rental duration
       const mtd = tenant?.monthly_tier_days ?? 30;
@@ -150,15 +152,21 @@ const BookingVehiclesContent = () => {
         }
       }
 
-      // Hide any vehicle that has a live booking (Pending, Active, or upcoming
-      // reservation) regardless of dates — we don't want to show vehicles that
-      // are already claimed on any non-terminal rental.
-      if (tenant?.id) {
+      // Hide vehicles whose LIVE rental (pending/active/upcoming) OVERLAPS the
+      // requested window. A car booked for other dates stays bookable — this
+      // mirrors the blocked_dates overlap check below and the checkout guard.
+      // NULL end_date (open-ended/PAYG) blocks from its start_date onward.
+      if (tenant?.id && pickupDate && returnDate) {
+        const rentReqStart = pickupDate.split("T")[0];
+        const rentReqEnd = returnDate.split("T")[0];
         const { data: blockedRentals } = await supabase
           .from("rentals")
           .select("vehicle_id")
           .eq("tenant_id", tenant.id)
-          .not("status", "in", "(Cancelled,Rejected,Closed,Completed)");
+          .not("status", "in", "(Cancelled,Rejected,Closed,Completed)")
+          .not("vehicle_id", "is", null)
+          .lte("start_date", rentReqEnd)
+          .or(`end_date.gte.${rentReqStart},end_date.is.null`);
 
         if (blockedRentals && blockedRentals.length > 0) {
           const blockedIds = new Set(blockedRentals.map(r => r.vehicle_id).filter(Boolean));
