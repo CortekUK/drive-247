@@ -57,6 +57,7 @@ import { getMileageTier, getTierMileage, calculateTotalMileageAllowance, isUnlim
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown, parseDateString as parseDateStringSafe } from "@/lib/calculate-rental-price";
 import { parseDateOnly } from "@/lib/date-utils";
+import { calcExtrasTotal } from "@/lib/calculate-extras-total";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -1654,10 +1655,9 @@ const MultiStepBookingWidget = () => {
       rentalDays = result.rentalDays;
       dayBreakdown = result.dayBreakdown;
     }
-    const extrasTotal = Object.entries(selectedExtras).reduce((sum, [extraId, qty]) => {
-      const extra = availableExtras.find(e => e.id === extraId);
-      return sum + (extra ? extra.price * qty : 0);
-    }, 0);
+    // Per-day extras (e.g. a stroller) bill unit price × rental days; per-trip bill flat.
+    // selectedExtras is a Record<extraId, qty> at runtime; the store's loose type needs a cast.
+    const extrasTotal = calcExtrasTotal(selectedExtras as unknown as Record<string, number>, availableExtras, rentalDays);
 
     // Calculate delivery fees
     const deliveryFees = (formData.pickupDeliveryFee || 0) + (formData.returnDeliveryFee || 0);

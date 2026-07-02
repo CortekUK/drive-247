@@ -122,12 +122,17 @@ export function AdminExtendRentalDialog({
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('promocodes')
-        .select('id, code, type, value, expires_at')
+        .select('id, code, type, value, expires_at, min_duration_days')
         .eq('tenant_id', tenant!.id)
         .order('code', { ascending: true });
       if (error) throw error;
+      // Filter out expired codes and auto-applied duration discounts (min_duration_days > 0)
       const now = new Date();
-      return (data || []).filter((p: any) => !p.expires_at || new Date(p.expires_at) >= now);
+      return (data || []).filter(
+        (p: any) =>
+          (!p.expires_at || new Date(p.expires_at) >= now) &&
+          !(p.min_duration_days && p.min_duration_days > 0)
+      );
     },
     enabled: !!tenant?.id,
   });
@@ -151,6 +156,12 @@ export function AdminExtendRentalDialog({
       }
       if (data.expires_at && new Date(data.expires_at) < new Date()) {
         setPromoError('Promo code has expired');
+        return;
+      }
+      // Duration-based discounts (min_duration_days > 0) apply automatically and
+      // must not stack with a manually-entered promo code.
+      if (data.min_duration_days && data.min_duration_days > 0) {
+        setPromoError("This is an automatic duration discount and can't be entered as a promo code.");
         return;
       }
       setPromoDetails({

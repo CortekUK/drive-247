@@ -51,6 +51,7 @@ interface ExtraFormData {
   description: string;
   price: string;
   pricing_type: 'global' | 'per_vehicle';
+  billing_type: 'per_trip' | 'per_day';
   vehicle_pricing: VehiclePricingRow[];
   image_urls: string[];
   max_quantity: string;
@@ -63,6 +64,7 @@ const EMPTY_FORM: ExtraFormData = {
   description: '',
   price: '',
   pricing_type: 'global',
+  billing_type: 'per_trip',
   vehicle_pricing: [],
   image_urls: [],
   max_quantity: '10',
@@ -211,6 +213,7 @@ export function ExtrasSettings() {
       description: extra.description || '',
       price: String(extra.price),
       pricing_type: extra.pricing_type || 'global',
+      billing_type: extra.billing_type || 'per_trip',
       vehicle_pricing: (extra.vehicle_pricing || []).map((vp) => ({
         vehicle_id: vp.vehicle_id,
         price: String(vp.price),
@@ -321,6 +324,7 @@ export function ExtrasSettings() {
       description: formData.description.trim() || null,
       price,
       pricing_type: formData.pricing_type,
+      billing_type: formData.billing_type,
       vehicle_pricing: formData.vehicle_pricing.map((vp) => ({
         vehicle_id: vp.vehicle_id,
         price: parseFloat(vp.price),
@@ -662,6 +666,37 @@ export function ExtrasSettings() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Billing frequency: per trip (flat) vs per day (x rental days) */}
+            <div className="space-y-2">
+              <Label>Billing</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFormData((p) => ({ ...p, billing_type: 'per_trip' }))}
+                  className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                    formData.billing_type === 'per_trip'
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                      : 'hover:bg-muted/50'
+                  }`}
+                >
+                  <p className="font-medium">Per trip</p>
+                  <p className="text-xs text-muted-foreground">Charged once for the whole rental</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData((p) => ({ ...p, billing_type: 'per_day' }))}
+                  className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                    formData.billing_type === 'per_day'
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                      : 'hover:bg-muted/50'
+                  }`}
+                >
+                  <p className="font-medium">Per day</p>
+                  <p className="text-xs text-muted-foreground">Price x number of rental days</p>
+                </button>
+              </div>
             </div>
 
             {/* Pricing Type */}

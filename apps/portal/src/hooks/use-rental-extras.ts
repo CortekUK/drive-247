@@ -19,6 +19,8 @@ export interface RentalExtra {
   description: string | null;
   price: number;
   pricing_type: 'global' | 'per_vehicle';
+  /** 'per_trip' (flat) or 'per_day' (× rental days). */
+  billing_type: 'per_trip' | 'per_day';
   image_urls: string[];
   is_active: boolean;
   max_quantity: number | null;
@@ -38,6 +40,7 @@ export interface CreateRentalExtraInput {
   description?: string | null;
   price: number;
   pricing_type?: 'global' | 'per_vehicle';
+  billing_type?: 'per_trip' | 'per_day';
   vehicle_pricing?: { vehicle_id: string; price: number }[];
   image_urls?: string[];
   is_active?: boolean;
@@ -51,6 +54,7 @@ export interface UpdateRentalExtraInput {
   description?: string | null;
   price?: number;
   pricing_type?: 'global' | 'per_vehicle';
+  billing_type?: 'per_trip' | 'per_day';
   vehicle_pricing?: { vehicle_id: string; price: number }[];
   image_urls?: string[];
   is_active?: boolean;
@@ -153,6 +157,7 @@ export const useRentalExtras = () => {
           description: input.description ?? null,
           price: input.price,
           pricing_type: input.pricing_type ?? 'global',
+          billing_type: input.billing_type ?? 'per_trip',
           image_urls: input.image_urls ?? [],
           is_active: input.is_active ?? true,
           max_quantity: input.max_quantity ?? null,

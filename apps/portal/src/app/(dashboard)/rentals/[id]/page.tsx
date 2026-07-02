@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, Fragment } from "react";
+import { differenceInDays } from "date-fns";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -999,14 +1000,26 @@ const RentalDetail = () => {
       if (!id) return [];
       const { data, error } = await supabase
         .from("rental_extras_selections")
-        .select("id, quantity, price_at_booking, extra_id, rental_extras(name, description)")
+        .select("id, quantity, price_at_booking, billing_type_at_booking, extra_id, rental_extras(name, description)")
         .eq("rental_id", id);
       if (error || !data) return [];
       return data as any[];
     },
     enabled: !!id,
   });
-  const extrasTotal = (extrasDetails || []).reduce((sum: number, s: any) => sum + (s.quantity * s.price_at_booking), 0);
+  // Number of rental days — used to expand per_day extras. MUST use the same
+  // day-count algorithm as the charge (rentals/new: differenceInDays on local-
+  // midnight dates), otherwise a DST spring-forward crossing makes the displayed
+  // extras total drift from what was actually charged/stored. parseLocalDate
+  // yields local midnight, matching the date-picker dates used at booking.
+  const extrasRentalDays = rental?.end_date
+    ? Math.max(1, differenceInDays(parseLocalDate(rental.end_date), parseLocalDate(rental.start_date)))
+    : 1;
+  const extrasTotal = (extrasDetails || []).reduce(
+    (sum: number, s: any) =>
+      sum + (s.quantity * s.price_at_booking * (s.billing_type_at_booking === 'per_day' ? extrasRentalDays : 1)),
+    0
+  );
   const [showExtrasDialog, setShowExtrasDialog] = useState(false);
   const [showChargeDepositDialog, setShowChargeDepositDialog] = useState(false);
   const [showAddHoldDialog, setShowAddHoldDialog] = useState(false);
@@ -6091,10 +6104,15 @@ const RentalDetail = () => {
                           {item.rental_extras?.description && (
                             <p className="text-xs text-muted-foreground line-clamp-1">{item.rental_extras.description}</p>
                           )}
+                          {item.billing_type_at_booking === 'per_day' && (
+                            <p className="text-xs text-muted-foreground">Per day × {extrasRentalDays} {extrasRentalDays === 1 ? 'day' : 'days'}</p>
+                          )}
                         </TableCell>
                         <TableCell className="text-center text-sm">{item.quantity}</TableCell>
-                        <TableCell className="text-right text-sm">{formatCurrencyUtil(item.price_at_booking, tenant?.currency_code || 'USD')}</TableCell>
-                        <TableCell className="text-right text-sm font-medium">{formatCurrencyUtil(item.quantity * item.price_at_booking, tenant?.currency_code || 'USD')}</TableCell>
+                        <TableCell className="text-right text-sm">
+                          {formatCurrencyUtil(item.price_at_booking, tenant?.currency_code || 'USD')}{item.billing_type_at_booking === 'per_day' ? '/day' : ''}
+                        </TableCell>
+                        <TableCell className="text-right text-sm font-medium">{formatCurrencyUtil(item.quantity * item.price_at_booking * (item.billing_type_at_booking === 'per_day' ? extrasRentalDays : 1), tenant?.currency_code || 'USD')}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

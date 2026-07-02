@@ -13,6 +13,7 @@ import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Lo
 import { getUnlimitedMileageOption } from "@/lib/mileage-utils";
 import type { PricingTier, DayBreakdown } from "@/lib/calculate-rental-price";
 import { parseDateString } from "@/lib/calculate-rental-price";
+import { calcExtrasTotal, extraLineTotal } from "@/lib/calculate-extras-total";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
@@ -271,12 +272,9 @@ export default function BookingCheckoutStep({
     return (pickupDeliveryFee || 0) + (returnDeliveryFee || 0);
   };
 
-  // Calculate extras total from selectedExtras
+  // Calculate extras total. Per-day extras bill unit price × rental days; per-trip bill flat.
   const calculateExtrasTotal = (): number => {
-    return Object.entries(selectedExtras).reduce((sum, [extraId, qty]) => {
-      const extra = extras.find((e: any) => e.id === extraId);
-      return sum + (extra ? extra.price * qty : 0);
-    }, 0);
+    return calcExtrasTotal(selectedExtras, extras as any[], rentalDuration?.days || 0);
   };
 
   const calculateGrandTotal = () => {
@@ -1148,6 +1146,7 @@ export default function BookingCheckoutStep({
             extra_id: extraId,
             quantity: qty,
             price_at_booking: extra?.price || 0,
+            billing_type_at_booking: extra?.billing_type || 'per_trip',
           };
         });
         const { error: extrasError } = await supabase.from("rental_extras_selections").insert(extrasInserts);
@@ -1661,12 +1660,14 @@ export default function BookingCheckoutStep({
                 {Object.entries(selectedExtras).map(([extraId, qty]) => {
                   const extra = extras.find((e: any) => e.id === extraId);
                   if (!extra) return null;
+                  const isPerDay = extra.billing_type === 'per_day';
+                  const days = Math.max(1, Math.floor(Number(rentalDuration?.days) || 1));
                   return (
                     <div key={extraId} className="flex justify-between text-sm">
                       <span className="text-muted-foreground">
-                        {extra.name}{qty > 1 ? ` x${qty}` : ''}
+                        {extra.name}{qty > 1 ? ` x${qty}` : ''}{isPerDay ? ` (per day × ${days} ${days === 1 ? 'day' : 'days'})` : ''}
                       </span>
-                      <span className="font-medium">{fmt(extra.price * qty)}</span>
+                      <span className="font-medium">{fmt(extraLineTotal(extra.price, qty, extra.billing_type, rentalDuration?.days))}</span>
                     </div>
                   );
                 })}
@@ -1951,12 +1952,14 @@ export default function BookingCheckoutStep({
                   {Object.entries(selectedExtras).map(([extraId, qty]) => {
                     const extra = extras.find((e: any) => e.id === extraId);
                     if (!extra) return null;
+                    const isPerDay = extra.billing_type === 'per_day';
+                    const days = Math.max(1, Math.floor(Number(rentalDuration?.days) || 1));
                     return (
                       <div key={extraId} className="flex justify-between text-sm">
                         <span className="text-muted-foreground">
-                          {extra.name}{qty > 1 ? ` x${qty}` : ''}
+                          {extra.name}{qty > 1 ? ` x${qty}` : ''}{isPerDay ? ` (per day × ${days} ${days === 1 ? 'day' : 'days'})` : ''}
                         </span>
-                        <span className="font-medium">{fmt(extra.price * qty)}</span>
+                        <span className="font-medium">{fmt(extraLineTotal(extra.price, qty, extra.billing_type, rentalDuration?.days))}</span>
                       </div>
                     );
                   })}
@@ -2188,8 +2191,9 @@ export default function BookingCheckoutStep({
           }}
           selectedExtras={Object.entries(selectedExtras).map(([extraId, qty]) => {
             const extra = extras.find((e: any) => e.id === extraId);
-            return { name: extra?.name || 'Extra', quantity: qty, price: extra?.price || 0 };
+            return { name: extra?.name || 'Extra', quantity: qty, price: extra?.price || 0, billing_type: (extra?.billing_type || 'per_trip') as 'per_trip' | 'per_day' };
           }).filter(e => e.quantity > 0)}
+          rentalDays={rentalDuration?.days || 1}
           rentalBreakdown={rentalBreakdown}
         />
       )}

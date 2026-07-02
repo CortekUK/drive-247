@@ -8,6 +8,7 @@ import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
+import { extraLineTotal } from "@/lib/calculate-extras-total";
 
 interface InvoiceDialogProps {
   open: boolean;
@@ -48,14 +49,16 @@ interface InvoiceDialogProps {
     cost: number;
     rentalFee: number; // Vehicle rental cost only (excluding protection)
   };
-  selectedExtras?: { name: string; quantity: number; price: number }[];
+  selectedExtras?: { name: string; quantity: number; price: number; billing_type?: 'per_trip' | 'per_day' }[];
+  // Number of rental days — used to expand per_day extras on the invoice
+  rentalDays?: number;
   currencyCode?: string;
   // Rental price breakdown for display (e.g., "€345.00/wk × 3 weeks")
   rentalBreakdown?: { label: string; amount?: number }[];
 }
 
 // Separate printable component
-const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, selectedExtras, rentalBreakdown, companyName, logoUrl, accentColor, currencyCode = 'USD' }: Omit<InvoiceDialogProps, "open" | "onOpenChange"> & { companyName: string; logoUrl?: string | null; accentColor: string }) => {
+const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, selectedExtras, rentalDays, rentalBreakdown, companyName, logoUrl, accentColor, currencyCode = 'USD' }: Omit<InvoiceDialogProps, "open" | "onOpenChange"> & { companyName: string; logoUrl?: string | null; accentColor: string }) => {
   const fc = (amount: number) => formatCurrency(amount, currencyCode);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   const hasDiscount = (invoice.discount_amount ?? 0) > 0;
@@ -169,14 +172,19 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
                 </td>
               </tr>
             )}
-            {selectedExtras && selectedExtras.map((extra, i) => (
-              <tr key={i} className="border-b border-gray-300">
-                <td className="p-3 text-sm">
-                  {extra.name}{extra.quantity > 1 ? ` x${extra.quantity}` : ''}
-                </td>
-                <td className="p-3 text-sm text-right">{fc(extra.price * extra.quantity)}</td>
-              </tr>
-            ))}
+            {selectedExtras && selectedExtras.map((extra, i) => {
+              const days = Math.max(1, Math.floor(Number(rentalDays) || 1));
+              const isPerDay = extra.billing_type === 'per_day';
+              return (
+                <tr key={i} className="border-b border-gray-300">
+                  <td className="p-3 text-sm">
+                    {extra.name}{extra.quantity > 1 ? ` x${extra.quantity}` : ''}
+                    {isPerDay ? ` (per day × ${days} ${days === 1 ? 'day' : 'days'})` : ''}
+                  </td>
+                  <td className="p-3 text-sm text-right">{fc(extraLineTotal(extra.price, extra.quantity, extra.billing_type, rentalDays))}</td>
+                </tr>
+              );
+            })}
             {!selectedExtras && (invoice.extras_total ?? 0) > 0 && (
               <tr className="border-b border-gray-300">
                 <td className="p-3 text-sm">Rental Extras</td>
@@ -255,6 +263,7 @@ export const InvoiceDialog = ({
   rental,
   protectionPlan,
   selectedExtras,
+  rentalDays,
   currencyCode: currencyCodeProp,
   rentalBreakdown,
 }: InvoiceDialogProps) => {
@@ -300,6 +309,7 @@ export const InvoiceDialog = ({
             rental={rental}
             protectionPlan={protectionPlan}
             selectedExtras={selectedExtras}
+            rentalDays={rentalDays}
             rentalBreakdown={rentalBreakdown}
             companyName={companyName}
             logoUrl={logoUrl}
@@ -425,14 +435,19 @@ export const InvoiceDialog = ({
                       </td>
                     </tr>
                   )}
-                  {selectedExtras && selectedExtras.map((extra, i) => (
-                    <tr key={i} className="border-b">
-                      <td className="p-3 text-sm">
-                        {extra.name}{extra.quantity > 1 ? ` x${extra.quantity}` : ''}
-                      </td>
-                      <td className="p-3 text-sm text-right">{fc(extra.price * extra.quantity)}</td>
-                    </tr>
-                  ))}
+                  {selectedExtras && selectedExtras.map((extra, i) => {
+                    const days = Math.max(1, Math.floor(Number(rentalDays) || 1));
+                    const isPerDay = extra.billing_type === 'per_day';
+                    return (
+                      <tr key={i} className="border-b">
+                        <td className="p-3 text-sm">
+                          {extra.name}{extra.quantity > 1 ? ` x${extra.quantity}` : ''}
+                          {isPerDay ? ` (per day × ${days} ${days === 1 ? 'day' : 'days'})` : ''}
+                        </td>
+                        <td className="p-3 text-sm text-right">{fc(extraLineTotal(extra.price, extra.quantity, extra.billing_type, rentalDays))}</td>
+                      </tr>
+                    );
+                  })}
                   {!selectedExtras && (invoice.extras_total ?? 0) > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">Rental Extras</td>

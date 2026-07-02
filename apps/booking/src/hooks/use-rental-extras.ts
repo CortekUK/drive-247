@@ -7,6 +7,8 @@ export interface RentalExtra {
   name: string;
   description: string | null;
   price: number;
+  /** 'per_trip' (flat) or 'per_day' (× rental days). Missing => per_trip. */
+  billing_type: string;
   image_urls: string[];
   max_quantity: number | null;
   /** Computed: remaining stock for quantity-based extras */
@@ -26,7 +28,7 @@ export const useRentalExtras = (vehicleId?: string | null) => {
 
       const { data, error } = await supabase
         .from('rental_extras')
-        .select('id, name, description, price, image_urls, max_quantity, pricing_type')
+        .select('id, name, description, price, image_urls, max_quantity, pricing_type, billing_type')
         .eq('tenant_id', tenant.id)
         .eq('is_active', true)
         .order('sort_order', { ascending: true });
@@ -88,6 +90,7 @@ export const useRentalExtras = (vehicleId?: string | null) => {
           name: extra.name,
           description: extra.description,
           price: resolvedPrice,
+          billing_type: extra.billing_type || 'per_trip',
           image_urls: extra.image_urls || [],
           max_quantity: extra.max_quantity,
           remaining_stock: extra.max_quantity !== null

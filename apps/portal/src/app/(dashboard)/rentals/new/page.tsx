@@ -68,6 +68,7 @@ import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
 import { useVehiclePricingOverrides } from "@/hooks/use-vehicle-pricing-overrides";
 import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
 import { calculateRentalPriceBreakdown, type DayBreakdown } from "@/lib/calculate-rental-price";
+import { calcExtrasTotal, extraLineTotal } from "@/lib/calculate-extras-total";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { useVehicleBookedDates } from "@/hooks/use-vehicle-booked-dates";
 import { RentalProgressOverlay } from "@/components/rentals/rental-progress-overlay";
@@ -322,6 +323,13 @@ const CreateRental = () => {
       // Check expiry
       if (data.expires_at && new Date(data.expires_at) < new Date()) {
         setPromoError("Promo code has expired");
+        return;
+      }
+
+      // Duration-based discounts (min_duration_days > 0) apply automatically and
+      // must not stack with a manually-entered promo code.
+      if (data.min_duration_days && data.min_duration_days > 0) {
+        setPromoError("This is an automatic duration discount and can't be entered as a promo code.");
         return;
       }
 
@@ -901,13 +909,17 @@ const CreateRental = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("promocodes")
-        .select("id, code, type, value, expires_at")
+        .select("id, code, type, value, expires_at, min_duration_days")
         .eq("tenant_id", tenant!.id)
         .order("code", { ascending: true });
       if (error) throw error;
-      // Filter out expired codes
+      // Filter out expired codes and auto-applied duration discounts (min_duration_days > 0)
       const now = new Date();
-      return (data || []).filter((p: any) => !p.expires_at || new Date(p.expires_at) >= now);
+      return (data || []).filter(
+        (p: any) =>
+          (!p.expires_at || new Date(p.expires_at) >= now) &&
+          !(p.min_duration_days && p.min_duration_days > 0)
+      );
     },
     enabled: !!tenant,
   });
@@ -1716,6 +1728,7 @@ const CreateRental = () => {
             extra_id: extraId,
             quantity: qty,
             price_at_booking: extra ? Number(extra.price) : 0,
+            billing_type_at_booking: extra?.billing_type || 'per_trip',
           };
         });
         const { error: extrasError } = await supabase
@@ -1801,11 +1814,10 @@ const CreateRental = () => {
       const serviceFee = serviceFeeOverride !== null ? serviceFeeOverride : calculateServiceFee(discountedAmount);
       const securityDeposit = depositOverride !== null ? depositOverride : calculateSecurityDeposit(data.vehicle_id);
       const insurancePremium = bonzahPremium > 0 ? bonzahPremium : 0;
-      const extrasTotal = Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
-        if (qty <= 0) return sum;
-        const extra = activeExtras?.find((e: RentalExtra) => e.id === id);
-        return sum + (extra ? Number(extra.price) * qty : 0);
-      }, 0);
+      // Per-day extras bill unit price × rental days; per-trip bill flat. PAYG (no
+      // end date) has no fixed length, so per-day extras fall back to a single day.
+      const extrasDays = data.end_date ? Math.max(1, differenceInDays(data.end_date, data.start_date)) : 1;
+      const extrasTotal = calcExtrasTotal(selectedExtras, (activeExtras || []) as any[], extrasDays);
       // Deposit is NOT included in the chargeable total — it's held separately
       // via create-hold-checkout / place-deposit-hold so the customer gets a
       // proper pre-auth on their card instead of being charged for the deposit
@@ -2118,7 +2130,11 @@ const CreateRental = () => {
         if (qty <= 0) return;
         const extra = activeExtras.find(e => e.id === extraId);
         if (!extra) return;
-        breakdownForPayment.push({ label: `${extra.name}${qty > 1 ? ` ×${qty}` : ''}`, amount: Number(extra.price) * qty });
+        const isPerDay = (extra as any).billing_type === 'per_day';
+        breakdownForPayment.push({
+          label: `${extra.name}${qty > 1 ? ` ×${qty}` : ''}${isPerDay ? ` (per day × ${extrasDays})` : ''}`,
+          amount: extraLineTotal(Number(extra.price), qty, (extra as any).billing_type, extrasDays),
+        });
       });
       if (effectiveDeliveryFee > 0) breakdownForPayment.push({ label: 'Delivery Fee', amount: effectiveDeliveryFee });
       if (!sameAsPickup && effectiveCollectionFee > 0) breakdownForPayment.push({ label: 'Collection Fee', amount: effectiveCollectionFee });
@@ -5002,7 +5018,7 @@ const CreateRental = () => {
                                   <div className="flex items-center justify-between gap-1">
                                     <span className="font-medium text-sm truncate">{extra.name}</span>
                                     <span className="text-sm font-semibold text-primary whitespace-nowrap">
-                                      {formatCurrency(Number(extra.price), tenant?.currency_code || 'USD')}
+                                      {formatCurrency(Number(extra.price), tenant?.currency_code || 'USD')}{(extra as any).billing_type === 'per_day' ? '/day' : ''}
                                     </span>
                                   </div>
                                   {extra.description && (
@@ -5057,7 +5073,7 @@ const CreateRental = () => {
                                       </Button>
                                       {qty > 0 && (
                                         <span className="text-xs text-muted-foreground ml-1">
-                                          = {formatCurrency(Number(extra.price) * qty, tenant?.currency_code || 'USD')}
+                                          = {formatCurrency(extraLineTotal(Number(extra.price), qty, (extra as any).billing_type, (watchedStartDate && watchedEndDate) ? Math.max(1, differenceInDays(watchedEndDate, watchedStartDate)) : 1), tenant?.currency_code || 'USD')}
                                         </span>
                                       )}
                                     </div>
@@ -5070,10 +5086,7 @@ const CreateRental = () => {
                     </div>
                     {Object.keys(selectedExtras).length > 0 && (
                       <div className="text-sm text-right font-medium">
-                        Extras Total: {formatCurrency(Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
-                          const extra = activeExtras.find(e => e.id === id);
-                          return sum + (extra ? Number(extra.price) * qty : 0);
-                        }, 0), tenant?.currency_code || 'USD')}
+                        Extras Total: {formatCurrency(calcExtrasTotal(selectedExtras, activeExtras as any[], (watchedStartDate && watchedEndDate) ? Math.max(1, differenceInDays(watchedEndDate, watchedStartDate)) : 1), tenant?.currency_code || 'USD')}
                       </div>
                     )}
                   </div>
@@ -5248,10 +5261,8 @@ const CreateRental = () => {
                       const prevDeliveryFee = deliveryFeeOverride !== null ? deliveryFeeOverride : deliveryFee;
                       const prevCollectionFee = sameAsPickup ? 0 : (collectionFeeOverride !== null ? collectionFeeOverride : collectionFee);
 
-                      const extrasTotal = Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
-                        const extra = activeExtras?.find((e: RentalExtra) => e.id === id);
-                        return sum + (extra ? Number(extra.price) * qty : 0);
-                      }, 0);
+                      const extrasDays = (watchedStartDate && watchedEndDate) ? Math.max(1, differenceInDays(watchedEndDate, watchedStartDate)) : 1;
+                      const extrasTotal = calcExtrasTotal(selectedExtras, (activeExtras || []) as any[], extrasDays);
 
                       const subtotal = discountedAmount + (showTax ? effectiveTax : 0) + (showServiceFee && autoServiceFee > 0 ? effectiveServiceFee : 0) + bonzahPremium + extrasTotal + prevDeliveryFee + (sameAsPickup ? 0 : prevCollectionFee);
                       const grandTotal = subtotal + (effectiveDeposit > 0 ? effectiveDeposit : 0);
@@ -5309,10 +5320,12 @@ const CreateRental = () => {
                                 if (qty <= 0) return null;
                                 const extra = activeExtras?.find((e: RentalExtra) => e.id === id);
                                 if (!extra) return null;
+                                const isPerDay = (extra as any).billing_type === 'per_day';
+                                const days = (watchedStartDate && watchedEndDate) ? Math.max(1, differenceInDays(watchedEndDate, watchedStartDate)) : 1;
                                 return (
                                   <div key={id} className="flex items-center justify-between">
-                                    <p className="text-xs text-muted-foreground">{extra.name}{qty > 1 ? ` ×${qty}` : ''}</p>
-                                    <p className="text-xs font-medium">{formatCurrency(Number(extra.price) * qty, currency)}</p>
+                                    <p className="text-xs text-muted-foreground">{extra.name}{qty > 1 ? ` ×${qty}` : ''}{isPerDay ? ` (per day × ${days})` : ''}</p>
+                                    <p className="text-xs font-medium">{formatCurrency(extraLineTotal(Number(extra.price), qty, (extra as any).billing_type, days), currency)}</p>
                                   </div>
                                 );
                               })}
@@ -5464,8 +5477,9 @@ const CreateRental = () => {
           } : undefined}
           selectedExtras={Object.entries(selectedExtras).map(([extraId, qty]) => {
             const extra = activeExtras.find(e => e.id === extraId);
-            return { name: extra?.name || 'Extra', quantity: qty, price: extra?.price || 0 };
+            return { name: extra?.name || 'Extra', quantity: qty, price: extra?.price || 0, billing_type: (extra?.billing_type || 'per_trip') as 'per_trip' | 'per_day' };
           }).filter(e => e.quantity > 0)}
+          rentalDays={createdRentalData.formData.end_date ? Math.max(1, differenceInDays(createdRentalData.formData.end_date, createdRentalData.formData.start_date)) : 1}
         />
       )}
 

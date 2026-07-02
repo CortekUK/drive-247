@@ -95,7 +95,7 @@ export default function ExtrasSelector({
                       )}
                     </div>
                     <p className="font-semibold text-sm whitespace-nowrap">
-                      {formatCurrency(extra.price, currencyCode)}
+                      {formatCurrency(extra.price, currencyCode)}{extra.billing_type === 'per_day' ? '/day' : ''}
                     </p>
                   </div>
 
