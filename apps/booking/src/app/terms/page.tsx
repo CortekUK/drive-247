@@ -1,32 +1,57 @@
-'use client';
-
+import type { Metadata } from 'next';
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { usePageContent, defaultTermsContent, mergeWithDefaults } from "@/hooks/usePageContent";
+import { getTermsPageContent } from "@/lib/legal-page-content";
 
-const Terms = () => {
-  const { data: rawContent, isLoading } = usePageContent("terms");
-  const content = mergeWithDefaults(rawContent, defaultTermsContent);
-  const termsContent = content.terms_content!;
+// Server-rendered so carrier / A2P 10DLC review crawlers and SEO bots see the
+// full terms text without executing JS. Client rendering left the server HTML
+// blank and failed SMS campaign vetting (errors 30908 / 30882).
+export const dynamic = 'force-dynamic';
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Navigation />
-        <section className="pt-32 pb-20">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              <Skeleton className="h-16 w-96 mb-6" />
-              <Skeleton className="h-[600px] w-full" />
-            </div>
-          </div>
-        </section>
-        <Footer />
-      </div>
-    );
+const LEGAL_CONTENT_STYLES = `
+  .legal-content h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: hsl(var(--primary));
+    font-family: var(--font-display);
   }
+  .legal-content h2:first-child {
+    margin-top: 0;
+  }
+  .legal-content p {
+    color: hsl(var(--muted-foreground));
+    margin-bottom: 1rem;
+    line-height: 1.75;
+  }
+  .legal-content ul {
+    list-style-type: disc;
+    margin-left: 1.5rem;
+    margin-bottom: 1rem;
+    color: hsl(var(--muted-foreground));
+  }
+  .legal-content li {
+    margin-bottom: 0.5rem;
+    line-height: 1.6;
+  }
+  .legal-content a {
+    color: hsl(var(--accent));
+    text-decoration: none;
+  }
+  .legal-content a:hover {
+    text-decoration: underline;
+  }
+`;
+
+export async function generateMetadata(): Promise<Metadata> {
+  const content = await getTermsPageContent();
+  return { title: content.title || 'Terms of Service' };
+}
+
+export default async function TermsPage() {
+  const termsContent = await getTermsPageContent();
 
   return (
     <div className="min-h-screen bg-background">
@@ -40,41 +65,7 @@ const Terms = () => {
             </h1>
 
             <Card className="p-8 md:p-12 shadow-metal bg-card/50 backdrop-blur">
-              <style>{`
-                .legal-content h2 {
-                  font-size: 1.5rem;
-                  font-weight: 700;
-                  margin-top: 1.5rem;
-                  margin-bottom: 0.75rem;
-                  color: hsl(var(--primary));
-                  font-family: var(--font-display);
-                }
-                .legal-content h2:first-child {
-                  margin-top: 0;
-                }
-                .legal-content p {
-                  color: hsl(var(--muted-foreground));
-                  margin-bottom: 1rem;
-                  line-height: 1.75;
-                }
-                .legal-content ul {
-                  list-style-type: disc;
-                  margin-left: 1.5rem;
-                  margin-bottom: 1rem;
-                  color: hsl(var(--muted-foreground));
-                }
-                .legal-content li {
-                  margin-bottom: 0.5rem;
-                  line-height: 1.6;
-                }
-                .legal-content a {
-                  color: hsl(var(--accent));
-                  text-decoration: none;
-                }
-                .legal-content a:hover {
-                  text-decoration: underline;
-                }
-              `}</style>
+              <style>{LEGAL_CONTENT_STYLES}</style>
               <div
                 className="legal-content"
                 dangerouslySetInnerHTML={{ __html: termsContent.content }}
@@ -93,6 +84,4 @@ const Terms = () => {
       <Footer />
     </div>
   );
-};
-
-export default Terms;
+}
