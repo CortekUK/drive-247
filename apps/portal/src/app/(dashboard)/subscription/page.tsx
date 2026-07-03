@@ -7,6 +7,7 @@ import {
   TenantSubscriptionInvoice,
 } from "@/hooks/use-tenant-subscription";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
+import { useTenant } from "@/contexts/TenantContext";
 import { PricingCard } from "@/components/subscription/pricing-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,7 @@ export default function SubscriptionPage() {
     refetch,
   } = useTenantSubscription();
   const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
+  const { tenant } = useTenant();
 
   const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
 
@@ -154,6 +156,7 @@ export default function SubscriptionPage() {
                   plan={plan}
                   onSubscribe={handleSubscribe}
                   isLoading={subscribingPlanId === plan.id && createCheckoutSession.isPending}
+                  billingAnchor={(tenant as { subscription_billing_anchor?: string | null } | null)?.subscription_billing_anchor}
                 />
               ))}
             </div>

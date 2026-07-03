@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
 
     const { data: tenant, error: tenantError } = await supabase
       .from("tenants")
-      .select("id, company_name, contact_email, stripe_subscription_customer_id, subscription_plan")
+      .select("id, company_name, contact_email, stripe_subscription_customer_id, subscription_plan, subscription_billing_anchor")
       .eq("id", tenantId)
       .single();
 
@@ -144,18 +144,34 @@ Deno.serve(async (req) => {
     // Determine how long until the first real charge.
     // - "trial": classic free trial of plan.trial_days days.
     // - "upfront_monthly" (new model): no free trial framing. Card is entered
-    //   now; the first payment is taken EXACTLY one calendar month from today
-    //   (relative to entry). We still ride Stripe's trial primitive so nothing
-    //   is charged for the plan until then, but the UI never calls it a trial.
+    //   now; the first payment is taken EXACTLY one calendar month after the
+    //   tenant went live. We still ride Stripe's trial primitive so nothing is
+    //   charged for the plan until then, but the UI never calls it a trial.
+    //
+    // The anchor for that first charge is `tenants.subscription_billing_anchor`
+    // (the go-live date, since month 1 was paid outside the platform). When it's
+    // NULL we fall back to "today + 1 month" so nothing breaks for tenants that
+    // never had an anchor set. We use Stripe's exact `trial_end` timestamp rather
+    // than a rounded day count so the charge lands on the correct calendar day.
     const isUpfrontMonthly = plan.billing_model === "upfront_monthly";
     let trialDays = plan.trial_days || 0;
+    let trialEndTs: number | null = null;
     if (isUpfrontMonthly) {
       const now = new Date();
-      const firstCharge = new Date(now);
-      firstCharge.setMonth(firstCharge.getMonth() + 1); // same day, next month
-      trialDays = Math.max(
-        1,
-        Math.round((firstCharge.getTime() - now.getTime()) / 86_400_000),
+      const anchor = tenant.subscription_billing_anchor
+        ? new Date(`${tenant.subscription_billing_anchor}T00:00:00Z`)
+        : now;
+      const firstCharge = new Date(anchor);
+      firstCharge.setUTCMonth(firstCharge.getUTCMonth() + 1); // same day, next month
+      // If the anchored first-charge date is already in the past (card entered
+      // late), Stripe can't set a past trial_end — charge on the next monthly
+      // cycle instead of billing for elapsed months up front.
+      while (firstCharge.getTime() <= now.getTime() + 60_000) {
+        firstCharge.setUTCMonth(firstCharge.getUTCMonth() + 1);
+      }
+      trialEndTs = Math.floor(firstCharge.getTime() / 1000);
+      console.log(
+        `Upfront billing: anchor=${tenant.subscription_billing_anchor ?? "(none/today)"}, first charge ${firstCharge.toISOString()}`,
       );
     }
 
@@ -198,7 +214,8 @@ Deno.serve(async (req) => {
       metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, source: "platform_subscription", setup_fee: "true" },
       subscription_data: {
         metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, billing_model: plan.billing_model || "trial" },
-        trial_period_days: trialDays,
+        // Exact anchored date for upfront_monthly; rounded day count otherwise.
+        ...(trialEndTs ? { trial_end: trialEndTs } : { trial_period_days: trialDays }),
       },
     });
 

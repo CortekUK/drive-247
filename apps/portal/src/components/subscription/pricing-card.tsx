@@ -18,6 +18,8 @@ interface PricingCardProps {
   onSubscribe: (planId: string) => void;
   isLoading?: boolean;
   isCurrentPlan?: boolean;
+  /** Go-live date (tenants.subscription_billing_anchor) for upfront_monthly first-charge date. */
+  billingAnchor?: string | null;
 }
 
 function formatPrice(amount: number, currency: string) {
@@ -29,17 +31,28 @@ function formatPrice(amount: number, currency: string) {
   }).format(amount / 100);
 }
 
-// "Upfront monthly" plans charge exactly one calendar month from today.
-function firstChargeLabel() {
-  const d = new Date();
-  d.setMonth(d.getMonth() + 1);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+// "Upfront monthly" plans charge exactly one calendar month after the tenant's
+// go-live date (billingAnchor); falls back to one month from today when unset.
+function firstChargeLabel(anchor?: string | null) {
+  const now = new Date();
+  const base = anchor ? new Date(`${anchor}T00:00:00Z`) : now;
+  const d = new Date(base);
+  d.setUTCMonth(d.getUTCMonth() + 1);
+  while (d.getTime() <= now.getTime()) {
+    d.setUTCMonth(d.getUTCMonth() + 1);
+  }
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
-export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan }: PricingCardProps) {
+export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan, billingAnchor }: PricingCardProps) {
   const isUpfront = plan.billing_model === "upfront_monthly";
   const hasTrial = !isUpfront && plan.trial_days && plan.trial_days > 0;
-  const firstCharge = firstChargeLabel();
+  const firstCharge = firstChargeLabel(billingAnchor);
 
   return (
     <div className="w-full max-w-sm">

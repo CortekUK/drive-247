@@ -305,6 +305,7 @@ export function SubscriptionSettings() {
                     plan={plan}
                     onSubscribe={handleSubscribe}
                     isLoading={subscribingPlanId === plan.id && createCheckoutSession.isPending}
+                    billingAnchor={(tenant as { subscription_billing_anchor?: string | null } | null)?.subscription_billing_anchor}
                   />
                 ))}
               </div>

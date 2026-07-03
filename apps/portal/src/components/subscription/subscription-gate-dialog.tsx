@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
+import { useTenant } from "@/contexts/TenantContext";
 import {
   Dialog,
   DialogContent,
@@ -21,11 +22,25 @@ function formatPrice(amount: number, currency: string) {
   }).format(amount / 100);
 }
 
-// "Upfront monthly" plans take the first payment exactly one month from today.
-function firstChargeLabel() {
-  const d = new Date();
-  d.setMonth(d.getMonth() + 1);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+// "Upfront monthly" plans take the first payment exactly one calendar month
+// after the tenant's go-live date (`subscription_billing_anchor`). When there's
+// no anchor we fall back to one month from today. Mirrors the backend logic in
+// create-subscription-checkout so the displayed date matches the real charge.
+function firstChargeLabel(anchor?: string | null) {
+  const now = new Date();
+  const base = anchor ? new Date(`${anchor}T00:00:00Z`) : now;
+  const d = new Date(base);
+  d.setUTCMonth(d.getUTCMonth() + 1);
+  // Late card entry: skip past months already elapsed.
+  while (d.getTime() <= now.getTime()) {
+    d.setUTCMonth(d.getUTCMonth() + 1);
+  }
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 interface SubscriptionGateDialogProps {
@@ -53,6 +68,7 @@ export function SubscriptionGateDialog({
   const [subscribing, setSubscribing] = useState(false);
   const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
   const { createCheckoutSession } = useTenantSubscription();
+  const { tenant } = useTenant();
 
   // Derive trial duration text from plans
   const trialDays = plans?.length
@@ -69,7 +85,10 @@ export function SubscriptionGateDialog({
   const isUpfront = !!plans?.some(
     (p) => (p as { billing_model?: string }).billing_model === "upfront_monthly",
   );
-  const firstCharge = firstChargeLabel();
+  const firstCharge = firstChargeLabel(
+    (tenant as { subscription_billing_anchor?: string | null } | null)
+      ?.subscription_billing_anchor,
+  );
 
   const handleSubscribe = async (planId: string) => {
     setSubscribing(true);
@@ -134,9 +153,9 @@ export function SubscriptionGateDialog({
                     To continue using Drive247, please add your card details.
                   </p>
                   <p>
-                    Your first payment will be taken{" "}
+                    Your first payment will be taken on{" "}
                     <span className="font-medium text-foreground">
-                      {firstCharge} — one month from today
+                      {firstCharge}
                     </span>
                     , then monthly after that.
                   </p>
