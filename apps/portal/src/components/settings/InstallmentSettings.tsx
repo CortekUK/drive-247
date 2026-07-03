@@ -65,6 +65,12 @@ export function InstallmentSettings() {
   });
   const [previewOpen, setPreviewOpen] = useState<null | { unit: "week" | "month"; paymentsPerUnit: number }>(null);
 
+  // Master gate the CHECKOUT actually reads (tenants.installments_enabled). The
+  // weekly/monthly toggles below only configure the plans (installment_config);
+  // without this ON, the split-payment option never appears at checkout — the
+  // customer pays in full. Kept as instant-save (like the Pay As You Go toggle).
+  const [installmentsEnabled, setInstallmentsEnabled] = useState(false);
+
   // Hydrate local state from server when the server snapshot changes (initial
   // load, after save, refetches). Field-level deps avoid resyncing on
   // unrelated reference changes from React Query.
@@ -82,6 +88,11 @@ export function InstallmentSettings() {
     tenantCfg?.monthly_enabled,
     tenantCfg?.monthly_payments_per_unit,
   ]);
+
+  // Keep the master toggle reflecting the saved DB value on load / after save / refetch.
+  useEffect(() => {
+    setInstallmentsEnabled(settings?.installments_enabled ?? false);
+  }, [settings?.installments_enabled]);
 
   async function save() {
     if (!tenant?.id) return;
@@ -113,15 +124,49 @@ export function InstallmentSettings() {
         </div>
       </div>
 
+      {/* Master enable — this is the flag the CHECKOUT reads (tenants.installments_enabled).
+          Instant-save, mirroring the Pay As You Go toggle. Passing ONLY installments_enabled
+          leaves installment_config (the plans below) untouched. */}
+      <div className="flex items-start justify-between gap-3 bg-card border border-border/60 rounded-lg p-6">
+        <div className="space-y-1 min-w-0">
+          <h4 className="font-medium text-foreground">Enable Installments</h4>
+          <p className="text-sm text-muted-foreground">
+            Turn on to offer the split-payment option at checkout. When off, customers pay in full even if the plans below are
+            configured. It applies to rentals that meet each plan&apos;s minimum length.
+          </p>
+        </div>
+        <Switch
+          className="shrink-0 mt-0.5"
+          checked={installmentsEnabled}
+          onCheckedChange={async (checked) => {
+            setInstallmentsEnabled(checked);
+            try {
+              await updateSettings({ installments_enabled: checked });
+              toast({ title: checked ? "Installments enabled" : "Installments disabled" });
+            } catch {
+              setInstallmentsEnabled(!checked);
+            }
+          }}
+        />
+      </div>
+
+      {!installmentsEnabled && (
+        <p className="-mt-2 px-1 text-xs text-muted-foreground">
+          Turn on <span className="font-medium">Enable Installments</span> above to configure the plans below.
+        </p>
+      )}
+
       <SectionRow
         label="Weekly Plan"
         sublabel={`Available for rentals ${WEEKLY_MIN_DAYS}+ days`}
+        disabled={!installmentsEnabled}
       >
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <Switch
               checked={config.weekly_enabled}
               onCheckedChange={(v) => setConfig({ ...config, weekly_enabled: v })}
+              disabled={!installmentsEnabled}
               id="weekly-enabled"
             />
             <Label htmlFor="weekly-enabled" className="text-sm text-foreground/90">Enable weekly installments</Label>
@@ -148,12 +193,14 @@ export function InstallmentSettings() {
       <SectionRow
         label="Monthly Plan"
         sublabel={`Available for rentals ${MONTHLY_MIN_DAYS}+ days`}
+        disabled={!installmentsEnabled}
       >
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <Switch
               checked={config.monthly_enabled}
               onCheckedChange={(v) => setConfig({ ...config, monthly_enabled: v })}
+              disabled={!installmentsEnabled}
               id="monthly-enabled"
             />
             <Label htmlFor="monthly-enabled" className="text-sm text-foreground/90">Enable monthly installments</Label>
@@ -198,14 +245,20 @@ export function InstallmentSettings() {
   );
 }
 
-function SectionRow({ label, sublabel, children }: { label: string; sublabel?: string; children: React.ReactNode }) {
+function SectionRow({ label, sublabel, disabled, children }: { label: string; sublabel?: string; disabled?: boolean; children: React.ReactNode }) {
   return (
-    <div className="bg-card border border-border/60 rounded-lg flex flex-col md:flex-row md:items-start gap-4 p-6">
+    <div className={cn(
+      "bg-card border border-border/60 rounded-lg flex flex-col md:flex-row md:items-start gap-4 p-6 transition-opacity",
+      disabled && "opacity-60"
+    )}>
       <div className="md:w-[304px] flex-none">
         <div className="text-sm font-medium text-foreground">{label}</div>
         {sublabel ? <div className="text-xs text-muted-foreground mt-1">{sublabel}</div> : null}
       </div>
-      <div className="flex-1 min-w-0">{children}</div>
+      {/* A disabled <fieldset> blocks EVERY nested control (switches, pills, "See example")
+          for both mouse AND keyboard when the master toggle is off — while the saved config
+          state is left untouched, so nothing is wiped. */}
+      <fieldset disabled={disabled} className="flex-1 min-w-0 border-0 m-0 p-0">{children}</fieldset>
     </div>
   );
 }
