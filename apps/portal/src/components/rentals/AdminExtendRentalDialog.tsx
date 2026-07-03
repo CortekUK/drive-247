@@ -31,6 +31,7 @@ import { useQuery } from '@tanstack/react-query';
 import { calculateTotalMileageAllowance, getMileageTier, isUnlimitedMileage } from '@/lib/mileage-utils';
 import { useRentalSettings } from '@/hooks/use-rental-settings';
 import { type CoverageOptions } from '@/hooks/use-bonzah-premium';
+import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import { Checkbox } from '@/components/ui/checkbox';
 import BonzahInsuranceSelector from '@/components/rentals/bonzah-insurance-selector';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -1286,7 +1287,7 @@ export function AdminExtendRentalDialog({
                       <>
                         <ShieldCheck className="h-3.5 w-3.5 text-blue-600" />
                         {hasBonzahCoverage
-                          ? [extensionCoverage.cdw && 'CDW', extensionCoverage.rcli && 'RCLI', extensionCoverage.sli && 'SLI', extensionCoverage.pai && 'PAI'].filter(Boolean).join(', ')
+                          ? getActiveCoverageLabels(extensionCoverage, { cdw: 'CDW', rcli: 'RCLI', sli: 'SLI', pai: 'PAI' }).map(c => c.label).join(', ')
                           : 'No coverage selected'}
                       </>
                     ) : (

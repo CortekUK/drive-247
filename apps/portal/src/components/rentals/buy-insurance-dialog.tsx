@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { type CoverageOptions } from '@/hooks/use-bonzah-premium';
 import { useBonzahVehicleEligibility } from '@/hooks/use-bonzah-vehicle-eligibility';
 import { formatCurrency } from '@/lib/format-utils';
+import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import BonzahInsuranceSelector from '@/components/rentals/bonzah-insurance-selector';
 import { useBonzahBalance } from '@/hooks/use-bonzah-balance';
 import { Button } from '@/components/ui/button';
@@ -485,12 +486,7 @@ export function BuyInsuranceDialog({
                     <span className="text-sm font-medium">Insurance Premium</span>
                     {hasCoverage && (
                       <span className="text-xs text-muted-foreground">
-                        ({[
-                          coverage.cdw && 'CDW',
-                          coverage.rcli && 'RCLI',
-                          coverage.sli && 'SLI',
-                          coverage.pai && 'PAI',
-                        ].filter(Boolean).join(', ')})
+                        ({getActiveCoverageLabels(coverage, { cdw: 'CDW', rcli: 'RCLI', sli: 'SLI', pai: 'PAI' }).map(c => c.label).join(', ')})
                       </span>
                     )}
                   </div>
@@ -578,12 +574,7 @@ export function BuyInsuranceDialog({
                 <div>
                   <p className="text-muted-foreground">Selected Coverage</p>
                   <p className="font-medium">
-                    {[
-                      coverage.cdw && 'CDW',
-                      coverage.rcli && 'RCLI',
-                      coverage.sli && 'SLI',
-                      coverage.pai && 'PAI',
-                    ].filter(Boolean).join(', ')}
+                    {getActiveCoverageLabels(coverage, { cdw: 'CDW', rcli: 'RCLI', sli: 'SLI', pai: 'PAI' }).map(c => c.label).join(', ')}
                   </p>
                 </div>
               </div>

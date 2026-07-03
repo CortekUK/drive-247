@@ -67,6 +67,10 @@ const BROCHURE_URLS: Record<keyof CoverageOptions, string> = {
   pai: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bonzah-brochures/pai-brochure.pdf`,
 };
 
+// The bundle's coverage details are simply CDW's + RCLI's combined (it IS those two coverages).
+const BUNDLE_FEATURES = [...COVERAGE_INFO.cdw.features, ...COVERAGE_INFO.rcli.features];
+const BUNDLE_EXCLUSIONS = [...COVERAGE_INFO.cdw.exclusions, ...COVERAGE_INFO.rcli.exclusions];
+
 const CoverageIcon = ({ type, className }: { type: keyof CoverageOptions; className?: string }) => {
   switch (type) {
     case 'cdw': return <Car className={className} />;
@@ -237,6 +241,18 @@ export default function BonzahInsuranceSelector({
     });
   };
 
+  // "CDW + RCLI" convenience bundle — one toggle that turns on BOTH coverages
+  // together. It is NOT a separate Bonzah product; it simply sets cdw+rcli, which
+  // price/quote/store identically to picking them individually. Turning it off
+  // also clears SLI (mirrors the existing RCLI -> SLI cascade above).
+  const handleBundleToggle = () => {
+    setCoverage(prev =>
+      prev.cdw && prev.rcli
+        ? { ...prev, cdw: false, rcli: false, sli: false }
+        : { ...prev, cdw: true, rcli: true }
+    );
+  };
+
   const handleSkipInsurance = () => {
     setShowInsurance(false);
     setCoverage(DEFAULT_COVERAGE);
@@ -249,6 +265,13 @@ export default function BonzahInsuranceSelector({
 
   const hasCoverage = coverage.cdw || coverage.rcli || coverage.sli || coverage.pai;
   const cur = tenant?.currency_code || 'USD';
+
+  // Combined CDW + RCLI bundle (additive convenience option). To restrict it to
+  // specific tenants later, set `showBundle` to `tenant?.bonzah_bundle_cdw_rcli_enabled`
+  // here and in the booking twin (BonzahInsuranceSelector.tsx) — one line each.
+  const showBundle = true;
+  const bundleSelected = coverage.cdw && coverage.rcli;
+  const bundlePrice = (breakdown.cdw || 0) + (breakdown.rcli || 0);
 
   if (!showInsurance) {
     return (
@@ -445,10 +468,119 @@ export default function BonzahInsuranceSelector({
       {/* Coverage Cards — only show when details are complete */}
       {(!hasMissingFields || !customerDetails) && (
         <div className="space-y-2">
+          {/* Combined CDW + RCLI bundle — selects both coverages in one click */}
+          {showBundle && (
+            <Collapsible
+              open={expandedCoverage === 'bundle'}
+              onOpenChange={(open) => setExpandedCoverage(open ? 'bundle' : null)}
+            >
+              <div
+                className={cn(
+                  'rounded-lg border transition-all',
+                  bundleSelected ? 'border-[#CC004A]/40 bg-[#CC004A]/5' : 'border-border hover:border-muted-foreground/30'
+                )}
+              >
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={handleBundleToggle}
+                    className={cn(
+                      'h-5 w-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all',
+                      bundleSelected ? 'bg-[#CC004A] border-[#CC004A]' : 'border-muted-foreground/30 hover:border-[#CC004A]/50'
+                    )}
+                  >
+                    {bundleSelected && <Check className="h-3 w-3 text-white" />}
+                  </button>
+                  <div
+                    className={cn(
+                      'h-8 w-8 rounded-md flex items-center justify-center flex-shrink-0',
+                      bundleSelected ? 'bg-[#CC004A]/10' : 'bg-muted'
+                    )}
+                  >
+                    <ShieldCheck className={cn('w-4 h-4', bundleSelected ? 'text-[#CC004A]' : 'text-muted-foreground')} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">CDW + RCLI</span>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Bundle</Badge>
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                      Damage + liability in one — selects CDW and RCLI together
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    {bundleSelected && bundlePrice > 0 && (
+                      <span className="text-sm font-semibold text-[#CC004A]">
+                        {formatCurrency(bundlePrice, cur)}
+                      </span>
+                    )}
+                    <CollapsibleTrigger asChild>
+                      <button
+                        type="button"
+                        className="text-[11px] text-[#CC004A] hover:underline flex items-center gap-0.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {expandedCoverage === 'bundle' ? 'Hide' : 'Details'}
+                      </button>
+                    </CollapsibleTrigger>
+                  </div>
+                </div>
+
+                <CollapsibleContent>
+                  <div className="px-4 pb-3 border-t border-border/50 pt-3 mx-4 mb-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1">
+                      <div>
+                        <p className="text-[11px] font-medium mb-1.5">Covered</p>
+                        {BUNDLE_FEATURES.map((feature, i) => (
+                          <div key={i} className="flex items-start gap-1.5 py-0.5">
+                            <Check className="w-3 h-3 text-emerald-500 flex-shrink-0 mt-0.5" />
+                            <span className="text-[11px] text-muted-foreground leading-tight">{feature}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-medium mb-1.5">Not Covered</p>
+                        {BUNDLE_EXCLUSIONS.map((exclusion, i) => (
+                          <div key={i} className="flex items-start gap-1.5 py-0.5">
+                            <X className="w-3 h-3 text-muted-foreground/50 flex-shrink-0 mt-0.5" />
+                            <span className="text-[11px] text-muted-foreground leading-tight">{exclusion}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-col gap-2">
+                      <a
+                        href={BROCHURE_URLS.cdw}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 rounded-md border border-border/50 px-3 py-2 text-[11px] text-muted-foreground hover:text-foreground hover:border-[#CC004A]/40 transition-colors"
+                      >
+                        <FileText className="w-3.5 h-3.5 flex-shrink-0 text-[#CC004A]" />
+                        <span>View CDW Coverage Brochure</span>
+                      </a>
+                      <a
+                        href={BROCHURE_URLS.rcli}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 rounded-md border border-border/50 px-3 py-2 text-[11px] text-muted-foreground hover:text-foreground hover:border-[#CC004A]/40 transition-colors"
+                      >
+                        <FileText className="w-3.5 h-3.5 flex-shrink-0 text-[#CC004A]" />
+                        <span>View RCLI Coverage Brochure</span>
+                      </a>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+          )}
           {(Object.keys(COVERAGE_INFO) as Array<keyof CoverageOptions>).map((type) => {
             const info = COVERAGE_INFO[type];
-            const isSelected = coverage[type];
-            const isDisabled = type === 'sli' && !coverage.rcli;
+            // When the CDW+RCLI bundle is active, its two coverages are managed by the
+            // bundle: show them DISABLED and NOT individually checked (absorbed into
+            // the bundle row above), so the user manages them via the bundle toggle.
+            const isBundled = bundleSelected && (type === 'cdw' || type === 'rcli');
+            const isSelected = coverage[type] && !isBundled;
+            const isDisabled = (type === 'sli' && !coverage.rcli) || isBundled;
             const price = breakdown[type];
             const isExpanded = expandedCoverage === type;
 
@@ -502,11 +634,15 @@ export default function BonzahInsuranceSelector({
                         <span className="font-medium text-sm">{info.shortName}</span>
                         <span className="text-xs text-muted-foreground hidden sm:inline">{info.name}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-muted-foreground">
-                        <span>{info.deductible === 'None' ? 'No deductible' : `${info.deductible} deductible`}</span>
-                        <span>·</span>
-                        <span>{info.maxCoverage.startsWith('$') ? `Up to ${info.maxCoverage}` : info.maxCoverage}</span>
-                      </div>
+                      {isBundled ? (
+                        <div className="mt-0.5 text-[11px] text-[#CC004A]">Included in the CDW + RCLI bundle</div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-muted-foreground">
+                          <span>{info.deductible === 'None' ? 'No deductible' : `${info.deductible} deductible`}</span>
+                          <span>·</span>
+                          <span>{info.maxCoverage.startsWith('$') ? `Up to ${info.maxCoverage}` : info.maxCoverage}</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Price + details link */}
@@ -598,11 +734,17 @@ export default function BonzahInsuranceSelector({
 
           {totalPremium > 0 && !isLoading && !isFetching && (
             <div className="mt-2 pt-2 border-t border-[#CC004A]/10 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-              {coverage.cdw && breakdown.cdw > 0 && (
-                <span>CDW <span className="font-medium text-foreground">{formatCurrency(breakdown.cdw, cur)}</span></span>
-              )}
-              {coverage.rcli && breakdown.rcli > 0 && (
-                <span>RCLI <span className="font-medium text-foreground">{formatCurrency(breakdown.rcli, cur)}</span></span>
+              {bundleSelected && bundlePrice > 0 ? (
+                <span>CDW + RCLI <span className="font-medium text-foreground">{formatCurrency(bundlePrice, cur)}</span></span>
+              ) : (
+                <>
+                  {coverage.cdw && breakdown.cdw > 0 && (
+                    <span>CDW <span className="font-medium text-foreground">{formatCurrency(breakdown.cdw, cur)}</span></span>
+                  )}
+                  {coverage.rcli && breakdown.rcli > 0 && (
+                    <span>RCLI <span className="font-medium text-foreground">{formatCurrency(breakdown.rcli, cur)}</span></span>
+                  )}
+                </>
               )}
               {coverage.sli && breakdown.sli > 0 && (
                 <span>SLI <span className="font-medium text-foreground">{formatCurrency(breakdown.sli, cur)}</span></span>

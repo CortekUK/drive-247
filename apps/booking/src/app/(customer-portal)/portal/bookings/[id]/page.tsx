@@ -70,6 +70,7 @@ import { PaygSection } from '@/components/customer-portal/payg-section';
 import { AutoExtensionCard } from '@/components/customer-portal/AutoExtensionCard';
 import { CustomerInstallmentsView } from '@/components/installments/CustomerInstallmentsView';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
+import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -398,8 +399,9 @@ function InsuranceSection({
   policy: CustomerInsurancePolicy;
   currencyCode: string;
 }) {
-  const activeCoverages = Object.entries(COVERAGE_LABELS).filter(
-    ([key]) => policy.coverage_types?.[key]
+  const activeCoverages = getActiveCoverageLabels(
+    policy.coverage_types,
+    COVERAGE_LABELS
   );
 
   return (
@@ -420,7 +422,7 @@ function InsuranceSection({
           {activeCoverages.length > 0 && (
             <>
               <span className="text-muted-foreground">Coverage</span>
-              <span>{activeCoverages.map(([, label]) => label).join(', ')}</span>
+              <span>{activeCoverages.map((c) => c.label).join(', ')}</span>
             </>
           )}
           <span className="text-muted-foreground">Period</span>

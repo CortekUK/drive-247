@@ -25,6 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/formatters';
+import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import type { InsurancePolicy } from '@/hooks/use-rental-insurance-policies';
 
 interface InsuranceTimelineProps {
@@ -86,11 +87,6 @@ function getStatusInfo(status: string) {
   }
 }
 
-function getCoverageBadges(coverageTypes: any) {
-  if (!coverageTypes) return [];
-  return ['cdw', 'rcli', 'sli', 'pai'].filter((key) => coverageTypes[key]);
-}
-
 function InsuranceTimelineItem({
   policy,
   isLast,
@@ -115,7 +111,7 @@ function InsuranceTimelineItem({
   const [refreshingPolicy, setRefreshingPolicy] = useState(false);
 
   const statusInfo = getStatusInfo(policy.status);
-  const coverageKeys = getCoverageBadges(policy.coverage_types);
+  const coverageBadges = getActiveCoverageLabels(policy.coverage_types, COVERAGE_SHORT_LABELS);
   const pdfIds = (policy.coverage_types as any)?.pdf_ids as Record<string, string> | undefined;
   const isRetryable = policy.status === 'quoted' || policy.status === 'failed' || policy.status === 'insufficient_balance';
 
@@ -233,13 +229,13 @@ function InsuranceTimelineItem({
 
           {/* Coverage badges + premium */}
           <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-            {coverageKeys.map((key) => (
+            {coverageBadges.map(({ key, label }) => (
               <span
                 key={key}
                 className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary ring-1 ring-inset ring-primary/20"
-                title={COVERAGE_FULL_LABELS[key]}
+                title={COVERAGE_FULL_LABELS[key] || label}
               >
-                {COVERAGE_SHORT_LABELS[key]}
+                {label}
               </span>
             ))}
             <span className="text-sm font-semibold text-green-600 dark:text-green-400 ml-1">

@@ -41,6 +41,7 @@ import { format } from 'date-fns';
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
 import { parseDateOnly } from '@/lib/date-utils';
+import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -257,9 +258,7 @@ function getPolicyStatusBadge(status: string) {
 function InsurancePolicyCard({ policy, currencyCode, tenantId }: { policy: CustomerBonzahPolicy; currencyCode: string; tenantId: string | undefined }) {
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const coverageTypes = policy.coverage_types || {};
-  const activeCoverages = Object.entries(COVERAGE_LABELS).filter(
-    ([key]) => coverageTypes[key]
-  );
+  const activeCoverages = getActiveCoverageLabels(coverageTypes, COVERAGE_LABELS);
   const pdfIds = (coverageTypes as any)?.pdf_ids as Record<string, number> | undefined;
   const rental = policy.rentals;
   const vehicle = rental?.vehicles;
@@ -349,7 +348,7 @@ function InsurancePolicyCard({ policy, currencyCode, tenantId }: { policy: Custo
 
             <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div className="flex items-center gap-1.5 flex-wrap">
-                {activeCoverages.map(([key, label]) => (
+                {activeCoverages.map(({ key, label }) => (
                   <Badge key={key} variant="secondary" className="text-xs">
                     {label}
                   </Badge>

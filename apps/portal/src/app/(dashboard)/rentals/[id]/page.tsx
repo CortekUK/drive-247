@@ -53,6 +53,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency } from "@/lib/formatters";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
+import { getActiveCoverageLabels } from "@/lib/coverage-labels";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { LocationMap } from "@/components/ui/location-map";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -3787,7 +3788,7 @@ const RentalDetail = () => {
               amount: insuranceLedgerCharge ? Number(insuranceLedgerCharge.amount) : insuranceAmount,
               remaining_amount: insuranceLedgerCharge ? Number(insuranceLedgerCharge.remaining_amount) : insuranceAmount,
               detail: extInsurance
-                ? `${extInsurance.coverage_types ? Object.entries(extInsurance.coverage_types).filter(([, v]) => v).map(([k]) => k.toUpperCase()).join(', ') : 'Bonzah Insurance'}`
+                ? `${extInsurance.coverage_types ? getActiveCoverageLabels(extInsurance.coverage_types, { cdw: 'CDW', rcli: 'RCLI', sli: 'SLI', pai: 'PAI' }).map(c => c.label).join(', ') : 'Bonzah Insurance'}`
                 : "Customer's own",
               icon: ShieldCheck,
               color: 'text-teal-500',

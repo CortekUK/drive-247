@@ -25,6 +25,7 @@ const safeFormat = (dateStr: string | null | undefined, fmt: string): string | n
 };
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
+import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import { useRentalAgreements } from '@/hooks/use-rental-agreements';
 import type { RentalAgreement } from '@/hooks/use-rental-agreements';
 import { useRentalInsurancePolicies } from '@/hooks/use-rental-insurance-policies';
@@ -275,9 +276,7 @@ function InsuranceItem({
   currencyCode: string;
 }) {
   const coverageTypes = policy.coverage_types || {};
-  const activeCoverages = Object.entries(COVERAGE_LABELS).filter(
-    ([key]) => coverageTypes[key]
-  );
+  const activeCoverages = getActiveCoverageLabels(coverageTypes, COVERAGE_LABELS);
   const statusBadge = getInsuranceStatusBadge(policy.status);
   const dotClass = getInsuranceDotClass(policy.status);
   const isExtension = policy.policy_type === 'extension';
@@ -306,7 +305,7 @@ function InsuranceItem({
 
             {/* Coverage badges + trip dates */}
             <div className="flex items-center gap-1 flex-wrap mt-1">
-              {activeCoverages.map(([key, label]) => (
+              {activeCoverages.map(({ key, label }) => (
                 <Badge
                   key={key}
                   variant="secondary"

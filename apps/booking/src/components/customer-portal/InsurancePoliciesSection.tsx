@@ -7,6 +7,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
 import { parseDateOnly } from '@/lib/date-utils';
 import { useRentalInsurancePolicies } from '@/hooks/use-rental-insurance-policies';
+import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 
 interface InsurancePoliciesSectionProps {
   rentalId: string;
@@ -42,9 +43,7 @@ export function InsurancePoliciesSection({ rentalId }: InsurancePoliciesSectionP
     <div className="pt-2 border-t mt-2 space-y-2">
       {policies.map((policy) => {
         const coverageTypes = policy.coverage_types || {};
-        const activeCoverages = Object.entries(COVERAGE_LABELS).filter(
-          ([key]) => coverageTypes[key]
-        );
+        const activeCoverages = getActiveCoverageLabels(coverageTypes, COVERAGE_LABELS);
         const statusConfig = getStatusConfig(policy.status);
         const StatusIcon = statusConfig.icon;
         const isExtension = policy.policy_type === 'extension';
@@ -69,7 +68,7 @@ export function InsurancePoliciesSection({ rentalId }: InsurancePoliciesSectionP
 
             {/* Coverage badges */}
             <div className="flex items-center gap-1 flex-wrap">
-              {activeCoverages.map(([key, label]) => (
+              {activeCoverages.map(({ key, label }) => (
                 <Badge
                   key={key}
                   variant="secondary"
