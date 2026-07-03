@@ -2,8 +2,9 @@ import { jsonResponse, errorResponse } from "../_shared/cors.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
-  getSubscriptionStripeClient,
-  getSubscriptionWebhookSecret,
+  getSubscriptionStripeClientForAccount,
+  getSubscriptionWebhookSecretCandidates,
+  type SubscriptionAccount,
 } from "../_shared/subscription-stripe.ts";
 
 Deno.serve(async (req) => {
@@ -27,23 +28,36 @@ Deno.serve(async (req) => {
   }
   const mode: "test" | "live" = payload.livemode ? "live" : "test";
 
-  const webhookSecret = getSubscriptionWebhookSecret(mode);
-  if (!webhookSecret) {
+  // The same webhook URL is registered on both platform accounts (UK legacy +
+  // UAE) during the migration. Try each account's signing secret — whichever
+  // verifies tells us which account the event came from.
+  const candidates = getSubscriptionWebhookSecretCandidates(mode);
+  if (candidates.length === 0) {
     console.error(`Missing webhook secret for mode: ${mode}`);
     return errorResponse("Webhook not configured", 500);
   }
 
-  const stripe = getSubscriptionStripeClient(mode);
+  let event: Stripe.Event | null = null;
+  let account: SubscriptionAccount = "uk";
+  let stripe: Stripe | null = null;
+  for (const candidate of candidates) {
+    try {
+      const client = getSubscriptionStripeClientForAccount(candidate.account, mode);
+      event = await client.webhooks.constructEventAsync(body, signature, candidate.secret);
+      account = candidate.account;
+      stripe = client;
+      break;
+    } catch (_err) {
+      // Wrong secret (or missing key) for this candidate — try the next one.
+    }
+  }
 
-  let event: Stripe.Event;
-  try {
-    event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
-  } catch (err) {
-    console.error("Webhook signature verification failed:", err.message);
+  if (!event || !stripe) {
+    console.error("Webhook signature verification failed for all configured accounts");
     return errorResponse("Invalid signature", 400);
   }
 
-  console.log(`Subscription webhook event: ${event.type} (${event.id}) [mode: ${mode}]`);
+  console.log(`Subscription webhook event: ${event.type} (${event.id}) [account: ${account}, mode: ${mode}]`);
 
   try {
     switch (event.type) {
@@ -52,15 +66,15 @@ Deno.serve(async (req) => {
         if (sessionObj.metadata?.type === "credit_purchase") {
           await handleCreditPurchase(supabase, sessionObj);
         } else {
-          await handleCheckoutCompleted(stripe, supabase, sessionObj);
+          await handleCheckoutCompleted(stripe, supabase, sessionObj, account, mode);
         }
         break;
       }
       case "customer.subscription.updated":
-        await handleSubscriptionUpdated(stripe, supabase, event.data.object);
+        await handleSubscriptionUpdated(stripe, supabase, event.data.object, account);
         break;
       case "customer.subscription.deleted":
-        await handleSubscriptionDeleted(supabase, event.data.object);
+        await handleSubscriptionDeleted(supabase, event.data.object, account);
         break;
       case "invoice.paid":
         await handleInvoicePaid(supabase, event.data.object);
@@ -79,7 +93,13 @@ Deno.serve(async (req) => {
   return jsonResponse({ received: true });
 });
 
-async function handleCheckoutCompleted(stripe: Stripe, supabase: any, session: any) {
+async function handleCheckoutCompleted(
+  stripe: Stripe,
+  supabase: any,
+  session: any,
+  account: SubscriptionAccount,
+  mode: "test" | "live"
+) {
   if (session.mode !== "subscription") return;
 
   const tenantId = session.metadata?.tenant_id;
@@ -90,6 +110,54 @@ async function handleCheckoutCompleted(stripe: Stripe, supabase: any, session: a
 
   const planId = session.metadata?.plan_id || null;
   const planName = session.metadata?.plan_name || null;
+  const isUaeMigration = account === "uae" && session.metadata?.migration === "uae-capture";
+
+  // UK→UAE migration: retire the legacy UK subscription BEFORE upserting the
+  // new UAE row (a partial unique index allows only one active/trialing/
+  // past_due row per tenant). The Stripe-side UK subscription is set to
+  // cancel_at_period_end so it simply stops when the already-paid period ends.
+  if (isUaeMigration) {
+    // Flip the tenant to the UAE account FIRST so the post-migration guard in
+    // handleSubscriptionUpdated ignores the UK subscription.updated event that
+    // the cancel_at_period_end call below will trigger (it can arrive before
+    // this handler finishes).
+    await supabase
+      .from("tenants")
+      .update({ subscription_account: "uae" })
+      .eq("id", tenantId);
+
+    const { data: oldSubs } = await supabase
+      .from("tenant_subscriptions")
+      .select("id, stripe_subscription_id, stripe_account, current_period_end")
+      .eq("tenant_id", tenantId)
+      .in("status", ["active", "trialing", "past_due"])
+      .neq("stripe_subscription_id", subscriptionId);
+
+    for (const oldSub of oldSubs || []) {
+      if (oldSub.stripe_account !== "uae" && oldSub.stripe_subscription_id) {
+        try {
+          const ukStripe = getSubscriptionStripeClientForAccount("uk", mode);
+          await ukStripe.subscriptions.update(oldSub.stripe_subscription_id, {
+            cancel_at_period_end: true,
+          });
+          console.log(`UAE migration: set UK subscription ${oldSub.stripe_subscription_id} to cancel_at_period_end for tenant ${tenantId}`);
+        } catch (cancelErr) {
+          console.error(`UAE migration: failed to cancel UK subscription ${oldSub.stripe_subscription_id}:`, cancelErr.message);
+        }
+      }
+      // Retire the DB row now so the new UAE row can occupy the
+      // one-active-subscription-per-tenant slot.
+      await supabase
+        .from("tenant_subscriptions")
+        .update({
+          status: "canceled",
+          canceled_at: new Date().toISOString(),
+          ended_at: oldSub.current_period_end || new Date().toISOString(),
+        })
+        .eq("id", oldSub.id);
+      console.log(`UAE migration: retired legacy subscription row ${oldSub.id} for tenant ${tenantId}`);
+    }
+  }
 
   let resolvedPlanName = planName || "pro";
   if (planId) {
@@ -129,16 +197,25 @@ async function handleCheckoutCompleted(stripe: Stripe, supabase: any, session: a
       trial_end: subscription.trial_end
         ? new Date(subscription.trial_end * 1000).toISOString()
         : null,
+      // Tag which platform account bills this subscription. UK rows keep the
+      // column's default; only events verified from the UAE account tag 'uae'.
+      ...(account === "uae" ? { stripe_account: "uae" } : {}),
     }, { onConflict: "stripe_subscription_id" });
 
   if (subError) { console.error("Error upserting subscription:", subError); throw subError; }
 
-  // If trialing, force test mode for Stripe Connect and Bonzah so tenant can configure safely
+  // If trialing, force test mode for Stripe Connect and Bonzah so tenant can configure safely.
+  // EXCEPTION: a uae-capture migration rides Stripe's trial primitive purely to
+  // defer the first UAE charge until the paid UK period ends — the tenant is an
+  // existing (often live) operator, so never knock them back to test mode.
   const tenantUpdate: Record<string, any> = {
     subscription_plan: resolvedPlanName,
     stripe_subscription_customer_id: subscription.customer as string,
   };
-  if (subscription.status === "trialing") {
+  if (isUaeMigration) {
+    tenantUpdate.subscription_account = "uae";
+    console.log(`UAE migration complete for tenant ${tenantId} — subscription now bills on the UAE account`);
+  } else if (subscription.status === "trialing") {
     tenantUpdate.stripe_mode = "test";
     tenantUpdate.bonzah_mode = "test";
     tenantUpdate.setup_completed_at = null;
@@ -168,9 +245,30 @@ async function handleCheckoutCompleted(stripe: Stripe, supabase: any, session: a
   console.log(`Subscription ${subscription.id} activated for tenant ${tenantId}, plan: ${resolvedPlanName}`);
 }
 
-async function handleSubscriptionUpdated(stripe: Stripe, supabase: any, subscription: any) {
+async function handleSubscriptionUpdated(
+  stripe: Stripe,
+  supabase: any,
+  subscription: any,
+  account: SubscriptionAccount
+) {
   const tenantId = subscription.metadata?.tenant_id;
   if (!tenantId) { console.error("No tenant_id in subscription metadata"); return; }
+
+  // Post-migration guard: once a tenant bills on the UAE account, events about
+  // their legacy UK subscription (which is winding down via
+  // cancel_at_period_end) must not overwrite the retired DB row or the
+  // tenant's plan — the UAE subscription is now the source of truth.
+  if (account === "uk") {
+    const { data: tenantRow } = await supabase
+      .from("tenants")
+      .select("subscription_account")
+      .eq("id", tenantId)
+      .maybeSingle();
+    if (tenantRow?.subscription_account === "uae") {
+      console.log(`Ignoring UK subscription.updated for migrated tenant ${tenantId} (sub ${subscription.id})`);
+      return;
+    }
+  }
 
   const fullSub = await stripe.subscriptions.retrieve(subscription.id, {
     expand: ["default_payment_method"],
@@ -195,6 +293,7 @@ async function handleSubscriptionUpdated(stripe: Stripe, supabase: any, subscrip
       card_last4: card?.last4 || null,
       card_exp_month: card?.exp_month || null,
       card_exp_year: card?.exp_year || null,
+      ...(account === "uae" ? { stripe_account: "uae" } : {}),
     })
     .eq("stripe_subscription_id", subscription.id);
 
@@ -235,7 +334,7 @@ async function handleSubscriptionUpdated(stripe: Stripe, supabase: any, subscrip
   console.log(`Subscription ${subscription.id} updated: status=${subscription.status}, plan=${activePlan}`);
 }
 
-async function handleSubscriptionDeleted(supabase: any, subscription: any) {
+async function handleSubscriptionDeleted(supabase: any, subscription: any, account: SubscriptionAccount) {
   const tenantId = subscription.metadata?.tenant_id;
 
   const { error } = await supabase
@@ -250,7 +349,22 @@ async function handleSubscriptionDeleted(supabase: any, subscription: any) {
   if (error) console.error("Error marking subscription canceled:", error);
 
   if (tenantId) {
-    await supabase.from("tenants").update({ subscription_plan: "basic" }).eq("id", tenantId);
+    // Don't downgrade the tenant's plan if another subscription is still
+    // active/trialing — e.g. the legacy UK subscription finally ending at
+    // period end AFTER the tenant migrated to a UAE subscription.
+    const { data: otherActive } = await supabase
+      .from("tenant_subscriptions")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .in("status", ["active", "trialing", "past_due"])
+      .neq("stripe_subscription_id", subscription.id)
+      .limit(1);
+
+    if (otherActive && otherActive.length > 0) {
+      console.log(`Subscription ${subscription.id} (${account}) deleted for tenant ${tenantId}, but another active subscription exists — keeping current plan`);
+    } else {
+      await supabase.from("tenants").update({ subscription_plan: "basic" }).eq("id", tenantId);
+    }
   }
   console.log(`Subscription ${subscription.id} deleted/canceled`);
 }

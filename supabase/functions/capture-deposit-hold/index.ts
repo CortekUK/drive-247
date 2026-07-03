@@ -11,7 +11,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getStripeClient, getConnectAccountId, resolveHoldExpiry, createDepositHoldIntentWithFallback, type StripeMode } from "../_shared/stripe-client.ts";
+import { getConnectAccountId, getStripeClientForRecord, resolveHoldExpiry, createDepositHoldIntentWithFallback, type StripeMode } from "../_shared/stripe-client.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
       .select(
-        "deposit_hold_payment_intent_id, deposit_hold_status, deposit_hold_amount, deposit_hold_payment_method_id, deposit_hold_stripe_customer_id, tenant_id, customer_id, vehicle_id, auto_extend_enabled"
+        "deposit_hold_payment_intent_id, deposit_hold_status, deposit_hold_amount, deposit_hold_payment_method_id, deposit_hold_stripe_customer_id, tenant_id, customer_id, vehicle_id, auto_extend_enabled, platform_account"
       )
       .eq("id", rentalId)
       .single();
@@ -54,13 +54,21 @@ Deno.serve(async (req) => {
 
     const { data: tenant } = await supabase
       .from("tenants")
-      .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code")
+      .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code")
       .eq("id", effectiveTenantId)
       .single();
 
     const stripeMode: StripeMode = (tenant?.stripe_mode as StripeMode) || "test";
-    const stripe = getStripeClient(stripeMode);
-    const connectAccountId = tenant ? getConnectAccountId(tenant) : null;
+    // The hold lives on the platform account it was CREATED on
+    // (rentals.platform_account) — capture with those keys + that platform's
+    // connected account, even if the tenant has since flipped payment model.
+    const stripe = getStripeClientForRecord(rental, stripeMode);
+    const connectAccountId = tenant
+      ? getConnectAccountId({
+          ...tenant,
+          payment_model: rental.platform_account === "uae" ? "own" : "managed",
+        })
+      : null;
     const stripeOptions = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
 
     const capturedInCents = Math.round(amount * 100);
@@ -225,6 +233,7 @@ Deno.serve(async (req) => {
         verification_status: "auto_approved",
         stripe_payment_intent_id: rental.deposit_hold_payment_intent_id,
         capture_status: "captured",
+        platform_account: rental.platform_account === "uae" ? "uae" : "uk",
         booking_source: "admin",
       })
       .select()

@@ -138,6 +138,11 @@ verify_jwt = false
 [functions.get-apply-form-config]
 verify_jwt = false
 
+# Own Stripe OAuth callback (Stripe 302-redirects the browser here, so it
+# can't carry a JWT). State is HMAC-verified in code before any DB write.
+[functions.stripe-oauth-callback]
+verify_jwt = false
+
 # Phase 3 AI layer.
 [functions.ai-rank-matches]
 verify_jwt = true

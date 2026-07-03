@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { corsHeaders } from "../_shared/cors.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type PlatformAccount } from "../_shared/stripe-client.ts";
 
 // --- Stripe Checkout session helpers for reminder pay-now button.
 // The reminder email embeds a Stripe Checkout link so the customer can pay with
@@ -15,6 +16,7 @@ import { sendEmail } from "../_shared/resend-service.ts";
 interface StripeContext {
   stripe: Stripe;
   mode: "test" | "live";
+  platformAccount: PlatformAccount;
   connectAccountId: string | null;
   currencyCode: string;
 }
@@ -22,28 +24,22 @@ interface StripeContext {
 async function getStripeContext(supabase: any, tenantId: string): Promise<StripeContext | null> {
   const { data: tenant } = await supabase
     .from("tenants")
-    .select("id, stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code")
+    .select("id, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code")
     .eq("id", tenantId)
     .single();
   const mode: "test" | "live" = tenant?.stripe_mode === "live" ? "live" : "test";
-  const secretKey = mode === "live"
-    ? Deno.env.get("STRIPE_LIVE_SECRET_KEY")
-    : Deno.env.get("STRIPE_TEST_SECRET_KEY");
-  if (!secretKey) {
-    console.warn(`[payg_reminder] No Stripe secret key for ${mode} mode — skipping payment link`);
+  // NEW charges use the tenant's current platform account
+  // ('managed' → legacy UK keys, 'own' → UAE keys).
+  const platformAccount = getChargePlatformAccount(tenant ?? {});
+  let stripe: Stripe;
+  try {
+    stripe = getStripeClientForAccount(platformAccount, mode);
+  } catch (keyErr: any) {
+    console.warn(`[payg_reminder] ${keyErr?.message ?? keyErr} — skipping payment link`);
     return null;
   }
-  const stripe = new Stripe(secretKey, {
-    apiVersion: "2023-10-16",
-    httpClient: Stripe.createFetchHttpClient(),
-  });
-  let connectAccountId: string | null = null;
-  if (mode === "test") {
-    connectAccountId = Deno.env.get("STRIPE_TEST_CONNECT_ACCOUNT_ID") || null;
-  } else if (tenant?.stripe_onboarding_complete && tenant?.stripe_account_id) {
-    connectAccountId = tenant.stripe_account_id;
-  }
-  return { stripe, mode, connectAccountId, currencyCode: tenant?.currency_code || "USD" };
+  const connectAccountId = tenant ? getConnectAccountId(tenant) : null;
+  return { stripe, mode, platformAccount, connectAccountId, currencyCode: tenant?.currency_code || "USD" };
 }
 
 // Find the most recent reminder for this rental that still has a live Stripe
@@ -203,6 +199,7 @@ async function createReminderCheckoutSession(args: {
       verification_status: "pending",
       stripe_checkout_session_id: session.id,
       capture_status: "requires_capture",
+      platform_account: args.ctx.platformAccount,
       booking_source: "website",
       target_categories: ["Rental", "Tax", "Service Fee"],
       created_at: new Date().toISOString(),

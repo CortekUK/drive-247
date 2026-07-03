@@ -4,7 +4,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getStripeClient, getConnectAccountId, type StripeMode } from "../_shared/stripe-client.ts";
+import { getConnectAccountId, getStripeClientForRecord, type StripeMode } from "../_shared/stripe-client.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
 
 Deno.serve(async (req) => {
@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
     // Fetch rental details
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
-      .select("id, customer_id, vehicle_id, tenant_id, deposit_hold_status, deposit_hold_payment_intent_id, deposit_hold_amount")
+      .select("id, customer_id, vehicle_id, tenant_id, deposit_hold_status, deposit_hold_payment_intent_id, deposit_hold_amount, platform_account")
       .eq("id", rentalId)
       .single();
 
@@ -99,15 +99,26 @@ Deno.serve(async (req) => {
     // Get tenant's Stripe configuration
     const { data: tenantData } = await supabase
       .from("tenants")
-      .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code")
+      .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code")
       .eq("id", effectiveTenantId)
       .single();
 
     const currencyCode = tenantData?.currency_code || "USD";
     const stripeMode = (tenantData?.stripe_mode as StripeMode) || "test";
-    const stripe = getStripeClient(stripeMode);
-    const connectAccountId = tenantData ? getConnectAccountId(tenantData) : null;
-    const stripeOptions = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
+    // Resolve Stripe client + connected account from the platform the RECORD
+    // (hold rental / payment) was created on — never the tenant's current
+    // model, which may have flipped since the money object was created.
+    const resolveForRecord = (record: { platform_account?: string | null }) => {
+      const client = getStripeClientForRecord(record, stripeMode);
+      const connectAccountId = tenantData
+        ? getConnectAccountId({
+            ...tenantData,
+            payment_model: record.platform_account === "uae" ? "own" : "managed",
+          })
+        : null;
+      return { client, options: connectAccountId ? { stripeAccount: connectAccountId } : undefined };
+    };
+    const { client: stripe, options: stripeOptions } = resolveForRecord(rental);
 
     // If there's an active deposit hold, capture from it instead of refunding
     if (rental.deposit_hold_status === 'held' && rental.deposit_hold_payment_intent_id) {
@@ -169,10 +180,12 @@ Deno.serve(async (req) => {
 
     if (payment?.stripe_payment_intent_id) {
       try {
-        const paymentIntent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id, stripeOptions);
+        // Refund on the platform the PAYMENT was created on (may differ from the rental's).
+        const { client: paymentStripe, options: paymentStripeOptions } = resolveForRecord(payment);
+        const paymentIntent = await paymentStripe.paymentIntents.retrieve(payment.stripe_payment_intent_id, paymentStripeOptions);
 
         if (paymentIntent.status === "succeeded") {
-          const refund = await stripe.refunds.create(
+          const refund = await paymentStripe.refunds.create(
             {
               payment_intent: payment.stripe_payment_intent_id,
               amount: Math.round(amount * 100),
@@ -183,7 +196,7 @@ Deno.serve(async (req) => {
                 refund_reason: "Deducted for excess mileage charge",
               },
             },
-            stripeOptions
+            paymentStripeOptions
           );
           stripeRefundId = refund.id;
           console.log("[DEDUCT-DEPOSIT] Stripe refund created:", refund.id);

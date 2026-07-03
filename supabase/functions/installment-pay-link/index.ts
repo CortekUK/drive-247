@@ -14,7 +14,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
-import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts'
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode } from '../_shared/stripe-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -125,13 +125,13 @@ Deno.serve(async (req) => {
     // the email locally).
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('id, slug, company_name, stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code')
+      .select('id, slug, company_name, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code')
       .eq('id', plan.tenant_id)
       .single()
 
     const stripeMode: StripeMode = (tenant?.stripe_mode as StripeMode) || 'test'
     const currency = (tenant?.currency_code || 'USD').toLowerCase()
-    const stripe = getStripeClient(stripeMode)
+    const stripe = getStripeClientForAccount(tenant ? getChargePlatformAccount(tenant) : 'uk', stripeMode)
     const stripeAccountId = tenant ? getConnectAccountId(tenant) : null
     const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
 

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
-import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts';
+import { getConnectAccountId, getStripeClientForRecord, type StripeMode } from '../_shared/stripe-client.ts';
 import { getTenantBonzahCredentials, bonzahFetchWithCredentials } from '../_shared/bonzah-client.ts';
 
 const corsHeaders = {
@@ -46,7 +46,7 @@ serve(async (req) => {
     // Get rental details (separate query to avoid join issues)
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
-      .select("id, status, customer_id, vehicle_id, monthly_amount, tenant_id, deposit_hold_status, deposit_hold_payment_intent_id")
+      .select("id, status, customer_id, vehicle_id, monthly_amount, tenant_id, deposit_hold_status, deposit_hold_payment_intent_id, platform_account")
       .eq("id", rentalId)
       .single();
 
@@ -85,23 +85,35 @@ serve(async (req) => {
     let stripeAccountId: string | null = null;
     let stripeMode: StripeMode = 'test';
 
+    let tenantData: any = null;
     if (tenantId) {
       const { data: tenant } = await supabase
         .from("tenants")
-        .select("stripe_mode, stripe_account_id, stripe_onboarding_complete")
+        .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id")
         .eq("id", tenantId)
         .single();
 
       if (tenant) {
+        tenantData = tenant;
         stripeMode = (tenant.stripe_mode as StripeMode) || 'test';
         stripeAccountId = getConnectAccountId(tenant);
         console.log("Refund - tenantId:", tenantId, "mode:", stripeMode, "connectAccount:", stripeAccountId);
       }
     }
 
-    // Initialize mode-aware Stripe client
-    const stripe = getStripeClient(stripeMode);
-    const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
+    // Resolve Stripe client + connected account from the platform the RECORD
+    // (payment / rental hold) was CREATED on — never the tenant's current
+    // model, which may have flipped since the Stripe object was created.
+    const resolveForRecord = (record: { platform_account?: string | null }) => {
+      const client = getStripeClientForRecord(record, stripeMode);
+      const accountId = tenantData
+        ? getConnectAccountId({
+            ...tenantData,
+            payment_model: record.platform_account === 'uae' ? 'own' : 'managed',
+          })
+        : null;
+      return { client, options: accountId ? { stripeAccount: accountId } : undefined };
+    };
 
     // Get related payment with Stripe payment intent
     let payment = null;
@@ -132,10 +144,11 @@ serve(async (req) => {
     if (payment?.stripe_payment_intent_id && refundType !== "none") {
       try {
         const paymentIntentId = payment.stripe_payment_intent_id;
+        const { client: stripe, options: stripeOptions } = resolveForRecord(payment);
 
         // Get the payment intent to check its status (with Connect account if applicable)
         const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, stripeOptions);
-        console.log("Payment intent status:", paymentIntent.status, stripeAccountId ? `(Connect: ${stripeAccountId})` : '');
+        console.log("Payment intent status:", paymentIntent.status);
 
         if (paymentIntent.status === "requires_capture") {
           // Pre-auth: Cancel the payment intent (release hold)
@@ -285,7 +298,8 @@ serve(async (req) => {
     // Release deposit hold if one exists
     if (rental.deposit_hold_status === 'held' && rental.deposit_hold_payment_intent_id) {
       try {
-        await stripe.paymentIntents.cancel(rental.deposit_hold_payment_intent_id, stripeOptions);
+        const { client: holdStripe, options: holdOptions } = resolveForRecord(rental);
+        await holdStripe.paymentIntents.cancel(rental.deposit_hold_payment_intent_id, holdOptions);
         await supabase.from("rentals").update({ deposit_hold_status: "released" }).eq("id", rentalId);
         console.log("Released deposit hold:", rental.deposit_hold_payment_intent_id);
       } catch (holdErr: any) {

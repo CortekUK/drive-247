@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
+import { getConnectWebhookSecretCandidates } from '../_shared/stripe-client.ts'
 
 // Use live key since Connect accounts are created in live mode
 const stripe = new Stripe(Deno.env.get('STRIPE_LIVE_SECRET_KEY') || '', {
@@ -27,13 +28,24 @@ serve(async (req) => {
 
     let event: Stripe.Event
 
-    // Verify webhook signature if secret is configured
-    const webhookSecret = Deno.env.get('STRIPE_CONNECT_WEBHOOK_SECRET')
-    if (webhookSecret && signature) {
-      try {
-        event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
-      } catch (err) {
-        console.error('Webhook signature verification failed:', err.message)
+    // Verify webhook signature if a secret is configured. During the UAE
+    // migration this endpoint may be registered on BOTH platform accounts
+    // (legacy + UAE), so try each candidate secret until one verifies.
+    const secretCandidates = getConnectWebhookSecretCandidates()
+    if (secretCandidates.length > 0 && signature) {
+      let verified = false
+      let lastErr: any = null
+      for (const secret of secretCandidates) {
+        try {
+          event = stripe.webhooks.constructEvent(body, signature, secret)
+          verified = true
+          break
+        } catch (err) {
+          lastErr = err
+        }
+      }
+      if (!verified) {
+        console.error('Webhook signature verification failed with all secrets:', lastErr?.message)
         return new Response(
           JSON.stringify({ error: 'Invalid signature' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
@@ -42,7 +54,7 @@ serve(async (req) => {
     } else {
       // Parse event without verification (development mode)
       event = JSON.parse(body)
-      console.warn('Webhook signature not verified - STRIPE_CONNECT_WEBHOOK_SECRET not set')
+      console.warn('Webhook signature not verified - no Connect webhook secret set')
     }
 
     // Initialize Supabase client
@@ -93,6 +105,45 @@ serve(async (req) => {
         // Tenant disconnected their account
         const account = event.data.object as Stripe.Account
 
+        // Own Stripe (OAuth-connected Standard account on the UAE platform):
+        // if the deauthorized id matches a tenant's own account, clear ONLY the
+        // matching own_stripe_* column + its connected_at. Legacy Express
+        // fields are handled by the separate path below and never touched here.
+        const { data: ownLiveTenants } = await supabaseClient
+          .from('tenants')
+          .select('id')
+          .eq('own_stripe_account_id', account.id)
+        if (ownLiveTenants && ownLiveTenants.length > 0) {
+          const { error: ownLiveError } = await supabaseClient
+            .from('tenants')
+            .update({ own_stripe_account_id: null, own_stripe_connected_at: null })
+            .eq('own_stripe_account_id', account.id)
+          if (ownLiveError) {
+            console.error('Error clearing own_stripe_account_id on deauthorize:', ownLiveError)
+          } else {
+            console.log(`Own Stripe LIVE account ${account.id} deauthorized — cleared from tenant(s)`)
+          }
+          break
+        }
+
+        const { data: ownTestTenants } = await supabaseClient
+          .from('tenants')
+          .select('id')
+          .eq('own_stripe_test_account_id', account.id)
+        if (ownTestTenants && ownTestTenants.length > 0) {
+          const { error: ownTestError } = await supabaseClient
+            .from('tenants')
+            .update({ own_stripe_test_account_id: null, own_stripe_test_connected_at: null })
+            .eq('own_stripe_test_account_id', account.id)
+          if (ownTestError) {
+            console.error('Error clearing own_stripe_test_account_id on deauthorize:', ownTestError)
+          } else {
+            console.log(`Own Stripe TEST account ${account.id} deauthorized — cleared from tenant(s)`)
+          }
+          break
+        }
+
+        // Legacy managed (Express) account path — unchanged.
         const { error: updateError } = await supabaseClient
           .from('tenants')
           .update({

@@ -1,8 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import {
-  getSubscriptionStripeClient,
   getSubscriptionStripeMode,
+  getTenantSubscriptionAccount,
+  getSubscriptionStripeClientForAccount,
 } from "../_shared/subscription-stripe.ts";
 import { CREDIT_CONFIG } from "../_shared/credit-config.ts";
 
@@ -40,9 +41,11 @@ Deno.serve(async (req) => {
 
     const priceCents = Math.round(creditAmount * CREDIT_CONFIG.CREDIT_PRICE_USD * 100); // $0.20/credit
 
-    // Get tenant's Stripe mode and customer ID
+    // Get tenant's Stripe mode + platform account (UK legacy vs UAE).
+    // Credits are platform billing — same account as subscriptions.
     const mode = await getSubscriptionStripeMode(supabaseAdmin, tenantId);
-    const stripe = getSubscriptionStripeClient(mode);
+    const account = await getTenantSubscriptionAccount(supabaseAdmin, tenantId);
+    const stripe = getSubscriptionStripeClientForAccount(account, mode);
 
     const { data: tenant } = await supabaseAdmin
       .from("tenants")
@@ -50,8 +53,24 @@ Deno.serve(async (req) => {
       .eq("id", tenantId)
       .single();
 
-    // Create or reuse Stripe customer
+    // Create or reuse Stripe customer. Customer IDs are account-specific:
+    // tenants.stripe_subscription_customer_id was originally created on the UK
+    // account, so for a migrated ('uae') tenant — or after a test→live mode
+    // switch — the stored ID may not exist on the target account. Verify it
+    // and create a fresh customer if not (same pattern as
+    // create-subscription-checkout).
     let customerId = tenant?.stripe_subscription_customer_id;
+    if (customerId) {
+      try {
+        const existing = await stripe.customers.retrieve(customerId);
+        if ((existing as { deleted?: boolean }).deleted) customerId = null;
+      } catch (_e) {
+        console.log(
+          `Stored customer ${customerId} not found on ${account}/${mode} Stripe account, creating new one`
+        );
+        customerId = null;
+      }
+    }
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
@@ -85,6 +104,7 @@ Deno.serve(async (req) => {
         tenant_id: tenantId,
         package_name: `${creditAmount} Credits`,
         credits: String(creditAmount),
+        platform_account: account,
       },
       success_url:
         successUrl || `${req.headers.get("origin")}/credits?status=success`,
@@ -95,6 +115,7 @@ Deno.serve(async (req) => {
         metadata: {
           type: "credit_purchase",
           tenant_id: tenantId,
+          platform_account: account,
         },
       },
     });

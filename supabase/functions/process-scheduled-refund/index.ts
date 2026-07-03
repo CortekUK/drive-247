@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
-import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts';
+import { getConnectAccountId, getStripeClientForRecord, type StripeMode } from '../_shared/stripe-client.ts';
 import { formatCurrency } from '../_shared/format-utils.ts';
 
 const corsHeaders = {
@@ -69,22 +69,27 @@ serve(async (req) => {
       if (tenantId) {
         const { data: tenant } = await supabase
           .from('tenants')
-          .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code')
+          .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code')
           .eq('id', tenantId)
           .single();
 
         if (tenant) {
           stripeMode = (tenant.stripe_mode as StripeMode) || 'test';
-          stripeAccountId = getConnectAccountId(tenant);
+          // Refund on the platform the payment was CREATED on
+          // (payments.platform_account), not the tenant's current model.
+          stripeAccountId = getConnectAccountId({
+            ...tenant,
+            payment_model: payment.platform_account === 'uae' ? 'own' : 'managed',
+          });
           if (tenant.currency_code) {
             currencyCode = tenant.currency_code;
           }
-          console.log('Tenant mode:', stripeMode, 'Connect account:', stripeAccountId);
+          console.log('Tenant mode:', stripeMode, 'Connect account:', stripeAccountId, 'Platform:', payment.platform_account || 'uk');
         }
       }
 
-      // Get Stripe client for the tenant's mode
-      const stripe = getStripeClient(stripeMode);
+      // Get Stripe client for the platform account this payment was created on
+      const stripe = getStripeClientForRecord(payment, stripeMode);
       const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
       const refundAmount = requestBody.amount || payment.amount;
 
@@ -231,7 +236,7 @@ serve(async (req) => {
         // Get tenant's Stripe mode and Connect account for this refund
         const { data: paymentRecord } = await supabase
           .from('payments')
-          .select('tenant_id')
+          .select('tenant_id, platform_account')
           .eq('id', refund.payment_id)
           .single();
 
@@ -240,18 +245,22 @@ serve(async (req) => {
         if (paymentRecord?.tenant_id) {
           const { data: tenant } = await supabase
             .from('tenants')
-            .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
+            .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id')
             .eq('id', paymentRecord.tenant_id)
             .single();
 
           if (tenant) {
             batchStripeMode = (tenant.stripe_mode as StripeMode) || 'test';
-            batchStripeAccountId = getConnectAccountId(tenant);
+            // Refund on the platform the payment was CREATED on.
+            batchStripeAccountId = getConnectAccountId({
+              ...tenant,
+              payment_model: paymentRecord.platform_account === 'uae' ? 'own' : 'managed',
+            });
           }
         }
 
-        // Get Stripe client for this tenant's mode
-        const batchStripe = getStripeClient(batchStripeMode);
+        // Get Stripe client for the platform account this payment was created on
+        const batchStripe = getStripeClientForRecord(paymentRecord ?? {}, batchStripeMode);
         const batchStripeOptions = batchStripeAccountId ? { stripeAccount: batchStripeAccountId } : undefined;
 
         // Process refund via Stripe (on connected account for direct charges)

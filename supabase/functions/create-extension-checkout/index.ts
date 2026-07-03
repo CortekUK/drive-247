@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts'
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode } from '../_shared/stripe-client.ts'
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 // Phase 3: server-authoritative extension checkout.
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
     // Fetch tenant details for Stripe configuration
     const { data: tenantData, error: tenantError } = await supabaseClient
       .from('tenants')
-      .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete')
+      .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id')
       .eq('id', extRow.tenant_id)
       .eq('status', 'active')
       .single();
@@ -151,7 +151,8 @@ Deno.serve(async (req) => {
 
     console.log('Extension checkout — extensionId:', extRow.id, 'rental:', extRow.rental_id, 'mode:', stripeMode, 'total:', totalAmount);
 
-    const stripe = getStripeClient(stripeMode);
+    const platformAccount = getChargePlatformAccount(tenantData);
+    const stripe = getStripeClientForAccount(platformAccount, stripeMode);
     const stripeAccountId = getConnectAccountId(tenantData);
     const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
 
@@ -211,6 +212,7 @@ Deno.serve(async (req) => {
         target_categories: ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance'],
         stripe_checkout_session_id: session.id,
         capture_status: 'requires_capture',
+        platform_account: platformAccount,
         booking_source: 'portal',
         notes: `Extension #${extRow.sequence_number}: ${extensionDays} day${extensionDays !== 1 ? 's' : ''}`,
         created_at: new Date().toISOString(),

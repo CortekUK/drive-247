@@ -6,7 +6,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getStripeClient, getConnectAccountId, resolveHoldExpiry, createDepositHoldIntentWithFallback, type StripeMode } from "../_shared/stripe-client.ts";
+import { getConnectAccountId, getStripeClientForRecord, resolveHoldExpiry, createDepositHoldIntentWithFallback, type StripeMode } from "../_shared/stripe-client.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -36,7 +36,8 @@ Deno.serve(async (req) => {
         deposit_hold_amount,
         deposit_hold_payment_method_id,
         deposit_hold_stripe_customer_id,
-        deposit_hold_expires_at
+        deposit_hold_expires_at,
+        platform_account
       `)
       .eq("status", "Active")
       .eq("deposit_hold_status", "held")
@@ -76,7 +77,7 @@ Deno.serve(async (req) => {
         if (!tenantCache[rental.tenant_id]) {
           const { data: tenant } = await supabase
             .from("tenants")
-            .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code")
+            .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code")
             .eq("id", rental.tenant_id)
             .single();
           tenantCache[rental.tenant_id] = tenant;
@@ -88,8 +89,14 @@ Deno.serve(async (req) => {
         }
 
         const stripeMode: StripeMode = (tenant.stripe_mode as StripeMode) || "test";
-        const stripe = getStripeClient(stripeMode);
-        const connectAccountId = getConnectAccountId(tenant);
+        // Operate on the platform the hold was CREATED on (rentals.platform_account):
+        // the old PI, the saved card AND the replacement hold all live there —
+        // even if the tenant's payment model has since flipped.
+        const stripe = getStripeClientForRecord(rental, stripeMode);
+        const connectAccountId = getConnectAccountId({
+          ...tenant,
+          payment_model: rental.platform_account === "uae" ? "own" : "managed",
+        });
         const stripeOptions = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
 
         // Step 1: Cancel the old hold

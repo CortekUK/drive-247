@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts';
+import { getConnectAccountId, getStripeClientForRecord, type StripeMode } from '../_shared/stripe-client.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -76,14 +76,21 @@ serve(async (req) => {
     if (tenantId) {
       const { data: tenant } = await supabase
         .from("tenants")
-        .select("stripe_mode, stripe_account_id, stripe_onboarding_complete")
+        .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id")
         .eq("id", tenantId)
         .single();
 
       if (tenant) {
         stripeMode = (tenant.stripe_mode as StripeMode) || 'test';
-        stripeAccountId = getConnectAccountId(tenant);
-        console.log("Tenant mode:", stripeMode, "Connect account:", stripeAccountId);
+        // Resolve the connected account for the platform the payment was
+        // CREATED on (payments.platform_account), not the tenant's current
+        // model — a UK-created object must be captured with UK routing even
+        // after the tenant flips to Own Stripe.
+        stripeAccountId = getConnectAccountId({
+          ...tenant,
+          payment_model: payment.platform_account === 'uae' ? 'own' : 'managed',
+        });
+        console.log("Tenant mode:", stripeMode, "Connect account:", stripeAccountId, "Platform:", payment.platform_account || 'uk');
       }
     }
 
@@ -151,8 +158,8 @@ serve(async (req) => {
       }
     }
 
-    // Get Stripe client for the tenant's mode
-    const stripe = getStripeClient(stripeMode);
+    // Get Stripe client for the platform account this payment was created on
+    const stripe = getStripeClientForRecord(payment, stripeMode);
     const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
 
     // 4. Get the Stripe checkout session to find the PaymentIntent

@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts'
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
 import { formatCurrency } from '../_shared/format-utils.ts'
 
 const corsHeaders = {
@@ -46,7 +46,7 @@ serve(async (req) => {
     if (slug) {
       const { data: tenant, error: tenantError } = await supabaseClient
         .from('tenants')
-        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, security_deposit_enabled, global_deposit_amount')
+        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, security_deposit_enabled, global_deposit_amount')
         .eq('slug', slug)
         .eq('status', 'active')
         .single()
@@ -65,7 +65,7 @@ serve(async (req) => {
       // Lookup tenant by ID if slug not provided
       const { data: tenant, error: tenantError } = await supabaseClient
         .from('tenants')
-        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, security_deposit_enabled, global_deposit_amount')
+        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, security_deposit_enabled, global_deposit_amount')
         .eq('id', tenantId)
         .eq('status', 'active')
         .single()
@@ -92,7 +92,7 @@ serve(async (req) => {
 
         const { data: tenant } = await supabaseClient
           .from('tenants')
-          .select('company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, security_deposit_enabled, global_deposit_amount')
+          .select('company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, security_deposit_enabled, global_deposit_amount')
           .eq('id', tenantId)
           .single()
 
@@ -156,10 +156,12 @@ serve(async (req) => {
       ? `After payment, a ${formattedDeposit} security deposit hold (not a charge) will be authorised on the same card. Released when your rental ends.`
       : null;
 
-    // Get Stripe client for the tenant's mode
-    const stripe = getStripeClient(stripeMode)
+    // Get Stripe client for the tenant's platform account + mode
+    // ('managed' tenants → legacy UK platform, 'own' tenants → UAE platform)
+    const platformAccount: PlatformAccount = tenantData ? getChargePlatformAccount(tenantData) : 'uk'
+    const stripe = getStripeClientForAccount(platformAccount, stripeMode)
 
-    // Determine which Connect account to use based on tenant mode
+    // Determine which Connect account to use based on tenant mode/model
     const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null
 
     console.log('Checkout session - tenantId:', tenantId, 'mode:', stripeMode, 'connectAccount:', stripeAccountId)
@@ -305,6 +307,7 @@ serve(async (req) => {
       // Only update payments that match status=Pending to avoid corrupting existing paid records
       const updateData: any = {
         stripe_checkout_session_id: session.id,
+        platform_account: platformAccount,
         updated_at: new Date().toISOString(),
       }
       // Persist targetCategories on the payment record for reliable retrieval by webhook/fallback
@@ -369,6 +372,7 @@ serve(async (req) => {
               verification_status: 'pending',
               stripe_checkout_session_id: session.id,
               capture_status: 'requires_capture',
+              platform_account: platformAccount,
               booking_source: source === 'portal' ? 'admin' : 'website',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -413,6 +417,7 @@ serve(async (req) => {
           verification_status: 'pending',
           stripe_checkout_session_id: session.id,
           capture_status: 'requires_capture',
+          platform_account: platformAccount,
           booking_source: source === 'portal' ? 'admin' : 'website',
         })
         .select('id')

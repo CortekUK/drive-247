@@ -97,7 +97,20 @@ export function getConnectAccountId(tenant: {
   stripe_mode: string;
   stripe_account_id: string | null;
   stripe_onboarding_complete: boolean | null;
+  payment_model?: string | null;
+  own_stripe_account_id?: string | null;
+  own_stripe_test_account_id?: string | null;
 }): string | null {
+  // Own Stripe (Standard account connected via OAuth on the UAE platform).
+  // Callers that don't select the new columns fall through to the managed path,
+  // which is correct for every tenant until their payment_model is flipped.
+  if (tenant.payment_model === 'own') {
+    if (tenant.stripe_mode === 'test') {
+      return tenant.own_stripe_test_account_id || null;
+    }
+    return tenant.own_stripe_account_id || null;
+  }
+
   if (tenant.stripe_mode === 'test') {
     // All test tenants use the shared test Connect account
     return Deno.env.get('STRIPE_TEST_CONNECT_ACCOUNT_ID') || null;
@@ -238,4 +251,124 @@ export async function resolveHoldExpiry(
   const fallback = new Date();
   fallback.setDate(fallback.getDate() + 7);
   return fallback.toISOString();
+}
+
+// ---------------------------------------------------------------------------
+// Multi-platform-account support (Own Stripe / UAE migration)
+//
+// Two platform Stripe accounts coexist during the migration:
+//   'uk'  — the legacy account. Managed (Express) connected accounts and all
+//           money objects created before a tenant is flipped live here.
+//   'uae' — the new self-owned account. Operator-owned Standard accounts are
+//           OAuth-connected to it; subscriptions/credits move here per tenant.
+//
+// Rules:
+//  * NEW charges for a tenant use the account implied by tenants.payment_model
+//    ('managed' → 'uk', 'own' → 'uae').
+//  * Operations on EXISTING records (capture, refund, deposit ops) must use the
+//    account the record was created under — payments.platform_account /
+//    rentals.platform_account — NEVER the tenant's current model.
+// ---------------------------------------------------------------------------
+
+export type PlatformAccount = 'uk' | 'uae';
+
+/** Standard column list for tenant selects feeding getConnectAccountId/context helpers. */
+export const TENANT_STRIPE_COLUMNS =
+  'stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id';
+
+/** Which platform account NEW money objects for this tenant belong to. */
+export function getChargePlatformAccount(tenant: { payment_model?: string | null }): PlatformAccount {
+  return tenant.payment_model === 'own' ? 'uae' : 'uk';
+}
+
+/** Secret key for a platform account + mode. 'uk' preserves the legacy env names. */
+function getSecretKeyForAccount(account: PlatformAccount, mode: StripeMode): string {
+  const key = account === 'uae'
+    ? Deno.env.get(mode === 'live' ? 'STRIPE_UAE_LIVE_SECRET_KEY' : 'STRIPE_UAE_TEST_SECRET_KEY')
+    : Deno.env.get(mode === 'live' ? 'STRIPE_LIVE_SECRET_KEY' : 'STRIPE_TEST_SECRET_KEY');
+  if (!key) throw new Error(`Missing Stripe secret key for account=${account} mode=${mode}`);
+  return key;
+}
+
+export function getStripeClientForAccount(account: PlatformAccount, mode: StripeMode): Stripe {
+  return new Stripe(getSecretKeyForAccount(account, mode), {
+    apiVersion: '2023-10-16',
+    httpClient: Stripe.createFetchHttpClient(),
+  });
+}
+
+export function getPublishableKeyForAccount(account: PlatformAccount, mode: StripeMode): string {
+  const key = account === 'uae'
+    ? Deno.env.get(mode === 'live' ? 'STRIPE_UAE_LIVE_PUBLISHABLE_KEY' : 'STRIPE_UAE_TEST_PUBLISHABLE_KEY')
+    : Deno.env.get(mode === 'live' ? 'STRIPE_LIVE_PUBLISHABLE_KEY' : 'STRIPE_TEST_PUBLISHABLE_KEY');
+  if (!key) throw new Error(`Missing Stripe publishable key for account=${account} mode=${mode}`);
+  return key;
+}
+
+/**
+ * All signing secrets a booking webhook should try, in order. During the
+ * migration the same endpoint URL is registered on BOTH platform accounts, so
+ * verification must attempt each account's secret before rejecting.
+ */
+export function getWebhookSecretCandidates(mode: StripeMode): string[] {
+  return [
+    Deno.env.get(mode === 'live' ? 'STRIPE_LIVE_WEBHOOK_SECRET' : 'STRIPE_TEST_WEBHOOK_SECRET'),
+    Deno.env.get(mode === 'live' ? 'STRIPE_UAE_LIVE_WEBHOOK_SECRET' : 'STRIPE_UAE_TEST_WEBHOOK_SECRET'),
+  ].filter((s): s is string => !!s);
+}
+
+export function getConnectWebhookSecretCandidates(): string[] {
+  return [
+    Deno.env.get('STRIPE_CONNECT_WEBHOOK_SECRET'),
+    Deno.env.get('STRIPE_UAE_CONNECT_WEBHOOK_SECRET'),
+  ].filter((s): s is string => !!s);
+}
+
+/**
+ * One-stop context for creating NEW money objects for a tenant.
+ * Selects the tenant's stripe columns, resolves mode, platform account,
+ * connected account and a correctly-keyed client.
+ */
+export async function getTenantChargeContext(
+  supabase: SupabaseClient,
+  tenantId: string
+): Promise<{
+  tenant: Record<string, unknown>;
+  mode: StripeMode;
+  platformAccount: PlatformAccount;
+  stripe: Stripe;
+  connectAccountId: string | null;
+  stripeOptions: Stripe.RequestOptions | undefined;
+}> {
+  const { data: tenant, error } = await supabase
+    .from('tenants')
+    .select(TENANT_STRIPE_COLUMNS)
+    .eq('id', tenantId)
+    .single();
+  if (error || !tenant) throw new Error(`getTenantChargeContext: tenant ${tenantId} not found: ${error?.message}`);
+
+  const mode = ((tenant as any).stripe_mode as StripeMode) || 'test';
+  const platformAccount = getChargePlatformAccount(tenant as any);
+  const connectAccountId = getConnectAccountId(tenant as any);
+  return {
+    tenant: tenant as Record<string, unknown>,
+    mode,
+    platformAccount,
+    stripe: getStripeClientForAccount(platformAccount, mode),
+    connectAccountId,
+    stripeOptions: getStripeOptions(connectAccountId),
+  };
+}
+
+/**
+ * Client for operating on an EXISTING record (payments.platform_account /
+ * rentals.platform_account). Records created before this migration have no
+ * value and default to 'uk' — which is where all their Stripe objects live.
+ */
+export function getStripeClientForRecord(
+  record: { platform_account?: string | null },
+  mode: StripeMode
+): Stripe {
+  const account: PlatformAccount = record.platform_account === 'uae' ? 'uae' : 'uk';
+  return getStripeClientForAccount(account, mode);
 }

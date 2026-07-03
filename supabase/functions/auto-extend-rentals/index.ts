@@ -19,6 +19,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type PlatformAccount } from "../_shared/stripe-client.ts";
 // Vendored inline so the function deploys as a single self-contained file.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,6 +46,7 @@ async function sendEmailInline(to: string, subject: string, html: string, slug: 
 interface StripeContext {
   stripe: Stripe;
   mode: "test" | "live";
+  platformAccount: PlatformAccount;
   connectAccountId: string | null;
   options: { stripeAccount: string } | undefined;
   currencyCode: string;
@@ -52,25 +54,19 @@ interface StripeContext {
 
 async function getStripeContext(supabase: any, tenant: any): Promise<StripeContext | null> {
   const mode: "test" | "live" = tenant?.stripe_mode === "live" ? "live" : "test";
-  const secretKey = mode === "live"
-    ? Deno.env.get("STRIPE_LIVE_SECRET_KEY")
-    : Deno.env.get("STRIPE_TEST_SECRET_KEY");
-  if (!secretKey) {
-    console.warn(`[auto-extend] no Stripe secret key for ${mode} mode`);
+  // NEW charges go to the tenant's current platform account
+  // ('managed' → legacy UK keys, 'own' → UAE keys).
+  const platformAccount = getChargePlatformAccount(tenant ?? {});
+  let stripe: Stripe;
+  try {
+    stripe = getStripeClientForAccount(platformAccount, mode);
+  } catch (keyErr: any) {
+    console.warn(`[auto-extend] ${keyErr?.message ?? keyErr}`);
     return null;
   }
-  const stripe = new Stripe(secretKey, {
-    apiVersion: "2023-10-16",
-    httpClient: Stripe.createFetchHttpClient(),
-  });
-  let connectAccountId: string | null = null;
-  if (mode === "test") {
-    connectAccountId = Deno.env.get("STRIPE_TEST_CONNECT_ACCOUNT_ID") || null;
-  } else if (tenant?.stripe_onboarding_complete && tenant?.stripe_account_id) {
-    connectAccountId = tenant.stripe_account_id;
-  }
+  const connectAccountId = tenant ? getConnectAccountId(tenant) : null;
   const options = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
-  return { stripe, mode, connectAccountId, options, currencyCode: tenant?.currency_code || "USD" };
+  return { stripe, mode, platformAccount, connectAccountId, options, currencyCode: tenant?.currency_code || "USD" };
 }
 
 function deriveBookingOrigin(tenantSlug: string): string {
@@ -187,7 +183,7 @@ Deno.serve(async (req) => {
       .from("tenants")
       .select(`id, slug, company_name, contact_email, contact_phone, currency_code,
                tax_enabled, tax_percentage, service_fee_enabled, service_fee_type, service_fee_value, service_fee_amount,
-               stripe_mode, stripe_account_id, stripe_onboarding_complete,
+               stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id,
                auto_extend_grace_hours, auto_extend_max_retries`)
       .in("id", tenantIds);
     const tenantMap = new Map<string, any>((tenants ?? []).map((t: any) => [t.id, t]));
@@ -343,7 +339,7 @@ Deno.serve(async (req) => {
                 extension_id: ext.id, amount: chargeTotal, remaining_amount: chargeTotal,
                 payment_date: today, method: "Card", payment_type: "Payment",
                 status: "Completed", verification_status: "approved", capture_status: "captured",
-                stripe_payment_intent_id: pi.id, booking_source: "auto_extend",
+                stripe_payment_intent_id: pi.id, booking_source: "auto_extend", platform_account: ctx.platformAccount,
                 target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"],
                 created_at: nowIso, updated_at: nowIso,
               }).select("id").single();
@@ -427,7 +423,7 @@ Deno.serve(async (req) => {
             extension_id: ext.id, amount: chargeTotal, remaining_amount: chargeTotal,
             payment_date: today, method: "Card", payment_type: "Payment",
             status: "Pending", verification_status: "pending", capture_status: "requires_capture",
-            stripe_checkout_session_id: session.id, booking_source: "auto_extend",
+            stripe_checkout_session_id: session.id, booking_source: "auto_extend", platform_account: ctx.platformAccount,
             target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"],
             created_at: nowIso, updated_at: nowIso,
           });

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
-import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts';
+import { getConnectAccountId, getStripeClientForRecord, type StripeMode } from '../_shared/stripe-client.ts';
 import { formatCurrency } from '../_shared/format-utils.ts';
 
 const corsHeaders = {
@@ -159,15 +159,17 @@ serve(async (req) => {
     tenantId = requestTenantId || rental.tenant_id;
     let stripeAccountId: string | null = null;
     let stripeMode: StripeMode = 'test';
+    let tenantData: any = null;
 
     if (tenantId) {
       const { data: tenant } = await supabase
         .from("tenants")
-        .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code")
+        .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code")
         .eq("id", tenantId)
         .single();
 
       if (tenant) {
+        tenantData = tenant;
         stripeMode = (tenant.stripe_mode as StripeMode) || 'test';
         stripeAccountId = getConnectAccountId(tenant);
         if (tenant.currency_code) {
@@ -176,10 +178,6 @@ serve(async (req) => {
         console.log("Refund - tenantId:", tenantId, "mode:", stripeMode, "connectAccount:", stripeAccountId);
       }
     }
-
-    // Initialize mode-aware Stripe client
-    const stripe = getStripeClient(stripeMode);
-    const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
 
     // Get related payment with Stripe payment intent
     let payment = null;
@@ -294,6 +292,17 @@ serve(async (req) => {
     if (payment?.stripe_payment_intent_id) {
       try {
         const paymentIntentId = payment.stripe_payment_intent_id;
+        // Refund with the keys + connected account of the platform this payment
+        // was CREATED on (payments.platform_account) — never the tenant's
+        // current model, which may have flipped since.
+        const stripe = getStripeClientForRecord(payment, stripeMode);
+        if (tenantData) {
+          stripeAccountId = getConnectAccountId({
+            ...tenantData,
+            payment_model: payment.platform_account === 'uae' ? 'own' : 'managed',
+          });
+        }
+        const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
         const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, stripeOptions);
         console.log("Payment intent status:", paymentIntent.status, "amount:", paymentIntent.amount, "amount_refunded:", (paymentIntent as any).amount_refunded);
 

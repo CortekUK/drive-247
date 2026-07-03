@@ -26,23 +26,12 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
+import { getConnectAccountId, getStripeClientForRecord } from "../_shared/stripe-client.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-function getStripeClient(mode: 'test' | 'live'): Stripe | null {
-  const key = mode === 'live' ? Deno.env.get('STRIPE_LIVE_SECRET_KEY') : Deno.env.get('STRIPE_TEST_SECRET_KEY');
-  if (!key) return null;
-  return new Stripe(key, { apiVersion: '2023-10-16', httpClient: Stripe.createFetchHttpClient() });
-}
-
-function getConnectAccountId(tenant: { stripe_mode: string; stripe_account_id: string | null; stripe_onboarding_complete: boolean | null }): string | null {
-  if (tenant.stripe_mode === 'test') return Deno.env.get('STRIPE_TEST_CONNECT_ACCOUNT_ID') || null;
-  if (tenant.stripe_mode === 'live' && tenant.stripe_onboarding_complete) return tenant.stripe_account_id;
-  return null;
-}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
@@ -59,7 +48,7 @@ Deno.serve(async (req) => {
     const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: pending, error: pendingErr } = await supabase
       .from('payments')
-      .select('id, rental_id, tenant_id, amount, stripe_checkout_session_id, target_categories, extension_id')
+      .select('id, rental_id, tenant_id, amount, stripe_checkout_session_id, target_categories, extension_id, platform_account')
       .eq('status', 'Pending')
       .not('stripe_checkout_session_id', 'is', null)
       .gte('created_at', cutoffIso)
@@ -68,23 +57,20 @@ Deno.serve(async (req) => {
 
     if (pendingErr) throw pendingErr;
 
-    // Cache tenant context to avoid N tenant lookups
-    const tenantCtx = new Map<string, { stripeMode: 'test' | 'live'; connectAccountId: string | null }>();
-    async function ctxFor(tenantId: string | null) {
-      if (!tenantId) return { stripeMode: 'test' as const, connectAccountId: null };
-      const cached = tenantCtx.get(tenantId);
-      if (cached) return cached;
+    // Cache tenant rows to avoid N tenant lookups. Client + connected account
+    // are resolved PER PAYMENT from payments.platform_account (the platform the
+    // money object was created on), not the tenant's current payment model.
+    const tenantRows = new Map<string, any>();
+    async function tenantFor(tenantId: string | null) {
+      if (!tenantId) return null;
+      if (tenantRows.has(tenantId)) return tenantRows.get(tenantId);
       const { data: t } = await supabase
         .from('tenants')
-        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
+        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id')
         .eq('id', tenantId)
         .single();
-      const ctx = {
-        stripeMode: (t?.stripe_mode as 'test' | 'live') || 'test',
-        connectAccountId: t ? getConnectAccountId(t) : null,
-      };
-      tenantCtx.set(tenantId, ctx);
-      return ctx;
+      tenantRows.set(tenantId, t ?? null);
+      return t ?? null;
     }
 
     let scanned = 0;
@@ -95,10 +81,15 @@ Deno.serve(async (req) => {
     for (const p of pending ?? []) {
       scanned++;
       try {
-        const ctx = await ctxFor(p.tenant_id);
-        const stripe = getStripeClient(ctx.stripeMode);
+        const t = await tenantFor(p.tenant_id);
+        const stripeMode = (t?.stripe_mode as 'test' | 'live') || 'test';
+        let stripe: Stripe | null = null;
+        try { stripe = getStripeClientForRecord(p, stripeMode); } catch { stripe = null; }
         if (!stripe) { errors++; continue; }
-        const opts = ctx.connectAccountId ? { stripeAccount: ctx.connectAccountId } : undefined;
+        const connectAccountId = t
+          ? getConnectAccountId({ ...t, payment_model: p.platform_account === 'uae' ? 'own' : 'managed' })
+          : null;
+        const opts = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
 
         const session = await stripe.checkout.sessions.retrieve(p.stripe_checkout_session_id, opts);
         if (session.payment_status !== 'paid') { unchanged++; continue; }

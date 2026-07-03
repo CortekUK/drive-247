@@ -3,7 +3,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getStripeClient, getConnectAccountId, resolveHoldExpiry, DEPOSIT_HOLD_CARD_OPTIONS, type StripeMode } from "../_shared/stripe-client.ts";
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, resolveHoldExpiry, DEPOSIT_HOLD_CARD_OPTIONS, type StripeMode } from "../_shared/stripe-client.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     // Fetch tenant settings (deposit amount, Stripe config)
     const { data: tenant, error: tenantError } = await supabase
       .from("tenants")
-      .select("global_deposit_amount, security_deposit_enabled, deposit_mode, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete")
+      .select("global_deposit_amount, security_deposit_enabled, deposit_mode, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id")
       .eq("id", effectiveTenantId)
       .single();
 
@@ -124,9 +124,11 @@ Deno.serve(async (req) => {
       return errorResponse("Customer has no saved payment method. Card must be saved during booking.", 400);
     }
 
-    // Set up Stripe
+    // Set up Stripe — NEW hold, so it belongs to the tenant's current
+    // platform account ('managed' → UK, 'own' → UAE).
     const stripeMode: StripeMode = (tenant.stripe_mode as StripeMode) || "test";
-    const stripe = getStripeClient(stripeMode);
+    const platformAccount = getChargePlatformAccount(tenant);
+    const stripe = getStripeClientForAccount(platformAccount, stripeMode);
     const connectAccountId = getConnectAccountId(tenant);
     const stripeOptions = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
 
@@ -317,6 +319,9 @@ Deno.serve(async (req) => {
         deposit_hold_expires_at: expiresAtIso,
         deposit_hold_payment_method_id: paymentMethodId,
         deposit_hold_stripe_customer_id: customer.stripe_customer_id,
+        // Record which platform account this hold lives on so capture/release/
+        // sync target the right keys even if the tenant's model flips later.
+        platform_account: platformAccount,
       })
       .eq("id", rentalId);
 

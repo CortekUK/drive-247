@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
-import { getStripeClient, getConnectAccountId, DEPOSIT_HOLD_CARD_VARIANTS, isCardFeatureIneligibleError, type StripeMode } from '../_shared/stripe-client.ts'
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, DEPOSIT_HOLD_CARD_VARIANTS, isCardFeatureIneligibleError, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -63,7 +63,7 @@ serve(async (req) => {
     if (tenantId) {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code')
+        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code')
         .eq('id', tenantId)
         .single()
 
@@ -77,10 +77,12 @@ serve(async (req) => {
     // Get currency from tenant settings (Stripe expects lowercase)
     const currencyCode = (tenantData?.currency_code || 'USD').toLowerCase()
 
-    // Get Stripe client for the tenant's mode
-    const stripe = getStripeClient(stripeMode)
+    // Get Stripe client for the tenant's platform account + mode
+    // ('managed' tenants → legacy UK platform, 'own' tenants → UAE platform)
+    const platformAccount: PlatformAccount = tenantData ? getChargePlatformAccount(tenantData) : 'uk'
+    const stripe = getStripeClientForAccount(platformAccount, stripeMode)
 
-    // Determine which Connect account to use based on tenant mode
+    // Determine which Connect account to use based on tenant mode/model
     const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null
     console.log('Pre-auth checkout - mode:', stripeMode, 'connectAccount:', stripeAccountId, 'currency:', currencyCode)
 
@@ -217,6 +219,7 @@ serve(async (req) => {
         preauth_expires_at: preauthExpiresAt.toISOString(),
         booking_source: 'website',
         tenant_id: tenantId,
+        platform_account: platformAccount,
       })
       .select()
       .single()

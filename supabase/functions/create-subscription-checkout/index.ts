@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import {
   getSubscriptionStripeMode,
-  getSubscriptionStripeClient,
+  getTenantSubscriptionAccount,
+  getSubscriptionStripeClientForAccount,
 } from "../_shared/subscription-stripe.ts";
 
 const STRIPE_PRODUCT_NAME = "Drive247 Platform Subscription";
@@ -65,7 +66,7 @@ Deno.serve(async (req) => {
     // Look up the plan from DB
     const { data: plan, error: planError } = await supabase
       .from("subscription_plans")
-      .select("id, name, stripe_price_id, stripe_product_id, tenant_id, is_active, trial_days, amount, currency, interval, billing_model")
+      .select("id, name, stripe_price_id, stripe_product_id, tenant_id, is_active, trial_days, amount, currency, interval, billing_model, stripe_account")
       .eq("id", planId)
       .single();
 
@@ -75,14 +76,27 @@ Deno.serve(async (req) => {
     if (!plan.stripe_price_id) return errorResponse("Plan has no Stripe price configured", 500);
 
     const mode = await getSubscriptionStripeMode(supabase, tenantId);
-    const stripe = getSubscriptionStripeClient(mode);
+    const account = await getTenantSubscriptionAccount(supabase, tenantId);
+    const stripe = getSubscriptionStripeClientForAccount(account, mode);
     let priceId = plan.stripe_price_id;
 
+    // The plan's price must live on the tenant's subscription account. If the
+    // plan row was created on the other platform account (e.g. tenant migrated
+    // uk→uae after the plan was created), never reuse the foreign price id.
+    const planAccount = plan.stripe_account === "uae" ? "uae" : "uk";
+    let priceValid = planAccount === account;
+
     // Verify the price exists on the current Stripe account (handles test→live mode switch)
-    try {
-      await stripe.prices.retrieve(priceId);
-    } catch (_e) {
-      console.log(`Price ${priceId} not found on ${mode} Stripe account, recreating`);
+    if (priceValid) {
+      try {
+        await stripe.prices.retrieve(priceId);
+      } catch (_e) {
+        priceValid = false;
+      }
+    }
+
+    if (!priceValid) {
+      console.log(`Price ${priceId} not usable on ${account}/${mode} Stripe account, recreating`);
       const productId = await getOrCreateProduct(stripe);
       const newPrice = await stripe.prices.create({
         product: productId,
@@ -94,9 +108,9 @@ Deno.serve(async (req) => {
       priceId = newPrice.id;
       await supabase
         .from("subscription_plans")
-        .update({ stripe_price_id: newPrice.id, stripe_product_id: productId })
+        .update({ stripe_price_id: newPrice.id, stripe_product_id: productId, stripe_account: account })
         .eq("id", planId);
-      console.log(`Created new Stripe Price ${newPrice.id} on ${mode} account for plan ${planId}`);
+      console.log(`Created new Stripe Price ${newPrice.id} on ${account}/${mode} account for plan ${planId}`);
     }
 
     let stripeCustomerId = tenant.stripe_subscription_customer_id;
@@ -124,7 +138,7 @@ Deno.serve(async (req) => {
         .update({ stripe_subscription_customer_id: customer.id })
         .eq("id", tenantId);
 
-      console.log(`Created Stripe customer ${customer.id} for tenant ${tenantId} (mode: ${mode})`);
+      console.log(`Created Stripe customer ${customer.id} for tenant ${tenantId} (account: ${account}, mode: ${mode})`);
     }
 
     // Determine how long until the first real charge.
@@ -149,9 +163,15 @@ Deno.serve(async (req) => {
     const lineItems: Array<any> = [
       { price: priceId, quantity: 1 },
     ];
-    const meteredPriceId = mode === "live"
-      ? Deno.env.get("STRIPE_ESIGN_METERED_PRICE_ID_LIVE")
-      : (Deno.env.get("STRIPE_ESIGN_METERED_PRICE_ID_TEST") || Deno.env.get("STRIPE_ESIGN_METERED_PRICE_ID"));
+    // Metered price ids are account-specific: never attach the UK price id to a
+    // UAE checkout (it doesn't exist on that account and the session would fail).
+    const meteredPriceId = account === "uae"
+      ? (mode === "live"
+          ? Deno.env.get("STRIPE_UAE_ESIGN_METERED_PRICE_ID_LIVE")
+          : Deno.env.get("STRIPE_UAE_ESIGN_METERED_PRICE_ID_TEST"))
+      : (mode === "live"
+          ? Deno.env.get("STRIPE_ESIGN_METERED_PRICE_ID_LIVE")
+          : (Deno.env.get("STRIPE_ESIGN_METERED_PRICE_ID_TEST") || Deno.env.get("STRIPE_ESIGN_METERED_PRICE_ID")));
     if (meteredPriceId) {
       lineItems.push({ price: meteredPriceId }); // no quantity for metered
     }
@@ -182,7 +202,7 @@ Deno.serve(async (req) => {
       },
     });
 
-    console.log(`Created subscription checkout session ${session.id} for tenant ${tenantId} (mode: ${mode})`);
+    console.log(`Created subscription checkout session ${session.id} for tenant ${tenantId} (account: ${account}, mode: ${mode})`);
 
     return jsonResponse({ sessionId: session.id, url: session.url });
   } catch (error) {

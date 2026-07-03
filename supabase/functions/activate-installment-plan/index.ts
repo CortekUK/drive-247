@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForRecord } from '../_shared/stripe-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -118,17 +119,20 @@ serve(async (req) => {
     // Find the upfront payment record
     let paymentRecordId: string | null = null
     let paymentIntentId: string | null = null
+    // Platform the payment's Stripe objects live on ('uk' default / 'uae').
+    let paymentPlatform: string | null = null
 
     if (checkoutSessionId) {
       const { data: paymentRecord } = await supabase
         .from('payments')
-        .select('id, stripe_payment_intent_id')
+        .select('id, stripe_payment_intent_id, platform_account')
         .eq('stripe_checkout_session_id', checkoutSessionId)
         .maybeSingle()
 
       if (paymentRecord) {
         paymentRecordId = paymentRecord.id
         paymentIntentId = paymentRecord.stripe_payment_intent_id
+        paymentPlatform = paymentRecord.platform_account
         console.log('[ACTIVATE] Found payment record:', paymentRecordId)
 
         // Update payment status to Applied if still Pending
@@ -152,6 +156,14 @@ serve(async (req) => {
             .single()
 
           if (rental) {
+            // The checkout session was just created on the tenant's current
+            // charge platform — stamp the recreated row accordingly.
+            const { data: tenantForPlatform } = await supabase
+              .from('tenants')
+              .select('payment_model')
+              .eq('id', rental.tenant_id)
+              .single()
+            paymentPlatform = getChargePlatformAccount(tenantForPlatform ?? {})
             const { data: newPayment } = await supabase
               .from('payments')
               .insert({
@@ -168,6 +180,7 @@ serve(async (req) => {
                 capture_status: 'captured',
                 booking_source: 'website',
                 tenant_id: rental.tenant_id,
+                platform_account: paymentPlatform,
               })
               .select()
               .single()
@@ -196,41 +209,31 @@ serve(async (req) => {
         if (rental?.tenant_id) {
           const { data: tenant } = await supabase
             .from('tenants')
-            .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
+            .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id')
             .eq('id', rental.tenant_id)
             .single()
 
           if (tenant) {
-            const stripeMode = tenant.stripe_mode || 'test'
-            const stripeKey = stripeMode === 'live'
-              ? Deno.env.get('STRIPE_LIVE_SECRET_KEY')
-              : Deno.env.get('STRIPE_TEST_SECRET_KEY')
+            const stripeMode = (tenant.stripe_mode || 'test') as 'test' | 'live'
+            // Session lives on the platform the payment was created on
+            // (payments.platform_account), not the tenant's current model.
+            const stripe = getStripeClientForRecord({ platform_account: paymentPlatform }, stripeMode)
+            const connectedAccountId = getConnectAccountId({
+              ...tenant,
+              payment_model: paymentPlatform === 'uae' ? 'own' : 'managed',
+            })
 
-            if (stripeKey) {
-              const stripe = new Stripe(stripeKey, {
-                apiVersion: '2023-10-16',
-                httpClient: Stripe.createFetchHttpClient(),
-              })
+            const stripeOptions = connectedAccountId ? { stripeAccount: connectedAccountId } : undefined
+            const stripeSession = await stripe.checkout.sessions.retrieve(checkoutSessionId, stripeOptions)
+            paymentIntentId = stripeSession.payment_intent as string
+            console.log('[ACTIVATE] Retrieved payment_intent from Stripe session:', paymentIntentId)
 
-              let connectedAccountId: string | null = null
-              if (stripeMode === 'test') {
-                connectedAccountId = Deno.env.get('STRIPE_TEST_CONNECT_ACCOUNT_ID') || null
-              } else if (stripeMode === 'live' && tenant.stripe_onboarding_complete) {
-                connectedAccountId = tenant.stripe_account_id
-              }
-
-              const stripeOptions = connectedAccountId ? { stripeAccount: connectedAccountId } : undefined
-              const stripeSession = await stripe.checkout.sessions.retrieve(checkoutSessionId, stripeOptions)
-              paymentIntentId = stripeSession.payment_intent as string
-              console.log('[ACTIVATE] Retrieved payment_intent from Stripe session:', paymentIntentId)
-
-              // Also update the payment record for future reference
-              if (paymentIntentId && paymentRecordId) {
-                await supabase
-                  .from('payments')
-                  .update({ stripe_payment_intent_id: paymentIntentId })
-                  .eq('id', paymentRecordId)
-              }
+            // Also update the payment record for future reference
+            if (paymentIntentId && paymentRecordId) {
+              await supabase
+                .from('payments')
+                .update({ stripe_payment_intent_id: paymentIntentId })
+                .eq('id', paymentRecordId)
             }
           }
         }
@@ -253,35 +256,23 @@ serve(async (req) => {
         if (rental?.tenant_id) {
           const { data: tenant } = await supabase
             .from('tenants')
-            .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
+            .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id')
             .eq('id', rental.tenant_id)
             .single()
 
           if (tenant) {
-            const stripeMode = tenant.stripe_mode || 'test'
-            const stripeKey = stripeMode === 'live'
-              ? Deno.env.get('STRIPE_LIVE_SECRET_KEY')
-              : Deno.env.get('STRIPE_TEST_SECRET_KEY')
+            const stripeMode = (tenant.stripe_mode || 'test') as 'test' | 'live'
+            // PI lives on the platform the payment was created on.
+            const stripe = getStripeClientForRecord({ platform_account: paymentPlatform }, stripeMode)
+            const connectedAccountId = getConnectAccountId({
+              ...tenant,
+              payment_model: paymentPlatform === 'uae' ? 'own' : 'managed',
+            })
 
-            if (stripeKey) {
-              const stripe = new Stripe(stripeKey, {
-                apiVersion: '2023-10-16',
-                httpClient: Stripe.createFetchHttpClient(),
-              })
-
-              // Get connected account
-              let connectedAccountId: string | null = null
-              if (stripeMode === 'test') {
-                connectedAccountId = Deno.env.get('STRIPE_TEST_CONNECT_ACCOUNT_ID') || null
-              } else if (stripeMode === 'live' && tenant.stripe_onboarding_complete) {
-                connectedAccountId = tenant.stripe_account_id
-              }
-
-              const stripeOptions = connectedAccountId ? { stripeAccount: connectedAccountId } : undefined
-              const pi = await stripe.paymentIntents.retrieve(paymentIntentId, stripeOptions)
-              paymentMethodId = pi.payment_method as string
-              console.log('[ACTIVATE] Retrieved payment method:', paymentMethodId)
-            }
+            const stripeOptions = connectedAccountId ? { stripeAccount: connectedAccountId } : undefined
+            const pi = await stripe.paymentIntents.retrieve(paymentIntentId, stripeOptions)
+            paymentMethodId = pi.payment_method as string
+            console.log('[ACTIVATE] Retrieved payment method:', paymentMethodId)
           }
         }
       } catch (err) {

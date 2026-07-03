@@ -1,8 +1,8 @@
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import {
-  getStripeClient,
   getConnectAccountId,
+  getStripeClientForRecord,
   type StripeMode,
 } from "../_shared/stripe-client.ts";
 
@@ -54,24 +54,35 @@ Deno.serve(async (req) => {
 
     // 2. Get tenant info for Stripe
     let stripeMode: StripeMode = "test";
-    let stripeAccountId: string | null = null;
+    let tenantData: any = null;
 
     if (tenantId) {
       const { data: tenant } = await supabase
         .from("tenants")
-        .select("stripe_mode, stripe_account_id, stripe_onboarding_complete")
+        .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id")
         .eq("id", tenantId)
         .single();
 
       if (tenant) {
+        tenantData = tenant;
         stripeMode = (tenant.stripe_mode as StripeMode) || "test";
-        stripeAccountId = getConnectAccountId(tenant);
-        console.log("Tenant mode:", stripeMode, "Connect account:", stripeAccountId);
+        console.log("Tenant mode:", stripeMode);
       }
     }
 
-    const stripe = getStripeClient(stripeMode);
-    const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
+    // Resolve Stripe client + connected account per PAYMENT: each payment is
+    // cancelled/refunded on the platform it was CREATED on
+    // (payments.platform_account), never the tenant's current model.
+    const resolveForRecord = (record: { platform_account?: string | null }) => {
+      const client = getStripeClientForRecord(record, stripeMode);
+      const accountId = tenantData
+        ? getConnectAccountId({
+            ...tenantData,
+            payment_model: record.platform_account === "uae" ? "own" : "managed",
+          })
+        : null;
+      return { client, options: accountId ? { stripeAccount: accountId } : undefined };
+    };
 
     // 3. Fetch ALL active payments for this rental
     const { data: payments, error: paymentsError } = await supabase
@@ -99,6 +110,8 @@ Deno.serve(async (req) => {
       };
 
       try {
+        const { client: stripe, options: stripeOptions } = resolveForRecord(payment);
+
         // Resolve payment intent ID if missing
         let paymentIntentId = payment.stripe_payment_intent_id;
         if (!paymentIntentId && payment.stripe_checkout_session_id) {

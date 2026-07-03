@@ -7,7 +7,7 @@ import {
   wrapWithBrandedTemplate,
   sendResendEmail,
 } from "../_shared/resend-service.ts";
-import { getStripeClient, getConnectAccountId, type StripeMode } from "../_shared/stripe-client.ts";
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode } from "../_shared/stripe-client.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface SendInvoiceEmailRequest {
@@ -252,7 +252,7 @@ serve(async (req) => {
     // Fetch tenant data for Stripe and currency
     const { data: tenant } = await supabase
       .from("tenants")
-      .select("slug, stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code")
+      .select("slug, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code")
       .eq("id", tenantId)
       .single();
 
@@ -263,7 +263,8 @@ serve(async (req) => {
     if (!paymentUrl) try {
       if (tenant) {
         const stripeMode = (tenant.stripe_mode as StripeMode) || "test";
-        const stripe = getStripeClient(stripeMode);
+        const platformAccount = getChargePlatformAccount(tenant);
+        const stripe = getStripeClientForAccount(platformAccount, stripeMode);
         const connectAccountId = getConnectAccountId(tenant);
         const stripeOptions = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
         const currencyCode = tenantCurrencyCode.toLowerCase();
@@ -316,6 +317,7 @@ serve(async (req) => {
             method: "Card",
             stripe_checkout_session_id: session.id,
             tenant_id: tenantId,
+            platform_account: platformAccount,
           });
           if (paymentInsertError) {
             console.error("Failed to pre-create payment record:", paymentInsertError);

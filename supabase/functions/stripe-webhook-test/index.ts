@@ -5,9 +5,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { formatCurrency } from '../_shared/format-utils.ts';
+import { getStripeClientForAccount, getWebhookSecretCandidates } from '../_shared/stripe-client.ts';
 
-// Initialize Stripe with TEST secret key
-const stripe = new Stripe(Deno.env.get("STRIPE_TEST_SECRET_KEY") || "", {
+// Initialize Stripe with TEST secret key (legacy UK platform)
+const ukStripe = new Stripe(Deno.env.get("STRIPE_TEST_SECRET_KEY") || "", {
   apiVersion: "2023-10-16",
   httpClient: Stripe.createFetchHttpClient(),
 });
@@ -32,38 +33,47 @@ serve(async (req) => {
 
     const signature = req.headers.get("stripe-signature");
     const body = await req.text();
-    const platformSecret = Deno.env.get("STRIPE_TEST_WEBHOOK_SECRET");
     const connectSecret = Deno.env.get("STRIPE_TEST_CONNECT_WEBHOOK_SECRET");
+    const uaeSecret = Deno.env.get("STRIPE_UAE_TEST_WEBHOOK_SECRET");
+    // During the UAE migration this endpoint is registered on BOTH platform
+    // accounts, so verification must try every candidate secret:
+    // legacy platform, UAE platform, then the legacy Connect endpoint secret.
+    const secretCandidates = [
+      ...getWebhookSecretCandidates("test"),
+      ...(connectSecret ? [connectSecret] : []),
+    ];
+
+    // Downstream Stripe API calls must use the platform account the event came
+    // from — default to the legacy UK client, swap to UAE if its secret verifies.
+    let stripe = ukStripe;
+    let platformAccount: "uk" | "uae" = "uk";
 
     let event: Stripe.Event;
 
-    // Verify webhook signature - try platform secret first, then Connect secret
-    if (signature && (platformSecret || connectSecret)) {
+    // Verify webhook signature - try each candidate secret until one succeeds
+    if (signature && secretCandidates.length > 0) {
       let verified = false;
+      let lastErr: any = null;
 
-      // Try platform secret first
-      if (platformSecret) {
+      for (const secret of secretCandidates) {
         try {
-          event = stripe.webhooks.constructEvent(body, signature, platformSecret);
+          event = stripe.webhooks.constructEvent(body, signature, secret);
           verified = true;
-          console.log("[TEST MODE] Verified with platform webhook secret");
+          if (uaeSecret && secret === uaeSecret) {
+            stripe = getStripeClientForAccount("uae", "test");
+            platformAccount = "uae";
+            console.log("[TEST MODE] Verified with UAE platform webhook secret");
+          } else {
+            console.log("[TEST MODE] Verified with legacy webhook secret");
+          }
+          break;
         } catch (err) {
-          // Platform secret didn't work, try Connect secret
-        }
-      }
-
-      // Try Connect secret if platform secret didn't work
-      if (!verified && connectSecret) {
-        try {
-          event = stripe.webhooks.constructEvent(body, signature, connectSecret);
-          verified = true;
-          console.log("[TEST MODE] Verified with Connect webhook secret");
-        } catch (err) {
-          console.error("[TEST MODE] Webhook signature verification failed with both secrets:", err.message);
+          lastErr = err;
         }
       }
 
       if (!verified) {
+        console.error("[TEST MODE] Webhook signature verification failed with all secrets:", lastErr?.message);
         return new Response(
           JSON.stringify({ error: "Invalid signature" }),
           {
@@ -144,6 +154,7 @@ serve(async (req) => {
               stripe_payment_intent_id: paymentIntentId || null,
               stripe_checkout_session_id: session.id,
               booking_source: "admin",
+              platform_account: platformAccount,
             }).select("id").single();
             creditPaymentId = newCredit?.id ?? null;
           }
@@ -225,6 +236,7 @@ serve(async (req) => {
                   stripe_payment_intent_id: paymentIntentId || null,
                   stripe_checkout_session_id: session.id,
                   tenant_id: session.metadata?.tenant_id || null,
+                  platform_account: platformAccount,
                 })
                 .select()
                 .single();
@@ -304,6 +316,7 @@ serve(async (req) => {
                   stripe_payment_intent_id: session.payment_intent as string,
                   capture_status: "captured",
                   booking_source: "website",
+                  platform_account: platformAccount,
                   ...(sessionTenantId ? { tenant_id: sessionTenantId } : {}),
                 })
                 .select()
@@ -798,6 +811,7 @@ serve(async (req) => {
                 stripe_payment_intent_id: session.payment_intent as string,
                 capture_status: "captured",
                 booking_source: "website",
+                platform_account: platformAccount,
               };
 
               if (rental.tenant_id) {

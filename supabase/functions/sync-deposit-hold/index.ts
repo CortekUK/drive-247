@@ -7,8 +7,9 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import {
-  getStripeClient,
   getConnectAccountId,
+  getChargePlatformAccount,
+  getStripeClientForAccount,
   getStripeOptions,
   resolveHoldExpiry,
   type StripeMode,
@@ -52,12 +53,15 @@ Deno.serve(async (req) => {
 
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
+      .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id')
       .eq('id', rental.tenant_id)
       .single()
 
     const stripeMode: StripeMode = (tenant?.stripe_mode as StripeMode) || 'test'
-    const stripe = getStripeClient(stripeMode)
+    // The hold-checkout session was created by create-hold-checkout on the
+    // tenant's CURRENT charge platform, so resolve the same way here.
+    const platformAccount = getChargePlatformAccount(tenant ?? {})
+    const stripe = getStripeClientForAccount(platformAccount, stripeMode)
     const stripeOptions = getStripeOptions(getConnectAccountId(tenant as any))
 
     const session = await stripe.checkout.sessions.retrieve(
@@ -97,6 +101,9 @@ Deno.serve(async (req) => {
         deposit_hold_expires_at: expiresAtIso,
         deposit_hold_payment_method_id: pmId,
         deposit_hold_stripe_customer_id: stripeCustomerId,
+        // Record the platform account this hold lives on so capture/release/
+        // refresh target the right keys even if the tenant flips model later.
+        platform_account: platformAccount,
       })
       .eq('id', rental.id)
     if (updateError) return errorResponse(`Failed to persist hold: ${updateError.message}`, 500)

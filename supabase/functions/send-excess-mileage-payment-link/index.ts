@@ -2,7 +2,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getStripeClient, getTenantStripeMode, getConnectAccountId, getStripeOptions } from "../_shared/stripe-client.ts";
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, getStripeOptions } from "../_shared/stripe-client.ts";
 import { sendResendEmail, getTenantBranding, wrapWithBrandedTemplate } from "../_shared/resend-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
 
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     // Fetch tenant details for Stripe and branding
     const { data: tenantData, error: tenantError } = await supabase
       .from("tenants")
-      .select("slug, stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code")
+      .select("slug, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code")
       .eq("id", effectiveTenantId)
       .single();
 
@@ -54,7 +54,8 @@ Deno.serve(async (req) => {
 
     const currencyCode = tenantData.currency_code || "USD";
     const stripeMode = (tenantData.stripe_mode || "test") as "test" | "live";
-    const stripe = getStripeClient(stripeMode);
+    const platformAccount = getChargePlatformAccount(tenantData);
+    const stripe = getStripeClientForAccount(platformAccount, stripeMode);
     const connectAccountId = getConnectAccountId(tenantData);
     const stripeOptions = getStripeOptions(connectAccountId);
 
@@ -114,6 +115,7 @@ Deno.serve(async (req) => {
       payment_type: "Excess Mileage",
       status: "Pending",
       stripe_checkout_session_id: session.id,
+      platform_account: platformAccount,
     });
 
     if (paymentError) {

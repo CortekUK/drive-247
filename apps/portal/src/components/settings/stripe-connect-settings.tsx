@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Link2, CheckCircle2, AlertCircle, ExternalLink, Loader2, RefreshCw, Copy, TestTube2, Zap, Lock } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { OwnStripeSettings } from './own-stripe-settings';
 
 interface StripeConnectStatus {
   stripe_account_id: string | null;
@@ -30,7 +31,7 @@ export function StripeConnectSettings() {
 
       const { data: tenant, error: tenantError } = await supabase
         .from('tenants')
-        .select('id, stripe_account_id, stripe_onboarding_complete, stripe_account_status, stripe_mode, company_name, contact_email')
+        .select('id, stripe_account_id, stripe_onboarding_complete, stripe_account_status, stripe_mode, company_name, contact_email, payment_model')
         .eq('id', tenantContext.id)
         .single();
 
@@ -113,6 +114,12 @@ export function StripeConnectSettings() {
         </CardContent>
       </Card>
     );
+  }
+
+  // Own Stripe tenants connect their own account via OAuth — completely
+  // different flow from the managed Express onboarding below.
+  if ((tenantStatus as { payment_model?: string } | null)?.payment_model === 'own') {
+    return <OwnStripeSettings />;
   }
 
   const isConnected = tenantStatus?.stripe_onboarding_complete && tenantStatus?.stripe_account_status === 'active';

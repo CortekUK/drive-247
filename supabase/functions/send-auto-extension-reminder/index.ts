@@ -14,6 +14,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type PlatformAccount } from "../_shared/stripe-client.ts";
 
 // Vendored inline (keeps this function self-contained for MCP single-file deploys).
 const corsHeaders = {
@@ -37,17 +38,16 @@ async function sendEmail(to: string, subject: string, html: string, slug: string
   } catch (e: any) { return { success: false, error: e.message }; }
 }
 
-interface Ctx { stripe: Stripe; options: { stripeAccount: string } | undefined; currency: string; }
+interface Ctx { stripe: Stripe; platformAccount: PlatformAccount; options: { stripeAccount: string } | undefined; currency: string; }
 
 async function stripeCtx(tenant: any): Promise<Ctx | null> {
   const mode = tenant?.stripe_mode === "live" ? "live" : "test";
-  const key = mode === "live" ? Deno.env.get("STRIPE_LIVE_SECRET_KEY") : Deno.env.get("STRIPE_TEST_SECRET_KEY");
-  if (!key) return null;
-  const stripe = new Stripe(key, { apiVersion: "2023-10-16", httpClient: Stripe.createFetchHttpClient() });
-  let acct: string | null = null;
-  if (mode === "test") acct = Deno.env.get("STRIPE_TEST_CONNECT_ACCOUNT_ID") || null;
-  else if (tenant?.stripe_onboarding_complete && tenant?.stripe_account_id) acct = tenant.stripe_account_id;
-  return { stripe, options: acct ? { stripeAccount: acct } : undefined, currency: (tenant?.currency_code || "USD").toLowerCase() };
+  // NEW charges use the tenant's current platform account ('managed' → UK keys, 'own' → UAE keys).
+  const platformAccount = getChargePlatformAccount(tenant ?? {});
+  let stripe: Stripe;
+  try { stripe = getStripeClientForAccount(platformAccount, mode); } catch { return null; }
+  const acct = tenant ? getConnectAccountId(tenant) : null;
+  return { stripe, platformAccount, options: acct ? { stripeAccount: acct } : undefined, currency: (tenant?.currency_code || "USD").toLowerCase() };
 }
 
 function origin(slug: string): string {
@@ -127,7 +127,7 @@ async function sendForRental(supabase: any, rental: any, opts: { customAmount?: 
         rental_id: rental.id, customer_id: rental.customer_id, vehicle_id: rental.vehicle_id, tenant_id: rental.tenant_id,
         extension_id: ext.id, amount, remaining_amount: amount, payment_date: today, method: "Card", payment_type: "Payment",
         status: "Pending", verification_status: "pending", capture_status: "requires_capture",
-        stripe_checkout_session_id: sessionId, booking_source: "auto_extend",
+        stripe_checkout_session_id: sessionId, booking_source: "auto_extend", platform_account: ctx.platformAccount,
         target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"],
       });
     }
@@ -164,7 +164,7 @@ const RENTAL_SELECT = `
   auto_extend_reminder_count, auto_extend_reminder_send_weekday, auto_extend_last_reminder_at, auto_extend_pending_extension_id,
   customers!rentals_customer_id_fkey ( id, name, email ),
   vehicles ( make, model, reg ),
-  tenants ( id, slug, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, timezone )
+  tenants ( id, slug, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, timezone, payment_model, own_stripe_account_id, own_stripe_test_account_id )
 `;
 
 Deno.serve(async (req) => {

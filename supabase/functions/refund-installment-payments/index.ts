@@ -1,8 +1,8 @@
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import {
-  getStripeClient,
   getConnectAccountId,
+  getStripeClientForRecord,
   type StripeMode,
 } from "../_shared/stripe-client.ts";
 
@@ -74,23 +74,34 @@ Deno.serve(async (req) => {
 
     // 2. Get tenant Stripe config
     let stripeMode: StripeMode = "test";
-    let stripeAccountId: string | null = null;
+    let tenantData: any = null;
 
     if (tenantId) {
       const { data: tenant } = await supabase
         .from("tenants")
-        .select("stripe_mode, stripe_account_id, stripe_onboarding_complete")
+        .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id")
         .eq("id", tenantId)
         .single();
 
       if (tenant) {
+        tenantData = tenant;
         stripeMode = (tenant.stripe_mode as StripeMode) || "test";
-        stripeAccountId = getConnectAccountId(tenant);
       }
     }
 
-    const stripe = getStripeClient(stripeMode);
-    const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
+    // Resolve Stripe client + connected account from the platform the PAYMENT
+    // was CREATED on (payments.platform_account) — never the tenant's current
+    // model, which may have flipped since the charge was made.
+    const resolveForRecord = (record: { platform_account?: string | null }) => {
+      const client = getStripeClientForRecord(record, stripeMode);
+      const accountId = tenantData
+        ? getConnectAccountId({
+            ...tenantData,
+            payment_model: record.platform_account === "uae" ? "own" : "managed",
+          })
+        : null;
+      return { client, options: accountId ? { stripeAccount: accountId } : undefined };
+    };
 
     // 3. Fetch ALL scheduled installments for this plan
     const { data: installments, error: installmentsError } = await supabase
@@ -138,6 +149,18 @@ Deno.serve(async (req) => {
             installment.stripe_payment_intent_id,
             "Amount:", installment.amount
           );
+
+          // Refund on the platform the linked payment was created on.
+          let paymentRecord: { platform_account?: string | null } = {};
+          if (installment.payment_id) {
+            const { data: pr } = await supabase
+              .from("payments")
+              .select("platform_account")
+              .eq("id", installment.payment_id)
+              .maybeSingle();
+            if (pr) paymentRecord = pr;
+          }
+          const { client: stripe, options: stripeOptions } = resolveForRecord(paymentRecord);
 
           const stripeRefund = await stripe.refunds.create(
             {
@@ -218,7 +241,8 @@ Deno.serve(async (req) => {
             "Amount:", upfrontPayment.amount
           );
 
-          const stripeRefund = await stripe.refunds.create(
+          const { client: upfrontStripe, options: upfrontOptions } = resolveForRecord(upfrontPayment);
+          const stripeRefund = await upfrontStripe.refunds.create(
             {
               payment_intent: upfrontPayment.stripe_payment_intent_id,
               amount: Math.round(upfrontPayment.amount * 100),
@@ -230,7 +254,7 @@ Deno.serve(async (req) => {
                 reason: reason || "Booking rejected/cancelled",
               },
             },
-            stripeOptions
+            upfrontOptions
           );
 
           await supabase

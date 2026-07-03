@@ -1,8 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
+import { getStripeClientForAccount, type StripeMode } from "../_shared/stripe-client.ts";
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+// Legacy UK-platform client — kept as-is for records created there (the default).
+const legacyStripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
   apiVersion: "2023-10-16",
   httpClient: Stripe.createFetchHttpClient(),
 });
@@ -33,7 +35,7 @@ serve(async (req) => {
     // Find payments with checkout session ID but no payment intent ID
     const { data: payments, error: queryError } = await supabase
       .from("payments")
-      .select("id, stripe_checkout_session_id, tenant_id")
+      .select("id, stripe_checkout_session_id, tenant_id, platform_account")
       .not("stripe_checkout_session_id", "is", null)
       .is("stripe_payment_intent_id", null);
 
@@ -68,16 +70,25 @@ serve(async (req) => {
       try {
         console.log(`Processing payment ${payment.id}...`);
 
-        // Try to get the Stripe Connect account for this tenant
+        // Try to get the Stripe Connect account for this tenant. Lookups run on
+        // the platform the payment was CREATED on (payments.platform_account,
+        // default 'uk' = the legacy client).
+        const isUaeRecord = payment.platform_account === "uae";
+        let stripe = legacyStripe;
         let stripeOptions: { stripeAccount?: string } = {};
         if (payment.tenant_id) {
           const { data: tenant } = await supabase
             .from("tenants")
-            .select("stripe_account_id, stripe_onboarding_complete")
+            .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, own_stripe_account_id, own_stripe_test_account_id")
             .eq("id", payment.tenant_id)
             .single();
 
-          if (tenant?.stripe_account_id && tenant?.stripe_onboarding_complete) {
+          if (isUaeRecord) {
+            const mode: StripeMode = tenant?.stripe_mode === "live" ? "live" : "test";
+            stripe = getStripeClientForAccount("uae", mode);
+            const ownAccountId = mode === "live" ? tenant?.own_stripe_account_id : tenant?.own_stripe_test_account_id;
+            if (ownAccountId) stripeOptions = { stripeAccount: ownAccountId };
+          } else if (tenant?.stripe_account_id && tenant?.stripe_onboarding_complete) {
             stripeOptions = { stripeAccount: tenant.stripe_account_id };
           }
         }

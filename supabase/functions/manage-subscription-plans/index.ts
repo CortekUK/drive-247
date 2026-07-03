@@ -3,7 +3,8 @@ import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
   getSubscriptionStripeMode,
-  getSubscriptionStripeClient,
+  getTenantSubscriptionAccount,
+  getSubscriptionStripeClientForAccount,
 } from "../_shared/subscription-stripe.ts";
 
 const STRIPE_PRODUCT_NAME = "Drive247 Platform Subscription";
@@ -85,9 +86,21 @@ Deno.serve(async (req) => {
   }
 });
 
+/** Stripe client on the tenant's configured subscription account. */
 async function getStripe(supabase: any, tenantId: string) {
   const mode = await getSubscriptionStripeMode(supabase, tenantId);
-  return getSubscriptionStripeClient(mode);
+  const account = await getTenantSubscriptionAccount(supabase, tenantId);
+  return { stripe: getSubscriptionStripeClientForAccount(account, mode), account, mode };
+}
+
+/**
+ * Stripe client on the account a plan's price actually lives on
+ * (rows created before the UAE migration default to 'uk').
+ */
+async function getStripeForPlan(supabase: any, tenantId: string, planStripeAccount: string | null) {
+  const mode = await getSubscriptionStripeMode(supabase, tenantId);
+  const account = planStripeAccount === "uae" ? "uae" : "uk";
+  return getSubscriptionStripeClientForAccount(account, mode);
 }
 
 async function handleCreate(supabase: any, body: any) {
@@ -98,7 +111,7 @@ async function handleCreate(supabase: any, body: any) {
   if (!name) return errorResponse("name is required");
   if (!amount || amount <= 0) return errorResponse("amount must be a positive number (in cents)");
 
-  const stripe = await getStripe(supabase, tenantId);
+  const { stripe, account } = await getStripe(supabase, tenantId);
   const productId = await getOrCreateProduct(stripe);
 
   const price = await stripe.prices.create({
@@ -109,7 +122,7 @@ async function handleCreate(supabase: any, body: any) {
     metadata: { tenant_id: tenantId, plan_name: name },
   });
 
-  console.log(`Created Stripe Price ${price.id} for tenant ${tenantId}, plan "${name}"`);
+  console.log(`Created Stripe Price ${price.id} on ${account} account for tenant ${tenantId}, plan "${name}"`);
 
   const { data, error } = await supabase
     .from("subscription_plans")
@@ -123,6 +136,7 @@ async function handleCreate(supabase: any, body: any) {
       interval,
       stripe_price_id: price.id,
       stripe_product_id: productId,
+      stripe_account: account,
       trial_days: trialDays,
       billing_model: safeBillingModel,
     })
@@ -150,7 +164,8 @@ async function handleUpdate(supabase: any, body: any) {
 
   if (fetchError || !existingPlan) return errorResponse("Plan not found", 404);
 
-  const stripe = await getStripe(supabase, existingPlan.tenant_id);
+  const { stripe, account } = await getStripe(supabase, existingPlan.tenant_id);
+  const planAccount = existingPlan.stripe_account === "uae" ? "uae" : "uk";
 
   const pricingChanged =
     (amount !== undefined && amount !== existingPlan.amount) ||
@@ -158,12 +173,19 @@ async function handleUpdate(supabase: any, body: any) {
     (interval !== undefined && interval !== existingPlan.interval);
 
   let newStripePriceId = existingPlan.stripe_price_id;
+  let newStripeProductId = existingPlan.stripe_product_id;
+  let newStripeAccount = planAccount;
 
   if (pricingChanged) {
     const newAmount = amount ?? existingPlan.amount;
     const newCurrency = (currency ?? existingPlan.currency).toLowerCase();
     const newInterval = interval ?? existingPlan.interval;
-    const productId = existingPlan.stripe_product_id;
+    // New price goes on the tenant's CURRENT subscription account. If the plan
+    // was created on the other account, its stored product id doesn't exist
+    // here — resolve/create the product on this account instead.
+    const productId = planAccount === account
+      ? existingPlan.stripe_product_id
+      : await getOrCreateProduct(stripe);
 
     const newPrice = await stripe.prices.create({
       product: productId,
@@ -174,11 +196,21 @@ async function handleUpdate(supabase: any, body: any) {
     });
 
     if (existingPlan.stripe_price_id) {
-      await stripe.prices.update(existingPlan.stripe_price_id, { active: false });
+      // Deactivate the old price on the account it actually lives on.
+      try {
+        const oldStripe = planAccount === account
+          ? stripe
+          : await getStripeForPlan(supabase, existingPlan.tenant_id, planAccount);
+        await oldStripe.prices.update(existingPlan.stripe_price_id, { active: false });
+      } catch (deactivateErr) {
+        console.warn(`Could not deactivate old price ${existingPlan.stripe_price_id} on ${planAccount} account:`, deactivateErr.message);
+      }
     }
 
     newStripePriceId = newPrice.id;
-    console.log(`Created new Stripe Price ${newPrice.id}, deactivated old ${existingPlan.stripe_price_id}`);
+    newStripeProductId = productId;
+    newStripeAccount = account;
+    console.log(`Created new Stripe Price ${newPrice.id} on ${account} account, deactivated old ${existingPlan.stripe_price_id}`);
   }
 
   const updateData: Record<string, any> = {};
@@ -192,6 +224,12 @@ async function handleUpdate(supabase: any, body: any) {
   if (billingModel !== undefined) updateData.billing_model = billingModel === "upfront_monthly" ? "upfront_monthly" : "trial";
   if (newStripePriceId !== existingPlan.stripe_price_id) {
     updateData.stripe_price_id = newStripePriceId;
+  }
+  if (newStripeProductId !== existingPlan.stripe_product_id) {
+    updateData.stripe_product_id = newStripeProductId;
+  }
+  if (newStripeAccount !== planAccount) {
+    updateData.stripe_account = newStripeAccount;
   }
 
   const { data, error } = await supabase
@@ -215,14 +253,14 @@ async function handleDeactivate(supabase: any, body: any) {
 
   const { data: plan, error: fetchError } = await supabase
     .from("subscription_plans")
-    .select("stripe_price_id, tenant_id")
+    .select("stripe_price_id, tenant_id, stripe_account")
     .eq("id", planId)
     .single();
 
   if (fetchError || !plan) return errorResponse("Plan not found", 404);
 
   if (plan.stripe_price_id) {
-    const stripe = await getStripe(supabase, plan.tenant_id);
+    const stripe = await getStripeForPlan(supabase, plan.tenant_id, plan.stripe_account);
     await stripe.prices.update(plan.stripe_price_id, { active: false });
   }
 
@@ -242,14 +280,14 @@ async function handleActivate(supabase: any, body: any) {
 
   const { data: plan, error: fetchError } = await supabase
     .from("subscription_plans")
-    .select("stripe_price_id, tenant_id")
+    .select("stripe_price_id, tenant_id, stripe_account")
     .eq("id", planId)
     .single();
 
   if (fetchError || !plan) return errorResponse("Plan not found", 404);
 
   if (plan.stripe_price_id) {
-    const stripe = await getStripe(supabase, plan.tenant_id);
+    const stripe = await getStripeForPlan(supabase, plan.tenant_id, plan.stripe_account);
     await stripe.prices.update(plan.stripe_price_id, { active: true });
   }
 
@@ -282,12 +320,12 @@ async function handleDelete(supabase: any, body: any) {
 
   const { data: plan } = await supabase
     .from("subscription_plans")
-    .select("stripe_price_id, tenant_id")
+    .select("stripe_price_id, tenant_id, stripe_account")
     .eq("id", planId)
     .single();
 
   if (plan?.stripe_price_id) {
-    const stripe = await getStripe(supabase, plan.tenant_id);
+    const stripe = await getStripeForPlan(supabase, plan.tenant_id, plan.stripe_account);
     await stripe.prices.update(plan.stripe_price_id, { active: false });
   }
 

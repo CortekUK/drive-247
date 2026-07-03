@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       _orphaned_data_audit: {
@@ -8443,6 +8468,7 @@ export type Database = {
           paid_at: string | null
           payment_date: string
           payment_type: string
+          platform_account: string
           preauth_expires_at: string | null
           refund_amount: number | null
           refund_processed_at: string | null
@@ -8480,6 +8506,7 @@ export type Database = {
           paid_at?: string | null
           payment_date?: string
           payment_type?: string
+          platform_account?: string
           preauth_expires_at?: string | null
           refund_amount?: number | null
           refund_processed_at?: string | null
@@ -8517,6 +8544,7 @@ export type Database = {
           paid_at?: string | null
           payment_date?: string
           payment_type?: string
+          platform_account?: string
           preauth_expires_at?: string | null
           refund_amount?: number | null
           refund_processed_at?: string | null
@@ -10270,6 +10298,7 @@ export type Database = {
       }
       rental_extras: {
         Row: {
+          billing_type: string
           created_at: string
           description: string | null
           id: string
@@ -10284,6 +10313,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          billing_type?: string
           created_at?: string
           description?: string | null
           id?: string
@@ -10298,6 +10328,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          billing_type?: string
           created_at?: string
           description?: string | null
           id?: string
@@ -10330,6 +10361,7 @@ export type Database = {
       }
       rental_extras_selections: {
         Row: {
+          billing_type_at_booking: string
           created_at: string
           extra_id: string
           id: string
@@ -10338,6 +10370,7 @@ export type Database = {
           rental_id: string
         }
         Insert: {
+          billing_type_at_booking?: string
           created_at?: string
           extra_id: string
           id?: string
@@ -10346,6 +10379,7 @@ export type Database = {
           rental_id: string
         }
         Update: {
+          billing_type_at_booking?: string
           created_at?: string
           extra_id?: string
           id?: string
@@ -11026,6 +11060,7 @@ export type Database = {
           auto_extend_reminder_enabled: boolean
           auto_extend_reminder_interval_days: number
           auto_extend_reminder_max: number
+          auto_extend_reminder_send_weekday: number | null
           auto_extend_status: string
           boldsign_mode: string | null
           bonzah_policy_id: string | null
@@ -11093,6 +11128,7 @@ export type Database = {
           pickup_location: string | null
           pickup_location_id: string | null
           pickup_time: string | null
+          platform_account: string
           previous_end_date: string | null
           promo_code: string | null
           renewed_from_rental_id: string | null
@@ -11140,6 +11176,7 @@ export type Database = {
           auto_extend_reminder_enabled?: boolean
           auto_extend_reminder_interval_days?: number
           auto_extend_reminder_max?: number
+          auto_extend_reminder_send_weekday?: number | null
           auto_extend_status?: string
           boldsign_mode?: string | null
           bonzah_policy_id?: string | null
@@ -11207,6 +11244,7 @@ export type Database = {
           pickup_location?: string | null
           pickup_location_id?: string | null
           pickup_time?: string | null
+          platform_account?: string
           previous_end_date?: string | null
           promo_code?: string | null
           renewed_from_rental_id?: string | null
@@ -11254,6 +11292,7 @@ export type Database = {
           auto_extend_reminder_enabled?: boolean
           auto_extend_reminder_interval_days?: number
           auto_extend_reminder_max?: number
+          auto_extend_reminder_send_weekday?: number | null
           auto_extend_status?: string
           boldsign_mode?: string | null
           bonzah_policy_id?: string | null
@@ -11321,6 +11360,7 @@ export type Database = {
           pickup_location?: string | null
           pickup_location_id?: string | null
           pickup_time?: string | null
+          platform_account?: string
           previous_end_date?: string | null
           promo_code?: string | null
           renewed_from_rental_id?: string | null
@@ -12120,6 +12160,7 @@ export type Database = {
           is_active: boolean
           name: string
           sort_order: number
+          stripe_account: string
           stripe_price_id: string | null
           stripe_product_id: string | null
           tenant_id: string
@@ -12138,6 +12179,7 @@ export type Database = {
           is_active?: boolean
           name: string
           sort_order?: number
+          stripe_account?: string
           stripe_price_id?: string | null
           stripe_product_id?: string | null
           tenant_id: string
@@ -12156,6 +12198,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           sort_order?: number
+          stripe_account?: string
           stripe_price_id?: string | null
           stripe_product_id?: string | null
           tenant_id?: string
@@ -12422,6 +12465,7 @@ export type Database = {
           plan_id: string | null
           plan_name: string
           status: string
+          stripe_account: string
           stripe_customer_id: string
           stripe_subscription_id: string
           tenant_id: string
@@ -12446,6 +12490,7 @@ export type Database = {
           plan_id?: string | null
           plan_name?: string
           status?: string
+          stripe_account?: string
           stripe_customer_id: string
           stripe_subscription_id: string
           tenant_id: string
@@ -12470,6 +12515,7 @@ export type Database = {
           plan_id?: string | null
           plan_name?: string
           status?: string
+          stripe_account?: string
           stripe_customer_id?: string
           stripe_subscription_id?: string
           tenant_id?: string
@@ -12619,6 +12665,10 @@ export type Database = {
           monthly_tier_days: number
           multiple_locations_enabled: boolean | null
           og_image_url: string | null
+          own_stripe_account_id: string | null
+          own_stripe_connected_at: string | null
+          own_stripe_test_account_id: string | null
+          own_stripe_test_connected_at: string | null
           pay_as_you_go_enabled: boolean
           payg_accrual_window_seconds: number
           payg_auto_reminders_enabled: boolean
@@ -12629,6 +12679,7 @@ export type Database = {
           payg_reminder_interval_days: number
           payg_upfront_required: boolean
           payment_mode: string | null
+          payment_model: string
           phone: string | null
           pickup_area_enabled: boolean | null
           pickup_area_radius_km: number | null
@@ -12665,6 +12716,7 @@ export type Database = {
           stripe_mode: string
           stripe_onboarding_complete: boolean | null
           stripe_subscription_customer_id: string | null
+          subscription_account: string
           subscription_gate_disabled: boolean
           subscription_plan: string | null
           subscription_stripe_mode: string
@@ -12833,6 +12885,10 @@ export type Database = {
           monthly_tier_days?: number
           multiple_locations_enabled?: boolean | null
           og_image_url?: string | null
+          own_stripe_account_id?: string | null
+          own_stripe_connected_at?: string | null
+          own_stripe_test_account_id?: string | null
+          own_stripe_test_connected_at?: string | null
           pay_as_you_go_enabled?: boolean
           payg_accrual_window_seconds?: number
           payg_auto_reminders_enabled?: boolean
@@ -12843,6 +12899,7 @@ export type Database = {
           payg_reminder_interval_days?: number
           payg_upfront_required?: boolean
           payment_mode?: string | null
+          payment_model?: string
           phone?: string | null
           pickup_area_enabled?: boolean | null
           pickup_area_radius_km?: number | null
@@ -12879,6 +12936,7 @@ export type Database = {
           stripe_mode?: string
           stripe_onboarding_complete?: boolean | null
           stripe_subscription_customer_id?: string | null
+          subscription_account?: string
           subscription_gate_disabled?: boolean
           subscription_plan?: string | null
           subscription_stripe_mode?: string
@@ -13047,6 +13105,10 @@ export type Database = {
           monthly_tier_days?: number
           multiple_locations_enabled?: boolean | null
           og_image_url?: string | null
+          own_stripe_account_id?: string | null
+          own_stripe_connected_at?: string | null
+          own_stripe_test_account_id?: string | null
+          own_stripe_test_connected_at?: string | null
           pay_as_you_go_enabled?: boolean
           payg_accrual_window_seconds?: number
           payg_auto_reminders_enabled?: boolean
@@ -13057,6 +13119,7 @@ export type Database = {
           payg_reminder_interval_days?: number
           payg_upfront_required?: boolean
           payment_mode?: string | null
+          payment_model?: string
           phone?: string | null
           pickup_area_enabled?: boolean | null
           pickup_area_radius_km?: number | null
@@ -13093,6 +13156,7 @@ export type Database = {
           stripe_mode?: string
           stripe_onboarding_complete?: boolean | null
           stripe_subscription_customer_id?: string | null
+          subscription_account?: string
           subscription_gate_disabled?: boolean
           subscription_plan?: string | null
           subscription_stripe_mode?: string
@@ -16107,6 +16171,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       accounting_connection_status: ["active", "expired", "revoked", "error"],
@@ -16184,4 +16251,3 @@ export const Constants = {
     },
   },
 } as const
-

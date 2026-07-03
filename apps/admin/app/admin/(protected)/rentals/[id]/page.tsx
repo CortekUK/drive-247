@@ -49,6 +49,7 @@ import { Area, AreaChart, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { DatePicker } from '@/components/ui/date-picker';
 import { BarChart3 } from 'lucide-react';
 import { TenantCreditsTab } from '@/components/admin/tenant-credits-tab';
+import { TenantPaymentsTab } from '@/components/admin/tenant-payments-tab';
 import { AdminTodosTab } from '@/components/admin-todos/admin-todos-tab';
 import {
   ArrowLeft,
@@ -1168,10 +1169,19 @@ export default function TenantDetailsPage() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="details" className="space-y-6">
+      <Tabs
+        defaultValue={
+          typeof window !== 'undefined' &&
+          new URLSearchParams(window.location.search).get('tab') === 'payments'
+            ? 'payments'
+            : 'details'
+        }
+        className="space-y-6"
+      >
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="management">Management</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="todos">Todos</TabsTrigger>
         </TabsList>
@@ -1915,6 +1925,11 @@ export default function TenantDetailsPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Payments / Migration Tab */}
+        <TabsContent value="payments" className="space-y-6">
+          <TenantPaymentsTab tenantId={params.id as string} />
         </TabsContent>
 
         {/* Analytics Tab */}

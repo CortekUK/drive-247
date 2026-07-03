@@ -2,7 +2,8 @@ import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
   getSubscriptionStripeMode,
-  getSubscriptionStripeClient,
+  getTenantSubscriptionAccount,
+  getSubscriptionStripeClientForAccount,
 } from "../_shared/subscription-stripe.ts";
 
 Deno.serve(async (req) => {
@@ -39,7 +40,15 @@ Deno.serve(async (req) => {
     let stripeSubscription = null;
     try {
       const mode = await getSubscriptionStripeMode(supabase, tenantId);
-      const stripe = getSubscriptionStripeClient(mode);
+      // The Stripe subscription lives on the account recorded on the row
+      // (rows created before the UAE migration default to 'uk'); fall back
+      // to the tenant's configured subscription account.
+      const account = subscription.stripe_account === "uae"
+        ? "uae"
+        : subscription.stripe_account === "uk"
+          ? "uk"
+          : await getTenantSubscriptionAccount(supabase, tenantId);
+      const stripe = getSubscriptionStripeClientForAccount(account, mode);
       stripeSubscription = await stripe.subscriptions.retrieve(
         subscription.stripe_subscription_id,
         { expand: ["default_payment_method", "latest_invoice"] }

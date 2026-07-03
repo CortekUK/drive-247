@@ -3,7 +3,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
-import { getStripeClient, getTenantStripeMode, getConnectAccountId } from "../_shared/stripe-client.ts";
+import { getConnectAccountId, getStripeClientForRecord } from "../_shared/stripe-client.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     // Find the payment by checkout session ID
     const { data: payment, error: findError } = await supabase
       .from('payments')
-      .select('id, status, rental_id, tenant_id, amount, target_categories, extension_id')
+      .select('id, status, rental_id, tenant_id, amount, target_categories, extension_id, platform_account')
       .eq('stripe_checkout_session_id', checkoutSessionId)
       .maybeSingle();
 
@@ -120,17 +120,22 @@ Deno.serve(async (req) => {
     if (tenantId) {
       const { data: tenantData } = await supabase
         .from('tenants')
-        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
+        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id')
         .eq('id', tenantId)
         .single();
 
       if (tenantData) {
         stripeMode = (tenantData.stripe_mode as 'test' | 'live') || 'test';
-        connectAccountId = getConnectAccountId(tenantData);
+        // Resolve the connected account for the platform the payment was
+        // CREATED on (payments.platform_account), not the tenant's current model.
+        connectAccountId = getConnectAccountId({
+          ...tenantData,
+          payment_model: payment.platform_account === 'uae' ? 'own' : 'managed',
+        });
       }
     }
 
-    const stripe = getStripeClient(stripeMode);
+    const stripe = getStripeClientForRecord(payment, stripeMode);
     const stripeOptions = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
 
     let sessionPaid = false;

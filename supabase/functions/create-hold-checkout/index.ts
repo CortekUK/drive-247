@@ -9,8 +9,9 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import {
-  getStripeClient,
   getConnectAccountId,
+  getChargePlatformAccount,
+  getStripeClientForAccount,
   getStripeOptions,
   DEPOSIT_HOLD_CARD_VARIANTS,
   isCardFeatureIneligibleError,
@@ -56,7 +57,7 @@ Deno.serve(async (req) => {
 
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
-      .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, security_deposit_enabled, global_deposit_amount, currency_code, company_name')
+      .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, security_deposit_enabled, global_deposit_amount, currency_code, company_name')
       .eq('id', rental.tenant_id)
       .single()
     if (tenantError || !tenant) return errorResponse('Tenant not found', 404)
@@ -86,7 +87,7 @@ Deno.serve(async (req) => {
       .single()
 
     const stripeMode: StripeMode = (tenant.stripe_mode as StripeMode) || 'test'
-    const stripe = getStripeClient(stripeMode)
+    const stripe = getStripeClientForAccount(getChargePlatformAccount(tenant as any), stripeMode)
     const stripeOptions = getStripeOptions(getConnectAccountId(tenant as any))
 
     const currency = (tenant.currency_code || 'usd').toLowerCase()

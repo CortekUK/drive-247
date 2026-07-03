@@ -3,7 +3,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getStripeClient, getConnectAccountId, type StripeMode } from "../_shared/stripe-client.ts";
+import { getConnectAccountId, getStripeClientForRecord, type StripeMode } from "../_shared/stripe-client.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     // Fetch rental deposit hold info
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
-      .select("deposit_hold_payment_intent_id, deposit_hold_status, deposit_hold_amount, tenant_id")
+      .select("deposit_hold_payment_intent_id, deposit_hold_status, deposit_hold_amount, tenant_id, platform_account")
       .eq("id", rentalId)
       .single();
 
@@ -51,13 +51,20 @@ Deno.serve(async (req) => {
     // Fetch tenant Stripe config
     const { data: tenant } = await supabase
       .from("tenants")
-      .select("stripe_mode, stripe_account_id, stripe_onboarding_complete")
+      .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id")
       .eq("id", effectiveTenantId)
       .single();
 
     const stripeMode: StripeMode = (tenant?.stripe_mode as StripeMode) || "test";
-    const stripe = getStripeClient(stripeMode);
-    const connectAccountId = tenant ? getConnectAccountId(tenant) : null;
+    // Release with the keys + connected account of the platform the hold was
+    // CREATED on (rentals.platform_account), not the tenant's current model.
+    const stripe = getStripeClientForRecord(rental, stripeMode);
+    const connectAccountId = tenant
+      ? getConnectAccountId({
+          ...tenant,
+          payment_model: rental.platform_account === "uae" ? "own" : "managed",
+        })
+      : null;
     const stripeOptions = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
 
     // Cancel the PaymentIntent to release the hold
