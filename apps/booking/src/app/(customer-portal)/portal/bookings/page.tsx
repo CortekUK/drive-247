@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCustomerRentals, useCustomerRentalStats } from '@/hooks/use-customer-rentals';
+import { parseDateOnly } from '@/lib/date-utils';
 import { useCustomerNotifications } from '@/hooks/use-customer-notifications';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -76,7 +77,9 @@ function getStatusColor(status: string | null): string {
 function formatDateShort(date: string | null): string {
   if (!date) return '-';
   try {
-    return format(new Date(date), 'dd MMM yyyy');
+    // start_date/end_date are date-only columns — parse as LOCAL midnight, or
+    // the day renders one early in timezones west of UTC (the Jangram bug).
+    return format(parseDateOnly(date), 'dd MMM yyyy');
   } catch {
     return '-';
   }
