@@ -71,7 +71,7 @@ const BUNDLE_FEATURES = [...COVERAGE_INFO.cdw.features, ...COVERAGE_INFO.rcli.fe
 // Each product alone excludes the risk the other one covers (CDW: non-rental vehicles;
 // RCLI: the rental vehicle). Bundled together each fills the other's gap, so those two
 // exclusions are dropped. Typed against the source lists so rewording an exclusion in
-// the premium hook breaks the build here instead of silently un-filtering.
+// the premium hook fails typecheck (tsc/IDE) here instead of silently un-filtering.
 type BundleExclusion =
   | (typeof COVERAGE_INFO.cdw.exclusions)[number]
   | (typeof COVERAGE_INFO.rcli.exclusions)[number];
