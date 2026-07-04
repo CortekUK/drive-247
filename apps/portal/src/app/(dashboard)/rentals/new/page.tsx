@@ -7,6 +7,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { addMonths, addDays, addWeeks, isAfter, isBefore, subYears, startOfDay, format, differenceInDays, parseISO } from "date-fns";
+import { clampToBonzahStart } from "@/lib/bonzah-dates";
+import BonzahAvailabilityNotice from "@/components/rentals/bonzah-availability-notice";
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1358,7 +1360,7 @@ const CreateRental = () => {
         const tz = tenant?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
         // Build a date string in the tenant's timezone and convert to UTC
         const dateStr = data.start_date instanceof Date
-          ? data.start_date.toISOString().split('T')[0]
+          ? format(data.start_date, 'yyyy-MM-dd')
           : String(data.start_date).split('T')[0];
         const localStr = `${dateStr}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`;
         // Use Intl to compute the UTC offset for the tenant's timezone at this date/time
@@ -1382,7 +1384,7 @@ const CreateRental = () => {
       let autoExtendNextChargeAt: string | null = null;
       if (isAutoExtend && data.end_date) {
         const leadHours = Number((rentalSettings as any)?.auto_extend_default_lead_hours ?? 0);
-        const periodEnd = new Date(`${data.end_date.toISOString().split('T')[0]}T00:00:00Z`);
+        const periodEnd = new Date(`${format(data.end_date, 'yyyy-MM-dd')}T00:00:00Z`);
         periodEnd.setUTCHours(periodEnd.getUTCHours() - leadHours);
         autoExtendNextChargeAt = periodEnd.toISOString();
       }
@@ -1392,9 +1394,11 @@ const CreateRental = () => {
       const rentalInsertPayload: any = {
         customer_id: data.customer_id,
         vehicle_id: data.vehicle_id,
-        start_date: data.start_date.toISOString().split('T')[0],
+        // format() = the picker's LOCAL calendar date. toISOString() shifted the
+        // stored dates one day EARLIER for staff in UTC+ timezones (e.g. Manila).
+        start_date: format(data.start_date, 'yyyy-MM-dd'),
         // Regular: use form's end_date. PAYG: null (open-ended).
-        end_date: isPayAsYouGo ? null : (data.end_date ? data.end_date.toISOString().split('T')[0] : null),
+        end_date: isPayAsYouGo ? null : (data.end_date ? format(data.end_date, 'yyyy-MM-dd') : null),
         rental_period_type: data.rental_period_type,
         monthly_amount: data.monthly_amount,
         status: "Pending",
@@ -1611,12 +1615,11 @@ const CreateRental = () => {
                 customer_id: data.customer_id,
                 tenant_id: tenant.id,
                 trip_dates: {
-                  start: (() => {
-                    const d = data.start_date.toISOString().split('T')[0];
-                    const today = new Date().toISOString().split('T')[0];
-                    return d < today ? today : d;
-                  })(),
-                  end: data.end_date.toISOString().split('T')[0],
+                  // format() renders the picker's LOCAL calendar date — toISOString()
+                  // shifted it a day earlier for UTC+ browsers (e.g. Manila staff).
+                  // clampToBonzahStart mirrors the server's LA earliest-start rule.
+                  start: clampToBonzahStart(format(data.start_date, 'yyyy-MM-dd')),
+                  end: format(data.end_date, 'yyyy-MM-dd'),
                 },
                 pickup_state: custState,
                 coverage: bonzahCoverage,
@@ -1776,7 +1779,7 @@ const CreateRental = () => {
 
       // Create a payment reminder for the new rental (so it shows in Reminders tab)
       try {
-        const dueDate = data.start_date.toISOString().split('T')[0];
+        const dueDate = format(data.start_date, 'yyyy-MM-dd');
         const reminderContext = {
           rental_id: rental.id,
           customer_id: data.customer_id,
@@ -1975,7 +1978,7 @@ const CreateRental = () => {
               status: 'pending',
               paid_installments: 0,
               total_paid: 0,
-              next_due_date: firstScheduledDate.toISOString().split('T')[0],
+              next_due_date: format(firstScheduledDate, 'yyyy-MM-dd'),
               config: {
                 charge_first_upfront: chargeFirst,
                 what_gets_split: whatGetsSplit,
@@ -2009,7 +2012,7 @@ const CreateRental = () => {
                 customer_id: data.customer_id,
                 installment_number: i + 1,
                 amount: isLast ? lastAmt : effectiveInstAmt,
-                due_date: dueDate.toISOString().split('T')[0],
+                due_date: format(dueDate, 'yyyy-MM-dd'),
                 status: 'scheduled',
                 failure_count: 0,
               };
@@ -2048,8 +2051,8 @@ const CreateRental = () => {
           vehicleReg: vehicleReg,
           vehicleMake: selectedVehicle?.make || '',
           vehicleModel: selectedVehicle?.model || '',
-          startDate: data.start_date.toISOString(),
-          endDate: data.end_date.toISOString(),
+          startDate: format(data.start_date, 'yyyy-MM-dd'),
+          endDate: format(data.end_date, 'yyyy-MM-dd'),
           monthlyAmount: data.monthly_amount,
           totalAmount: data.monthly_amount,
         });
@@ -2925,8 +2928,8 @@ const CreateRental = () => {
                                                 supabase,
                                                 tenant.id,
                                                 vehicle.id,
-                                                start.toISOString().split("T")[0],
-                                                end.toISOString().split("T")[0],
+                                                format(start, 'yyyy-MM-dd'),
+                                                format(end, 'yyyy-MM-dd'),
                                               );
                                               if (result.hasConflicts) {
                                                 setVehicleChangeConflict(result);
@@ -4891,13 +4894,12 @@ const CreateRental = () => {
                     {!skipInsurance && watchedStartDate && watchedEndDate && isBonzahEligible && !isBonzahEligibilityLoading && (
                       <div className="space-y-4">
                             {(() => {
-                              const startStr = watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null;
-                              const endStr = watchedEndDate ? watchedEndDate.toISOString().split('T')[0] : null;
-                              const todayStr = new Date().toISOString().split('T')[0];
-                              const effectiveStart = startStr && startStr < todayStr ? todayStr : startStr;
+                              const startStr = watchedStartDate ? format(watchedStartDate, 'yyyy-MM-dd') : null;
+                              const endStr = watchedEndDate ? format(watchedEndDate, 'yyyy-MM-dd') : null;
+                              const effectiveStart = startStr ? clampToBonzahStart(startStr) : null;
                               const warnings: string[] = [];
-                              if (startStr && startStr < todayStr) {
-                                warnings.push(`Rental starts ${new Date(startStr + 'T00:00:00').toLocaleDateString('en-US')} which is in the past. Insurance coverage will begin from today.`);
+                              if (startStr && effectiveStart && startStr < effectiveStart) {
+                                warnings.push(`Bonzah policies start tomorrow (Los Angeles time) at the earliest — coverage will begin ${new Date(effectiveStart + 'T00:00:00').toLocaleDateString('en-US')}, not ${new Date(startStr + 'T00:00:00').toLocaleDateString('en-US')}.`);
                               }
                               if (effectiveStart && endStr) {
                                 const s = new Date(effectiveStart + 'T00:00:00');
@@ -4920,27 +4922,39 @@ const CreateRental = () => {
                                 </div>
                               );
                             })()}
-                            <BonzahInsuranceSelector
-                              key={bonzahKey}
-                              tripStartDate={(() => {
-                                const d = watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null;
-                                if (!d) return null;
-                                const today = new Date().toISOString().split('T')[0];
-                                return d < today ? today : d;
-                              })()}
-                              tripEndDate={watchedEndDate ? watchedEndDate.toISOString().split('T')[0] : null}
-                              pickupState={customerDetails?.address_state || "FL"}
-                              onCoverageChange={(coverage, premium) => {
-                                setBonzahCoverage(coverage);
-                                setBonzahPremium(premium);
-                              }}
-                              onSkipInsurance={() => {
-                                setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
-                                setBonzahPremium(0);
-                              }}
-                              initialCoverage={bonzahCoverage}
-                              customerDetails={customerDetails}
-                            />
+                            {(() => {
+                              // Zero-night window after the LA clamp (e.g. a rental
+                              // ending tomorrow booked today) — explain instead of
+                              // rendering a selector whose quote must fail.
+                              const clampedStart = watchedStartDate ? clampToBonzahStart(format(watchedStartDate, 'yyyy-MM-dd')) : null;
+                              const endStr = watchedEndDate ? format(watchedEndDate, 'yyyy-MM-dd') : null;
+                              if (clampedStart && endStr && endStr <= clampedStart) {
+                                return (
+                                  <BonzahAvailabilityNotice
+                                    windowStart={format(watchedStartDate!, 'yyyy-MM-dd')}
+                                    windowEnd={endStr}
+                                  />
+                                );
+                              }
+                              return (
+                                <BonzahInsuranceSelector
+                                  key={bonzahKey}
+                                  tripStartDate={clampedStart}
+                                  tripEndDate={endStr}
+                                  pickupState={customerDetails?.address_state || "FL"}
+                                  onCoverageChange={(coverage, premium) => {
+                                    setBonzahCoverage(coverage);
+                                    setBonzahPremium(premium);
+                                  }}
+                                  onSkipInsurance={() => {
+                                    setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+                                    setBonzahPremium(0);
+                                  }}
+                                  initialCoverage={bonzahCoverage}
+                                  customerDetails={customerDetails}
+                                />
+                              );
+                            })()}
                             {bonzahPremium > 0 && (
                               <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-3 space-y-2">
                                 <div className="flex items-start gap-2">
@@ -5461,8 +5475,10 @@ const CreateRental = () => {
             model: createdRentalData.vehicle?.model || "",
           }}
           rental={{
-            start_date: createdRentalData.formData.start_date.toISOString(),
-            end_date: createdRentalData.formData.end_date?.toISOString() || createdRentalData.formData.start_date.toISOString(),
+            start_date: format(createdRentalData.formData.start_date, 'yyyy-MM-dd'),
+            end_date: createdRentalData.formData.end_date
+              ? format(createdRentalData.formData.end_date, 'yyyy-MM-dd')
+              : format(createdRentalData.formData.start_date, 'yyyy-MM-dd'),
             monthly_amount: createdRentalData.formData.monthly_amount,
           }}
           protectionPlan={bonzahPremium > 0 ? {

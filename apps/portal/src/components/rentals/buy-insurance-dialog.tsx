@@ -12,6 +12,8 @@ import { formatCurrency } from '@/lib/format-utils';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import BonzahInsuranceSelector from '@/components/rentals/bonzah-insurance-selector';
 import { useBonzahBalance } from '@/hooks/use-bonzah-balance';
+import { clampToBonzahStart, getPacificToday } from '@/lib/bonzah-dates';
+import BonzahAvailabilityNotice from '@/components/rentals/bonzah-availability-notice';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -50,6 +52,8 @@ interface BuyInsuranceDialogProps {
   extensionDates?: { start: string; end: string };
   /** When set, stamps extension_id on the created bonzah policy + ledger entry (Phase 5 per-extension isolation). */
   extensionId?: string | null;
+  /** Offered in the availability notice when the window has no insurable days. */
+  onUploadOwnPolicy?: () => void;
 }
 
 const DEFAULT_COVERAGE: CoverageOptions = {
@@ -67,6 +71,7 @@ export function BuyInsuranceDialog({
   mode = 'original',
   extensionDates,
   extensionId,
+  onUploadOwnPolicy,
 }: BuyInsuranceDialogProps) {
   const isExtension = mode === 'extension';
   const { tenant } = useTenant();
@@ -113,25 +118,31 @@ export function BuyInsuranceDialog({
   }, [open, rental.customers?.id]);
 
   // Compute trip dates once — used by both the selector and the purchase handler.
+  // Starts in the past clamp to Pacific-TOMORROW (not local today): Bonzah can't
+  // start a policy today, and bonzah-create-quote clamps the same way — so the
+  // preview prices exactly the window the purchase will actually cover.
   // PAYG rentals have a null end_date (open-ended); fall back to start+30d so this
   // dialog can still render without crashing even if it ever opens for a PAYG row.
   // (PAYG should not surface this dialog at all — guarded at the call site too.)
   const tripDates = (() => {
-    const now = new Date();
-    const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     if (isExtension && extensionDates) {
-      const extStart = extensionDates.start.split('T')[0];
-      return { start: extStart < todayLocal ? todayLocal : extStart, end: extensionDates.end.split('T')[0] };
+      return { start: clampToBonzahStart(extensionDates.start.split('T')[0]), end: extensionDates.end.split('T')[0] };
     }
-    const rentalStart = rental.start_date?.split('T')[0] || todayLocal;
+    const rentalStart = rental.start_date?.split('T')[0] || getPacificToday();
     let rentalEnd = rental.end_date?.split('T')[0];
     if (!rentalEnd) {
       const fallback = new Date(`${rentalStart}T00:00:00Z`);
       fallback.setUTCDate(fallback.getUTCDate() + 30);
       rentalEnd = fallback.toISOString().split('T')[0];
     }
-    return { start: rentalStart < todayLocal ? todayLocal : rentalStart, end: rentalEnd };
+    return { start: clampToBonzahStart(rentalStart), end: rentalEnd };
   })();
+
+  // After the clamp the window can be EMPTY (start >= end) — e.g. a same-day
+  // 1-day extension. bonzah-calculate-premium would still quote 1 day for it
+  // (Math.max(days, 1)), so gate here rather than show a phantom premium the
+  // purchase step will always refuse.
+  const hasInsurableWindow = tripDates.start < tripDates.end;
 
   const hasCoverage = coverage.cdw || coverage.rcli || coverage.sli || coverage.pai;
 
@@ -154,6 +165,7 @@ export function BuyInsuranceDialog({
 
   const handlePurchase = async (forceDuplicate = false) => {
     if (!tenant?.id || !rental.customers?.id) return;
+    if (!hasInsurableWindow) return; // zero-night window — nothing Bonzah can sell
 
     setPurchasing(true);
     try {
@@ -495,21 +507,32 @@ export function BuyInsuranceDialog({
                   </span>
                 </div>
 
-                <BonzahInsuranceSelector
-                  tripStartDate={tripDates.start}
-                  tripEndDate={tripDates.end}
-                  pickupState={customerState}
-                  onCoverageChange={handleCoverageChange}
-                  onSkipInsurance={handleSkipInsurance}
-                  hidePremiumSummary
-                />
+                {hasInsurableWindow ? (
+                  <BonzahInsuranceSelector
+                    tripStartDate={tripDates.start}
+                    tripEndDate={tripDates.end}
+                    pickupState={customerState}
+                    onCoverageChange={handleCoverageChange}
+                    onSkipInsurance={handleSkipInsurance}
+                    hidePremiumSummary
+                  />
+                ) : (
+                  <BonzahAvailabilityNotice
+                    windowStart={(isExtension && extensionDates
+                      ? extensionDates.start
+                      : rental.start_date || getPacificToday()
+                    ).split('T')[0]}
+                    windowEnd={tripDates.end}
+                    onUploadOwnPolicy={onUploadOwnPolicy}
+                  />
+                )}
 
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={handleClose}>
                     Cancel
                   </Button>
                   <Button
-                    disabled={!hasCoverage || premium <= 0}
+                    disabled={!hasInsurableWindow || !hasCoverage || premium <= 0}
                     onClick={() => setStep(2)}
                   >
                     Continue
@@ -558,7 +581,7 @@ export function BuyInsuranceDialog({
                         {isClamped && (
                           <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
                             <AlertTriangle className="h-3 w-3" />
-                            Rental started {new Date(rawStart + 'T00:00:00').toLocaleDateString('en-US')} — coverage begins today
+                            Rental started {new Date(rawStart + 'T00:00:00').toLocaleDateString('en-US')} — coverage begins tomorrow (Pacific time)
                           </p>
                         )}
                         {isChained && (

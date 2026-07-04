@@ -26,6 +26,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/formatters';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
+import { bonzahCanInsureThrough } from '@/lib/bonzah-dates';
 import type { InsurancePolicy } from '@/hooks/use-rental-insurance-policies';
 
 interface InsuranceTimelineProps {
@@ -483,6 +484,12 @@ export function InsuranceTimeline({
                   const hasDoc = extDocs.length > 0;
                   const hasCoverage = hasActivePolicy || hasDoc;
                   const extTotal = extPolicies.reduce((sum, p) => sum + (p.premium_amount || 0), 0);
+                  // Bonzah policies can't start today — once the extension's end
+                  // date is on/before Pacific-tomorrow there is nothing left to
+                  // insure and bonzah-create-quote would always 400. Mirror the
+                  // original-scope "No Days Left" gate instead of offering a
+                  // button that can only error.
+                  const extInsurable = bonzahCanInsureThrough(ext.new_end_date);
 
                   return (
                     <div key={ext.id} className="border border-amber-200 dark:border-amber-800/50 bg-amber-50/40 dark:bg-amber-950/10 p-4">
@@ -546,10 +553,16 @@ export function InsuranceTimeline({
                       {canEdit && !hasCoverage && (
                         <div className={`flex items-center gap-2 ${extPolicies.length > 0 || extDocs.length > 0 ? 'mt-3 pt-3 border-t border-amber-200 dark:border-amber-800/50' : ''}`}>
                           {isBonzahConnected && onBuyExtensionInsuranceFor && (
-                            <Button variant="outline" size="sm" onClick={() => onBuyExtensionInsuranceFor(ext.id)} className="border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onBuyExtensionInsuranceFor(ext.id)}
+                              title={extInsurable ? undefined : 'Bonzah cannot cover this window — opens an explanation with alternatives.'}
+                              className="border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                            >
                               <img src="/bonzah-logo.svg" alt="" className="h-3 w-auto mr-1.5 dark:hidden" />
                               <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-auto mr-1.5 hidden dark:block" />
-                              Buy Bonzah
+                              {extInsurable ? 'Buy Bonzah' : 'Buy Bonzah — No Days Left'}
                             </Button>
                           )}
                           {onUploadExtensionInsuranceFor && (

@@ -58,6 +58,7 @@ import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown, parseDateString as parseDateStringSafe } from "@/lib/calculate-rental-price";
 import { parseDateOnly } from "@/lib/date-utils";
 import { calcExtrasTotal } from "@/lib/calculate-extras-total";
+import { clampToBonzahStart } from "@/lib/bonzah-dates";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -3331,6 +3332,22 @@ const MultiStepBookingWidget = () => {
     setBonzahPolicyId(null);
   };
 
+  // If the dates change to a window Bonzah can't insure (zero nights after the
+  // LA clamp), the selector unmounts — clear any previously selected coverage
+  // too, or a stale premium rides into checkout for a purchase that is
+  // guaranteed to fail.
+  useEffect(() => {
+    const d = formData.pickupDate;
+    const e = formData.dropoffDate;
+    const insurable = !!(d && e && e > clampToBonzahStart(d));
+    const hasSelection =
+      bonzahPremium > 0 || bonzahCoverage.cdw || bonzahCoverage.rcli || bonzahCoverage.sli || bonzahCoverage.pai;
+    if (!insurable && hasSelection) {
+      handleBonzahSkipInsurance();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.pickupDate, formData.dropoffDate, bonzahPremium, bonzahCoverage]);
+
   // Step 4: Customer Details
   const handleStep4Continue = async () => {
     console.log('🚀 handleStep4Continue called');
@@ -5141,13 +5158,28 @@ const MultiStepBookingWidget = () => {
               </div>
 
               {(() => {
+                // Bonzah policies can't start on the purchase day (Los Angeles
+                // time) — clamp like the server does so we show what it will
+                // actually sell, and gate windows with nothing left to insure.
                 const d = formData.pickupDate;
                 const e = formData.dropoffDate;
-                const todayStr = new Date().toISOString().split('T')[0];
-                const effectiveStart = d && d < todayStr ? todayStr : d;
+                const effectiveStart = d ? clampToBonzahStart(d) : null;
+                const windowInsurable = !!(effectiveStart && e && e > effectiveStart);
+                if (!windowInsurable) {
+                  return (
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
+                      <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                      <span>
+                        Bonzah insurance isn't available for these dates — policies can only start
+                        tomorrow (Los Angeles time), which is on or after your return date. You can
+                        adjust your dates, or continue and arrange coverage with the rental team.
+                      </span>
+                    </div>
+                  );
+                }
                 const warnings: string[] = [];
-                if (d && d < todayStr) {
-                  warnings.push(`Your rental starts ${new Date(d + 'T00:00:00').toLocaleDateString('en-US')} which is in the past. Insurance coverage will begin from today.`);
+                if (d && effectiveStart && d < effectiveStart) {
+                  warnings.push(`Bonzah policies start tomorrow (Los Angeles time) at the earliest — coverage will begin ${new Date(effectiveStart + 'T00:00:00').toLocaleDateString('en-US')}, not ${new Date(d + 'T00:00:00').toLocaleDateString('en-US')}.`);
                 }
                 if (effectiveStart && e) {
                   const s = new Date(effectiveStart + 'T00:00:00');
@@ -5159,31 +5191,29 @@ const MultiStepBookingWidget = () => {
                     warnings.push(`${policyCount} insurance policies will be created to cover your full rental (Bonzah max 30 days per policy).`);
                   }
                 }
-                if (warnings.length === 0) return null;
                 return (
-                  <div className="space-y-1.5">
-                    {warnings.map((w, i) => (
-                      <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
-                        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                        <span>{w}</span>
+                  <>
+                    {warnings.length > 0 && (
+                      <div className="space-y-1.5">
+                        {warnings.map((w, i) => (
+                          <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
+                            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                            <span>{w}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    )}
+                    <BonzahInsuranceSelector
+                      tripStartDate={effectiveStart}
+                      tripEndDate={e || null}
+                      pickupState={formData.addressState || "FL"}
+                      onCoverageChange={handleBonzahCoverageChange}
+                      onSkipInsurance={handleBonzahSkipInsurance}
+                      initialCoverage={bonzahCoverage}
+                    />
+                  </>
                 );
               })()}
-              <BonzahInsuranceSelector
-                tripStartDate={(() => {
-                  const d = formData.pickupDate || null;
-                  if (!d) return null;
-                  const today = new Date().toISOString().split('T')[0];
-                  return d < today ? today : d;
-                })()}
-                tripEndDate={formData.dropoffDate || null}
-                pickupState={formData.addressState || "FL"}
-                onCoverageChange={handleBonzahCoverageChange}
-                onSkipInsurance={handleBonzahSkipInsurance}
-                initialCoverage={bonzahCoverage}
-              />
 
               {/* Navigation for Bonzah flow */}
               <div className="flex flex-col sm:flex-row gap-4 pt-4">

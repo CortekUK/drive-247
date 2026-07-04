@@ -14,6 +14,7 @@ import { getUnlimitedMileageOption } from "@/lib/mileage-utils";
 import type { PricingTier, DayBreakdown } from "@/lib/calculate-rental-price";
 import { parseDateString } from "@/lib/calculate-rental-price";
 import { calcExtrasTotal, extraLineTotal } from "@/lib/calculate-extras-total";
+import { clampToBonzahStart } from "@/lib/bonzah-dates";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
@@ -114,6 +115,10 @@ export default function BookingCheckoutStep({
   const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
   const [createdRentalData, setCreatedRentalData] = useState<any>(null);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
+  // Set when the Bonzah quote attempt fails during checkout — the premium is
+  // then dropped from every total so the customer is never charged for
+  // coverage that doesn't exist (the GoNiko paid-but-no-policy bug class).
+  const [bonzahQuoteFailed, setBonzahQuoteFailed] = useState(false);
 
   // Bonzah policy ID - created dynamically during checkout
   const [bonzahPolicyId, setBonzahPolicyId] = useState<string | null>(null);
@@ -277,10 +282,13 @@ export default function BookingCheckoutStep({
     return calcExtrasTotal(selectedExtras, extras as any[], rentalDuration?.days || 0);
   };
 
+  // The premium actually charged: 0 once the quote attempt has failed.
+  const effectiveBonzahPremium = bonzahQuoteFailed ? 0 : bonzahPremium;
+
   const calculateGrandTotal = () => {
     // Grand total = discounted vehicle price + delivery fees + extras + tax + service fee + insurance + unlimited mileage upgrade
     // NOTE: Security deposit is NOT included — it's placed as a card hold at key handover, not charged at booking
-    return calculateDiscountedVehicleTotal() + calculateDeliveryFees() + calculateExtrasTotal() + calculateTaxAmount() + calculateServiceFee() + bonzahPremium + unlimitedMileageTotal;
+    return calculateDiscountedVehicleTotal() + calculateDeliveryFees() + calculateExtrasTotal() + calculateTaxAmount() + calculateServiceFee() + effectiveBonzahPremium + unlimitedMileageTotal;
   };
 
   // Check if this is an enquiry-based tenant (e.g., Kedic Services)
@@ -402,23 +410,25 @@ export default function BookingCheckoutStep({
     }
   };
 
-  // Function to create Bonzah insurance quote
+  // Function to create Bonzah insurance quote. `failed: true` means we TRIED
+  // and could not create the quote — the caller must then drop the premium
+  // from every amount charged (a skip is not a failure).
   const createBonzahQuote = async (
     rentalId: string,
     customerId: string,
     tenantId: string
-  ): Promise<string | null> => {
+  ): Promise<{ policyId: string | null; failed: boolean }> => {
     // Skip if no insurance selected
     if (!bonzahPremium || bonzahPremium <= 0 || !bonzahCoverage) {
       console.log('[Bonzah] No insurance selected, skipping quote creation');
-      return null;
+      return { policyId: null, failed: false };
     }
 
     // Check if any coverage is actually selected
     const hasCoverage = bonzahCoverage.cdw || bonzahCoverage.rcli || bonzahCoverage.sli || bonzahCoverage.pai;
     if (!hasCoverage) {
       console.log('[Bonzah] No coverage options selected, skipping quote creation');
-      return null;
+      return { policyId: null, failed: false };
     }
 
     try {
@@ -440,11 +450,9 @@ export default function BookingCheckoutStep({
           customer_id: customerId,
           tenant_id: tenantId,
           trip_dates: {
-            start: (() => {
-              const d = formData.pickupDate;
-              const today = new Date().toISOString().split('T')[0];
-              return d < today ? today : d;
-            })(),
+            // Bonzah can't start a policy today (LA time) — mirror the edge
+            // function's clamp so the request matches what it will sell.
+            start: clampToBonzahStart(formData.pickupDate),
             end: formData.dropoffDate,
           },
           pickup_state: formData.addressState || 'FL', // Use customer's state or default to FL
@@ -471,22 +479,27 @@ export default function BookingCheckoutStep({
 
       if (error) {
         console.error('[Bonzah] Error creating quote:', error);
-        toast.error('Failed to create insurance quote. Insurance will not be included.');
-        return null;
+        setBonzahQuoteFailed(true);
+        toast.error('Insurance could not be set up, so it has been removed from your total. Our team can help arrange coverage after booking.');
+        return { policyId: null, failed: true };
       }
 
       if (data?.policy_record_id) {
         console.log('[Bonzah] Quote created successfully:', data);
         setBonzahPolicyId(data.policy_record_id);
-        return data.policy_record_id;
+        setBonzahQuoteFailed(false); // a successful retry re-includes the premium
+        return { policyId: data.policy_record_id, failed: false };
       }
 
       console.error('[Bonzah] No policy_record_id in response:', data);
-      return null;
+      setBonzahQuoteFailed(true);
+      toast.error('Insurance could not be set up, so it has been removed from your total. Our team can help arrange coverage after booking.');
+      return { policyId: null, failed: true };
     } catch (err) {
       console.error('[Bonzah] Exception creating quote:', err);
-      toast.error('Failed to create insurance quote. Insurance will not be included.');
-      return null;
+      setBonzahQuoteFailed(true);
+      toast.error('Insurance could not be set up, so it has been removed from your total. Our team can help arrange coverage after booking.');
+      return { policyId: null, failed: true };
     }
   };
 
@@ -565,7 +578,7 @@ export default function BookingCheckoutStep({
           returnDate: formData.dropoffDate,
           tenantId: tenant?.id, // Explicitly pass tenant_id
           // Bonzah insurance data
-          insuranceAmount: bonzahPremium,
+          insuranceAmount: effectiveBonzahPremium,
           bonzahPolicyId: createdRentalData.bonzahPolicyId || null,
         },
       });
@@ -1163,14 +1176,31 @@ export default function BookingCheckoutStep({
 
       // Step 4.5: Create Bonzah insurance quote if coverage was selected
       let createdBonzahPolicyId: string | null = null;
+      let bonzahFailedNow = false;
       if (bonzahPremium > 0 && bonzahCoverage && tenant?.id) {
         console.log('🛡️ Creating Bonzah insurance quote...');
-        createdBonzahPolicyId = await createBonzahQuote(rental.id, customer.id, tenant.id);
+        const quoteOutcome = await createBonzahQuote(rental.id, customer.id, tenant.id);
+        createdBonzahPolicyId = quoteOutcome.policyId;
+        bonzahFailedNow = quoteOutcome.failed;
         if (createdBonzahPolicyId) {
           console.log('✅ Bonzah quote created:', createdBonzahPolicyId);
         } else {
           console.log('⚠️ Bonzah quote creation failed or skipped');
         }
+      }
+      // State updates don't reach this closure — carry the outcome locally so
+      // the invoice and stored payment amounts reflect what is really charged.
+      // calculateGrandTotal() here uses the RENDER-TIME effectiveBonzahPremium,
+      // so normalize to "total without premium" then add back the charged one —
+      // a retry after a prior failure can neither double-subtract nor re-add.
+      const premiumCharged = bonzahFailedNow ? 0 : (bonzahPremium || 0);
+      const grandTotalCharged = calculateGrandTotal() - effectiveBonzahPremium + premiumCharged;
+      if (Math.abs(grandTotalCharged - calculateGrandTotal()) > 0.005) {
+        // rentals.monthly_amount was stored before the quote attempt — keep it
+        // in sync, because generate_first_charge_for_rental falls back to
+        // monthly_amount when no DB invoice exists and would re-bill the
+        // failed premium onto the customer's ledger.
+        await supabase.from('rentals').update({ monthly_amount: grandTotalCharged }).eq('id', rental.id);
       }
 
       setCheckoutProgress(4); // Step 4: Generating invoice
@@ -1191,11 +1221,11 @@ export default function BookingCheckoutStep({
         tax_amount: calculateTaxAmount(),
         service_fee: calculateServiceFee(),
         security_deposit: 0, // Deposit is a card hold at pickup, not charged at booking
-        insurance_premium: bonzahPremium || 0,
+        insurance_premium: premiumCharged,
         delivery_fee: pickupDeliveryFee || 0,
         collection_fee: returnDeliveryFee || 0,
         extras_total: calculateExtrasTotal() || 0,
-        total_amount: calculateGrandTotal(),
+        total_amount: grandTotalCharged,
         discount_amount: promoDiscount,
         promo_code: promoDetails?.code || null,
         tenant_id: tenant?.id,
@@ -1228,7 +1258,7 @@ export default function BookingCheckoutStep({
       // Payment record will be created ONLY after Stripe confirms successful payment
       console.log('💳 Storing payment details for success page...');
       const paymentDetails = {
-        amount: calculateGrandTotal(),
+        amount: grandTotalCharged,
         customer_id: customer.id,
         rental_id: rental.id,
         vehicle_id: selectedVehicle.id,
@@ -1997,13 +2027,13 @@ export default function BookingCheckoutStep({
                   )}
 
                   {/* Bonzah Insurance line item - only show when > 0 */}
-                  {bonzahPremium > 0 && (
+                  {effectiveBonzahPremium > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground flex items-center gap-1">
                         <Shield className="w-3 h-3" />
                         Bonzah Insurance
                       </span>
-                      <span className="font-medium">{fmt(bonzahPremium)}</span>
+                      <span className="font-medium">{fmt(effectiveBonzahPremium)}</span>
                     </div>
                   )}
 

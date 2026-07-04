@@ -32,6 +32,8 @@ import { calculateTotalMileageAllowance, getMileageTier, isUnlimitedMileage } fr
 import { useRentalSettings } from '@/hooks/use-rental-settings';
 import { type CoverageOptions } from '@/hooks/use-bonzah-premium';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
+import { clampToBonzahStart } from '@/lib/bonzah-dates';
+import BonzahAvailabilityNotice from '@/components/rentals/bonzah-availability-notice';
 import { Checkbox } from '@/components/ui/checkbox';
 import BonzahInsuranceSelector from '@/components/rentals/bonzah-insurance-selector';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -105,6 +107,8 @@ export function AdminExtendRentalDialog({
   const [extensionCoverage, setExtensionCoverage] = useState<CoverageOptions>({ cdw: false, rcli: false, sli: false, pai: false });
   const [bonzahPremiumAmount, setBonzahPremiumAmount] = useState(0);
   const [ownInsuranceFile, setOwnInsuranceFile] = useState<File | null>(null);
+  // Scroll target for the availability notice's "Pick a later end date" action.
+  const endDatePickerRef = useRef<HTMLDivElement>(null);
 
   // Promo code state — applied against the extension rental fee only.
   // Tax + service fee recompute on the discounted base, mirroring new-rental flow.
@@ -240,16 +244,21 @@ export function AdminExtendRentalDialog({
   });
 
   const hasBonzahCoverage = extensionInsuranceType === 'bonzah' && (extensionCoverage.cdw || extensionCoverage.rcli || extensionCoverage.sli || extensionCoverage.pai);
-  // Insurance must cover the same window the rental charge covers — from the
-  // rental's existing end date (snapshotEndDate) through newEndDate. Clamping
-  // this to "today" when the rental was already past its end caused the
-  // insurance day count to be SHORTER than the rental day count, leaving the
-  // balance short by one day's premium for every late extension.
-  const extensionStartForInsurance = (() => {
-    const raw = (snapshotEndDate || rental.end_date || new Date().toISOString()).toString();
-    return raw.split('T')[0];
-  })();
-  const insurancePremium = extensionInsuranceType === 'bonzah' ? bonzahPremiumAmount : 0;
+  // Insurance is quoted for the window Bonzah will actually SELL: policies can
+  // only start tomorrow (Pacific) or later — bonzah-create-quote clamps the trip
+  // start and rejects the request when nothing insurable remains. So the quote
+  // start is the later of the rental's existing end date and Pacific-tomorrow.
+  // (We previously quoted from the raw end date so insurance days matched
+  // rental-charge days, but that billed customers for nights Bonzah can never
+  // insure — paid premiums with no policy behind them; reported by GoNiko.)
+  const rawInsuranceWindowStart = (snapshotEndDate || rental.end_date || new Date().toISOString())
+    .toString()
+    .split('T')[0];
+  const extensionStartForInsurance = clampToBonzahStart(rawInsuranceWindowStart);
+  // Does the extension window contain any night Bonzah can insure? Ranges are
+  // end-exclusive (matching the backend), so a same-day +1 extension has none.
+  const extensionBonzahInsurable = !!newEndDate && newEndDate.split('T')[0] > extensionStartForInsurance;
+  const insurancePremium = extensionInsuranceType === 'bonzah' && extensionBonzahInsurable ? bonzahPremiumAmount : 0;
 
   // Resolve the pickup state + renter details for the Bonzah extension quote.
   // Prefer the original policy (it carries the exact snapshot used at booking),
@@ -652,16 +661,27 @@ export function AdminExtendRentalDialog({
       }
 
       setSubmissionStep('Finalising...');
-      // 8. Auto-create extension insurance (fire-and-forget) — runs whenever
-      //    Bonzah is selected with coverage. Renter details come from the
-      //    original policy when present, otherwise we rebuild them from the
-      //    customer record so extensions work even when the base rental had no
-      //    Bonzah policy. We require at least one source of renter details.
+      // 8. Auto-create extension insurance — runs whenever Bonzah is selected
+      //    with coverage AND the window still has an insurable night (Bonzah
+      //    policies can't start today, so a same-day +1 extension has nothing
+      //    to insure). Renter details come from the original policy when
+      //    present, otherwise rebuilt from the customer record. Any failure is
+      //    surfaced to the operator via the completion toast — a swallowed
+      //    failure here previously billed premiums with no policy behind them.
+      let insuranceWarning: string | null = null;
       const renterForQuote = (originalPolicy?.renter_details as any) || buildRenterFromCustomer();
-      if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && renterForQuote) {
+      if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && !extensionBonzahInsurable) {
+        insuranceWarning =
+          'Bonzah cannot cover this extension — policies start tomorrow (Pacific) at the earliest, and this extension ends before then. No insurance was purchased or charged.';
+      }
+      if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && extensionBonzahInsurable && !renterForQuote) {
+        insuranceWarning =
+          'Renter details were unavailable (no original policy and the customer record did not load) — Bonzah insurance was NOT purchased.';
+      }
+      if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && extensionBonzahInsurable && renterForQuote) {
         try {
           // Create extension quote with the user-selected coverage
-          const { data: quoteResult } = await supabase.functions.invoke('bonzah-create-quote', {
+          const { data: quoteResult, error: quoteError } = await supabase.functions.invoke('bonzah-create-quote', {
             body: {
               rental_id: rental.id,
               customer_id: rental.customer_id || rental.customers?.id,
@@ -678,13 +698,24 @@ export function AdminExtendRentalDialog({
             },
           });
 
-          // Confirm payment (deduct from Bonzah balance) immediately so the
-          // policy issues right away, matching the original-rental flow.
-          // Use the actual premium returned by the quote API — UI state
-          // (`insurancePremium`) can be 0 if the user submits before the
-          // selector finishes calculating.
-          const actualPremium = Number(quoteResult?.total_premium ?? insurancePremium ?? 0);
-          if (quoteResult?.policy_record_id) {
+          if (quoteError || !quoteResult?.policy_record_id) {
+            // A non-2xx from the edge function does NOT throw — supabase-js
+            // returns it in `error`. Read the real message from the response
+            // body so the operator sees exactly why insurance wasn't bought.
+            let bodyError: string | null = null;
+            try {
+              if (quoteError?.context instanceof Response) {
+                bodyError = (await quoteError.context.json())?.error ?? null;
+              }
+            } catch { /* ignore parse errors */ }
+            insuranceWarning =
+              bodyError || quoteError?.message || 'Bonzah quote failed with no policy record.';
+          } else {
+            // Confirm payment (deduct from Bonzah balance) immediately so the
+            // policy issues right away, matching the original-rental flow.
+            // The premium comes from the quote API only — never UI state, so a
+            // failed quote can no longer be billed as if it succeeded.
+            const actualPremium = Number(quoteResult.total_premium ?? 0);
             await supabase.functions.invoke('bonzah-confirm-payment', {
               body: {
                 policy_record_id: quoteResult.policy_record_id,
@@ -701,39 +732,54 @@ export function AdminExtendRentalDialog({
                 })
                 .eq('id', createdExtensionId);
             }
-          }
 
-          // Create Extension Insurance ledger charge so payments can be allocated to it
-          if (actualPremium > 0) {
-            await supabase.from('ledger_entries').insert({
-              customer_id: rental.customer_id || rental.customers?.id,
-              rental_id: rental.id,
-              vehicle_id: rental.vehicle_id || rental.vehicles?.id,
-              entry_date: newEndDate.split('T')[0],
-              type: 'Charge',
-              category: 'Extension Insurance',
-              amount: actualPremium,
-              remaining_amount: actualPremium,
-              due_date: newEndDate.split('T')[0],
-              tenant_id: tenant.id,
-              reference: `Extension #${extNum}: Insurance`,
-              ...(createdExtensionId ? { extension_id: createdExtensionId } : {}),
-            });
+            // Create the Extension Insurance ledger charge only now that a
+            // policy record exists. (If confirm failed — e.g. insufficient
+            // Bonzah balance — the charge stands and the operator can retry
+            // the purchase from the insurance timeline.)
+            if (actualPremium > 0) {
+              await supabase.from('ledger_entries').insert({
+                customer_id: rental.customer_id || rental.customers?.id,
+                rental_id: rental.id,
+                vehicle_id: rental.vehicle_id || rental.vehicles?.id,
+                entry_date: newEndDate.split('T')[0],
+                type: 'Charge',
+                category: 'Extension Insurance',
+                amount: actualPremium,
+                remaining_amount: actualPremium,
+                due_date: newEndDate.split('T')[0],
+                tenant_id: tenant.id,
+                reference: `Extension #${extNum}: Insurance`,
+                ...(createdExtensionId ? { extension_id: createdExtensionId } : {}),
+              });
+            }
           }
 
           queryClient.invalidateQueries({ queryKey: ['rental-insurance-policies', rental.id] });
           queryClient.invalidateQueries({ queryKey: ['bonzah-balance'] });
-        } catch (insuranceErr) {
-          console.error('Extension insurance auto-create failed (non-blocking):', insuranceErr);
+        } catch (insuranceErr: any) {
+          console.error('Extension insurance auto-create failed:', insuranceErr);
+          insuranceWarning = insuranceErr?.message || 'Bonzah insurance could not be purchased.';
         }
       }
 
+      // Report the total that actually landed on the ledger: when insurance
+      // failed the premium was never charged — but the payment link (created
+      // before the quote) still includes it, so tell the operator explicitly.
+      const currencyLabel = tenant?.currency_code || '$';
+      const chargedTotal = insuranceWarning ? extensionTotalAmount - insurancePremium : extensionTotalAmount;
+      if (insuranceWarning && insurancePremium > 0) {
+        insuranceWarning += ` The payment link was created for ${currencyLabel}${extensionTotalAmount.toFixed(2)} and still includes the ${currencyLabel}${insurancePremium.toFixed(2)} premium — refund or adjust if the customer pays it.`;
+      }
       toast({
-        title: agreementSent ? 'Rental Extended — Agreement Sent' : 'Rental Extended — Agreement Pending',
-        description: agreementSent
-          ? `Rental extended to ${format(parseLocalDate(newEndDate), 'MMMM dd, yyyy')}.${extensionTotalAmount > 0 ? ` Extension charge of ${tenant?.currency_code || '$'}${extensionTotalAmount.toFixed(2)} created.` : ''} Agreement sent to customer for signing.`
-          : `Rental extended to ${format(parseLocalDate(newEndDate), 'MMMM dd, yyyy')}.${extensionTotalAmount > 0 ? ` Extension charge of ${tenant?.currency_code || '$'}${extensionTotalAmount.toFixed(2)} created.` : ''} Agreement failed to send — you can retry from the rental details page.`,
-        variant: agreementSent ? 'default' : 'default',
+        title: insuranceWarning
+          ? 'Rental Extended — WITHOUT Insurance'
+          : agreementSent ? 'Rental Extended — Agreement Sent' : 'Rental Extended — Agreement Pending',
+        description: `${agreementSent
+          ? `Rental extended to ${format(parseLocalDate(newEndDate), 'MMMM dd, yyyy')}.${chargedTotal > 0 ? ` Extension charge of ${currencyLabel}${chargedTotal.toFixed(2)} created.` : ''} Agreement sent to customer for signing.`
+          : `Rental extended to ${format(parseLocalDate(newEndDate), 'MMMM dd, yyyy')}.${chargedTotal > 0 ? ` Extension charge of ${currencyLabel}${chargedTotal.toFixed(2)} created.` : ''} Agreement failed to send — you can retry from the rental details page.`}${
+          insuranceWarning ? ` ⚠ Insurance: ${insuranceWarning}` : ''}`,
+        variant: insuranceWarning ? 'destructive' : 'default',
       });
 
       queryClient.invalidateQueries({ queryKey: ['rental', rental.id, tenant.id] });
@@ -852,7 +898,7 @@ export function AdminExtendRentalDialog({
               </div>
 
               {/* New End Date Picker */}
-              <div className="space-y-2">
+              <div className="space-y-2" ref={endDatePickerRef}>
                 <Label>New End Date</Label>
                 <RentalDateRangePicker
                   mode="end-only"
@@ -1145,10 +1191,28 @@ export function AdminExtendRentalDialog({
                       )}
                     </label>
 
+                    {/* Bonzah has no insurable nights in this window (policies
+                        can't start today, LA time) — show the branded explainer
+                        with the clock math and ways forward instead of quoting a
+                        premium the purchase step would refuse. */}
+                    {extensionInsuranceType === 'bonzah' && !extensionBonzahInsurable && (
+                      <div className="ml-2">
+                        <BonzahAvailabilityNotice
+                          windowStart={rawInsuranceWindowStart}
+                          windowEnd={newEndDate ? newEndDate.split('T')[0] : null}
+                          onUploadOwnPolicy={() => setExtensionInsuranceType('own')}
+                          onChangeDates={() => {
+                            endDatePickerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }}
+                          changeDatesLabel="Pick a later end date"
+                        />
+                      </div>
+                    )}
+
                     {/* Bonzah Coverage Selector — rendered whenever Bonzah is
                         chosen, even when the base rental had no original policy.
                         The selector collects renter details itself when missing. */}
-                    {extensionInsuranceType === 'bonzah' && (
+                    {extensionInsuranceType === 'bonzah' && extensionBonzahInsurable && (
                       <div className="pl-2 space-y-2">
                         {!originalPolicy && (
                           <p className="text-xs text-muted-foreground p-2.5 border rounded-lg bg-muted/20">

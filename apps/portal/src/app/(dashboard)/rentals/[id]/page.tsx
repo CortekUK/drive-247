@@ -54,6 +54,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { getActiveCoverageLabels } from "@/lib/coverage-labels";
+import { getPacificTomorrow } from "@/lib/bonzah-dates";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { LocationMap } from "@/components/ui/location-map";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -1708,20 +1709,8 @@ const RentalDetail = () => {
   const bonzahHasInsurableDays = (() => {
     const endStr = (rental as any)?.end_date as string | undefined;
     if (!endStr) return true; // no date yet → don't block
-    const endDate = String(endStr).slice(0, 10); // YYYY-MM-DD
-    const pacificTomorrow = (() => {
-      const t = new Date(Date.now() + 86400000);
-      const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/Los_Angeles',
-        year: 'numeric', month: '2-digit', day: '2-digit',
-      }).formatToParts(t);
-      const y = parts.find((p) => p.type === 'year')!.value;
-      const m = parts.find((p) => p.type === 'month')!.value;
-      const d = parts.find((p) => p.type === 'day')!.value;
-      return `${y}-${m}-${d}`;
-    })();
     // Insurable only if the trip ends strictly after tomorrow.
-    return endDate > pacificTomorrow;
+    return String(endStr).slice(0, 10) > getPacificTomorrow();
   })();
 
   // Inline upload helper — used by both scopes. Stamps extension_id when provided.
@@ -5812,6 +5801,14 @@ const RentalDetail = () => {
           rental={rental}
           mode={buyInsuranceMode}
           extensionId={buyInsuranceExtensionId}
+          onUploadOwnPolicy={() => {
+            const extId = buyInsuranceMode === 'extension' ? buyInsuranceExtensionId : null;
+            // Reset mode/extension like the onOpenChange close path does.
+            setShowBuyInsurance(false);
+            setBuyInsuranceMode('original');
+            setBuyInsuranceExtensionId(null);
+            uploadInsuranceDoc({ extensionId: extId });
+          }}
           extensionDates={(() => {
             if (buyInsuranceMode !== 'extension') return undefined;
             // Prefer the specific extension's dates when one is selected; fall
