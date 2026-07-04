@@ -69,7 +69,19 @@ const BROCHURE_URLS: Record<keyof CoverageOptions, string> = {
 
 // The bundle's coverage details are simply CDW's + RCLI's combined (it IS those two coverages).
 const BUNDLE_FEATURES = [...COVERAGE_INFO.cdw.features, ...COVERAGE_INFO.rcli.features];
-const BUNDLE_EXCLUSIONS = [...COVERAGE_INFO.cdw.exclusions, ...COVERAGE_INFO.rcli.exclusions];
+// Each product alone excludes the risk the other one covers (CDW: non-rental vehicles;
+// RCLI: the rental vehicle). Bundled together each fills the other's gap, so those two
+// exclusions are dropped. Typed against the source lists so rewording an exclusion in
+// the premium hook breaks the build here instead of silently un-filtering.
+type BundleExclusion =
+  | (typeof COVERAGE_INFO.cdw.exclusions)[number]
+  | (typeof COVERAGE_INFO.rcli.exclusions)[number];
+const BUNDLE_CROSS_COVERED_EXCLUSIONS: readonly BundleExclusion[] = [
+  'Does not cover non-rental vehicle damage', // CDW gap — RCLI covers it in the bundle
+  'Does not cover damage to the rental vehicle', // RCLI gap — CDW covers it in the bundle
+];
+const BUNDLE_EXCLUSIONS = [...COVERAGE_INFO.cdw.exclusions, ...COVERAGE_INFO.rcli.exclusions]
+  .filter((exclusion) => !BUNDLE_CROSS_COVERED_EXCLUSIONS.includes(exclusion));
 
 const CoverageIcon = ({ type, className }: { type: keyof CoverageOptions; className?: string }) => {
   switch (type) {
