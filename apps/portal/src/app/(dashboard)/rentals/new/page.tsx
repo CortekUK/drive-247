@@ -3957,11 +3957,20 @@ const CreateRental = () => {
                             )}
                           </div>
 
-                          {/* Grand Total */}
+                          {/* Grand Total — payable at booking; the pre-auth is a card HOLD
+                              placed at key handover (released after return), so it's shown
+                              separately instead of inflating the headline. Matches the
+                              customer checkout view. */}
                           <div className="border-t pt-3 flex items-center justify-between">
                             <span className="font-semibold text-sm">Estimated Total</span>
-                            <span className="font-semibold text-base">{formatCurrency(grandTotal, currency)}</span>
+                            <span className="font-semibold text-base">{formatCurrency(grandTotal - (showDeposit ? effectiveDeposit : 0), currency)}</span>
                           </div>
+                          {showDeposit && effectiveDeposit > 0 && (
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>+ Pre-authorization hold at pickup (released after return)</span>
+                              <span>{formatCurrency(effectiveDeposit, currency)}</span>
+                            </div>
+                          )}
 
                           {hasOverrides && (
                             <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
@@ -5362,7 +5371,7 @@ const CreateRental = () => {
                           {effectiveDeposit > 0 && (
                             <div className="flex items-center justify-between">
                               <p className="text-xs text-muted-foreground">
-                                Pre-Authorization
+                                Pre-Authorization (hold at pickup)
                                 {depositOverride !== null && <span className="text-amber-500 ml-1">*</span>}
                               </p>
                               <p className="text-xs font-medium">{formatCurrency(effectiveDeposit, currency)}</p>
@@ -5373,16 +5382,19 @@ const CreateRental = () => {
                             <p className="text-[10px] text-amber-500">* Manually adjusted</p>
                           )}
 
+                          {/* Headline = what the customer pays at booking (matches the
+                              customer checkout view). The pre-auth is a card HOLD at key
+                              handover — released after return, never charged. */}
                           <div className="border-t pt-2 mt-1 flex items-center justify-between">
                             <p className="text-sm font-semibold">Total</p>
                             <p className="text-base font-bold text-primary">
-                              {grandTotal > 0 ? formatCurrency(Math.max(0, grandTotal), currency) : "—"}
+                              {subtotal > 0 ? formatCurrency(Math.max(0, subtotal), currency) : "—"}
                             </p>
                           </div>
-                          {effectiveDeposit > 0 && grandTotal > 0 && (
+                          {effectiveDeposit > 0 && subtotal > 0 && (
                             <div className="flex items-center justify-between">
-                              <p className="text-[10px] text-muted-foreground">Excl. deposit</p>
-                              <p className="text-[10px] text-muted-foreground">{formatCurrency(Math.max(0, grandTotal - effectiveDeposit), currency)}</p>
+                              <p className="text-[10px] text-muted-foreground">Incl. pre-auth hold</p>
+                              <p className="text-[10px] text-muted-foreground">{formatCurrency(Math.max(0, grandTotal), currency)}</p>
                             </div>
                           )}
                         </div>
