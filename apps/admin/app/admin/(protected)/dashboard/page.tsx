@@ -2,24 +2,45 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, cn } from '@/lib/utils';
 import { DashboardSkeleton } from '@/components/skeletons/DashboardSkeleton';
 
-interface PlatformMetrics {
-  totalTenants: number;
-  activeTenants: number;
-  totalVehicles: number;
-  totalRentals: number;
-  totalCustomers: number;
-  // Money metrics are kept per-currency so USD/GBP/EUR are never summed into one
+// Live = real/production tenants; Test = sandbox/demo tenants. The whole
+// dashboard is scoped to one of these at a time so counts and money never mix.
+type DashboardMode = 'live' | 'test';
+
+interface ModeMetrics {
+  companies: number;
+  activeCompanies: number;
+  vehicles: number;
+  rentals: number;
+  customers: number;
+  // Money is kept per-currency so USD/GBP/EUR are never summed into one
   // meaningless scalar. Values are in major units (dollars), not cents.
   mrr: Record<string, number>;             // Drive247's monthly recurring subscription revenue
   lifetimeRevenue: Record<string, number>; // all-time subscription cash actually collected
-  bookingVolume: Record<string, number>;   // GMV: gross rental value across production tenants
+  bookingVolume: Record<string, number>;   // GMV: gross rental value across the mode's tenants
 }
+
+const EMPTY_MODE_METRICS: ModeMetrics = {
+  companies: 0,
+  activeCompanies: 0,
+  vehicles: 0,
+  rentals: 0,
+  customers: 0,
+  mrr: {},
+  lifetimeRevenue: {},
+  bookingVolume: {},
+};
 
 // Rental statuses that should not count toward booking volume.
 const NON_GMV_STATUSES = new Set(['cancelled', 'canceled']);
+
+const MODE_STORAGE_KEY = 'admin_dashboard_mode';
+
+// Generous ceiling so per-mode aggregates stay correct well beyond current
+// scale; exact counts use head-count queries (below) which ignore this.
+const ROW_FETCH_LIMIT = 10000;
 
 /**
  * Format a per-currency money map for display. Joins multiple currencies with
@@ -35,63 +56,91 @@ function formatMoneyMap(map: Record<string, number>): string {
 }
 
 export default function DashboardPage() {
-  const [metrics, setMetrics] = useState<PlatformMetrics>({
-    totalTenants: 0,
-    activeTenants: 0,
-    totalVehicles: 0,
-    totalRentals: 0,
-    totalCustomers: 0,
-    mrr: {},
-    lifetimeRevenue: {},
-    bookingVolume: {},
+  const [mode, setMode] = useState<DashboardMode>('live');
+  const [metrics, setMetrics] = useState<Record<DashboardMode, ModeMetrics>>({
+    live: EMPTY_MODE_METRICS,
+    test: EMPTY_MODE_METRICS,
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Restore the last-used mode (defaults to Live). Read in an effect so
+    // server and first client render agree ("live") — no hydration mismatch.
+    try {
+      const saved = window.localStorage.getItem(MODE_STORAGE_KEY);
+      if (saved === 'live' || saved === 'test') setMode(saved);
+    } catch {
+      /* localStorage unavailable — stay on the default */
+    }
     loadMetrics();
   }, []);
 
+  const changeMode = (next: DashboardMode) => {
+    setMode(next);
+    try {
+      window.localStorage.setItem(MODE_STORAGE_KEY, next);
+    } catch {
+      /* ignore persistence failures */
+    }
+  };
+
   const loadMetrics = async () => {
     try {
-      // --- Platform-wide counts (include every tenant, test or production) ---
-      const [
-        { count: totalTenants },
-        { count: activeTenants },
-        { count: totalVehicles },
-        { count: totalRentals },
-        { count: totalCustomers },
-      ] = await Promise.all([
-        supabase.from('tenants').select('*', { count: 'exact', head: true }),
-        supabase.from('tenants').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-        supabase.from('vehicles').select('*', { count: 'exact', head: true }),
-        supabase.from('rentals').select('*', { count: 'exact', head: true }),
-        supabase.from('customers').select('*', { count: 'exact', head: true }),
-      ]);
-
-      // --- Tenant classification: money metrics exclude test/demo tenants ---
+      // --- Classify every tenant into live (production) vs test ---
       const { data: tenantRows, error: tenantErr } = await supabase
         .from('tenants')
-        .select('id, tenant_type, currency_code');
+        .select('id, tenant_type, status, currency_code');
       if (tenantErr) console.error('Dashboard: tenants query failed:', tenantErr);
 
-      const productionTenantIds = new Set<string>();
+      const liveIds: string[] = [];
+      const testIds: string[] = [];
+      const tenantMode = new Map<string, DashboardMode>();
       const tenantCurrency = new Map<string, string>();
+      const companyCount: Record<DashboardMode, number> = { live: 0, test: 0 };
+      const activeCount: Record<DashboardMode, number> = { live: 0, test: 0 };
+
       for (const t of tenantRows ?? []) {
+        const m: DashboardMode = t.tenant_type === 'test' ? 'test' : 'live';
+        tenantMode.set(t.id, m);
         tenantCurrency.set(t.id, (t.currency_code || 'USD').toUpperCase());
-        if (t.tenant_type !== 'test') productionTenantIds.add(t.id);
+        (m === 'test' ? testIds : liveIds).push(t.id);
+        companyCount[m] += 1;
+        if (t.status === 'active') activeCount[m] += 1;
       }
 
-      // --- Booking Volume (GMV): production tenants, non-cancelled rentals ---
-      // Uses the same per-rental value formula as the tenant Analytics tab:
-      // base rent + fees + insurance − discount, floored at 0.
+      // --- Exact counts per mode (head-count queries are limit-proof) ---
+      const countFor = async (table: string, ids: string[]): Promise<number> => {
+        if (ids.length === 0) return 0;
+        const { count, error } = await supabase
+          .from(table)
+          .select('*', { count: 'exact', head: true })
+          .in('tenant_id', ids);
+        if (error) console.error(`Dashboard: ${table} count failed:`, error);
+        return count ?? 0;
+      };
+
+      const [liveVehicles, testVehicles, liveCustomers, testCustomers] = await Promise.all([
+        countFor('vehicles', liveIds),
+        countFor('vehicles', testIds),
+        countFor('customers', liveIds),
+        countFor('customers', testIds),
+      ]);
+
+      // --- Rentals: fetched once → derive both the count (all statuses) and
+      //     the GMV (non-cancelled), per mode, using the tenant Analytics
+      //     formula: base rent + fees + insurance − discount, floored at 0. ---
       const { data: rentalRows, error: rentalErr } = await supabase
         .from('rentals')
-        .select('tenant_id, status, monthly_amount, collection_fee, delivery_fee, insurance_premium, discount_applied');
-      if (rentalErr) console.error('Dashboard: rentals GMV query failed:', rentalErr);
+        .select('tenant_id, status, monthly_amount, collection_fee, delivery_fee, insurance_premium, discount_applied')
+        .limit(ROW_FETCH_LIMIT);
+      if (rentalErr) console.error('Dashboard: rentals query failed:', rentalErr);
 
-      const bookingVolume: Record<string, number> = {};
+      const rentalCount: Record<DashboardMode, number> = { live: 0, test: 0 };
+      const bookingVolume: Record<DashboardMode, Record<string, number>> = { live: {}, test: {} };
       for (const r of rentalRows ?? []) {
-        if (!r.tenant_id || !productionTenantIds.has(r.tenant_id)) continue;
+        const m = r.tenant_id ? tenantMode.get(r.tenant_id) : undefined;
+        if (!m) continue;
+        rentalCount[m] += 1;
         if (NON_GMV_STATUSES.has((r.status || '').toLowerCase())) continue;
         const value = Math.max(
           0,
@@ -101,50 +150,58 @@ export default function DashboardPage() {
             (r.insurance_premium ?? 0) -
             (r.discount_applied ?? 0)
         );
-        const currency = tenantCurrency.get(r.tenant_id) || 'USD';
-        bookingVolume[currency] = (bookingVolume[currency] || 0) + value;
+        const currency = tenantCurrency.get(r.tenant_id!) || 'USD';
+        bookingVolume[m][currency] = (bookingVolume[m][currency] || 0) + value;
       }
 
-      // --- Platform Revenue: what Drive247 itself earns (subscriptions) ---
-      // Lifetime = actual cash collected from PAID invoices (amounts stored in cents).
-      const { data: paidInvoices, error: invErr } = await supabase
-        .from('tenant_subscription_invoices')
-        .select('amount_paid, currency')
-        .eq('status', 'paid');
-      if (invErr) console.error('Dashboard: subscription invoices query failed:', invErr);
-
-      const lifetimeRevenue: Record<string, number> = {};
-      for (const inv of paidInvoices ?? []) {
-        const currency = (inv.currency || 'USD').toUpperCase();
-        lifetimeRevenue[currency] = (lifetimeRevenue[currency] || 0) + (inv.amount_paid ?? 0) / 100;
-      }
-
-      // MRR = active subscriptions of production tenants, normalized to monthly
-      // (yearly plans ÷ 12). Amounts stored in cents.
+      // --- Platform Revenue: active subscriptions → MRR (normalized to
+      //     monthly, amounts in cents), grouped by mode + currency. ---
       const { data: activeSubs, error: subErr } = await supabase
         .from('tenant_subscriptions')
         .select('tenant_id, amount, currency, interval, status')
-        .eq('status', 'active');
+        .eq('status', 'active')
+        .limit(ROW_FETCH_LIMIT);
       if (subErr) console.error('Dashboard: subscriptions query failed:', subErr);
 
-      const mrr: Record<string, number> = {};
+      const mrr: Record<DashboardMode, Record<string, number>> = { live: {}, test: {} };
       for (const s of activeSubs ?? []) {
-        if (!s.tenant_id || !productionTenantIds.has(s.tenant_id)) continue;
-        if (!s.amount) continue;
+        const m = s.tenant_id ? tenantMode.get(s.tenant_id) : undefined;
+        if (!m || !s.amount) continue;
         const monthlyCents = s.interval === 'year' ? s.amount / 12 : s.amount;
         const currency = (s.currency || 'USD').toUpperCase();
-        mrr[currency] = (mrr[currency] || 0) + monthlyCents / 100;
+        mrr[m][currency] = (mrr[m][currency] || 0) + monthlyCents / 100;
       }
 
+      // --- Lifetime collected: actual cash from PAID invoices (cents) ---
+      const { data: paidInvoices, error: invErr } = await supabase
+        .from('tenant_subscription_invoices')
+        .select('tenant_id, amount_paid, currency, status')
+        .eq('status', 'paid')
+        .limit(ROW_FETCH_LIMIT);
+      if (invErr) console.error('Dashboard: subscription invoices query failed:', invErr);
+
+      const lifetime: Record<DashboardMode, Record<string, number>> = { live: {}, test: {} };
+      for (const inv of paidInvoices ?? []) {
+        const m = inv.tenant_id ? tenantMode.get(inv.tenant_id) : undefined;
+        if (!m) continue;
+        const currency = (inv.currency || 'USD').toUpperCase();
+        lifetime[m][currency] = (lifetime[m][currency] || 0) + (inv.amount_paid ?? 0) / 100;
+      }
+
+      const build = (m: DashboardMode, vehicles: number, customers: number): ModeMetrics => ({
+        companies: companyCount[m],
+        activeCompanies: activeCount[m],
+        vehicles,
+        rentals: rentalCount[m],
+        customers,
+        mrr: mrr[m],
+        lifetimeRevenue: lifetime[m],
+        bookingVolume: bookingVolume[m],
+      });
+
       setMetrics({
-        totalTenants: totalTenants || 0,
-        activeTenants: activeTenants || 0,
-        totalVehicles: totalVehicles || 0,
-        totalRentals: totalRentals || 0,
-        totalCustomers: totalCustomers || 0,
-        mrr,
-        lifetimeRevenue,
-        bookingVolume,
+        live: build('live', liveVehicles, liveCustomers),
+        test: build('test', testVehicles, testCustomers),
       });
     } catch (error) {
       console.error('Error loading metrics:', error);
@@ -157,20 +214,28 @@ export default function DashboardPage() {
     return <DashboardSkeleton />;
   }
 
-  const lifetimeLabel = formatMoneyMap(metrics.lifetimeRevenue);
+  const m = metrics[mode];
+  const isLive = mode === 'live';
+  const tenantWord = isLive ? 'production' : 'test';
+  const lifetimeLabel = formatMoneyMap(m.lifetimeRevenue);
 
   return (
     <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Platform Dashboard</h1>
-        <p className="mt-2 text-gray-400">Overview of all rental companies and platform metrics</p>
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Platform Dashboard</h1>
+          <p className="mt-2 text-gray-400">
+            Showing {isLive ? 'live (production)' : 'test / sandbox'} rental companies and platform metrics
+          </p>
+        </div>
+        <ModeToggle mode={mode} onChange={changeMode} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <MetricCard
           title="Total Rental Companies"
-          value={metrics.totalTenants}
-          subtitle={`${metrics.activeTenants} active`}
+          value={m.companies}
+          subtitle={`${m.activeCompanies} active`}
           icon="🏢"
           bgColor="bg-blue-900/20 border border-blue-800/50"
           textColor="text-blue-400"
@@ -178,8 +243,8 @@ export default function DashboardPage() {
 
         <MetricCard
           title="Total Vehicles"
-          value={metrics.totalVehicles}
-          subtitle="Across all companies"
+          value={m.vehicles}
+          subtitle={`Across all ${tenantWord} companies`}
           icon="🚗"
           bgColor="bg-green-900/20 border border-green-800/50"
           textColor="text-green-400"
@@ -187,7 +252,7 @@ export default function DashboardPage() {
 
         <MetricCard
           title="Total Rentals"
-          value={metrics.totalRentals}
+          value={m.rentals}
           subtitle="All-time bookings"
           icon="📋"
           bgColor="bg-purple-900/20 border border-purple-800/50"
@@ -196,8 +261,8 @@ export default function DashboardPage() {
 
         <MetricCard
           title="Total Customers"
-          value={metrics.totalCustomers}
-          subtitle="Platform-wide"
+          value={m.customers}
+          subtitle={`${tenantWord} tenants`}
           icon="👥"
           bgColor="bg-yellow-900/20 border border-yellow-800/50"
           textColor="text-yellow-400"
@@ -206,7 +271,7 @@ export default function DashboardPage() {
         {/* Drive247's OWN revenue — subscription fees. This is the platform's top line. */}
         <MetricCard
           title="Monthly Recurring Revenue"
-          value={formatMoneyMap(metrics.mrr)}
+          value={formatMoneyMap(m.mrr)}
           subtitle={`From tenant subscriptions · ${lifetimeLabel} collected all-time`}
           icon="💰"
           bgColor="bg-indigo-900/20 border border-indigo-800/50"
@@ -216,8 +281,8 @@ export default function DashboardPage() {
         {/* Platform SCALE — gross rental value flowing to tenants, NOT Drive247 income. */}
         <MetricCard
           title="Booking Volume (GMV)"
-          value={formatMoneyMap(metrics.bookingVolume)}
-          subtitle="Gross rental value · production tenants · not Drive247 revenue"
+          value={formatMoneyMap(m.bookingVolume)}
+          subtitle={`Gross rental value · ${tenantWord} tenants · not Drive247 revenue`}
           icon="📊"
           bgColor="bg-cyan-900/20 border border-cyan-800/50"
           textColor="text-cyan-400"
@@ -248,6 +313,39 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ModeToggle({ mode, onChange }: { mode: DashboardMode; onChange: (m: DashboardMode) => void }) {
+  const options: { key: DashboardMode; label: string; activeClass: string; dot: string }[] = [
+    { key: 'live', label: 'Live', activeClass: 'bg-emerald-500/20 text-emerald-300', dot: 'bg-emerald-400' },
+    { key: 'test', label: 'Test', activeClass: 'bg-amber-500/20 text-amber-300', dot: 'bg-amber-400' },
+  ];
+  return (
+    <div
+      role="tablist"
+      aria-label="Data mode"
+      className="inline-flex items-center rounded-lg border border-dark-border bg-dark-card p-1"
+    >
+      {options.map((opt) => {
+        const active = mode === opt.key;
+        return (
+          <button
+            key={opt.key}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(opt.key)}
+            className={cn(
+              'flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-medium transition-colors',
+              active ? opt.activeClass : 'text-gray-400 hover:text-gray-200'
+            )}
+          >
+            <span className={cn('h-1.5 w-1.5 rounded-full', opt.dot, !active && 'opacity-40')} />
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
