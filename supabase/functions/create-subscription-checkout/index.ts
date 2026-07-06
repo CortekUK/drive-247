@@ -113,33 +113,17 @@ Deno.serve(async (req) => {
       console.log(`Created new Stripe Price ${newPrice.id} on ${account}/${mode} account for plan ${planId}`);
     }
 
-    let stripeCustomerId = tenant.stripe_subscription_customer_id;
-
-    // Verify the stored customer exists on the current Stripe account (handles test→live mode switch)
-    if (stripeCustomerId) {
-      try {
-        await stripe.customers.retrieve(stripeCustomerId);
-      } catch (_e) {
-        console.log(`Stored customer ${stripeCustomerId} not found on ${mode} Stripe account, creating new one`);
-        stripeCustomerId = null;
-      }
-    }
-
-    if (!stripeCustomerId) {
-      const customer = await stripe.customers.create({
-        email: tenant.contact_email,
-        name: tenant.company_name,
-        metadata: { tenant_id: tenantId, source: "platform_subscription" },
-      });
-      stripeCustomerId = customer.id;
-
-      await supabase
-        .from("tenants")
-        .update({ stripe_subscription_customer_id: customer.id })
-        .eq("id", tenantId);
-
-      console.log(`Created Stripe customer ${customer.id} for tenant ${tenantId} (account: ${account}, mode: ${mode})`);
-    }
+    // We intentionally do NOT bind a fixed `customer` to the Checkout session.
+    // When Stripe Checkout is given a `customer`, it renders the email field
+    // read-only, so tenants couldn't change/correct the billing email (e.g. use
+    // a finance inbox instead of their login email). Passing `customer_email`
+    // instead PREFILLS the address but keeps it editable. Stripe creates the
+    // Customer only when checkout completes, and the subscription webhook
+    // captures that real customer id (subscription.customer) into
+    // tenants.stripe_subscription_customer_id — so no orphan customers are made
+    // for abandoned sessions. This function only ever runs for never-subscribed
+    // tenants (the active-subscription guard above returns 409 otherwise), so
+    // there is never an existing customer to reuse here.
 
     // Determine how long until the first real charge.
     // - "trial": classic free trial of plan.trial_days days.
@@ -207,7 +191,9 @@ Deno.serve(async (req) => {
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
-      customer: stripeCustomerId,
+      // Prefilled but EDITABLE email (see note above). Do not switch this back
+      // to `customer:` — that locks the email field in Stripe Checkout.
+      customer_email: tenant.contact_email,
       line_items: lineItems,
       success_url: successUrl,
       cancel_url: cancelUrl,
