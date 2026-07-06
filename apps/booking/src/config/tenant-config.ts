@@ -26,3 +26,22 @@ export const isEnquiryBasedTenant = (tenantId: string | undefined | null): boole
   if (!tenantId) return false;
   return tenantId === KEDIC_TENANT_ID;
 };
+
+/**
+ * Per-tenant legal-entity notation shown on the server-rendered compliance
+ * pages (/privacy, /terms, /sms-opt-in). Carrier A2P 10DLC reviewers must be
+ * able to connect the public brand name on the page to the legal entity on
+ * the registered messaging Brand — without this line the pages appear to
+ * belong to a different company and campaign vetting fails (errors
+ * 30908/30882). Keyed by tenant slug. Only listed tenants get a line; all
+ * others render nothing extra.
+ */
+const TENANT_LEGAL_ENTITY_LINES: Record<string, string> = {
+  revtekrentals:
+    'RevTek Rentals is a trade name of RevTek Capital Holdings, LLC. This website is operated on the Drive247 booking platform; RevTek Rentals is the sole sender of SMS messages and sole holder of customer messaging consent.',
+};
+
+export const getTenantLegalEntityLine = (slug: string | undefined | null): string | null => {
+  if (!slug) return null;
+  return TENANT_LEGAL_ENTITY_LINES[slug] ?? null;
+};

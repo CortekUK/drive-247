@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
-import Navigation from "@/components/Navigation";
-import Footer from "@/components/Footer";
 import { Card } from "@/components/ui/card";
-import { getPrivacyPageContent } from "@/lib/legal-page-content";
+import { getPrivacyPageContent, getLegalTenantBranding } from "@/lib/legal-page-content";
+import LegalPageShell from "@/components/legal/LegalPageShell";
 
 // Server-rendered so carrier / A2P 10DLC review crawlers and SEO bots see the
 // full policy text without executing JS. Client rendering left the server HTML
-// blank and failed SMS campaign vetting (errors 30908 / 30882).
+// blank and failed SMS campaign vetting (errors 30908 / 30882). Uses
+// LegalPageShell (not the client Navigation/Footer, whose server fallback is
+// the platform's default branding) so the page is visibly the TENANT's own.
 export const dynamic = 'force-dynamic';
 
 const LEGAL_CONTENT_STYLES = `
@@ -46,18 +47,22 @@ const LEGAL_CONTENT_STYLES = `
 `;
 
 export async function generateMetadata(): Promise<Metadata> {
-  const content = await getPrivacyPageContent();
-  return { title: content.title || 'Privacy Policy' };
+  const [content, tenant] = await Promise.all([
+    getPrivacyPageContent(),
+    getLegalTenantBranding(),
+  ]);
+  return { title: `${content.title || 'Privacy Policy'} | ${tenant.name}` };
 }
 
 export default async function PrivacyPage() {
-  const privacyContent = await getPrivacyPageContent();
+  const [privacyContent, tenant] = await Promise.all([
+    getPrivacyPageContent(),
+    getLegalTenantBranding(),
+  ]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navigation />
-
-      <section className="pt-32 pb-20">
+    <LegalPageShell tenant={tenant}>
+      <section className="pt-12 pb-20">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
             <h1 className="text-5xl md:text-6xl font-display font-bold mb-6 text-gradient-metal">
@@ -80,8 +85,6 @@ export default async function PrivacyPage() {
           </div>
         </div>
       </section>
-
-      <Footer />
-    </div>
+    </LegalPageShell>
   );
 }

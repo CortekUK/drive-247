@@ -2,8 +2,7 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
-import Navigation from '@/components/Navigation';
-import Footer from '@/components/Footer';
+import LegalPageShell from '@/components/legal/LegalPageShell';
 
 // Server-rendered so reviewers / The Campaign Registry crawler see the full
 // opt-in proof without executing JS. This page is the canonical, publicly
@@ -53,19 +52,22 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function SmsOptInPage() {
   const tenant = await getTenant();
+  const headersList = await headers();
+  const tenantSlug = headersList.get('x-tenant-slug');
   const brand = tenant?.app_name || tenant?.company_name || 'this rental company';
   const email = tenant?.contact_email || null;
   const phone = tenant?.contact_phone || tenant?.phone || null;
+  const twilioNumber = tenant?.twilio_phone_number || null;
 
   // Verbatim consent language — must stay identical to the checkbox shown on the
   // /booking form (apps/booking/src/app/booking/page.tsx). Reviewers cross-check this.
   const consentLanguage = `I agree to receive SMS text messages from ${brand} about my rental — booking confirmations, vehicle collection/pickup details, lockbox codes and e-signing links. Message & data rates may apply. Message frequency varies. Reply STOP to opt out, HELP for help. See our Privacy Policy and Terms. Consent is not a condition of rental.`;
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navigation />
-
-      <section className="pt-32 pb-20">
+    <LegalPageShell
+      tenant={{ slug: tenantSlug, name: brand, contactEmail: email, contactPhone: phone }}
+    >
+      <section className="pt-12 pb-20">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl md:text-5xl font-display font-bold mb-3 text-foreground">
@@ -86,6 +88,12 @@ export default async function SmsOptInPage() {
                   and customer support. We never send marketing or promotional text messages through
                   this program.
                 </p>
+                {twilioNumber && (
+                  <p className="mt-3">
+                    Messages will originate from{' '}
+                    <strong className="text-foreground">{twilioNumber}</strong>.
+                  </p>
+                )}
               </section>
 
               <section>
@@ -143,8 +151,9 @@ export default async function SmsOptInPage() {
               <section>
                 <h2 className="text-2xl font-semibold text-foreground mb-3">Privacy</h2>
                 <p>
-                  No mobile information or SMS opt-in consent is shared with third parties or
-                  affiliates for marketing or promotional purposes. Full details are in our{' '}
+                  We do not share, sell, or otherwise provide your mobile phone number, mobile
+                  information, or SMS consent to any third parties, affiliates, or lead generators
+                  for marketing or promotional purposes. Full details are in our{' '}
                   <Link href="/privacy" className="text-accent underline">Privacy Policy</Link> and{' '}
                   <Link href="/terms" className="text-accent underline">Terms of Service</Link>.
                 </p>
@@ -153,8 +162,6 @@ export default async function SmsOptInPage() {
           </div>
         </div>
       </section>
-
-      <Footer />
-    </div>
+    </LegalPageShell>
   );
 }
