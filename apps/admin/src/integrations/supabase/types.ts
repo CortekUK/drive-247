@@ -13192,42 +13192,39 @@ export type Database = {
       }
       tenant_onboarding_checklist: {
         Row: {
+          bonzah_override: boolean
+          branding_override: boolean
           brandon_sent_at: string | null
           created_at: string
-          credentials_sent: boolean
-          credentials_sent_at: string | null
           excluded: boolean
           id: string
           notes: string | null
+          subscription_override: boolean
           tenant_id: string
-          training_complete: boolean
-          training_complete_at: string | null
           updated_at: string
         }
         Insert: {
+          bonzah_override?: boolean
+          branding_override?: boolean
           brandon_sent_at?: string | null
           created_at?: string
-          credentials_sent?: boolean
-          credentials_sent_at?: string | null
           excluded?: boolean
           id?: string
           notes?: string | null
+          subscription_override?: boolean
           tenant_id: string
-          training_complete?: boolean
-          training_complete_at?: string | null
           updated_at?: string
         }
         Update: {
+          bonzah_override?: boolean
+          branding_override?: boolean
           brandon_sent_at?: string | null
           created_at?: string
-          credentials_sent?: boolean
-          credentials_sent_at?: string | null
           excluded?: boolean
           id?: string
           notes?: string | null
+          subscription_override?: boolean
           tenant_id?: string
-          training_complete?: boolean
-          training_complete_at?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -15692,23 +15689,26 @@ export type Database = {
       v_tenant_onboarding_status: {
         Row: {
           admin_name: string | null
+          bonzah_auto: boolean | null
+          bonzah_done: boolean | null
           bonzah_form_status: string | null
           bonzah_form_submitted: boolean | null
-          bonzah_live: boolean | null
+          bonzah_override: boolean | null
+          branding_auto: boolean | null
           branding_done: boolean | null
+          branding_override: boolean | null
           brandon_sent: boolean | null
           brandon_sent_at: string | null
           company_name: string | null
           contact_email: string | null
           created_at: string | null
-          credentials_sent: boolean | null
           excluded: boolean | null
           notes: string | null
-          paywall_set: boolean | null
           slug: string | null
-          subscribed: boolean | null
+          subscription_auto: boolean | null
+          subscription_done: boolean | null
+          subscription_override: boolean | null
           tenant_id: string | null
-          training_complete: boolean | null
         }
         Relationships: []
       }

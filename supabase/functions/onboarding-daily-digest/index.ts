@@ -23,26 +23,18 @@ interface OnboardingRow {
   contact_email: string | null;
   created_at: string;
   branding_done: boolean;
-  credentials_sent: boolean;
-  paywall_set: boolean;
-  subscribed: boolean;
+  subscription_done: boolean;
+  bonzah_done: boolean;
   bonzah_form_submitted: boolean;
   bonzah_form_status: string | null;
   brandon_sent: boolean;
-  training_complete: boolean;
-  bonzah_live: boolean;
   excluded: boolean;
 }
 
 const ITEMS: { key: keyof OnboardingRow; label: string; owner: string }[] = [
   { key: "branding_done", label: "Branding", owner: "Haseeb" },
-  { key: "credentials_sent", label: "Credentials sent", owner: "Haseeb" },
-  { key: "paywall_set", label: "Paywall set", owner: "Haseeb" },
-  { key: "subscribed", label: "Subscribed", owner: "George" },
-  { key: "bonzah_form_submitted", label: "Bonzah form", owner: "George" },
-  { key: "brandon_sent", label: "Sent to Brandon", owner: "George" },
-  { key: "training_complete", label: "Bonzah training", owner: "George" },
-  { key: "bonzah_live", label: "Bonzah live", owner: "Haseeb" },
+  { key: "subscription_done", label: "Subscription", owner: "George" },
+  { key: "bonzah_done", label: "Bonzah", owner: "Haseeb" },
 ];
 
 const doneCount = (r: OnboardingRow) => ITEMS.filter((i) => r[i.key] === true).length;
@@ -69,7 +61,7 @@ function buildDigestHtml(pending: OnboardingRow[], onboardedCount: number): stri
           <span style="font-size:11px;color:#737373;">${esc(r.slug)} · ${daysOld}d old</span>
         </td>
         ${ITEMS.map((i) => cell(r[i.key] === true)).join("")}
-        <td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:center;font-size:13px;font-weight:700;color:${n >= 6 ? "#16a34a" : n >= 3 ? "#d97706" : "#dc2626"};white-space:nowrap;">${n}/${ITEMS.length}</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:center;font-size:13px;font-weight:700;color:${n >= ITEMS.length ? "#16a34a" : n >= 2 ? "#d97706" : "#dc2626"};white-space:nowrap;">${n}/${ITEMS.length}</td>
       </tr>`;
     })
     .join("");

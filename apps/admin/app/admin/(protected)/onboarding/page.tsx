@@ -53,41 +53,40 @@ interface OnboardingRow {
   contact_email: string | null;
   admin_name: string | null;
   created_at: string;
+  branding_auto: boolean;
+  branding_override: boolean;
   branding_done: boolean;
-  credentials_sent: boolean;
-  paywall_set: boolean;
-  subscribed: boolean;
+  subscription_auto: boolean;
+  subscription_override: boolean;
+  subscription_done: boolean;
+  bonzah_auto: boolean;
+  bonzah_override: boolean;
+  bonzah_done: boolean;
   bonzah_form_submitted: boolean;
   bonzah_form_status: string | null;
   brandon_sent: boolean;
   brandon_sent_at: string | null;
-  training_complete: boolean;
-  bonzah_live: boolean;
   excluded: boolean;
   notes: string | null;
 }
 
-type ManualField = 'credentials_sent' | 'training_complete';
+type ItemKey = 'branding' | 'subscription' | 'bonzah';
 
 interface ChecklistItem {
-  key: keyof OnboardingRow;
+  key: ItemKey;
   label: string;
   owner: string;
-  kind: 'auto' | 'manual' | 'action';
+  autoHint: string;
 }
 
 const ITEMS: ChecklistItem[] = [
-  { key: 'branding_done', label: 'Branding', owner: 'Haseeb', kind: 'auto' },
-  { key: 'credentials_sent', label: 'Credentials Sent', owner: 'Haseeb', kind: 'manual' },
-  { key: 'paywall_set', label: 'Paywall Set', owner: 'Haseeb', kind: 'auto' },
-  { key: 'subscribed', label: 'Subscribed', owner: 'George', kind: 'auto' },
-  { key: 'bonzah_form_submitted', label: 'Bonzah Form', owner: 'George', kind: 'auto' },
-  { key: 'brandon_sent', label: 'Sent to Brandon', owner: 'George', kind: 'action' },
-  { key: 'training_complete', label: 'Bonzah Training', owner: 'George', kind: 'manual' },
-  { key: 'bonzah_live', label: 'Bonzah Live', owner: 'Haseeb', kind: 'auto' },
+  { key: 'branding', label: 'Branding', owner: 'Haseeb', autoHint: 'Auto-clears when the paywall (subscription plan) is set up' },
+  { key: 'subscription', label: 'Subscription', owner: 'George', autoHint: 'Auto-clears when the tenant pays through the paywall ($1 card capture)' },
+  { key: 'bonzah', label: 'Bonzah', owner: 'Haseeb', autoHint: 'Auto-clears when the Bonzah integration goes live' },
 ];
 
-const doneCount = (r: OnboardingRow) => ITEMS.filter((i) => r[i.key] === true).length;
+const doneCount = (r: OnboardingRow) =>
+  ITEMS.filter((i) => r[`${i.key}_done` as keyof OnboardingRow] === true).length;
 const isFullyOnboarded = (r: OnboardingRow) => doneCount(r) === ITEMS.length;
 
 const fmtDate = (iso: string | null) =>
@@ -123,23 +122,25 @@ export default function OnboardingPage() {
     void loadRows();
   }, []);
 
-  const toggleManual = async (row: OnboardingRow, field: ManualField) => {
+  const toggleOverride = async (row: OnboardingRow, key: ItemKey) => {
+    const field = `${key}_override` as const;
     const next = !row[field];
-    setBusy(`${row.tenant_id}:${field}`);
+    setBusy(`${row.tenant_id}:${key}`);
     try {
       const { error } = await (supabase as any)
         .from('tenant_onboarding_checklist')
-        .upsert(
-          {
-            tenant_id: row.tenant_id,
-            [field]: next,
-            [`${field}_at`]: next ? new Date().toISOString() : null,
-          },
-          { onConflict: 'tenant_id' },
-        );
+        .upsert({ tenant_id: row.tenant_id, [field]: next }, { onConflict: 'tenant_id' });
       if (error) throw error;
       setRows((prev) =>
-        prev.map((r) => (r.tenant_id === row.tenant_id ? { ...r, [field]: next } : r)),
+        prev.map((r) =>
+          r.tenant_id === row.tenant_id
+            ? {
+                ...r,
+                [field]: next,
+                [`${key}_done`]: r[`${key}_auto` as keyof OnboardingRow] === true || next,
+              }
+            : r,
+        ),
       );
     } catch (err: any) {
       toast.error(`Failed to update: ${err.message}`);
@@ -346,11 +347,15 @@ export default function OnboardingPage() {
                     <TableRow className="bg-primary/5 hover:bg-primary/5">
                       <TableHead className="min-w-[180px]">Tenant</TableHead>
                       {ITEMS.map((item) => (
-                        <TableHead key={item.key as string} className="text-center whitespace-nowrap">
+                        <TableHead key={item.key} className="text-center whitespace-nowrap">
                           <div className="text-[11px] leading-tight">{item.label}</div>
                           <div className="text-[10px] font-normal text-muted-foreground">{item.owner}</div>
                         </TableHead>
                       ))}
+                      <TableHead className="text-center whitespace-nowrap">
+                        <div className="text-[11px] leading-tight">Send to Brandon</div>
+                        <div className="text-[10px] font-normal text-muted-foreground">George</div>
+                      </TableHead>
                       <TableHead className="text-center">Progress</TableHead>
                       <TableHead className="text-right">Track</TableHead>
                     </TableRow>
@@ -369,92 +374,82 @@ export default function OnboardingPage() {
                           </TableCell>
 
                           {ITEMS.map((item) => {
-                            const done = row[item.key] === true;
-                            const busyKey = `${row.tenant_id}:${item.key === 'brandon_sent' ? 'brandon' : item.key}`;
-                            const isBusy = busy === busyKey;
+                            const auto = row[`${item.key}_auto` as keyof OnboardingRow] === true;
+                            const override = row[`${item.key}_override` as keyof OnboardingRow] === true;
+                            const done = auto || override;
+                            const isBusy = busy === `${row.tenant_id}:${item.key}`;
 
-                            if (item.kind === 'manual') {
-                              return (
-                                <TableCell key={item.key as string} className="text-center">
+                            return (
+                              <TableCell key={item.key} className="text-center">
+                                {auto ? (
+                                  <CheckCircle2
+                                    className="h-5 w-5 text-success inline"
+                                    aria-label={`${item.label} done automatically`}
+                                  />
+                                ) : (
                                   <button
-                                    onClick={() => toggleManual(row, item.key as ManualField)}
+                                    onClick={() => toggleOverride(row, item.key)}
                                     disabled={!!busy}
-                                    title={`${item.label} — click to ${done ? 'un-check' : 'check'}`}
+                                    title={
+                                      override
+                                        ? `${item.label} marked done manually — click to undo. ${item.autoHint}.`
+                                        : `Click to mark ${item.label} done manually. ${item.autoHint}.`
+                                    }
                                     className="inline-flex items-center justify-center p-1 rounded hover:bg-accent transition-colors"
                                   >
                                     {isBusy ? (
                                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                    ) : done ? (
-                                      <CheckCircle2 className="h-5 w-5 text-success" />
+                                    ) : override ? (
+                                      <CheckCircle2 className="h-5 w-5 text-sky-400" />
                                     ) : (
                                       <Circle className="h-5 w-5 text-muted-foreground/50" />
                                     )}
                                   </button>
-                                </TableCell>
-                              );
-                            }
-
-                            if (item.kind === 'action') {
-                              return (
-                                <TableCell key={item.key as string} className="text-center">
-                                  {done ? (
-                                    <span title={`Sent ${fmtDate(row.brandon_sent_at)} — click to resend`}>
-                                      <button
-                                        onClick={() => sendToBrandon(row)}
-                                        disabled={!!busy}
-                                        className="inline-flex items-center justify-center p-1 rounded hover:bg-accent transition-colors"
-                                      >
-                                        {isBusy ? (
-                                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                        ) : (
-                                          <CheckCircle2 className="h-5 w-5 text-success" />
-                                        )}
-                                      </button>
-                                    </span>
-                                  ) : row.bonzah_form_submitted ? (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-7 px-2 text-xs"
-                                      disabled={!!busy}
-                                      onClick={() => sendToBrandon(row)}
-                                      title="Email the Bonzah form details to Brandon"
-                                    >
-                                      {isBusy ? (
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                      ) : (
-                                        <>
-                                          <Send className="h-3 w-3 mr-1" />
-                                          Send
-                                        </>
-                                      )}
-                                    </Button>
-                                  ) : (
-                                    <span title="Waiting for the Bonzah form to be submitted first">
-                                      <XCircle className="h-5 w-5 text-muted-foreground/30 inline" />
-                                    </span>
-                                  )}
-                                </TableCell>
-                              );
-                            }
-
-                            // auto
-                            return (
-                              <TableCell key={item.key as string} className="text-center">
-                                {done ? (
-                                  <CheckCircle2
-                                    className="h-5 w-5 text-success inline"
-                                    aria-label={`${item.label} done`}
-                                  />
-                                ) : (
-                                  <XCircle
-                                    className="h-5 w-5 text-destructive/60 inline"
-                                    aria-label={`${item.label} not done`}
-                                  />
                                 )}
                               </TableCell>
                             );
                           })}
+
+                          {/* Send to Brandon (action, not a checkpoint) */}
+                          <TableCell className="text-center">
+                            {row.brandon_sent ? (
+                              <span title={`Sent ${fmtDate(row.brandon_sent_at)} — click to resend`}>
+                                <button
+                                  onClick={() => sendToBrandon(row)}
+                                  disabled={!!busy}
+                                  className="inline-flex items-center justify-center p-1 rounded hover:bg-accent transition-colors"
+                                >
+                                  {busy === `${row.tenant_id}:brandon` ? (
+                                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                  ) : (
+                                    <CheckCircle2 className="h-5 w-5 text-success" />
+                                  )}
+                                </button>
+                              </span>
+                            ) : row.bonzah_form_submitted ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                disabled={!!busy}
+                                onClick={() => sendToBrandon(row)}
+                                title="Email the Bonzah form details to Brandon"
+                              >
+                                {busy === `${row.tenant_id}:brandon` ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Send className="h-3 w-3 mr-1" />
+                                    Send
+                                  </>
+                                )}
+                              </Button>
+                            ) : (
+                              <span title="Waiting for the Bonzah form to be submitted first">
+                                <XCircle className="h-5 w-5 text-muted-foreground/30 inline" />
+                              </span>
+                            )}
+                          </TableCell>
 
                           <TableCell className="text-center">
                             {complete ? (
@@ -466,7 +461,7 @@ export default function OnboardingPage() {
                               <span
                                 className={cn(
                                   'text-sm font-bold tabular-nums',
-                                  n >= 6 ? 'text-success' : n >= 3 ? 'text-warning' : 'text-destructive',
+                                  n >= 2 ? 'text-warning' : 'text-destructive',
                                 )}
                               >
                                 {n}/{ITEMS.length}
