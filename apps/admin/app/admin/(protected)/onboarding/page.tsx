@@ -339,21 +339,23 @@ export default function OnboardingPage() {
                   {showExcluded ? 'Showing hidden' : 'Show hidden'}
                   {counts.excluded > 0 && ` (${counts.excluded})`}
                 </button>
-                {counts.excluded > 0 && (
-                  <button
-                    onClick={untrackAll}
-                    disabled={!!busy}
-                    title="Bring every hidden tenant back into onboarding tracking"
-                    className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all border bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80"
-                  >
-                    {busy === 'untrack-all' ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                    Untrack all
-                  </button>
-                )}
+                <button
+                  onClick={untrackAll}
+                  disabled={!!busy || counts.excluded === 0}
+                  title={
+                    counts.excluded > 0
+                      ? 'Bring every hidden tenant back into onboarding tracking'
+                      : 'No hidden tenants — hide one with the eye icon on its row'
+                  }
+                  className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all border bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {busy === 'untrack-all' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                  Untrack all{counts.excluded > 0 && ` (${counts.excluded})`}
+                </button>
               </div>
             </CardContent>
           </Card>
