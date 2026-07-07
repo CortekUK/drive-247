@@ -153,6 +153,11 @@ verify_jwt = true
 [functions.ai-draft-message]
 verify_jwt = true
 
+# Onboarding daily digest — called by pg_cron with x-platform-secret header;
+# manual "send now" from the admin UI is verified as super-admin JWT in code.
+[functions.onboarding-daily-digest]
+verify_jwt = false
+
 # Automations engine support functions.
 [functions.automation-test-run]
 verify_jwt = true
