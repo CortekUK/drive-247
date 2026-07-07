@@ -118,11 +118,18 @@ export function BonzahSettings() {
   const handleVerifyAndConnect = async () => {
     if (!tenantContext?.id || !username || !password) return;
 
+    // Never persist stray whitespace: a single leading/trailing space (easy to
+    // pick up from copy/paste) is sent verbatim to Bonzah's auth endpoint and
+    // makes every live insurance operation fail with an auth error.
+    const cleanUsername = username.trim();
+    const cleanPassword = password.trim();
+    if (!cleanUsername || !cleanPassword) return;
+
     setIsVerifying(true);
     try {
       // Mode is resolved server-side from the DB via tenantId
       const { data, error } = await supabase.functions.invoke('bonzah-verify-credentials', {
-        body: { username, password, tenantId: tenantContext.id },
+        body: { username: cleanUsername, password: cleanPassword, tenantId: tenantContext.id },
       });
 
       if (error) throw error;
@@ -136,12 +143,12 @@ export function BonzahSettings() {
         return;
       }
 
-      // Credentials valid — save to database
+      // Credentials valid — save to database (trimmed)
       const { error: updateError } = await supabase
         .from('tenants')
         .update({
-          bonzah_username: username,
-          bonzah_password: password,
+          bonzah_username: cleanUsername,
+          bonzah_password: cleanPassword,
           integration_bonzah: true,
         })
         .eq('id', tenantContext.id);

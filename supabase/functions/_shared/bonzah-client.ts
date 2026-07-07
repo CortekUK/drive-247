@@ -69,9 +69,12 @@ export async function getTenantBonzahCredentials(
     throw new Error('Tenant does not have Bonzah credentials configured. Please add your live Bonzah credentials in Settings.');
   }
 
+  // Defense-in-depth: strip stray whitespace before use. A stored credential
+  // with a single leading space (from copy/paste at save time) is otherwise
+  // sent verbatim to Bonzah's /auth and fails every live insurance call.
   return {
-    username: data.bonzah_username,
-    password: data.bonzah_password,
+    username: data.bonzah_username.trim(),
+    password: data.bonzah_password.trim(),
     mode: 'live',
   };
 }

@@ -103,7 +103,7 @@ interface ExistingRental {
   start_date: string;
   end_date: string;
   pickup_time: string | null;
-  dropoff_time: string | null;
+  return_time: string | null;
 }
 
 function LiveClock({ timezone }: { timezone: string }) {
@@ -1126,7 +1126,7 @@ const MultiStepBookingWidget = () => {
     if (tenant?.buffer_time_minutes && tenant.buffer_time_minutes > 0) {
       const { data: rentalsData } = await supabase
         .from("rentals")
-        .select("id, vehicle_id, start_date, end_date, pickup_time, dropoff_time")
+        .select("id, vehicle_id, start_date, end_date, pickup_time, return_time")
         .eq("tenant_id", tenant.id)
         .eq("status", "Completed")
         .not("vehicle_id", "is", null);
@@ -1995,7 +1995,7 @@ const MultiStepBookingWidget = () => {
         start_date: formData.pickupDate,
         end_date: formData.dropoffDate || formData.pickupDate,
         pickup_time: formData.pickupTime || null,
-        dropoff_time: formData.dropoffTime || null,
+        return_time: formData.dropoffTime || null,
         customer_timezone: formData.customerTimezone || null,
         monthly_amount: priceBreakdown?.totalPrice || 0,
         notes: formData.specialRequests ? sanitizeTextArea(formData.specialRequests) : null,
@@ -2736,13 +2736,13 @@ const MultiStepBookingWidget = () => {
 
           for (const rental of vehicleRentals) {
             // When the rental ended
-            const rentalEnd = new Date(`${rental.end_date}T${rental.dropoff_time || '23:59'}`);
+            const rentalEnd = new Date(`${rental.end_date}T${rental.return_time || '23:59'}`);
             // Buffer deadline = rental end + buffer minutes
             const bufferDeadline = new Date(rentalEnd.getTime() + bufferMs);
 
             // If pickup falls before buffer deadline, vehicle is still in cooldown
             if (pickupDateTime < bufferDeadline && pickupDateTime >= rentalEnd) {
-              console.log(`[BufferTime] Vehicle ${vehicle.reg} hidden: rental ended ${rental.end_date} ${rental.dropoff_time || '23:59'}, buffer until ${bufferDeadline.toISOString()}`);
+              console.log(`[BufferTime] Vehicle ${vehicle.reg} hidden: rental ended ${rental.end_date} ${rental.return_time || '23:59'}, buffer until ${bufferDeadline.toISOString()}`);
               return false;
             }
           }

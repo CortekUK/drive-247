@@ -15,7 +15,14 @@ Deno.serve(async (req) => {
   try {
     const body: VerifyCredentialsRequest = await req.json()
 
-    if (!body.username || !body.password) {
+    // Strip stray whitespace before validating/verifying. A space-prefixed
+    // password pasted at save time would otherwise pass the test-mode
+    // short-circuit below unverified, get persisted, and then fail every
+    // live Bonzah auth once the tenant switches to live mode.
+    const username = (body.username || '').trim()
+    const password = (body.password || '').trim()
+
+    if (!username || !password) {
       return errorResponse('Missing username or password')
     }
 
@@ -54,14 +61,14 @@ Deno.serve(async (req) => {
     // Live mode: verify tenant's own credentials
     const apiUrl = getBonzahApiUrl(mode)
 
-    console.log('[Bonzah Verify] Verifying credentials against', mode, 'API for:', body.username)
+    console.log('[Bonzah Verify] Verifying credentials against', mode, 'API for:', username)
 
     try {
-      const token = await getBonzahTokenForCredentials(body.username, body.password, apiUrl)
+      const token = await getBonzahTokenForCredentials(username, password, apiUrl)
 
       return jsonResponse({
         valid: true,
-        email: body.username,
+        email: username,
         mode,
       })
     } catch (authError) {

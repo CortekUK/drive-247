@@ -128,7 +128,7 @@ const BookingVehiclesContent = () => {
       if (bufferMinutes > 0 && filteredData.length > 0 && tenant?.id && pickupDate) {
         const { data: rentalsData } = await supabase
           .from("rentals")
-          .select("id, vehicle_id, start_date, end_date, pickup_time, dropoff_time")
+          .select("id, vehicle_id, start_date, end_date, pickup_time, return_time")
           .eq("tenant_id", tenant.id)
           .eq("status", "Completed")
           .not("vehicle_id", "is", null);
@@ -140,7 +140,7 @@ const BookingVehiclesContent = () => {
           filteredData = filteredData.filter(vehicle => {
             const vehicleRentals = rentalsData.filter(r => r.vehicle_id === vehicle.id);
             for (const rental of vehicleRentals) {
-              const rentalEnd = new Date(`${rental.end_date}T${rental.dropoff_time || '23:59'}`);
+              const rentalEnd = new Date(`${rental.end_date}T${rental.return_time || '23:59'}`);
               const bufferDeadline = new Date(rentalEnd.getTime() + bufferMs);
               // If pickup falls within the buffer window after rental ended, hide it
               if (pickupDateTime < bufferDeadline && pickupDateTime >= rentalEnd) {

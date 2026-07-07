@@ -538,7 +538,7 @@ const CreateRental = () => {
       // Get the most recent completed/closed rental for this vehicle
       const { data } = await supabase
         .from("rentals")
-        .select("id, end_date, dropoff_time")
+        .select("id, end_date, return_time")
         .eq("tenant_id", tenant.id)
         .eq("vehicle_id", selectedVehicleId)
         .in("status", ["Completed", "Closed"])
@@ -548,7 +548,7 @@ const CreateRental = () => {
 
       if (!data) return null;
 
-      const rentalEnd = new Date(`${data.end_date}T${data.dropoff_time || '23:59'}`);
+      const rentalEnd = new Date(`${data.end_date}T${data.return_time || '23:59'}`);
       const bufferDeadline = new Date(rentalEnd.getTime() + bufferMinutes * 60 * 1000);
       const now = new Date();
 
