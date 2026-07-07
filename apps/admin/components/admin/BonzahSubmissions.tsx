@@ -56,7 +56,7 @@ interface FileRef {
   size: number;
 }
 
-interface Submission {
+export interface Submission {
   id: string;
   tenant_id: string;
   submitted_by: string | null;
@@ -628,7 +628,7 @@ function buildSections(submission: Submission): Section[] {
   ];
 }
 
-async function generateSubmissionPdf(submission: Submission) {
+export async function generateSubmissionPdf(submission: Submission) {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -822,7 +822,7 @@ async function generateSubmissionPdf(submission: Submission) {
   doc.save(filename);
 }
 
-async function generateImagesZip(submission: Submission) {
+export async function generateImagesZip(submission: Submission) {
   const zip = new JSZip();
   const files = submission.file_urls || {};
   const data = submission.data || {};
@@ -898,9 +898,6 @@ function SubmissionDetailDialog({
 
   if (!submission) return null;
 
-  const data = submission.data || {};
-  const files = submission.file_urls || {};
-
   const handleStatusChange = async (newStatus: 'approved' | 'rejected') => {
     setUpdating(newStatus === 'approved' ? 'approve' : 'reject');
     try {
@@ -962,6 +959,63 @@ function SubmissionDetailDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <SubmissionDetailTabs submission={submission} />
+
+        {/* Review actions */}
+        <div className="border-t pt-4 mt-4 space-y-3">
+          <div>
+            <label className="text-sm font-medium">Note for tenant (optional)</label>
+            <Textarea
+              value={adminNote}
+              onChange={(e) => setAdminNote(e.target.value)}
+              rows={2}
+              placeholder="Add a note that the tenant will see in their portal — e.g. credentials emailed separately, or what's missing."
+              className="mt-1.5"
+              disabled={!!updating}
+            />
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button variant="outline" onClick={onClose} disabled={!!updating}>
+              Close
+            </Button>
+            {submission.status !== 'rejected' && (
+              <Button
+                variant="outline"
+                className="text-destructive hover:bg-destructive/10 border-destructive/40"
+                onClick={() => handleStatusChange('rejected')}
+                disabled={!!updating}
+              >
+                {updating === 'reject' ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <XCircle className="h-4 w-4 mr-1.5" />
+                )}
+                Reject
+              </Button>
+            )}
+            {submission.status !== 'approved' && (
+              <Button onClick={() => handleStatusChange('approved')} disabled={!!updating}>
+                {updating === 'approve' ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                )}
+                Approve
+              </Button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+export function SubmissionDetailTabs({ submission }: { submission: Submission }) {
+  const data = submission.data || {};
+  const files = submission.file_urls || {};
+
+  return (
         <Tabs defaultValue="business" className="mt-2">
           <TabsList className="grid grid-cols-4 lg:grid-cols-8 gap-1 h-auto p-1 mb-4">
             {sectionTabs.map(({ key, label, icon: Icon }) => (
@@ -1157,53 +1211,6 @@ function SubmissionDetailDialog({
             )}
           </TabsContent>
         </Tabs>
-
-        {/* Review actions */}
-        <div className="border-t pt-4 mt-4 space-y-3">
-          <div>
-            <label className="text-sm font-medium">Note for tenant (optional)</label>
-            <Textarea
-              value={adminNote}
-              onChange={(e) => setAdminNote(e.target.value)}
-              rows={2}
-              placeholder="Add a note that the tenant will see in their portal — e.g. credentials emailed separately, or what's missing."
-              className="mt-1.5"
-              disabled={!!updating}
-            />
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button variant="outline" onClick={onClose} disabled={!!updating}>
-              Close
-            </Button>
-            {submission.status !== 'rejected' && (
-              <Button
-                variant="outline"
-                className="text-destructive hover:bg-destructive/10 border-destructive/40"
-                onClick={() => handleStatusChange('rejected')}
-                disabled={!!updating}
-              >
-                {updating === 'reject' ? (
-                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                ) : (
-                  <XCircle className="h-4 w-4 mr-1.5" />
-                )}
-                Reject
-              </Button>
-            )}
-            {submission.status !== 'approved' && (
-              <Button onClick={() => handleStatusChange('approved')} disabled={!!updating}>
-                {updating === 'approve' ? (
-                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                )}
-                Approve
-              </Button>
-            )}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
 

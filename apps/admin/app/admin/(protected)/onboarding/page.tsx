@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dialog';
 import CreateTenantDialog from '@/components/admin/CreateTenantDialog';
 import BonzahSubmissions from '@/components/admin/BonzahSubmissions';
+import SendToBrandonDialog from '@/components/admin/SendToBrandonDialog';
 import {
   ClipboardCheck,
   Plus,
@@ -101,6 +102,7 @@ export default function OnboardingPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [busy, setBusy] = useState<string | null>(null); // `${tenantId}:${action}`
+  const [brandonRow, setBrandonRow] = useState<OnboardingRow | null>(null);
 
   const loadRows = async () => {
     try {
@@ -184,27 +186,12 @@ export default function OnboardingPage() {
     }
   };
 
-  const sendToBrandon = async (row: OnboardingRow) => {
-    setBusy(`${row.tenant_id}:brandon`);
-    try {
-      const { data, error } = await supabase.functions.invoke('send-bonzah-form-to-brandon', {
-        body: { tenant_id: row.tenant_id },
-      });
-      if (error) throw new Error(error.message);
-      if (data?.error) throw new Error(data.error);
-      setRows((prev) =>
-        prev.map((r) =>
-          r.tenant_id === row.tenant_id
-            ? { ...r, brandon_sent: true, brandon_sent_at: data?.brandon_sent_at ?? new Date().toISOString() }
-            : r,
-        ),
-      );
-      toast.success(`Form details sent to ${data?.sent_to || 'Brandon'}`);
-    } catch (err: any) {
-      toast.error(`Send failed: ${err.message}`);
-    } finally {
-      setBusy(null);
-    }
+  const handleBrandonSent = (tenantId: string, sentAt: string) => {
+    setRows((prev) =>
+      prev.map((r) =>
+        r.tenant_id === tenantId ? { ...r, brandon_sent: true, brandon_sent_at: sentAt } : r,
+      ),
+    );
   };
 
   const visibleRows = useMemo(() => {
@@ -443,17 +430,12 @@ export default function OnboardingPage() {
                           {/* Send to Brandon (action, not a checkpoint) */}
                           <TableCell className="text-center">
                             {row.brandon_sent ? (
-                              <span title={`Sent ${fmtDate(row.brandon_sent_at)} — click to resend`}>
+                              <span title={`Sent ${fmtDate(row.brandon_sent_at)} — click to review / resend`}>
                                 <button
-                                  onClick={() => sendToBrandon(row)}
-                                  disabled={!!busy}
+                                  onClick={() => setBrandonRow(row)}
                                   className="inline-flex items-center justify-center p-1 rounded hover:bg-accent transition-colors"
                                 >
-                                  {busy === `${row.tenant_id}:brandon` ? (
-                                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                  ) : (
-                                    <CheckCircle2 className="h-5 w-5 text-success" />
-                                  )}
+                                  <CheckCircle2 className="h-5 w-5 text-success" />
                                 </button>
                               </span>
                             ) : row.bonzah_form_submitted ? (
@@ -461,18 +443,11 @@ export default function OnboardingPage() {
                                 variant="outline"
                                 size="sm"
                                 className="h-7 px-2 text-xs"
-                                disabled={!!busy}
-                                onClick={() => sendToBrandon(row)}
+                                onClick={() => setBrandonRow(row)}
                                 title="Email the Bonzah form details to Brandon"
                               >
-                                {busy === `${row.tenant_id}:brandon` ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <>
-                                    <Send className="h-3 w-3 mr-1" />
-                                    Send
-                                  </>
-                                )}
+                                <Send className="h-3 w-3 mr-1" />
+                                Send
                               </Button>
                             ) : (
                               <span title="Waiting for the Bonzah form to be submitted first">
@@ -537,6 +512,15 @@ export default function OnboardingPage() {
       />
 
       <DigestSettingsDialog open={showSettings} onOpenChange={setShowSettings} />
+
+      <SendToBrandonDialog
+        open={!!brandonRow}
+        onOpenChange={(o) => !o && setBrandonRow(null)}
+        tenantId={brandonRow?.tenant_id ?? null}
+        tenantName={brandonRow?.company_name ?? ''}
+        brandonSentAt={brandonRow?.brandon_sent_at ?? null}
+        onSent={handleBrandonSent}
+      />
     </div>
   );
 }
