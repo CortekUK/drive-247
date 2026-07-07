@@ -168,6 +168,23 @@ export default function OnboardingPage() {
     }
   };
 
+  const untrackAll = async () => {
+    setBusy('untrack-all');
+    try {
+      const { error } = await (supabase as any)
+        .from('tenant_onboarding_checklist')
+        .update({ excluded: false })
+        .eq('excluded', true);
+      if (error) throw error;
+      setRows((prev) => prev.map((r) => ({ ...r, excluded: false })));
+      toast.success('All tenants are back in onboarding tracking');
+    } catch (err: any) {
+      toast.error(`Failed to update: ${err.message}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const sendToBrandon = async (row: OnboardingRow) => {
     setBusy(`${row.tenant_id}:brandon`);
     try {
@@ -320,7 +337,23 @@ export default function OnboardingPage() {
                 >
                   {showExcluded ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                   {showExcluded ? 'Showing hidden' : 'Show hidden'}
+                  {counts.excluded > 0 && ` (${counts.excluded})`}
                 </button>
+                {counts.excluded > 0 && (
+                  <button
+                    onClick={untrackAll}
+                    disabled={!!busy}
+                    title="Bring every hidden tenant back into onboarding tracking"
+                    className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all border bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80"
+                  >
+                    {busy === 'untrack-all' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                    Untrack all
+                  </button>
+                )}
               </div>
             </CardContent>
           </Card>
