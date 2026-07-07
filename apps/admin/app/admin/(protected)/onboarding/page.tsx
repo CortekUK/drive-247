@@ -75,14 +75,13 @@ type ItemKey = 'branding' | 'subscription' | 'bonzah';
 interface ChecklistItem {
   key: ItemKey;
   label: string;
-  owner: string;
   autoHint: string;
 }
 
 const ITEMS: ChecklistItem[] = [
-  { key: 'branding', label: 'Branding', owner: 'Haseeb', autoHint: 'Auto-clears when the paywall (subscription plan) is set up' },
-  { key: 'subscription', label: 'Subscription', owner: 'George', autoHint: 'Auto-clears when the tenant pays through the paywall ($1 card capture)' },
-  { key: 'bonzah', label: 'Bonzah', owner: 'Haseeb', autoHint: 'Auto-clears when the Bonzah integration goes live' },
+  { key: 'branding', label: 'Branding', autoHint: 'Auto-clears when the paywall (subscription plan) is set up' },
+  { key: 'subscription', label: 'Subscription', autoHint: 'Auto-clears when the tenant pays through the paywall ($1 card capture)' },
+  { key: 'bonzah', label: 'Bonzah', autoHint: 'Auto-clears when the Bonzah integration goes live' },
 ];
 
 const doneCount = (r: OnboardingRow) =>
@@ -383,14 +382,10 @@ export default function OnboardingPage() {
                       <TableHead className="min-w-[180px]">Tenant</TableHead>
                       {ITEMS.map((item) => (
                         <TableHead key={item.key} className="text-center whitespace-nowrap">
-                          <div className="text-[11px] leading-tight">{item.label}</div>
-                          <div className="text-[10px] font-normal text-muted-foreground">{item.owner}</div>
+                          {item.label}
                         </TableHead>
                       ))}
-                      <TableHead className="text-center whitespace-nowrap">
-                        <div className="text-[11px] leading-tight">Send to Brandon</div>
-                        <div className="text-[10px] font-normal text-muted-foreground">George</div>
-                      </TableHead>
+                      <TableHead className="text-center whitespace-nowrap">Send to Brandon</TableHead>
                       <TableHead className="text-center">Progress</TableHead>
                       <TableHead className="text-right">Track</TableHead>
                     </TableRow>

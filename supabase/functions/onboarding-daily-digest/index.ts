@@ -31,10 +31,10 @@ interface OnboardingRow {
   excluded: boolean;
 }
 
-const ITEMS: { key: keyof OnboardingRow; label: string; owner: string }[] = [
-  { key: "branding_done", label: "Branding", owner: "Haseeb" },
-  { key: "subscription_done", label: "Subscription", owner: "George" },
-  { key: "bonzah_done", label: "Bonzah", owner: "Haseeb" },
+const ITEMS: { key: keyof OnboardingRow; label: string }[] = [
+  { key: "branding_done", label: "Branding" },
+  { key: "subscription_done", label: "Subscription" },
+  { key: "bonzah_done", label: "Bonzah" },
 ];
 
 const doneCount = (r: OnboardingRow) => ITEMS.filter((i) => r[i.key] === true).length;
@@ -47,7 +47,7 @@ function cell(ok: boolean): string {
 function buildDigestHtml(pending: OnboardingRow[], onboardedCount: number): string {
   const headerCells = ITEMS.map(
     (i) =>
-      `<th style="padding:8px 6px;border-bottom:2px solid #e0e7ff;background:#eef2ff;font-size:10px;color:#3f3f82;text-transform:uppercase;letter-spacing:0.03em;white-space:nowrap;">${esc(i.label)}<br/><span style="font-weight:400;color:#737373;">${esc(i.owner)}</span></th>`,
+      `<th style="padding:8px 6px;border-bottom:2px solid #e0e7ff;background:#eef2ff;font-size:10px;color:#3f3f82;text-transform:uppercase;letter-spacing:0.03em;white-space:nowrap;">${esc(i.label)}</th>`,
   ).join("");
 
   const rows = pending
