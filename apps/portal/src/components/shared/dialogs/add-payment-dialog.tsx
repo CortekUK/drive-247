@@ -125,6 +125,24 @@ const PAYMENT_METHODS = [
   { value: "Other", label: "Other", icon: MoreHorizontal },
 ];
 
+// supabase.functions.invoke wraps non-2xx responses in FunctionsHttpError whose
+// .message is always the generic "Edge Function returned a non-2xx status code";
+// the edge function's real JSON error body hides behind error.context. Without
+// unwrapping it, operators see an opaque failure and retry blindly (Kedic
+// incident: 12 retries against a stale Stripe customer id, real error unseen).
+const extractFunctionError = async (error: unknown, fallback: string): Promise<string> => {
+  const ctx = (error as { context?: Response })?.context;
+  if (ctx && typeof ctx.clone === "function") {
+    try {
+      const body = await ctx.clone().json();
+      const msg = body?.error || body?.message;
+      if (typeof msg === "string" && msg.trim()) return msg;
+    } catch { /* body wasn't JSON — fall through to fallback */ }
+  }
+  const m = (error as { message?: string })?.message;
+  return m && m !== "Edge Function returned a non-2xx status code" ? m : fallback;
+};
+
 export const AddPaymentDialog = ({
   open,
   onOpenChange,
@@ -608,7 +626,7 @@ export const AddPaymentDialog = ({
         },
       });
 
-      if (error) throw new Error(error.message || 'Failed to create checkout session');
+      if (error) throw new Error(await extractFunctionError(error, 'Failed to create checkout session'));
       if (!data?.url) throw new Error('No checkout URL returned');
 
       // Store targetCategories in localStorage so the fallback handler can use them
@@ -695,7 +713,11 @@ export const AddPaymentDialog = ({
       });
 
       if (checkoutError || !checkoutData?.url) {
-        throw new Error(checkoutError?.message || 'Failed to create payment link');
+        throw new Error(
+          checkoutError
+            ? await extractFunctionError(checkoutError, 'Failed to create payment link')
+            : 'Failed to create payment link'
+        );
       }
 
       // Step 2: Send email with payment link (works with or without an existing invoice)

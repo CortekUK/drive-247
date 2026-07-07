@@ -13,6 +13,7 @@ import {
   getChargePlatformAccount,
   getStripeClientForAccount,
   getStripeOptions,
+  validateStripeCustomerId,
   DEPOSIT_HOLD_CARD_VARIANTS,
   isCardFeatureIneligibleError,
   type StripeMode,
@@ -130,8 +131,13 @@ Deno.serve(async (req) => {
       cancel_url: cancelUrl || `${origin}/rentals/${rentalId}?hold=cancelled`,
     }
 
-    if (customer?.stripe_customer_id) {
-      sessionParams.customer = customer.stripe_customer_id
+    // Validate the stored id before reuse (scoped per Stripe account+mode; a
+    // stale test-era id would fail sessions.create with "No such customer").
+    // On stale, fall back to customer_email — the hold flow has no mint step;
+    // sync-deposit-hold backfills the fresh id after checkout completes.
+    const validHoldCustomerId = await validateStripeCustomerId(stripe, customer?.stripe_customer_id, stripeOptions)
+    if (validHoldCustomerId) {
+      sessionParams.customer = validHoldCustomerId
     } else if (customer?.email) {
       sessionParams.customer_email = customer.email
     }

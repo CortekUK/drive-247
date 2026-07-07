@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
-import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode } from '../_shared/stripe-client.ts'
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, validateStripeCustomerId, type StripeMode } from '../_shared/stripe-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -75,8 +75,10 @@ serve(async (req) => {
       const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null
       const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
 
-      // Create or verify Stripe customer
-      let stripeCustomerId = customer.stripe_customer_id
+      // Create or verify Stripe customer. Validate a stored id before reuse:
+      // Stripe customers are scoped per account+mode, so a stale (e.g.
+      // test-era) id would fail setupIntents.create with "No such customer".
+      let stripeCustomerId = await validateStripeCustomerId(stripe, customer.stripe_customer_id, stripeOptions)
 
       if (!stripeCustomerId) {
         // Get customer details for creating Stripe customer

@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, validateStripeCustomerId, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
 import { formatCurrency } from '../_shared/format-utils.ts'
 
 const corsHeaders = {
@@ -189,11 +189,20 @@ serve(async (req) => {
         .eq('id', resolvedCustomerId)
         .single();
 
+      // Stripe Customer objects are scoped to one account + one mode: a stored
+      // id minted in a different context (e.g. while the tenant was in test
+      // mode) does not exist on the current account, and reusing it blindly
+      // makes sessions.create fail with "No such customer" before any payment
+      // row is written. Validate first; on a stale id fall through and re-mint.
       if (existingCustomer?.stripe_customer_id) {
-        stripeCustomerId = existingCustomer.stripe_customer_id;
-        console.log('Using existing Stripe customer:', stripeCustomerId);
-      } else {
-        // Create new Stripe customer
+        stripeCustomerId = await validateStripeCustomerId(stripe, existingCustomer.stripe_customer_id, stripeOptions);
+        if (stripeCustomerId) {
+          console.log('Using existing Stripe customer:', stripeCustomerId);
+        }
+      }
+
+      if (!stripeCustomerId) {
+        // Create new Stripe customer (also replaces a stale/foreign-mode id)
         const customer = await stripe.customers.create({
           email: customerEmail,
           name: customerName,

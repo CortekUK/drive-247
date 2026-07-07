@@ -109,11 +109,17 @@ Deno.serve(async (req) => {
     if (updateError) return errorResponse(`Failed to persist hold: ${updateError.message}`, 500)
 
     if (stripeCustomerId) {
+      // Overwrite unconditionally (not just when NULL): a stored id that
+      // differs from the one Stripe just used is stale — e.g. minted in a
+      // different mode/account era — and keeping it would strand the row on a
+      // dead id (Kedic incident) while orphaning a fresh Checkout-created
+      // customer on every subsequent hold. NOTE: no .neq() filter here — in
+      // Postgres NULL != x is NULL, so .neq would skip the backfill-when-NULL
+      // case; an unconditional idempotent write covers both.
       await supabase
         .from('customers')
         .update({ stripe_customer_id: stripeCustomerId })
         .eq('id', rental.customer_id)
-        .is('stripe_customer_id', null)
     }
 
     return jsonResponse({

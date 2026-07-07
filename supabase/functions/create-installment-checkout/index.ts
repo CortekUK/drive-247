@@ -17,7 +17,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
-import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, validateStripeCustomerId, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
 import { formatCurrency } from '../_shared/format-utils.ts'
 
 const corsHeaders = {
@@ -181,7 +181,10 @@ serve(async (req) => {
     }
 
     // ── Stripe customer ──────────────────────────────────────────
-    let stripeCustomerId: string
+    // Validate a stored id before reuse: Stripe customers are scoped per
+    // account+mode, so a stale id (e.g. test-era) would fail sessions.create
+    // with "No such customer". On stale, fall through and mint fresh.
+    let stripeCustomerId: string | null = null
     const { data: existingCustomer } = await supabase
       .from('customers')
       .select('stripe_customer_id')
@@ -189,8 +192,9 @@ serve(async (req) => {
       .single()
 
     if (existingCustomer?.stripe_customer_id) {
-      stripeCustomerId = existingCustomer.stripe_customer_id
-    } else {
+      stripeCustomerId = await validateStripeCustomerId(stripe, existingCustomer.stripe_customer_id, stripeOptions)
+    }
+    if (!stripeCustomerId) {
       const customer = await stripe.customers.create({
         email: body.customerEmail,
         name: body.customerName,

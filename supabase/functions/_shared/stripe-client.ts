@@ -372,3 +372,41 @@ export function getStripeClientForRecord(
   const account: PlatformAccount = record.platform_account === 'uae' ? 'uae' : 'uk';
   return getStripeClientForAccount(account, mode);
 }
+
+/**
+ * Validate a stored Stripe customer id against the account/mode the caller is
+ * about to charge on. Stripe Customer objects are scoped to ONE account and
+ * ONE mode (test/live) — an id minted while a tenant was in test mode does not
+ * exist on their live Connect account, so reusing it makes every charge fail
+ * with "No such customer" (Kedic incident, 2026-07: test-era id survived the
+ * go-live wipe and broke all portal payment collection for that customer).
+ *
+ * Returns the id when it is usable on the given account, or null when Stripe
+ * reports it missing/deleted there — callers then fall through to their
+ * existing mint-a-fresh-customer branch (which persists the new id).
+ * Non-"missing" errors (network, auth) are rethrown: they signal real
+ * problems that must surface, not a stale id.
+ */
+export async function validateStripeCustomerId(
+  stripe: Stripe,
+  storedId: string | null | undefined,
+  options?: { stripeAccount?: string },
+): Promise<string | null> {
+  if (!storedId) return null;
+  try {
+    const customer = await stripe.customers.retrieve(storedId, options);
+    if ((customer as { deleted?: boolean }).deleted === true) {
+      console.warn('[stripe-client] Stored Stripe customer is deleted, re-mint needed:', storedId);
+      return null;
+    }
+    return storedId;
+  } catch (err) {
+    const code = (err as { code?: string; raw?: { code?: string } })?.code
+      ?? (err as { raw?: { code?: string } })?.raw?.code;
+    if (code === 'resource_missing') {
+      console.warn('[stripe-client] Stored Stripe customer not found on current account/mode, re-mint needed:', storedId);
+      return null;
+    }
+    throw err;
+  }
+}
