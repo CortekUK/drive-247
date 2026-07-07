@@ -568,14 +568,69 @@ serve(async (req) => {
             // The booking-success page finalizes too, but the webhook is the
             // authoritative signal — finalize here so auto-extension renewals
             // sync even if the customer never completes the browser redirect.
-            const extIdMeta = session.metadata?.extension_id;
+            //
+            // Mirrors stripe-webhook-live: read the rental's auto-extend state so
+            // we can (a) fall back to its parked pending extension when
+            // session.metadata.extension_id is missing (else the payment strands
+            // as an unallocated Credit and the rental sits paused) and (b) sync the
+            // auto_extend_* columns — which this TEST-mode handler previously never
+            // did at all, so test-mode renewals never returned to active.
+            const { data: aeRental } = await supabase
+              .from("rentals")
+              .select("auto_extend_enabled, auto_extend_pending_extension_id, auto_extend_charge_count")
+              .eq("id", rentalId)
+              .maybeSingle();
+
+            let extIdMeta = session.metadata?.extension_id as string | undefined;
+            if (!extIdMeta && aeRental?.auto_extend_pending_extension_id) {
+              extIdMeta = aeRental.auto_extend_pending_extension_id;
+              console.log("Resolved extension_id from parked pending extension:", extIdMeta);
+            }
+
+            let finalizeOk = false;
             if (extIdMeta) {
               const { error: finalizeErr } = await supabase.rpc("finalize_rental_extension", {
                 p_extension_id: extIdMeta,
                 p_payment_id: extensionPayment.id,
               });
-              if (finalizeErr) console.error("[TEST MODE] finalize_rental_extension error:", finalizeErr);
-              else console.log("Extension finalized via webhook:", extIdMeta);
+              if (finalizeErr) {
+                console.error("[TEST MODE] finalize_rental_extension error:", finalizeErr);
+              } else {
+                finalizeOk = true;
+                console.log("Extension finalized via webhook:", extIdMeta);
+              }
+            }
+
+            // Auto-extension: a paid pay-link must return the rental to "active"
+            // and un-pause it (a rental that auto-paused past grace must un-pause
+            // when finally paid, or both crons keep skipping it). Guarded by
+            // pending_extension_id === extIdMeta so retries can't double-increment.
+            // Gated on finalizeOk: if finalize failed, leave the rental paused with
+            // its pending id intact (recoverable) rather than clear the parked week
+            // and advance charge_count against a period that was never applied.
+            if (
+              finalizeOk &&
+              aeRental?.auto_extend_enabled &&
+              aeRental.auto_extend_pending_extension_id &&
+              aeRental.auto_extend_pending_extension_id === extIdMeta
+            ) {
+              try {
+                await supabase
+                  .from("rentals")
+                  .update({
+                    auto_extend_pending_extension_id: null,
+                    auto_extend_status: "active",
+                    auto_extend_paused: false,
+                    auto_extend_paused_at: null,
+                    auto_extend_charge_count: (aeRental.auto_extend_charge_count || 0) + 1,
+                    auto_extend_failed_attempts: 0,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", rentalId);
+                console.log("Auto-extend rental returned to active after payment:", rentalId);
+              } catch (aeErr) {
+                console.error("Auto-extend post-payment sync error:", aeErr);
+              }
             }
           } else {
             console.error("No extension payment found for session:", session.id, extPaymentError?.message);
