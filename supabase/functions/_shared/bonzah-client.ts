@@ -272,6 +272,18 @@ export function formatDateForBonzah(date: string | Date): string {
 }
 
 /**
+ * Normalize a ZIP code for Bonzah API.
+ * Bonzah's /Bonzah/quote endpoint with finalize: 1 silently returns an EMPTY
+ * payment_id (status 0, no error) when zip_code is in ZIP+4 format with a
+ * hyphen (e.g. "30034-2123"). Extract the first 5-digit run; fall back to the
+ * provided default only when no 5-digit run exists.
+ */
+export function normalizeZipForBonzah(zip: string | null | undefined, fallback = '33101'): string {
+  const match = String(zip || '').match(/\d{5}/);
+  return match ? match[0] : fallback;
+}
+
+/**
  * Coverage type codes used by Bonzah API
  */
 export const COVERAGE_CODES = {

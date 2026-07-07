@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import { bonzahFetchWithCredentials, getTenantBonzahCredentials, getBonzahTokenForCredentials, getBonzahApiUrl, formatDateForBonzah, type TenantBonzahCredentials } from '../_shared/bonzah-client.ts'
+import { bonzahFetchWithCredentials, getTenantBonzahCredentials, getBonzahTokenForCredentials, getBonzahApiUrl, formatDateForBonzah, normalizeZipForBonzah, type TenantBonzahCredentials } from '../_shared/bonzah-client.ts'
 import { corsHeaders, handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { sendResendEmail, getTenantBranding, wrapWithBrandedTemplate } from '../_shared/resend-service.ts'
 
@@ -125,7 +125,8 @@ async function recoverPaymentId(
 
   // Default empty address fields (Bonzah requires non-empty address for finalization)
   const street = renter.address?.street || '123 Main St'
-  const zip = renter.address?.zip || '33101'
+  // Bonzah silently returns an empty payment_id on ZIP+4 (e.g. "30034-2123") — send 5 digits only
+  const zip = normalizeZipForBonzah(renter.address?.zip)
 
   // Format phone
   const phoneDigits = (renter.phone || '').replace(/\D/g, '')

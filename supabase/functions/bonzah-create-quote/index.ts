@@ -4,6 +4,7 @@ import {
   bonzahFetchWithCredentials,
   getTenantBonzahCredentials,
   formatDateForBonzah,
+  normalizeZipForBonzah,
   type CoverageTypes,
   type RenterDetails,
   type TenantBonzahCredentials,
@@ -279,7 +280,8 @@ serve(async (req) => {
 
     // Default empty address fields (Bonzah requires non-empty address to generate payment_id)
     const street = body.renter.address.street || '123 Main St'
-    const zip = body.renter.address.zip || '33101'
+    // Bonzah silently returns an empty payment_id on ZIP+4 (e.g. "30034-2123") — send 5 digits only
+    const zip = normalizeZipForBonzah(body.renter.address.zip)
 
     // Format phone number for Bonzah (must be digits, with country code 1)
     const phoneDigits = body.renter.phone.replace(/\D/g, '')
