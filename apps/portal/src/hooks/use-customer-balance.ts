@@ -160,7 +160,7 @@ export const useCustomerBalanceWithStatus = (customerId: string | undefined) => 
       // Also check for unapplied payments (credit balance)
       const { data: paymentsData, error: paymentsError } = await supabase
         .from("payments")
-        .select("remaining_amount")
+        .select("remaining_amount, status, capture_status")
         .eq("tenant_id", tenant.id)
         .eq("customer_id", customerId);
 
@@ -196,8 +196,20 @@ export const useCustomerBalanceWithStatus = (customerId: string | undefined) => 
         }
       });
 
-      // Sum up unapplied payment amounts (credit available)
-      paymentsData?.forEach(payment => {
+      // Sum up unapplied payment amounts (credit available). ONLY captured,
+      // settled money counts. Whitelist the settled statuses — matching the
+      // booking app (portal/bookings/[id]/page.tsx uses
+      // .in('status', ['Applied','Credit','Partial'])) — so this excludes BOTH
+      // uncaptured Stripe holds (status='Pending' / capture_status=
+      // 'requires_capture', which carry remaining_amount = the full amount but
+      // are NOT real money) AND Refunded/Cancelled rows that reject-rental can
+      // leave with remaining_amount > 0. Counting any of those inflated
+      // availableCredit and, because netBalance = outstandingDebt - availableCredit,
+      // could flip a customer who actually owed money into a bogus "In Credit" —
+      // hiding the debt (e.g. a $147 debtor shown as ~$1,577 credit from stale holds).
+      const CAPTURED_CREDIT_STATUSES = ['Applied', 'Credit', 'Partial'];
+      paymentsData?.forEach((payment: any) => {
+        if (!CAPTURED_CREDIT_STATUSES.includes(payment.status)) return;
         availableCredit += (payment.remaining_amount || 0);
       });
 

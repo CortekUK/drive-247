@@ -798,6 +798,73 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
         }
       }
 
+      // Auto-extension un-pause on the MANUAL / offline payment path.
+      // The Stripe extension-checkout webhook already finalizes + un-pauses a
+      // renewal when the customer pays the pay-link online. But staff who record
+      // a payment here directly (offline bank/cash, or applying an existing
+      // captured credit to the parked renewal) hit NO un-pause logic — so the
+      // rental stayed paused forever, because the un-pause lived only in the
+      // webhook and the auto-extend cron explicitly skips paused rentals
+      // (.eq('auto_extend_paused', false)). This mirrors that webhook block for
+      // the manual path. Gated on payment.extension_id === the rental's parked
+      // pending id, so it can only fire for a payment that IS this renewal, and
+      // the pending-id latch (cleared to null below) makes it one-shot: whether
+      // apply-payment or the webhook runs first, the other sees pending=null and
+      // no-ops, so charge_count can never double-increment.
+      if (payment.extension_id && payment.rental_id) {
+        try {
+          const { data: aeRental } = await supabase
+            .from('rentals')
+            .select('auto_extend_enabled, auto_extend_pending_extension_id, auto_extend_charge_count')
+            .eq('id', payment.rental_id)
+            .maybeSingle();
+
+          if (
+            aeRental?.auto_extend_enabled &&
+            aeRental.auto_extend_pending_extension_id &&
+            aeRental.auto_extend_pending_extension_id === payment.extension_id
+          ) {
+            // finalize_rental_extension marks the extension paid and rolls
+            // end_date forward. Idempotent (status only flips approved->paid,
+            // paid_amount uses GREATEST), so it is safe even if the webhook
+            // already finalized this extension.
+            const { error: finalizeErr } = await supabase.rpc('finalize_rental_extension', {
+              p_extension_id: payment.extension_id,
+              p_payment_id: paymentId,
+            });
+
+            if (finalizeErr) {
+              console.error('[APPLY-PAYMENT] finalize_rental_extension error:', finalizeErr.message ?? finalizeErr);
+            } else {
+              // Only clear the parked pending + un-pause AFTER finalize
+              // succeeded (mirrors the webhook's finalizeOk gate): if finalize
+              // had failed, end_date was not rolled, so we must leave the
+              // rental paused with its pending id intact (recoverable).
+              const { error: aeSyncErr } = await supabase
+                .from('rentals')
+                .update({
+                  auto_extend_pending_extension_id: null,
+                  auto_extend_status: 'active',
+                  auto_extend_paused: false,
+                  auto_extend_paused_at: null,
+                  auto_extend_charge_count: (aeRental.auto_extend_charge_count || 0) + 1,
+                  auto_extend_failed_attempts: 0,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', payment.rental_id);
+              if (aeSyncErr) {
+                console.error('[APPLY-PAYMENT] auto-extend un-pause sync error:', aeSyncErr.message ?? aeSyncErr);
+              } else {
+                console.log(`[APPLY-PAYMENT] Auto-extend rental ${payment.rental_id} finalized + returned to active via manual payment ${paymentId}`);
+              }
+            }
+          }
+        } catch (aeErr: any) {
+          // Best-effort: the payment itself already succeeded.
+          console.error('[APPLY-PAYMENT] auto-extend post-payment sync failed (non-fatal):', aeErr?.message ?? aeErr);
+        }
+      }
+
       return {
         ok: true,
         paymentId: paymentId,

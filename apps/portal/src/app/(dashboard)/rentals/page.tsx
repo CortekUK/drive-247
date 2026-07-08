@@ -478,6 +478,11 @@ const RentalsList = () => {
                                 Auto-Extend
                               </Badge>
                             )}
+                            {(rental as any).auto_extend_status === 'paused' && (
+                              <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-100 dark:text-amber-400 dark:border-amber-700 dark:bg-amber-950/30 text-[10px]">
+                                Paused
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
