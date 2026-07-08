@@ -448,7 +448,7 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           { category: 'Extension Tax', description: 'extension tax' },
           { category: 'Extension Service Fee', description: 'extension service fee' },
           { category: 'Extension Insurance', description: 'extension insurance' },
-          { category: 'Fines', description: 'fine charges' },
+          { category: 'Fine', description: 'fine charges' },
           { category: 'Other', description: 'other charges' },
         ];
         console.log('Using full category list with auto-creation from invoice');
@@ -466,7 +466,7 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           { category: 'Extension Tax', description: 'extension tax' },
           { category: 'Extension Service Fee', description: 'extension service fee' },
           { category: 'Extension Insurance', description: 'extension insurance' },
-          { category: 'Fines', description: 'fine charges' },
+          { category: 'Fine', description: 'fine charges' },
           { category: 'Other', description: 'other charges' },
         ];
         console.log('No rental_id, using all common categories');
@@ -697,7 +697,9 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
             vehicle_id: charge.vehicle_id || payment.vehicle_id,
             entry_date: chargeDueDate,
             side: 'Revenue',
-            category: category,
+            // P&L keeps fine revenue under 'Fines' to satisfy chk_pnl_category_valid
+            // and match existing pnl_entries data; the ledger charge stays 'Fine'.
+            category: category === 'Fine' ? 'Fines' : category,
             amount: toApply,
             source_ref: `${paymentId}_${charge.id}`,
             customer_id: payment.customer_id,
