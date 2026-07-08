@@ -210,6 +210,12 @@ export const useCustomerBalanceWithStatus = (customerId: string | undefined) => 
       const CAPTURED_CREDIT_STATUSES = ['Applied', 'Credit', 'Partial'];
       paymentsData?.forEach((payment: any) => {
         if (!CAPTURED_CREDIT_STATUSES.includes(payment.status)) return;
+        // Belt-and-suspenders: a genuinely captured payment never keeps
+        // capture_status='requires_capture'. Excluding it too means a hold
+        // mislabeled with a captured-looking status (e.g. Credit/Partial that is
+        // still requires_capture) can't inflate credit either — the status
+        // whitelist alone would miss those.
+        if (payment.capture_status === 'requires_capture') return;
         availableCredit += (payment.remaining_amount || 0);
       });
 
