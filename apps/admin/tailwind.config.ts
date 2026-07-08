@@ -15,6 +15,17 @@ const config: Config = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        // Dark-theme tokens used across the admin app (bg-dark-card, border-dark-border,
+        // text-dark-text-secondary, etc.). Defined as literal hex — matching the neon-purple
+        // theme's CSS variables — so they render reliably regardless of CSS-variable scope.
+        // Previously these classes were UNDEFINED and only "looked" dark by rendering
+        // transparent on top of a dark backdrop, which let invisible elements slip through.
+        "dark-bg": "#1c1535", // matches --background (258 30% 12%)
+        "dark-card": "#241c42", // matches --card (258 28% 15%)
+        "dark-border": "#362d54", // matches --border (258 22% 22%)
+        "dark-hover": "#2e2550", // hover surface between card and border
+        "dark-text": "#ddd1f0", // matches --foreground
+        "dark-text-secondary": "#8a74a8", // matches --muted-foreground (265 15% 55%)
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",

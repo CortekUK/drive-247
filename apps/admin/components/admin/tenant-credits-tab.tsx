@@ -168,7 +168,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
               value={adjustAmount}
               onChange={(e) => setAdjustAmount(e.target.value)}
               placeholder="e.g. 100 or -50"
-              className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-white text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
 
@@ -179,7 +179,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
               value={adjustNote}
               onChange={(e) => setAdjustNote(e.target.value)}
               placeholder="Reason for adjustment"
-              className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-white text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
 
