@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { CheckSquare, CreditCard, Ban, X, AlertTriangle } from "lucide-react";
+import { CheckSquare, CreditCard, Ban, X, AlertTriangle, Mail } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +16,13 @@ interface Fine {
   status: string;
   amount: number;
   reference_no: string | null;
+  // Extra fields (present on the EnhancedFine objects the fines page passes in)
+  // used by the "Email Statement + Pay Link" toll-report action.
+  customer_id?: string | null;
+  rental_id?: string | null;
+  issue_date?: string | null;
+  type?: string | null;
+  customers?: { name: string; email?: string; phone?: string } | null;
 }
 
 interface BulkActionBarProps {
@@ -26,6 +33,7 @@ interface BulkActionBarProps {
 export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBarProps) => {
   const [showChargeDialog, setShowChargeDialog] = useState(false);
   const [showWaiveDialog, setShowWaiveDialog] = useState(false);
+  const [showTollDialog, setShowTollDialog] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
@@ -136,6 +144,95 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
     },
   });
 
+  // ── Toll statement + pay-link ──────────────────────────────────────────────
+  // A single email + one Stripe link can only target ONE customer, and keeping it
+  // to ONE rental means settlement rides the proven generic webhook path with no
+  // webhook change. Enable only when every billable selected fine shares one
+  // customer + one rental, that customer has an email, and there's a positive total.
+  const billableFines = selectedFines.filter(
+    (f) => f.status !== 'Paid' && f.status !== 'Waived' && Number(f.amount) > 0,
+  );
+  const uniqueReportCustomers = new Set(billableFines.map((f) => f.customer_id).filter(Boolean));
+  const uniqueReportRentals = new Set(billableFines.map((f) => f.rental_id).filter(Boolean));
+  const reportCustomer = billableFines[0]?.customers ?? null;
+  const reportCustomerId = billableFines[0]?.customer_id ?? null;
+  const reportRentalId = billableFines[0]?.rental_id ?? null;
+  const reportTotal = billableFines.reduce((s, f) => s + Number(f.amount || 0), 0);
+  const canEmailReport =
+    billableFines.length > 0 &&
+    uniqueReportCustomers.size === 1 &&
+    uniqueReportRentals.size === 1 &&
+    !!reportCustomer?.email &&
+    reportTotal > 0;
+
+  const sendTollReportMutation = useMutation({
+    mutationFn: async () => {
+      if (!reportCustomerId || !reportRentalId || !reportCustomer?.email) {
+        throw new Error('Select tolls for a single customer and rental that has an email on file.');
+      }
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      // 1) Mint the pay-link via the proven checkout path. targetCategories:['Fine']
+      //    means the webhook settles it against this customer's Fine ledger charges.
+      const { data: sessionData, error: sessionError } = await supabase.functions.invoke(
+        'create-checkout-session',
+        {
+          body: {
+            rentalId: reportRentalId,
+            customerId: reportCustomerId,
+            customerEmail: reportCustomer.email,
+            customerName: reportCustomer.name,
+            totalAmount: reportTotal,
+            tenantId: tenant?.id,
+            targetCategories: ['Fine'],
+            source: 'portal',
+            successUrl: `${origin}/fines?payment=success`,
+            cancelUrl: `${origin}/fines?payment=cancelled`,
+          },
+        },
+      );
+      if (sessionError) throw sessionError;
+      const payUrl = sessionData?.url;
+      if (!payUrl) throw new Error('No payment link was returned by checkout.');
+
+      // 2) Email the branded toll statement with the pay button (email-only fn).
+      const { error: emailError } = await supabase.functions.invoke('send-toll-report', {
+        body: {
+          tenantId: tenant?.id,
+          customerEmail: reportCustomer.email,
+          customerName: reportCustomer.name,
+          currencyCode: tenant?.currency_code || 'USD',
+          total: reportTotal,
+          payUrl,
+          tolls: billableFines.map((f) => ({
+            date: f.issue_date ?? null,
+            description: [f.type, f.reference_no].filter(Boolean).join(' · ') || 'Toll charge',
+            amount: Number(f.amount || 0),
+          })),
+        },
+      });
+      if (emailError) throw emailError;
+      return { count: billableFines.length };
+    },
+    onSuccess: ({ count }) => {
+      toast({
+        title: 'Toll statement sent',
+        description: `Emailed ${count} toll${count === 1 ? '' : 's'} with a payment link.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['fines-list'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-payment-links'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-payment-links'] });
+      onClearSelection();
+      setShowTollDialog(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Could not send toll statement',
+        description: error.message || 'Unknown error',
+        variant: 'destructive',
+      });
+    },
+  });
+
   if (selectedFines.length === 0) {
     return null;
   }
@@ -178,6 +275,18 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
               >
                 <Ban className="h-4 w-4 mr-2" />
                 Waive Selected ({waivableFines.length})
+              </Button>
+
+              {/* Email Statement + Pay Link (toll report) */}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!canEmailReport || sendTollReportMutation.isPending}
+                onClick={() => setShowTollDialog(true)}
+                title={canEmailReport ? undefined : 'Select unpaid tolls for a single customer & rental that has an email on file'}
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Email Statement + Pay Link
               </Button>
 
               {/* Clear Selection */}
@@ -269,6 +378,51 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
               disabled={bulkWaiveMutation.isPending}
             >
               {bulkWaiveMutation.isPending ? "Waiving..." : "Waive Fines"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Toll Statement + Pay Link Confirmation Dialog */}
+      <AlertDialog open={showTollDialog} onOpenChange={setShowTollDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Email toll statement + payment link</AlertDialogTitle>
+            <AlertDialogDescription>
+              This emails {reportCustomer?.name || 'the customer'} a statement of the tolls below plus a
+              secure link to pay {formatCurrency(reportTotal, tenant?.currency_code || 'USD')}. Make sure
+              these tolls have already been charged to the customer.
+
+              <div className="mt-4 p-3 bg-muted rounded">
+                <div className="max-h-40 overflow-y-auto space-y-1">
+                  {billableFines.map(fine => (
+                    <div key={fine.id} className="text-xs flex justify-between gap-3">
+                      <span className="truncate">
+                        {[fine.type, fine.reference_no].filter(Boolean).join(' · ') || 'Toll'}
+                      </span>
+                      <span className="whitespace-nowrap">
+                        {formatCurrency(Number(fine.amount || 0), tenant?.currency_code || 'USD')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 pt-2 border-t flex justify-between text-sm font-semibold">
+                  <span>Total</span>
+                  <span>{formatCurrency(reportTotal, tenant?.currency_code || 'USD')}</span>
+                </div>
+              </div>
+              {reportCustomer?.email && (
+                <p className="mt-2 text-xs text-muted-foreground">Sending to {reportCustomer.email}</p>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => sendTollReportMutation.mutate()}
+              disabled={sendTollReportMutation.isPending}
+            >
+              {sendTollReportMutation.isPending ? "Sending..." : "Send statement + link"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

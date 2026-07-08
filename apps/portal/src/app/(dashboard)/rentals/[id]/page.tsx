@@ -32,6 +32,8 @@ import { useRentalManualPaidBreakdown } from "@/hooks/use-rental-manual-paid-bre
 import { usePaygLedger } from "@/hooks/use-payg-ledger";
 import { usePaygInvoices } from "@/hooks/use-payg-invoices";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
+import { PaymentLinksPanel } from "@/components/payments/payment-links-panel";
+import { useRentalPaymentLinks } from "@/hooks/use-payment-links";
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
 import { KeyHandoverActionBanner } from "@/components/rentals/key-handover-action-banner";
 import { DamageAnalysisCard } from "@/components/rentals/damage-analysis-card";
@@ -436,6 +438,7 @@ const RentalDetail = () => {
   const { data: rentalCharges } = useRentalCharges(id);
   const { data: rawInvoiceBreakdown } = useRentalInvoice(id);
   const { data: paymentBreakdown, isLoading: isPaymentBreakdownLoading } = useRentalPaymentBreakdown(id);
+  const { data: paymentLinks, isLoading: paymentLinksLoading } = useRentalPaymentLinks(id);
   const { data: refundData } = useRentalRefundBreakdown(id);
   const refundBreakdown = refundData?.categoryRefunds || null;
   const chargeRefunds = refundData?.chargeRefunds || {};
@@ -2943,6 +2946,17 @@ const RentalDetail = () => {
             queryClient.invalidateQueries({ queryKey: ['payg-invoices'] });
             queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
           }}
+        />
+      )}
+
+      {/* Payment Links — history of every Stripe payment link / request sent for
+          this rental (renewals, balances, tolls, deposits) with live status, so
+          staff can see what was sent and whether it was paid without opening Stripe. */}
+      {rental && (
+        <PaymentLinksPanel
+          links={paymentLinks || []}
+          isLoading={paymentLinksLoading}
+          currencyCode={tenant?.currency_code || 'USD'}
         />
       )}
 

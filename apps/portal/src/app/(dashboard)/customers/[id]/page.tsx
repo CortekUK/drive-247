@@ -39,6 +39,8 @@ import DocumentStatusBadge from "@/components/customers/document-status-badge";
 import { DocumentSigningStatusBadge } from "@/components/customers/document-signing-status-badge";
 import { NextOfKinCard } from "@/components/customers/next-of-kin-card";
 import { PaymentStatusBadge } from "@/components/customers/payment-status-badge";
+import { PaymentLinksPanel } from "@/components/payments/payment-links-panel";
+import { useCustomerPaymentLinks } from "@/hooks/use-payment-links";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { format } from "date-fns";
 import { parseLocalDate } from "@/lib/date-utils";
@@ -290,6 +292,7 @@ const CustomerDetail = () => {
   const { data: activeRentalsCount } = useCustomerActiveRentals(id!);
   const { data: rentals } = useCustomerRentals(id!);
   const { data: payments } = useCustomerPayments(id!);
+  const { data: customerPaymentLinks, isLoading: customerPaymentLinksLoading } = useCustomerPaymentLinks(id!);
   const { data: paymentStats } = useCustomerPaymentStats(id!);
   const { data: fines } = useCustomerFines(id!);
   const { data: fineStats } = useCustomerFineStats(id!);
@@ -1031,6 +1034,15 @@ const CustomerDetail = () => {
               </CardContent>
             </Card>
           )}
+
+          {/* Payment Links — every Stripe link / request sent to this customer with
+              live status (Paid / Awaiting / Expired), so staff can track what's been
+              sent across all their rentals without leaving the portal. */}
+          <PaymentLinksPanel
+            links={customerPaymentLinks || []}
+            isLoading={customerPaymentLinksLoading}
+            currencyCode={currencyCode}
+          />
 
           <Card>
             <CardHeader>
