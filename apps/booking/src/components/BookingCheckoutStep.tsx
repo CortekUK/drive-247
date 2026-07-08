@@ -455,7 +455,7 @@ export default function BookingCheckoutStep({
             start: clampToBonzahStart(formData.pickupDate),
             end: formData.dropoffDate,
           },
-          pickup_state: formData.addressState || 'FL', // Use customer's state or default to FL
+          pickup_state: formData.addressState || 'FL', // fallback only — bonzah-create-quote resolves the real pickup state from the rental/tenant location
           coverage: bonzahCoverage,
           renter: {
             first_name: formData.customerName.split(' ')[0] || formData.customerName,

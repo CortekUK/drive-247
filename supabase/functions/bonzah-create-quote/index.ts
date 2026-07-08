@@ -45,6 +45,31 @@ function getStateName(stateCode: string): string {
   return STATE_NAMES[stateCode.toUpperCase()] || stateCode
 }
 
+// State names sorted longest-first so "West Virginia" matches before "Virginia".
+const STATE_NAME_ENTRIES = Object.entries(STATE_NAMES).sort((a, b) => b[1].length - a[1].length)
+
+/**
+ * Extract a 2-letter US state code from a free-text address string.
+ * Handles "…, Metairie, LA 70003, USA" (code before ZIP), "New Orleans, Louisiana"
+ * (full state name), and "…, LA" / "…, LA, USA" (trailing code). Returns null if none.
+ */
+function extractStateFromAddress(addr: string | null | undefined): string | null {
+  if (!addr) return null
+  const s = addr.trim()
+  // 1. Two-letter code immediately before a 5-digit ZIP: "LA 70003"
+  const beforeZip = s.match(/\b([A-Za-z]{2})\s+\d{5}(?:-\d{4})?\b/)
+  if (beforeZip && STATE_NAMES[beforeZip[1].toUpperCase()]) return beforeZip[1].toUpperCase()
+  // 2. Full state name anywhere (longest-first): "Louisiana"
+  const lower = s.toLowerCase()
+  for (const [code, name] of STATE_NAME_ENTRIES) {
+    if (new RegExp(`\\b${name.toLowerCase()}\\b`).test(lower)) return code
+  }
+  // 3. Trailing two-letter code after a comma: "…, LA" or "…, LA, USA"
+  const trailing = s.match(/,\s*([A-Za-z]{2})\s*(?:,\s*(?:USA|United States))?\s*$/i)
+  if (trailing && STATE_NAMES[trailing[1].toUpperCase()]) return trailing[1].toUpperCase()
+  return null
+}
+
 /**
  * Get current date and hour in Pacific timezone using formatToParts (locale-independent).
  * Returns { date: 'YYYY-MM-DD', hour: number }
@@ -271,9 +296,37 @@ serve(async (req) => {
       return errorResponse('No coverage selected')
     }
 
+    // Resolve the TRUE pickup state from the rental / tenant location — NOT the
+    // renter's residence. Bonzah rates on pickup_state; the portal & booking were
+    // filling pickup_state with the customer's HOME state, so premiums tracked
+    // where the renter lives instead of where the car is picked up (flagged by
+    // Bonzah 2026-07 — a Metairie, LA pickup was pricing as the renter's FL home).
+    // Priority: rental pickup location → rental delivery address → tenant fixed
+    // pickup address → tenant address → whatever the caller sent (unchanged fallback).
+    let resolvedPickupState = body.pickup_state
+    try {
+      const [{ data: rentalRow }, { data: tenantRow }] = await Promise.all([
+        supabase.from('rentals').select('pickup_location, delivery_address').eq('id', body.rental_id).maybeSingle(),
+        supabase.from('tenants').select('fixed_pickup_address, address').eq('id', body.tenant_id).maybeSingle(),
+      ])
+      const locationState =
+        extractStateFromAddress(rentalRow?.pickup_location) ||
+        extractStateFromAddress(rentalRow?.delivery_address) ||
+        extractStateFromAddress(tenantRow?.fixed_pickup_address) ||
+        extractStateFromAddress(tenantRow?.address)
+      if (locationState) {
+        resolvedPickupState = locationState
+        console.log(`[Bonzah Quote] Pickup state resolved from location: ${locationState} (caller sent: ${body.pickup_state})`)
+      } else {
+        console.warn(`[Bonzah Quote] Could not resolve pickup state from location; using caller value: ${body.pickup_state}`)
+      }
+    } catch (e) {
+      console.error('[Bonzah Quote] Pickup-state resolution failed, using caller value:', e)
+    }
+
     // Get full state names for Bonzah API
-    // Default empty state fields to pickup_state (Bonzah requires valid state for finalization)
-    const defaultState = body.pickup_state || 'FL'
+    // Default empty state fields to the resolved pickup state (Bonzah requires a valid state for finalization)
+    const defaultState = resolvedPickupState || 'FL'
     const pickupStateFull = getStateName(defaultState)
     const residenceStateFull = getStateName(body.renter.address.state || defaultState)
     const licenseStateFull = getStateName(body.renter.license.state || defaultState)
@@ -434,7 +487,7 @@ serve(async (req) => {
           coverage_types: coverageTypesWithPdfs,
           trip_start_date: chunk.start,
           trip_end_date: chunk.end,
-          pickup_state: body.pickup_state,
+          pickup_state: resolvedPickupState,
           premium_amount: quoteResult.premium,
           renter_details: body.renter,
           status: 'quoted',
