@@ -88,7 +88,10 @@ export const ChargeDepositDialog = ({
     setRefreshing(true);
     try {
       const { data, error } = await supabase.functions.invoke("place-deposit-hold", {
-        body: { rentalId, tenantId: tenant?.id },
+        // manualOverride: this dialog is a deliberate staff action, allowed on
+        // manually-extended rentals (auto-extend rentals are still refused
+        // server-side regardless of this flag).
+        body: { rentalId, tenantId: tenant?.id, manualOverride: true },
       });
       if (error) {
         let detail = error.message;

@@ -163,18 +163,13 @@ Deno.serve(async (req) => {
     //      remainder on the saved card.
     let newHoldPiId: string | null = null;
     let newHoldExpiresAt: string | null = null;
-    // Belt-and-braces: never RE-HOLD the remainder on a long-running rental
-    // (auto-extend or extended). The operator's capture above still completes —
-    // we just don't spin up a fresh hold for the uncaptured remainder, keeping the
-    // invariant "no deposit hold ever lives on an auto-extend/extended rental".
-    let isLongRunning = (rental as any).auto_extend_enabled === true;
-    if (!isLongRunning) {
-      const { count } = await supabase
-        .from("rental_extensions")
-        .select("id", { count: "exact", head: true })
-        .eq("rental_id", rentalId);
-      isLongRunning = (count ?? 0) > 0;
-    }
+    // Belt-and-braces: never RE-HOLD the remainder on an AUTO-EXTEND rental
+    // (renewal pricing replaces the deposit). The operator's capture above still
+    // completes — we just don't spin up a fresh hold for the remainder.
+    // Manually-extended rentals are allowed again (GMT incident, Jul 2026): a
+    // rollover after a staff-initiated partial capture is a one-time, deliberate
+    // operation, not the RevTek/Fabri auto-retry loop.
+    const isLongRunning = (rental as any).auto_extend_enabled === true;
     if (!usedMulticapture && remainder > 0 && !isLongRunning && rental.deposit_hold_payment_method_id && rental.deposit_hold_stripe_customer_id) {
       try {
         // Ask for extended authorization + multicapture on the rollover PI so it

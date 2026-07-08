@@ -15,6 +15,19 @@ interface AddHoldDialogProps {
   onSuccess?: () => void;
 }
 
+// create-hold-checkout returns machine skip codes; show operators plain English.
+const HOLD_SKIP_MESSAGES: Record<string, string> = {
+  auto_extend_rental:
+    "This is an auto-extension rental — deposits are never held on these (the renewal price replaces the deposit).",
+  // Legacy code from before the guard was narrowed (Jul 2026); kept for safety.
+  auto_extend_or_extended_rental:
+    "This is an auto-extension rental — deposits are never held on these (the renewal price replaces the deposit).",
+  hold_already_active: "A deposit hold is already active on this rental.",
+  deposit_disabled_for_tenant: "Security deposits are disabled in your settings.",
+  deposit_amount_is_zero: "The deposit amount is 0 — set a deposit amount in settings or on the rental first.",
+};
+const describeHoldSkip = (code: string): string => HOLD_SKIP_MESSAGES[code] || `Hold not placed (${code}).`;
+
 export const AddHoldDialog = ({
   open,
   onOpenChange,
@@ -54,7 +67,7 @@ export const AddHoldDialog = ({
       });
       if (error) throw new Error(error.message || "Failed to create hold checkout");
       if (data?.skipped) {
-        toast({ title: "Hold not placed", description: data.skipped, variant: "destructive" });
+        toast({ title: "Hold not placed", description: describeHoldSkip(data.skipped), variant: "destructive" });
         return;
       }
       if (!data?.url) throw new Error("No checkout URL returned");
@@ -91,7 +104,7 @@ export const AddHoldDialog = ({
       });
       if (checkoutError) throw new Error(checkoutError.message || "Failed to create hold session");
       if (checkoutData?.skipped) {
-        toast({ title: "Hold not created", description: checkoutData.skipped, variant: "destructive" });
+        toast({ title: "Hold not created", description: describeHoldSkip(checkoutData.skipped), variant: "destructive" });
         return;
       }
       if (!checkoutData?.url) throw new Error("No checkout URL returned");

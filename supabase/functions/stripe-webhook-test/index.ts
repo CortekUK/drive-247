@@ -199,6 +199,10 @@ serve(async (req) => {
                 capture_status: "captured",
                 paid_at: new Date().toISOString(),
                 stripe_payment_intent_id: paymentIntentId || null,
+                // Stripe captured the money — nothing left for staff to verify.
+                // Pre-created rows default to 'pending', which (among other
+                // things) hides the revenue from owner payouts (GMT incident).
+                verification_status: "auto_approved",
               })
               .eq("id", existingPayment.id);
 
@@ -237,6 +241,7 @@ serve(async (req) => {
                   stripe_checkout_session_id: session.id,
                   tenant_id: session.metadata?.tenant_id || null,
                   platform_account: platformAccount,
+                  verification_status: "auto_approved",
                 })
                 .select()
                 .single();
@@ -531,6 +536,10 @@ serve(async (req) => {
                 status: "Completed",
                 capture_status: "captured",
                 stripe_payment_intent_id: session.payment_intent as string,
+                // Stripe captured the money — auto-approve. Extension payments
+                // were inserted as 'pending' and never flipped, which hid ALL
+                // long-running-rental revenue from owner payouts (GMT incident).
+                verification_status: "auto_approved",
                 updated_at: new Date().toISOString(),
               })
               .eq("id", extensionPayment.id);

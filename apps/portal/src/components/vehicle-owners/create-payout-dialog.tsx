@@ -35,6 +35,9 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
   const [refundAdjustments, setRefundAdjustments] = useState<string>("0");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Manual mode: type a flat Net Owed and skip the revenue calculator entirely.
+  const [manualMode, setManualMode] = useState(false);
+  const [manualNetOwed, setManualNetOwed] = useState<string>("");
 
   // Reset state on open and prefill default range based on owner's frequency
   useEffect(() => {
@@ -43,6 +46,8 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
     setError(null);
     setNotes("");
     setRefundAdjustments("0");
+    setManualMode(false);
+    setManualNetOwed("");
     const today = new Date();
     setPeriodStart(format(startOfMonth(today), "yyyy-MM-dd"));
     setPeriodEnd(format(endOfMonth(today), "yyyy-MM-dd"));
@@ -94,7 +99,13 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
       setError("End date must be on or after start date.");
       return;
     }
-    if (preview.length === 0) {
+    if (manualMode) {
+      const amt = Number(manualNetOwed);
+      if (!manualNetOwed || Number.isNaN(amt) || amt <= 0) {
+        setError("Enter a net payout amount greater than 0.");
+        return;
+      }
+    } else if (preview.length === 0) {
       setError("This owner has no managed vehicles or no revenue in the selected range.");
       return;
     }
@@ -103,9 +114,10 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
         owner_id: ownerId,
         period_start: periodStart,
         period_end: periodEnd,
-        refund_adjustments: Number(refundAdjustments) || 0,
+        refund_adjustments: manualMode ? 0 : (Number(refundAdjustments) || 0),
         notes: notes.trim() || undefined,
-        preview,
+        preview: manualMode ? [] : preview,
+        ...(manualMode ? { manualNetOwed: Number(manualNetOwed) } : {}),
       });
       onCreated?.();
       onOpenChange(false);
@@ -148,6 +160,35 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
             </div>
           </div>
 
+          <div className="flex items-center gap-2">
+            <input
+              id="manual-mode"
+              type="checkbox"
+              className="h-4 w-4 rounded border-input"
+              checked={manualMode}
+              onChange={(e) => setManualMode(e.target.checked)}
+            />
+            <Label htmlFor="manual-mode" className="cursor-pointer font-normal">
+              Enter a manual amount (skip the revenue calculator)
+            </Label>
+          </div>
+
+          {manualMode ? (
+            <div>
+              <Label htmlFor="manual-net">Net Payout Amount ({currency})</Label>
+              <Input
+                id="manual-net"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={manualNetOwed}
+                onChange={(e) => setManualNetOwed(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                This exact amount is recorded as owed to the owner. No per-vehicle breakdown or revenue lookup is performed.
+              </p>
+            </div>
+          ) : (
           <div>
             <Label>Preview</Label>
             <div className="border rounded-md overflow-hidden mt-1">
@@ -194,47 +235,52 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
               </Table>
             </div>
           </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="refund-adj">Refund Adjustments ({currency})</Label>
-              <Input
-                id="refund-adj"
-                type="number"
-                step="0.01"
-                value={refundAdjustments}
-                onChange={(e) => setRefundAdjustments(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Subtract refunds issued in this period that you've already paid the owner for.
-              </p>
-            </div>
-            <div>
+            {!manualMode && (
+              <div>
+                <Label htmlFor="refund-adj">Refund Adjustments ({currency})</Label>
+                <Input
+                  id="refund-adj"
+                  type="number"
+                  step="0.01"
+                  value={refundAdjustments}
+                  onChange={(e) => setRefundAdjustments(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Subtract refunds issued in this period that you've already paid the owner for.
+                </p>
+              </div>
+            )}
+            <div className={manualMode ? "col-span-2" : ""}>
               <Label htmlFor="payout-notes">Notes</Label>
               <Textarea id="payout-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
           </div>
 
-          <div className="rounded-md border p-3 bg-[#f8fafc] dark:bg-muted/40">
-            <div className="grid grid-cols-4 text-sm gap-2">
-              <Stat label="Gross Revenue" value={formatCurrency(totals.gross, currency)} />
-              <Stat label="Commission" value={`- ${formatCurrency(totals.commission, currency)}`} />
-              <Stat label="Refund Adj." value={`- ${formatCurrency(totals.refund, currency)}`} />
-              <Stat label="Net Owed" value={formatCurrency(totals.net, currency)} highlight />
+          {!manualMode && (
+            <div className="rounded-md border p-3 bg-[#f8fafc] dark:bg-muted/40">
+              <div className="grid grid-cols-4 text-sm gap-2">
+                <Stat label="Gross Revenue" value={formatCurrency(totals.gross, currency)} />
+                <Stat label="Commission" value={`- ${formatCurrency(totals.commission, currency)}`} />
+                <Stat label="Refund Adj." value={`- ${formatCurrency(totals.refund, currency)}`} />
+                <Stat label="Net Owed" value={formatCurrency(totals.net, currency)} highlight />
+              </div>
+              {totals.net < 0 && (
+                <p className="text-xs text-orange-700 dark:text-orange-400 mt-2">
+                  Net is negative — owner currently owes the operator {formatCurrency(Math.abs(totals.net), currency)}. Carry forward to next payout.
+                </p>
+              )}
             </div>
-            {totals.net < 0 && (
-              <p className="text-xs text-orange-700 dark:text-orange-400 mt-2">
-                Net is negative — owner currently owes the operator {formatCurrency(Math.abs(totals.net), currency)}. Carry forward to next payout.
-              </p>
-            )}
-          </div>
+          )}
 
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={create.isPending}>Cancel</Button>
-          <Button onClick={handleCreate} disabled={create.isPending || !ownerId || preview.length === 0}>
+          <Button onClick={handleCreate} disabled={create.isPending || !ownerId || (!manualMode && preview.length === 0)}>
             {create.isPending ? "Creating..." : "Create Payout"}
           </Button>
         </DialogFooter>

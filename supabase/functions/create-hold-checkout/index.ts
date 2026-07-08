@@ -40,16 +40,12 @@ Deno.serve(async (req) => {
       .single()
     if (rentalError || !rental) return errorResponse('Rental not found', 404)
 
-    // A deposit hold is one-time, placed at handover — never (re)attempted on a
-    // long-running rental: auto-extend OR any rental that's been extended.
-    {
-      const { count } = await supabase
-        .from('rental_extensions')
-        .select('id', { count: 'exact', head: true })
-        .eq('rental_id', rentalId)
-      if ((rental as any).auto_extend_enabled || (count ?? 0) > 0) {
-        return jsonResponse({ skipped: 'auto_extend_or_extended_rental' })
-      }
+    // AUTO-EXTEND rentals never carry a deposit (renewal pricing replaces it).
+    // Manually-extended rentals are allowed: this function is only reached from
+    // the portal's Add Hold dialog — a deliberate staff action — so the RevTek/
+    // Fabri auto-retry concern does not apply here (GMT incident, Jul 2026).
+    if ((rental as any).auto_extend_enabled) {
+      return jsonResponse({ skipped: 'auto_extend_rental' })
     }
 
     if (rental.deposit_hold_status === 'held') {

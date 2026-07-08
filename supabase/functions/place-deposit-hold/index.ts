@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { rentalId, tenantId } = await req.json();
+    const { rentalId, tenantId, manualOverride } = await req.json();
 
     if (!rentalId) {
       return errorResponse("Missing required field: rentalId");
@@ -34,26 +34,34 @@ Deno.serve(async (req) => {
       return errorResponse("Rental not found", 404);
     }
 
-    // A deposit hold is a ONE-TIME authorisation placed at handover. It must
-    // never be (re)attempted on a long-running rental — neither an auto-extend
-    // rental (flat advertised renewal price) NOR a rental that has been EXTENDED.
-    // Without a per-rental override the code fell back to the tenant's $150
-    // default and re-authorised the customer's card on every renewal/extension
-    // payment: RevTek/Jeffrey (auto-extend) hit it twice, and RevTek/Fabri (a
-    // 1-day rental manually extended 5× — NOT flagged auto-extend) racked up 16
-    // failed attempts. Guard on BOTH signals so it's removed from every
-    // long-running rental regardless of the auto-extend flag or override state.
-    let hasExtensions = false;
-    {
-      const { count } = await supabase
-        .from("rental_extensions")
-        .select("id", { count: "exact", head: true })
-        .eq("rental_id", rentalId);
-      hasExtensions = (count ?? 0) > 0;
+    // Two-tier guard (GMT incident, Jul 2026 — the old blanket ban broke
+    // deposits for tenants whose business is manually-extended rentals):
+    //
+    // 1. AUTO-EXTEND rentals NEVER get a hold, from any caller (RevTek/Jeffrey:
+    //    renewal pricing replaces the deposit; hit twice by auto placement).
+    // 2. Manually-EXTENDED rentals are blocked only for AUTOMATIC callers
+    //    (webhooks, booking-success, post-charge auto-placement) — that loop is
+    //    what spammed RevTek/Fabri with 16 failed attempts on every extension
+    //    payment. A deliberate staff action passes manualOverride: true and is
+    //    allowed through: the operator is choosing to hold a deposit on a
+    //    rental they extended, which is legitimate (GMT's whole fleet).
+    if ((rental as any).auto_extend_enabled) {
+      console.log("[DEPOSIT-HOLD] Skipped — auto-extend rental:", rentalId);
+      return jsonResponse({ success: true, skipped: true, message: "Auto-extend rental — deposit hold skipped (renewal pricing replaces the deposit)" });
     }
-    if ((rental as any).auto_extend_enabled || hasExtensions) {
-      console.log("[DEPOSIT-HOLD] Skipped — auto-extend/extended rental:", rentalId);
-      return jsonResponse({ success: true, skipped: true, message: "Auto-extend or extended rental — deposit hold skipped" });
+    if (!manualOverride) {
+      let hasExtensions = false;
+      {
+        const { count } = await supabase
+          .from("rental_extensions")
+          .select("id", { count: "exact", head: true })
+          .eq("rental_id", rentalId);
+        hasExtensions = (count ?? 0) > 0;
+      }
+      if (hasExtensions) {
+        console.log("[DEPOSIT-HOLD] Skipped — extended rental (automatic caller):", rentalId);
+        return jsonResponse({ success: true, skipped: true, message: "Extended rental — automatic deposit placement skipped. Staff can place a hold deliberately from the rental page." });
+      }
     }
 
     // Remember the prior state: a re-collection after an expired/released hold

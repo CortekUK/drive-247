@@ -72,6 +72,12 @@ export interface CreatePayoutInput {
   refund_adjustments?: number;
   notes?: string;
   preview: OwnerOwedRow[]; // from useOwnerOwedPreview
+  // Manual mode: skip the revenue calculation entirely and record a flat
+  // net_owed the operator types in (safety valve for when the calculator is
+  // wrong, or for one-off payouts outside standard commission math). When set,
+  // `preview` is ignored, no per-vehicle lines are written, and gross/
+  // commission are recorded as 0.
+  manualNetOwed?: number;
 }
 
 export function useCreatePayout() {
@@ -83,18 +89,26 @@ export function useCreatePayout() {
     mutationFn: async (input: CreatePayoutInput): Promise<OwnerPayout> => {
       if (!tenant?.id) throw new Error("Tenant context missing");
 
-      // Per-vehicle overlap protection now lives in calculate_owner_owed —
-      // it excludes vehicles already covered by a non-cancelled payout in
-      // the requested period. The preview only contains uncovered revenue,
-      // so an empty preview = nothing left to pay out.
-      if (input.preview.length === 0) {
+      const isManual = input.manualNetOwed !== undefined && input.manualNetOwed !== null;
+
+      // Auto mode: per-vehicle overlap protection lives in calculate_owner_owed
+      // (it excludes vehicles already covered by a non-cancelled payout in the
+      // period), so the preview only contains uncovered revenue — an empty
+      // preview means nothing left to pay out. Manual mode skips this entirely.
+      if (!isManual && input.preview.length === 0) {
         throw new Error("No remaining revenue to pay out for this owner in the selected range.");
       }
 
-      const grossRevenue = input.preview.reduce((sum, r) => sum + Number(r.paid_revenue || 0), 0);
-      const commissionAmount = input.preview.reduce((sum, r) => sum + Number(r.commission_amount || 0), 0);
       const refundAdjustments = Number(input.refund_adjustments ?? 0);
-      const netOwed = round2(grossRevenue - commissionAmount - refundAdjustments);
+      const grossRevenue = isManual
+        ? 0
+        : input.preview.reduce((sum, r) => sum + Number(r.paid_revenue || 0), 0);
+      const commissionAmount = isManual
+        ? 0
+        : input.preview.reduce((sum, r) => sum + Number(r.commission_amount || 0), 0);
+      const netOwed = isManual
+        ? round2(Number(input.manualNetOwed))
+        : round2(grossRevenue - commissionAmount - refundAdjustments);
 
       const { data: payout, error: payoutErr } = await (supabase as any)
         .from("owner_payouts")
@@ -116,7 +130,9 @@ export function useCreatePayout() {
         .single();
       if (payoutErr) throw payoutErr;
 
-      const lineRows = input.preview
+      // Manual payouts carry no per-vehicle breakdown — the header net_owed is
+      // the whole story. Skip line rows entirely.
+      const lineRows = isManual ? [] : input.preview
         .filter((r) => Number(r.paid_revenue) > 0 || Number(r.commission_amount) > 0)
         .map((r) => ({
           payout_id: payout.id,

@@ -114,18 +114,20 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Auto-extend / extended rentals must NOT carry a deposit. If one has a
-        // 'held' deposit from before the place-deposit-hold guard existed, RELEASE
-        // it here (the old hold was already cancelled in Step 1) instead of
-        // re-placing it — never re-authorise a long-running rental's card.
-        let isLongRunning = (rental as any).auto_extend_enabled === true;
-        if (!isLongRunning) {
-          const { count } = await supabase
-            .from("rental_extensions")
-            .select("id", { count: "exact", head: true })
-            .eq("rental_id", rental.id);
-          isLongRunning = (count ?? 0) > 0;
-        }
+        // AUTO-EXTEND rentals must NOT carry a deposit (renewal pricing replaces
+        // it — RevTek/Jeffrey incident). If one has a 'held' deposit from before
+        // the place-deposit-hold guard existed, RELEASE it here (the old hold was
+        // already cancelled in Step 1) instead of re-placing it.
+        //
+        // Manually-EXTENDED rentals are deliberately NOT excluded any more: they
+        // are normal rentals whose deposit must stay alive, and operators on
+        // 7-day-capped Stripe accounts (GMT) rely on this cron to re-authorise
+        // before expiry. The Jun-25 blanket ban conflated the two and this cron
+        // was cancelling their live holds (GMT incident, Jul 2026). The RevTek/
+        // Fabri spam came from AUTOMATIC placement paths, which stay guarded in
+        // place-deposit-hold — one cron re-auth per held hold cannot spam (a
+        // failed re-auth marks the hold 'expired' and is never retried).
+        const isLongRunning = (rental as any).auto_extend_enabled === true;
         if (isLongRunning) {
           await supabase
             .from("rentals")
@@ -135,7 +137,7 @@ Deno.serve(async (req) => {
               deposit_hold_expires_at: null,
             })
             .eq("id", rental.id);
-          console.log("[DEPOSIT-REFRESH] Released (auto-extend/extended — not refreshed):", rental.id);
+          console.log("[DEPOSIT-REFRESH] Released (auto-extend — not refreshed):", rental.id);
           continue;
         }
 
