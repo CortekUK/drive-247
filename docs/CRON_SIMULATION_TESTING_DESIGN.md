@@ -1,7 +1,9 @@
 # Cron Simulation & Testing Environment — Design Document (FINAL)
 
+> ⚠️ **AMENDED 2026-07-08:** a pre-build edge-case audit produced binding amendments B1–B6 (key-rotation sequencing to avoid a prod outage, staging identity fixture, stamp-at-deploy, `--twice`/catch-up corrections, documentation rows, secrets corrections). **See [CRON_SIM_EDGE_CASE_AUDIT.md](CRON_SIM_EDGE_CASE_AUDIT.md) before implementing — especially B1 before any key rotation.**
+
 **Project:** Drive247
-**Date:** 2026-07-08 · **Status:** Approved for implementation
+**Date:** 2026-07-08 · **Status:** Approved for implementation *with audit amendments B1–B6*
 **Origin:** Multi-agent research (5 research tracks → architecture → adversarial critique → final revision), all repo/live-DB claims verified. Production state verified against the live `cron.job` table (21 jobs) the same day.
 
 > **Update (verified 2026-07-08, post-design):** the staging project `ksmreaadhbirzakkxqrq` was audited via the Management API — its `cron.job` table is **empty**. The §5.2 hazard ("staging may be firing prod-keyed jobs at production") is confirmed not occurring, and the design's "no cron on staging" target state already holds.
