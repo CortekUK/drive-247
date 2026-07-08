@@ -30,6 +30,7 @@ import {
 import CreateTenantDialog from '@/components/admin/CreateTenantDialog';
 import BonzahSubmissions from '@/components/admin/BonzahSubmissions';
 import SendToBrandonDialog from '@/components/admin/SendToBrandonDialog';
+import OnboardingFollowUpSheet from '@/components/admin/OnboardingFollowUpSheet';
 import {
   ClipboardCheck,
   Plus,
@@ -103,6 +104,7 @@ export default function OnboardingPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [busy, setBusy] = useState<string | null>(null); // `${tenantId}:${action}`
   const [brandonRow, setBrandonRow] = useState<OnboardingRow | null>(null);
+  const [followUpRow, setFollowUpRow] = useState<OnboardingRow | null>(null);
 
   const loadRows = async () => {
     try {
@@ -382,7 +384,15 @@ export default function OnboardingPage() {
                       const n = doneCount(row);
                       const complete = isFullyOnboarded(row);
                       return (
-                        <TableRow key={row.tenant_id} className={cn(row.excluded && 'opacity-50')}>
+                        <TableRow
+                          key={row.tenant_id}
+                          onClick={() => setFollowUpRow(row)}
+                          className={cn(
+                            'cursor-pointer hover:bg-accent/40',
+                            row.excluded && 'opacity-50',
+                          )}
+                          title="Open follow-up assistant"
+                        >
                           <TableCell>
                             <div className="font-medium whitespace-nowrap">{row.company_name}</div>
                             <div className="text-xs text-muted-foreground whitespace-nowrap">
@@ -405,7 +415,10 @@ export default function OnboardingPage() {
                                   />
                                 ) : (
                                   <button
-                                    onClick={() => toggleOverride(row, item.key)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleOverride(row, item.key);
+                                    }}
                                     disabled={!!busy}
                                     title={
                                       override
@@ -432,7 +445,10 @@ export default function OnboardingPage() {
                             {row.brandon_sent ? (
                               <span title={`Sent ${fmtDate(row.brandon_sent_at)} — click to review / resend`}>
                                 <button
-                                  onClick={() => setBrandonRow(row)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setBrandonRow(row);
+                                  }}
                                   className="inline-flex items-center justify-center p-1 rounded hover:bg-accent transition-colors"
                                 >
                                   <CheckCircle2 className="h-5 w-5 text-success" />
@@ -443,7 +459,10 @@ export default function OnboardingPage() {
                                 variant="outline"
                                 size="sm"
                                 className="h-7 px-2 text-xs"
-                                onClick={() => setBrandonRow(row)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setBrandonRow(row);
+                                }}
                                 title="Email the Bonzah form details to Brandon"
                               >
                                 <Send className="h-3 w-3 mr-1" />
@@ -476,7 +495,10 @@ export default function OnboardingPage() {
 
                           <TableCell className="text-right">
                             <button
-                              onClick={() => toggleExcluded(row)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleExcluded(row);
+                              }}
                               disabled={!!busy}
                               title={row.excluded ? 'Resume tracking this tenant' : 'Stop tracking this tenant (hides from daily digest)'}
                               className="inline-flex items-center justify-center p-1.5 rounded hover:bg-accent transition-colors text-muted-foreground"
@@ -512,6 +534,12 @@ export default function OnboardingPage() {
       />
 
       <DigestSettingsDialog open={showSettings} onOpenChange={setShowSettings} />
+
+      <OnboardingFollowUpSheet
+        row={followUpRow}
+        open={!!followUpRow}
+        onOpenChange={(o) => !o && setFollowUpRow(null)}
+      />
 
       <SendToBrandonDialog
         open={!!brandonRow}
