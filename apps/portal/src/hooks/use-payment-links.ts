@@ -57,15 +57,25 @@ function normalizeCategories(cats: unknown): string {
 // same set of target categories. A newer link for the same target supersedes an
 // older unpaid one (staff re-sent it).
 function targetKey(row: any): string {
-  return `${row.rental_id ?? ""}|${row.extension_id ?? ""}|${normalizeCategories(row.target_categories)}`;
+  // Include amount so genuinely-distinct same-rental links with NULL categories
+  // (e.g. a deposit request and a general balance request) don't collapse into
+  // one key and wrongly mark each other superseded. A true re-send (same target,
+  // same amount, newer created_at) still shares the key and supersedes the older.
+  return `${row.rental_id ?? ""}|${row.extension_id ?? ""}|${normalizeCategories(row.target_categories)}|${Number(row.amount || 0).toFixed(2)}`;
 }
 
 function isCaptured(row: any): boolean {
+  // An uncaptured pre-authorization hold can carry status 'Applied'/'Partial'
+  // while capture_status='requires_capture' — that is authorized, NOT money in
+  // hand. Mirror the availableCredit fix (use-customer-balance): the status
+  // branch only counts when it is NOT an uncaptured hold. A real capture
+  // (capture_status='captured') or a real paid_at / payment intent still wins.
   return (
     row.capture_status === "captured" ||
     row.stripe_payment_intent_id != null ||
     row.paid_at != null ||
-    ["Applied", "Completed", "Partial"].includes(row.status)
+    (["Applied", "Completed", "Partial"].includes(row.status) &&
+      row.capture_status !== "requires_capture")
   );
 }
 

@@ -152,24 +152,47 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
   const billableFines = selectedFines.filter(
     (f) => f.status !== 'Paid' && f.status !== 'Waived' && Number(f.amount) > 0,
   );
-  const uniqueReportCustomers = new Set(billableFines.map((f) => f.customer_id).filter(Boolean));
-  const uniqueReportRentals = new Set(billableFines.map((f) => f.rental_id).filter(Boolean));
   const reportCustomer = billableFines[0]?.customers ?? null;
   const reportCustomerId = billableFines[0]?.customer_id ?? null;
   const reportRentalId = billableFines[0]?.rental_id ?? null;
   const reportTotal = billableFines.reduce((s, f) => s + Number(f.amount || 0), 0);
+  // Airtight guard: EVERY billable fine must share the SAME non-null customer AND
+  // rental. A .filter(Boolean) Set would let a rental_id=null fine slip in beside
+  // a rental-bound one and still read as "one rental", so require every fine to
+  // match the first fine's ids, which must themselves be non-null.
   const canEmailReport =
     billableFines.length > 0 &&
-    uniqueReportCustomers.size === 1 &&
-    uniqueReportRentals.size === 1 &&
+    !!reportCustomerId &&
+    !!reportRentalId &&
     !!reportCustomer?.email &&
-    reportTotal > 0;
+    reportTotal > 0 &&
+    billableFines.every((f) => f.customer_id === reportCustomerId && f.rental_id === reportRentalId);
 
   const sendTollReportMutation = useMutation({
     mutationFn: async () => {
       if (!reportCustomerId || !reportRentalId || !reportCustomer?.email) {
         throw new Error('Select tolls for a single customer and rental that has an email on file.');
       }
+
+      // Idempotency guard: block accidental double-send. If a still-live unpaid
+      // Fine pay-link already exists for this rental (Pending / requires_capture,
+      // created within the ~24h Stripe Checkout session lifetime), don't mint a
+      // second payable link — that would let the customer pay the same tolls twice.
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: existingLinks } = await (supabase as any)
+        .from('payments')
+        .select('id')
+        .eq('rental_id', reportRentalId)
+        .eq('tenant_id', tenant?.id)
+        .eq('status', 'Pending')
+        .eq('capture_status', 'requires_capture')
+        .contains('target_categories', ['Fine'])
+        .gte('created_at', since)
+        .limit(1);
+      if (existingLinks && existingLinks.length > 0) {
+        throw new Error('A toll payment link was already sent for this rental and is still unpaid. Wait for it to be paid or to expire (24h) before sending another.');
+      }
+
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       // 1) Mint the pay-link via the proven checkout path. targetCategories:['Fine']
       //    means the webhook settles it against this customer's Fine ledger charges.
