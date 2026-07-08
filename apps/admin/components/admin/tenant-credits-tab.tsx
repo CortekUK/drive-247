@@ -168,7 +168,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
               value={adjustAmount}
               onChange={(e) => setAdjustAmount(e.target.value)}
               placeholder="e.g. 100 or -50"
-              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
@@ -179,14 +179,14 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
               value={adjustNote}
               onChange={(e) => setAdjustNote(e.target.value)}
               placeholder="Reason for adjustment"
-              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
           <button
             onClick={handleAdjust}
             disabled={adjusting}
-            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium disabled:opacity-50"
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 text-sm font-medium disabled:opacity-50"
           >
             {adjusting ? 'Applying...' : 'Apply Adjustment'}
           </button>
