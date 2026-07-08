@@ -163,7 +163,7 @@ export default function VehicleOwnersPage() {
                     <TableCell>
                       {o.commission_type === "percentage"
                         ? `${o.commission_value}%`
-                        : `${formatCurrency(o.commission_value, currency)} / ${o.flat_fee_period === "per_month" ? "month" : "rental"}`}
+                        : `${formatCurrency(o.commission_value, currency)} / ${o.flat_fee_period === "per_month" ? "month" : o.flat_fee_period === "per_day" ? "day" : "rental"}`}
                     </TableCell>
                     <TableCell className="capitalize">{o.payout_frequency.replace("_", " ")}</TableCell>
                     <TableCell className="text-right">

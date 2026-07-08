@@ -110,7 +110,7 @@ export default function VehicleOwnerDetailPage() {
                 value={
                   owner.commission_type === "percentage"
                     ? `${owner.commission_value}% of revenue`
-                    : `${formatCurrency(owner.commission_value, currency)} per ${owner.flat_fee_period === "per_month" ? "month" : "rental"}`
+                    : `${formatCurrency(owner.commission_value, currency)} per ${owner.flat_fee_period === "per_month" ? "month" : owner.flat_fee_period === "per_day" ? "rented day" : "rental"}`
                 }
               />
               <Field label="Payout Frequency" value={owner.payout_frequency.replace("_", " ")} />
@@ -216,7 +216,7 @@ function VehicleRow({ vehicle, ownerId, currency }: { vehicle: any; ownerId: str
   const override = vehicle.commission_type_override
     ? vehicle.commission_type_override === "percentage"
       ? `${vehicle.commission_value_override}%`
-      : `${formatCurrency(Number(vehicle.commission_value_override ?? 0), currency)} / ${vehicle.flat_fee_period_override === "per_month" ? "mo" : "rental"}`
+      : `${formatCurrency(Number(vehicle.commission_value_override ?? 0), currency)} / ${vehicle.flat_fee_period_override === "per_month" ? "mo" : vehicle.flat_fee_period_override === "per_day" ? "day" : "rental"}`
     : "—";
   return (
     <TableRow>

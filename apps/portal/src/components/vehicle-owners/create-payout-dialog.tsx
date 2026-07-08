@@ -15,6 +15,7 @@ import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
 import { useOwnerOwedPreview } from "@/hooks/use-owner-revenue";
 import { useCreatePayout } from "@/hooks/use-owner-payouts";
 import { formatCurrency } from "@/lib/format-utils";
+import { flatFeePeriodSuffix, type FlatFeePeriod } from "@/types/vehicle-owners";
 
 interface CreatePayoutDialogProps {
   open: boolean;
@@ -224,7 +225,7 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
                           <div className="text-xs text-muted-foreground">
                             {row.commission_type === "percentage"
                               ? `${row.commission_value}%`
-                              : `${formatCurrency(Number(row.commission_value), currency)} / ${row.flat_fee_period === "per_month" ? "mo" : "rental"}`}
+                              : `${formatCurrency(Number(row.commission_value), currency)} / ${flatFeePeriodSuffix(row.flat_fee_period as FlatFeePeriod)}`}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">{formatCurrency(Number(row.net_to_owner), currency)}</TableCell>

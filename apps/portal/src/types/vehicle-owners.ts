@@ -3,7 +3,7 @@
 //   supabase gen types typescript --project-id hviqoaokxvlancmftwuo > apps/portal/src/integrations/supabase/types.ts
 
 export type CommissionType = "percentage" | "flat_fee";
-export type FlatFeePeriod = "per_rental" | "per_month";
+export type FlatFeePeriod = "per_rental" | "per_month" | "per_day";
 export type PayoutFrequency = "weekly" | "biweekly" | "monthly" | "manual";
 export type PayoutStatus = "pending" | "partially_paid" | "paid" | "cancelled";
 export type PaymentMethod = "bank_transfer" | "cash" | "cheque" | "stripe" | "other";
@@ -107,7 +107,12 @@ export const COMMISSION_TYPE_OPTIONS: { value: CommissionType; label: string }[]
 export const FLAT_FEE_PERIOD_OPTIONS: { value: FlatFeePeriod; label: string }[] = [
   { value: "per_month", label: "Per month" },
   { value: "per_rental", label: "Per rental" },
+  { value: "per_day", label: "Per day (per rented day)" },
 ];
+
+// Short suffix for inline commission display, e.g. "$13.95 / day".
+export const flatFeePeriodSuffix = (p: FlatFeePeriod | null | undefined): string =>
+  p === "per_month" ? "mo" : p === "per_day" ? "day" : "rental";
 
 export const PAYOUT_FREQUENCY_OPTIONS: { value: PayoutFrequency; label: string }[] = [
   { value: "weekly", label: "Weekly" },

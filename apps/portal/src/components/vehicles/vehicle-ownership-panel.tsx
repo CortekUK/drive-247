@@ -20,6 +20,7 @@ import { formatCurrency } from "@/lib/format-utils";
 import {
   COMMISSION_TYPE_OPTIONS,
   FLAT_FEE_PERIOD_OPTIONS,
+  flatFeePeriodSuffix,
   type CommissionType,
   type FlatFeePeriod,
 } from "@/types/vehicle-owners";
@@ -148,12 +149,12 @@ export function VehicleOwnershipPanel({ vehicleId }: VehicleOwnershipPanelProps)
                 {vehicle?.commission_type_override
                   ? vehicle.commission_type_override === "percentage"
                     ? `${vehicle.commission_value_override}% (override)`
-                    : `${formatCurrency(Number(vehicle.commission_value_override ?? 0), currency)} / ${vehicle.flat_fee_period_override === "per_month" ? "month" : "rental"} (override)`
+                    : `${formatCurrency(Number(vehicle.commission_value_override ?? 0), currency)} / ${flatFeePeriodSuffix(vehicle.flat_fee_period_override)} (override)`
                   : currentOwner
                     ? `Inheriting owner default: ${
                         currentOwner.commission_type === "percentage"
                           ? `${currentOwner.commission_value}%`
-                          : `${formatCurrency(currentOwner.commission_value, currency)} / ${currentOwner.flat_fee_period === "per_month" ? "month" : "rental"}`
+                          : `${formatCurrency(currentOwner.commission_value, currency)} / ${flatFeePeriodSuffix(currentOwner.flat_fee_period)}`
                       }`
                     : "—"}
               </div>
