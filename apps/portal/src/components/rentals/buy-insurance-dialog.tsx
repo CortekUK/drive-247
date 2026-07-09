@@ -221,6 +221,9 @@ export function BuyInsuranceDialog({
 
       const licenseNumber = customer.license_number || '';
       const licenseStateVal = customer.license_state || state || '';
+      // Fallback only — bonzah-create-quote now resolves the REAL pickup state from
+      // the rental/tenant location. We no longer rely on the customer's residence
+      // state for pickup (that made premiums track where the renter lives).
       const pickupState = state || 'FL';
 
       // 4. Call bonzah-create-quote
@@ -244,7 +247,7 @@ export function BuyInsuranceDialog({
             address: {
               street,
               city,
-              state: pickupState,
+              state: state || pickupState, // renter's true residence state
               zip,
             },
             license: {
