@@ -1,80 +1,71 @@
 // ============================================================================
-// services.ts — SERVER-ONLY multi-service manifest for the STAGING cron sandbox
+// services.ts — SERVER-ONLY manifest for the HYBRID cron sandbox (PROD test tenant)
 // ============================================================================
-// Data-driven catalog the /api/dev/sandbox dispatcher (route.ts) iterates over.
-// Each entry describes ONE cron-driven rental service: how to make its staging
-// fixture eligible (shiftDomain/shiftId), which real cron fn(s) to fire and by
-// what transport, how to step time (catch-up / day-loop / single), and how to
-// read/reset its fixture state directly on staging.
+// The Time Machine now runs against the PRODUCTION database, hard-scoped to ONE
+// designated test tenant and a fixed allow-list of designated test rentals. It
+// fires ISOLATED `sandbox-*` edge functions (never the real cron), each of which
+// is fail-closed + tenant-locked. Time is advanced by directly backdating the
+// target rental's own driving columns (scoped to id + tenant) — there is NO
+// sim-control and NO sim_shift RPC on prod.
 //
 // This file NEVER runs in the browser: route.ts is 404 outside development and
-// holds the staging service key. status()/reset()/preFire()/resolveShiftId()
-// receive a service-role Supabase client bound to the staging project.
-//
-// IMPORTANT ID note: for `installment`, shiftId (a scheduled_installments.id) is
-// NOT the same as scopeRentalId (the rentals.id). scopeRentalId is always what
-// gets passed to a cron fn as only_rental_id; shiftId (or resolveShiftId) is what
-// the sim-control `shift` RPC backdates.
+// holds the prod service key server-side. status()/reset()/preFire()/backdate()
+// receive a service-role Supabase client bound to PRODUCTION and must only ever
+// touch the designated test rentals below.
 // ============================================================================
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-// deno/next both fine with an untyped client for these ad-hoc reads.
 type Sb = SupabaseClient;
 
-// ── Pre-assigned staging fixture rentals (must match the STAGING RECIPE) ─────
-export const PAYG_RENTAL = "b657f93b-a4d4-419d-84d5-fa9281e72ba4";
-export const INSTALLMENT_RENTAL = "22222222-0000-0000-0000-000000000001";
-export const AUTO_EXTEND_RENTAL = "44444444-0000-0000-0000-000000000001";
-export const DEPOSIT_RENTAL = "55555555-0000-0000-0000-000000000001";
-export const RETURN_REMINDER_RENTAL = "66666666-0000-0000-0000-000000000001";
-export const DAILY_REMINDER_RENTAL = "77777777-0000-0000-0000-000000000001";
+// ── The one blessed test tenant (prod `test`) ───────────────────────────────
+export const DESIGNATED_TEST_TENANT_ID = "09926302-f0ec-49f9-a05d-0cf1da93cf16";
 
-// ── Types ────────────────────────────────────────────────────────────────
-export type FireTransport = "sim" | "direct";
-// catchup  = shift once by N days, then fire in a loop until the backlog drains
-// dayloop  = shift 1 day + fire, repeated N times (order-coupled money chains)
-// single   = shift once by N days (+optional preFire), then fire once
+// ── Designated test rentals (created in the test tenant with these exact ids).
+//    route.ts refuses to operate on anything not in this set. ────────────────
+export const PAYG_RENTAL = "a0000001-0000-4000-8000-000000000001";
+export const INSTALLMENT_RENTAL = "a0000002-0000-4000-8000-000000000001";
+export const AUTO_EXTEND_RENTAL = "a0000003-0000-4000-8000-000000000001";
+export const DEPOSIT_RENTAL = "a0000004-0000-4000-8000-000000000001";
+export const RETURN_REMINDER_RENTAL = "a0000005-0000-4000-8000-000000000001";
+export const DAILY_REMINDER_RENTAL = "a0000006-0000-4000-8000-000000000001";
+
+export const DESIGNATED_TEST_RENTAL_IDS: ReadonlySet<string> = new Set([
+  PAYG_RENTAL, INSTALLMENT_RENTAL, AUTO_EXTEND_RENTAL, DEPOSIT_RENTAL,
+  RETURN_REMINDER_RENTAL, DAILY_REMINDER_RENTAL,
+]);
+
+// ── Types ───────────────────────────────────────────────────────────────────
+// catchup  = backdate once by N days, then fire in a loop until the backlog drains
+// dayloop  = backdate 1 day + fire, repeated N times (order-coupled money chains)
+// single   = backdate/preFire once, then fire once
 export type Stepping = "catchup" | "dayloop" | "single";
-
-export interface CronFire {
-  /** sim → dispatch name in sim-control CRON_MANIFEST (GUARD 3 re-check).
-   *  direct → the edge-function path fetched directly (used only for
-   *  daily-reminders, which is intentionally NOT sim-dispatchable). */
-  name: string;
-  via: FireTransport;
-}
 
 export interface SbService {
   key: string;
   label: string;
   /** advanceAll fires services in ascending order (cron-clock order). */
   order: number;
-  /** Passed to every cron fn as only_rental_id. */
+  /** The designated test rental this service drives (passed as only_rental_id). */
   scopeRentalId: string;
-  /** sim-control shift domain key, or null when the fixture is positioned by
-   *  reset()/preFire() instead of a time-shift (daily_reminder). */
-  shiftDomain: string | null;
-  /** Concrete id the shift RPC targets. null → resolveShiftId() is used, or
-   *  (when both absent) the shift falls back to scopeRentalId. */
-  shiftId: string | null;
-  /** Optional dynamic shift-id resolver (installment: earliest open row). */
-  resolveShiftId?: (staging: Sb) => Promise<string | null>;
-  cronFns: CronFire[];
+  /** Isolated sandbox-* fn(s) to fire (in order). NEVER a real cron fn. */
+  cronFns: string[];
   stepping: Stepping;
   /** Max iterations for a catch-up drain (default 8). */
   drainFires?: number;
-  /** Body field on a fired fn's response that signals "work was done" — the
-   *  drain loop stops when the FIRST cronFn reports 0 here. Default "processed". */
+  /** Response field on the PRIMARY fn signalling "work was done" (drain stops at 0). */
   progressKey?: string;
-  /** single-stepping pre-fire hook (seed a fixture into the exact bucket). */
-  preFire?: (staging: Sb) => Promise<void>;
-  /** Read current fixture state from staging (service-role). */
-  status: (staging: Sb) => Promise<Record<string, unknown>>;
-  /** Restore the fixture to a fresh, eligible-but-unfired baseline on staging. */
-  reset: (staging: Sb) => Promise<Record<string, unknown>>;
+  /** Scoped time-shift: backdate the driving column(s) by `days`. null when the
+   *  fixture is positioned by preFire() instead (installment/return/daily). */
+  backdate?: (prod: Sb, days: number) => Promise<void>;
+  /** Re-anchor the fixture into the exact "due now" bucket (no time-shift). */
+  preFire?: (prod: Sb) => Promise<void>;
+  /** Read current fixture state (service-role, prod). */
+  status: (prod: Sb) => Promise<Record<string, unknown>>;
+  /** Restore the fixture to a fresh, eligible-but-unfired baseline. */
+  reset: (prod: Sb) => Promise<Record<string, unknown>>;
 }
 
-// ── helpers ─────────────────────────────────────────────────────────────
+// ── helpers ─────────────────────────────────────────────────────────────────
 function sumRemaining(rows: Array<{ remaining_amount?: number | null }> | null): number {
   const total = (rows ?? []).reduce((s, r) => s + Number(r.remaining_amount || 0), 0);
   return Math.round(total * 100) / 100;
@@ -82,33 +73,64 @@ function sumRemaining(rows: Array<{ remaining_amount?: number | null }> | null):
 const todayStr = () => new Date().toISOString().split("T")[0];
 const inDaysIso = (n: number) => new Date(Date.now() + n * 24 * 3600 * 1000).toISOString();
 
-// ── Manifest ────────────────────────────────────────────────────────────
+// Backdate a timestamptz column on ONE designated rental by `days` (read-modify-write,
+// scoped to id + the test tenant so a bad id can never touch a real rental).
+async function shiftTs(prod: Sb, rentalId: string, column: string, days: number, fallbackFromNow = 1): Promise<void> {
+  const { data } = await prod.from("rentals").select(`${column}`)
+    .eq("id", rentalId).eq("tenant_id", DESIGNATED_TEST_TENANT_ID).maybeSingle();
+  const cur = (data as any)?.[column];
+  const base = cur ? new Date(cur).getTime() : Date.now() + fallbackFromNow * 24 * 3600 * 1000;
+  const shifted = new Date(base - days * 24 * 3600 * 1000).toISOString();
+  await prod.from("rentals").update({ [column]: shifted })
+    .eq("id", rentalId).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
+}
+
+// Backdate a date-only column (e.g. end_date) by `days`.
+async function shiftDate(prod: Sb, rentalId: string, column: string, days: number): Promise<void> {
+  const { data } = await prod.from("rentals").select(`${column}`)
+    .eq("id", rentalId).eq("tenant_id", DESIGNATED_TEST_TENANT_ID).maybeSingle();
+  const cur = (data as any)?.[column];
+  const base = cur ? new Date(`${cur}T00:00:00Z`).getTime() : Date.now();
+  const shifted = new Date(base - days * 24 * 3600 * 1000).toISOString().split("T")[0];
+  await prod.from("rentals").update({ [column]: shifted })
+    .eq("id", rentalId).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
+}
+
+// ── Manifest ────────────────────────────────────────────────────────────────
 export const SERVICES: SbService[] = [
-  // 1. PAYG accrual (ledger only, no money) ────────────────────────────────
+  // 1. PAYG accrual (ledger only, no money) ─────────────────────────────────
   {
     key: "payg",
     label: "PAYG accrual",
     order: 10,
     scopeRentalId: PAYG_RENTAL,
-    shiftDomain: "payg",
-    shiftId: PAYG_RENTAL,
-    cronFns: [{ name: "accrue-payg-charges", via: "sim" }],
+    cronFns: ["sandbox-accrue-payg-charges"],
     stepping: "catchup",
-    drainFires: 8,
+    drainFires: 10,
     progressKey: "processed",
+    // Window-aware: post `days` accrual CYCLES (one daily-rate charge each) by
+    // anchoring payg_next_accrual_at `days` windows into the past — works whether
+    // the tenant's accrual window is 24h (prod) or 5-min (this test tenant's QA).
+    backdate: async (prod, days) => {
+      const { data: t } = await prod.from("tenants")
+        .select("payg_accrual_window_seconds").eq("id", DESIGNATED_TEST_TENANT_ID).maybeSingle();
+      const win = Number((t as any)?.payg_accrual_window_seconds) || 86400;
+      // `- 1s` so exactly `days` windows fall due (avoids the boundary off-by-one).
+      const target = new Date(Date.now() - (days * win - 1) * 1000).toISOString();
+      await prod.from("rentals").update({ payg_next_accrual_at: target })
+        .eq("id", PAYG_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
+    },
     status: async (s) => {
       const [{ count: accruals }, charges, rental] = await Promise.all([
         s.from("payg_accruals").select("id", { count: "exact", head: true }).eq("rental_id", PAYG_RENTAL),
         s.from("ledger_entries").select("remaining_amount").eq("rental_id", PAYG_RENTAL).eq("type", "Charge"),
-        s.from("rentals").select("payg_next_accrual_at, payg_accrual_day_count, monthly_amount, rental_period_type")
-          .eq("id", PAYG_RENTAL).maybeSingle(),
+        s.from("rentals").select("payg_next_accrual_at, payg_accrual_day_count").eq("id", PAYG_RENTAL).maybeSingle(),
       ]);
       return {
         accruals: accruals ?? 0,
         totalCharged: sumRemaining(charges.data),
         nextAccrualAt: rental.data?.payg_next_accrual_at ?? null,
         dayCount: rental.data?.payg_accrual_day_count ?? 0,
-        rate: rental.data ? `${rental.data.monthly_amount}/${rental.data.rental_period_type}` : null,
       };
     },
     reset: async (s) => {
@@ -118,22 +140,21 @@ export const SERVICES: SbService[] = [
         is_pay_as_you_go: true, status: "Active", payg_paused: false, payg_closed_at: null,
         payg_accrual_day_count: 0, payg_start_ts: new Date().toISOString(), payg_next_accrual_at: inDaysIso(1),
         payg_last_accrual_at: null, payg_max_duration_alerted: false,
-      }).eq("id", PAYG_RENTAL);
+      }).eq("id", PAYG_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
       return SERVICES[0].status(s);
     },
   },
 
-  // 2. Deposit-hold refresh (test hold recreate; self-reverts) ──────────────
+  // 2. Deposit-hold refresh (test hold recreate; self-reverts) ───────────────
   {
     key: "deposit",
     label: "Deposit-hold refresh",
     order: 20,
     scopeRentalId: DEPOSIT_RENTAL,
-    shiftDomain: "deposit",
-    shiftId: DEPOSIT_RENTAL,
-    cronFns: [{ name: "refresh-deposit-holds", via: "sim" }],
+    cronFns: ["sandbox-refresh-deposit-holds"],
     stepping: "single",
     progressKey: "refreshed",
+    backdate: (prod, days) => shiftTs(prod, DEPOSIT_RENTAL, "deposit_hold_expires_at", days, 7),
     status: async (s) => {
       const { data } = await s.from("rentals")
         .select("deposit_hold_status, deposit_hold_expires_at, deposit_hold_payment_intent_id, deposit_hold_amount")
@@ -145,44 +166,38 @@ export const SERVICES: SbService[] = [
         amount: data?.deposit_hold_amount ?? null,
       };
     },
-    // NOTE: a real requires_capture test PaymentIntent must already exist on the
-    // fixture (seeded by fixture SQL / place-deposit-hold). reset() only re-anchors
-    // the DB row to a fresh "held" baseline; it does not mint a Stripe hold.
     reset: async (s) => {
       await s.from("rentals").update({
         status: "Active", deposit_hold_status: "held",
         deposit_hold_placed_at: new Date().toISOString(), deposit_hold_expires_at: inDaysIso(7),
-      }).eq("id", DEPOSIT_RENTAL);
+      }).eq("id", DEPOSIT_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
       return SERVICES[1].status(s);
     },
   },
 
-  // 3. Installment auto-charge (real test PI, settles inline) ───────────────
+  // 3. Installment auto-charge (real TEST PI, settles inline) ────────────────
+  //    NOTE: mark-overdue-installments is intentionally NOT fired (global-blast job).
   {
     key: "installment",
     label: "Installment auto-charge",
     order: 30,
     scopeRentalId: INSTALLMENT_RENTAL,
-    // No sim_shift: process-installment-payment charges the CUMULATIVE of all
-    // open+due installments in one PI, so we backdate ALL open rows' due_date in
-    // preFire (a single-row sim_shift would leave later installments future-dated).
-    shiftDomain: null,
-    shiftId: null,
+    cronFns: ["sandbox-process-installment-payment"],
+    stepping: "catchup",
+    drainFires: 8,
+    progressKey: "charged",
+    // Charges the CUMULATIVE of all open+due installments in one PI → backdate ALL
+    // open rows' due_date to today (a single-column time-shift would leave later
+    // installments future-dated).
     preFire: async (s) => {
-      const { data: plan } = await s.from("installment_plans").select("id").eq("rental_id", INSTALLMENT_RENTAL).maybeSingle();
+      const { data: plan } = await s.from("installment_plans").select("id")
+        .eq("rental_id", INSTALLMENT_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID).maybeSingle();
       if (plan?.id) {
         await s.from("scheduled_installments").update({ due_date: todayStr() })
           .eq("installment_plan_id", plan.id).eq("invoice_status", "open");
         await s.from("installment_plans").update({ last_reminder_sent_at: null }).eq("id", plan.id);
       }
     },
-    cronFns: [
-      { name: "process-installment-payment", via: "sim" },
-      { name: "mark-overdue-installments", via: "sim" },
-    ],
-    stepping: "catchup",
-    drainFires: 8,
-    progressKey: "charged", // process-installment-payment reports { charged }
     status: async (s) => {
       const { data: plan } = await s.from("installment_plans")
         .select("id, status, collection_mode, last_reminder_sent_at").eq("rental_id", INSTALLMENT_RENTAL).maybeSingle();
@@ -204,12 +219,10 @@ export const SERVICES: SbService[] = [
         nextOpenDue: nextOpen?.due_date ?? null,
       };
     },
-    // NOTE: money fixture — the plan, scheduled_installments and the attached
-    // Stripe TEST PM are seeded by fixture SQL + sim-control `setup`. reset() only
-    // re-opens the installments and clears the reminder stamp so the flow can rerun.
     reset: async (s) => {
       const { data: plan } = await s.from("installment_plans")
-        .update({ status: "active", last_reminder_sent_at: null }).eq("rental_id", INSTALLMENT_RENTAL)
+        .update({ status: "active", last_reminder_sent_at: null })
+        .eq("rental_id", INSTALLMENT_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID)
         .select("id").maybeSingle();
       if (plan?.id) {
         await s.from("scheduled_installments").update({ invoice_status: "open" }).eq("installment_plan_id", plan.id);
@@ -218,17 +231,19 @@ export const SERVICES: SbService[] = [
     },
   },
 
-  // 4. Auto-extension (real test PI, settles inline; order-coupled) ─────────
+  // 4. Auto-extension (real TEST PI, settles inline; order-coupled) ──────────
   {
     key: "auto_extend",
     label: "Auto-extension",
     order: 40,
     scopeRentalId: AUTO_EXTEND_RENTAL,
-    shiftDomain: "auto_extend",
-    shiftId: AUTO_EXTEND_RENTAL,
-    cronFns: [{ name: "auto-extend-rentals", via: "sim" }],
+    cronFns: ["sandbox-auto-extend-rentals"],
     stepping: "dayloop",
     progressKey: "renewed",
+    backdate: async (prod, days) => {
+      await shiftTs(prod, AUTO_EXTEND_RENTAL, "auto_extend_next_charge_at", days);
+      await shiftDate(prod, AUTO_EXTEND_RENTAL, "end_date", days);
+    },
     status: async (s) => {
       const { data } = await s.from("rentals")
         .select("auto_extend_status, auto_extend_charge_count, auto_extend_next_charge_at, end_date, auto_extend_failed_attempts")
@@ -241,32 +256,26 @@ export const SERVICES: SbService[] = [
         failedAttempts: data?.auto_extend_failed_attempts ?? 0,
       };
     },
-    // NOTE: money fixture (Stripe TEST PM seeded externally). reset() re-arms the
-    // extension loop to a clean baseline; it does not undo already-charged periods'
-    // ledger rows (rerun after a full fixture reseed for a pristine state).
     reset: async (s) => {
       await s.from("rentals").update({
         status: "Active", auto_extend_enabled: true, auto_extend_paused: false,
         auto_extend_status: "active", auto_extend_charge_count: 0, auto_extend_failed_attempts: 0,
         auto_extend_pending_extension_id: null, auto_extend_next_charge_at: inDaysIso(7),
-      }).eq("id", AUTO_EXTEND_RENTAL);
+      }).eq("id", AUTO_EXTEND_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
       return SERVICES[3].status(s);
     },
   },
 
-  // 5. PAYG pay-link reminder (reuses the PAYG fixture rental) ──────────────
+  // 5. PAYG pay-link reminder (reuses the PAYG fixture rental) ───────────────
   {
     key: "payg_reminder",
     label: "PAYG pay-link reminder",
     order: 50,
     scopeRentalId: PAYG_RENTAL,
-    // reuses the payg shift domain; requires payg_last_reminder_sent_at added to
-    // that domain's driveCols (see orchestrator note).
-    shiftDomain: "payg",
-    shiftId: PAYG_RENTAL,
-    cronFns: [{ name: "send-payg-reminders", via: "sim" }],
+    cronFns: ["sandbox-send-payg-reminders"],
     stepping: "single",
     progressKey: "sent",
+    backdate: (prod, days) => shiftTs(prod, PAYG_RENTAL, "payg_last_reminder_sent_at", days),
     status: async (s) => {
       const [{ count: logs }, rental] = await Promise.all([
         s.from("payg_reminder_log").select("id", { count: "exact", head: true }).eq("rental_id", PAYG_RENTAL),
@@ -282,29 +291,26 @@ export const SERVICES: SbService[] = [
       await s.from("payg_reminder_log").delete().eq("rental_id", PAYG_RENTAL);
       await s.from("rentals").update({
         payg_last_reminder_sent_at: null, payg_auto_reminders_enabled: true,
-      }).eq("id", PAYG_RENTAL);
+      }).eq("id", PAYG_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
       return SERVICES[4].status(s);
     },
   },
 
-  // 6. Return reminder (email → SES no-op on staging) ──────────────────────
+  // 6. Return reminder (real email → notify-rental-reminder) ─────────────────
   {
     key: "return_reminder",
     label: "Return reminder",
     order: 60,
     scopeRentalId: RETURN_REMINDER_RENTAL,
-    // No time-shift: send-return-reminders excludes end_date < today, so backdating
-    // would push the fixture OUT of the window. Instead preFire re-anchors end_date
-    // to today (in-window) and clears the dedupe stamp so an advance re-fires.
-    shiftDomain: null,
-    shiftId: null,
-    preFire: async (s) => {
-      await s.from("rentals").update({ return_reminder_sent_at: null, end_date: todayStr() })
-        .eq("id", RETURN_REMINDER_RENTAL);
-    },
-    cronFns: [{ name: "send-return-reminders", via: "sim" }],
+    cronFns: ["sandbox-send-return-reminders"],
     stepping: "single",
     progressKey: "processed",
+    // send-return-reminders excludes end_date < today, so backdating would push it
+    // OUT of the window. Instead re-anchor end_date to today (in-window) + clear stamp.
+    preFire: async (s) => {
+      await s.from("rentals").update({ return_reminder_sent_at: null, end_date: todayStr() })
+        .eq("id", RETURN_REMINDER_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
+    },
     status: async (s) => {
       const { data } = await s.from("rentals")
         .select("end_date, return_reminder_sent_at, status").eq("id", RETURN_REMINDER_RENTAL).maybeSingle();
@@ -314,35 +320,28 @@ export const SERVICES: SbService[] = [
         status: data?.status ?? null,
       };
     },
-    // Seed end_date INTO the reminder window (tomorrow) so the fixture is eligible
-    // even without a shift; clears the dedupe stamp.
     reset: async (s) => {
       await s.from("rentals").update({
         status: "Active", return_reminder_sent_at: null, end_date: todayStr(),
-      }).eq("id", RETURN_REMINDER_RENTAL);
+      }).eq("id", RETURN_REMINDER_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
       return SERVICES[5].status(s);
     },
   },
 
-  // 7. Daily ledger reminder (in-app reminder_events only; direct fire) ─────
+  // 7. Daily ledger reminder (in-app reminder_events only) ───────────────────
   {
     key: "daily_reminder",
     label: "Daily ledger reminder",
     order: 70,
     scopeRentalId: DAILY_REMINDER_RENTAL,
-    // No time-shift: daily-reminders has a date off-by-one, so we position the
-    // charge's due_date at the exact "today" bucket via preFire instead.
-    shiftDomain: null,
-    shiftId: null,
-    // fired by DIRECT URL — daily-reminders is intentionally NOT sim-dispatchable
-    // (its live cron misroutes to a foreign project), so sim-control would reject it.
-    cronFns: [{ name: "daily-reminders", via: "direct" }],
+    cronFns: ["sandbox-daily-reminders"],
     stepping: "single",
     progressKey: "processedCharges",
+    // daily-reminders has a date off-by-one; position the charge's due_date at the
+    // exact "today" bucket via preFire instead of a time-shift.
     preFire: async (s) => {
-      // Land the fixture's Charge ledger row on today's exact bucket.
       await s.from("ledger_entries").update({ due_date: todayStr() })
-        .eq("rental_id", DAILY_REMINDER_RENTAL).eq("type", "Charge");
+        .eq("rental_id", DAILY_REMINDER_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID).eq("type", "Charge");
     },
     status: async (s) => {
       const [{ count: events }, charges] = await Promise.all([
@@ -356,12 +355,10 @@ export const SERVICES: SbService[] = [
         nextDue: rows.map((r) => r.due_date).filter(Boolean).sort()[0] ?? null,
       };
     },
-    // NOTE: the Charge ledger row itself is seeded by fixture SQL (needs customer_id
-    // etc.). reset() clears emitted reminder_events and re-buckets due_date to today.
     reset: async (s) => {
       await s.from("reminder_events").delete().eq("rental_id", DAILY_REMINDER_RENTAL);
       await s.from("ledger_entries").update({ due_date: todayStr() })
-        .eq("rental_id", DAILY_REMINDER_RENTAL).eq("type", "Charge");
+        .eq("rental_id", DAILY_REMINDER_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID).eq("type", "Charge");
       return SERVICES[6].status(s);
     },
   },

@@ -332,9 +332,10 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
       {expanded && (
         <div className="px-2 pb-2 space-y-2">
           <p className="text-[10px] text-muted-foreground leading-relaxed">
-            Isolated STAGING sandbox — <strong>never touches production</strong>. Fast-forwards a
-            dedicated test rental per service and runs the REAL cron for it. Results appear here (the
-            sandbox data lives on staging, not on your portal pages).
+            Runs on your <strong>prod test tenant</strong>, hard-scoped to one designated test rental
+            per service. Fires isolated <code>sandbox-*</code> workers (never the real cron), behind a
+            tenant-lock + blast-radius check — so a real customer <strong>cannot</strong> be affected.
+            Fast-forwards time and shows the result; refresh the rental page to see it in the ledger.
           </p>
 
           {/* Global: advance / reset ALL services at once */}

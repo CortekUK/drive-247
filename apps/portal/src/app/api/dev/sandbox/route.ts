@@ -1,115 +1,108 @@
-// DEV-ONLY generic dispatcher for the isolated STAGING cron sandbox.
+// DEV-ONLY hybrid cron sandbox dispatcher — PRODUCTION test tenant, ONE rental.
 //
-// Lets the Time Machine panel drive staging's `sim-control` + real cron fns from
-// the normal (production-pointed) portal WITHOUT any env switching and WITHOUT
-// ever touching production. The staging service key lives here, SERVER-SIDE — it
-// is never sent to the browser.
+// The Time Machine panel drives PRODUCTION's isolated `sandbox-*` cron fns (never
+// the real cron) scoped to a single designated test rental. Multiple fail-closed
+// guardrails stand between a click and a real customer:
 //
-// This route is now DATA-DRIVEN: every service lives in ./services.ts (a
-// server-only SbService[] manifest). The route only knows how to: read status,
-// step time per a service's `stepping` policy, fire cron fns (money fns through
-// sim-control `action:fire` so GUARD 3 + simDispatchable re-check on every
-// dispatch; daily-reminders by direct URL since it is not sim-dispatchable),
-// and reset fixtures.
-//
-// Hard guards:
-//   - 404 unless NODE_ENV === 'development' (cannot exist in a deployed build).
-//   - Firing money fns goes through sim-control, which fail-closes on any live
-//     tenant or side-effect key (GUARD 3). Every fire is scoped to one rental.
+//   1. 404 unless NODE_ENV==='development' (cannot exist in a deployed build).
+//   2. The prod service key comes ONLY from env SANDBOX_PROD_SERVICE_KEY — if it
+//      is unset we refuse to run (never a committed key).
+//   3. assertDesignated(): every op (backdate / preFire / reset / fire) requires
+//      the target rental to be in DESIGNATED_TEST_RENTAL_IDS, owned by the one
+//      DESIGNATED_TEST_TENANT_ID, whose tenant is in Stripe TEST mode.
+//   4. assertBlastRadius(): before any real fire, a preview call must report that
+//      the fn's own due-criteria match ONLY this rental — else abort, no fire.
+//   5. Every fire targets a sandbox-* fn that is itself fail-closed + tenant-locked.
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   SERVICES_BY_KEY,
   SERVICES_ORDERED,
+  DESIGNATED_TEST_TENANT_ID,
+  DESIGNATED_TEST_RENTAL_IDS,
   type SbService,
-  type CronFire,
 } from "./services";
 
 const IS_DEV = process.env.NODE_ENV === "development";
+const PROD_URL = "https://hviqoaokxvlancmftwuo.supabase.co";
+// Prod service key — env ONLY (put it in a gitignored .env.local; never commit).
+const PROD_KEY = process.env.SANDBOX_PROD_SERVICE_KEY || "";
 
-const STAGING_URL = "https://ksmreaadhbirzakkxqrq.supabase.co";
-// Staging service key — already committed in scripts/db-switch.mjs; staging-only;
-// safe to rotate. Kept server-side (never inlined into the client bundle).
-const STAGING_SERVICE_KEY =
-  process.env.SANDBOX_STAGING_SERVICE_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtzbXJlYWFkaGJpcnpha2t4cXJxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDczMjkxMiwiZXhwIjoyMDk2MzA4OTEyfQ.Fo8OqiaEzCs6ECeRZB8_OgXIi138SRnBR4YyfeSNjfQ";
-
-const staging = createClient(STAGING_URL, STAGING_SERVICE_KEY, {
-  auth: { persistSession: false },
-});
-
-// ── sim-control proxy (money fns fire through here → GUARD 3 re-check) ──────
-async function sim(action: string, extra: Record<string, unknown> = {}) {
-  const res = await fetch(`${STAGING_URL}/functions/v1/sim-control`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${STAGING_SERVICE_KEY}` },
-    body: JSON.stringify({ action, ...extra }),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok || body?.ok === false) {
-    throw new Error(body?.error || `sim-control ${action} failed (${res.status})`);
+function prod(): SupabaseClient {
+  if (!PROD_KEY) {
+    throw new Error("SANDBOX_PROD_SERVICE_KEY is not set — refusing to run against production");
   }
-  return body;
+  return createClient(PROD_URL, PROD_KEY, { auth: { persistSession: false } });
 }
 
-// Direct fire — ONLY used for non-sim-dispatchable fns (daily-reminders). Scoped
-// to a single rental via only_rental_id; wrapped in the same {dispatch:[...]}
-// envelope sim-control returns so callers treat both transports uniformly.
-async function fireDirect(path: string, scopeRentalId: string) {
-  const res = await fetch(`${STAGING_URL}/functions/v1/${path}`, {
+// ── GUARD: the rental must be a designated test rental, in the designated test
+//    tenant, and that tenant must be in Stripe TEST mode. Fail-closed (throws). ─
+async function assertDesignated(p: SupabaseClient, rentalId: string): Promise<void> {
+  if (!DESIGNATED_TEST_RENTAL_IDS.has(rentalId)) {
+    throw new Error(`refused: ${rentalId} is not a designated test rental`);
+  }
+  const { data: r, error } = await p
+    .from("rentals").select("tenant_id").eq("id", rentalId).maybeSingle();
+  if (error) throw new Error(`refused: could not resolve rental ${rentalId}: ${error.message}`);
+  if (!r) throw new Error(`refused: designated rental ${rentalId} does not exist`);
+  if (r.tenant_id !== DESIGNATED_TEST_TENANT_ID) {
+    throw new Error(`refused: rental ${rentalId} is not in the designated test tenant`);
+  }
+  const { data: t } = await p
+    .from("tenants").select("stripe_mode").eq("id", DESIGNATED_TEST_TENANT_ID).maybeSingle();
+  if (!t || t.stripe_mode !== "test") {
+    throw new Error("refused: designated test tenant is not in Stripe test mode");
+  }
+}
+
+// Call a sandbox-* fn on prod. verify_jwt=true → authenticate with the service key.
+async function callSandbox(fn: string, body: Record<string, unknown>) {
+  const res = await fetch(`${PROD_URL}/functions/v1/${fn}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${STAGING_SERVICE_KEY}` },
-    body: JSON.stringify({ only_rental_id: scopeRentalId }),
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${PROD_KEY}` },
+    body: JSON.stringify(body),
   });
-  const body = await res.json().catch(() => null);
-  return { dispatch: [{ name: path, kind: "fn", status: res.status, body, via: "direct" }] };
+  const json = await res.json().catch(() => null);
+  return { name: fn, status: res.status, body: json as any };
 }
 
-async function fireOne(f: CronFire, scopeRentalId: string) {
-  if (f.via === "sim") return sim("fire", { name: f.name, onlyId: scopeRentalId });
-  return fireDirect(f.name, scopeRentalId);
+// ── GUARD: preview must show the fn would touch ONLY this rental (or nothing). ─
+async function assertBlastRadius(fn: string, scopeRentalId: string): Promise<void> {
+  const { status, body } = await callSandbox(fn, { only_rental_id: scopeRentalId, preview: true });
+  if (status !== 200 || !body || body.preview !== true) {
+    throw new Error(`preview failed for ${fn} (status ${status}): ${JSON.stringify(body)?.slice(0, 180)}`);
+  }
+  const matched: string[] = Array.isArray(body.matchedRentalIds) ? body.matchedRentalIds : [];
+  const stray = matched.filter((id) => id !== scopeRentalId);
+  if (stray.length > 0) {
+    throw new Error(`ABORT: preview for ${fn} matched OTHER rentals: ${stray.join(", ")}`);
+  }
 }
 
-// Pull the "work done" count from a fire response's first dispatch, using the
-// service's progressKey (accrue→processed, installment→charged, etc.).
-function progressOf(fireRes: unknown, key: string): number {
-  const dispatch = (fireRes as { dispatch?: Array<{ body?: unknown }> })?.dispatch ?? [];
-  const body = dispatch[0]?.body as Record<string, unknown> | null | undefined;
-  const v = body?.[key];
+// Fire ONE sandbox fn, fully guarded: designated → blast-radius → real fire.
+async function fireOne(p: SupabaseClient, fn: string, scopeRentalId: string) {
+  await assertDesignated(p, scopeRentalId);
+  await assertBlastRadius(fn, scopeRentalId);
+  return callSandbox(fn, { only_rental_id: scopeRentalId });
+}
+
+function progressOf(fireRes: { body?: any }, key: string): number {
+  const v = fireRes?.body?.[key];
   return typeof v === "number" ? v : 0;
 }
 
-// Backdate a service's driving columns so its fixture becomes due. No-op for
-// services positioned by reset()/preFire() (shiftDomain === null).
-async function shiftService(svc: SbService, days: number) {
-  if (!svc.shiftDomain) return null;
-  const id = svc.shiftId ?? (svc.resolveShiftId ? await svc.resolveShiftId(staging) : null);
-  // Never fall back to scopeRentalId — for resolver-based domains (installment)
-  // that would target a rentals UUID against the wrong table. No id → skip shift.
-  if (!id) return null;
-  return sim("shift", { domain: svc.shiftDomain, id, days });
-}
-
-// Fire every cronFn once; returns the raw fire responses.
-async function fireAll(svc: SbService) {
-  const out: unknown[] = [];
-  for (const f of svc.cronFns) out.push(await fireOne(f, svc.scopeRentalId));
-  return out;
-}
-
-// Catch-up drain: fire repeatedly until the primary fn stops doing work.
-async function drainFire(svc: SbService) {
+// Catch-up drain: fire repeatedly until the PRIMARY fn stops doing work.
+async function drainFire(p: SupabaseClient, svc: SbService) {
   const key = svc.progressKey ?? "processed";
   const max = svc.drainFires ?? 8;
   const fired: unknown[] = [];
   let processed = 0;
   for (let i = 0; i < max; i++) {
     let iter = 0;
-    for (const f of svc.cronFns) {
-      const r = await fireOne(f, svc.scopeRentalId);
+    for (const fn of svc.cronFns) {
+      const r = await fireOne(p, fn, svc.scopeRentalId);
       fired.push(r);
-      // Progress is measured from the PRIMARY (first) fn only.
-      if (f === svc.cronFns[0]) iter += progressOf(r, key);
+      if (fn === svc.cronFns[0]) iter += progressOf(r, key);
     }
     processed += iter;
     if (iter === 0) break;
@@ -117,41 +110,47 @@ async function drainFire(svc: SbService) {
   return { fired, processed };
 }
 
-// Advance ONE service by `days`, honouring its stepping policy.
-async function advanceService(svc: SbService, days: number) {
+// Advance ONE service by `days`, honouring its stepping policy. Every path is
+// gated: assertDesignated before any prod mutation (backdate/preFire) or fire.
+async function advanceService(p: SupabaseClient, svc: SbService, days: number) {
+  await assertDesignated(p, svc.scopeRentalId);
+
   if (svc.stepping === "catchup") {
-    await shiftService(svc, days);
-    if (svc.preFire) await svc.preFire(staging);
-    const { fired, processed } = await drainFire(svc);
-    return { fired, processed };
+    if (svc.backdate) await svc.backdate(p, days);
+    if (svc.preFire) await svc.preFire(p);
+    return drainFire(p, svc);
   }
   if (svc.stepping === "dayloop") {
     const fired: unknown[] = [];
     for (let d = 0; d < days; d++) {
-      await shiftService(svc, 1);
-      for (const r of await fireAll(svc)) fired.push(r);
+      if (svc.backdate) await svc.backdate(p, 1);
+      if (svc.preFire) await svc.preFire(p);
+      for (const fn of svc.cronFns) fired.push(await fireOne(p, fn, svc.scopeRentalId));
     }
     return { fired };
   }
-  // single: shift → preFire → fire once
-  await shiftService(svc, days);
-  if (svc.preFire) await svc.preFire(staging);
-  return { fired: await fireAll(svc) };
+  // single
+  if (svc.backdate) await svc.backdate(p, days);
+  if (svc.preFire) await svc.preFire(p);
+  const fired: unknown[] = [];
+  for (const fn of svc.cronFns) fired.push(await fireOne(p, fn, svc.scopeRentalId));
+  return { fired };
 }
 
-// One outer "day" for a service inside advanceAll (always 1-day granular).
-async function advanceServiceOneDay(svc: SbService) {
-  await shiftService(svc, 1);
-  if (svc.preFire) await svc.preFire(staging);
-  if (svc.stepping === "catchup") return (await drainFire(svc)).fired;
-  return fireAll(svc);
+// One outer "day" for a service inside advanceAll (1-day granular).
+async function advanceServiceOneDay(p: SupabaseClient, svc: SbService) {
+  await assertDesignated(p, svc.scopeRentalId);
+  if (svc.backdate) await svc.backdate(p, 1);
+  if (svc.preFire) await svc.preFire(p);
+  if (svc.stepping === "catchup") return (await drainFire(p, svc)).fired;
+  const fired: unknown[] = [];
+  for (const fn of svc.cronFns) fired.push(await fireOne(p, fn, svc.scopeRentalId));
+  return fired;
 }
 
-async function allStatus() {
-  // Return a KEYED map { [serviceKey]: statusObject } — the panel indexes
-  // services[key] and renders the status object's fields directly.
+async function allStatus(p: SupabaseClient) {
   const entries = await Promise.all(
-    SERVICES_ORDERED.map(async (svc) => [svc.key, await svc.status(staging)] as const),
+    SERVICES_ORDERED.map(async (svc) => [svc.key, await svc.status(p)] as const),
   );
   return { services: Object.fromEntries(entries) };
 }
@@ -180,23 +179,19 @@ export async function POST(req: Request) {
   };
 
   try {
-    if (action === "status") {
-      return NextResponse.json({ ok: true, ...(await allStatus()) });
-    }
+    const p = prod();
 
-    if (action === "setup") {
-      // Mint the Stripe TEST customer + PMs used by money fixtures (staging only).
-      const res = await sim("setup");
-      return NextResponse.json({ ok: true, setup: res?.stripe ?? res });
+    if (action === "status") {
+      return NextResponse.json({ ok: true, ...(await allStatus(p)) });
     }
 
     if (action === "advance") {
       const svc = need();
       const n = posDays();
-      const result = await advanceService(svc, n);
+      const result = await advanceService(p, svc, n);
       return NextResponse.json({
         ok: true, service: svc.key, advancedDays: n, ...result,
-        services: { [svc.key]: await svc.status(staging) },
+        services: { [svc.key]: await svc.status(p) },
       });
     }
 
@@ -205,20 +200,24 @@ export async function POST(req: Request) {
       const perService: Record<string, unknown[]> = {};
       for (let d = 0; d < n; d++) {
         for (const svc of SERVICES_ORDERED) {
-          (perService[svc.key] ??= []).push(...(await advanceServiceOneDay(svc)));
+          (perService[svc.key] ??= []).push(...(await advanceServiceOneDay(p, svc)));
         }
       }
-      return NextResponse.json({ ok: true, advancedDays: n, fired: perService, ...(await allStatus()) });
+      return NextResponse.json({ ok: true, advancedDays: n, fired: perService, ...(await allStatus(p)) });
     }
 
     if (action === "reset") {
       const svc = need();
-      return NextResponse.json({ ok: true, service: svc.key, services: { [svc.key]: await svc.reset(staging) } });
+      await assertDesignated(p, svc.scopeRentalId); // reset mutates prod rows — gate it
+      return NextResponse.json({ ok: true, service: svc.key, services: { [svc.key]: await svc.reset(p) } });
     }
 
     if (action === "resetAll") {
       const entries = await Promise.all(
-        SERVICES_ORDERED.map(async (svc) => [svc.key, await svc.reset(staging)] as const),
+        SERVICES_ORDERED.map(async (svc) => {
+          await assertDesignated(p, svc.scopeRentalId);
+          return [svc.key, await svc.reset(p)] as const;
+        }),
       );
       return NextResponse.json({ ok: true, services: Object.fromEntries(entries) });
     }
