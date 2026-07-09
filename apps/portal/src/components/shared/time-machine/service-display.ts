@@ -63,7 +63,6 @@ export const SERVICE_DISPLAY: Record<ServiceKey, ServiceDisplay> = {
       { key: "totalCharged", label: "Total charged", format: "currency" },
       { key: "dayCount", label: "Days elapsed", format: "number" },
       { key: "nextAccrualAt", label: "Next accrual", format: "datetime" },
-      { key: "rate", label: "Rate", format: "text" },
     ],
   },
   installment: {
