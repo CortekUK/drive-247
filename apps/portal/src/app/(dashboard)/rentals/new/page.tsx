@@ -581,6 +581,18 @@ const CreateRental = () => {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedStartDate?.getTime(), watchedEndDate?.getTime()]);
+
+  // PAYG billing only supports Weekly/Monthly. The auto-determine effect above (and
+  // the "Monthly" default) can leave rental_period_type = "Daily", and the PAYG period
+  // <Select> only *displays* a coerced "Weekly" without writing it back — so the form
+  // would submit "Daily" and fail validation ("PAYG must use Weekly or Monthly billing").
+  // Normalize the actual form value whenever PAYG is active and it's still "Daily".
+  useEffect(() => {
+    if (isPayAsYouGo && watchedRentalPeriodType === "Daily") {
+      form.setValue("rental_period_type", "Weekly", { shouldValidate: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPayAsYouGo, watchedRentalPeriodType]);
   const watchedInsuranceStatus = form.watch("insurance_status");
   const watchedDriverAge = form.watch("driver_age");
 
