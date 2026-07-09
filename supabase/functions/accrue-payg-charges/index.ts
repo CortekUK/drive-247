@@ -101,6 +101,16 @@ Deno.serve(async (req) => {
   const now = new Date();
   const nowIso = now.toISOString();
 
+  // Optional sandbox scoping. When `only_rental_id` is supplied (by the Time
+  // Machine sandbox control), accrual is restricted to that ONE rental so a
+  // manual dispatch can never touch another tenant's rentals. Absent (the
+  // production cron) = unchanged global behaviour: process all due rentals.
+  let onlyRentalId: string | null = null;
+  try {
+    const body = await req.json();
+    onlyRentalId = typeof body?.only_rental_id === "string" ? body.only_rental_id : null;
+  } catch { /* no/invalid body — global cron run */ }
+
   try {
     console.log(`[PaygAccrualCron] Running at ${nowIso}`);
 
@@ -122,7 +132,7 @@ Deno.serve(async (req) => {
     }
 
     // 2. Find active PAYG rentals whose next accrual window has arrived
-    const { data: rentals, error: rentalErr } = await supabase
+    let rentalQuery = supabase
       .from("rentals")
       .select(
         "id, tenant_id, customer_id, vehicle_id, monthly_amount, rental_period_type, payg_start_ts, payg_next_accrual_at, payg_accrual_day_count, payg_paused, status, is_pay_as_you_go, payg_closed_at, payg_max_duration_alerted",
@@ -133,6 +143,9 @@ Deno.serve(async (req) => {
       .is("payg_closed_at", null)
       .not("payg_next_accrual_at", "is", null)
       .lte("payg_next_accrual_at", nowIso);
+    // Sandbox scoping — hard-restrict to one rental when requested.
+    if (onlyRentalId) rentalQuery = rentalQuery.eq("id", onlyRentalId);
+    const { data: rentals, error: rentalErr } = await rentalQuery;
 
     if (rentalErr) {
       console.error("[PaygAccrualCron] Error fetching rentals:", rentalErr);
