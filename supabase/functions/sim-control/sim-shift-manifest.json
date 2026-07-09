@@ -2,10 +2,17 @@
   "_comment": "Time-shift domains. driveCols = the timestamp/date columns that drive each cron's 'is it time?' decision; shifting them all by the same delta keeps the fixture's timeline coherent. Every column here MUST also be in the sim_shift RPC allowlist. idField is the PK the shift targets.",
   "payg": {
     "table": "rentals",
-    "driveCols": ["payg_next_accrual_at", "payg_start_ts", "payg_last_accrual_at", "start_date"],
+    "driveCols": ["payg_next_accrual_at", "payg_start_ts", "payg_last_accrual_at", "start_date", "payg_last_reminder_sent_at"],
     "idField": "id",
     "fireJobs": ["accrue-payg-charges", "send-payg-reminders"],
     "eligibility": "status='Active' AND is_pay_as_you_go=true AND NOT payg_paused AND payg_closed_at IS NULL"
+  },
+  "return_reminder": {
+    "table": "rentals",
+    "driveCols": ["end_date"],
+    "idField": "id",
+    "fireJobs": ["send-return-reminders"],
+    "note": "end_date must land in [today, today+return_reminder_hours]; the reset() positions it, advance shifts it."
   },
   "auto_extend": {
     "table": "rentals",

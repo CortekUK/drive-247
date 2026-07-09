@@ -444,6 +444,16 @@ Deno.serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  // Optional sandbox scoping. When `only_rental_id` is supplied (by the Time
+  // Machine sandbox control), reminders are restricted to that ONE rental so a
+  // manual dispatch can never touch another tenant's rentals. Absent (the
+  // production cron) = unchanged global behaviour: process all eligible rentals.
+  let onlyRentalId: string | null = null;
+  try {
+    const reqBody = await req.json();
+    onlyRentalId = typeof reqBody?.only_rental_id === "string" ? reqBody.only_rental_id : null;
+  } catch { /* no/invalid body — global cron run */ }
+
   const now = new Date();
   const nowMs = now.getTime();
 
@@ -461,7 +471,7 @@ Deno.serve(async (req) => {
       tenantMap.set(t.id, t);
     }
 
-    const { data: rentals, error: rentalErr } = await supabase
+    let rentalQuery = supabase
       .from("rentals")
       .select(`
         id,
@@ -488,6 +498,9 @@ Deno.serve(async (req) => {
       .eq("payg_auto_reminders_enabled", true)
       .is("payg_closed_at", null)
       .not("payg_start_ts", "is", null);
+    // Sandbox scoping — hard-restrict to one rental when requested.
+    if (onlyRentalId) rentalQuery = rentalQuery.eq("id", onlyRentalId);
+    const { data: rentals, error: rentalErr } = await rentalQuery;
 
     if (rentalErr) throw rentalErr;
 

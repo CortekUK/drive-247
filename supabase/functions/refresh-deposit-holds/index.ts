@@ -20,6 +20,16 @@ Deno.serve(async (req) => {
 
     console.log("[DEPOSIT-REFRESH] Starting deposit hold refresh check...");
 
+    // Optional sandbox scoping. When `only_rental_id` is supplied (by the Time
+    // Machine sandbox control), the refresh is restricted to that ONE rental so
+    // a manual dispatch can never touch another tenant's holds. Absent (the
+    // production cron) = unchanged global behaviour: process all due holds.
+    let onlyRentalId: string | null = null;
+    try {
+      const reqBody = await req.json();
+      onlyRentalId = typeof reqBody?.only_rental_id === "string" ? reqBody.only_rental_id : null;
+    } catch { /* no/invalid body — global cron run */ }
+
     // Find active rentals with deposit holds expiring within 2 days of the real
     // Stripe deadline. Running daily, this gives ~1 cron cycle of buffer before
     // the auth dies — tight enough to avoid needless churn on 7-day holds, early
@@ -27,7 +37,7 @@ Deno.serve(async (req) => {
     const refreshThreshold = new Date();
     refreshThreshold.setDate(refreshThreshold.getDate() + 2);
 
-    const { data: rentalsToRefresh, error: queryError } = await supabase
+    let refreshQuery = supabase
       .from("rentals")
       .select(`
         id, tenant_id, customer_id,
@@ -43,6 +53,9 @@ Deno.serve(async (req) => {
       .eq("deposit_hold_status", "held")
       .lt("deposit_hold_expires_at", refreshThreshold.toISOString())
       .not("deposit_hold_payment_intent_id", "is", null);
+    // Sandbox scoping — hard-restrict to one rental when requested.
+    if (onlyRentalId) refreshQuery = refreshQuery.eq("id", onlyRentalId);
+    const { data: rentalsToRefresh, error: queryError } = await refreshQuery;
 
     if (queryError) {
       console.error("[DEPOSIT-REFRESH] Query error:", queryError);

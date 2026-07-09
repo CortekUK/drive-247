@@ -14,6 +14,7 @@
 //   fire  — dispatch a real cron edge function / SQL job against staging
 // ============================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { CRON_MANIFEST, SHIFT_MANIFEST, SCENARIOS } from "./manifests.ts";
 
 const STAGING_REF = "ksmreaadhbirzakkxqrq";
@@ -115,6 +116,8 @@ Deno.serve(async (req) => {
   }
 
   try {
+    if (action === "setup") return json({ ...env, ...(await doSetup()) });
+    if (action === "seed_hold") return json({ ...env, ...(await doSeedHold(body)) });
     if (action === "shift") return json({ ...env, ...(await doShift(svc, body)) });
     if (action === "fire") return json({ ...env, ...(await doFire(svc, body)) });
     return json({ ok: false, error: `unknown action: ${action}` }, 400);
@@ -122,6 +125,53 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 500);
   }
 });
+
+// Mint a Stripe TEST customer + payment methods for money-flow fixtures.
+// Uses STRIPE_TEST_SECRET_KEY on the platform test account (no Connect) — the
+// same account the cron charge fns resolve to when STRIPE_TEST_CONNECT_ACCOUNT_ID
+// is unset. STRIPE_LIVE_SECRET_KEY is absent on staging, so live is impossible.
+async function doSetup() {
+  const key = Deno.env.get("STRIPE_TEST_SECRET_KEY");
+  if (!key) throw new Error("STRIPE_TEST_SECRET_KEY not set on staging");
+  const stripe = new Stripe(key, { apiVersion: "2023-10-16", httpClient: Stripe.createFetchHttpClient() });
+
+  const customer = await stripe.customers.create({ name: "Sim Fixture", email: "sim@fixture.test" });
+  const attach = async (tok: string) => {
+    try {
+      const pm = await stripe.paymentMethods.attach(tok, { customer: customer.id });
+      return pm.id;
+    } catch (e) {
+      return `ERR:${e instanceof Error ? e.message : String(e)}`;
+    }
+  };
+  const pmSuccess = await attach("pm_card_visa");
+  if (pmSuccess.startsWith("ERR")) throw new Error(`pm_card_visa attach failed: ${pmSuccess}`);
+  const pmDecline = await attach("pm_card_chargeDeclined");
+  const pmSca = await attach("pm_card_authenticationRequired");
+  await stripe.customers.update(customer.id, { invoice_settings: { default_payment_method: pmSuccess } });
+
+  return { stripe: { customerId: customer.id, pmSuccess, pmDecline, pmSca } };
+}
+
+// Create a REAL test-mode manual-capture (requires_capture) PaymentIntent — a
+// deposit hold — on the platform test account, for the deposit-refresh fixture.
+async function doSeedHold(body: Record<string, unknown>) {
+  const key = Deno.env.get("STRIPE_TEST_SECRET_KEY");
+  if (!key) throw new Error("STRIPE_TEST_SECRET_KEY not set on staging");
+  const stripe = new Stripe(key, { apiVersion: "2023-10-16", httpClient: Stripe.createFetchHttpClient() });
+  const customer = String(body.customer ?? "cus_Uqv7FpcYFQdEhX");
+  const pm = String(body.pm ?? "pm_1TrDHTB9wIYWaRK0YyQTaazG");
+  const amount = Number(body.amount ?? 25000);
+  const pi = await stripe.paymentIntents.create({
+    amount, currency: "usd", customer, payment_method: pm,
+    capture_method: "manual", confirm: true, off_session: true,
+    expand: ["latest_charge"],
+    metadata: { type: "deposit_hold_seed" },
+  });
+  // deno-lint-ignore no-explicit-any
+  const captureBefore = (pi as any).latest_charge?.payment_method_details?.card?.capture_before ?? null;
+  return { hold: { pi_id: pi.id, status: pi.status, capture_before: captureBefore } };
+}
 
 // deno-lint-ignore no-explicit-any
 async function doShift(svc: any, body: Record<string, unknown>) {

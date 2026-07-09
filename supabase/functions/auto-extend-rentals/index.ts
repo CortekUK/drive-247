@@ -147,12 +147,22 @@ Deno.serve(async (req) => {
 
   const now = new Date();
   const nowIso = now.toISOString();
+
+  // Optional sandbox scoping — restrict to one rental so a manual dispatch can
+  // never charge another tenant. Null = global cron (unchanged).
+  let onlyRentalId: string | null = null;
+  try {
+    const reqBody = await req.json();
+    onlyRentalId = typeof reqBody?.only_rental_id === "string" ? reqBody.only_rental_id : null;
+  } catch { /* no body — global cron run */ }
+
   let renewed = 0, linked = 0, paused = 0, skipped = 0, failed = 0;
+  const errors: string[] = [];
 
   try {
     console.log(`[auto-extend] run at ${nowIso}`);
 
-    const { data: rentals, error: rentalErr } = await supabase
+    let rentalQuery = supabase
       .from("rentals")
       .select(`
         id, tenant_id, customer_id, vehicle_id, end_date, monthly_amount,
@@ -169,10 +179,13 @@ Deno.serve(async (req) => {
       .eq("auto_extend_paused", false)
       .not("auto_extend_next_charge_at", "is", null)
       .lte("auto_extend_next_charge_at", nowIso);
+    // Sandbox scoping — hard-restrict to one rental when requested.
+    if (onlyRentalId) rentalQuery = rentalQuery.eq("id", onlyRentalId);
+    const { data: rentals, error: rentalErr } = await rentalQuery;
 
     if (rentalErr) throw rentalErr;
     if (!rentals || rentals.length === 0) {
-      return new Response(JSON.stringify({ success: true, renewed, linked, paused, skipped, failed }), {
+      return new Response(JSON.stringify({ success: true, renewed, linked, paused, skipped, failed, errors }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -383,6 +396,7 @@ Deno.serve(async (req) => {
               failed++;
             }
             console.error(`[auto-extend] charge failed ${r.id}: ${chargeErr?.message}`);
+            errors.push(`${String(r.id).slice(0, 8)}: ${chargeErr?.message ?? chargeErr}`);
             continue;
           }
         }
@@ -472,7 +486,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[auto-extend] done renewed=${renewed} linked=${linked} paused=${paused} skipped=${skipped} failed=${failed}`);
-    return new Response(JSON.stringify({ success: true, renewed, linked, paused, skipped, failed }), {
+    return new Response(JSON.stringify({ success: true, renewed, linked, paused, skipped, failed, errors }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {

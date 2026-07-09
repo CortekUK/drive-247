@@ -36,6 +36,14 @@ serve(async (req) => {
   const now = new Date()
   const todayStr = now.toISOString().split('T')[0]
 
+  // Optional sandbox scoping — restrict to one rental's plans so a manual
+  // dispatch can never charge another tenant. Null = global cron (unchanged).
+  let onlyRentalId: string | null = null
+  try {
+    const reqBody = await req.json()
+    onlyRentalId = typeof reqBody?.only_rental_id === 'string' ? reqBody.only_rental_id : null
+  } catch { /* no body — global cron run */ }
+
   let attempted = 0
   let charged = 0
   let failed = 0
@@ -44,7 +52,7 @@ serve(async (req) => {
   try {
     // Find plans with at least one open + past-due installment that we
     // haven't reminded/charged in the last 24h
-    const { data: candidatePlans, error: planErr } = await supabase
+    let planQuery = supabase
       .from('installment_plans')
       .select(`
         id, tenant_id, customer_id, rental_id,
@@ -54,6 +62,9 @@ serve(async (req) => {
       `)
       .eq('status', 'active')
       .eq('collection_mode', 'auto')
+    // Sandbox scoping — hard-restrict to one rental's plans when requested.
+    if (onlyRentalId) planQuery = planQuery.eq('rental_id', onlyRentalId)
+    const { data: candidatePlans, error: planErr } = await planQuery
 
     if (planErr) throw planErr
 

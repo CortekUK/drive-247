@@ -38,6 +38,16 @@ serve(async (req) => {
       }
     );
 
+    // Optional sandbox scoping. When `only_rental_id` is supplied (by the Time
+    // Machine sandbox control), reminder generation is restricted to that ONE
+    // rental so a manual dispatch can never touch another tenant's charges.
+    // Absent (the production cron) = unchanged global behaviour: all charges.
+    let onlyRentalId: string | null = null;
+    try {
+      const reqBody = await req.json();
+      onlyRentalId = typeof reqBody?.only_rental_id === 'string' ? reqBody.only_rental_id : null;
+    } catch { /* no/invalid body — global cron run */ }
+
     console.log('Starting daily reminder generation at:', new Date().toISOString());
 
     const currentDate = new Date();
@@ -46,7 +56,7 @@ serve(async (req) => {
     const yesterday = new Date(currentDate.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     // Get all unpaid charges
-    const { data: charges, error: chargesError } = await supabaseClient
+    let chargesQuery = supabaseClient
       .from('ledger_entries')
       .select(`
         id,
@@ -63,6 +73,10 @@ serve(async (req) => {
       .eq('type', 'Charge')
       .gt('remaining_amount', 0)
       .not('due_date', 'is', null);
+
+    if (onlyRentalId) chargesQuery = chargesQuery.eq('rental_id', onlyRentalId);
+
+    const { data: charges, error: chargesError } = await chargesQuery;
 
     if (chargesError) {
       console.error('Error fetching charges:', chargesError);
