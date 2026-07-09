@@ -35,12 +35,13 @@ function prod(): SupabaseClient {
   return createClient(PROD_URL, PROD_KEY, { auth: { persistSession: false } });
 }
 
-// ── GUARD: the rental must be a designated test rental, in the designated test
-//    tenant, and that tenant must be in Stripe TEST mode. Fail-closed (throws). ─
+// ── GUARD: the rental must live in the designated TEST tenant, and that tenant
+//    must be in Stripe TEST mode. Fail-closed (throws).
+//    Any rental in the test tenant is allowed (not just the fixtures) so the
+//    panel can target the rental you're viewing — the test tenant has NO real
+//    customers, and the blast-radius preview + fail-closed sandbox fns still keep
+//    every fire to that one rental. ─────────────────────────────────────────
 async function assertDesignated(p: SupabaseClient, rentalId: string): Promise<void> {
-  if (!DESIGNATED_TEST_RENTAL_IDS.has(rentalId)) {
-    throw new Error(`refused: ${rentalId} is not a designated test rental`);
-  }
   const { data: r, error } = await p
     .from("rentals").select("tenant_id").eq("id", rentalId).maybeSingle();
   if (error) throw new Error(`refused: could not resolve rental ${rentalId}: ${error.message}`);
@@ -89,6 +90,36 @@ async function fireOne(p: SupabaseClient, fn: string, scopeRentalId: string) {
 function progressOf(fireRes: { body?: any }, key: string): number {
   const v = fireRes?.body?.[key];
   return typeof v === "number" ? v : 0;
+}
+
+// ── "This rental" (PAYG) — advance/inspect the rental the user is VIEWING, ─────
+//    not a fixed fixture. Same guards (assertDesignated → test tenant + mode;
+//    fireOne → blast-radius). PAYG is ledger-only so it works on any PAYG rental.
+async function backdatePaygWindows(p: SupabaseClient, rentalId: string, days: number) {
+  const { data: t } = await p.from("tenants")
+    .select("payg_accrual_window_seconds").eq("id", DESIGNATED_TEST_TENANT_ID).maybeSingle();
+  const win = Number((t as any)?.payg_accrual_window_seconds) || 86400;
+  const target = new Date(Date.now() - (days * win - 1) * 1000).toISOString();
+  await p.from("rentals").update({ payg_next_accrual_at: target })
+    .eq("id", rentalId).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
+}
+
+async function paygStatusFor(p: SupabaseClient, rentalId: string) {
+  const [accr, charges, rental] = await Promise.all([
+    p.from("payg_accruals").select("id", { count: "exact", head: true }).eq("rental_id", rentalId),
+    p.from("ledger_entries").select("remaining_amount").eq("rental_id", rentalId).eq("type", "Charge"),
+    p.from("rentals").select("payg_next_accrual_at, payg_accrual_day_count, is_pay_as_you_go, status")
+      .eq("id", rentalId).maybeSingle(),
+  ]);
+  const total = (charges.data ?? []).reduce((s: number, r: any) => s + Number(r.remaining_amount || 0), 0);
+  return {
+    isPayg: rental.data?.is_pay_as_you_go ?? false,
+    status: rental.data?.status ?? null,
+    accruals: accr.count ?? 0,
+    totalCharged: Math.round(total * 100) / 100,
+    dayCount: rental.data?.payg_accrual_day_count ?? 0,
+    nextAccrualAt: rental.data?.payg_next_accrual_at ?? null,
+  };
 }
 
 // Catch-up drain: fire repeatedly until the PRIMARY fn stops doing work.
@@ -161,11 +192,13 @@ export async function POST(req: Request) {
   let action = "";
   let serviceKey = "";
   let days = 0;
+  let rentalId = "";
   try {
     const body = await req.json();
     action = String(body?.action ?? "");
     serviceKey = String(body?.service ?? "");
     days = Number(body?.days ?? 0);
+    rentalId = String(body?.rentalId ?? "");
   } catch { /* empty */ }
 
   const need = (): SbService => {
@@ -220,6 +253,30 @@ export async function POST(req: Request) {
         }),
       );
       return NextResponse.json({ ok: true, services: Object.fromEntries(entries) });
+    }
+
+    // ── "This rental" — inspect/advance the PAYG rental the user is viewing ──
+    if (action === "rentalPaygStatus") {
+      await assertDesignated(p, rentalId);
+      return NextResponse.json({ ok: true, rentalId, status: await paygStatusFor(p, rentalId) });
+    }
+
+    if (action === "advanceRentalPayg") {
+      const n = posDays();
+      await assertDesignated(p, rentalId);
+      const st0 = await paygStatusFor(p, rentalId);
+      if (!st0.isPayg) throw new Error("this rental is not a Pay-As-You-Go rental");
+      await backdatePaygWindows(p, rentalId, n);
+      // Drain-fire the isolated PAYG worker — each pass is blast-radius-checked.
+      const fn = "sandbox-accrue-payg-charges";
+      let processed = 0;
+      for (let i = 0; i < 10; i++) {
+        const r = await fireOne(p, fn, rentalId);
+        const did = progressOf(r, "processed");
+        processed += did;
+        if (did === 0) break;
+      }
+      return NextResponse.json({ ok: true, rentalId, advancedDays: n, processed, status: await paygStatusFor(p, rentalId) });
     }
 
     return NextResponse.json({ ok: false, error: `unknown action: ${action}` }, { status: 400 });
