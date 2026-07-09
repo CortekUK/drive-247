@@ -17,7 +17,9 @@
     "lint": "turbo run lint",
     "update-branding": "node scripts/bulk-update-branding.js",
     "update-cms": "node scripts/update-cms-content.js",
-    "db:switch": "node scripts/db-switch.mjs"
+    "db:switch": "node scripts/db-switch.mjs",
+    "dev:staging": "node scripts/db-switch.mjs staging && node scripts/kill-dev-ports.mjs && turbo run dev --filter=portal",
+    "dev:prod": "node scripts/db-switch.mjs prod && node scripts/kill-dev-ports.mjs && turbo run dev --filter=portal"
   },
   "devDependencies": {
     "pg": "^8.16.3",
