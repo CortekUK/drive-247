@@ -121,7 +121,7 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
             <div className="flex items-start gap-2 text-[11px] text-red-600 p-2">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               <span>
-                Disabled on production. Point local env at staging (<code>npm run db:switch staging</code>) to use the Time Machine.
+                Disabled on production. Point local env at staging (<code>node scripts/db-switch.mjs staging</code>), then restart the dev server, to use the Time Machine.
               </span>
             </div>
           ) : (
