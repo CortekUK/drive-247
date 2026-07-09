@@ -43,3 +43,6 @@ testing-qa.env
 
 # Code analysis tool output (graphify) — generated artifacts, never commit
 graphify-out/
+
+# local env backups — NEVER commit (contain secrets)
+.env*.bak
