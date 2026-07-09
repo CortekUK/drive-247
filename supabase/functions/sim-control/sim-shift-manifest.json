@@ -1,0 +1,31 @@
+{
+  "_comment": "Time-shift domains. driveCols = the timestamp/date columns that drive each cron's 'is it time?' decision; shifting them all by the same delta keeps the fixture's timeline coherent. Every column here MUST also be in the sim_shift RPC allowlist. idField is the PK the shift targets.",
+  "payg": {
+    "table": "rentals",
+    "driveCols": ["payg_next_accrual_at", "payg_start_ts", "payg_last_accrual_at", "start_date"],
+    "idField": "id",
+    "fireJobs": ["accrue-payg-charges", "send-payg-reminders"],
+    "eligibility": "status='Active' AND is_pay_as_you_go=true AND NOT payg_paused AND payg_closed_at IS NULL"
+  },
+  "auto_extend": {
+    "table": "rentals",
+    "driveCols": ["auto_extend_next_charge_at", "end_date", "auto_extend_last_charge_at"],
+    "idField": "id",
+    "fireJobs": ["auto-extend-rentals", "send-auto-extension-reminder"],
+    "note": "Multi-week chains are order-coupled: shift +7 -> fire, repeat, rather than one +28 jump."
+  },
+  "deposit": {
+    "table": "rentals",
+    "driveCols": ["deposit_hold_expires_at"],
+    "idField": "id",
+    "fireJobs": ["refresh-deposit-holds"],
+    "note": "refresh-deposit-holds re-anchors expiry to the real Stripe capture_before on each refresh, so a shift self-reverts. Seed a fresh hold per test."
+  },
+  "installment": {
+    "table": "scheduled_installments",
+    "driveCols": ["due_date"],
+    "idField": "id",
+    "fireJobs": ["process-installment-payment", "mark-overdue-installments"],
+    "note": "idField is a scheduled_installments id, NOT a rental id."
+  }
+}

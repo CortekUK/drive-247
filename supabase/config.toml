@@ -33,6 +33,12 @@ verify_jwt = false
 [functions.platform-rental-notify]
 verify_jwt = false
 
+# sim-control: STAGING-ONLY cron simulation control plane. verify_jwt=true accepts
+# both a super-admin portal JWT (panel) and the service-role key (harness); the
+# function itself refuses to run on any non-staging project (fail-closed).
+[functions.sim-control]
+verify_jwt = true
+
 [functions.twilio-inbound-sms]
 verify_jwt = false
 

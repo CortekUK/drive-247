@@ -11,6 +11,7 @@ import { useTenant } from "@/contexts/TenantContext"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { addMonths, format } from "date-fns"
+import { TimeMachineSection } from "./TimeMachineSection"
 
 // Only render in development
 const IS_DEV = process.env.NODE_ENV === 'development'
@@ -1065,6 +1066,12 @@ export default function DevPanel() {
                         </div>
                     )}
                 </div>
+
+                {/* Time Machine / Cron (staging only) */}
+                <TimeMachineSection
+                    expanded={expandedSection === 'sim'}
+                    onToggle={() => toggleSection('sim')}
+                />
 
                 {/* Clear All */}
                 <Button
