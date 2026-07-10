@@ -1195,7 +1195,7 @@ export function SubmissionDetailTabs({ submission }: { submission: Submission })
               <TabsTrigger
                 key={key}
                 value={key}
-                className="flex flex-col gap-1 h-auto py-2 text-[11px]"
+                className="flex flex-col gap-1 h-auto py-2.5 text-[11px] rounded-lg border-transparent data-[state=active]:bg-secondary data-[state=active]:border-transparent"
               >
                 <Icon className="h-3.5 w-3.5" />
                 <span>{label}</span>
