@@ -146,6 +146,14 @@ export function useBonzahOnboarding() {
           /* best-effort; verdict can be regenerated from the console */
         });
 
+      // Fire-and-forget: email the application to the Bonzah partner (Brandon)
+      // with a deep link into the console. Best-effort; never blocks submit.
+      void supabase.functions
+        .invoke('send-bonzah-form-to-brandon', { body: { tenant_id: tenant.id } })
+        .catch(() => {
+          /* best-effort; a super admin can still send it manually */
+        });
+
       return row as unknown as BonzahSubmissionRow;
     },
     onSuccess: () => {

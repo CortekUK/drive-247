@@ -203,6 +203,11 @@ function buildEmailHtml(submission: any, tenantName: string): string {
         ${esc(submission.business_trade_name || tenantName)} · submitted ${esc(new Date(submission.submitted_at).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }))}
       </p>
     </div>
+    <div style="margin-top:16px;text-align:center;">
+      <a href="https://bonzah.drive-247.com/dashboard" style="display:inline-block;background:#6366f1;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 20px;border-radius:8px;">
+        Review in the Bonzah Console →
+      </a>
+    </div>
     ${body}
     <p style="margin-top:28px;font-size:12px;color:#737373;">Sent from the Drive247 platform on behalf of ${esc(tenantName)}.</p>
   </div>`;
@@ -231,13 +236,19 @@ Deno.serve(async (req) => {
 
     const { data: appUser } = await supabase
       .from("app_users")
-      .select("is_super_admin")
+      .select("is_super_admin, tenant_id")
       .eq("auth_user_id", user.id)
       .single();
-    if (appUser?.is_super_admin !== true) return errorResponse("Forbidden", 403);
 
     const { tenant_id } = await req.json();
     if (!tenant_id) return errorResponse("tenant_id required", 400);
+
+    // Super admins may send any tenant's form; a tenant's own staff may send
+    // their own form (used by the auto-fire on submit).
+    const allowed =
+      appUser?.is_super_admin === true ||
+      (appUser?.tenant_id != null && appUser.tenant_id === tenant_id);
+    if (!allowed) return errorResponse("Forbidden", 403);
 
     const { data: settings } = await supabase
       .from("admin_settings")

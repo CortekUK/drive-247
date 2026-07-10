@@ -954,9 +954,8 @@ function SubmissionDetailDialog({
 
   if (!submission) return null;
 
-  // Approve/reject are wired to the bonzah-partner-review edge function in
-  // Phase 4. Until then the console is review-only.
-  const ACTIVATION_ENABLED = false;
+  // Approve/reject are wired to the bonzah-partner-review edge function.
+  const ACTIVATION_ENABLED = true;
 
   const handleApprove = async () => {
     if (!ACTIVATION_ENABLED) return;
