@@ -92,7 +92,7 @@ function currentRentalId(): string | null {
   return m ? m[1] : null;
 }
 
-type ThisRentalPayg = { isPayg?: boolean; accruals?: number; totalCharged?: number; dayCount?: number };
+type ThisRentalPayg = { isPayg?: boolean; status?: string; accruals?: number; totalCharged?: number; dayCount?: number };
 
 // Render a raw status value per its declared format. Null/empty -> em dash.
 function fmt(value: unknown, format?: StatusFieldFormat): string {
@@ -250,25 +250,20 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
   // "<service>:+1", "<service>:reset".
   const [busy, setBusy] = useState<string>("");
   // The rental currently open in this browser tab (if any). When set, the panel
-  // can advance THAT rental and its charges land on the page you're looking at.
+  // acts as THAT rental's cron — results land on the page you're looking at.
   const [rentalId] = useState<string | null>(() => currentRentalId());
-  const [thisPayg, setThisPayg] = useState<ThisRentalPayg | null>(null);
+  // On a rental page the fixture controls are collapsed (they confuse: they're
+  // different rentals). Toggle to reveal them.
+  const [showFixtures, setShowFixtures] = useState(false);
+  const fixturesVisible = !rentalId || showFixtures;
 
-  // Fetch full status once, when the section is first expanded.
+  // Fetch fixture status only when the fixture controls are actually visible.
   useEffect(() => {
-    if (!expanded || services) return;
+    if (!expanded || services || !fixturesVisible) return;
     fetchStatus()
       .then(setServices)
       .catch((e) => toast.error(`Sandbox: ${e.message}`));
-  }, [expanded, services]);
-
-  // Load the CURRENT rental's PAYG state (if we're on a rental page).
-  useEffect(() => {
-    if (!expanded || !rentalId) return;
-    sandbox({ action: "rentalPaygStatus", rentalId })
-      .then((d) => setThisPayg(((d as { status?: ThisRentalPayg }).status) ?? null))
-      .catch(() => setThisPayg(null));
-  }, [expanded, rentalId]);
+  }, [expanded, services, fixturesVisible]);
 
   // Apply a mutation response: prefer the fresh services it returns, else refetch.
   const applyResponse = async (data: SandboxResponse) => {
@@ -334,15 +329,23 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
     }
   };
 
-  const advanceThisRental = async (days: number) => {
+  // Fast-forward the rental open in this tab: the panel becomes ITS cron for
+  // `days` days. No amounts are shown here — the results land in the rental's
+  // ledger, so the page's KPI cards / Payment Breakdown / timeline show them.
+  const fastForwardThisRental = async (days: number) => {
     if (!rentalId) return;
     setBusy(`this:+${days}`);
-    const id = toast.loading(`Advancing this rental ${days} day${days > 1 ? "s" : ""}…`);
+    const id = toast.loading(`Fast-forwarding this rental ${days} day${days > 1 ? "s" : ""}…`);
     try {
-      const data = await sandbox({ action: "advanceRentalPayg", rentalId, days });
-      setThisPayg(((data as { status?: ThisRentalPayg }).status) ?? null);
-      const n = typeof data.processed === "number" ? data.processed : 0;
-      toast.success(`This rental +${days}d — ${n} PAYG charge${n === 1 ? "" : "s"} posted. Refresh the page.`, { id });
+      const data = await sandbox({ action: "fastForwardRental", rentalId, days });
+      const f = (data.fired ?? {}) as Record<string, number>;
+      const bits: string[] = [];
+      if (f.charges) bits.push(`${f.charges} charge${f.charges === 1 ? "" : "s"}`);
+      if (f.reminders) bits.push(`${f.reminders} reminder${f.reminders === 1 ? "" : "s"}`);
+      if (f.autoExtensions) bits.push(`${f.autoExtensions} auto-extension${f.autoExtensions === 1 ? "" : "s"}`);
+      if (f.depositRefreshes) bits.push(`${f.depositRefreshes} deposit refresh`);
+      const what = bits.length ? bits.join(", ") : "nothing was due";
+      toast.success(`+${days}d — ${what}. The page updates live.`, { id });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e), { id });
     } finally {
@@ -378,60 +381,48 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
             Fast-forwards time and shows the result; refresh the rental page to see it in the ledger.
           </p>
 
-          {/* THIS rental — advance the rental open in this tab (PAYG) */}
+          {/* THIS rental — a pure TIME control: the panel becomes ITS cron. */}
           {rentalId && (
             <div className="border border-primary/40 rounded-lg bg-primary/5">
               <div className="px-2 pt-2 flex items-center gap-1.5 text-[11px] font-medium text-primary">
-                <Gauge className="h-3.5 w-3.5" /> This rental
+                <FastForward className="h-3.5 w-3.5" /> Fast-forward this rental
               </div>
               <div className="px-2 py-2 space-y-1.5">
-                {thisPayg && thisPayg.isPayg === false ? (
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    The rental open in this tab isn&apos;t a Pay-As-You-Go rental — open a PAYG rental,
-                    or use the service fixtures below.
-                  </p>
-                ) : (
-                  <>
-                    <p className="text-[10px] text-muted-foreground leading-relaxed">
-                      Advances the PAYG rental open in this tab and writes to <strong>its</strong> ledger.
-                      Refresh the page to see the charges in Payment Breakdown.
-                    </p>
-                    {thisPayg && (
-                      <div className="rounded-md bg-muted/40 p-2 text-[11px] space-y-0.5">
-                        <div className="flex justify-between gap-2">
-                          <span className="text-muted-foreground">Accruals posted</span>
-                          <span className="font-medium">{fmt(thisPayg.accruals, "number")}</span>
-                        </div>
-                        <div className="flex justify-between gap-2">
-                          <span className="text-muted-foreground">Total charged</span>
-                          <span className="font-medium">{fmt(thisPayg.totalCharged, "currency")}</span>
-                        </div>
-                        <div className="flex justify-between gap-2">
-                          <span className="text-muted-foreground">Days elapsed</span>
-                          <span className="font-medium">{fmt(thisPayg.dayCount, "number")}</span>
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex gap-1">
-                      {[1, 7].map((d) => (
-                        <Button
-                          key={d}
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 text-xs h-7"
-                          disabled={anyBusy}
-                          onClick={() => advanceThisRental(d)}
-                        >
-                          {busy === `this:+${d}` ? <Loader2 className="h-3 w-3 animate-spin" /> : `+${d}d`}
-                        </Button>
-                      ))}
-                    </div>
-                  </>
-                )}
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  Acts as the cron for the rental open in this tab: moves <strong>its</strong> clock forward
+                  and runs <strong>its</strong> cron jobs (accrual, reminders, next payment). Results appear
+                  on the page — not here. A Pending rental is activated first.
+                </p>
+                <div className="flex gap-1">
+                  {[1, 7, 30].map((d) => (
+                    <Button
+                      key={d}
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 text-xs h-7"
+                      disabled={anyBusy}
+                      onClick={() => fastForwardThisRental(d)}
+                    >
+                      {busy === `this:+${d}` ? <Loader2 className="h-3 w-3 animate-spin" /> : `+${d}d`}
+                    </Button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
 
+          {/* Fixture controls only make sense when you're NOT on a rental page. */}
+          {rentalId && (
+            <button
+              onClick={() => setShowFixtures((v) => !v)}
+              className="w-full text-left pt-1 mt-1 text-[9px] uppercase tracking-wide text-muted-foreground/70 border-t border-dashed border-border/60 hover:text-muted-foreground"
+            >
+              {showFixtures ? "▾" : "▸"} Sandbox fixtures (separate test rentals)
+            </button>
+          )}
+
+          {fixturesVisible && (
+          <>
           {/* Global: advance / reset ALL services at once */}
           <div className="border border-border rounded-lg bg-muted/40">
             <div className="px-2 pt-2 flex items-center gap-1.5 text-[11px] font-medium">
@@ -492,6 +483,8 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
                 />
               ))}
             </div>
+          )}
+          </>
           )}
         </div>
       )}

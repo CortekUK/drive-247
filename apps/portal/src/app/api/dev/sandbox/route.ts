@@ -92,6 +92,55 @@ function progressOf(fireRes: { body?: any }, key: string): number {
   return typeof v === "number" ? v : 0;
 }
 
+// ── FAST-FORWARD the rental being viewed ──────────────────────────────────────
+// The Dev Panel is a pure TIME control: it shifts this rental's clock back N days
+// (so "N days have passed" from the rental's point of view), then runs THIS
+// rental's own cron jobs — accrual, reminders, auto-extend, deposit — exactly as
+// production would. Results land in the rental's ledger, so the FRONTEND (KPI
+// cards, Payment Breakdown, timeline) shows them; the panel shows no amounts.
+//
+// Afterwards we hand the clock back to the real cron at its natural next point,
+// so the real cron does NOT immediately re-fire this rental (that churn is what
+// made the numbers move on their own).
+const DAY_MS = 24 * 3600 * 1000;
+const backDays = (ts: string | null, days: number) =>
+  ts ? new Date(new Date(ts).getTime() - days * DAY_MS).toISOString() : null;
+
+async function paygWindowSeconds(p: SupabaseClient): Promise<number> {
+  const { data } = await p.from("tenants")
+    .select("payg_accrual_window_seconds").eq("id", DESIGNATED_TEST_TENANT_ID).maybeSingle();
+  return Number((data as any)?.payg_accrual_window_seconds) || 86400;
+}
+
+/** Move every time anchor on ONE designated rental back by `days`. Scoped to id + tenant. */
+async function shiftRentalClock(p: SupabaseClient, rentalId: string, days: number) {
+  const { data } = await p.from("rentals")
+    .select("payg_start_ts, payg_last_reminder_sent_at, payg_next_accrual_at, auto_extend_next_charge_at, deposit_hold_expires_at")
+    .eq("id", rentalId).maybeSingle();
+  if (!data) return;
+  const r = data as any;
+  const u: Record<string, unknown> = {};
+  if (r.payg_start_ts) u.payg_start_ts = backDays(r.payg_start_ts, days);
+  if (r.payg_last_reminder_sent_at) u.payg_last_reminder_sent_at = backDays(r.payg_last_reminder_sent_at, days);
+  if (r.payg_next_accrual_at) u.payg_next_accrual_at = backDays(r.payg_next_accrual_at, days);
+  if (r.auto_extend_next_charge_at) u.auto_extend_next_charge_at = backDays(r.auto_extend_next_charge_at, days);
+  if (r.deposit_hold_expires_at) u.deposit_hold_expires_at = backDays(r.deposit_hold_expires_at, days);
+  if (Object.keys(u).length) {
+    await p.from("rentals").update(u).eq("id", rentalId).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
+  }
+}
+
+/** Fire a cron fn repeatedly until it stops doing work (catch-up drain). */
+async function drainRental(p: SupabaseClient, fn: string, rentalId: string, key: string, max = 12) {
+  let total = 0;
+  for (let i = 0; i < max; i++) {
+    const did = progressOf(await fireOne(p, fn, rentalId), key);
+    total += did;
+    if (did === 0) break;
+  }
+  return total;
+}
+
 // ── "This rental" (PAYG) — advance/inspect the rental the user is VIEWING, ─────
 //    not a fixed fixture. Same guards (assertDesignated → test tenant + mode;
 //    fireOne → blast-radius). PAYG is ledger-only so it works on any PAYG rental.
@@ -266,6 +315,14 @@ export async function POST(req: Request) {
       await assertDesignated(p, rentalId);
       const st0 = await paygStatusFor(p, rentalId);
       if (!st0.isPayg) throw new Error("this rental is not a Pay-As-You-Go rental");
+      // PAYG only accrues ACTIVE rentals. A freshly-created test rental is often
+      // "Pending" — activate it (and clear pause/close) so the accrual can run.
+      let activated = false;
+      if (st0.status !== "Active") {
+        await p.from("rentals").update({ status: "Active", payg_paused: false, payg_closed_at: null })
+          .eq("id", rentalId).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
+        activated = true;
+      }
       await backdatePaygWindows(p, rentalId, n);
       // Drain-fire the isolated PAYG worker — each pass is blast-radius-checked.
       const fn = "sandbox-accrue-payg-charges";
@@ -276,7 +333,75 @@ export async function POST(req: Request) {
         processed += did;
         if (did === 0) break;
       }
-      return NextResponse.json({ ok: true, rentalId, advancedDays: n, processed, status: await paygStatusFor(p, rentalId) });
+      return NextResponse.json({ ok: true, rentalId, advancedDays: n, processed, activated, status: await paygStatusFor(p, rentalId) });
+    }
+
+    // Send a PAYG reminder for the rental being viewed (needs an outstanding balance).
+    if (action === "sendRentalPaygReminder") {
+      await assertDesignated(p, rentalId);
+      const st0 = await paygStatusFor(p, rentalId);
+      if (!st0.isPayg) throw new Error("this rental is not a Pay-As-You-Go rental");
+      if ((st0.totalCharged ?? 0) <= 0) {
+        return NextResponse.json({ ok: true, rentalId, sent: 0, note: "no outstanding balance — advance the rental first so there's something to remind about", status: st0 });
+      }
+      // The first reminder only fires once now >= (payg_start_ts + interval days).
+      // Backdate the start + clear the last-sent stamp + ensure reminders on so the
+      // reminder is due right now.
+      await p.from("rentals").update({
+        payg_start_ts: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
+        payg_last_reminder_sent_at: null,
+        payg_auto_reminders_enabled: true,
+      }).eq("id", rentalId).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
+      const r = await fireOne(p, "sandbox-send-payg-reminders", rentalId);
+      const sent = progressOf(r, "sent");
+      const { count } = await p.from("payg_reminder_log").select("id", { count: "exact", head: true }).eq("rental_id", rentalId);
+      return NextResponse.json({ ok: true, rentalId, sent, reminderLogs: count ?? 0, status: await paygStatusFor(p, rentalId) });
+    }
+
+    // ── FAST-FORWARD the rental being viewed: the Dev Panel becomes ITS cron ──
+    if (action === "fastForwardRental") {
+      const n = posDays();
+      await assertDesignated(p, rentalId);
+      const { data: r0 } = await p.from("rentals")
+        .select("status, is_pay_as_you_go, auto_extend_enabled, deposit_hold_status")
+        .eq("id", rentalId).maybeSingle();
+      if (!r0) throw new Error("rental not found");
+      const rr = r0 as any;
+
+      // Cron jobs only process ACTIVE rentals — activate a Pending test rental.
+      const activated = rr.status !== "Active";
+      if (activated) {
+        await p.from("rentals").update({ status: "Active", payg_paused: false, payg_closed_at: null })
+          .eq("id", rentalId).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
+      }
+
+      // "N days have passed" for this rental.
+      await shiftRentalClock(p, rentalId, n);
+
+      // Run THIS rental's own cron jobs, in cron-clock order.
+      const fired: Record<string, number> = {};
+      if (rr.is_pay_as_you_go) {
+        fired.charges = await drainRental(p, "sandbox-accrue-payg-charges", rentalId, "processed");
+        fired.reminders = progressOf(await fireOne(p, "sandbox-send-payg-reminders", rentalId), "sent");
+      }
+      if (rr.auto_extend_enabled) {
+        fired.autoExtensions = progressOf(await fireOne(p, "sandbox-auto-extend-rentals", rentalId), "renewed");
+      }
+      if (rr.deposit_hold_status === "held") {
+        fired.depositRefreshes = progressOf(await fireOne(p, "sandbox-refresh-deposit-holds", rentalId), "refreshed");
+      }
+      fired.dailyReminders = progressOf(await fireOne(p, "sandbox-daily-reminders", rentalId), "processedCharges");
+
+      // Hand the clock back to the REAL cron at its natural next point, so it does
+      // NOT immediately re-fire this rental (that churn moved the numbers on their own).
+      if (rr.is_pay_as_you_go) {
+        const win = await paygWindowSeconds(p);
+        await p.from("rentals")
+          .update({ payg_next_accrual_at: new Date(Date.now() + win * 1000).toISOString() })
+          .eq("id", rentalId).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
+      }
+
+      return NextResponse.json({ ok: true, rentalId, advancedDays: n, activated, fired });
     }
 
     return NextResponse.json({ ok: false, error: `unknown action: ${action}` }, { status: 400 });
