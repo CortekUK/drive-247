@@ -395,17 +395,33 @@ export default function BonzahQueue() {
                       onClick={() => setSelected(s)}
                     >
                       <td className="px-5 py-3.5 align-top">
-                        <div className="font-semibold text-foreground leading-tight">{s.business_trade_name}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
+                        <div
+                          className="font-semibold text-foreground leading-tight truncate max-w-[240px]"
+                          title={s.business_trade_name}
+                        >
+                          {s.business_trade_name}
+                        </div>
+                        <div
+                          className="text-xs text-muted-foreground mt-0.5 truncate max-w-[240px]"
+                          title={`${s.business_legal_name}${s.ein ? ` · EIN ${s.ein}` : ''}`}
+                        >
                           {s.business_legal_name}
-                          {s.ein && <span className="ml-2">· EIN {s.ein}</span>}
+                          {s.ein && <span className="ml-1.5">· EIN {s.ein}</span>}
                         </div>
                       </td>
                       <td className="px-4 py-3.5 align-top">
-                        <div className="text-[13px] text-foreground">
+                        <div
+                          className="text-[13px] text-foreground truncate max-w-[190px]"
+                          title={`${s.primary_contact_first_name ?? ''} ${s.primary_contact_last_name ?? ''}`.trim()}
+                        >
                           {s.primary_contact_first_name} {s.primary_contact_last_name}
                         </div>
-                        <div className="text-xs text-muted-foreground truncate max-w-[210px]">{s.primary_contact_email}</div>
+                        <div
+                          className="text-xs text-muted-foreground truncate max-w-[190px] lowercase"
+                          title={s.primary_contact_email}
+                        >
+                          {s.primary_contact_email}
+                        </div>
                       </td>
                       <td className="px-4 py-3.5 align-top text-xs text-muted-foreground whitespace-nowrap">
                         {formatDate(s.submitted_at)}
