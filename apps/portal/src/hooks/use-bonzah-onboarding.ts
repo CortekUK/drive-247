@@ -136,6 +136,16 @@ export function useBonzahOnboarding() {
         .select()
         .single();
       if (error) throw error;
+
+      // Fire-and-forget: kick off the AI verdict so a Bonzah reviewer sees a
+      // recommendation when they open the submission. Never blocks submit.
+      const submissionId = (row as unknown as BonzahSubmissionRow).id;
+      void supabase.functions
+        .invoke('summarize-bonzah-submission', { body: { submissionId } })
+        .catch(() => {
+          /* best-effort; verdict can be regenerated from the console */
+        });
+
       return row as unknown as BonzahSubmissionRow;
     },
     onSuccess: () => {
