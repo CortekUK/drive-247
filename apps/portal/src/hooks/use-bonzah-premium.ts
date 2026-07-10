@@ -147,8 +147,6 @@ export const COVERAGE_INFO = {
       "Does not cover renter's injuries",
       'Coverage limited to state minimum requirements',
       'Coverage amount varies based on state',
-      // Exact wording supplied by Bonzah (Brandon) — compliance text, do not reword.
-      'Excludes medical, PIP, UIM, UM where allowed by law.',
     ],
   },
   sli: {

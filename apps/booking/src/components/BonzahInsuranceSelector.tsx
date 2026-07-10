@@ -79,8 +79,18 @@ const BUNDLE_CROSS_COVERED_EXCLUSIONS: readonly BundleExclusion[] = [
   'Does not cover non-rental vehicle damage', // CDW gap — RCLI covers it in the bundle
   'Does not cover damage to the rental vehicle', // RCLI gap — CDW covers it in the bundle
 ];
-const BUNDLE_EXCLUSIONS = [...COVERAGE_INFO.cdw.exclusions, ...COVERAGE_INFO.rcli.exclusions]
-  .filter((exclusion) => !BUNDLE_CROSS_COVERED_EXCLUSIONS.includes(exclusion));
+// Bundle-only exclusion requested by Bonzah (Brandon) for the CDW+RCLI bundle
+// specifically — deliberately NOT added to COVERAGE_INFO.rcli.exclusions, so it does
+// not appear on the standalone RCLI card. Exact wording supplied by the insurer:
+// compliance text, do not reword.
+const BUNDLE_EXTRA_EXCLUSIONS = [
+  'Excludes medical, PIP, UIM, UM where allowed by law.',
+];
+const BUNDLE_EXCLUSIONS = [
+  ...[...COVERAGE_INFO.cdw.exclusions, ...COVERAGE_INFO.rcli.exclusions]
+    .filter((exclusion) => !BUNDLE_CROSS_COVERED_EXCLUSIONS.includes(exclusion)),
+  ...BUNDLE_EXTRA_EXCLUSIONS,
+];
 
 export default function BonzahInsuranceSelector({
   tripStartDate,
