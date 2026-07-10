@@ -19,7 +19,8 @@
 //   advanceAll { days }            -> advance every service in cron-clock order
 //   reset      { service }         -> reseed ONE service's fixture
 //   resetAll                       -> reseed all fixtures
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -82,17 +83,11 @@ async function sandbox(body: Record<string, unknown>): Promise<SandboxResponse> 
   return data;
 }
 
-// If the current page is a rental detail page (/rentals/<uuid>), return that id.
-// Lets the Time Machine advance the rental you're VIEWING (not just a fixture).
-function currentRentalId(): string | null {
-  if (typeof window === "undefined") return null;
-  const m = /\/rentals\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/.exec(
-    window.location.pathname,
-  );
-  return m ? m[1] : null;
-}
-
-type ThisRentalPayg = { isPayg?: boolean; status?: string; accruals?: number; totalCharged?: number; dayCount?: number };
+// Matches a rental detail page (/rentals/<uuid>) so the Time Machine can target
+// the rental you're VIEWING. Applied to usePathname() — hydration-safe AND
+// updates on client-side navigation (window.location read once would go stale).
+const RENTAL_PATH_RE =
+  /\/rentals\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/;
 
 // Render a raw status value per its declared format. Null/empty -> em dash.
 function fmt(value: unknown, format?: StatusFieldFormat): string {
@@ -251,7 +246,10 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
   const [busy, setBusy] = useState<string>("");
   // The rental currently open in this browser tab (if any). When set, the panel
   // acts as THAT rental's cron — results land on the page you're looking at.
-  const [rentalId] = useState<string | null>(() => currentRentalId());
+  // usePathname() tracks client-side navigation, so this stays correct when the
+  // user moves between rentals without a full reload.
+  const pathname = usePathname();
+  const rentalId = useMemo(() => RENTAL_PATH_RE.exec(pathname ?? "")?.[1] ?? null, [pathname]);
   // On a rental page the fixture controls are collapsed (they confuse: they're
   // different rentals). Toggle to reveal them.
   const [showFixtures, setShowFixtures] = useState(false);
@@ -341,10 +339,17 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
       const f = (data.fired ?? {}) as Record<string, number>;
       const bits: string[] = [];
       if (f.charges) bits.push(`${f.charges} charge${f.charges === 1 ? "" : "s"}`);
+      if (f.installments) bits.push(`${f.installments} installment charge${f.installments === 1 ? "" : "s"}`);
       if (f.reminders) bits.push(`${f.reminders} reminder${f.reminders === 1 ? "" : "s"}`);
       if (f.autoExtensions) bits.push(`${f.autoExtensions} auto-extension${f.autoExtensions === 1 ? "" : "s"}`);
       if (f.depositRefreshes) bits.push(`${f.depositRefreshes} deposit refresh`);
+      if (f.returnReminders) bits.push(`${f.returnReminders} return reminder${f.returnReminders === 1 ? "" : "s"}`);
+      const errs = Array.isArray(data.errors) ? (data.errors as string[]) : [];
       const what = bits.length ? bits.join(", ") : "nothing was due";
+      if (errs.length) {
+        toast.warning(`+${days}d — ${what}; ${errs.length} step${errs.length === 1 ? "" : "s"} failed: ${errs[0]}`, { id });
+        return;
+      }
       toast.success(`+${days}d — ${what}. The page updates live.`, { id });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e), { id });

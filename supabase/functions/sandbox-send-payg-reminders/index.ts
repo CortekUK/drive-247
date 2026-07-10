@@ -476,6 +476,10 @@ Deno.serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   const SANDBOX_TENANT = Deno.env.get("SANDBOX_TEST_TENANT_ID") || null;
+  // FAIL-CLOSED: without the designated-tenant env this sandbox must not run at all.
+  if (!SANDBOX_TENANT) {
+    return json({ success: false, error: "sandbox: SANDBOX_TEST_TENANT_ID is not configured" }, 412);
+  }
 
   // ── FAIL-CLOSED scope parse — no valid single-rental id => refuse. ──────────
   // Unlike the production cron there is NO global path: the sandbox only ever

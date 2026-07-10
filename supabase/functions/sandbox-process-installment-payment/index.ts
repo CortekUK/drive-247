@@ -57,6 +57,10 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
   )
   const SANDBOX_TENANT = Deno.env.get('SANDBOX_TEST_TENANT_ID') || null
+  // FAIL-CLOSED: without the designated-tenant env this sandbox must not run at all.
+  if (!SANDBOX_TENANT) {
+    return json({ success: false, error: "sandbox: SANDBOX_TEST_TENANT_ID is not configured" }, 412);
+  }
 
   const now = new Date()
   const todayStr = now.toISOString().split('T')[0]

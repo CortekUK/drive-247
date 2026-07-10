@@ -70,6 +70,10 @@ serve(async (req) => {
     }
   );
   const SANDBOX_TENANT = Deno.env.get('SANDBOX_TEST_TENANT_ID') || null;
+  // FAIL-CLOSED: without the designated-tenant env this sandbox must not run at all.
+  if (!SANDBOX_TENANT) {
+    return json({ success: false, error: "sandbox: SANDBOX_TEST_TENANT_ID is not configured" }, 412);
+  }
 
   // ── FAIL-CLOSED scope parse — no valid single-rental id => refuse. ──────────
   //    There is no global path: the sandbox can only ever run for ONE rental.
@@ -201,7 +205,7 @@ serve(async (req) => {
         .eq('reminder_type', reminderType)
         .gte('created_at', `${today}T00:00:00.000Z`)
         .lt('created_at', `${today}T23:59:59.999Z`)
-        .single();
+        .limit(1).maybeSingle();
 
       if (existingReminder) {
         console.log(`[SandboxDailyReminders] Reminder already exists for charge ${typedCharge.id}, type ${reminderType}`);

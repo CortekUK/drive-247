@@ -22,12 +22,14 @@ export const DESIGNATED_TEST_TENANT_ID = "09926302-f0ec-49f9-a05d-0cf1da93cf16";
 
 // ── Designated test rentals (created in the test tenant with these exact ids).
 //    route.ts refuses to operate on anything not in this set. ────────────────
+// NOTE: rental_number is derived as 'R-' || LEFT(id, 6), so each fixture id must
+// differ within its FIRST SIX hex chars or the unique rental_number collides.
 export const PAYG_RENTAL = "a0000001-0000-4000-8000-000000000001";
-export const INSTALLMENT_RENTAL = "a0000002-0000-4000-8000-000000000001";
-export const AUTO_EXTEND_RENTAL = "a0000003-0000-4000-8000-000000000001";
-export const DEPOSIT_RENTAL = "a0000004-0000-4000-8000-000000000001";
-export const RETURN_REMINDER_RENTAL = "a0000005-0000-4000-8000-000000000001";
-export const DAILY_REMINDER_RENTAL = "a0000006-0000-4000-8000-000000000001";
+export const INSTALLMENT_RENTAL = "a2000002-0000-4000-8000-000000000001";
+export const AUTO_EXTEND_RENTAL = "a3000003-0000-4000-8000-000000000001";
+export const DEPOSIT_RENTAL = "a4000004-0000-4000-8000-000000000001";
+export const RETURN_REMINDER_RENTAL = "a5000005-0000-4000-8000-000000000001";
+export const DAILY_REMINDER_RENTAL = "a6000006-0000-4000-8000-000000000001";
 
 export const DESIGNATED_TEST_RENTAL_IDS: ReadonlySet<string> = new Set([
   PAYG_RENTAL, INSTALLMENT_RENTAL, AUTO_EXTEND_RENTAL, DEPOSIT_RENTAL,
@@ -167,8 +169,19 @@ export const SERVICES: SbService[] = [
       };
     },
     reset: async (s) => {
+      // The refresh fn needs a REAL requires_capture PI; if a failed run burned it
+      // (status flipped to expired + PI cancelled), surface that instead of
+      // silently re-arming a fixture that can only fail again.
+      const { data } = await s.from("rentals").select("deposit_hold_payment_intent_id")
+        .eq("id", DEPOSIT_RENTAL).maybeSingle();
+      if (!(data as { deposit_hold_payment_intent_id?: string | null } | null)?.deposit_hold_payment_intent_id) {
+        throw new Error("deposit fixture has no hold PaymentIntent — run sandbox-fixture-setup and re-seed it");
+      }
       await s.from("rentals").update({
         status: "Active", deposit_hold_status: "held",
+        // auto-extend must stay OFF here: the refresh fn RELEASES holds on
+        // auto-extend rentals instead of refreshing them.
+        auto_extend_enabled: false,
         deposit_hold_placed_at: new Date().toISOString(), deposit_hold_expires_at: inDaysIso(7),
       }).eq("id", DEPOSIT_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
       return SERVICES[1].status(s);
@@ -186,17 +199,21 @@ export const SERVICES: SbService[] = [
     stepping: "catchup",
     drainFires: 8,
     progressKey: "charged",
-    // Charges the CUMULATIVE of all open+due installments in one PI → backdate ALL
-    // open rows' due_date to today (a single-column time-shift would leave later
-    // installments future-dated).
-    preFire: async (s) => {
+    // Days-aware: shift every OPEN installment's due_date back by `days` (the fn
+    // charges the cumulative of the ones that land <= today), and clear the 24h
+    // charge cooldown so simulated days aren't swallowed by it.
+    backdate: async (s, days) => {
       const { data: plan } = await s.from("installment_plans").select("id")
         .eq("rental_id", INSTALLMENT_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID).maybeSingle();
-      if (plan?.id) {
-        await s.from("scheduled_installments").update({ due_date: todayStr() })
-          .eq("installment_plan_id", plan.id).eq("invoice_status", "open");
-        await s.from("installment_plans").update({ last_reminder_sent_at: null }).eq("id", plan.id);
+      if (!plan?.id) return;
+      const { data: open } = await s.from("scheduled_installments")
+        .select("id, due_date").eq("installment_plan_id", plan.id).eq("invoice_status", "open");
+      for (const si of (open ?? []) as Array<{ id: string; due_date: string }>) {
+        const base = new Date(`${si.due_date}T00:00:00Z`).getTime();
+        const shifted = new Date(base - days * 24 * 3600 * 1000).toISOString().split("T")[0];
+        await s.from("scheduled_installments").update({ due_date: shifted }).eq("id", si.id);
       }
+      await s.from("installment_plans").update({ last_reminder_sent_at: null }).eq("id", plan.id);
     },
     status: async (s) => {
       const { data: plan } = await s.from("installment_plans")
@@ -221,11 +238,21 @@ export const SERVICES: SbService[] = [
     },
     reset: async (s) => {
       const { data: plan } = await s.from("installment_plans")
-        .update({ status: "active", last_reminder_sent_at: null })
+        .update({ status: "active", collection_mode: "auto", last_reminder_sent_at: null })
         .eq("rental_id", INSTALLMENT_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID)
         .select("id").maybeSingle();
       if (plan?.id) {
-        await s.from("scheduled_installments").update({ invoice_status: "open" }).eq("installment_plan_id", plan.id);
+        // Restore the CANONICAL schedule (future-dated so the real cron ignores it
+        // at rest): installment N due at +30d + (N-1) weeks.
+        const { data: rows } = await s.from("scheduled_installments")
+          .select("id, installment_number").eq("installment_plan_id", plan.id);
+        for (const si of (rows ?? []) as Array<{ id: string; installment_number: number }>) {
+          const due = new Date(Date.now() + (30 + (si.installment_number - 1) * 7) * 24 * 3600 * 1000)
+            .toISOString().split("T")[0];
+          await s.from("scheduled_installments")
+            .update({ invoice_status: "open", due_date: due, failure_count: 0, last_failure_reason: null })
+            .eq("id", si.id);
+        }
       }
       return SERVICES[2].status(s);
     },
@@ -259,6 +286,9 @@ export const SERVICES: SbService[] = [
     reset: async (s) => {
       await s.from("rentals").update({
         status: "Active", auto_extend_enabled: true, auto_extend_paused: false,
+        // Pin auto_charge: with no saved card the fn falls through to the PAY-LINK
+        // branch, which emails a real Stripe Checkout link to the customer.
+        auto_extend_charge_mode: "auto_charge",
         auto_extend_status: "active", auto_extend_charge_count: 0, auto_extend_failed_attempts: 0,
         auto_extend_pending_extension_id: null, auto_extend_next_charge_at: inDaysIso(7),
       }).eq("id", AUTO_EXTEND_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
@@ -275,7 +305,15 @@ export const SERVICES: SbService[] = [
     cronFns: ["sandbox-send-payg-reminders"],
     stepping: "single",
     progressKey: "sent",
-    backdate: (prod, days) => shiftTs(prod, PAYG_RENTAL, "payg_last_reminder_sent_at", days),
+    // Cadence anchor is last-sent OR (when never sent) payg_start_ts — shift
+    // whichever one the fn will actually read, so a fresh reset still works.
+    backdate: async (prod, days) => {
+      const { data } = await prod.from("rentals").select("payg_last_reminder_sent_at")
+        .eq("id", PAYG_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID).maybeSingle();
+      const col = (data as { payg_last_reminder_sent_at?: string | null } | null)?.payg_last_reminder_sent_at
+        ? "payg_last_reminder_sent_at" : "payg_start_ts";
+      await shiftTs(prod, PAYG_RENTAL, col, days, 0);
+    },
     status: async (s) => {
       const [{ count: logs }, rental] = await Promise.all([
         s.from("payg_reminder_log").select("id", { count: "exact", head: true }).eq("rental_id", PAYG_RENTAL),
