@@ -99,9 +99,11 @@ export default function BonzahLoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          Bonzah × Drive247 · Secure partner access
-        </p>
+        <div className="flex items-center justify-center gap-2 mt-7 text-xs text-muted-foreground">
+          <span>Powered by</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/drive247-logo.png" alt="Drive247" className="h-4 w-auto opacity-90" />
+        </div>
       </div>
     </div>
   );

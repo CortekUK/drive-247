@@ -67,6 +67,18 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
         <main className="flex-1">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">{children}</div>
         </main>
+        <footer className="border-t border-border mt-8">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Powered by</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/drive247-logo.png" alt="Drive247" className="h-4 w-auto opacity-90" />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Bonzah Partner Console · A Drive247 platform · © {new Date().getFullYear()}
+            </p>
+          </div>
+        </footer>
       </div>
     </TooltipProvider>
   );
