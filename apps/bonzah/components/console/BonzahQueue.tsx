@@ -428,7 +428,7 @@ export default function BonzahQueue() {
                       </td>
                       <td className="px-4 py-3.5 align-top">
                         {ai && AiIcon ? (
-                          <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border', ai.cls)}>
+                          <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border whitespace-nowrap', ai.cls)}>
                             <AiIcon className="h-3 w-3" />
                             {ai.label}
                             {s.ai_confidence != null && (
@@ -442,8 +442,8 @@ export default function BonzahQueue() {
                         )}
                       </td>
                       <td className="px-4 py-3.5 align-top">
-                        <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border', statusPill[s.status])}>
-                          <StatusIcon className="h-3 w-3" />
+                        <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap', statusPill[s.status])}>
+                          <StatusIcon className="h-3 w-3 shrink-0" />
                           {statusLabel[s.status]}
                         </span>
                       </td>

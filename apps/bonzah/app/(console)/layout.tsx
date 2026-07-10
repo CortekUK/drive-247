@@ -40,7 +40,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
     <TooltipProvider>
       <div className="min-h-screen bg-background flex flex-col">
         <header className="sticky top-0 z-20 border-b border-border bg-card/95 backdrop-blur">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <div className="w-full px-5 sm:px-8 h-14 flex items-center justify-between">
             <div className="flex items-center gap-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/bonzah-logo.svg" alt="Bonzah" className="h-6 w-auto" />
@@ -65,10 +65,10 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
           </div>
         </header>
         <main className="flex-1">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">{children}</div>
+          <div className="w-full px-5 sm:px-8 py-6">{children}</div>
         </main>
         <footer className="border-t border-border mt-8">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="w-full px-5 sm:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>Powered by</span>
               {/* eslint-disable-next-line @next/next/no-img-element */}
