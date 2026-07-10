@@ -12,7 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <NextTopLoader color="#6366f1" height={2} showSpinner={false} />
+        <NextTopLoader color="#d6004f" height={2} showSpinner={false} />
         {children}
         <Toaster />
       </body>

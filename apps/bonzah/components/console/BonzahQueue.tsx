@@ -144,6 +144,47 @@ const statusIcon: Record<Submission['status'], React.ElementType> = {
   rejected: XCircle,
 };
 
+// Static class maps (Tailwind JIT can't see dynamically-built class strings).
+const STAT_CARDS = [
+  {
+    key: 'pending' as const,
+    icon: Clock,
+    label: 'Pending review',
+    iconWrap: 'bg-warning/12 text-warning',
+    active: 'border-warning/50 ring-1 ring-warning/30 bg-warning/[0.04]',
+  },
+  {
+    key: 'approved' as const,
+    icon: CheckCircle2,
+    label: 'Approved & live',
+    iconWrap: 'bg-success/12 text-success',
+    active: 'border-success/50 ring-1 ring-success/30 bg-success/[0.04]',
+  },
+  {
+    key: 'rejected' as const,
+    icon: XCircle,
+    label: 'Sent back',
+    iconWrap: 'bg-destructive/12 text-destructive',
+    active: 'border-destructive/50 ring-1 ring-destructive/30 bg-destructive/[0.04]',
+  },
+];
+
+const statusPill: Record<Submission['status'], string> = {
+  pending: 'text-warning bg-warning/10 border-warning/25',
+  approved: 'text-success bg-success/10 border-success/25',
+  rejected: 'text-destructive bg-destructive/10 border-destructive/25',
+};
+
+// Compact AI recommendation chip for the table column.
+const aiCompact: Record<
+  NonNullable<Submission['ai_recommendation']>,
+  { label: string; cls: string; icon: React.ElementType }
+> = {
+  approve: { label: 'Approve', cls: 'text-success bg-success/10 border-success/25', icon: ThumbsUp },
+  disapprove: { label: 'Disapprove', cls: 'text-destructive bg-destructive/10 border-destructive/25', icon: ThumbsDown },
+  uncertain: { label: 'Review', cls: 'text-warning bg-warning/10 border-warning/25', icon: HelpCircle },
+};
+
 export default function BonzahQueue() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -249,200 +290,168 @@ export default function BonzahQueue() {
     <div className="space-y-6">
       {/* Stat cards (clickable filters) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {(
-          [
-            { key: 'pending', icon: Clock, label: 'Pending', count: counts.pending, accent: 'warning' },
-            { key: 'approved', icon: CheckCircle2, label: 'Approved', count: counts.approved, accent: 'success' },
-            { key: 'rejected', icon: XCircle, label: 'Rejected', count: counts.rejected, accent: 'destructive' },
-          ] as const
-        ).map(({ key, icon: Icon, label, count, accent }) => (
-          <Card
-            key={key}
-            className={cn(
-              'cursor-pointer transition-all',
-              filter === key && `border-${accent}/40 bg-${accent}/5`,
-            )}
-            onClick={() => setFilter(filter === key ? 'all' : key)}
-          >
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
+        {STAT_CARDS.map(({ key, icon: Icon, label, iconWrap, active }) => {
+          const count = counts[key];
+          const isActive = filter === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilter(isActive ? 'all' : key)}
+              className={cn(
+                'text-left rounded-xl border border-border bg-card p-5 transition-all card-elev hover:border-primary/30',
+                isActive && active,
+              )}
+            >
+              <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">{label}</p>
-                  <p className="text-2xl font-bold tabular-nums">{count}</p>
+                  <p className="text-[13px] font-medium text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums text-foreground">
+                    {count}
+                  </p>
                 </div>
-                <div className={cn('flex items-center justify-center h-10 w-10 rounded-lg', `bg-${accent}/15`)}>
-                  <Icon className={cn('h-5 w-5', `text-${accent}`)} />
-                </div>
+                <span className={cn('flex h-10 w-10 items-center justify-center rounded-xl', iconWrap)}>
+                  <Icon className="h-5 w-5" />
+                </span>
               </div>
-            </CardContent>
-          </Card>
-        ))}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Search & Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by business name, contact email, EIN, or tenant..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
-              {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setFilter(status)}
-                  className={cn(
-                    'px-3 py-2 rounded-md text-xs font-semibold transition-all capitalize border',
-                    filter === status
-                      ? status === 'pending'
-                        ? 'bg-warning/15 text-amber-400 border-warning/30'
-                        : status === 'approved'
-                        ? 'bg-success/15 text-success border-success/30'
-                        : status === 'rejected'
-                        ? 'bg-destructive/15 text-destructive border-destructive/30'
-                        : 'bg-primary/15 text-primary border-primary/30'
-                      : 'bg-transparent text-muted-foreground border-border hover:text-foreground',
-                  )}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
+      {/* Submissions table */}
+      <div className="rounded-xl border border-border bg-card card-elev overflow-hidden">
+        {/* Toolbar */}
+        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by business, contact, or EIN…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 bg-background"
+            />
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex items-center gap-1.5">
+            {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilter(status)}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-xs font-semibold capitalize border transition-all',
+                  filter === status
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-transparent text-muted-foreground border-border hover:text-foreground hover:border-primary/30',
+                )}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+        </div>
 
-      {/* Table */}
-      <Card>
-        <CardContent className="pt-6">
-          {loading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
+        {loading ? (
+          <div className="space-y-2 p-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : filteredSubmissions.length === 0 ? (
+          <div className="text-center py-16 px-4">
+            <div className="mx-auto h-12 w-12 rounded-full bg-secondary flex items-center justify-center mb-3">
+              <FileText className="h-5 w-5 text-primary" />
             </div>
-          ) : filteredSubmissions.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="mx-auto h-12 w-12 rounded-full bg-muted/40 flex items-center justify-center mb-3">
-                <FileText className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <p className="text-sm font-medium">No submissions found</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {filter === 'all'
-                  ? 'Tenants will appear here once they submit their Bonzah onboarding form.'
-                  : `No ${filter} submissions match your filters.`}
-              </p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Business</TableHead>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Submitted</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <p className="text-sm font-semibold text-foreground">No submissions found</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {filter === 'all'
+                ? 'Operators appear here once they submit their Bonzah application.'
+                : `No ${filter} submissions match your filters.`}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[880px] text-sm border-collapse">
+              <thead>
+                <tr className="bg-secondary/70 text-left">
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-secondary-foreground">Operator</th>
+                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-secondary-foreground">Contact</th>
+                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-secondary-foreground">Submitted</th>
+                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-secondary-foreground">
+                    <span className="inline-flex items-center gap-1"><Sparkles className="h-3 w-3" /> Drive247 AI</span>
+                  </th>
+                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-secondary-foreground">Status</th>
+                  <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-secondary-foreground">Action</th>
+                </tr>
+              </thead>
+              <tbody>
                 {filteredSubmissions.map((s) => {
                   const StatusIcon = statusIcon[s.status];
+                  const ai = s.ai_recommendation ? aiCompact[s.ai_recommendation] : null;
+                  const AiIcon = ai?.icon;
                   return (
-                    <TableRow
+                    <tr
                       key={s.id}
-                      className="cursor-pointer hover:bg-muted/40"
+                      className="border-t border-border cursor-pointer hover:bg-secondary/40 transition-colors"
                       onClick={() => setSelected(s)}
                     >
-                      <TableCell>
-                        <div className="font-medium">{s.business_trade_name}</div>
-                        <div className="text-xs text-muted-foreground">
+                      <td className="px-5 py-3.5 align-top">
+                        <div className="font-semibold text-foreground leading-tight">{s.business_trade_name}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
                           {s.business_legal_name}
-                          {s.ein && <span className="ml-2">EIN: {s.ein}</span>}
+                          {s.ein && <span className="ml-2">· EIN {s.ein}</span>}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">{s.tenant_name}</div>
-                        {s.tenant_slug && (
-                          <div className="text-xs text-muted-foreground">{s.tenant_slug}</div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
+                      </td>
+                      <td className="px-4 py-3.5 align-top">
+                        <div className="text-[13px] text-foreground">
                           {s.primary_contact_first_name} {s.primary_contact_last_name}
                         </div>
-                        <div className="text-xs text-muted-foreground">{s.primary_contact_email}</div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                        <div className="text-xs text-muted-foreground truncate max-w-[210px]">{s.primary_contact_email}</div>
+                      </td>
+                      <td className="px-4 py-3.5 align-top text-xs text-muted-foreground whitespace-nowrap">
                         {formatDate(s.submitted_at)}
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={cn(
-                            'inline-flex items-center gap-1.5 text-sm font-medium',
-                            statusBadgeClass[s.status],
-                          )}
-                        >
-                          <StatusIcon className="h-3.5 w-3.5" />
+                      </td>
+                      <td className="px-4 py-3.5 align-top">
+                        {ai && AiIcon ? (
+                          <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border', ai.cls)}>
+                            <AiIcon className="h-3 w-3" />
+                            {ai.label}
+                            {s.ai_confidence != null && (
+                              <span className="opacity-70"> · {Math.round(s.ai_confidence * 100)}%</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <Sparkles className="h-3 w-3" /> on open
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 align-top">
+                        <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border', statusPill[s.status])}>
+                          <StatusIcon className="h-3 w-3" />
                           {statusLabel[s.status]}
                         </span>
-                      </TableCell>
-                      <TableCell className="text-right">
+                      </td>
+                      <td className="px-5 py-3.5 align-top text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            title="Download structured PDF"
-                            onClick={(e) => handleDownloadPdf(e, s)}
-                            disabled={rowAction?.id === s.id}
-                          >
-                            {rowAction?.id === s.id && rowAction.kind === 'pdf' ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <FileDown className="h-4 w-4" />
-                            )}
+                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Download structured PDF" onClick={(e) => handleDownloadPdf(e, s)} disabled={rowAction?.id === s.id}>
+                            {rowAction?.id === s.id && rowAction.kind === 'pdf' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            title="Download images as ZIP"
-                            onClick={(e) => handleDownloadZip(e, s)}
-                            disabled={rowAction?.id === s.id}
-                          >
-                            {rowAction?.id === s.id && rowAction.kind === 'zip' ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <ImageDown className="h-4 w-4" />
-                            )}
+                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Download images as ZIP" onClick={(e) => handleDownloadZip(e, s)} disabled={rowAction?.id === s.id}>
+                            {rowAction?.id === s.id && rowAction.kind === 'zip' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageDown className="h-4 w-4" />}
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelected(s);
-                            }}
-                          >
+                          <Button size="sm" className="ml-1" onClick={(e) => { e.stopPropagation(); setSelected(s); }}>
                             Review
                           </Button>
                         </div>
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   );
                 })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <SubmissionDetailDialog
         submission={selected}
@@ -1051,7 +1060,7 @@ function SubmissionDetailDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <AiVerdictCard submission={submission} />
+        <AiVerdictCard submission={submission} onGenerated={onUpdated} />
 
         <QuizBadge submission={submission} />
 
@@ -1464,81 +1473,167 @@ const recMeta: Record<
   },
 };
 
-function AiVerdictCard({ submission }: { submission: Submission }) {
-  const rec = submission.ai_recommendation;
-  if (!rec && !submission.ai_summary) {
-    return (
-      <div className="rounded-lg border border-border bg-muted/20 p-3 mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-        <Sparkles className="h-4 w-4" />
-        AI verdict pending — check back shortly.
-      </div>
-    );
-  }
+type LocalVerdict = {
+  recommendation: Submission['ai_recommendation'];
+  summary: string | null;
+  confidence: number | null;
+  reasons: string[];
+  red_flags: string[];
+  generatedAt: string | null;
+};
+
+const toVerdict = (s: Submission): LocalVerdict => ({
+  recommendation: s.ai_recommendation,
+  summary: s.ai_summary,
+  confidence: s.ai_confidence,
+  reasons: Array.isArray(s.ai_reasons) ? s.ai_reasons : [],
+  red_flags: Array.isArray(s.ai_red_flags) ? s.ai_red_flags : [],
+  generatedAt: s.ai_generated_at,
+});
+
+function AiVerdictCard({
+  submission,
+  onGenerated,
+}: {
+  submission: Submission;
+  onGenerated?: () => void;
+}) {
+  const [verdict, setVerdict] = useState<LocalVerdict>(() => toVerdict(submission));
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const generate = async () => {
+    setGenerating(true);
+    setError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('summarize-bonzah-submission', {
+        body: { submissionId: submission.id },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      setVerdict({
+        recommendation: data.recommendation ?? 'uncertain',
+        summary: data.summary ?? null,
+        confidence: data.confidence ?? null,
+        reasons: Array.isArray(data.reasons) ? data.reasons : [],
+        red_flags: Array.isArray(data.red_flags) ? data.red_flags : [],
+        generatedAt: data.ai_generated_at ?? new Date().toISOString(),
+      });
+      onGenerated?.();
+    } catch (e: any) {
+      setError(e.message || 'Could not generate the AI verdict');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // On open (or when switching submissions): reset, and auto-generate if missing.
+  useEffect(() => {
+    const initial = toVerdict(submission);
+    setVerdict(initial);
+    setError(null);
+    if (!initial.generatedAt && !initial.recommendation) void generate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submission.id]);
+
+  const rec = verdict.recommendation;
   const meta = rec ? recMeta[rec] : recMeta.uncertain;
   const Icon = meta.icon;
-  const confidence =
-    submission.ai_confidence != null ? Math.round(submission.ai_confidence * 100) : null;
-  const reasons = Array.isArray(submission.ai_reasons) ? submission.ai_reasons : [];
-  const redFlags = Array.isArray(submission.ai_red_flags) ? submission.ai_red_flags : [];
+  const confidence = verdict.confidence != null ? Math.round(verdict.confidence * 100) : null;
+  const hasVerdict = !!verdict.generatedAt || !!rec;
 
   return (
-    <div className={cn('rounded-lg border p-4 mt-2 space-y-3', meta.cls)}>
-      <div className="flex items-center gap-2 flex-wrap">
-        <Sparkles className="h-4 w-4 text-primary" />
-        <span className="text-sm font-semibold">AI Verdict</span>
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border',
-            meta.chip,
+    <div className="relative overflow-hidden rounded-xl border border-primary/25 bg-gradient-to-br from-primary/[0.07] via-card to-secondary/40 p-4 sm:p-5 mt-1">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15">
+            <Sparkles className="h-4 w-4 text-primary" />
+          </span>
+          <div className="leading-tight">
+            <div className="text-sm font-bold text-foreground">Drive247 AI Verdict</div>
+            <div className="text-[11px] text-muted-foreground">Underwriting assistant</div>
+          </div>
+        </div>
+        <Button variant="outline" size="sm" onClick={generate} disabled={generating} className="h-8 shrink-0">
+          {generating ? (
+            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+          ) : (
+            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
           )}
-        >
-          <Icon className="h-3 w-3" />
-          {meta.label}
-        </span>
-        {confidence != null && (
-          <span className="text-xs text-muted-foreground">{confidence}% confidence</span>
-        )}
+          {hasVerdict ? 'Regenerate' : 'Generate'}
+        </Button>
       </div>
 
-      {submission.ai_summary && (
-        <p className="text-sm text-foreground/90">{submission.ai_summary}</p>
-      )}
+      {generating && !hasVerdict ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          Analyzing this application…
+        </div>
+      ) : error && !hasVerdict ? (
+        <div className="text-sm text-destructive py-1">{error} — try Regenerate.</div>
+      ) : !hasVerdict ? (
+        <div className="text-sm text-muted-foreground py-1">
+          No verdict yet — click Generate.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm font-semibold border',
+                meta.chip,
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {meta.label}
+            </span>
+            {confidence != null && (
+              <span className="text-xs font-medium text-muted-foreground">{confidence}% confidence</span>
+            )}
+            {error && <span className="text-xs text-destructive">{error}</span>}
+          </div>
 
-      {reasons.length > 0 && (
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-            Reasons
+          {verdict.summary && (
+            <p className="text-sm text-foreground/90 leading-relaxed">{verdict.summary}</p>
+          )}
+
+          {verdict.reasons.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                Reasons
+              </p>
+              <ul className="space-y-1.5">
+                {verdict.reasons.map((r, i) => (
+                  <li key={i} className="text-sm flex gap-2">
+                    <ThumbsUp className="h-3.5 w-3.5 text-success/70 mt-0.5 shrink-0" />
+                    <span>{r}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {verdict.red_flags.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-destructive mb-1.5 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" /> Red flags
+              </p>
+              <ul className="space-y-1.5">
+                {verdict.red_flags.map((r, i) => (
+                  <li key={i} className="text-sm flex gap-2 text-destructive/90">
+                    <span className="mt-1.5 h-1 w-1 rounded-full bg-destructive shrink-0" />
+                    <span>{r}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <p className="text-[11px] text-muted-foreground pt-1">
+            Generated by Drive247 AI to assist your review — always use your own judgement.
           </p>
-          <ul className="space-y-1">
-            {reasons.map((r, i) => (
-              <li key={i} className="text-sm flex gap-2">
-                <span className="text-muted-foreground">•</span>
-                <span>{r}</span>
-              </li>
-            ))}
-          </ul>
         </div>
       )}
-
-      {redFlags.length > 0 && (
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-destructive mb-1 flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3" /> Red flags
-          </p>
-          <ul className="space-y-1">
-            {redFlags.map((r, i) => (
-              <li key={i} className="text-sm flex gap-2 text-destructive/90">
-                <span>•</span>
-                <span>{r}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <p className="text-[11px] text-muted-foreground">
-        Generated by AI to assist review — always use your own judgement.
-      </p>
     </div>
   );
 }

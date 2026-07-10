@@ -6,60 +6,60 @@
 
 @layer base {
   :root {
-    /* Neon purple theme — rich purple tones, glowy, dreamy */
-    --background: 258 30% 12%;           /* #1c1535 — deep violet */
-    --foreground: 270 25% 88%;           /* #ddd1f0 — warm lavender */
+    /* Bonzah brand — clean white + baby pink, raspberry-magenta accent */
+    --background: 336 100% 99%;          /* #fffafc — soft pink-white page */
+    --foreground: 335 26% 12%;           /* #26141b — warm near-black */
 
-    --card: 258 28% 15%;                 /* #241c42 — rich purple card */
-    --card-foreground: 270 25% 88%;
+    --card: 0 0% 100%;                   /* #ffffff — pure white cards */
+    --card-foreground: 335 26% 12%;
 
-    --popover: 258 28% 17%;
-    --popover-foreground: 270 25% 88%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 335 26% 12%;
 
-    --primary: 265 85% 65%;              /* #a470ff — bright neon violet */
-    --primary-foreground: 270 30% 98%;
+    --primary: 338 100% 42%;             /* #d6004f — Bonzah magenta */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 258 25% 20%;            /* #30264e */
-    --secondary-foreground: 270 20% 78%;
+    --secondary: 336 70% 96%;            /* #fdeaf1 — baby pink surface */
+    --secondary-foreground: 338 60% 32%; /* deep magenta text on pink */
 
-    --muted: 258 25% 20%;
-    --muted-foreground: 265 15% 55%;     /* #8a74a8 — purple-gray */
+    --muted: 336 55% 96%;                /* #fceef3 — muted baby pink */
+    --muted-foreground: 333 12% 46%;     /* #82717a — warm mauve-gray */
 
-    --accent: 258 25% 23%;
-    --accent-foreground: 270 25% 88%;
+    --accent: 336 72% 94%;               /* #fbe1ec — soft pink accent */
+    --accent-foreground: 338 60% 30%;
 
-    --destructive: 350 70% 55%;          /* pinkish-red, fits purple */
-    --destructive-foreground: 270 30% 98%;
+    --destructive: 0 72% 51%;            /* #dc2626 — reject red */
+    --destructive-foreground: 0 0% 100%;
 
-    --success: 160 60% 50%;              /* teal-green, complements purple */
-    --success-foreground: 270 30% 98%;
+    --success: 142 66% 40%;              /* #16a34a — approve green */
+    --success-foreground: 0 0% 100%;
 
-    --warning: 42 90% 58%;               /* warm gold */
-    --warning-foreground: 258 30% 12%;
+    --warning: 33 92% 44%;               /* #d97706 — amber */
+    --warning-foreground: 0 0% 100%;
 
-    --border: 258 22% 22%;               /* #362d54 */
-    --input: 258 22% 24%;
-    --ring: 265 85% 65%;
+    --border: 336 44% 91%;               /* #f4dce6 — soft pink border */
+    --input: 336 44% 91%;
+    --ring: 338 100% 42%;                /* magenta focus ring */
 
     --radius: 0.75rem;
 
-    /* Sidebar — richest purple layer */
-    --sidebar-background: 260 35% 10%;   /* #17102e */
-    --sidebar-foreground: 270 18% 75%;
-    --sidebar-primary: 265 85% 65%;
-    --sidebar-primary-foreground: 270 30% 98%;
-    --sidebar-accent: 265 85% 65%;
-    --sidebar-accent-foreground: 270 30% 98%;
-    --sidebar-border: 258 22% 18%;
-    --sidebar-ring: 265 85% 65%;
-    --sidebar-muted: 265 15% 55%;
+    /* Sidebar — baby pink layer */
+    --sidebar-background: 336 78% 97%;   /* #fdeef4 */
+    --sidebar-foreground: 335 18% 30%;
+    --sidebar-primary: 338 100% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 336 72% 94%;
+    --sidebar-accent-foreground: 338 60% 30%;
+    --sidebar-border: 336 44% 90%;
+    --sidebar-ring: 338 100% 42%;
+    --sidebar-muted: 333 12% 46%;
 
-    /* Charts */
-    --chart-1: 265 85% 65%;             /* neon purple */
-    --chart-2: 190 90% 55%;             /* neon cyan */
-    --chart-3: 160 60% 50%;             /* teal */
-    --chart-4: 42 90% 58%;              /* gold */
-    --chart-5: 350 70% 55%;             /* pink-red */
+    /* Charts — magenta-forward brand family */
+    --chart-1: 338 100% 42%;            /* magenta */
+    --chart-2: 320 78% 55%;             /* pink */
+    --chart-3: 262 60% 58%;             /* soft violet */
+    --chart-4: 33 92% 52%;              /* amber */
+    --chart-5: 142 66% 42%;             /* green */
   }
 
   * {
@@ -77,38 +77,43 @@
   }
 
   .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-fuchsia-400;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-[#d6004f] to-[#ff3d84];
   }
 
-  /* Neon glow utilities — visible, dreamy, layered */
+  /* Bonzah brand background wash for auth / hero surfaces */
+  .brand-wash {
+    background:
+      radial-gradient(60% 55% at 85% 0%, hsl(338 100% 42% / 0.10), transparent 70%),
+      radial-gradient(50% 50% at 0% 100%, hsl(320 90% 60% / 0.10), transparent 70%),
+      hsl(336 100% 99%);
+  }
+
+  /* Soft brand-tinted elevation — replaces the old neon glows.
+     Names kept so existing components (badges, kpi cards) keep working. */
   .glow-purple {
-    box-shadow: 0 0 20px -4px hsl(265 85% 65% / 0.45),
-                0 0 8px -2px hsl(265 85% 65% / 0.2),
-                inset 0 0 12px -8px hsl(265 85% 65% / 0.1);
+    box-shadow: 0 10px 30px -12px hsl(338 100% 42% / 0.28),
+                0 2px 8px -3px hsl(338 60% 40% / 0.12);
   }
-
   .glow-purple-sm {
-    box-shadow: 0 0 14px -4px hsl(265 85% 65% / 0.35),
-                0 0 5px -1px hsl(265 85% 65% / 0.15);
+    box-shadow: 0 6px 18px -10px hsl(338 100% 42% / 0.22),
+                0 1px 4px -2px hsl(338 60% 40% / 0.10);
   }
-
   .glow-green {
-    box-shadow: 0 0 14px -4px hsl(160 60% 50% / 0.4),
-                0 0 5px -1px hsl(160 60% 50% / 0.15);
+    box-shadow: 0 6px 16px -10px hsl(142 66% 40% / 0.30);
   }
-
   .glow-red {
-    box-shadow: 0 0 14px -4px hsl(350 70% 55% / 0.4),
-                0 0 5px -1px hsl(350 70% 55% / 0.15);
+    box-shadow: 0 6px 16px -10px hsl(0 72% 51% / 0.30);
   }
-
   .glow-amber {
-    box-shadow: 0 0 14px -4px hsl(42 90% 58% / 0.4),
-                0 0 5px -1px hsl(42 90% 58% / 0.15);
+    box-shadow: 0 6px 16px -10px hsl(33 92% 44% / 0.30);
+  }
+  .glow-cyan {
+    box-shadow: 0 6px 16px -10px hsl(320 78% 55% / 0.28);
   }
 
-  .glow-cyan {
-    box-shadow: 0 0 14px -4px hsl(190 90% 55% / 0.4),
-                0 0 5px -1px hsl(190 90% 55% / 0.15);
+  /* Gentle resting card shadow for the light theme */
+  .card-elev {
+    box-shadow: 0 1px 2px hsl(338 30% 30% / 0.04),
+                0 8px 24px -16px hsl(338 40% 30% / 0.10);
   }
 }
