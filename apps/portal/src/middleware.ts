@@ -71,6 +71,9 @@ export async function middleware(request: NextRequest) {
  * - "portal.localhost:3001" → null (no tenant)
  * - "portal.drive-247.com" → null (no tenant)
  */
+// Subdomains with their own Vercel deployments — never treat as tenant slugs.
+const RESERVED_SUBDOMAINS = ['www', 'admin', 'portal', 'api', 'app', 'bonzah'];
+
 function extractTenantSlug(hostname: string): string | null {
   // Remove port if present
   const host = hostname.split(':')[0];
@@ -102,6 +105,7 @@ function extractTenantSlug(hostname: string): string | null {
   // Must have at least 4 parts: tenant.portal.domain.tld
   if (parts.length >= 4 && parts[1] === 'portal') {
     const tenant = parts[0];
+    if (RESERVED_SUBDOMAINS.includes(tenant)) return null;
     return tenant;
   }
 

@@ -81,7 +81,7 @@ function extractSubdomain(hostname: string): string | null {
   // Handle production: "acme.drive-247.com" -> "acme"
   // Must have at least 3 parts (subdomain.domain.tld)
   // Exclude reserved subdomains that have their own Vercel projects
-  const reservedSubdomains = ['www', 'admin', 'portal', 'api', 'app'];
+  const reservedSubdomains = ['www', 'admin', 'portal', 'api', 'app', 'bonzah'];
   if (parts.length >= 3) {
     const subdomain = parts[0];
     if (reservedSubdomains.includes(subdomain)) {
