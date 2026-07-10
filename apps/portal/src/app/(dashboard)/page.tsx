@@ -27,6 +27,7 @@ import { CalendarWidget } from "@/components/dashboard/calendar-widget";
 import { AIInsightsPanel } from "@/components/rentals/calendar/ai-insights-panel";
 import { BonzahPendingAlert } from "@/components/dashboard/bonzah-pending-alert";
 import { PlatformStatusBanner } from "@/components/dashboard/platform-status-banner";
+import { BonzahStatusBanner } from "@/components/dashboard/bonzah-status-banner";
 import { CommandCenter } from "@/components/dashboard/command-center";
 import { LowCreditsBanner } from "@/components/dashboard/low-credits-banner";
 import { useCalendarRentals } from "@/hooks/use-calendar-rentals";
@@ -191,6 +192,9 @@ export default function DashboardPage() {
 
       {/* Low credit balance warning */}
       <LowCreditsBanner />
+
+      {/* Bonzah onboarding decision banner (approved / needs update) */}
+      <BonzahStatusBanner />
 
       {/* Platform Status */}
       <PlatformStatusBanner
