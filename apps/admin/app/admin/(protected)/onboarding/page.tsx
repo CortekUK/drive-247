@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dialog';
 import CreateTenantDialog from '@/components/admin/CreateTenantDialog';
 import BonzahSubmissions from '@/components/admin/BonzahSubmissions';
+import BonzahContentEditor from '@/components/admin/BonzahContentEditor';
 import SendToBrandonDialog from '@/components/admin/SendToBrandonDialog';
 import OnboardingFollowUpSheet from '@/components/admin/OnboardingFollowUpSheet';
 import {
@@ -261,6 +262,7 @@ export default function OnboardingPage() {
         <TabsList>
           <TabsTrigger value="checklist">Checklist</TabsTrigger>
           <TabsTrigger value="forms">Bonzah Forms</TabsTrigger>
+          <TabsTrigger value="content">Training &amp; Quiz</TabsTrigger>
         </TabsList>
 
         <TabsContent value="checklist" className="space-y-6 mt-4">
@@ -524,6 +526,10 @@ export default function OnboardingPage() {
 
         <TabsContent value="forms" className="mt-4">
           <BonzahSubmissions />
+        </TabsContent>
+
+        <TabsContent value="content" className="mt-4">
+          <BonzahContentEditor />
         </TabsContent>
       </Tabs>
 

@@ -237,7 +237,11 @@ export const stepFields: Record<number, (keyof BonzahOnboardingFormData)[]> = {
     'uw_modified_for_performance',
     'uw_other_use',
   ],
-  8: [
+  // 8 (Training) and 9 (Quiz) have no react-hook-form fields — they are gated by
+  // local state in index.tsx (training acknowledgement + server-graded quiz).
+  8: [],
+  9: [],
+  10: [
     'declare_complete_accurate',
     'declare_authorized',
     'declare_authorize_bonzah',
@@ -320,7 +324,9 @@ export const STEPS = [
   { id: 5, key: 'insurance', title: 'Insurance', description: 'Coverage and fleet details' },
   { id: 6, key: 'policies', title: 'Policies', description: 'Renter screening and operations' },
   { id: 7, key: 'underwriting', title: 'Underwriting', description: 'Risk questions' },
-  { id: 8, key: 'review', title: 'Review & Sign', description: 'Confirm and submit' },
+  { id: 8, key: 'training', title: 'Training', description: 'How Bonzah works' },
+  { id: 9, key: 'quiz', title: 'Quiz', description: 'Quick knowledge check' },
+  { id: 10, key: 'review', title: 'Review & Sign', description: 'Confirm and submit' },
 ] as const;
 
 export const TOTAL_STEPS = STEPS.length;

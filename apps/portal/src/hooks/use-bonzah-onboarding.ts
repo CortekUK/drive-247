@@ -105,9 +105,11 @@ export function useBonzahOnboarding() {
     mutationFn: async ({
       data,
       fileUrls,
+      quizResult,
     }: {
       data: BonzahOnboardingFormData;
       fileUrls: FileUrls;
+      quizResult?: { score: number; total: number; passed: boolean } | null;
     }) => {
       if (!tenant?.id) throw new Error('Tenant not loaded');
       const payload = {
@@ -123,6 +125,10 @@ export function useBonzahOnboarding() {
         status: 'pending' as const,
         data: data as unknown as Json,
         file_urls: fileUrls as unknown as Json,
+        quiz_score: quizResult?.score ?? null,
+        quiz_total: quizResult?.total ?? null,
+        quiz_passed: quizResult?.passed ?? null,
+        training_completed_at: quizResult ? new Date().toISOString() : null,
       };
       const { data: row, error } = await supabase
         .from('bonzah_onboarding_submissions')
@@ -130,6 +136,24 @@ export function useBonzahOnboarding() {
         .select()
         .single();
       if (error) throw error;
+
+      // Fire-and-forget: kick off the AI verdict so a Bonzah reviewer sees a
+      // recommendation when they open the submission. Never blocks submit.
+      const submissionId = (row as unknown as BonzahSubmissionRow).id;
+      void supabase.functions
+        .invoke('summarize-bonzah-submission', { body: { submissionId } })
+        .catch(() => {
+          /* best-effort; verdict can be regenerated from the console */
+        });
+
+      // Fire-and-forget: email the application to the Bonzah partner (Brandon)
+      // with a deep link into the console. Best-effort; never blocks submit.
+      void supabase.functions
+        .invoke('send-bonzah-form-to-brandon', { body: { tenant_id: tenant.id } })
+        .catch(() => {
+          /* best-effort; a super admin can still send it manually */
+        });
+
       return row as unknown as BonzahSubmissionRow;
     },
     onSuccess: () => {

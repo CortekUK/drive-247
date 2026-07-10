@@ -655,6 +655,7 @@ export type Database = {
           forwarding_number: string | null
           id: string
           is_active: boolean
+          is_bonzah_partner: boolean
           is_primary_super_admin: boolean | null
           is_super_admin: boolean | null
           must_change_password: boolean
@@ -671,6 +672,7 @@ export type Database = {
           forwarding_number?: string | null
           id?: string
           is_active?: boolean
+          is_bonzah_partner?: boolean
           is_primary_super_admin?: boolean | null
           is_super_admin?: boolean | null
           must_change_password?: boolean
@@ -687,6 +689,7 @@ export type Database = {
           forwarding_number?: string | null
           id?: string
           is_active?: boolean
+          is_bonzah_partner?: boolean
           is_primary_super_admin?: boolean | null
           is_super_admin?: boolean | null
           must_change_password?: boolean
@@ -2185,7 +2188,14 @@ export type Database = {
       }
       bonzah_onboarding_submissions: {
         Row: {
+          activated_at: string | null
           admin_note: string | null
+          ai_confidence: number | null
+          ai_generated_at: string | null
+          ai_reasons: Json | null
+          ai_recommendation: string | null
+          ai_red_flags: Json | null
+          ai_summary: string | null
           business_legal_name: string
           business_trade_name: string
           created_at: string
@@ -2193,20 +2203,33 @@ export type Database = {
           ein: string | null
           file_urls: Json
           id: string
+          partner_message: string | null
           primary_contact_email: string
           primary_contact_first_name: string | null
           primary_contact_last_name: string | null
           primary_contact_phone: string | null
+          quiz_passed: boolean | null
+          quiz_score: number | null
+          quiz_total: number | null
+          reject_reason: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           status: string
           submitted_at: string
           submitted_by: string | null
           tenant_id: string
+          training_completed_at: string | null
           updated_at: string
         }
         Insert: {
+          activated_at?: string | null
           admin_note?: string | null
+          ai_confidence?: number | null
+          ai_generated_at?: string | null
+          ai_reasons?: Json | null
+          ai_recommendation?: string | null
+          ai_red_flags?: Json | null
+          ai_summary?: string | null
           business_legal_name: string
           business_trade_name: string
           created_at?: string
@@ -2214,20 +2237,33 @@ export type Database = {
           ein?: string | null
           file_urls?: Json
           id?: string
+          partner_message?: string | null
           primary_contact_email: string
           primary_contact_first_name?: string | null
           primary_contact_last_name?: string | null
           primary_contact_phone?: string | null
+          quiz_passed?: boolean | null
+          quiz_score?: number | null
+          quiz_total?: number | null
+          reject_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
           submitted_at?: string
           submitted_by?: string | null
           tenant_id: string
+          training_completed_at?: string | null
           updated_at?: string
         }
         Update: {
+          activated_at?: string | null
           admin_note?: string | null
+          ai_confidence?: number | null
+          ai_generated_at?: string | null
+          ai_reasons?: Json | null
+          ai_recommendation?: string | null
+          ai_red_flags?: Json | null
+          ai_summary?: string | null
           business_legal_name?: string
           business_trade_name?: string
           created_at?: string
@@ -2235,16 +2271,22 @@ export type Database = {
           ein?: string | null
           file_urls?: Json
           id?: string
+          partner_message?: string | null
           primary_contact_email?: string
           primary_contact_first_name?: string | null
           primary_contact_last_name?: string | null
           primary_contact_phone?: string | null
+          quiz_passed?: boolean | null
+          quiz_score?: number | null
+          quiz_total?: number | null
+          reject_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
           submitted_at?: string
           submitted_by?: string | null
           tenant_id?: string
+          training_completed_at?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2284,6 +2326,144 @@ export type Database = {
             referencedColumns: ["tenant_id"]
           },
         ]
+      }
+      bonzah_quiz_questions: {
+        Row: {
+          correct_option_index: number
+          created_at: string
+          id: string
+          is_active: boolean
+          options: Json
+          question: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          correct_option_index: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          options?: Json
+          question: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          correct_option_index?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          options?: Json
+          question?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      bonzah_submission_events: {
+        Row: {
+          actor_id: string | null
+          actor_type: string
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          note: string | null
+          submission_id: string
+          tenant_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_type: string
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          note?: string | null
+          submission_id: string
+          tenant_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          note?: string | null
+          submission_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonzah_submission_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_submission_events_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "bonzah_onboarding_submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_submission_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_submission_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "bonzah_submission_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      bonzah_training_videos: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          loom_url: string
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          loom_url: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          loom_url?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       call_logs: {
         Row: {
@@ -8221,6 +8401,61 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      onboarding_followups: {
+        Row: {
+          channel: string
+          contacted_at: string
+          created_at: string
+          id: string
+          message: string | null
+          note: string | null
+          stage: string
+          tenant_id: string
+        }
+        Insert: {
+          channel?: string
+          contacted_at?: string
+          created_at?: string
+          id?: string
+          message?: string | null
+          note?: string | null
+          stage: string
+          tenant_id: string
+        }
+        Update: {
+          channel?: string
+          contacted_at?: string
+          created_at?: string
+          id?: string
+          message?: string | null
+          note?: string | null
+          stage?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_followups_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_followups_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "onboarding_followups_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -15464,6 +15699,27 @@ export type Database = {
           },
         ]
       }
+      bonzah_quiz_questions_public: {
+        Row: {
+          id: string | null
+          options: Json | null
+          question: string | null
+          sort_order: number | null
+        }
+        Insert: {
+          id?: string | null
+          options?: Json | null
+          question?: string | null
+          sort_order?: number | null
+        }
+        Update: {
+          id?: string | null
+          options?: Json | null
+          question?: string | null
+          sort_order?: number | null
+        }
+        Relationships: []
+      }
       feature_announcement_stats: {
         Row: {
           announcement_id: string | null
@@ -16797,6 +17053,7 @@ export type Database = {
         Args: { p_installment_id: string; p_payment_id: string }
         Returns: undefined
       }
+      is_bonzah_partner: { Args: never; Returns: boolean }
       is_current_user_admin: { Args: never; Returns: boolean }
       is_global_master_admin: { Args: never; Returns: boolean }
       is_globally_blacklisted: { Args: { p_email: string }; Returns: boolean }
