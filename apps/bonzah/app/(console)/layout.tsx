@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -41,14 +41,13 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
       <div className="min-h-screen bg-background flex flex-col">
         <header className="sticky top-0 z-20 border-b border-border bg-card/95 backdrop-blur">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-primary/15 flex items-center justify-center">
-                <ShieldCheck className="h-4 w-4 text-primary" />
-              </div>
-              <div className="leading-tight">
-                <div className="text-sm font-semibold">Bonzah Console</div>
-                <div className="text-[11px] text-muted-foreground">Onboarding reviews</div>
-              </div>
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/bonzah-logo.svg" alt="Bonzah" className="h-6 w-auto" />
+              <span className="hidden sm:block h-5 w-px bg-border" />
+              <span className="hidden sm:block text-[13px] font-medium text-muted-foreground">
+                Partner Console
+              </span>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs text-muted-foreground hidden sm:block">{user.email}</span>

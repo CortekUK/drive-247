@@ -301,7 +301,7 @@ export default function BonzahQueue() {
                     'px-3 py-2 rounded-md text-xs font-semibold transition-all capitalize border',
                     filter === status
                       ? status === 'pending'
-                        ? 'bg-warning/15 text-amber-400 border-warning/30'
+                        ? 'bg-warning/15 text-warning border-warning/30'
                         : status === 'approved'
                         ? 'bg-success/15 text-success border-success/30'
                         : status === 'rejected'
