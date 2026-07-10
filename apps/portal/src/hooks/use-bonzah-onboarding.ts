@@ -105,9 +105,11 @@ export function useBonzahOnboarding() {
     mutationFn: async ({
       data,
       fileUrls,
+      quizResult,
     }: {
       data: BonzahOnboardingFormData;
       fileUrls: FileUrls;
+      quizResult?: { score: number; total: number; passed: boolean } | null;
     }) => {
       if (!tenant?.id) throw new Error('Tenant not loaded');
       const payload = {
@@ -123,6 +125,10 @@ export function useBonzahOnboarding() {
         status: 'pending' as const,
         data: data as unknown as Json,
         file_urls: fileUrls as unknown as Json,
+        quiz_score: quizResult?.score ?? null,
+        quiz_total: quizResult?.total ?? null,
+        quiz_passed: quizResult?.passed ?? null,
+        training_completed_at: quizResult ? new Date().toISOString() : null,
       };
       const { data: row, error } = await supabase
         .from('bonzah_onboarding_submissions')

@@ -38,8 +38,11 @@ import { Step4Banking } from './steps/step-4-banking';
 import { Step5Insurance } from './steps/step-5-insurance';
 import { Step6Policies } from './steps/step-6-policies';
 import { Step7Underwriting } from './steps/step-7-underwriting';
+import { Step8Training } from './steps/step-8-training';
+import { Step9Quiz } from './steps/step-9-quiz';
 import { Step8Review } from './steps/step-8-review';
 import { useBonzahOnboarding } from '@/hooks/use-bonzah-onboarding';
+import type { QuizGradeResult } from '@/hooks/use-bonzah-quiz';
 
 const DRAFT_KEY = (tenantId: string) => `bonzah_onboarding_draft_${tenantId}`;
 
@@ -53,7 +56,13 @@ export function BonzahOnboardingForm() {
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [forceShowForm, setForceShowForm] = useState(false);
+  const [trainingAcknowledged, setTrainingAcknowledged] = useState(false);
+  const [quizResult, setQuizResult] = useState<QuizGradeResult | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // Step numbers for the gated training/quiz steps (kept in sync with STEPS).
+  const TRAINING_STEP = 8;
+  const QUIZ_STEP = 9;
 
   const form = useForm<BonzahOnboardingFormData>({
     resolver: zodResolver(bonzahOnboardingSchema),
@@ -147,6 +156,25 @@ export function BonzahOnboardingForm() {
   };
 
   const handleNext = async () => {
+    // Gate the training step: must acknowledge before continuing.
+    if (currentStep === TRAINING_STEP && !trainingAcknowledged) {
+      toast({
+        title: 'Please confirm the training',
+        description: 'Tick the box to confirm you’ve watched the training.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    // Gate the quiz step: must pass the server-graded quiz before continuing.
+    if (currentStep === QUIZ_STEP && !quizResult?.passed) {
+      toast({
+        title: 'Pass the quiz to continue',
+        description: 'Answer the questions and click "Check answers" to pass.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const fieldsForStep = stepFields[currentStep] ?? [];
     const valid = await form.trigger(fieldsForStep as never);
     if (!valid) {
@@ -212,10 +240,19 @@ export function BonzahOnboardingForm() {
       });
       return;
     }
+    if (!quizResult?.passed) {
+      toast({
+        title: 'Complete the quiz first',
+        description: 'You need to pass the knowledge check before submitting.',
+        variant: 'destructive',
+      });
+      setCurrentStep(QUIZ_STEP);
+      return;
+    }
     setIsSubmitting(true);
     try {
       const values = form.getValues();
-      const row = await submit.mutateAsync({ data: values, fileUrls });
+      const row = await submit.mutateAsync({ data: values, fileUrls, quizResult });
       // Move draft files into the submission folder
       const movedFiles = await moveDraftFiles(row.id);
       if (Object.keys(movedFiles).length > 0) {
@@ -232,6 +269,8 @@ export function BonzahOnboardingForm() {
       setCurrentStep(1);
       setCompletedSteps(new Set());
       setForceShowForm(false);
+      setTrainingAcknowledged(false);
+      setQuizResult(null);
       toast({
         title: 'Submitted!',
         description:
@@ -329,7 +368,16 @@ export function BonzahOnboardingForm() {
               <Step6Policies fileUrls={fileUrls} setFileUrls={setFileUrls} />
             )}
             {currentStep === 7 && <Step7Underwriting />}
-            {currentStep === 8 && <Step8Review fileUrls={fileUrls} />}
+            {currentStep === 8 && (
+              <Step8Training
+                acknowledged={trainingAcknowledged}
+                onAcknowledgedChange={setTrainingAcknowledged}
+              />
+            )}
+            {currentStep === 9 && (
+              <Step9Quiz result={quizResult} onResult={setQuizResult} />
+            )}
+            {currentStep === 10 && <Step8Review fileUrls={fileUrls} />}
           </CardContent>
 
           <div className="sticky bottom-0 z-10 bg-card/95 backdrop-blur-sm border-t border-border dark:border-gray-800 px-6 py-4 flex items-center justify-between gap-3">
