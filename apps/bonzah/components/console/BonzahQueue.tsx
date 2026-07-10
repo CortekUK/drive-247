@@ -180,15 +180,18 @@ export default function BonzahQueue() {
 
   const loadSubmissions = async () => {
     try {
+      // Bonzah partners are scoped to Bonzah data only — we deliberately do NOT
+      // join the tenants table here. The operator's business name from the
+      // submission is shown instead.
       const { data, error } = await supabase
         .from('bonzah_onboarding_submissions')
-        .select('*, tenants:tenant_id (company_name, slug)')
+        .select('*')
         .order('submitted_at', { ascending: false });
       if (error) throw error;
       const mapped = (data || []).map((r: any) => ({
         ...r,
-        tenant_name: r.tenants?.company_name || 'Unknown',
-        tenant_slug: r.tenants?.slug,
+        tenant_name: r.business_legal_name || r.business_trade_name || 'Operator',
+        tenant_slug: undefined,
       }));
       setSubmissions(mapped);
     } catch (err: any) {
