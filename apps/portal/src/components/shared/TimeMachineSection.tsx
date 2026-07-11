@@ -246,14 +246,23 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
   const [busy, setBusy] = useState<string>("");
   // The rental currently open in this browser tab (if any). When set, the panel
   // acts as THAT rental's cron — results land on the page you're looking at.
-  // usePathname() tracks client-side navigation, so this stays correct when the
-  // user moves between rentals without a full reload.
+  // Belt-and-braces detection: usePathname() (tracks client-side navigation) with
+  // window.location as a fallback, re-read whenever the path changes. Either
+  // source alone has bitten us, so we accept whichever one yields a rental id.
   const pathname = usePathname();
-  const rentalId = useMemo(() => RENTAL_PATH_RE.exec(pathname ?? "")?.[1] ?? null, [pathname]);
-  // On a rental page the fixture controls are collapsed (they confuse: they're
-  // different rentals). Toggle to reveal them.
+  const [winPath, setWinPath] = useState("");
+  useEffect(() => {
+    if (typeof window !== "undefined") setWinPath(window.location.pathname);
+  }, [pathname]);
+  const rentalId = useMemo(() => {
+    const fromRouter = pathname ? RENTAL_PATH_RE.exec(pathname)?.[1] : undefined;
+    const fromWindow = winPath ? RENTAL_PATH_RE.exec(winPath)?.[1] : undefined;
+    return fromRouter ?? fromWindow ?? null;
+  }, [pathname, winPath]);
+  // Legacy fixture controls are hidden by default (they target separate fixed
+  // rentals and confuse the "this rental" flow). Only shown on explicit toggle.
   const [showFixtures, setShowFixtures] = useState(false);
-  const fixturesVisible = !rentalId || showFixtures;
+  const fixturesVisible = showFixtures;
 
   // Fetch fixture status only when the fixture controls are actually visible.
   useEffect(() => {
@@ -370,6 +379,9 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
           <Clock className="h-3.5 w-3.5" /> Time Machine / Cron
         </span>
         <span className="flex items-center gap-2">
+          {/* BUILD MARKER — if you do not see "v3" your browser is running an old
+              bundle and none of the newer fixes are loaded. */}
+          <Badge variant="outline" className="border-primary/50 text-primary">v3</Badge>
           <Badge variant="outline" className="border-green-500/50 text-green-600 gap-1">
             <Beaker className="h-3 w-3" /> SANDBOX
           </Badge>
@@ -385,6 +397,22 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
             tenant-lock + blast-radius check — so a real customer <strong>cannot</strong> be affected.
             Fast-forwards time and shows the result; refresh the rental page to see it in the ledger.
           </p>
+
+          {/* DIAGNOSTIC (always visible): proves which build is loaded and what it
+              detected. If you cannot see this line, the browser has an old bundle. */}
+          <div
+            className={`rounded-md border px-2 py-1.5 text-[10px] break-all ${
+              rentalId
+                ? "border-green-500/40 bg-green-500/5 text-green-700 dark:text-green-500"
+                : "border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-500"
+            }`}
+          >
+            <strong>build v3</strong> · router path: <code>{pathname || "(null)"}</code>
+            <br />
+            window path: <code>{winPath || "(empty)"}</code>
+            <br />
+            rental detected: <strong>{rentalId ? rentalId : "NONE — showing fixtures"}</strong>
+          </div>
 
           {/* THIS rental — a pure TIME control: the panel becomes ITS cron. */}
           {rentalId && (
@@ -416,15 +444,21 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
             </div>
           )}
 
-          {/* Fixture controls only make sense when you're NOT on a rental page. */}
-          {rentalId && (
-            <button
-              onClick={() => setShowFixtures((v) => !v)}
-              className="w-full text-left pt-1 mt-1 text-[9px] uppercase tracking-wide text-muted-foreground/70 border-t border-dashed border-border/60 hover:text-muted-foreground"
-            >
-              {showFixtures ? "▾" : "▸"} Sandbox fixtures (separate test rentals)
-            </button>
+          {/* No rental detected → tell the user to open one (NOT fixtures). */}
+          {!rentalId && (
+            <div className="border border-border rounded-lg bg-muted/30 px-2 py-3 text-center text-[11px] text-muted-foreground">
+              Open any rental in the <strong>test</strong> tenant, then use
+              <span className="text-foreground font-medium"> Fast-forward this rental</span> here.
+            </div>
           )}
+
+          {/* Fixtures are legacy debug scaffolding — hidden by default, behind a toggle. */}
+          <button
+            onClick={() => setShowFixtures((v) => !v)}
+            className="w-full text-left pt-1 mt-1 text-[9px] uppercase tracking-wide text-muted-foreground/50 border-t border-dashed border-border/60 hover:text-muted-foreground"
+          >
+            {showFixtures ? "▾" : "▸"} Legacy fixture controls (debug)
+          </button>
 
           {fixturesVisible && (
           <>

@@ -49,6 +49,19 @@
       "specialty": "Economy and premium vehicle rentals",
       "branding": "Black, Dark Grey, Silver, White",
       "logo_url": "https://hviqoaokxvlancmftwuo.supabase.co/storage/v1/object/public/company-logos/paramount-solutions-llc/logo.png"
+    },
+    "drive-hustle": {
+      "company_name": "Drive Hustle",
+      "contact_email": "booking@drivehustle.com",
+      "phone": "+1 (212) 280-2572",
+      "city": "New Jersey",
+      "state": "New York",
+      "service_area": "New Jersey & New York",
+      "timezone": "America/New_York",
+      "hours": "24/7",
+      "specialty": "Reliable economy car rentals",
+      "branding": ["#2563EB", "#111111", "#1D4ED8"],
+      "logo_url": "https://hviqoaokxvlancmftwuo.supabase.co/storage/v1/object/public/company-logos/drive-hustle/logo.png"
     }
   }
 }

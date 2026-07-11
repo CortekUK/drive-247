@@ -244,7 +244,7 @@ const generateContent = (t) => ({
     why_choose_us: { title:`Why Choose ${t.name}`, items:[
       { icon:'car', title:'Quality Fleet', description:'Well-maintained vehicles you can rely on.' },
       { icon:'dollar-sign', title:'Fair Pricing', description:'Competitive rates with no hidden fees. What you see is what you pay.' },
-      { icon:'clock', title:'Flexible Hours', description:`Open ${t.hours}. We work around your schedule.` },
+      { icon:'clock', title:'Flexible Hours', description:`${/^\s*open\b/i.test(t.hours) ? t.hours : 'Open ' + t.hours}. We work around your schedule.` },
       { icon:'map-pin', title:'Local Service', description:`Proudly serving ${t.location} and surrounding areas.` },
     ] },
     faq_cta: { title:'Still have questions?', description:'Our team is happy to help. Give us a call!', button_text:`Call ${t.phoneDisplay}` },
@@ -352,7 +352,11 @@ async function onboard(slug, cfg) {
   const stateAbbr = (cfg.state || '').toUpperCase();
   const [stateName, tz] = STATE[stateAbbr] || [cfg.state || '', cfg.timezone || 'America/New_York'];
   const city = cfg.city || '';
-  const location = [city, stateName].filter(Boolean).join(', ');
+  // service_area: optional label for a multi-area operator (e.g. "New Jersey & New York").
+  // When given it drives all customer-facing prose/tagline/meta, while city/state stay
+  // split so the structured footer address still reads cleanly.
+  const serviceArea = (cfg.service_area && String(cfg.service_area).trim()) || '';
+  const location = serviceArea || [city, stateName].filter(Boolean).join(', ');
   const phoneDisplay = fmtPhoneDisplay(cfg.phone);
   const palette = buildPalette(cfg.branding);
   const hours = parseHours(cfg.hours);
@@ -368,7 +372,7 @@ async function onboard(slug, cfg) {
     address: location || undefined,
     ...(cfg.logo_url ? { logo_url: cfg.logo_url, dark_logo_url: cfg.logo_url, auth_logo_url: cfg.logo_url } : {}),
     ...palette,
-    meta_title: `${name} — Car Rentals in ${city || stateName}`,
+    meta_title: `${name} — Car Rentals in ${serviceArea || city || stateName}`,
     meta_description: `Car rental services from ${name} in ${location}.`,
     currency_code: 'USD', distance_unit: 'miles', date_format: 'MM/DD/YYYY', timezone: tz,
     ...hours,
@@ -390,8 +394,8 @@ async function onboard(slug, cfg) {
 
   // ---- 2) CMS content ----
   const t = {
-    name, shortName: shortNameOf(name), tagline: `Car Rentals in ${city || stateName}`,
-    phone: cfg.phone, phoneDisplay, email: cfg.contact_email, location, region: city || stateName,
+    name, shortName: shortNameOf(name), tagline: `Car Rentals in ${serviceArea || city || stateName}`,
+    phone: cfg.phone, phoneDisplay, email: cfg.contact_email, location, region: serviceArea || city || stateName,
     hours: hours.business_hours, specialty: cfg.specialty || 'Economy and premium vehicles',
     city, stateName, foundedYear: cfg.foundedYear || (year - 3), year, today: new Date().toISOString().split('T')[0],
     logo_url: cfg.logo_url || '',
