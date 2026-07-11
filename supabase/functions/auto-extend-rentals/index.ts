@@ -162,6 +162,74 @@ Deno.serve(async (req) => {
   try {
     console.log(`[auto-extend] run at ${nowIso}`);
 
+    // ── RECONCILE PASS ───────────────────────────────────────────────────────
+    // Heal rentals whose parked renewal was PAID on the ledger but never
+    // finalized. A renewal is two things: a rental_extensions record and its
+    // Extension* ledger charges. finalize_rental_extension — which flips the
+    // record to 'paid', rolls end_date, and is the precondition for un-pausing —
+    // only runs when a payment carries the extension_id. But money paid via a
+    // GENERIC payment (extension_id=NULL — e.g. an operator-recorded offline
+    // payment, or any non-extension checkout) FIFO-settles the extension's ledger
+    // charges WITHOUT ever finalizing the record. The record stays 'approved',
+    // this cron pauses on the record status (never the ledger), and — because the
+    // main query below skips paused rentals — never revisits it: a paid week stuck
+    // paused forever. This pass finds "ledger fully settled by REAL payments AND
+    // record still not paid" (find_autoextend_reconcile_candidates is NOT filtered
+    // by auto_extend_paused, so it reaches paused rentals), finalizes each, and
+    // un-pauses — mirroring the apply-payment un-pause block. It only ever acts when
+    // money is already collected, so it can never charge anyone; the RPC's guards
+    // skip a charge-less or write-off-zeroed extension. Best-effort: a failure here
+    // must never break the normal renewal run below.
+    try {
+      const { data: reconcileCandidates, error: reconcileErr } = await supabase.rpc(
+        "find_autoextend_reconcile_candidates",
+        { p_only_rental_id: onlyRentalId },
+      );
+      if (reconcileErr) {
+        console.error("[auto-extend][reconcile] candidate query failed:", reconcileErr.message);
+      } else {
+        for (const c of (reconcileCandidates ?? []) as any[]) {
+          try {
+            const { error: finErr } = await supabase.rpc("finalize_rental_extension", {
+              p_extension_id: c.pending_ext_id,
+              p_payment_id: c.paying_payment_id,
+            });
+            if (finErr) {
+              console.error("[auto-extend][reconcile] finalize failed", c.rental_id, finErr.message);
+              continue;
+            }
+            // Un-pause only AFTER finalize succeeds (mirrors apply-payment's
+            // finalizeOk gate). Gated on the still-parked pending id so a
+            // concurrent webhook/apply-payment that already cleared it no-ops —
+            // this is the latch that prevents any double charge_count increment.
+            const { error: syncErr } = await supabase
+              .from("rentals")
+              .update({
+                auto_extend_pending_extension_id: null,
+                auto_extend_status: "active",
+                auto_extend_paused: false,
+                auto_extend_paused_at: null,
+                auto_extend_charge_count: (c.charge_count || 0) + 1,
+                auto_extend_failed_attempts: 0,
+                updated_at: nowIso,
+              })
+              .eq("id", c.rental_id)
+              .eq("auto_extend_pending_extension_id", c.pending_ext_id);
+            if (syncErr) {
+              console.error("[auto-extend][reconcile] un-pause update failed", c.rental_id, syncErr.message);
+            } else {
+              console.log(`[auto-extend][reconcile] healed ${c.rental_id}: ext ${c.pending_ext_id} finalized, end_date -> ${c.new_end_date}, un-paused`);
+            }
+          } catch (perErr: any) {
+            console.error("[auto-extend][reconcile] error healing", c.rental_id, perErr?.message ?? perErr);
+          }
+        }
+      }
+    } catch (reconcileFatal: any) {
+      console.error("[auto-extend][reconcile] pass failed (non-fatal):", reconcileFatal?.message ?? reconcileFatal);
+    }
+    // ── end reconcile pass ───────────────────────────────────────────────────
+
     let rentalQuery = supabase
       .from("rentals")
       .select(`
