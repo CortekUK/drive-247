@@ -109,9 +109,33 @@ Deno.serve(async (req) => {
     // back to the tenant default when the override is NULL ("not set"). Previously
     // this required `overrideAmount > 0`, so a 0 was treated as "unset" and a $150
     // default hold was placed despite the operator opting out.
-    const depositAmount = overrideAmount !== null
-      ? overrideAmount
-      : (Number(tenant.global_deposit_amount) || 0);
+    // Base (non-override) amount: normally the tenant's global_deposit_amount.
+    // For a per_vehicle tenant the correct amount is the VEHICLE's own
+    // security_deposit — the value the booking page and portal already show.
+    // place-deposit-hold historically ignored deposit_mode and under-held
+    // vehicles priced above the global (e.g. GMT's Tesla: $200 configured, $100
+    // held). SCOPED to GMT only for now: the other per_vehicle tenants have
+    // global_deposit_amount = $0, so enabling this for them would start placing
+    // holds they don't collect today — a separate rollout decision.
+    const PER_VEHICLE_DEPOSIT_TENANT_IDS = new Set([
+      "ada84c6f-eb17-43b6-a14d-d16518165349", // globalmotiontransport (GMT)
+    ]);
+    let baseDeposit = Number(tenant.global_deposit_amount) || 0;
+    if (
+      tenant.deposit_mode === "per_vehicle" &&
+      PER_VEHICLE_DEPOSIT_TENANT_IDS.has(effectiveTenantId) &&
+      rental.vehicle_id
+    ) {
+      const { data: veh } = await supabase
+        .from("vehicles")
+        .select("security_deposit")
+        .eq("id", rental.vehicle_id)
+        .single();
+      if (veh && veh.security_deposit != null) {
+        baseDeposit = Number(veh.security_deposit) || 0;
+      }
+    }
+    const depositAmount = overrideAmount !== null ? overrideAmount : baseDeposit;
     if (depositAmount <= 0) {
       return jsonResponse({ success: true, skipped: true, message: "Deposit amount is 0" });
     }
