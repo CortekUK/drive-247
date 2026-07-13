@@ -104,7 +104,7 @@ const PWAInstall = ({ title, description }: PWAInstallProps) => {
               {title || "Install Drive247"}
             </h3>
             <p className="text-base text-muted-foreground mb-6">
-              {description || "Add Drive247 to your home screen for fast, seamless bookings in Los Angeles and beyond."}
+              {description || "Add Drive247 to your home screen for fast, seamless bookings."}
             </p>
 
             <div className="flex flex-wrap gap-3 mb-4">

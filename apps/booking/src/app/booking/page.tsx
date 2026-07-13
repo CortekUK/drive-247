@@ -385,8 +385,8 @@ export default function Booking() {
     <div className="min-h-screen bg-background">
       <SEO
         title="Rental Booking — Drive 247"
-        description="Book your luxury vehicle rental with Drive 247. Choose pickup and return details for premium cars in Los Angeles."
-        keywords="luxury car rental booking, Los Angeles car rental, premium vehicle booking"
+        description="Book your luxury vehicle rental with Drive 247. Choose pickup and return details for premium cars."
+        keywords="luxury car rental booking, premium vehicle booking"
         canonical={typeof window !== 'undefined' ? `${window.location.origin}/booking` : 'https://drive247.com/booking'}
       />
       <Navigation />
@@ -422,7 +422,7 @@ export default function Booking() {
               Plan Your Rental
             </h1>
             <p className="text-lg text-muted-foreground">
-              Enter your rental details to view available luxury vehicles in Los Angeles.
+              Enter your rental details to view available luxury vehicles.
             </p>
           </div>
 

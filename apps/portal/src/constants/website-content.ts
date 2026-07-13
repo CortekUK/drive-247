@@ -274,13 +274,13 @@ export const CMS_SEO = {
 // ============================================
 
 export const DEFAULT_HOME_HERO: HomeHeroContent = {
-  headline: "Premium Car Rentals in Dallas",
+  headline: "Premium Car Rentals",
   subheading: "Experience luxury and reliability with our handpicked fleet. Flexible daily, weekly, and monthly rentals tailored to your needs.",
   background_image: "",
   phone_number: "+19725156635",
   phone_cta_text: "Call Now",
   book_cta_text: "Book Your Ride",
-  trust_line: "Trusted by 500+ customers in the Dallas-Fort Worth area",
+  trust_line: "Trusted by 500+ happy customers",
 };
 
 export const DEFAULT_PROMO_BADGE: PromoBadgeContent = {
@@ -354,9 +354,9 @@ export const DEFAULT_CONTACT_CARD: ContactCardContent = {
 };
 
 export const DEFAULT_HOME_SEO: SEOContent = {
-  title: "Drive 247 | Premium Car Rentals in Dallas, TX",
-  description: "Rent premium vehicles in Dallas-Fort Worth. Daily, weekly & monthly rentals. Competitive rates, flexible terms, and exceptional service. Book online today!",
-  keywords: "car rental dallas, rent a car dallas tx, premium car rental, weekly car rental, monthly car rental, drive 247",
+  title: "Drive 247 | Premium Car Rentals",
+  description: "Rent premium vehicles. Daily, weekly & monthly rentals. Competitive rates, flexible terms, and exceptional service. Book online today!",
+  keywords: "premium car rental, weekly car rental, monthly car rental, drive 247",
 };
 
 // ============================================
@@ -373,11 +373,11 @@ export const DEFAULT_SITE_CONTACT: SiteContactContent = {
   phone: "+19725156635",
   phone_display: "(972) 515-6635",
   email: "info@drive247.com",
-  address_line1: "1234 Main Street",
-  address_line2: "Suite 100",
-  city: "Dallas",
-  state: "TX",
-  zip: "75201",
+  address_line1: "",
+  address_line2: "",
+  city: "",
+  state: "",
+  zip: "",
   country: "USA",
   google_maps_url: "",
 };
@@ -393,7 +393,7 @@ export const DEFAULT_SOCIAL_LINKS: SocialLinksContent = {
 
 export const DEFAULT_FOOTER: FooterContent = {
   copyright_text: `© ${new Date().getFullYear()} Drive 247. All rights reserved.`,
-  tagline: "Premium Car Rentals in Dallas",
+  tagline: "Premium Car Rentals",
 };
 
 // ============================================
@@ -402,14 +402,14 @@ export const DEFAULT_FOOTER: FooterContent = {
 
 export const DEFAULT_ABOUT_HERO: HeroContent = {
   title: "About Drive 247",
-  subtitle: "Your trusted partner for premium car rentals in Dallas-Fort Worth",
+  subtitle: "Your trusted partner for premium car rentals",
 };
 
 export const DEFAULT_ABOUT_STORY: AboutStoryContent = {
   title: "Our Story",
   founded_year: "2020",
-  content: `<p>Drive 247 was founded with a simple mission: to provide Dallas-Fort Worth residents and visitors with reliable, affordable, and premium vehicle rentals.</p>
-<p>What started as a small fleet of carefully selected vehicles has grown into one of the most trusted car rental services in the metroplex. Our commitment to quality, transparency, and customer satisfaction has earned us a loyal customer base and a reputation for excellence.</p>
+  content: `<p>Drive 247 was founded with a simple mission: to provide residents and visitors with reliable, affordable, and premium vehicle rentals.</p>
+<p>What started as a small fleet of carefully selected vehicles has grown into one of the most trusted car rental services in the region. Our commitment to quality, transparency, and customer satisfaction has earned us a loyal customer base and a reputation for excellence.</p>
 <p>Every vehicle in our fleet is handpicked, thoroughly inspected, and maintained to the highest standards. We believe that renting a car should be a seamless experience, from booking to returning the keys.</p>`,
 };
 
@@ -455,9 +455,9 @@ export const DEFAULT_ABOUT_STATS: StatsContent = {
 };
 
 export const DEFAULT_ABOUT_SEO: SEOContent = {
-  title: "About Us | Drive 247 - Premium Car Rentals Dallas",
-  description: "Learn about Drive 247, Dallas's trusted car rental company. Quality vehicles, transparent pricing, and exceptional service since 2020.",
-  keywords: "about drive 247, dallas car rental company, car rental dallas about us",
+  title: "About Us | Drive 247 - Premium Car Rentals",
+  description: "Learn about Drive 247, a trusted car rental company. Quality vehicles, transparent pricing, and exceptional service since 2020.",
+  keywords: "about drive 247, car rental company, car rental about us",
 };
 
 // ============================================
@@ -479,7 +479,7 @@ export const DEFAULT_CONTACT_INFO: ContactInfoContent = {
     response_time: "We respond within 2 hours",
   },
   office: {
-    address: "1234 Main Street, Suite 100, Dallas, TX 75201",
+    address: "",
   },
   whatsapp: {
     number: "+19725156635",
@@ -513,9 +513,9 @@ export const DEFAULT_TRUST_BADGES: TrustBadgesContent = {
 };
 
 export const DEFAULT_CONTACT_SEO: SEOContent = {
-  title: "Contact Us | Drive 247 - Premium Car Rentals Dallas",
-  description: "Get in touch with Drive 247 for all your car rental needs in Dallas. Call us, email, or visit our location. We're here to help!",
-  keywords: "contact drive 247, dallas car rental contact, car rental phone number dallas",
+  title: "Contact Us | Drive 247 - Premium Car Rentals",
+  description: "Get in touch with Drive 247 for all your car rental needs. Call us, email, or visit our location. We're here to help!",
+  keywords: "contact drive 247, car rental contact, car rental phone number",
 };
 
 // ============================================
@@ -573,9 +573,9 @@ export const DEFAULT_FLEET_CTA: FleetCTAContent = {
 };
 
 export const DEFAULT_FLEET_SEO: SEOContent = {
-  title: "Our Fleet | Drive 247 - Premium Car Rentals Dallas",
-  description: "Browse our premium fleet of rental vehicles in Dallas. Sedans, SUVs, and luxury cars available for daily, weekly, and monthly rentals.",
-  keywords: "rental cars dallas, premium car fleet, rent sedan dallas, rent suv dallas, luxury car rental",
+  title: "Our Fleet | Drive 247 - Premium Car Rentals",
+  description: "Browse our premium fleet of rental vehicles. Sedans, SUVs, and luxury cars available for daily, weekly, and monthly rentals.",
+  keywords: "rental cars, premium car fleet, rent sedan, rent suv, luxury car rental",
 };
 
 // ============================================
@@ -619,9 +619,9 @@ export const DEFAULT_PROMO_TERMS: TermsContent = {
 };
 
 export const DEFAULT_PROMOTIONS_SEO: SEOContent = {
-  title: "Promotions & Deals | Drive 247 - Car Rental Discounts Dallas",
-  description: "Save on your next car rental with Drive 247's special promotions and deals. Exclusive discounts on daily, weekly, and monthly rentals in Dallas.",
-  keywords: "car rental deals dallas, rental car discounts, drive 247 promotions, cheap car rental dallas",
+  title: "Promotions & Deals | Drive 247 - Car Rental Discounts",
+  description: "Save on your next car rental with Drive 247's special promotions and deals. Exclusive discounts on daily, weekly, and monthly rentals.",
+  keywords: "car rental deals, rental car discounts, drive 247 promotions, cheap car rental",
 };
 
 // ============================================

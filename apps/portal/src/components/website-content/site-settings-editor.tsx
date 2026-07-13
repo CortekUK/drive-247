@@ -207,7 +207,7 @@ export function SiteSettingsEditor({
                   id="city"
                   value={contactData.city}
                   onChange={(e) => setContactData({ ...contactData, city: e.target.value })}
-                  placeholder="Dallas"
+                  placeholder="City"
                 />
               </div>
               <div className="space-y-2">
@@ -216,7 +216,7 @@ export function SiteSettingsEditor({
                   id="state"
                   value={contactData.state}
                   onChange={(e) => setContactData({ ...contactData, state: e.target.value })}
-                  placeholder="TX"
+                  placeholder="State"
                 />
               </div>
               <div className="space-y-2">
@@ -225,7 +225,7 @@ export function SiteSettingsEditor({
                   id="zip"
                   value={contactData.zip}
                   onChange={(e) => setContactData({ ...contactData, zip: e.target.value })}
-                  placeholder="75201"
+                  placeholder="ZIP Code"
                 />
               </div>
               <div className="space-y-2">
@@ -368,7 +368,7 @@ export function SiteSettingsEditor({
                 id="tagline"
                 value={footerData.tagline || ""}
                 onChange={(e) => setFooterData({ ...footerData, tagline: e.target.value })}
-                placeholder="Premium Car Rentals in Dallas"
+                placeholder="Premium Car Rentals"
               />
             </div>
 

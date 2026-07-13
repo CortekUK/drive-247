@@ -99,7 +99,7 @@ export function HomeCTAEditor({ content, onSave, isSaving }: HomeCTAEditorProps)
                   <FormItem>
                     <FormLabel>Section Title</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ready to Book Your Dallas Rental?" {...field} />
+                      <Input placeholder="Ready to Book Your Rental?" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -113,7 +113,7 @@ export function HomeCTAEditor({ content, onSave, isSaving }: HomeCTAEditorProps)
                     <FormLabel>Description</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Quick, easy, and affordable car rentals across Dallas and the DFW area."
+                        placeholder="Quick, easy, and affordable car rentals in your area."
                         rows={3}
                         {...field}
                       />

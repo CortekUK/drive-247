@@ -68,7 +68,7 @@ export function PWAInstallEditor({ content, onSave, isSaving }: PWAInstallEditor
             {formData.title || "Install Drive247"}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {formData.description || "Scan the QR code to add Drive247 to your home screen for fast, seamless bookings in Los Angeles and beyond."}
+            {formData.description || "Scan the QR code to add Drive247 to your home screen for fast, seamless bookings."}
           </p>
         </div>
 

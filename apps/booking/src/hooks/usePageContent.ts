@@ -513,7 +513,7 @@ export const usePageContent = (slug: string) => {
 export const defaultContactContent: PageContent = {
   hero: {
     title: "Contact Drive247",
-    subtitle: "Get in touch for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles.",
+    subtitle: "Get in touch for premium vehicle rentals, chauffeur services, and exclusive offers.",
   },
   contact_info: {
     phone: {
@@ -560,13 +560,13 @@ export const defaultContactContent: PageContent = {
     ],
   },
   seo: {
-    title: "Contact Drive247 — Los Angeles Luxury Car Rentals",
-    description: "Get in touch with Drive247 for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles.",
-    keywords: "contact Drive247, luxury car rental Los Angeles, premium vehicle rental contact, chauffeur service inquiry",
+    title: "Contact Drive247 — Luxury Car Rentals",
+    description: "Get in touch with Drive247 for premium vehicle rentals, chauffeur services, and exclusive offers.",
+    keywords: "contact Drive247, luxury car rental, premium vehicle rental contact, chauffeur service inquiry",
   },
   pwa_install: {
     title: "Install Drive247",
-    description: "Scan the QR code to add Drive247 to your home screen for fast, seamless bookings in Los Angeles and beyond.",
+    description: "Scan the QR code to add Drive247 to your home screen for fast, seamless bookings.",
   },
 };
 // Default content for Reviews page (used as fallback)

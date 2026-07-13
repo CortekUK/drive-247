@@ -209,11 +209,11 @@ export const COMPANY_DEFAULTS = {
 
   /** Business address */
   ADDRESS: {
-    line1: "1234 Main Street",
-    line2: "Suite 100",
-    city: "Dallas",
-    state: "TX",
-    zip: "75201",
+    line1: "",
+    line2: "",
+    city: "",
+    state: "",
+    zip: "",
     country: "USA",
   },
 } as const;

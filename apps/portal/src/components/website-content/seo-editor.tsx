@@ -55,7 +55,7 @@ export function SEOEditor({ content, onSave, isSaving }: SEOEditorProps) {
                 <FormItem>
                   <FormLabel>Page Title</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="Contact Drive247 — Los Angeles Luxury Car Rentals" />
+                    <Input {...field} placeholder="Contact Drive247 — Luxury Car Rentals" />
                   </FormControl>
                   <FormDescription className="flex justify-between">
                     <span>The title shown in browser tabs and search results</span>

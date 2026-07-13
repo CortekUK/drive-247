@@ -2957,6 +2957,7 @@ const RentalDetail = () => {
           links={paymentLinks || []}
           isLoading={paymentLinksLoading}
           currencyCode={tenant?.currency_code || 'USD'}
+          allowVoid={canEdit('rentals')}
         />
       )}
 

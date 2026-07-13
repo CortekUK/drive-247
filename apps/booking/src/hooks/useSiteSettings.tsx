@@ -71,7 +71,7 @@ const defaultSettings: SiteSettings = {
   notify_new_enquiry: true,
   privacy_policy_url: "/privacy",
   terms_url: "/terms",
-  footer_tagline: "Reliable Car Rentals",
+  footer_tagline: null,
   copyright_text: `© ${new Date().getFullYear()} Drive 247. All rights reserved.`,
   facebook_url: null,
   instagram_url: null,

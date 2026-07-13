@@ -81,29 +81,16 @@ const Contact = () => {
     "@context": "https://schema.org",
     "@type": "CarRental",
     "name": appName,
-    "description": "Premium luxury car rentals in Los Angeles",
+    "description": "Premium luxury car rentals",
     "url": typeof window !== 'undefined' ? window.location.origin : 'https://drive247.com',
     "telephone": contactSettings.phone,
     "email": contactSettings.email,
     "address": {
       "@type": "PostalAddress",
-      "streetAddress": "902 Melrose Avenue",
-      "addressLocality": "Los Angeles",
-      "addressRegion": "CA",
-      "postalCode": "90069",
       "addressCountry": "US"
     },
-    "geo": {
-      "@type": "GeoCoordinates",
-      "latitude": "34.0837",
-      "longitude": "-118.3688"
-    },
     "openingHours": "Mo-Su 00:00-23:59",
-    "priceRange": "$$$",
-    "areaServed": {
-      "@type": "City",
-      "name": "Los Angeles"
-    }
+    "priceRange": "$$$"
   };
 
   // Format phone number for tel: link (remove spaces and special chars except +)
@@ -191,9 +178,9 @@ const Contact = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEO
-        title={content.seo?.title ? replaceCompanyName(content.seo.title) : `Contact ${appName} — Los Angeles Luxury Car Rentals`}
-        description={content.seo?.description ? replaceCompanyName(content.seo.description) : `Get in touch with ${appName} for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles.`}
-        keywords={content.seo?.keywords ? replaceCompanyName(content.seo.keywords) : `contact ${appName}, luxury car rental Los Angeles, premium vehicle rental contact, chauffeur service inquiry`}
+        title={content.seo?.title ? replaceCompanyName(content.seo.title) : `Contact ${appName} — Luxury Car Rentals`}
+        description={content.seo?.description ? replaceCompanyName(content.seo.description) : `Get in touch with ${appName} for premium vehicle rentals, chauffeur services, and exclusive offers.`}
+        keywords={content.seo?.keywords ? replaceCompanyName(content.seo.keywords) : `contact ${appName}, luxury car rental, premium vehicle rental contact, chauffeur service inquiry`}
         schema={businessSchema}
         canonical={typeof window !== 'undefined' ? `${window.location.origin}/contact` : 'https://drive247.com/contact'}
       />
@@ -211,7 +198,7 @@ const Contact = () => {
               <div className="h-[1px] w-20 sm:w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
             </div>
             <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed whitespace-pre-line">
-              {content.hero?.subtitle || "Get in touch for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles."}
+              {content.hero?.subtitle || "Get in touch for premium vehicle rentals, chauffeur services, and exclusive offers."}
             </p>
           </div>
 

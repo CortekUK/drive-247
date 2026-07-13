@@ -25,6 +25,18 @@ const Footer = () => {
   const mapsUrl = settings.google_maps_url ||
     `https://maps.google.com/?q=${encodeURIComponent(addressDisplay)}`;
 
+  // Default footer tagline derives from the tenant's OWN locality so it reflects
+  // their city (e.g. "Reliable Car Rentals in Tampa, Florida") instead of a
+  // placeholder. Prefer structured city/state; else a city-only office address
+  // (guard against full street addresses — those contain digits). A tenant's
+  // custom footer_tagline (from CMS) always overrides this.
+  const taglineLocation =
+    [settings.city, settings.state].filter(Boolean).join(', ') ||
+    (settings.office_address && !/\d/.test(settings.office_address) ? settings.office_address : '');
+  const defaultTagline = taglineLocation
+    ? `Reliable Car Rentals in ${taglineLocation}`
+    : 'Reliable Car Rentals';
+
   return (
     <footer className="py-10 sm:py-14 md:py-20" style={{ backgroundColor: 'hsl(var(--nav-bg))' }}>
       <div className="container mx-auto px-4">
@@ -45,7 +57,7 @@ const Footer = () => {
             </>
           )}
           <p className="text-xs text-[#EAEAEA]/80">
-            {settings.footer_tagline || "Reliable Car Rentals"}
+            {settings.footer_tagline || defaultTagline}
           </p>
         </div>
 
@@ -66,7 +78,7 @@ const Footer = () => {
               </>
             )}
             <p className="text-sm text-[#EAEAEA]">
-              {settings.footer_tagline || "Reliable Car Rentals"}
+              {settings.footer_tagline || defaultTagline}
             </p>
           </div>
 

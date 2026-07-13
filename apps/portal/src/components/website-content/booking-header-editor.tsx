@@ -107,7 +107,7 @@ export function BookingHeaderEditor({ content, onSave, isSaving }: BookingHeader
                     <FormLabel>Section Subtitle</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Quick, easy, and affordable car rentals in Dallas..."
+                        placeholder="Quick, easy, and affordable car rentals..."
                         rows={2}
                         {...field}
                       />
@@ -137,7 +137,7 @@ export function BookingHeaderEditor({ content, onSave, isSaving }: BookingHeader
                     <Input
                       value={point}
                       onChange={(e) => updateTrustPoint(index, e.target.value)}
-                      placeholder="e.g., Dallas–Fort Worth Area"
+                      placeholder="e.g., Serving Your Area"
                     />
                     <Button
                       type="button"

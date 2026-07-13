@@ -105,8 +105,8 @@ export default function CMSSiteSettingsEditor() {
     email: "info@drive247.com",
     address_line1: "",
     address_line2: "",
-    city: "Dallas",
-    state: "TX",
+    city: "",
+    state: "",
     zip: "",
     country: "USA",
     google_maps_url: "",
@@ -123,7 +123,7 @@ export default function CMSSiteSettingsEditor() {
 
   const footerContent = getSectionContent<FooterContent>("footer", {
     copyright_text: `© ${new Date().getFullYear()} Drive 247. All rights reserved.`,
-    tagline: "Premium Car Rentals in Dallas",
+    tagline: "Premium Car Rentals",
   });
 
   const handlePublish = () => {

@@ -65,6 +65,7 @@ import { StartVerificationDialog } from "@/components/customers/start-verificati
 import { StartCmdVerificationDialog } from "@/components/customers/start-cmd-verification-dialog";
 import { useCmdVerification, useCmdResults, useResendCmdLink, type CmdLicenseStatus } from "@/hooks/use-cmd-verification";
 import { useToast } from "@/hooks/use-toast";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 interface Customer {
   id: string;
@@ -92,6 +93,7 @@ const CustomerDetail = () => {
   const id = params.id as string;
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { canEdit } = useManagerPermissions();
   const initialTab = searchParams.get("tab") || "rentals";
   const [activeTab, setActiveTab] = useState(initialTab);
   const [documentDialogOpen, setDocumentDialogOpen] = useState(false);
@@ -1042,6 +1044,7 @@ const CustomerDetail = () => {
             links={customerPaymentLinks || []}
             isLoading={customerPaymentLinksLoading}
             currencyCode={currencyCode}
+            allowVoid={canEdit('customers')}
           />
 
           <Card>

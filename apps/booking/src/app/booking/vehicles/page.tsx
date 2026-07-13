@@ -281,7 +281,7 @@ const BookingVehiclesContent = () => {
     <div className="min-h-screen bg-background">
       <SEO
         title="Select Your Vehicle | Drive 917"
-        description="Choose from our premium fleet of luxury vehicles in Los Angeles"
+        description="Choose from our premium fleet of luxury vehicles"
       />
       <Navigation />
       

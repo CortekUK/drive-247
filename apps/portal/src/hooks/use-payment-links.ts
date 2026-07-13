@@ -18,7 +18,8 @@ export type PaymentLinkStatus =
   | "awaiting"
   | "expired"
   | "superseded"
-  | "deposit_hold";
+  | "deposit_hold"
+  | "voided";
 
 export interface PaymentLink {
   id: string;
@@ -87,6 +88,12 @@ function isDepositHold(row: any): boolean {
   );
 }
 
+// A single unpaid link that staff cancelled via void-payment-link. The void writes
+// capture_status='cancelled' + status='Reversed'; either marks the link as dead.
+function isVoided(row: any): boolean {
+  return row.capture_status === "cancelled" || row.status === "Reversed";
+}
+
 // Exported for unit testing / reuse. `now` is injectable for deterministic tests.
 export function derivePaymentLinks(
   rows: any[],
@@ -104,10 +111,16 @@ export function derivePaymentLinks(
 
   return rows.map((r) => {
     let status: PaymentLinkStatus;
+    // Precedence: money-in-hand (deposit hold / captured) is classified BEFORE 'voided',
+    // so a genuinely captured payment that was later reversed (status='Reversed' via
+    // reverse-payment) still reads 'Paid', not 'Voided'. A voided link is unpaid, so it
+    // never matches isCaptured and correctly falls through to 'voided'.
     if (isDepositHold(r)) {
       status = "deposit_hold";
     } else if (isCaptured(r)) {
       status = "paid";
+    } else if (isVoided(r)) {
+      status = "voided";
     } else {
       const created = new Date(r.created_at).getTime();
       const newest = newestByKey.get(targetKey(r)) ?? created;

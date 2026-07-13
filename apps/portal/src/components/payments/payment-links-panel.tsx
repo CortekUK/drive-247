@@ -2,14 +2,21 @@
 
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { Link2, Copy, Check, ExternalLink } from 'lucide-react';
+import { Link2, Copy, Check, ExternalLink, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { formatCurrency } from '@/lib/format-utils';
+import { toast } from '@/hooks/use-toast';
+import { useVoidPaymentLink } from '@/hooks/use-void-payment-link';
 import type { PaymentLink, PaymentLinkStatus } from '@/hooks/use-payment-links';
 
 interface PaymentLinksPanelProps {
@@ -18,6 +25,8 @@ interface PaymentLinksPanelProps {
   currencyCode: string;
   title?: string;
   emptyText?: string;
+  /** When true, staff can void unpaid links (gated by edit permission at the call site). */
+  allowVoid?: boolean;
 }
 
 const STATUS_META: Record<
@@ -49,7 +58,16 @@ const STATUS_META: Record<
     className:
       'text-blue-700 border-blue-300 bg-blue-50 dark:text-blue-300 dark:border-blue-700 dark:bg-blue-950/30',
   },
+  voided: {
+    label: 'Voided',
+    className:
+      'text-muted-foreground border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/30',
+  },
 };
+
+// An unpaid link that staff may safely remove: awaiting/expired/superseded. Never
+// Paid, never a Deposit hold, never an already-Voided row.
+const VOIDABLE_STATUSES: PaymentLinkStatus[] = ['awaiting', 'expired', 'superseded'];
 
 // Human label for what a link was for, derived from its shape.
 function describeLink(link: PaymentLink): string {
@@ -95,12 +113,77 @@ function CopyLinkButton({ url }: { url: string }) {
   );
 }
 
+function VoidLinkButton({ paymentId }: { paymentId: string }) {
+  const [open, setOpen] = useState(false);
+  const { mutate, isPending } = useVoidPaymentLink();
+
+  const handleVoid = () => {
+    mutate(
+      { paymentId, reason: 'Duplicate/stale link removed by staff' },
+      {
+        onSuccess: () => {
+          toast({
+            title: 'Payment link voided',
+            description: 'The duplicate link was removed. The rental is unaffected.',
+          });
+          setOpen(false);
+        },
+        onError: (e: unknown) => {
+          toast({
+            title: 'Could not void link',
+            description: (e as { message?: string })?.message ?? 'Please try again.',
+            variant: 'destructive',
+          });
+        },
+      },
+    );
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-red-600"
+          title="Void this payment link"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Void this payment link?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This removes only this one unpaid link. The rental, the vehicle, and any
+            payments the guest has already made are not affected. This can&apos;t be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              handleVoid();
+            }}
+            disabled={isPending}
+            className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+          >
+            {isPending ? 'Voiding…' : 'Void link'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 export function PaymentLinksPanel({
   links,
   isLoading,
   currencyCode,
   title = 'Payment Links',
   emptyText = 'No payment links have been sent yet.',
+  allowVoid = false,
 }: PaymentLinksPanelProps) {
   const counts = useMemo(() => {
     const c = { paid: 0, awaiting: 0, other: 0 };
@@ -169,12 +252,17 @@ export function PaymentLinksPanel({
                     )}
                   </TableCell>
                   <TableCell className="py-2.5 text-right">
-                    {/* Copy is only possible where a reusable customer URL is stored
-                        (extension links today). Awaiting/expired links elsewhere have
-                        no persisted URL — a fresh link must be re-sent to reuse. */}
-                    {link.checkoutUrl && (link.status === 'awaiting' || link.status === 'expired') ? (
-                      <CopyLinkButton url={link.checkoutUrl} />
-                    ) : null}
+                    <div className="flex items-center justify-end gap-1">
+                      {/* Copy is only possible where a reusable customer URL is stored
+                          (extension links today). Awaiting/expired links elsewhere have
+                          no persisted URL — a fresh link must be re-sent to reuse. */}
+                      {link.checkoutUrl && (link.status === 'awaiting' || link.status === 'expired') ? (
+                        <CopyLinkButton url={link.checkoutUrl} />
+                      ) : null}
+                      {allowVoid && VOIDABLE_STATUSES.includes(link.status) ? (
+                        <VoidLinkButton paymentId={link.id} />
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
