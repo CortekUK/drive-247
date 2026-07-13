@@ -71,7 +71,7 @@ const defaultSettings: SiteSettings = {
   notify_new_enquiry: true,
   privacy_policy_url: "/privacy",
   terms_url: "/terms",
-  footer_tagline: "Reliable Dallas Car Rentals",
+  footer_tagline: "Reliable Car Rentals",
   copyright_text: `© ${new Date().getFullYear()} Drive 247. All rights reserved.`,
   facebook_url: null,
   instagram_url: null,
@@ -176,8 +176,8 @@ export const useSiteSettings = () => {
               tenantSettings.email = contact.email || tenantSettings.email;
               tenantSettings.address_line1 = contact.address_line1 || "";
               tenantSettings.address_line2 = contact.address_line2 || "";
-              tenantSettings.city = contact.city || "Dallas";
-              tenantSettings.state = contact.state || "TX";
+              tenantSettings.city = contact.city || "";
+              tenantSettings.state = contact.state || "";
               tenantSettings.zip = contact.zip || "";
               tenantSettings.country = contact.country || "USA";
               tenantSettings.google_maps_url = contact.google_maps_url || tenantSettings.google_maps_url;

@@ -118,7 +118,6 @@ export default function Home() {
     'telephone': '+1-800-123-4567',
     'address': {
       '@type': 'PostalAddress',
-      'addressLocality': 'Dallas',
       'addressCountry': 'US'
     },
     'priceRange': '$$$',
@@ -134,7 +133,7 @@ export default function Home() {
       <SEO
         title={content.seo?.title ? replaceCompanyName(content.seo.title) : 'Premium Luxury Car Rentals'}
         description={content.seo?.description ? replaceCompanyName(content.seo.description) : `Rent premium luxury vehicles with ${appName}. Flexible daily, weekly, and monthly rates. Top-tier fleet and exceptional service.`}
-        keywords={content.seo?.keywords ? replaceCompanyName(content.seo.keywords) : 'luxury car rental, premium vehicle hire, exotic car rental, Dallas car rental'}
+        keywords={content.seo?.keywords ? replaceCompanyName(content.seo.keywords) : 'luxury car rental, premium vehicle hire, exotic car rental'}
         schema={businessSchema}
       />
       <Navigation />
@@ -203,14 +202,14 @@ export default function Home() {
           <div className="animate-fade-in">
             <div className="text-center space-y-4 mb-8">
               <h2 className="text-4xl md:text-5xl font-display font-bold text-foreground">
-                {content.home_cta?.title || 'Ready to Book Your Dallas Rental?'}
+                {content.home_cta?.title || 'Ready to Book Your Rental?'}
               </h2>
               <div className="flex items-center justify-center">
                 <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-primary to-transparent" />
               </div>
             </div>
             <p className="text-xl text-foreground/80 max-w-3xl mx-auto leading-relaxed text-center whitespace-pre-line">
-              {content.home_cta?.description || 'Quick, easy, and affordable car rentals across Dallas and the DFW area. Friendly service, transparent pricing, and clean vehicles every time.'}
+              {content.home_cta?.description || 'Quick, easy, and affordable car rentals in your area. Friendly service, transparent pricing, and clean vehicles every time.'}
             </p>
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center pt-4">
               <a href="#booking">

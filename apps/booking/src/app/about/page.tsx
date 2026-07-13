@@ -164,7 +164,6 @@ const About = () => {
     "email": settings.email,
     "address": {
       "@type": "PostalAddress",
-      "addressLocality": "Dallas",
       "addressCountry": "US"
     },
     "aggregateRating": {

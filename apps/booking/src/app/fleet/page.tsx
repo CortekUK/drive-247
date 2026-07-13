@@ -265,7 +265,7 @@ const Pricing = () => {
       <SEO
         title={content.seo?.title ? replaceCompanyName(content.seo.title) : `Fleet & Pricing | ${appName} - Premium Luxury Car Rentals`}
         description={content.seo?.description ? replaceCompanyName(content.seo.description) : "Browse our exclusive fleet of luxury vehicles including Rolls-Royce, Bentley, and Range Rover. Transparent daily, weekly, and monthly rental rates with no hidden fees."}
-        keywords={content.seo?.keywords ? replaceCompanyName(content.seo.keywords) : "luxury car rental pricing, Rolls-Royce rental rates, premium vehicle hire, executive car rental, Dallas luxury cars"}
+        keywords={content.seo?.keywords ? replaceCompanyName(content.seo.keywords) : "luxury car rental pricing, Rolls-Royce rental rates, premium vehicle hire, executive car rental, luxury cars"}
       />
       <Navigation />
 

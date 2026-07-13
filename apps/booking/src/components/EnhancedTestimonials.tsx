@@ -66,7 +66,7 @@ const EnhancedTestimonials = () => {
       <div className="container mx-auto px-4">
         <div className="text-center mb-8 sm:mb-12 md:mb-16 animate-fade-in">
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-display font-bold mb-4 text-foreground leading-tight">
-            {content.testimonials_header?.title || "Why Dallas Drivers Choose Drive247"}
+            {content.testimonials_header?.title || "Why Drivers Choose Us"}
           </h2>
           <div className="flex items-center justify-center mt-4 sm:mt-6">
             <div className="h-[1px] w-20 sm:w-24 bg-gradient-to-r from-transparent via-primary to-transparent" />

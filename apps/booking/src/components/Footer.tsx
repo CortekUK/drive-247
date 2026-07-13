@@ -45,7 +45,7 @@ const Footer = () => {
             </>
           )}
           <p className="text-xs text-[#EAEAEA]/80">
-            {settings.footer_tagline || "Reliable Dallas Car Rentals"}
+            {settings.footer_tagline || "Reliable Car Rentals"}
           </p>
         </div>
 
@@ -66,7 +66,7 @@ const Footer = () => {
               </>
             )}
             <p className="text-sm text-[#EAEAEA]">
-              {settings.footer_tagline || "Reliable Dallas Car Rentals"}
+              {settings.footer_tagline || "Reliable Car Rentals"}
             </p>
           </div>
 

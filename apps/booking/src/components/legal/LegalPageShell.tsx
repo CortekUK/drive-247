@@ -2,8 +2,8 @@
 // /sms-opt-in). These pages are fetched by carrier A2P 10DLC reviewers with a
 // no-JavaScript client, so everything here must render real HTML on the
 // server. The app's normal <Navigation/> and <Footer/> are client components
-// whose SERVER fallback is the platform's default branding ("Drive 247 —
-// Reliable Dallas Car Rentals") — which made tenant compliance pages look
+// whose SERVER fallback is the platform's generic default branding (a
+// placeholder company name + tagline) — which made tenant compliance pages look
 // like they belong to a different company and failed campaign vetting
 // (errors 30908/30882). This shell renders the TENANT's own identity instead.
 //

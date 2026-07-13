@@ -3474,10 +3474,10 @@ const MultiStepBookingWidget = () => {
           <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-primary to-transparent" />
         </div>
         <p className="bk-hero__subtitle">
-          {cmsContent.booking_header?.subtitle || "Quick, easy, and affordable car rentals in Dallas — from pickup to drop-off, we've got you covered."}
+          {cmsContent.booking_header?.subtitle || "Quick, easy, and affordable car rentals — from pickup to drop-off, we've got you covered."}
         </p>
 
-        <p className="bk-hero__meta">{(cmsContent.booking_header?.trust_points || ["Dallas–Fort Worth Area", "Transparent Rates", "24/7 Support"]).join(" · ")}</p>
+        <p className="bk-hero__meta">{(cmsContent.booking_header?.trust_points || ["Serving Your Area", "Transparent Rates", "24/7 Support"]).join(" · ")}</p>
       </div>
     </section>
 

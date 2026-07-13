@@ -22,7 +22,7 @@ const SEO = ({ title, description, keywords, schema, canonical }: SEOProps) => {
   const ogImage = branding.og_image_url || `${siteUrl}/favicon.png`;
 
   // Use description from props, or fall back to branding meta_description
-  const metaDescription = description || branding.meta_description || 'Premium car rental services in Dallas, TX';
+  const metaDescription = description || branding.meta_description || 'Premium car rental services';
 
   useEffect(() => {
     // Set title

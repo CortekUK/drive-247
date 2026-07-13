@@ -48,13 +48,13 @@ export default function CreateTenantDialog({ open, onOpenChange, onCreated }: Cr
   const [credentials, setCredentials] = useState<TenantCredentials | null>(null);
   const [formErrors, setFormErrors] = useState<{ slug?: string }>({});
 
-  const generateRandomPassword = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%^&*';
-    let password = '';
-    for (let i = 0; i < 16; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password;
+  // New clients get a simple, predictable first-login password derived from their
+  // rental name: "<rentalname>123!" (e.g. slug "drive-hustle" -> "drivehustle123!").
+  // admin-create-user sets must_change_password=true, so the client is prompted to
+  // set their own password on first login.
+  const buildDefaultPassword = (slug: string) => {
+    const name = slug.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return `${name || 'rental'}123!`;
   };
 
   const validateSlug = (slug: string): string | null => {
@@ -94,7 +94,7 @@ export default function CreateTenantDialog({ open, onOpenChange, onCreated }: Cr
       if (tenantError) throw tenantError;
 
       const adminEmail = formData.contactEmail;
-      const adminPassword = generateRandomPassword();
+      const adminPassword = buildDefaultPassword(slug);
 
       const { data: session } = await supabase.auth.getSession();
       if (!session?.session?.access_token) {

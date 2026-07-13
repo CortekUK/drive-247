@@ -19,7 +19,7 @@ const ContactCard = () => {
                   {content.contact_card?.title || "Have Questions About Your Rental?"}
                 </h2>
                 <p className="text-lg text-muted-foreground">
-                  {content.contact_card?.description || "We're here to help 7 days a week. Reach out to our Dallas team for quick answers and booking support."}
+                  {content.contact_card?.description || "We're here to help 7 days a week. Reach out to our team for quick answers and booking support."}
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-4 shrink-0">

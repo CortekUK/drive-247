@@ -525,7 +525,7 @@ export const defaultContactContent: PageContent = {
       response_time: "Response within 2 hours during business hours (CST)",
     },
     office: {
-      address: "123 Luxury Lane, Dallas, TX",
+      address: "",
     },
     whatsapp: {
       number: "+18001234567",
@@ -834,22 +834,22 @@ export const defaultHomeContent: PageContent = {
   },
   booking_header: {
     title: "Book Your Rental",
-    subtitle: "Quick, easy, and affordable car rentals in Dallas — from pickup to drop-off, we've got you covered.",
-    trust_points: ["Dallas–Fort Worth Area", "Transparent Rates", "24/7 Support"],
+    subtitle: "Quick, easy, and affordable car rentals — from pickup to drop-off, we've got you covered.",
+    trust_points: ["Serving Your Area", "Transparent Rates", "24/7 Support"],
   },
   testimonials_header: {
-    title: "Why Dallas Drivers Choose Drive247",
+    title: "Why Drivers Choose Us",
   },
   home_cta: {
-    title: "Ready to Book Your Dallas Rental?",
-    description: "Quick, easy, and affordable car rentals across Dallas and the DFW area. Friendly service, transparent pricing, and clean vehicles every time.",
+    title: "Ready to Book Your Rental?",
+    description: "Quick, easy, and affordable car rentals in your area. Friendly service, transparent pricing, and clean vehicles every time.",
     primary_cta_text: "Book Now",
     secondary_cta_text: "Get in Touch",
     trust_points: ["Reliable Service", "Clean Vehicles", "24/7 Support"],
   },
   contact_card: {
     title: "Have Questions About Your Rental?",
-    description: "We're here to help 7 days a week. Reach out to our Dallas team for quick answers and booking support.",
+    description: "We're here to help 7 days a week. Reach out to our team for quick answers and booking support.",
     phone_number: "+19725156635",
     email: "info@drive247.com",
     call_button_text: "Call Now",
@@ -858,7 +858,7 @@ export const defaultHomeContent: PageContent = {
   seo: {
     title: "Premium Luxury Car Rentals",
     description: "Rent premium luxury vehicles with Drive247. Flexible daily, weekly, and monthly rates. Top-tier fleet and exceptional service.",
-    keywords: "luxury car rental, premium vehicle hire, exotic car rental, Dallas car rental",
+    keywords: "luxury car rental, premium vehicle hire, exotic car rental",
   },
 };
 
@@ -975,8 +975,8 @@ export const defaultSiteSettings: PageContent = {
     email: "info@drive247.com",
     address_line1: "",
     address_line2: "",
-    city: "Dallas",
-    state: "TX",
+    city: "",
+    state: "",
     zip: "",
     country: "USA",
     google_maps_url: "",
@@ -991,7 +991,7 @@ export const defaultSiteSettings: PageContent = {
   },
   footer_settings: {
     copyright_text: `© ${new Date().getFullYear()} Drive 917. All rights reserved.`,
-    tagline: "Premium Car Rentals in Dallas",
+    tagline: "Premium Car Rentals",
   },
 };
 
