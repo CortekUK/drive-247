@@ -8,10 +8,13 @@ import { useTenant } from "@/contexts/TenantContext";
 // installments, upfront, "Email Stripe Link", etc.) writes a row keyed by
 // stripe_checkout_session_id.
 //
-// Status is derived by CAPTURE state, not by amount-vs-remaining. The naive
-// approach (used by the old PaymentStatusBadge) mislabels a captured-but-
-// unallocated Credit row as "unpaid" — money that is actually in hand. Precedence:
-// Deposit-hold > Paid > Superseded > Expired > Awaiting.
+// Status is derived by CAPTURE state AND the staff Accept/Reject decision
+// (verification_status). The naive approach (used by the old PaymentStatusBadge)
+// mislabels a captured-but-unallocated Credit row as "unpaid" — money that is actually
+// in hand. Precedence: Deposit-hold > Paid (captured) > Voided > Rejected/Approved
+// (staff decision) > Superseded > Expired > Awaiting. Verification sits AFTER capture so
+// money-in-hand always wins, and BEFORE the age fallback so a declined/approved payment
+// never masquerades as an open "Awaiting"/"Expired" link (matches the Payments tab).
 
 export type PaymentLinkStatus =
   | "paid"
@@ -19,7 +22,9 @@ export type PaymentLinkStatus =
   | "expired"
   | "superseded"
   | "deposit_hold"
-  | "voided";
+  | "voided"
+  | "rejected"
+  | "approved";
 
 export interface PaymentLink {
   id: string;
@@ -42,7 +47,7 @@ export interface PaymentLink {
 }
 
 const LINK_SELECT =
-  "id, amount, status, capture_status, payment_type, method, booking_source, created_at, paid_at, stripe_checkout_session_id, stripe_payment_intent_id, extension_id, target_categories, preauth_expires_at, rental_id, customer_id";
+  "id, amount, status, capture_status, verification_status, payment_type, method, booking_source, created_at, paid_at, stripe_checkout_session_id, stripe_payment_intent_id, extension_id, target_categories, preauth_expires_at, rental_id, customer_id";
 
 // Stripe Checkout sessions expire ~24h after creation. The checkout.session.expired
 // webhook only cancels the rental — it never flips the payments row — so age is the
@@ -58,11 +63,16 @@ function normalizeCategories(cats: unknown): string {
 // same set of target categories. A newer link for the same target supersedes an
 // older unpaid one (staff re-sent it).
 function targetKey(row: any): string {
-  // Include amount so genuinely-distinct same-rental links with NULL categories
-  // (e.g. a deposit request and a general balance request) don't collapse into
-  // one key and wrongly mark each other superseded. A true re-send (same target,
-  // same amount, newer created_at) still shares the key and supersedes the older.
-  return `${row.rental_id ?? ""}|${row.extension_id ?? ""}|${normalizeCategories(row.target_categories)}|${Number(row.amount || 0).toFixed(2)}`;
+  // Scope by CUSTOMER first. The tenant-wide Payment Requests view feeds rows from many
+  // customers through here; two DIFFERENT customers' unpaid account-level links
+  // (rental_id/extension_id/categories all null) with the same amount would otherwise
+  // collapse to one key and wrongly mark one 'superseded' — showing a live request as
+  // dead. customer_id is constant within the per-rental and per-customer panels, so
+  // adding it is a no-op there (LINK_SELECT already selects customer_id). Then include
+  // amount so genuinely-distinct same-rental links with NULL categories (e.g. a deposit
+  // request and a general balance request) don't collapse. A true re-send (same customer
+  // + target + amount, newer created_at) still shares the key and supersedes the older.
+  return `${row.customer_id ?? ""}|${row.rental_id ?? ""}|${row.extension_id ?? ""}|${normalizeCategories(row.target_categories)}|${Number(row.amount || 0).toFixed(2)}`;
 }
 
 function isCaptured(row: any): boolean {
@@ -121,6 +131,17 @@ export function derivePaymentLinks(
       status = "paid";
     } else if (isVoided(r)) {
       status = "voided";
+    } else if (r.verification_status === "rejected") {
+      // Staff DECLINED this payment via the Accept/Reject flow. reject_payment only
+      // flips verification_status — it never touches capture_status/status/paid_at — so
+      // without this branch the panel keeps showing a declined payment as an open
+      // 'Awaiting'/'Expired'/'Superseded' link (the confirmed Goniko/Paulette bug).
+      status = "rejected";
+    } else if (r.verification_status === "approved") {
+      // Staff-approved but not (yet) captured on Stripe. Show 'Approved' to match the
+      // Payments tab rather than 'Awaiting'. (Approved AND captured is already 'paid'
+      // above via isCaptured, so this only affects the uncaptured case.)
+      status = "approved";
     } else {
       const created = new Date(r.created_at).getTime();
       const newest = newestByKey.get(targetKey(r)) ?? created;
@@ -202,6 +223,44 @@ export function useCustomerPaymentLinks(customerId: string | undefined) {
     queryKey: ["customer-payment-links", tenant?.id, customerId],
     queryFn: () => fetchLinks("customer_id", customerId!, tenant!.id),
     enabled: !!customerId && !!tenant?.id,
+    staleTime: 15_000,
+  });
+}
+
+// A payment request/link as shown on the tenant-wide "Payment Requests" view (Invoices
+// page), enriched with the customer name so operators can see every request they sent
+// in one place. Status uses the SAME derivePaymentLinks logic as the per-rental/customer
+// panel, so the labels are guaranteed consistent across all three surfaces.
+export interface TenantPaymentRequest extends PaymentLink {
+  customerName: string | null;
+  customerId: string | null;
+}
+
+async function fetchTenantPaymentRequests(tenantId: string): Promise<TenantPaymentRequest[]> {
+  const { data, error } = await supabaseUntyped
+    .from("payments")
+    .select(`${LINK_SELECT}, customers:customer_id ( name )`)
+    .eq("tenant_id", tenantId)
+    .not("stripe_checkout_session_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  const rows = (data as any[]) || [];
+  // derivePaymentLinks preserves input order 1:1, so index i lines up with rows[i].
+  const derived = derivePaymentLinks(rows);
+  return derived.map((link, i) => ({
+    ...link,
+    customerName: rows[i]?.customers?.name ?? null,
+    customerId: rows[i]?.customer_id ?? null,
+  }));
+}
+
+export function useTenantPaymentRequests() {
+  const { tenant } = useTenant();
+  return useQuery({
+    queryKey: ["tenant-payment-requests", tenant?.id],
+    queryFn: () => fetchTenantPaymentRequests(tenant!.id),
+    enabled: !!tenant?.id,
     staleTime: 15_000,
   });
 }

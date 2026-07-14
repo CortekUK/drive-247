@@ -33,6 +33,8 @@ import { SendInvoiceEmailDialog } from "@/components/invoices/send-invoice-email
 import { useTenant } from "@/contexts/TenantContext";
 import { cn } from "@/lib/utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { PaymentRequestsTab } from "@/components/invoices/payment-requests-tab";
 
 interface Invoice {
   id: string;
@@ -81,6 +83,7 @@ const InvoicesList = () => {
   const [selectedInvoiceForAction, setSelectedInvoiceForAction] = useState<Invoice | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
+  const [activeTab, setActiveTab] = useState("invoices");
 
   // Filter state
   const [filters, setFilters] = useState<InvoiceFilters>({
@@ -234,21 +237,30 @@ const InvoicesList = () => {
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold">Invoices</h1>
-          <p className="text-muted-foreground text-sm sm:text-base">View and manage rental invoices</p>
+          <p className="text-muted-foreground text-sm sm:text-base">Rental invoices, plus every payment link/charge you&apos;ve sent to customers</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleExportCSV}
-            disabled={!filteredInvoices.length}
-            className="shrink-0"
-          >
-            <Download className="h-4 w-4" />
-          </Button>
+          {activeTab === "invoices" && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleExportCSV}
+              disabled={!filteredInvoices.length}
+              className="shrink-0"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="invoices">Invoices</TabsTrigger>
+          <TabsTrigger value="requests">Payment Requests</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="invoices" className="space-y-4 mt-0">
       {/* Filters */}
       <div className="space-y-4">
         {/* Search and main filters */}
@@ -463,6 +475,12 @@ const InvoicesList = () => {
           </div>
         </>
       )}
+        </TabsContent>
+
+        <TabsContent value="requests" className="mt-0">
+          <PaymentRequestsTab />
+        </TabsContent>
+      </Tabs>
 
       {/* Delete Invoice Dialog */}
       <DeleteInvoiceDialog

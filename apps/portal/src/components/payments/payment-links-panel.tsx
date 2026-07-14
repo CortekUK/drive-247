@@ -63,6 +63,18 @@ const STATUS_META: Record<
     className:
       'text-muted-foreground border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/30',
   },
+  // Staff Accept/Reject decision (mirrors the Payments tab), so a declined or approved
+  // payment no longer masquerades as an open 'Awaiting' link here.
+  rejected: {
+    label: 'Rejected',
+    className:
+      'text-red-700 border-red-300 bg-red-50 dark:text-red-300 dark:border-red-700 dark:bg-red-950/30',
+  },
+  approved: {
+    label: 'Approved',
+    className:
+      'text-emerald-700 border-emerald-300 bg-emerald-50 dark:text-emerald-300 dark:border-emerald-700 dark:bg-emerald-950/30',
+  },
 };
 
 // An unpaid link that staff may safely remove: awaiting/expired/superseded. Never
@@ -70,7 +82,7 @@ const STATUS_META: Record<
 const VOIDABLE_STATUSES: PaymentLinkStatus[] = ['awaiting', 'expired', 'superseded'];
 
 // Human label for what a link was for, derived from its shape.
-function describeLink(link: PaymentLink): string {
+export function describeLink(link: PaymentLink): string {
   if (link.extensionId) return 'Weekly renewal';
   const cats = link.targetCategories ?? [];
   if (cats.some((c) => c === 'Fine' || c === 'Fines')) return 'Fine / toll';
@@ -81,7 +93,7 @@ function describeLink(link: PaymentLink): string {
   return 'Balance';
 }
 
-function StatusBadge({ status }: { status: PaymentLinkStatus }) {
+export function StatusBadge({ status }: { status: PaymentLinkStatus }) {
   const meta = STATUS_META[status];
   return (
     <Badge variant="outline" className={`text-[10px] ${meta.className}`}>
