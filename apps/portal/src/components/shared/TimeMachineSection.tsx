@@ -1,24 +1,21 @@
 "use client";
 
-// DevPanel "Time Machine" section — an ISOLATED, MULTI-SERVICE cron sandbox.
+// DevPanel "Time Machine" section — a pure TIME control for testing cron flows.
 //
-// Drives EVERY cron-driven rental service (PAYG accrual, installments,
-// auto-extension, deposit holds, and the three reminder jobs) against a set of
-// dedicated STAGING fixtures — one rental per service. Talks to a dev-only
-// server route (/api/dev/sandbox) that proxies the staging `sim-control`. You
-// stay on your normal (production-pointed) portal — NO env switching, NO
-// commands — and NOTHING here EVER touches production.
+// Primary use: when you're on a rental page (/rentals/<id>), the "Fast-forward
+// this rental" card makes this panel act as THAT rental's cron for N days — it
+// fires isolated `sandbox-*` edge fns (never the real cron) against the ONE
+// rental you're viewing, on the PRODUCTION test tenant, behind a tenant-lock +
+// blast-radius check. Results land in the rental's own ledger, so the page's KPI
+// cards / Payment Breakdown / timeline show them (Realtime). Renders only under
+// NODE_ENV==='development'; the dev-only /api/dev/sandbox route holds the prod key.
 //
-// Because the sandbox data lives on STAGING, results are shown INLINE below —
-// they will NOT appear on your prod portal pages. Renders only under
-// NODE_ENV==='development'.
+// A collapsed "Legacy fixture controls" section still exposes per-service fixture
+// rentals (advance/advanceAll/reset/resetAll) for isolated cron testing.
 //
 // Route actions used:
-//   status                         -> { ok, services: { [key]: {...fields} } }
-//   advance    { service, days }   -> advance ONE service (honors its stepping)
-//   advanceAll { days }            -> advance every service in cron-clock order
-//   reset      { service }         -> reseed ONE service's fixture
-//   resetAll                       -> reseed all fixtures
+//   fastForwardRental { rentalId, days } -> run the VIEWED rental's crons N days
+//   status / advance / advanceAll / reset / resetAll  -> legacy fixture controls
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -66,9 +63,19 @@ type SandboxResponse = {
   ok?: boolean;
   error?: string;
   services?: ServicesMap;
-  summary?: string;
   [k: string]: unknown;
 };
+
+// Post-fire summary the route returns for a "fast-forward this rental" call.
+type FfSummary = {
+  dayCount?: number | null;
+  endDate?: string | null;
+  chargeRows?: number;
+  grossCharged?: number;
+  outstanding?: number;
+  settledByPrepay?: boolean;
+};
+type FfResult = { days: number; what: string; summary: FfSummary | null };
 
 async function sandbox(body: Record<string, unknown>): Promise<SandboxResponse> {
   const res = await fetch("/api/dev/sandbox", {
@@ -259,10 +266,12 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
     const fromWindow = winPath ? RENTAL_PATH_RE.exec(winPath)?.[1] : undefined;
     return fromRouter ?? fromWindow ?? null;
   }, [pathname, winPath]);
-  // Legacy fixture controls are hidden by default (they target separate fixed
-  // rentals and confuse the "this rental" flow). Only shown on explicit toggle.
-  const [showFixtures, setShowFixtures] = useState(false);
-  const fixturesVisible = showFixtures;
+  // Result of the last "fast-forward this rental" — shown inline on the card.
+  const [lastFf, setLastFf] = useState<FfResult | null>(null);
+  // Fixed-fixture controls confused users into clicking the WRONG rental, so they
+  // are no longer surfaced. The dynamic "Fast-forward this rental" card is the
+  // only control. (Legacy fixture code kept but unreachable.)
+  const fixturesVisible = false;
 
   // Fetch fixture status only when the fixture controls are actually visible.
   useEffect(() => {
@@ -272,9 +281,10 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
       .catch((e) => toast.error(`Sandbox: ${e.message}`));
   }, [expanded, services, fixturesVisible]);
 
-  // Apply a mutation response: prefer the fresh services it returns, else refetch.
+  // Apply a mutation response: MERGE the fresh services it returns (single-service
+  // actions return only { [key]: ... } — replacing would blank the others), else refetch.
   const applyResponse = async (data: SandboxResponse) => {
-    if (data.services) setServices(data.services);
+    if (data.services) setServices((prev) => ({ ...(prev ?? {}), ...data.services }));
     else setServices(await fetchStatus());
   };
 
@@ -355,11 +365,12 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
       if (f.returnReminders) bits.push(`${f.returnReminders} return reminder${f.returnReminders === 1 ? "" : "s"}`);
       const errs = Array.isArray(data.errors) ? (data.errors as string[]) : [];
       const what = bits.length ? bits.join(", ") : "nothing was due";
+      setLastFf({ days, what, summary: (data.summary as FfSummary) ?? null });
       if (errs.length) {
         toast.warning(`+${days}d — ${what}; ${errs.length} step${errs.length === 1 ? "" : "s"} failed: ${errs[0]}`, { id });
         return;
       }
-      toast.success(`+${days}d — ${what}. The page updates live.`, { id });
+      toast.success(`+${days}d — ${what}. Refresh the page to see it in the ledger.`, { id });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e), { id });
     } finally {
@@ -440,6 +451,36 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
                     </Button>
                   ))}
                 </div>
+
+                {/* Inline result — what the last fast-forward did to THIS rental. */}
+                {lastFf && (
+                  <div className="rounded-md bg-muted/40 p-2 text-[10px] space-y-0.5">
+                    <div className="font-medium text-foreground">+{lastFf.days}d applied — {lastFf.what}</div>
+                    {lastFf.summary && (
+                      <>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">Day count</span>
+                          <span className="font-medium">{lastFf.summary.dayCount ?? "—"}</span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">Charges accrued</span>
+                          <span className="font-medium">{fmt(lastFf.summary.grossCharged, "currency")}</span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">Now outstanding</span>
+                          <span className="font-medium">{fmt(lastFf.summary.outstanding, "currency")}</span>
+                        </div>
+                        {lastFf.summary.settledByPrepay && (
+                          <div className="text-amber-600 dark:text-amber-500 leading-snug">
+                            Charges accrued but were settled against this rental&apos;s prepaid balance —
+                            that&apos;s why Balance Due stays $0. Use a rental with no prepayment to watch it rise.
+                          </div>
+                        )}
+                      </>
+                    )}
+                    <div className="text-muted-foreground">Refresh the page to see it in the ledger &amp; billing schedule.</div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -451,14 +492,6 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
               <span className="text-foreground font-medium"> Fast-forward this rental</span> here.
             </div>
           )}
-
-          {/* Fixtures are legacy debug scaffolding — hidden by default, behind a toggle. */}
-          <button
-            onClick={() => setShowFixtures((v) => !v)}
-            className="w-full text-left pt-1 mt-1 text-[9px] uppercase tracking-wide text-muted-foreground/50 border-t border-dashed border-border/60 hover:text-muted-foreground"
-          >
-            {showFixtures ? "▾" : "▸"} Legacy fixture controls (debug)
-          </button>
 
           {fixturesVisible && (
           <>

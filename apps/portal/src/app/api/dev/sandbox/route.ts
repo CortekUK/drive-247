@@ -326,42 +326,86 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
     await step("returnReminders", async () => progressOf(await fireOne(p, "sandbox-send-return-reminders", rentalId), "processed"));
     await step("dailyReminders", async () => progressOf(await fireOne(p, "sandbox-daily-reminders", rentalId), "processedCharges"));
   } finally {
-    // ── hand the clock back so the REAL cron never sees backdated anchors ───
+    // ── hand the clock back so the REAL cron never sees backdated anchors, and
+    //    restore business date fields we only shifted for the simulation. ─────
     const { data: after } = await p.from("rentals")
-      .select("payg_next_accrual_at, auto_extend_next_charge_at, deposit_hold_expires_at")
+      .select("auto_extend_next_charge_at, deposit_hold_expires_at, payg_last_reminder_sent_at, end_date")
       .eq("id", rentalId).maybeSingle();
     const a = (after ?? {}) as any;
+    const nowMs = Date.now();
+    const inst = (ts: unknown) => (ts ? new Date(ts as string).getTime() : NaN);
     const restore: Record<string, unknown> = {};
-    // PAYG pointer: park one full window in the future.
-    if (rr.is_pay_as_you_go) {
-      restore.payg_next_accrual_at = new Date(Date.now() + win * 1000).toISOString();
+
+    // PAYG accrual pointer: park one full window in the future.
+    if (rr.is_pay_as_you_go) restore.payg_next_accrual_at = new Date(nowMs + win * 1000).toISOString();
+
+    // payg_start_ts is a business field (billing start) — always restore it.
+    if (snap.rentals.payg_start_ts) restore.payg_start_ts = snap.rentals.payg_start_ts;
+
+    // payg_last_reminder_sent_at: keep it only if a reminder RE-STAMPED it (value
+    // moved off our shifted one); otherwise restore the real value.
+    if (u.payg_last_reminder_sent_at && inst(a.payg_last_reminder_sent_at) === inst(u.payg_last_reminder_sent_at)) {
+      restore.payg_last_reminder_sent_at = snap.rentals.payg_last_reminder_sent_at;
     }
-    // Anchors the crons did not consume (value still equals our shifted one)
-    // go back to their pre-shift values.
-    if (u.auto_extend_next_charge_at && a.auto_extend_next_charge_at === u.auto_extend_next_charge_at) {
+
+    // auto-extend / deposit anchors: if the cron did NOT advance them past now
+    // (compare as INSTANTS, not strings — DB returns +00:00, we wrote Z), restore
+    // the real future value so the real cron won't immediately re-fire.
+    if (u.auto_extend_next_charge_at && inst(a.auto_extend_next_charge_at) <= nowMs) {
       restore.auto_extend_next_charge_at = snap.rentals.auto_extend_next_charge_at;
     }
-    if (u.deposit_hold_expires_at && a.deposit_hold_expires_at === u.deposit_hold_expires_at) {
+    if (u.deposit_hold_expires_at && inst(a.deposit_hold_expires_at) <= nowMs) {
       restore.deposit_hold_expires_at = snap.rentals.deposit_hold_expires_at;
     }
+
+    // end_date: undo the artificial `days` shift while PRESERVING any legitimate
+    // roll a cron did (auto-extend renewal). +days cancels the -days shift exactly.
+    if (u.end_date && a.end_date) {
+      const base = new Date(`${a.end_date}T00:00:00Z`).getTime();
+      restore.end_date = new Date(base + days * DAY_MS).toISOString().split("T")[0];
+    }
+
     if (Object.keys(restore).length) {
       await p.from("rentals").update(restore).eq("id", rentalId).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
     }
-    // Installments that are STILL open (charge failed / skipped) get their real
-    // due dates back so the REAL installment cron won't charge them off-schedule.
+
+    // Installments STILL open (charge failed / skipped) get their real due dates
+    // + cooldown back so the REAL installment cron won't charge them off-schedule.
     if (snap.planId && snap.openInstallments.length) {
       const { data: still } = await p.from("scheduled_installments")
         .select("id").eq("installment_plan_id", snap.planId).eq("invoice_status", "open");
       const stillOpen = new Set(((still ?? []) as any[]).map((s) => s.id));
+      let anyStillOpen = false;
       for (const si of snap.openInstallments) {
         if (stillOpen.has(si.id)) {
+          anyStillOpen = true;
           await p.from("scheduled_installments").update({ due_date: si.due_date }).eq("id", si.id);
         }
+      }
+      if (anyStillOpen && snap.planCooldown) {
+        await p.from("installment_plans").update({ last_reminder_sent_at: snap.planCooldown }).eq("id", snap.planId);
       }
     }
   }
 
-  return { fired, errors, activated };
+  // Post-state so the panel can show what changed + a prepaid hint (a rental with
+  // a big prepaid balance settles new charges immediately → Balance Due stays $0).
+  const { data: post } = await p.from("rentals")
+    .select("payg_accrual_day_count, end_date").eq("id", rentalId).maybeSingle();
+  const { data: chg } = await p.from("ledger_entries")
+    .select("amount, remaining_amount").eq("rental_id", rentalId).eq("type", "Charge");
+  const gross = (chg ?? []).reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
+  const outstanding = (chg ?? []).reduce((s: number, c: any) => s + Number(c.remaining_amount || 0), 0);
+  const summary = {
+    dayCount: (post as any)?.payg_accrual_day_count ?? null,
+    endDate: (post as any)?.end_date ?? null,
+    chargeRows: (chg ?? []).length,
+    grossCharged: Math.round(gross * 100) / 100,
+    outstanding: Math.round(outstanding * 100) / 100,
+    settledByPrepay: gross > 0 && outstanding < gross - 0.01,
+  };
+
+  return { fired, errors, activated, summary };
 }
 
 export async function POST(req: Request) {

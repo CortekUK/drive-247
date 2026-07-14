@@ -30,11 +30,9 @@ export const AUTO_EXTEND_RENTAL = "a3000003-0000-4000-8000-000000000001";
 export const DEPOSIT_RENTAL = "a4000004-0000-4000-8000-000000000001";
 export const RETURN_REMINDER_RENTAL = "a5000005-0000-4000-8000-000000000001";
 export const DAILY_REMINDER_RENTAL = "a6000006-0000-4000-8000-000000000001";
-
-export const DESIGNATED_TEST_RENTAL_IDS: ReadonlySet<string> = new Set([
-  PAYG_RENTAL, INSTALLMENT_RENTAL, AUTO_EXTEND_RENTAL, DEPOSIT_RENTAL,
-  RETURN_REMINDER_RENTAL, DAILY_REMINDER_RENTAL,
-]);
+// NOTE: route.ts no longer gates on a fixed allow-list — assertDesignated permits
+// ANY rental in the designated test tenant (in Stripe test mode). These constants
+// are just the seeded fixtures the "Legacy fixture controls" section drives.
 
 // ── Types ───────────────────────────────────────────────────────────────────
 // catchup  = backdate once by N days, then fire in a loop until the backlog drains
