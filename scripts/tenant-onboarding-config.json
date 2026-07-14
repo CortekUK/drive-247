@@ -62,6 +62,18 @@
       "specialty": "Reliable economy car rentals",
       "branding": ["#2563EB", "#111111", "#1D4ED8"],
       "logo_url": "https://hviqoaokxvlancmftwuo.supabase.co/storage/v1/object/public/company-logos/drive-hustle/logo.png"
+    },
+    "axis-rentals": {
+      "company_name": "Axis Rentals",
+      "contact_email": "nicholas.falkner@gmail.com",
+      "phone": "+1 (801) 971-0005",
+      "city": "Salt Lake City",
+      "state": "UT",
+      "service_area": "Salt Lake City & Park City, Utah",
+      "hours": "",
+      "specialty": "Premium, exotic and luxury vehicle rentals",
+      "branding": "Green",
+      "logo_url": "https://hviqoaokxvlancmftwuo.supabase.co/storage/v1/object/public/company-logos/axis-rentals/logo.png"
     }
   }
 }

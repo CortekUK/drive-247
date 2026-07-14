@@ -244,7 +244,7 @@ const generateContent = (t) => ({
     why_choose_us: { title:`Why Choose ${t.name}`, items:[
       { icon:'car', title:'Quality Fleet', description:'Well-maintained vehicles you can rely on.' },
       { icon:'dollar-sign', title:'Fair Pricing', description:'Competitive rates with no hidden fees. What you see is what you pay.' },
-      { icon:'clock', title:'Flexible Hours', description:`${/^\s*open\b/i.test(t.hours) ? t.hours : 'Open ' + t.hours}. We work around your schedule.` },
+      { icon:'clock', title:'Flexible Hours', description: t.hours ? `${/^\s*open\b/i.test(t.hours) ? t.hours : 'Open ' + t.hours}. We work around your schedule.` : 'Flexible hours to suit your schedule — get in touch to arrange a time.' },
       { icon:'map-pin', title:'Local Service', description:`Proudly serving ${t.location} and surrounding areas.` },
     ] },
     faq_cta: { title:'Still have questions?', description:'Our team is happy to help. Give us a call!', button_text:`Call ${t.phoneDisplay}` },
@@ -253,7 +253,7 @@ const generateContent = (t) => ({
   },
   contact: {
     hero: { title:`Contact ${t.name}`, subtitle:`Get in touch for affordable car rentals in ${t.location}.` },
-    contact_info: { phone:{ number:t.phone, availability:t.hours }, email:{ address:t.email, response_time:'We respond within a few hours' }, office:{ address:t.location }, whatsapp:{ number:t.phone.replace(/[^0-9+]/g,''), description:'Text us for quick responses' } },
+    contact_info: { phone:{ number:t.phone, availability:t.hours || 'Contact us for availability' }, email:{ address:t.email, response_time:'We respond within a few hours' }, office:{ address:t.location }, whatsapp:{ number:t.phone.replace(/[^0-9+]/g,''), description:'Text us for quick responses' } },
     contact_form: { title:'Send Us a Message', subtitle:"We'll get back to you as soon as possible.", success_message:`Thank you for contacting ${t.name}. We'll respond shortly!`, gdpr_text:'I consent to being contacted regarding my enquiry.', submit_button_text:'Send Message', subject_options:['General Enquiry','Booking Question','Vehicle Availability','Pricing','Feedback'] },
     trust_badges: { badges:[ { icon:'shield', label:'Trusted', tooltip:`Trusted by ${t.location} drivers` }, { icon:'clock', label:'Quick Response', tooltip:'We respond quickly to all inquiries' }, { icon:'star', label:'5-Star Service', tooltip:'Rated 5 stars by our customers' } ] },
     pwa_install: { title:`Install ${t.name}`, description:`Add ${t.name} to your home screen for quick access to bookings.` },
@@ -396,7 +396,7 @@ async function onboard(slug, cfg) {
   const t = {
     name, shortName: shortNameOf(name), tagline: `Car Rentals in ${serviceArea || city || stateName}`,
     phone: cfg.phone, phoneDisplay, email: cfg.contact_email, location, region: serviceArea || city || stateName,
-    hours: hours.business_hours, specialty: cfg.specialty || 'Economy and premium vehicles',
+    hours: hours.business_hours || '', specialty: cfg.specialty || 'Economy and premium vehicles',
     city, stateName, foundedYear: cfg.foundedYear || (year - 3), year, today: new Date().toISOString().split('T')[0],
     logo_url: cfg.logo_url || '',
   };
