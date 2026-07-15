@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { raiseEsignCreditAlert } from '@/lib/esign-credit-alert';
 
 // BoldSign configuration — resolved per-request based on tenant mode
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
@@ -614,11 +615,22 @@ export async function POST(request: NextRequest) {
                 if (agreementType === 'original') {
                     await supabase.from('rentals').update({ document_status: 'credit_failed' }).eq('id', body.rentalId);
                 }
+                // Loudly alert the tenant: the next agreement already failed for lack of credits.
+                await raiseEsignCreditAlert(supabase, tenantId, {
+                    balance: Number(deductResult.balance ?? 0),
+                    insufficient: true,
+                    isTestMode,
+                });
                 return NextResponse.json({ ok: false, error: 'insufficient_credits', balance: deductResult.balance, required: deductResult.required }, { status: 402 });
             }
 
             creditDeductionResult = deductResult;
             console.log(`Credits deducted: ${deductResult.amount_deducted} (test: ${isTestMode}, balance: ${deductResult.balance_after})`);
+            // Check the post-deduction balance and warn the tenant before it runs dry.
+            await raiseEsignCreditAlert(supabase, tenantId, {
+                balance: Number(deductResult.balance_after ?? 0),
+                isTestMode,
+            });
         }
 
         console.log('Sending document to BoldSign...');

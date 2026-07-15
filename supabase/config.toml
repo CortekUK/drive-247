@@ -57,6 +57,11 @@ verify_jwt = false
 [functions.send-return-reminders]
 verify_jwt = false
 
+# Recovers credit_failed rental agreements after a top-up / hourly sweep.
+# Called server-to-server by subscription-webhook and pg_cron with the service role.
+[functions.retry-credit-failed-agreements]
+verify_jwt = false
+
 [functions.twilio-voice-connect]
 verify_jwt = false
 

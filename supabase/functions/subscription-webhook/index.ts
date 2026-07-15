@@ -608,4 +608,30 @@ async function handleCreditPurchase(supabase: any, session: any) {
   }
 
   console.log(`Credit purchase completed: ${credits} ${isTestPurchase ? "TEST" : "LIVE"} credits added for tenant ${tenantId} (package: ${packageName})`);
+
+  // A low/empty e-sign wallet parks agreements as document_status='credit_failed'
+  // and raises an ESIGN_LOW_CREDIT reminder. Now that the LIVE wallet is topped
+  // up, resolve that alert and auto-retry the parked agreements so the customer
+  // finally receives an up-to-date contract. Best-effort — never block the webhook.
+  if (!isTestPurchase) {
+    try {
+      await supabase
+        .from("reminders")
+        .update({ status: "done", updated_at: new Date().toISOString() })
+        .eq("rule_code", "ESIGN_LOW_CREDIT")
+        .eq("tenant_id", tenantId)
+        .in("status", ["pending", "sent"]);
+    } catch (e) {
+      console.warn("Failed to resolve ESIGN_LOW_CREDIT reminder:", e);
+    }
+
+    try {
+      await supabase.functions.invoke("retry-credit-failed-agreements", {
+        body: { tenantId },
+      });
+      console.log(`Triggered credit_failed agreement retry for tenant ${tenantId}`);
+    } catch (e) {
+      console.warn("Failed to trigger credit_failed agreement retry:", e);
+    }
+  }
 }
