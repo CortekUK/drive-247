@@ -10,100 +10,49 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { CreditCard, Loader2, Check, Mail, ShieldAlert } from "lucide-react";
-
-function formatPrice(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency.toUpperCase(),
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount / 100);
-}
-
-// "Upfront monthly" plans take the first payment exactly one calendar month
-// after the tenant's go-live date (`subscription_billing_anchor`). When there's
-// no anchor we fall back to one month from today. Mirrors the backend logic in
-// create-subscription-checkout so the displayed date matches the real charge.
-function firstChargeLabel(anchor?: string | null) {
-  const now = new Date();
-  const base = anchor ? new Date(`${anchor}T00:00:00Z`) : now;
-  const d = new Date(base);
-  d.setUTCMonth(d.getUTCMonth() + 1);
-  // Late card entry: skip past months already elapsed.
-  while (d.getTime() <= now.getTime()) {
-    d.setUTCMonth(d.getUTCMonth() + 1);
-  }
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
+import { PricingCard } from "@/components/subscription/pricing-card";
+import { CreditCard, Loader2, Mail, ShieldAlert } from "lucide-react";
 
 interface SubscriptionGateDialogProps {
   /**
    * When omitted, defaults to `true` (matching the legacy always-open behavior).
    * Prefer passing this explicitly so the dialog can stay mounted across
-   * gate-state flips without losing internal step/selection state.
+   * gate-state flips without losing internal selection state.
    */
   open?: boolean;
   /**
-   * "setup" — never-subscribed tenant, Finish Setup copy + Complete Setup CTA.
-   * "expired" — subscription ended/canceled, harder language + Resubscribe CTA.
+   * "setup" — never-subscribed tenant, Finish Setup copy.
+   * "expired" — subscription ended/canceled, harder language.
    * Both are equally non-dismissible.
    */
   variant?: "setup" | "expired";
 }
 
+/**
+ * Non-dismissible paywall shown to a tenant who must add billing before using the
+ * dashboard. It renders the SAME PricingCard the /subscription page uses, so a new
+ * customer sees the full, honest price breakdown up front — "$0 today / then $X on
+ * DATE" for a free-trial or upfront_monthly plan, or the real "$X/month" for a
+ * charge-now plan — plus the $1 card-verification line and first-payment date. The
+ * card carries its own CTA that kicks off Stripe Checkout.
+ */
 export function SubscriptionGateDialog({
   open = true,
   variant = "setup",
 }: SubscriptionGateDialogProps = {}) {
   const isExpired = variant === "expired";
-  const [step, setStep] = useState<"intro" | "plans">("intro");
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
-  const [subscribing, setSubscribing] = useState(false);
+  const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
   const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
   const { createCheckoutSession } = useTenantSubscription();
   const { tenant } = useTenant();
 
-  // Derive trial duration text from plans
-  const trialDays = plans?.length
-    ? Math.max(...plans.map((p) => p.trial_days ?? 0))
-    : 0;
-  const trialLabel = trialDays > 0
-    ? trialDays >= 1
-      ? `${trialDays} day${trialDays !== 1 ? "s" : ""}`
-      : `${trialDays * 24} hours`
-    : null;
-
-  // New billing model: card entered now, first charge exactly 1 month later.
-  // Never framed as a free trial.
-  const isUpfront = !!plans?.some(
-    (p) => (p as { billing_model?: string }).billing_model === "upfront_monthly",
-  );
-  const firstCharge = firstChargeLabel(
-    (tenant as { subscription_billing_anchor?: string | null } | null)
-      ?.subscription_billing_anchor,
-  );
-
-  // True only when EVERY plan is $0 today (a trial or upfront_monthly). Guards the
-  // intro's "only a $1 card check today" reassurance: with a mixed config where one
-  // plan actually charges its full amount at checkout, that line would misdescribe
-  // the charge-now path, so we suppress it and let the plan step show real prices.
-  const allZeroToday =
-    !!plans?.length &&
-    plans.every(
-      (p) =>
-        (p.trial_days ?? 0) > 0 ||
-        (p as { billing_model?: string }).billing_model === "upfront_monthly",
-    );
+  // Go-live date drives the upfront_monthly first-charge date shown on the card.
+  const billingAnchor = (
+    tenant as { subscription_billing_anchor?: string | null } | null
+  )?.subscription_billing_anchor;
 
   const handleSubscribe = async (planId: string) => {
-    setSubscribing(true);
+    setSubscribingPlanId(planId);
     try {
       const origin = window.location.origin;
       const result = await createCheckoutSession.mutateAsync({
@@ -115,105 +64,26 @@ export function SubscriptionGateDialog({
         window.location.href = result.url;
       }
     } finally {
-      setSubscribing(false);
+      setSubscribingPlanId(null);
     }
   };
+
+  const hasPlans = !!plans && plans.length > 0;
 
   return (
     <Dialog open={open}>
       <DialogContent
-        className="sm:max-w-md [&>button:last-child]:hidden"
+        className="sm:max-w-md max-h-[90vh] overflow-y-auto [&>button:last-child]:hidden"
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        {step === "intro" ? (
-          <>
-            <DialogHeader className="text-center sm:text-center">
-              <div
-                className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full ${
-                  isExpired ? "bg-destructive/10" : "bg-primary/10"
-                }`}
-              >
-                {isExpired ? (
-                  <ShieldAlert className="h-6 w-6 text-destructive" />
-                ) : (
-                  <CreditCard className="h-6 w-6 text-primary" />
-                )}
-              </div>
-              <DialogTitle className="text-xl">
-                {isExpired
-                  ? "Your subscription has ended"
-                  : "Finish Setup to Continue"}
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-3 text-sm text-muted-foreground">
-              {isExpired ? (
-                <>
-                  <p>
-                    Your trial or subscription has expired. To continue using
-                    Drive247, please resubscribe to a plan.
-                  </p>
-                  <p className="font-medium text-foreground">
-                    Access to the dashboard is paused until your subscription
-                    is active.
-                  </p>
-                </>
-              ) : isUpfront ? (
-                <>
-                  <p>
-                    To continue using Drive247, please add your card details.
-                  </p>
-                  <p>
-                    Your first payment will be taken on{" "}
-                    <span className="font-medium text-foreground">
-                      {firstCharge}
-                    </span>
-                    , then monthly after that.
-                  </p>
-                  <p className="font-medium text-foreground">
-                    Only a $1 card check today, refunded automatically.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p>
-                    To complete your Drive247 setup, please add your billing
-                    details.
-                  </p>
-                  {trialLabel && (
-                    <p>
-                      Your subscription will begin automatically{" "}
-                      <span className="font-medium text-foreground">
-                        {trialLabel} after setup is completed
-                      </span>
-                      .
-                    </p>
-                  )}
-                  {allZeroToday && (
-                    <p className="font-medium text-foreground">
-                      Only a $1 card check today, refunded automatically.
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-
-            <div className="mt-2">
-              <Button onClick={() => setStep("plans")} className="w-full">
-                {isExpired ? "Resubscribe Now" : "Complete Setup"}
-              </Button>
-            </div>
-          </>
-        ) : plansLoading ? (
+        {plansLoading ? (
           <div className="flex flex-col items-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="mt-3 text-sm text-muted-foreground">
-              Loading plans...
-            </p>
+            <p className="mt-3 text-sm text-muted-foreground">Loading plans...</p>
           </div>
-        ) : !plans || plans.length === 0 ? (
-          /* ── No plans ── */
+        ) : !hasPlans ? (
+          /* ── No plans configured ── */
           <>
             <DialogHeader className="text-center sm:text-center">
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
@@ -235,165 +105,48 @@ export function SubscriptionGateDialog({
               support@drive-247.com
             </a>
           </>
-        ) : plans.length === 1 ? (
-          /* ── Single plan ── */
+        ) : (
+          /* ── Plans available → full pricing card(s) right in the modal ── */
           <>
             <DialogHeader className="text-center sm:text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <CreditCard className="h-6 w-6 text-primary" />
-              </div>
-              <DialogTitle className="text-xl">
-                Complete Billing Setup
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className="rounded-lg border p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold">{plans[0].name}</span>
-                {plans[0].trial_days > 0 || isUpfront ? (
-                  <span className="text-lg font-bold">
-                    {formatPrice(0, plans[0].currency)}
-                    <span className="text-sm font-normal text-muted-foreground">
-                      {" "}today
-                    </span>
-                  </span>
+              <div
+                className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full ${
+                  isExpired ? "bg-destructive/10" : "bg-primary/10"
+                }`}
+              >
+                {isExpired ? (
+                  <ShieldAlert className="h-6 w-6 text-destructive" />
                 ) : (
-                  <span className="text-lg font-bold">
-                    {formatPrice(plans[0].amount, plans[0].currency)}
-                    <span className="text-sm font-normal text-muted-foreground">
-                      /{plans[0].interval}
-                    </span>
-                  </span>
+                  <CreditCard className="h-6 w-6 text-primary" />
                 )}
               </div>
-              {plans[0].description && (
-                <p className="text-sm text-muted-foreground">
-                  {plans[0].description}
-                </p>
-              )}
-              {plans[0].features.length > 0 && (
-                <ul className="space-y-1.5">
-                  {plans[0].features.map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-sm">
-                      <Check className="h-3.5 w-3.5 text-primary shrink-0" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {isUpfront ? (
-                <p className="text-xs text-primary font-medium">
-                  Then {formatPrice(plans[0].amount, plans[0].currency)} on {firstCharge} — just a $1 card check today
-                </p>
-              ) : plans[0].trial_days > 0 ? (
-                <p className="text-xs text-amber-600 font-medium">
-                  {plans[0].trial_days}-day free trial, then{" "}
-                  {formatPrice(plans[0].amount, plans[0].currency)}/{plans[0].interval}
-                </p>
-              ) : null}
-            </div>
-
-            <p className="text-xs text-muted-foreground text-center">
-              {plans[0].trial_days > 0 || isUpfront
-                ? "You'll be redirected to securely add billing details. Only a $1 card check is taken today, refunded automatically."
-                : "You'll be redirected to securely add billing details to start your subscription."}
-            </p>
-
-            <Button
-              onClick={() => handleSubscribe(plans[0].id)}
-              disabled={subscribing}
-              className="w-full"
-            >
-              {subscribing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Redirecting...
-                </>
-              ) : (
-                "Add Billing Details"
-              )}
-            </Button>
-          </>
-        ) : (
-          /* ── Multiple plans ── */
-          <>
-            <DialogHeader className="text-center sm:text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <CreditCard className="h-6 w-6 text-primary" />
-              </div>
-              <DialogTitle className="text-xl">Select Your Plan</DialogTitle>
+              <DialogTitle className="text-xl">
+                {isExpired
+                  ? "Your subscription has ended"
+                  : "Finish Setup to Continue"}
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                {isExpired
+                  ? "Resubscribe below to regain access to your dashboard."
+                  : plans!.length > 1
+                  ? "Choose a plan to start using Drive247."
+                  : "Add your billing details below to start using Drive247."}
+              </p>
             </DialogHeader>
 
-            <div className="space-y-2">
-              {plans.map((plan) => (
-                <button
+            <div className="mt-1 flex flex-col items-center gap-4">
+              {plans!.map((plan) => (
+                <PricingCard
                   key={plan.id}
-                  onClick={() => setSelectedPlanId(plan.id)}
-                  className={`w-full rounded-lg border p-4 text-left transition-colors ${
-                    selectedPlanId === plan.id
-                      ? "border-primary bg-primary/5 ring-1 ring-primary"
-                      : "border-border hover:border-muted-foreground/30"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">{plan.name}</span>
-                    {plan.trial_days > 0 ||
-                    (plan as { billing_model?: string }).billing_model ===
-                      "upfront_monthly" ? (
-                      <span className="text-lg font-bold">
-                        {formatPrice(0, plan.currency)}
-                        <span className="text-sm font-normal text-muted-foreground">
-                          {" "}today
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-lg font-bold">
-                        {formatPrice(plan.amount, plan.currency)}
-                        <span className="text-sm font-normal text-muted-foreground">
-                          /{plan.interval}
-                        </span>
-                      </span>
-                    )}
-                  </div>
-                  {plan.description && (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {plan.description}
-                    </p>
-                  )}
-                  {plan.trial_days > 0 ? (
-                    <p className="mt-1 text-xs text-amber-600 font-medium">
-                      {plan.trial_days}-day free trial, then{" "}
-                      {formatPrice(plan.amount, plan.currency)}/{plan.interval}
-                    </p>
-                  ) : (plan as { billing_model?: string }).billing_model ===
-                    "upfront_monthly" ? (
-                    <p className="mt-1 text-xs text-primary font-medium">
-                      Then {formatPrice(plan.amount, plan.currency)} on{" "}
-                      {firstCharge}, monthly after that
-                    </p>
-                  ) : null}
-                </button>
+                  plan={plan}
+                  onSubscribe={handleSubscribe}
+                  isLoading={
+                    subscribingPlanId === plan.id && createCheckoutSession.isPending
+                  }
+                  billingAnchor={billingAnchor}
+                />
               ))}
             </div>
-
-            <p className="text-xs text-muted-foreground text-center">
-              You'll be redirected to securely add your billing details.
-            </p>
-
-            <Button
-              onClick={() => selectedPlanId && handleSubscribe(selectedPlanId)}
-              disabled={!selectedPlanId || subscribing}
-              className="w-full"
-            >
-              {subscribing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Redirecting...
-                </>
-              ) : (
-                "Add Billing Details"
-              )}
-            </Button>
           </>
         )}
       </DialogContent>
