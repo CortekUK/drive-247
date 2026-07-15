@@ -20,6 +20,13 @@ interface PricingCardProps {
   isCurrentPlan?: boolean;
   /** Go-live date (tenants.subscription_billing_anchor) for upfront_monthly first-charge date. */
   billingAnchor?: string | null;
+  /**
+   * Flat, modal-embedded rendering: a single 1px-bordered block (the portal's
+   * native card style) with no gradient bar or drop shadow, so it doesn't read as
+   * a card floating inside the paywall dialog. Defaults to the elevated marketing
+   * card used on the /subscription page.
+   */
+  embedded?: boolean;
 }
 
 function formatPrice(amount: number, currency: string) {
@@ -49,10 +56,122 @@ function firstChargeLabel(anchor?: string | null) {
   });
 }
 
-export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan, billingAnchor }: PricingCardProps) {
+export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan, billingAnchor, embedded = false }: PricingCardProps) {
   const isUpfront = plan.billing_model === "upfront_monthly";
   const hasTrial = !isUpfront && (plan.trial_days ?? 0) > 0;
   const firstCharge = firstChargeLabel(billingAnchor);
+
+  // Flat, modal-native rendering — a single bordered block matching the portal's
+  // design system (1px border, no shadow, no gradient). Reuses the same shape
+  // logic above, so pricing/copy stay identical to the elevated card.
+  if (embedded) {
+    return (
+      <div
+        className={`w-full rounded-xl border p-5 text-left ${
+          isCurrentPlan ? "border-green-500/40 bg-green-500/5" : "border-border bg-card"
+        }`}
+      >
+        {/* Plan name + inline badge */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="inline-flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+              <Sparkles className="h-4 w-4 text-primary" />
+            </div>
+            <h3 className="text-base font-semibold leading-tight">{plan.name}</h3>
+          </div>
+          {!isCurrentPlan && hasTrial && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600">
+              <Zap className="h-3 w-3" />
+              {plan.trial_days}-day free trial
+            </span>
+          )}
+          {!isCurrentPlan && isUpfront && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+              <CalendarClock className="h-3 w-3" />
+              First payment {firstCharge}
+            </span>
+          )}
+        </div>
+
+        {plan.description && (
+          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+            {plan.description}
+          </p>
+        )}
+
+        {/* Price */}
+        <div className="mt-4">
+          {hasTrial || isUpfront ? (
+            <>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl font-semibold tracking-tight">
+                  {formatPrice(0, plan.currency)}
+                </span>
+                <span className="text-sm text-muted-foreground">today</span>
+              </div>
+              {hasTrial ? (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  then {formatPrice(plan.amount, plan.currency)}/{plan.interval} after your{" "}
+                  {plan.trial_days}-day free trial
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  then {formatPrice(plan.amount, plan.currency)} on{" "}
+                  <span className="font-medium text-foreground">{firstCharge}</span>, monthly after that
+                </p>
+              )}
+            </>
+          ) : (
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-semibold tracking-tight">
+                {formatPrice(plan.amount, plan.currency)}
+              </span>
+              <span className="text-sm text-muted-foreground">/{plan.interval}</span>
+            </div>
+          )}
+        </div>
+
+        {/* CTA */}
+        <div className="mt-5">
+          {isCurrentPlan ? (
+            <Button disabled className="w-full" variant="outline">
+              Current Plan
+            </Button>
+          ) : (
+            <Button
+              onClick={() => onSubscribe(plan.id)}
+              disabled={isLoading}
+              className="w-full"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Redirecting to checkout...
+                </>
+              ) : isUpfront ? (
+                "Add Card to Continue"
+              ) : hasTrial ? (
+                `Start ${plan.trial_days}-Day Free Trial`
+              ) : (
+                "Subscribe Now"
+              )}
+            </Button>
+          )}
+        </div>
+
+        {/* Fine print */}
+        {!isCurrentPlan && (
+          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+            {isUpfront
+              ? `A $1 card check today (refunded automatically) — first charge on ${firstCharge}. Cancel anytime.`
+              : hasTrial
+              ? "Only a $1 card check today, refunded automatically — no plan charge until your trial ends. Cancel anytime."
+              : "Cancel anytime. No long-term contracts."}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-sm">

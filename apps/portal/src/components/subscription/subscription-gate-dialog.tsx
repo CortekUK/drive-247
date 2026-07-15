@@ -138,7 +138,7 @@ export function SubscriptionGateDialog({
               </p>
             </DialogHeader>
 
-            <div className="mt-1 flex flex-col items-center gap-4">
+            <div className="mt-2 flex flex-col gap-3">
               {plans!.map((plan) => (
                 <PricingCard
                   key={plan.id}
@@ -148,6 +148,7 @@ export function SubscriptionGateDialog({
                     subscribingPlanId === plan.id && createCheckoutSession.isPending
                   }
                   billingAnchor={billingAnchor}
+                  embedded
                 />
               ))}
             </div>
