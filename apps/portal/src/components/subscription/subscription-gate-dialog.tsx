@@ -236,12 +236,21 @@ export function SubscriptionGateDialog({
             <div className="rounded-lg border p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-semibold">{plans[0].name}</span>
-                <span className="text-lg font-bold">
-                  {formatPrice(plans[0].amount, plans[0].currency)}
-                  <span className="text-sm font-normal text-muted-foreground">
-                    /{plans[0].interval}
+                {plans[0].trial_days > 0 || isUpfront ? (
+                  <span className="text-lg font-bold">
+                    {formatPrice(0, plans[0].currency)}
+                    <span className="text-sm font-normal text-muted-foreground">
+                      {" "}today
+                    </span>
                   </span>
-                </span>
+                ) : (
+                  <span className="text-lg font-bold">
+                    {formatPrice(plans[0].amount, plans[0].currency)}
+                    <span className="text-sm font-normal text-muted-foreground">
+                      /{plans[0].interval}
+                    </span>
+                  </span>
+                )}
               </div>
               {plans[0].description && (
                 <p className="text-sm text-muted-foreground">
@@ -260,11 +269,12 @@ export function SubscriptionGateDialog({
               )}
               {isUpfront ? (
                 <p className="text-xs text-primary font-medium">
-                  First payment {firstCharge} — nothing charged today
+                  Then {formatPrice(plans[0].amount, plans[0].currency)} on {firstCharge} — nothing charged today
                 </p>
               ) : plans[0].trial_days > 0 ? (
                 <p className="text-xs text-amber-600 font-medium">
-                  Includes {plans[0].trial_days}-day free trial
+                  {plans[0].trial_days}-day free trial, then{" "}
+                  {formatPrice(plans[0].amount, plans[0].currency)}/{plans[0].interval}
                 </p>
               ) : null}
             </div>
@@ -312,12 +322,21 @@ export function SubscriptionGateDialog({
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-semibold">{plan.name}</span>
-                    <span className="text-lg font-bold">
-                      {formatPrice(plan.amount, plan.currency)}
-                      <span className="text-sm font-normal text-muted-foreground">
-                        /{plan.interval}
+                    {plan.trial_days > 0 ? (
+                      <span className="text-lg font-bold">
+                        {formatPrice(0, plan.currency)}
+                        <span className="text-sm font-normal text-muted-foreground">
+                          {" "}today
+                        </span>
                       </span>
-                    </span>
+                    ) : (
+                      <span className="text-lg font-bold">
+                        {formatPrice(plan.amount, plan.currency)}
+                        <span className="text-sm font-normal text-muted-foreground">
+                          /{plan.interval}
+                        </span>
+                      </span>
+                    )}
                   </div>
                   {plan.description && (
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -326,7 +345,8 @@ export function SubscriptionGateDialog({
                   )}
                   {plan.trial_days > 0 && (
                     <p className="mt-1 text-xs text-amber-600 font-medium">
-                      {plan.trial_days}-day free trial
+                      {plan.trial_days}-day free trial, then{" "}
+                      {formatPrice(plan.amount, plan.currency)}/{plan.interval}
                     </p>
                   )}
                 </button>

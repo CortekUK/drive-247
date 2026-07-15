@@ -17,8 +17,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 type Sb = SupabaseClient;
 
-// ── The one blessed test tenant (prod `test`) ───────────────────────────────
-export const DESIGNATED_TEST_TENANT_ID = "09926302-f0ec-49f9-a05d-0cf1da93cf16";
+// ── The one blessed test tenant (STAGING `test` — isolated, no real customers) ─
+export const DESIGNATED_TEST_TENANT_ID = "8b434359-3ad1-491e-9593-b0ef381f5b21";
 
 // ── Designated test rentals (created in the test tenant with these exact ids).
 //    route.ts refuses to operate on anything not in this set. ────────────────

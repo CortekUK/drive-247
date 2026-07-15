@@ -526,8 +526,117 @@ Deno.serve(async (req) => {
         return jsonResponse({ success: true, userId, forwardingNumber: forwardingNumber || null });
       }
 
+      case 'preview-forward-call': {
+        // Dev/testing: render the EXACT TwiML that twilio-voice-inbound would return for
+        // a simulated inbound call, WITHOUT ringing a phone or writing a call log.
+        // Reuses the real inbound function (Preview=1) so there is zero logic drift.
+        const { data: tenant, error: tErr } = await supabase
+          .from('tenants')
+          .select('twilio_phone_number, twilio_voice_enabled, call_forwarding_enabled, forwarding_caller_id_mode, forwarding_number')
+          .eq('id', tenantId)
+          .single();
+
+        if (tErr || !tenant) return errorResponse('Failed to fetch tenant config', 500);
+        if (!tenant.twilio_phone_number) return errorResponse('Tenant has no Twilio phone number configured.', 400);
+
+        const fromNumber = (params.fromNumber || '+15550000000').toString();
+        const callerName = (params.callerName || 'Test Customer').toString();
+
+        const form = new URLSearchParams({
+          CallSid: 'PREVIEW',
+          AccountSid: 'PREVIEW',
+          From: fromNumber,
+          To: tenant.twilio_phone_number,
+          Preview: '1',
+          PreviewCallerName: callerName,
+        });
+
+        const resp = await fetch(`${supabaseUrl}/functions/v1/twilio-voice-inbound`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: form.toString(),
+        });
+        const twiml = await resp.text();
+
+        return jsonResponse({
+          success: true,
+          twiml,
+          twilioPhoneNumber: tenant.twilio_phone_number,
+          callForwardingEnabled: tenant.call_forwarding_enabled || false,
+          forwardingCallerIdMode: tenant.forwarding_caller_id_mode || 'caller',
+          forwardingNumber: tenant.forwarding_number || null,
+          whisperActive: tenant.forwarding_caller_id_mode === 'business_line',
+        });
+      }
+
+      case 'test-forward-call': {
+        // Dev/testing: place a REAL call to the tenant's forwarding phone so it actually
+        // rings — showing the BUSINESS number as caller ID and playing the whisper that
+        // announces the caller name. This is a real, billed call on the tenant's OWN
+        // Twilio account, so it requires explicit confirmation.
+        if (params.confirm !== true) {
+          return errorResponse('A real, billed call will be placed. Pass confirm: true to proceed.', 400);
+        }
+
+        const creds = await getTenantTwilioCredentials(supabase, tenantId);
+        if (!creds.isConfigured || !creds.sid || !creds.authToken) {
+          return errorResponse('Twilio is not configured for this tenant.', 400);
+        }
+
+        const { data: tenant, error: tErr } = await supabase
+          .from('tenants')
+          .select('twilio_phone_number, twilio_voice_enabled, forwarding_number')
+          .eq('id', tenantId)
+          .single();
+
+        if (tErr || !tenant) return errorResponse('Failed to fetch tenant config', 500);
+        if (!tenant.twilio_voice_enabled) return errorResponse('Voice is not enabled for this tenant. Run setup first.', 400);
+        if (!tenant.twilio_phone_number) return errorResponse('Tenant has no Twilio phone number.', 400);
+
+        const toNumber = (params.forwardingNumber || tenant.forwarding_number || '').toString().trim();
+        if (!toNumber) return errorResponse('No forwarding number to call. Set one first or pass forwardingNumber.', 400);
+
+        // Loop guard: never dial the Twilio number itself.
+        const toDigits = toNumber.replace(/[^+\d]/g, '');
+        const twilioDigits = tenant.twilio_phone_number.replace(/[^+\d]/g, '');
+        if (
+          toDigits && twilioDigits &&
+          (toDigits === twilioDigits ||
+            toDigits.endsWith(twilioDigits.replace('+', '')) ||
+            twilioDigits.endsWith(toDigits.replace('+', '')))
+        ) {
+          return errorResponse('Test number cannot be the same as your Twilio number.', 400);
+        }
+
+        const callerName = (params.callerName || 'Test Customer').toString();
+        const whisperUrl = `${supabaseUrl}/functions/v1/twilio-voice-whisper?name=${encodeURIComponent(callerName)}&test=1`;
+
+        // From = the tenant's OWN (owned) Twilio number => caller ID shows the BUSINESS line.
+        const callData = await twilioFetch(
+          `${TWILIO_API_BASE}/Accounts/${creds.sid}/Calls.json`,
+          creds.sid,
+          creds.authToken,
+          'POST',
+          {
+            To: toNumber,
+            From: tenant.twilio_phone_number,
+            Url: whisperUrl,
+            Method: 'POST',
+          }
+        );
+
+        console.log(`[manage-twilio-voice] Placed TEST forward call to ${toNumber} (callSid=${callData.sid})`);
+        return jsonResponse({
+          success: true,
+          callSid: callData.sid,
+          to: toNumber,
+          from: tenant.twilio_phone_number,
+          callerName,
+        });
+      }
+
       default:
-        return errorResponse(`Unknown action: ${action}. Valid actions: setup, get-token, get-status, disable, update-forwarding, set-forwarding-number`, 400);
+        return errorResponse(`Unknown action: ${action}. Valid actions: setup, get-token, get-status, disable, update-forwarding, set-forwarding-number, preview-forward-call, test-forward-call`, 400);
     }
   } catch (err: any) {
     console.error('[manage-twilio-voice] Error:', err);

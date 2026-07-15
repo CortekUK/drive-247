@@ -100,28 +100,42 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan, billi
             )}
           </div>
 
-          {/* Price */}
+          {/* Price — when NOTHING is charged today (free trial or upfront-monthly),
+              lead with "$0 today" so users aren't scared off by the full amount; the
+              real recurring price + when it starts goes on the subline. A genuine
+              charge-now plan (no trial, not upfront) still shows its real price. */}
           <div className="mb-8">
-            <div className="flex items-baseline gap-1">
-              <span className="text-4xl font-bold tracking-tight">
-                {formatPrice(plan.amount, plan.currency)}
-              </span>
-              <span className="text-sm text-muted-foreground font-medium">
-                /{plan.interval}
-              </span>
-            </div>
-            {hasTrial && (
-              <p className="mt-1.5 text-sm text-muted-foreground">
-                Free for {plan.trial_days} days, then{" "}
-                {formatPrice(plan.amount, plan.currency)}/{plan.interval}
-              </p>
-            )}
-            {isUpfront && (
-              <p className="mt-1.5 text-sm text-muted-foreground">
-                Add your card today — first payment of{" "}
-                {formatPrice(plan.amount, plan.currency)} on{" "}
-                <span className="font-medium text-foreground">{firstCharge}</span>, then monthly.
-              </p>
+            {hasTrial || isUpfront ? (
+              <>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-bold tracking-tight">
+                    {formatPrice(0, plan.currency)}
+                  </span>
+                  <span className="text-sm text-muted-foreground font-medium">
+                    today
+                  </span>
+                </div>
+                {hasTrial ? (
+                  <p className="mt-1.5 text-sm text-muted-foreground">
+                    then {formatPrice(plan.amount, plan.currency)}/{plan.interval} after your{" "}
+                    {plan.trial_days}-day free trial
+                  </p>
+                ) : (
+                  <p className="mt-1.5 text-sm text-muted-foreground">
+                    then {formatPrice(plan.amount, plan.currency)} on{" "}
+                    <span className="font-medium text-foreground">{firstCharge}</span>, monthly after that
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="flex items-baseline gap-1">
+                <span className="text-4xl font-bold tracking-tight">
+                  {formatPrice(plan.amount, plan.currency)}
+                </span>
+                <span className="text-sm text-muted-foreground font-medium">
+                  /{plan.interval}
+                </span>
+              </div>
             )}
           </div>
 

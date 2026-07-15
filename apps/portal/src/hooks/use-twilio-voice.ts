@@ -167,6 +167,31 @@ export function useTwilioVoice() {
     },
   });
 
+  // Dev/testing: render the exact forwarding TwiML for a simulated inbound call
+  // (no real call, no charges, no phone rings).
+  const previewForwardCall = useMutation({
+    mutationFn: (params: { fromNumber?: string; callerName?: string }) =>
+      invoke('preview-forward-call', params),
+    onError: (err: any) => {
+      toast({ title: 'Preview failed', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  // Dev/testing: place a REAL call to the forwarding phone so it rings for real.
+  const testForwardCall = useMutation({
+    mutationFn: (params: { forwardingNumber?: string; callerName?: string; confirm: boolean }) =>
+      invoke('test-forward-call', params),
+    onSuccess: (data: any) => {
+      toast({
+        title: 'Test Call Placed',
+        description: `Ringing ${data?.to ?? 'your phone'} now — answer to hear the announcement.`,
+      });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Test call failed', description: err.message, variant: 'destructive' });
+    },
+  });
+
   return {
     status: statusQuery.data ?? null,
     isLoading: statusQuery.isLoading,
@@ -176,6 +201,8 @@ export function useTwilioVoice() {
     getToken,
     updateForwarding,
     setForwardingNumber,
+    previewForwardCall,
+    testForwardCall,
     invalidateStatus,
   };
 }

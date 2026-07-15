@@ -17,6 +17,7 @@
 //   fastForwardRental { rentalId, days } -> run the VIEWED rental's crons N days
 //   status / advance / advanceAll / reset / resetAll  -> legacy fixture controls
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -245,6 +246,7 @@ function ServiceRow({
 
 // ---- the whole Time Machine section ---------------------------------------
 export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
+  const queryClient = useQueryClient();
   const [services, setServices] = useState<ServicesMap | null>(null);
   const [openService, setOpenService] = useState<ServiceKey | null>(null);
   // busy holds the key of the in-flight action ("" = idle), which disables all
@@ -366,11 +368,37 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
       const errs = Array.isArray(data.errors) ? (data.errors as string[]) : [];
       const what = bits.length ? bits.join(", ") : "nothing was due";
       setLastFf({ days, what, summary: (data.summary as FfSummary) ?? null });
+      // The fire wrote to the rental's ledger/accruals/payments/etc. The page
+      // normally refreshes via Supabase Realtime, but that depends on the tables
+      // being in the `supabase_realtime` publication — which is NOT guaranteed
+      // outside prod (staging's publication is empty). So invalidate the rental
+      // page's query keys directly: the KPI cards, Payment Breakdown, PAYG
+      // statement and installment schedule refetch immediately, no reload needed.
+      // Keys mirror the page's own Realtime handlers (rentals/[id]/page.tsx).
+      await Promise.all(
+        [
+          ["rental", rentalId],
+          ["rental-totals"],
+          ["rental-payment-breakdown"],
+          ["rental-charges"],
+          ["rental-refund-breakdown"],
+          ["rental-invoice"],
+          ["rental-extension-totals"],
+          ["rental-payments"],
+          ["rental-payments-total"],
+          ["rental-fines"],
+          ["rental-payment"],
+          ["payg-invoices"],
+          ["installment-plan"],
+          ["installment-plan-full"],
+          ["installment-plan-events"],
+        ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      );
       if (errs.length) {
         toast.warning(`+${days}d — ${what}; ${errs.length} step${errs.length === 1 ? "" : "s"} failed: ${errs[0]}`, { id });
         return;
       }
-      toast.success(`+${days}d — ${what}. Refresh the page to see it in the ledger.`, { id });
+      toast.success(`+${days}d — ${what}. Ledger & billing updated.`, { id });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e), { id });
     } finally {
@@ -390,9 +418,10 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
           <Clock className="h-3.5 w-3.5" /> Time Machine / Cron
         </span>
         <span className="flex items-center gap-2">
-          {/* BUILD MARKER — if you do not see "v3" your browser is running an old
-              bundle and none of the newer fixes are loaded. */}
-          <Badge variant="outline" className="border-primary/50 text-primary">v3</Badge>
+          {/* BUILD MARKER — if you do not see "v4" your browser is running an old
+              bundle and none of the newer fixes are loaded (incl. the auto-refresh
+              on fast-forward). Hard-reload / disable cache until it reads v4. */}
+          <Badge variant="outline" className="border-primary/50 text-primary">v4</Badge>
           <Badge variant="outline" className="border-green-500/50 text-green-600 gap-1">
             <Beaker className="h-3 w-3" /> SANDBOX
           </Badge>
@@ -418,7 +447,7 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
                 : "border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-500"
             }`}
           >
-            <strong>build v3</strong> · router path: <code>{pathname || "(null)"}</code>
+            <strong>build v4</strong> · router path: <code>{pathname || "(null)"}</code>
             <br />
             window path: <code>{winPath || "(empty)"}</code>
             <br />
@@ -478,7 +507,7 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
                         )}
                       </>
                     )}
-                    <div className="text-muted-foreground">Refresh the page to see it in the ledger &amp; billing schedule.</div>
+                    <div className="text-muted-foreground">The ledger, KPI cards &amp; billing schedule update automatically.</div>
                   </div>
                 )}
               </div>

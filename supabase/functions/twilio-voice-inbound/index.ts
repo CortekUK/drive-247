@@ -42,7 +42,12 @@ Deno.serve(async (req) => {
     const from = formData.get('From') as string; // Customer's phone number
     const to = formData.get('To') as string; // Tenant's phone number
 
-    console.log(`[twilio-voice-inbound] CallSid=${callSid} From=${from} To=${to}`);
+    // Preview mode: dev-panel "Test Call Forwarding" tool posts Preview=1 to render the
+    // exact TwiML this function would return WITHOUT logging a call or ringing anyone.
+    const isPreview = formData.get('Preview') === '1';
+    const previewCallerName = (formData.get('PreviewCallerName') as string) || '';
+
+    console.log(`[twilio-voice-inbound] CallSid=${callSid} From=${from} To=${to}${isPreview ? ' (PREVIEW)' : ''}`);
 
     if (!from || !to) {
       console.error('[twilio-voice-inbound] Missing From or To');
@@ -88,11 +93,12 @@ Deno.serve(async (req) => {
     const fromDigitsOnly = normalizedFrom.replace('+', '');
 
     let customerId: string | null = null;
+    let customerName: string | null = null;
     let channelId: string | null = null;
 
     const { data: customers } = await supabase
       .from('customers')
-      .select('id')
+      .select('id, name')
       .eq('tenant_id', tenant.id)
       .or(`phone.eq.${normalizedFrom},phone.eq.${fromDigitsOnly},phone.eq.${from}`);
 
@@ -100,7 +106,7 @@ Deno.serve(async (req) => {
       // Fuzzy match: strip non-digits from stored phones
       const { data: allCustomers } = await supabase
         .from('customers')
-        .select('id, phone')
+        .select('id, phone, name')
         .eq('tenant_id', tenant.id)
         .not('phone', 'is', null);
 
@@ -110,10 +116,19 @@ Deno.serve(async (req) => {
           const storedDigits = c.phone.replace(/[^+\d]/g, '');
           return storedDigits === normalizedFrom || storedDigits === `+${fromDigitsOnly}` || storedDigits.endsWith(fromDigitsOnly);
         });
-        if (match) customerId = match.id;
+        if (match) {
+          customerId = match.id;
+          customerName = (match as any).name ?? null;
+        }
       }
     } else {
       customerId = customers[0].id;
+      customerName = (customers[0] as any).name ?? null;
+    }
+
+    // Preview mode lets the dev-panel announce an arbitrary test name without a real customer.
+    if (isPreview && previewCallerName) {
+      customerName = previewCallerName;
     }
 
     // Get chat channel if customer is known
@@ -158,25 +173,27 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Step 4: Log the inbound call
-    const { error: logError } = await supabase
-      .from('call_logs')
-      .insert({
-        tenant_id: tenant.id,
-        customer_id: customerId,
-        channel_id: channelId,
-        caller_type: 'customer',
-        caller_id: customerId,
-        direction: 'inbound',
-        status: 'ringing',
-        twilio_call_sid: callSid,
-        from_number: normalizedFrom,
-        to_number: to,
-        started_at: new Date().toISOString(),
-      });
+    // Step 4: Log the inbound call (skipped in preview mode — no real call happened)
+    if (!isPreview) {
+      const { error: logError } = await supabase
+        .from('call_logs')
+        .insert({
+          tenant_id: tenant.id,
+          customer_id: customerId,
+          channel_id: channelId,
+          caller_type: 'customer',
+          caller_id: customerId,
+          direction: 'inbound',
+          status: 'ringing',
+          twilio_call_sid: callSid,
+          from_number: normalizedFrom,
+          to_number: to,
+          started_at: new Date().toISOString(),
+        });
 
-    if (logError) {
-      console.error('[twilio-voice-inbound] Failed to log call:', logError);
+      if (logError) {
+        console.error('[twilio-voice-inbound] Failed to log call:', logError);
+      }
     }
 
     // Step 5: Build TwiML to ring all tenant users
@@ -216,14 +233,23 @@ Deno.serve(async (req) => {
         // If the tenant wants forwarded calls to display the business line on staff
         // phones (so they know it's a business call before answering), set callerId
         // to the Twilio number. Otherwise let Twilio pass through the original caller.
-        const callerIdAttr = tenant.forwarding_caller_id_mode === 'business_line'
-          ? ` callerId="${to}"`
+        const useBusinessLine = tenant.forwarding_caller_id_mode === 'business_line';
+        const callerIdAttr = useBusinessLine ? ` callerId="${to}"` : '';
+
+        // In business_line mode the staff phone shows the BUSINESS number, not the
+        // customer's — so it can't resolve a contact name. Attach a "whisper" leg
+        // (twilio-voice-whisper) that announces the caller name and screens the call
+        // (press any key to accept). CNAM name-display is US-only, so this spoken
+        // announcement is how we convey the name on international (e.g. UK) phones.
+        const whisperName = customerName || normalizedFrom || 'an unknown number';
+        const whisperUrlAttr = useBusinessLine
+          ? ` url="${supabaseUrl}/functions/v1/twilio-voice-whisper?name=${encodeURIComponent(whisperName)}"`
           : '';
 
         numberElements = '\n' + allNumbers
-          .map((num) => `    <Number${callerIdAttr} statusCallback="${supabaseUrl}/functions/v1/twilio-voice-status">${num}</Number>`)
+          .map((num) => `    <Number${callerIdAttr}${whisperUrlAttr} statusCallback="${supabaseUrl}/functions/v1/twilio-voice-status">${num}</Number>`)
           .join('\n');
-        console.log(`[twilio-voice-inbound] Forwarding to ${allNumbers.length} phone numbers (callerIdMode=${tenant.forwarding_caller_id_mode || 'caller'})`);
+        console.log(`[twilio-voice-inbound] Forwarding to ${allNumbers.length} phone numbers (callerIdMode=${tenant.forwarding_caller_id_mode || 'caller'}, whisper=${useBusinessLine})`);
       }
     }
 
@@ -241,6 +267,15 @@ Deno.serve(async (req) => {
       ? '<Say>This call may be recorded for quality and training purposes.</Say>'
       : '';
 
+    // answerOnBridge keeps the customer hearing ringback (not silence) until a leg
+    // actually connects — important when a whisper/screening leg is in play so the
+    // customer isn't sitting in dead air during the "press any key" announcement.
+    // Only added when the whisper is active (business_line + forwarding), to keep
+    // default-mode behaviour unchanged.
+    const dialAnswerAttr = tenant.call_forwarding_enabled && tenant.forwarding_caller_id_mode === 'business_line'
+      ? ' answerOnBridge="true"'
+      : '';
+
     let fallbackTwiml: string;
 
     if (tenant.voicemail_enabled) {
@@ -249,7 +284,7 @@ Deno.serve(async (req) => {
       fallbackTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${consentSay}
-  <Dial timeout="30" action="${voicemailAction}"${recordAttrs}>
+  <Dial${dialAnswerAttr} timeout="30" action="${voicemailAction}"${recordAttrs}>
 ${clientElements}${numberElements}
   </Dial>
 </Response>`;
@@ -257,7 +292,7 @@ ${clientElements}${numberElements}
       fallbackTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${consentSay}
-  <Dial timeout="30" action="${statusCallbackUrl}"${recordAttrs}>
+  <Dial${dialAnswerAttr} timeout="30" action="${statusCallbackUrl}"${recordAttrs}>
 ${clientElements}${numberElements}
   </Dial>
   <Say>Sorry, no one is available to take your call right now. Please try again later.</Say>

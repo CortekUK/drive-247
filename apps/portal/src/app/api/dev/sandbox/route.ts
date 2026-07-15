@@ -25,15 +25,17 @@ import {
 } from "./services";
 
 const IS_DEV = process.env.NODE_ENV === "development";
-const PROD_URL = "https://hviqoaokxvlancmftwuo.supabase.co";
-// Prod service key — env ONLY (gitignored .env; never commit).
-const PROD_KEY = process.env.SANDBOX_PROD_SERVICE_KEY || "";
+// ISOLATED STAGING simulation. This sandbox runs ENTIRELY against the staging
+// Supabase project — real cron logic, a real DB, but ZERO real customers. It
+// NEVER touches production. The service key comes from env only (gitignored).
+const SANDBOX_URL = "https://ksmreaadhbirzakkxqrq.supabase.co";
+const SANDBOX_KEY = process.env.SANDBOX_STAGING_SERVICE_KEY || "";
 
-function prod(): SupabaseClient {
-  if (!PROD_KEY) {
-    throw new Error("SANDBOX_PROD_SERVICE_KEY is not set — refusing to run against production");
+function db(): SupabaseClient {
+  if (!SANDBOX_KEY) {
+    throw new Error("SANDBOX_STAGING_SERVICE_KEY is not set — refusing to run");
   }
-  return createClient(PROD_URL, PROD_KEY, { auth: { persistSession: false } });
+  return createClient(SANDBOX_URL, SANDBOX_KEY, { auth: { persistSession: false } });
 }
 
 // ── Concurrency: one in-flight mutation per lock key (rental id or "fixtures").
@@ -77,11 +79,11 @@ async function fixtureExists(p: SupabaseClient, rentalId: string): Promise<boole
   return !!data;
 }
 
-// Call a sandbox-* fn on prod. verify_jwt=true → authenticate with the service key.
+// Call a sandbox-* fn on staging. verify_jwt=true → authenticate with the service key.
 async function callSandbox(fn: string, body: Record<string, unknown>) {
-  const res = await fetch(`${PROD_URL}/functions/v1/${fn}`, {
+  const res = await fetch(`${SANDBOX_URL}/functions/v1/${fn}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${PROD_KEY}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${SANDBOX_KEY}` },
     body: JSON.stringify(body),
   });
   const json = await res.json().catch(() => null);
@@ -434,7 +436,7 @@ export async function POST(req: Request) {
   };
 
   try {
-    const p = prod();
+    const p = db();
 
     if (action === "status") {
       return NextResponse.json({ ok: true, ...(await allStatus(p)) });
