@@ -79,6 +79,10 @@ export function SubscriptionGateDialog({
       >
         {plansLoading ? (
           <div className="flex flex-col items-center py-8">
+            {/* Radix requires a DialogTitle for an accessible name. With the old
+                titled intro removed, this loading state is the initial render on a
+                fresh open, so give it a screen-reader-only title. */}
+            <DialogTitle className="sr-only">Loading subscription plans</DialogTitle>
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             <p className="mt-3 text-sm text-muted-foreground">Loading plans...</p>
           </div>
