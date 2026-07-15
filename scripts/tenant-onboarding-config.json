@@ -74,6 +74,17 @@
       "specialty": "Premium, exotic and luxury vehicle rentals",
       "branding": "Green",
       "logo_url": "https://hviqoaokxvlancmftwuo.supabase.co/storage/v1/object/public/company-logos/axis-rentals/logo.png"
+    },
+    "the-company-car-collection": {
+      "company_name": "The Company Car Collection",
+      "contact_email": "concierge@thecompanycarcollection.com",
+      "phone": "+1 (702) 600-9441",
+      "city": "Las Vegas",
+      "state": "NV",
+      "hours": "24/7",
+      "specialty": "Exotic and luxury vehicle rentals",
+      "branding": "Black, Gold, Grey, White",
+      "logo_url": "https://hviqoaokxvlancmftwuo.supabase.co/storage/v1/object/public/company-logos/the-company-car-collection/logo.png"
     }
   }
 }
