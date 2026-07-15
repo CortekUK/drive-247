@@ -51,7 +51,7 @@ function firstChargeLabel(anchor?: string | null) {
 
 export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan, billingAnchor }: PricingCardProps) {
   const isUpfront = plan.billing_model === "upfront_monthly";
-  const hasTrial = !isUpfront && plan.trial_days && plan.trial_days > 0;
+  const hasTrial = !isUpfront && (plan.trial_days ?? 0) > 0;
   const firstCharge = firstChargeLabel(billingAnchor);
 
   return (
@@ -100,10 +100,12 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan, billi
             )}
           </div>
 
-          {/* Price — when NOTHING is charged today (free trial or upfront-monthly),
+          {/* Price — when the SUBSCRIPTION is $0 today (free trial or upfront-monthly),
               lead with "$0 today" so users aren't scared off by the full amount; the
               real recurring price + when it starts goes on the subline. A genuine
-              charge-now plan (no trial, not upfront) still shows its real price. */}
+              charge-now plan (no trial, not upfront) still shows its real price.
+              Note: checkout also adds a $1 card-verification charge (auto-refunded) —
+              see the fine print below and create-subscription-checkout. */}
           <div className="mb-8">
             {hasTrial || isUpfront ? (
               <>
@@ -172,9 +174,9 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan, billi
           {!isCurrentPlan && (
             <p className="mt-3 text-center text-[11px] text-muted-foreground">
               {isUpfront
-                ? `Your card is saved now — first charge on ${firstCharge}. Cancel anytime.`
+                ? `A $1 card check today (refunded automatically) — first charge on ${firstCharge}. Cancel anytime.`
                 : hasTrial
-                ? "No charge until trial ends. Cancel anytime."
+                ? "Only a $1 card check today, refunded automatically — no plan charge until your trial ends. Cancel anytime."
                 : "Cancel anytime. No long-term contracts."}
             </p>
           )}

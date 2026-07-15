@@ -90,6 +90,18 @@ export function SubscriptionGateDialog({
       ?.subscription_billing_anchor,
   );
 
+  // True only when EVERY plan is $0 today (a trial or upfront_monthly). Guards the
+  // intro's "only a $1 card check today" reassurance: with a mixed config where one
+  // plan actually charges its full amount at checkout, that line would misdescribe
+  // the charge-now path, so we suppress it and let the plan step show real prices.
+  const allZeroToday =
+    !!plans?.length &&
+    plans.every(
+      (p) =>
+        (p.trial_days ?? 0) > 0 ||
+        (p as { billing_model?: string }).billing_model === "upfront_monthly",
+    );
+
   const handleSubscribe = async (planId: string) => {
     setSubscribing(true);
     try {
@@ -160,7 +172,7 @@ export function SubscriptionGateDialog({
                     , then monthly after that.
                   </p>
                   <p className="font-medium text-foreground">
-                    Nothing is charged today.
+                    Only a $1 card check today, refunded automatically.
                   </p>
                 </>
               ) : (
@@ -178,9 +190,11 @@ export function SubscriptionGateDialog({
                       .
                     </p>
                   )}
-                  <p className="font-medium text-foreground">
-                    No charges are taken at this stage.
-                  </p>
+                  {allZeroToday && (
+                    <p className="font-medium text-foreground">
+                      Only a $1 card check today, refunded automatically.
+                    </p>
+                  )}
                 </>
               )}
             </div>
@@ -269,7 +283,7 @@ export function SubscriptionGateDialog({
               )}
               {isUpfront ? (
                 <p className="text-xs text-primary font-medium">
-                  Then {formatPrice(plans[0].amount, plans[0].currency)} on {firstCharge} — nothing charged today
+                  Then {formatPrice(plans[0].amount, plans[0].currency)} on {firstCharge} — just a $1 card check today
                 </p>
               ) : plans[0].trial_days > 0 ? (
                 <p className="text-xs text-amber-600 font-medium">
@@ -280,8 +294,9 @@ export function SubscriptionGateDialog({
             </div>
 
             <p className="text-xs text-muted-foreground text-center">
-              You'll be redirected to securely add billing details. No charges
-              are taken at this stage.
+              {plans[0].trial_days > 0 || isUpfront
+                ? "You'll be redirected to securely add billing details. Only a $1 card check is taken today, refunded automatically."
+                : "You'll be redirected to securely add billing details to start your subscription."}
             </p>
 
             <Button
@@ -322,7 +337,9 @@ export function SubscriptionGateDialog({
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-semibold">{plan.name}</span>
-                    {plan.trial_days > 0 ? (
+                    {plan.trial_days > 0 ||
+                    (plan as { billing_model?: string }).billing_model ===
+                      "upfront_monthly" ? (
                       <span className="text-lg font-bold">
                         {formatPrice(0, plan.currency)}
                         <span className="text-sm font-normal text-muted-foreground">
@@ -343,19 +360,24 @@ export function SubscriptionGateDialog({
                       {plan.description}
                     </p>
                   )}
-                  {plan.trial_days > 0 && (
+                  {plan.trial_days > 0 ? (
                     <p className="mt-1 text-xs text-amber-600 font-medium">
                       {plan.trial_days}-day free trial, then{" "}
                       {formatPrice(plan.amount, plan.currency)}/{plan.interval}
                     </p>
-                  )}
+                  ) : (plan as { billing_model?: string }).billing_model ===
+                    "upfront_monthly" ? (
+                    <p className="mt-1 text-xs text-primary font-medium">
+                      Then {formatPrice(plan.amount, plan.currency)} on{" "}
+                      {firstCharge}, monthly after that
+                    </p>
+                  ) : null}
                 </button>
               ))}
             </div>
 
             <p className="text-xs text-muted-foreground text-center">
-              You'll be redirected to securely add billing details. No charges
-              are taken at this stage.
+              You'll be redirected to securely add your billing details.
             </p>
 
             <Button
