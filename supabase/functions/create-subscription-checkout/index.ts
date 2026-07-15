@@ -176,18 +176,28 @@ Deno.serve(async (req) => {
       lineItems.push({ price: meteredPriceId }); // no quantity for metered
     }
 
-    // Add a one-time $1 card verification fee to the checkout.
-    // Stripe charges one-time items immediately even during trial, which validates
-    // the card properly (some banks reject the $0 auth on trial subscriptions).
-    // This $1 is auto-refunded in the subscription webhook on checkout.session.completed.
-    lineItems.push({
-      price_data: {
-        currency: (plan.currency || "usd").toLowerCase(),
-        product_data: { name: "Card verification (refunded automatically)" },
-        unit_amount: 100, // $1.00
-      },
-      quantity: 1,
-    });
+    // Add a one-time $1 card verification fee ONLY when the plan's first real charge
+    // is deferred (a free trial or upfront_monthly). Stripe bills one-time items
+    // immediately even during a trial, so this validates the card while $0 of the plan
+    // is due today (some banks reject the $0 auth on trial subs). It is auto-refunded by
+    // the subscription webhook on checkout.session.completed.
+    //
+    // For a charge-now plan (no trial, not upfront) the full plan amount is billed today,
+    // which already validates the card — so we must NOT add the $1. If we did, it would
+    // ride the SAME first-invoice payment_intent as the plan charge, and the webhook's
+    // setup-fee refund would return the whole invoice (plan + $1) → $0 collected. Mirrors
+    // create-uae-subscription-capture's `hasTrial` gating.
+    const chargesDeferredToday = !!trialEndTs || trialDays > 0;
+    if (chargesDeferredToday) {
+      lineItems.push({
+        price_data: {
+          currency: (plan.currency || "usd").toLowerCase(),
+          product_data: { name: "Card verification (refunded automatically)" },
+          unit_amount: 100, // $1.00
+        },
+        quantity: 1,
+      });
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -197,11 +207,23 @@ Deno.serve(async (req) => {
       line_items: lineItems,
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, source: "platform_subscription", setup_fee: "true" },
+      // setup_fee flags the webhook to auto-refund the $1 verification. Only set it
+      // when the $1 was actually added (deferred-charge plans); a charge-now plan has
+      // no $1 to refund and must keep its full first-period charge.
+      metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, source: "platform_subscription", ...(chargesDeferredToday ? { setup_fee: "true" } : {}) },
       subscription_data: {
         metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, billing_model: plan.billing_model || "trial" },
-        // Exact anchored date for upfront_monthly; rounded day count otherwise.
-        ...(trialEndTs ? { trial_end: trialEndTs } : { trial_period_days: trialDays }),
+        // Exact anchored date for upfront_monthly; a positive rounded day count for a
+        // real free trial. A 0-day "trial" plan (trial_days=0, not upfront) must send
+        // NEITHER key: Stripe rejects trial_period_days:0 (minimum is 1) with a 400 that
+        // previously surfaced as a generic "non-2xx" and blocked checkout entirely.
+        // Omitting both starts the subscription and charges the first period immediately
+        // on completion — the $1 card-verification line item still validates the card.
+        ...(trialEndTs
+          ? { trial_end: trialEndTs }
+          : trialDays > 0
+            ? { trial_period_days: trialDays }
+            : {}),
       },
     });
 

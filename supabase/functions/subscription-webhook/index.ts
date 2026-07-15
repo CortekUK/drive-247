@@ -261,6 +261,12 @@ async function handleCheckoutCompleted(
       if (piId) {
         const refund = await stripe.refunds.create({
           payment_intent: piId,
+          // Refund ONLY the $1 verification, never a plan charge. setup_fee is now set
+          // solely for deferred-charge plans (trial/upfront) whose first invoice is
+          // $1-only, but cap defensively at the hardcoded verification amount (100 minor
+          // units) so an amount-less refund can never return a plan charge that happens
+          // to share the first invoice's payment_intent.
+          amount: 100,
           reason: "requested_by_customer",
         });
         console.log(`Auto-refunded $1 verification charge (refund: ${refund.id}, PI: ${piId}) for tenant ${tenantId}`);
