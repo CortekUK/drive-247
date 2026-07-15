@@ -86,8 +86,12 @@ Deno.serve(async (req) => {
         console.log(`Unhandled subscription webhook event: ${event.type}`);
     }
   } catch (error) {
+    // Return 500 (not 200) so Stripe retries for up to 3 days. All handlers are
+    // idempotent (upsert/onConflict, re-flip no-ops, retire matches nothing on
+    // replay), so a retried event is safe — and a transient DB/Stripe error
+    // during a migration no longer silently loses the whole event.
     console.error(`Error handling ${event.type}:`, error);
-    return jsonResponse({ received: true, error: error.message });
+    return errorResponse(`Handler error for ${event.type}: ${error?.message ?? error}`, 500);
   }
 
   return jsonResponse({ received: true });
@@ -128,25 +132,34 @@ async function handleCheckoutCompleted(
 
     const { data: oldSubs } = await supabase
       .from("tenant_subscriptions")
-      .select("id, stripe_subscription_id, stripe_account, current_period_end")
+      .select("id, stripe_subscription_id, stripe_account, status, current_period_end")
       .eq("tenant_id", tenantId)
       .in("status", ["active", "trialing", "past_due"])
       .neq("stripe_subscription_id", subscriptionId);
 
     for (const oldSub of oldSubs || []) {
-      if (oldSub.stripe_account !== "uae" && oldSub.stripe_subscription_id) {
-        try {
-          const ukStripe = getSubscriptionStripeClientForAccount("uk", mode);
-          await ukStripe.subscriptions.update(oldSub.stripe_subscription_id, {
+      if (oldSub.stripe_subscription_id) {
+        // Cancel the old sub on WHICHEVER account it actually lives on — a UK
+        // legacy sub, OR a duplicate UAE sub from a re-generated capture link.
+        // If this throws we let it propagate (event 500s → Stripe retries):
+        // NEVER retire the DB row while its Stripe subscription is still live,
+        // or it double-bills invisibly.
+        const oldAccount = oldSub.stripe_account === "uae" ? "uae" : "uk";
+        const oldStripe = getSubscriptionStripeClientForAccount(oldAccount, mode);
+        if (oldAccount === "uae" || oldSub.status === "past_due") {
+          // Duplicate UAE sub = redundant; past-due UK sub has no paid period to
+          // preserve and its open invoice would keep smart-retrying. Kill both now.
+          await oldStripe.subscriptions.cancel(oldSub.stripe_subscription_id);
+          console.log(`UAE migration: canceled ${oldAccount} subscription ${oldSub.stripe_subscription_id} (status ${oldSub.status}) for tenant ${tenantId}`);
+        } else {
+          // Active/trialing UK sub: let the already-paid period run out.
+          await oldStripe.subscriptions.update(oldSub.stripe_subscription_id, {
             cancel_at_period_end: true,
           });
           console.log(`UAE migration: set UK subscription ${oldSub.stripe_subscription_id} to cancel_at_period_end for tenant ${tenantId}`);
-        } catch (cancelErr) {
-          console.error(`UAE migration: failed to cancel UK subscription ${oldSub.stripe_subscription_id}:`, cancelErr.message);
         }
       }
-      // Retire the DB row now so the new UAE row can occupy the
-      // one-active-subscription-per-tenant slot.
+      // Only reached once the Stripe-side cancel above succeeded.
       await supabase
         .from("tenant_subscriptions")
         .update({
@@ -229,14 +242,31 @@ async function handleCheckoutCompleted(
 
   if (tenantError) console.error("Error updating tenant plan:", tenantError);
 
-  // Auto-refund the $1 card verification charge if present
-  if (session.metadata?.setup_fee === "true" && session.payment_intent) {
+  // Auto-refund the $1 card-verification charge if present.
+  // In `mode: "subscription"` Checkout, session.payment_intent is ALWAYS null —
+  // the $1 setup-fee charge lives on the subscription's first invoice's
+  // payment_intent. Resolve it from there (this is why the $1 was never
+  // actually being refunded before).
+  if (session.metadata?.setup_fee === "true") {
     try {
-      const refund = await stripe.refunds.create({
-        payment_intent: session.payment_intent as string,
-        reason: "requested_by_customer",
-      });
-      console.log(`Auto-refunded $1 verification charge (refund: ${refund.id}) for tenant ${tenantId}`);
+      let piId: string | null = (session.payment_intent as string) || null;
+      if (!piId && subscription.latest_invoice) {
+        const inv = await stripe.invoices.retrieve(
+          subscription.latest_invoice as string,
+          { expand: ["payment_intent"] }
+        );
+        const invPi = (inv as any).payment_intent;
+        piId = typeof invPi === "string" ? invPi : invPi?.id || null;
+      }
+      if (piId) {
+        const refund = await stripe.refunds.create({
+          payment_intent: piId,
+          reason: "requested_by_customer",
+        });
+        console.log(`Auto-refunded $1 verification charge (refund: ${refund.id}, PI: ${piId}) for tenant ${tenantId}`);
+      } else {
+        console.warn(`setup_fee set but no payment_intent found to refund for tenant ${tenantId}`);
+      }
     } catch (refundErr) {
       console.warn(`Failed to auto-refund verification charge for tenant ${tenantId}:`, refundErr.message);
     }
@@ -391,8 +421,22 @@ async function handleInvoicePaid(supabase: any, invoice: any) {
   const subscriptionId = invoice.subscription;
   const customerId = invoice.customer;
 
-  const { data: tenant } = await supabase.from("tenants").select("id").eq("stripe_subscription_customer_id", customerId).maybeSingle();
-  if (!tenant) { console.log("No tenant found for customer:", customerId); return; }
+  let { data: tenant } = await supabase.from("tenants").select("id").eq("stripe_subscription_customer_id", customerId).maybeSingle();
+  if (!tenant) {
+    // Fallback: the tenants column can be stale (e.g. overwritten by a credit
+    // purchase creating a customer on the other account, or a UAE first-charge
+    // invoice racing ahead of checkout.session.completed). Resolve via the
+    // subscription row instead so the invoice is never silently dropped.
+    const { data: subByCustomer } = await supabase
+      .from("tenant_subscriptions").select("tenant_id").eq("stripe_customer_id", customerId).maybeSingle();
+    if (subByCustomer) tenant = { id: subByCustomer.tenant_id };
+    else if (subscriptionId) {
+      const { data: subById } = await supabase
+        .from("tenant_subscriptions").select("tenant_id").eq("stripe_subscription_id", subscriptionId).maybeSingle();
+      if (subById) tenant = { id: subById.tenant_id };
+    }
+  }
+  if (!tenant) { console.log("No tenant found for customer:", customerId, "sub:", subscriptionId); return; }
 
   const { data: sub } = await supabase.from("tenant_subscriptions").select("id").eq("stripe_subscription_id", subscriptionId).maybeSingle();
 

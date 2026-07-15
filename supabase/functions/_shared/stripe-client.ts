@@ -105,10 +105,21 @@ export function getConnectAccountId(tenant: {
   // Callers that don't select the new columns fall through to the managed path,
   // which is correct for every tenant until their payment_model is flipped.
   if (tenant.payment_model === 'own') {
-    if (tenant.stripe_mode === 'test') {
-      return tenant.own_stripe_test_account_id || null;
+    const ownId = tenant.stripe_mode === 'test'
+      ? tenant.own_stripe_test_account_id
+      : tenant.own_stripe_account_id;
+    // NEVER fall through to a null (= no stripeAccount) charge here: that would
+    // silently create the charge on the Drive247 platform balance instead of
+    // the operator's account. A flipped tenant with no connected account for
+    // the current mode is a misconfiguration — fail loud so no customer money
+    // is misrouted. (Readiness/flip should prevent this; this is the backstop.)
+    if (!ownId) {
+      throw new Error(
+        `Tenant is on Own Stripe (payment_model='own') but has no connected account for ${tenant.stripe_mode} mode. ` +
+        `Reconnect Stripe (OAuth) or revert payment_model to 'managed' before taking payments.`
+      );
     }
-    return tenant.own_stripe_account_id || null;
+    return ownId;
   }
 
   if (tenant.stripe_mode === 'test') {
@@ -314,6 +325,10 @@ export function getWebhookSecretCandidates(mode: StripeMode): string[] {
   return [
     Deno.env.get(mode === 'live' ? 'STRIPE_LIVE_WEBHOOK_SECRET' : 'STRIPE_TEST_WEBHOOK_SECRET'),
     Deno.env.get(mode === 'live' ? 'STRIPE_UAE_LIVE_WEBHOOK_SECRET' : 'STRIPE_UAE_TEST_WEBHOOK_SECRET'),
+    // Belt-and-suspenders: own-tenant direct charges produce connected-account
+    // events; whichever UAE endpoint they land on, its secret verifies here.
+    Deno.env.get(mode === 'live' ? 'STRIPE_LIVE_CONNECT_WEBHOOK_SECRET' : ''),
+    Deno.env.get('STRIPE_UAE_CONNECT_WEBHOOK_SECRET'),
   ].filter((s): s is string => !!s);
 }
 

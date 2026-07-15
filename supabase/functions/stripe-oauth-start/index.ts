@@ -6,8 +6,47 @@
 // stripe-oauth-callback function verifies before touching the database.
 
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const STATE_TTL_SECONDS = 60 * 30; // 30 minutes to complete the OAuth flow
+
+/**
+ * Authorize the caller for this tenant. Only a super admin, or a head_admin/
+ * admin belonging to THIS tenant, may start an OAuth flow — otherwise anyone
+ * with a project JWT (incl. a self-registered booking customer) could bind
+ * their own Stripe account to a victim tenant. Returns null when authorized,
+ * or an error Response when not.
+ */
+async function authorizeCaller(req: Request, tenantId: string): Promise<Response | null> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) return errorResponse('Missing authorization header', 401);
+
+  const supabaseAuth = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY')!
+  );
+  const token = authHeader.replace('Bearer ', '');
+  const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(token);
+  if (userError || !user) return errorResponse('Unauthorized', 401);
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
+  const { data: appUser } = await supabase
+    .from('app_users')
+    .select('is_super_admin, tenant_id, role')
+    .eq('auth_user_id', user.id)
+    .single();
+
+  if (appUser?.is_super_admin === true) return null;
+  const canManageOwnTenant =
+    appUser?.tenant_id === tenantId &&
+    (appUser?.role === 'head_admin' || appUser?.role === 'admin');
+  if (canManageOwnTenant) return null;
+
+  return errorResponse('Not authorized to connect Stripe for this tenant', 403);
+}
 
 function base64urlEncode(input: string): string {
   return btoa(input).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
@@ -52,6 +91,16 @@ Deno.serve(async (req) => {
     if (!origin || typeof origin !== 'string' || !/^https?:\/\//.test(origin)) {
       return errorResponse('origin must be a valid http(s) origin');
     }
+    // Reject delimiter injection — origin/tenantId are joined into the state
+    // payload with '|', so neither may contain it (would let a caller forge
+    // the expiry field on the other side of the split).
+    if (origin.includes('|') || tenantId.includes('|')) {
+      return errorResponse('Invalid characters in request');
+    }
+
+    // Only a super admin or this tenant's own admin may start the flow.
+    const authError = await authorizeCaller(req, tenantId);
+    if (authError) return authError;
 
     const clientId = Deno.env.get(
       mode === 'live' ? 'STRIPE_UAE_OAUTH_CLIENT_ID_LIVE' : 'STRIPE_UAE_OAUTH_CLIENT_ID_TEST'

@@ -47,11 +47,18 @@ Deno.serve(async (req) => {
     const account = await getTenantSubscriptionAccount(supabaseAdmin, tenantId);
     const stripe = getSubscriptionStripeClientForAccount(account, mode);
 
-    const { data: tenant } = await supabaseAdmin
+    const { data: tenant, error: tenantErr } = await supabaseAdmin
       .from("tenants")
-      .select("stripe_subscription_customer_id, name")
+      .select("stripe_subscription_customer_id, company_name")
       .eq("id", tenantId)
       .single();
+    // Was previously selecting a non-existent column ("name"), which errored
+    // silently → tenant null → a brand-new Stripe customer created and
+    // stripe_subscription_customer_id overwritten on EVERY purchase, severing
+    // invoice→tenant resolution in the subscription webhook.
+    if (tenantErr || !tenant) {
+      return errorResponse(`Tenant not found: ${tenantErr?.message ?? tenantId}`, 404);
+    }
 
     // Create or reuse Stripe customer. Customer IDs are account-specific:
     // tenants.stripe_subscription_customer_id was originally created on the UK
@@ -74,7 +81,7 @@ Deno.serve(async (req) => {
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
-        name: tenant?.name || undefined,
+        name: tenant?.company_name || undefined,
         metadata: { tenant_id: tenantId },
       });
       customerId = customer.id;

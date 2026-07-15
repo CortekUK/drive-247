@@ -126,13 +126,19 @@ Deno.serve(async (req) => {
       ? { own_stripe_account_id: connectedAccountId, own_stripe_connected_at: now }
       : { own_stripe_test_account_id: connectedAccountId, own_stripe_test_connected_at: now };
 
-    const { error: updateError } = await supabase
+    const { data: updatedRows, error: updateError } = await supabase
       .from('tenants')
       .update(update)
-      .eq('id', state.tenantId);
+      .eq('id', state.tenantId)
+      .select('id');
 
     if (updateError) {
       throw new Error(`Failed to store connected account: ${updateError.message}`);
+    }
+    // 0 rows updated = the tenant id in the (validly-signed) state no longer
+    // exists. Don't report success when nothing was stored.
+    if (!updatedRows || updatedRows.length === 0) {
+      throw new Error(`No tenant matched id ${state.tenantId} — connected account not stored`);
     }
 
     console.log(`[stripe-oauth-callback] Connected ${state.mode} account ${connectedAccountId} for tenant ${state.tenantId}`);

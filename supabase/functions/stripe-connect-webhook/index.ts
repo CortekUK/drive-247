@@ -114,14 +114,23 @@ serve(async (req) => {
           .select('id')
           .eq('own_stripe_account_id', account.id)
         if (ownLiveTenants && ownLiveTenants.length > 0) {
+          // Clear the id AND revert payment_model to 'managed'. Leaving a
+          // tenant on 'own' with no connected account would make every new
+          // live charge throw (the getConnectAccountId backstop) — a hard
+          // outage. Reverting restores a working charge path (legacy Express)
+          // until the operator reconnects; this needs human follow-up.
           const { error: ownLiveError } = await supabaseClient
             .from('tenants')
-            .update({ own_stripe_account_id: null, own_stripe_connected_at: null })
+            .update({
+              own_stripe_account_id: null,
+              own_stripe_connected_at: null,
+              payment_model: 'managed',
+            })
             .eq('own_stripe_account_id', account.id)
           if (ownLiveError) {
             console.error('Error clearing own_stripe_account_id on deauthorize:', ownLiveError)
           } else {
-            console.log(`Own Stripe LIVE account ${account.id} deauthorized — cleared from tenant(s)`)
+            console.warn(`Own Stripe LIVE account ${account.id} deauthorized — cleared + reverted tenant(s) to managed. MANUAL FOLLOW-UP NEEDED.`)
           }
           break
         }

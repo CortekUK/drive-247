@@ -19,7 +19,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
-import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type PlatformAccount } from "../_shared/stripe-client.ts";
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, getStripeClientForRecord, type PlatformAccount } from "../_shared/stripe-client.ts";
 // Vendored inline so the function deploys as a single self-contained file.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -65,6 +65,32 @@ async function getStripeContext(supabase: any, tenant: any): Promise<StripeConte
     return null;
   }
   const connectAccountId = tenant ? getConnectAccountId(tenant) : null;
+  const options = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
+  return { stripe, mode, platformAccount, connectAccountId, options, currencyCode: tenant?.currency_code || "USD" };
+}
+
+// Stripe context for charging a SAVED CARD stored on an EXISTING rental record.
+// The saved card/customer live on the platform the rental was CREATED on
+// (rentals.platform_account) — NOT the tenant's current model. After a UK→UAE
+// flip, a pre-flip rental's card still lives on UK; charging it with UAE keys
+// throws "No such customer". Mirror capture-deposit-hold / refresh-deposit-holds.
+function getRecordStripeContext(tenant: any, record: any): StripeContext | null {
+  const mode: "test" | "live" = tenant?.stripe_mode === "live" ? "live" : "test";
+  const platformAccount: PlatformAccount = record?.platform_account === "uae" ? "uae" : "uk";
+  let stripe: Stripe;
+  let connectAccountId: string | null;
+  try {
+    stripe = getStripeClientForRecord(record ?? {}, mode);
+    // Derive the connected account from the RECORD's platform, not the tenant's
+    // current model (payment_model may have flipped since the rental was created).
+    connectAccountId = getConnectAccountId({
+      ...(tenant ?? {}),
+      payment_model: platformAccount === "uae" ? "own" : "managed",
+    });
+  } catch (keyErr: any) {
+    console.warn(`[auto-extend] ${keyErr?.message ?? keyErr}`);
+    return null;
+  }
   const options = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
   return { stripe, mode, platformAccount, connectAccountId, options, currencyCode: tenant?.currency_code || "USD" };
 }
@@ -237,7 +263,7 @@ Deno.serve(async (req) => {
         auto_extend_enabled, auto_extend_charge_mode, auto_extend_period_unit, auto_extend_interval_count, auto_extend_exceptions, auto_extend_overrides,
         auto_extend_next_charge_at, auto_extend_lead_hours, auto_extend_charge_count,
         auto_extend_max_periods, auto_extend_failed_attempts, auto_extend_pending_extension_id,
-        auto_extend_status, status,
+        auto_extend_status, status, platform_account,
         deposit_hold_stripe_customer_id, deposit_hold_payment_method_id,
         customers!rentals_customer_id_fkey ( id, name, email, address_state ),
         vehicles ( make, model, reg )
@@ -521,22 +547,28 @@ Deno.serve(async (req) => {
         const hasSavedCard = !!(r.deposit_hold_stripe_customer_id && r.deposit_hold_payment_method_id);
         const mode = r.auto_extend_charge_mode || "pay_link";
 
-        // 4a. AUTO-CHARGE path — off-session on the saved card
-        if (mode === "auto_charge" && hasSavedCard && ctx) {
+        // 4a. AUTO-CHARGE path — off-session on the SAVED CARD. The card/customer
+        // live on the platform the RENTAL was created on (r.platform_account), so
+        // resolve the client + connected account from the RECORD, not the tenant's
+        // current model — otherwise a post-flip charge fails "No such customer".
+        const chargeCtx = (mode === "auto_charge" && hasSavedCard)
+          ? getRecordStripeContext(tenant, r)
+          : null;
+        if (mode === "auto_charge" && hasSavedCard && chargeCtx) {
           let piId: string | null = null;
           let piCaptured = false;
           let payId: string | null = null;
           try {
-            const pi = await ctx.stripe.paymentIntents.create({
+            const pi = await chargeCtx.stripe.paymentIntents.create({
               amount: Math.round(dueNow * 100),
-              currency: ctx.currencyCode.toLowerCase(),
+              currency: chargeCtx.currencyCode.toLowerCase(),
               customer: r.deposit_hold_stripe_customer_id,
               payment_method: r.deposit_hold_payment_method_id,
               off_session: true,
               confirm: true,
               description: `Auto-extension #${seq} for rental ${String(r.id).slice(0, 8).toUpperCase()}`,
               metadata: { rental_id: r.id, tenant_id: r.tenant_id, extension_id: ext.id, type: "auto_extension" },
-            }, ctx.options);
+            }, chargeCtx.options);
             piId = pi.id;
 
             if (pi.status !== "succeeded") throw new Error(`PaymentIntent status ${pi.status}`);
@@ -548,7 +580,7 @@ Deno.serve(async (req) => {
                 extension_id: ext.id, amount: dueNow, remaining_amount: dueNow,
                 payment_date: today, method: "Card", payment_type: "Payment",
                 status: "Completed", verification_status: "approved", capture_status: "captured",
-                stripe_payment_intent_id: pi.id, booking_source: "auto_extend", platform_account: ctx.platformAccount,
+                stripe_payment_intent_id: pi.id, booking_source: "auto_extend", platform_account: chargeCtx.platformAccount,
                 target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"],
                 created_at: nowIso, updated_at: nowIso,
               }).select("id").single();
@@ -583,7 +615,7 @@ Deno.serve(async (req) => {
               continue;
             }
             renewed++;
-            console.log(`[auto-extend] renewed ${r.id} ext#${seq} ${fmtCurrency(chargeTotal, ctx.currencyCode)}`);
+            console.log(`[auto-extend] renewed ${r.id} ext#${seq} ${fmtCurrency(chargeTotal, chargeCtx.currencyCode)}`);
             continue;
           } catch (chargeErr: any) {
             // If money was captured but a later step threw, refund it so the customer is
@@ -593,7 +625,7 @@ Deno.serve(async (req) => {
             if (piCaptured && piId) {
               let refundOk = false;
               try {
-                await ctx.stripe.refunds.create({ payment_intent: piId }, ctx.options);
+                await chargeCtx.stripe.refunds.create({ payment_intent: piId }, chargeCtx.options);
                 refundOk = true;
               } catch (rfErr: any) {
                 console.error(`[auto-extend] refund FAILED ${r.id} pi=${piId}: ${rfErr?.message}`);

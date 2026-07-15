@@ -13,7 +13,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
-import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode } from '../_shared/stripe-client.ts'
+import { getConnectAccountId, getStripeClientForRecord, type PlatformAccount, type StripeMode } from '../_shared/stripe-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -112,9 +112,30 @@ serve(async (req) => {
           .single()
         const stripeMode: StripeMode = (tenant?.stripe_mode as StripeMode) || 'test'
         const currency = (tenant?.currency_code || 'USD').toLowerCase()
-        const platformAccount = tenant ? getChargePlatformAccount(tenant) : 'uk'
-        const stripe = getStripeClientForAccount(platformAccount, stripeMode)
-        const stripeAccountId = tenant ? getConnectAccountId(tenant) : null
+
+        // The saved card (plan.stripe_customer_id / stripe_payment_method_id) lives on
+        // the platform account the plan's UPFRONT payment was created under — NOT the
+        // tenant's current model. installment_plans has no platform_account column, so
+        // anchor via the earliest Stripe payment on this rental (created before any
+        // UK→UAE flip). Charging the saved card with the current model after a flip
+        // throws "No such customer". Mirror refund-installment-payments' resolveForRecord.
+        let anchorPlatform: PlatformAccount = 'uk'
+        if (plan.rental_id) {
+          const { data: anchorPay } = await supabase
+            .from('payments')
+            .select('platform_account')
+            .eq('rental_id', plan.rental_id)
+            .not('stripe_payment_intent_id', 'is', null)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle()
+          if (anchorPay?.platform_account === 'uae') anchorPlatform = 'uae'
+        }
+        const platformAccount = anchorPlatform
+        const stripe = getStripeClientForRecord({ platform_account: platformAccount }, stripeMode)
+        const stripeAccountId = tenant
+          ? getConnectAccountId({ ...tenant, payment_model: platformAccount === 'uae' ? 'own' : 'managed' })
+          : null
         const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
 
         attempted++

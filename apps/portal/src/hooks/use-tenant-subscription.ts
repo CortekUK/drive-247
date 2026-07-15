@@ -188,8 +188,17 @@ export function useTenantSubscription() {
     trialEndMs != null &&
     trialEndMs <= Date.now();
 
+  // A tenant that already completed setup / went live is NOT a "new signup in
+  // trial". During the UK→UAE migration the new UAE subscription is created with
+  // a future trial_end (to defer the first charge to the UK period end), so it
+  // sits at status='trialing' for weeks even though the operator has been live
+  // for a long time. Treating that as an active trial wrongly re-triggers the
+  // Setup Mode UI. setup_completed_at is only ever set once a tenant goes live,
+  // so it reliably distinguishes a migrated live operator from a genuine trial.
+  const tenantAlreadyLive = !!tenant?.setup_completed_at;
+
   const isTrialing =
-    subscriptionQuery.data?.status === "trialing" && !trialExpired;
+    subscriptionQuery.data?.status === "trialing" && !trialExpired && !tenantAlreadyLive;
 
   const trialDaysRemaining = (() => {
     if (!isTrialing || !subscriptionQuery.data?.trial_end) return 0;

@@ -341,20 +341,28 @@ Deno.serve(async (req) => {
         `UK Express account has a pending balance of ${(expressBalance.pending / 100).toFixed(2)} ${cur} — funds will still pay out on the old account; do not close it until settled.`
       );
     }
+    // BLOCK if the tenant's CURRENT stripe_mode has no connected own-account.
+    // Flipping to 'own' without the current mode's account = every charge in
+    // that mode throws (getConnectAccountId backstop). This is the misroute
+    // guard: the flip must be impossible-to-green until the right account for
+    // the mode the tenant actually charges in is connected.
+    const currentMode = (tenant.stripe_mode as StripeMode) || "test";
+    const currentModeConnected = currentMode === "live" ? oauthLiveConnected : oauthTestConnected;
     if (alreadyOwn) {
       ownReasons.push(
         "Tenant already uses their own Stripe account for booking payments — no migration needed."
       );
+    } else if (!currentModeConnected) {
+      ownBlocked = true;
+      ownReasons.push(
+        `Operator's own Stripe account for the tenant's CURRENT mode (${currentMode}) is not connected via OAuth — connect it before flipping, or charges will fail. (Tenant charges in ${currentMode} mode.)`
+      );
     } else if (!oauthLiveConnected) {
+      // Current mode is connected (test) but live isn't — fine for a test run,
+      // warn so nobody goes live-charging without the live account.
       ownWarning = true;
       ownReasons.push(
-        "Operator's own Stripe account (live) is not yet connected via OAuth — connect it before flipping payment_model to 'own'."
-      );
-    }
-    if (!oauthTestConnected && !alreadyOwn) {
-      // Informational only — test OAuth is optional, but useful for dry runs.
-      ownReasons.push(
-        "Own Stripe test account not connected (optional — useful for a test-mode dry run before going live)."
+        "Own Stripe LIVE account not yet connected — connect it before this tenant charges in live mode."
       );
     }
 

@@ -42,7 +42,12 @@ export function useSetupStatus() {
     },
     enabled: !!tenant,
     staleTime: 15_000,
-    refetchInterval: isTrialing ? 30_000 : false,
+    // Only poll while a genuine new-signup trial is being set up. isTrialing already
+    // excludes migrated live operators (see use-tenant-subscription); also guard on
+    // setup_completed_at so a tenant that has already gone live never regresses into
+    // 30s setup polling because its migrated UAE subscription reads status='trialing'.
+    refetchInterval: (query) =>
+      isTrialing && !query.state.data?.setup_completed_at ? 30_000 : false,
   });
 
   const data = setupQuery.data;
