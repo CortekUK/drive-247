@@ -73,12 +73,9 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan, billi
       >
         {/* Plan name + inline badge */}
         <div className="flex items-start justify-between gap-3">
-          <div className="inline-flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-              <Sparkles className="h-4 w-4 text-primary" />
-            </div>
-            <h3 className="text-base font-semibold leading-tight">{plan.name}</h3>
-          </div>
+          <h3 className="inline-flex items-center rounded-full bg-muted px-3 py-1 text-sm font-semibold text-foreground">
+            {plan.name}
+          </h3>
           {!isCurrentPlan && hasTrial && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600">
               <Zap className="h-3 w-3" />
