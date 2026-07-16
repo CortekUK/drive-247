@@ -556,6 +556,11 @@ Deno.serve(async (req) => {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: form.toString(),
         });
+        // twilio-voice-inbound always self-returns 200 (even its error TwiML), so a
+        // non-200 here is a gateway/transport failure — don't hand its body back as "twiml".
+        if (!resp.ok) {
+          return errorResponse(`Preview render failed (twilio-voice-inbound returned ${resp.status})`, 502);
+        }
         const twiml = await resp.text();
 
         return jsonResponse({
@@ -565,7 +570,9 @@ Deno.serve(async (req) => {
           callForwardingEnabled: tenant.call_forwarding_enabled || false,
           forwardingCallerIdMode: tenant.forwarding_caller_id_mode || 'caller',
           forwardingNumber: tenant.forwarding_number || null,
-          whisperActive: tenant.forwarding_caller_id_mode === 'business_line',
+          // Reflects the ACTUAL returned TwiML (whisper also requires forwarding on + a
+          // forwarding number), not just the caller-id mode.
+          whisperActive: twiml.includes('twilio-voice-whisper'),
         });
       }
 

@@ -238,8 +238,8 @@ Deno.serve(async (req) => {
 
         // In business_line mode the staff phone shows the BUSINESS number, not the
         // customer's — so it can't resolve a contact name. Attach a "whisper" leg
-        // (twilio-voice-whisper) that announces the caller name and screens the call
-        // (press any key to accept). CNAM name-display is US-only, so this spoken
+        // (twilio-voice-whisper) that announces the caller name to the staff member
+        // before the call bridges. CNAM name-display is US-only, so this spoken
         // announcement is how we convey the name on international (e.g. UK) phones.
         const whisperName = customerName || normalizedFrom || 'an unknown number';
         const whisperUrlAttr = useBusinessLine
