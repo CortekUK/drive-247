@@ -1287,12 +1287,9 @@ const BookingCheckoutContent = () => {
                       <span className="font-medium">+{formatCurrency(totals.serviceFee)}</span>
                     </div>
                   )}
-                  {totals.deposit > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Pre-Authorization (hold at pickup)</span>
-                      <span className="font-medium text-muted-foreground">{formatCurrency(totals.deposit)}</span>
-                    </div>
-                  )}
+                  {/* Pre-Authorization is shown separately below the Grand Total
+                      (refundable card-validation hold, not part of the total). For the
+                      installment plan it is instead folded into "Pay Today" below. */}
                 </div>
 
                 <div className="pt-4 space-y-4">
@@ -1333,6 +1330,20 @@ const BookingCheckoutContent = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* Pre-Authorization — separate refundable hold shown BELOW the total.
+                      Full-payment only; for installments it is already part of "Pay Today". */}
+                  {(!selectedInstallmentPlan || selectedInstallmentPlan.type === 'full') && totals.deposit > 0 && (
+                    <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30 px-4 py-3">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="font-medium">Pre-Authorization hold</span>
+                        <span className="font-semibold">{formatCurrency(totals.deposit)}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        A temporary hold placed on your card to verify it — released after your rental. This is not part of your total.
+                      </p>
+                    </div>
+                  )}
 
                   <Button
                     className="w-full"

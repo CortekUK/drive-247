@@ -2018,13 +2018,9 @@ export default function BookingCheckoutStep({
                     </div>
                   )}
 
-                  {/* Pre-authorization line item - only show when > 0 */}
-                  {calculateSecurityDeposit() > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Pre-Authorization</span>
-                      <span className="font-medium">{fmt(calculateSecurityDeposit())}</span>
-                    </div>
-                  )}
+                  {/* Pre-authorization is intentionally NOT listed here — it is a
+                      refundable card-validation hold, not part of the total, so it is
+                      shown as a separate block BELOW the Grand Total (see below). */}
 
                   {/* Bonzah Insurance line item - only show when > 0 */}
                   {effectiveBonzahPremium > 0 && (
@@ -2088,6 +2084,21 @@ export default function BookingCheckoutStep({
                       </span>
                     </div>
                   </div>
+
+                  {/* Pre-Authorization — shown SEPARATELY below the total. It is a
+                      refundable hold placed on the card to validate it, NOT a charge,
+                      so it is deliberately excluded from the Grand Total above. */}
+                  {calculateSecurityDeposit() > 0 && (
+                    <div className="mt-3 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30 px-4 py-3">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="font-medium">Pre-Authorization hold</span>
+                        <span className="font-semibold">{fmt(calculateSecurityDeposit())}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        A temporary hold placed on your card to verify it — released after your rental. This is not part of your total.
+                      </p>
+                    </div>
+                  )}
 
                   <p className="text-xs text-muted-foreground mt-4">
                     You'll receive a digital receipt immediately.

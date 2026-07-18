@@ -5380,15 +5380,8 @@ const CreateRental = () => {
                             </div>
                           )}
 
-                          {effectiveDeposit > 0 && (
-                            <div className="flex items-center justify-between">
-                              <p className="text-xs text-muted-foreground">
-                                Pre-Authorization (hold at pickup)
-                                {depositOverride !== null && <span className="text-amber-500 ml-1">*</span>}
-                              </p>
-                              <p className="text-xs font-medium">{formatCurrency(effectiveDeposit, currency)}</p>
-                            </div>
-                          )}
+                          {/* Pre-Authorization is shown separately BELOW the Total
+                              (refundable card-validation hold, not part of the total). */}
 
                           {(taxOverride !== null || serviceFeeOverride !== null || depositOverride !== null || deliveryFeeOverride !== null || collectionFeeOverride !== null) && (
                             <p className="text-[10px] text-amber-500">* Manually adjusted</p>
@@ -5405,8 +5398,11 @@ const CreateRental = () => {
                           </div>
                           {effectiveDeposit > 0 && subtotal > 0 && (
                             <div className="flex items-center justify-between">
-                              <p className="text-[10px] text-muted-foreground">Incl. pre-auth hold</p>
-                              <p className="text-[10px] text-muted-foreground">{formatCurrency(Math.max(0, grandTotal), currency)}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                + Pre-authorization hold at pickup (released after return)
+                                {depositOverride !== null && <span className="text-amber-500 ml-1">*</span>}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground">{formatCurrency(effectiveDeposit, currency)}</p>
                             </div>
                           )}
                         </div>
