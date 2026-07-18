@@ -25,12 +25,15 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- Only TRANSACTIONAL types dispatch a per-event email. Reminder/digest types
+  -- (return_overdue, pickup_reminder, preauth_expiring, rental_reminder,
+  -- insurance_reminder) keep their own in-function digest email, so they are
+  -- excluded here to avoid double-sending.
   IF NEW.type NOT IN (
-      'payment_received','payment_failed','refund_processed','preauth_expiring',
-      'fine_new','signing_completed','identity_verified','booking_approved',
-      'booking_rejected','booking_cancelled','pickup_reminder','rental_started',
-      'rental_extended','rental_completed','return_overdue','rental_reminder',
-      'insurance_reminder'
+      'payment_received','payment_failed','refund_processed',
+      'fine_new','signing_completed','identity_verified',
+      'booking_approved','booking_rejected','booking_cancelled',
+      'rental_started','rental_completed','rental_extended'
   ) THEN
     RETURN NEW;
   END IF;
@@ -42,15 +45,10 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- Pass ONLY the id; the function re-reads the row (never trusts caller content).
   PERFORM net.http_post(
     url     := 'https://hviqoaokxvlancmftwuo.supabase.co/functions/v1/notify-operator-email',
-    body    := jsonb_build_object(
-                 'tenant_id', NEW.tenant_id,
-                 'type',      NEW.type,
-                 'title',     NEW.title,
-                 'message',   NEW.message,
-                 'link',      NEW.link
-               ),
+    body    := jsonb_build_object('notification_id', NEW.id),
     headers := jsonb_build_object('Content-Type','application/json')
   );
 
