@@ -1039,9 +1039,9 @@ serve(async (req) => {
             }
           }
 
-          // PORTAL BELL: a captured payment just landed — notify all operators
-          // of the tenant. Fires once per settled payment; dedupe on the payment
-          // id guards webhook retries. notifyOperatorsInApp never throws.
+          // OPERATOR EMAIL for a captured payment. The in-app BELL is now emitted
+          // universally by the notify_payment_received() DB trigger on public.payments
+          // (which fires from EVERY settlement path), so there is no bell call here.
           if (finalPaymentId) {
             let bellTenantId = (session.metadata?.tenant_id as string | undefined) || undefined;
             if (!bellTenantId) {
@@ -1056,17 +1056,8 @@ serve(async (req) => {
               const bellAmount = session.amount_total ? session.amount_total / 100 : 0;
               const bellCurrency = (session.currency || "USD").toUpperCase();
               const bellRef = rentalId ? rentalId.substring(0, 8).toUpperCase() : "";
-              await notifyOperatorsInApp({
-                tenantId: bellTenantId,
-                type: "payment_received",
-                title: "Payment received",
-                message: `Payment of ${formatCurrency(bellAmount, bellCurrency)} received for booking ${bellRef}`,
-                link: rentalId ? `/rentals/${rentalId}` : "/invoices",
-                metadata: { rental_id: rentalId, payment_id: finalPaymentId, amount: bellAmount },
-                dedupeKey: finalPaymentId,
-              });
-
-              // OPERATOR EMAIL (in addition to the always-on bell above). Gated on
+              // OPERATOR EMAIL. The in-app bell is emitted by the
+              // notify_payment_received() DB trigger, so only the email is sent here. Gated on
               // the master email switch + "payments" category pref, and sent to the
               // configured notification recipient (notification_recipient_email ->
               // contact_email -> admin_email -> env ADMIN_EMAIL). Bell + customer
@@ -1339,16 +1330,29 @@ serve(async (req) => {
         // Notify customer of failed payment
         const rentalId = paymentIntent.metadata?.rental_id;
         if (rentalId) {
-          // Get customer details
+          // Get customer + tenant details
           const { data: rental } = await supabase
             .from("rentals")
-            .select("customer:customers(name, email, phone)")
+            .select("tenant_id, customer:customers(name, email, phone)")
             .eq("id", rentalId)
             .single();
 
           if (rental?.customer) {
-            // Could trigger a notification here
             console.log("Payment failed for customer:", rental.customer.email);
+          }
+
+          // Operator bell: a card payment failed. Always-on, broadcast, deduped
+          // on the payment_intent id (guards webhook retries). Never throws.
+          if (rental?.tenant_id) {
+            await notifyOperatorsInApp({
+              tenantId: rental.tenant_id,
+              type: "payment_failed",
+              title: "Payment failed",
+              message: `A card payment${paymentIntent.amount ? ` of ${formatCurrency(paymentIntent.amount / 100, (paymentIntent.currency || "usd").toUpperCase())}` : ""} failed${rental.customer?.name ? ` for ${rental.customer.name}` : ""} (booking ${rentalId.substring(0, 8).toUpperCase()}).`,
+              link: `/rentals/${rentalId}`,
+              metadata: { rental_id: rentalId, payment_intent: paymentIntent.id, amount: paymentIntent.amount ? paymentIntent.amount / 100 : null },
+              dedupeKey: paymentIntent.id,
+            });
           }
         }
         break;
