@@ -3614,7 +3614,17 @@ const CreateRental = () => {
                               const holidayGroups: Record<string, { name: string; items: DayBreakdown[]; surcharge: number }> = {};
                               if (breakdownResult) {
                                 for (const d of breakdownResult.dayBreakdown) {
-                                  if (d.type === 'holiday') {
+                                  if (d.appliedSurcharges && d.appliedSurcharges.length > 1) {
+                                    // Stacked day (2+ surcharges) — group under the combined label so the
+                                    // breakdown honestly reads e.g. "Birthday + Weekend (+10100%)" instead
+                                    // of hiding one surcharge under the other.
+                                    const label = d.appliedSurcharges.map(s => s.label).join(' + ');
+                                    const key = `stack::${label}::${d.surchargePercent}`;
+                                    if (!holidayGroups[key]) {
+                                      holidayGroups[key] = { name: label, items: [], surcharge: d.surchargePercent };
+                                    }
+                                    holidayGroups[key].items.push(d);
+                                  } else if (d.type === 'holiday') {
                                     const key = `${d.holidayName ?? 'Holiday'}::${d.surchargePercent}`;
                                     if (!holidayGroups[key]) {
                                       holidayGroups[key] = { name: d.holidayName ?? 'Holiday', items: [], surcharge: d.surchargePercent };

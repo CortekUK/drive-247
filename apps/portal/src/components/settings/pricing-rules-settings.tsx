@@ -55,6 +55,7 @@ export function PricingRulesSettings({ onDirtyChange }: PricingRulesSettingsProp
   // Weekend form state
   const [weekendPercent, setWeekendPercent] = useState<number | ''>(weekendSettings.weekend_surcharge_percent || '');
   const [weekendDays, setWeekendDays] = useState<number[]>(weekendSettings.weekend_days || [6, 0]);
+  const [stackSurcharges, setStackSurcharges] = useState<boolean>(weekendSettings.stack_surcharges ?? false);
   const [weekendDirty, setWeekendDirty] = useState(false);
 
   // Report dirty state to parent
@@ -80,9 +81,10 @@ export function PricingRulesSettings({ onDirtyChange }: PricingRulesSettingsProp
     if (!weekendLoading) {
       setWeekendPercent(weekendSettings.weekend_surcharge_percent || '');
       setWeekendDays(weekendSettings.weekend_days || [6, 0]);
+      setStackSurcharges(weekendSettings.stack_surcharges ?? false);
       setWeekendDirty(false);
     }
-  }, [weekendLoading, weekendSettings.weekend_surcharge_percent, weekendSettings.weekend_days]);
+  }, [weekendLoading, weekendSettings.weekend_surcharge_percent, weekendSettings.weekend_days, weekendSettings.stack_surcharges]);
 
   const handleWeekendDayToggle = (day: number) => {
     if (!weekendDays.includes(day) && weekendDays.length >= 3) {
@@ -99,6 +101,7 @@ export function PricingRulesSettings({ onDirtyChange }: PricingRulesSettingsProp
     await updateWeekend({
       weekend_surcharge_percent: Number(weekendPercent) || 0,
       weekend_days: weekendDays,
+      stack_surcharges: stackSurcharges,
     });
     setWeekendDirty(false);
   };
@@ -220,6 +223,21 @@ export function PricingRulesSettings({ onDirtyChange }: PricingRulesSettingsProp
                 })}
               </div>
             </div>
+          </div>
+
+          {/* Surcharge stacking — applies to weekend + holiday surcharges together */}
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div className="space-y-0.5 pr-4">
+              <Label htmlFor="stack-surcharges" className="text-sm">Stack surcharges</Label>
+              <p className="text-xs text-muted-foreground">
+                When a day matches more than one surcharge (e.g. a weekend that&apos;s also a holiday), apply them all added together. Off = only the highest one applies.
+              </p>
+            </div>
+            <Switch
+              id="stack-surcharges"
+              checked={stackSurcharges}
+              onCheckedChange={(v) => { setStackSurcharges(v); setWeekendDirty(true); }}
+            />
           </div>
 
           <div className="flex justify-end">

@@ -1635,7 +1635,7 @@ const MultiStepBookingWidget = () => {
     let dayBreakdown: import("@/lib/calculate-rental-price").DayBreakdown[] = [];
     if (formData.pickupDate && formData.dropoffDate) {
       const weekendConfig = (tenant?.weekend_surcharge_percent && tenant.weekend_surcharge_percent > 0)
-        ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0] }
+        ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0], stack_surcharges: tenant.stack_surcharges ?? false }
         : null;
 
       const result = calculateRentalPriceBreakdown(
@@ -2468,7 +2468,7 @@ const MultiStepBookingWidget = () => {
 
     // Use shared utility with dynamic pricing for daily tier
     const weekendConfig = (tenant?.weekend_surcharge_percent && tenant.weekend_surcharge_percent > 0)
-      ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0] }
+      ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0], stack_surcharges: tenant.stack_surcharges ?? false }
       : null;
 
     const result = calculateRentalPriceBreakdown(
@@ -2531,7 +2531,7 @@ const MultiStepBookingWidget = () => {
 
     // Shared weekend/holiday surcharge config (used across all tiers)
     const weekendConfig = (tenant?.weekend_surcharge_percent && tenant.weekend_surcharge_percent > 0)
-      ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0] }
+      ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0], stack_surcharges: tenant.stack_surcharges ?? false }
       : null;
 
     // Determine primary price based on duration (matching pricing tiers)

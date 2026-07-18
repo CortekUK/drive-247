@@ -159,6 +159,7 @@ export interface Tenant {
   monthly_tier_days: number | null;
   weekend_surcharge_percent: number | null;
   weekend_days: number[] | null;
+  stack_surcharges: boolean | null;
 
   // Maintenance banner
   maintenance_banner_enabled: boolean | null;
@@ -449,6 +450,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           monthly_tier_days,
           weekend_surcharge_percent,
           weekend_days,
+          stack_surcharges,
           maintenance_banner_enabled,
           maintenance_banner_message,
           buffer_time_minutes,

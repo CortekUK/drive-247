@@ -6,11 +6,15 @@ import { toast } from '@/hooks/use-toast';
 export interface WeekendPricingSettings {
   weekend_surcharge_percent: number;
   weekend_days: number[]; // JS day numbers: 0=Sun...6=Sat
+  // When true, ALL applicable surcharges stack additively on a day instead of
+  // only the highest/priority one applying. Off by default.
+  stack_surcharges: boolean;
 }
 
 const DEFAULTS: WeekendPricingSettings = {
   weekend_surcharge_percent: 0,
   weekend_days: [6, 0],
+  stack_surcharges: false,
 };
 
 export const useWeekendPricing = () => {
@@ -24,7 +28,7 @@ export const useWeekendPricing = () => {
 
       const { data, error } = await (supabase as any)
         .from('tenants')
-        .select('weekend_surcharge_percent, weekend_days')
+        .select('weekend_surcharge_percent, weekend_days, stack_surcharges')
         .eq('id', tenant.id)
         .single();
 
@@ -33,6 +37,7 @@ export const useWeekendPricing = () => {
       return {
         weekend_surcharge_percent: data?.weekend_surcharge_percent ?? 0,
         weekend_days: data?.weekend_days ?? [6, 0],
+        stack_surcharges: data?.stack_surcharges ?? false,
       };
     },
     enabled: !!tenant?.id,

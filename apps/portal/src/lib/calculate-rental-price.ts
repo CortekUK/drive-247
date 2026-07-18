@@ -29,6 +29,8 @@ export interface VehicleRates {
 export interface TenantWeekendConfig {
   weekend_surcharge_percent: number;
   weekend_days: number[]; // JS day numbers: 0=Sun, 1=Mon, ..., 6=Sat
+  // When true, all applicable surcharges stack additively (see calculateRentalPriceBreakdown).
+  stack_surcharges?: boolean;
 }
 
 export interface Holiday {
@@ -59,6 +61,10 @@ export interface DayBreakdown {
   baseRate: number;
   surchargePercent: number;
   effectiveRate: number;
+  // When surcharge stacking is enabled, the individual surcharges applied to this
+  // day (weekend + each matching holiday). Empty/undefined in the default
+  // (non-stacking) path. surchargePercent is their sum in stacking mode.
+  appliedSurcharges?: { label: string; percent: number }[];
 }
 
 export type PricingTier = 'daily' | 'weekly' | 'monthly';
@@ -158,10 +164,76 @@ function getDayRate(
   weekendConfig: TenantWeekendConfig | null,
   holidays: Holiday[],
   overrides: VehicleOverride[],
-  vehicleId?: string
+  vehicleId?: string,
+  stackSurcharges: boolean = false
 ): DayBreakdown {
   const dayOfWeek = date.getDay();
   const dateStr = formatDate(date);
+
+  // ── STACKING MODE ─────────────────────────────────────────────────────────
+  // When enabled, EVERY applicable surcharge applies additively (not by priority):
+  //   effectiveRate = base * (1 + sum(weekend% + each holiday%)/100).
+  // A fixed_price override is absolute and cannot stack (holiday wins over weekend).
+  // 'excluded' overrides drop that rule. This whole branch is skipped when the
+  // toggle is off, so the default pricing path below is byte-for-byte unchanged.
+  if (stackSurcharges) {
+    const applied: { label: string; percent: number }[] = [];
+    let type: DayBreakdown['type'] = 'regular';
+    let holidayName: string | undefined;
+
+    const stackHoliday = findMatchingHoliday(date, holidays, vehicleId);
+    const stackHolidayOv = stackHoliday
+      ? overrides.find(o => o.rule_type === 'holiday' && o.holiday_id === stackHoliday.id)
+      : undefined;
+    const stackWeekendMatch = !!(
+      weekendConfig &&
+      weekendConfig.weekend_surcharge_percent > 0 &&
+      weekendConfig.weekend_days?.includes(dayOfWeek)
+    );
+    const stackWeekendOv = stackWeekendMatch
+      ? overrides.find(o => o.rule_type === 'weekend')
+      : undefined;
+
+    // Fixed-price overrides are absolute → they win the day, no stacking (holiday first).
+    if (stackHoliday && stackHolidayOv?.override_type === 'fixed_price' && stackHolidayOv.fixed_price != null) {
+      return { date: dateStr, dayOfWeek, type: 'holiday', holidayName: stackHoliday.name, baseRate, surchargePercent: 0, effectiveRate: stackHolidayOv.fixed_price, appliedSurcharges: [] };
+    }
+    if (stackWeekendMatch && stackWeekendOv?.override_type === 'fixed_price' && stackWeekendOv.fixed_price != null) {
+      return { date: dateStr, dayOfWeek, type: 'weekend', baseRate, surchargePercent: 0, effectiveRate: stackWeekendOv.fixed_price, appliedSurcharges: [] };
+    }
+
+    // Holiday percentage (skip if excluded).
+    if (stackHoliday && stackHolidayOv?.override_type !== 'excluded') {
+      const pct = (stackHolidayOv?.override_type === 'custom_percent' && stackHolidayOv.custom_percent != null)
+        ? stackHolidayOv.custom_percent
+        : stackHoliday.surcharge_percent;
+      type = 'holiday';
+      holidayName = stackHoliday.name;
+      if (pct) applied.push({ label: stackHoliday.name, percent: pct });
+    }
+
+    // Weekend percentage (skip if excluded/fixed).
+    if (stackWeekendMatch && weekendConfig && stackWeekendOv?.override_type !== 'excluded' && stackWeekendOv?.override_type !== 'fixed_price') {
+      const pct = (stackWeekendOv?.override_type === 'custom_percent' && stackWeekendOv.custom_percent != null)
+        ? stackWeekendOv.custom_percent
+        : weekendConfig.weekend_surcharge_percent;
+      if (type === 'regular') type = 'weekend';
+      if (pct) applied.push({ label: 'Weekend', percent: pct });
+    }
+
+    const totalPct = applied.reduce((s, a) => s + a.percent, 0);
+    return {
+      date: dateStr,
+      dayOfWeek,
+      type,
+      holidayName,
+      baseRate,
+      surchargePercent: totalPct,
+      effectiveRate: Math.round(baseRate * (1 + totalPct / 100) * 100) / 100,
+      appliedSurcharges: applied,
+    };
+  }
+  // ── DEFAULT (highest/priority wins) — unchanged ───────────────────────────
 
   // 1. Check for holiday match
   const holiday = findMatchingHoliday(date, holidays, vehicleId);
@@ -311,7 +383,10 @@ export function calculateRentalPriceBreakdown(
   // flat tier base rate. Used for auto-extend ("set price") rentals, where the
   // operator advertises a fixed rate and the seasonal markups should apply to
   // short-term rentals only.
-  skipSurcharges: boolean = false
+  skipSurcharges: boolean = false,
+  // When true, all applicable weekend/holiday surcharges stack additively on a day
+  // instead of only the highest/priority one applying. Off by default.
+  stackSurcharges: boolean = false
 ): RentalPriceResult {
   const pickup = parseDateString(pickupDate);
   const dropoff = parseDateString(dropoffDate);
@@ -325,6 +400,11 @@ export function calculateRentalPriceBreakdown(
   const effectiveWeekendConfig = skipSurcharges ? null : (weekendConfig || null);
   const safeHolidays = skipSurcharges ? [] : (holidays || []);
   const safeOverrides = skipSurcharges ? [] : (overrides || []);
+
+  // Stacking can be turned on either explicitly (param) or via the tenant's
+  // weekend config (stack_surcharges) so callers that already pass weekendConfig
+  // don't each need a new argument.
+  const stack = stackSurcharges || Boolean(weekendConfig?.stack_surcharges);
 
   // Run the per-day surcharge loop for any tier given its per-day base rate.
   // Non-surcharge days cost `perDayRate`; weekend/holiday days carry the surcharge.
@@ -341,7 +421,8 @@ export function calculateRentalPriceBreakdown(
         effectiveWeekendConfig,
         safeHolidays,
         safeOverrides,
-        vehicleId
+        vehicleId,
+        stack
       );
 
       breakdown.push(dayInfo);

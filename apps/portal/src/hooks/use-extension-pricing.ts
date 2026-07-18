@@ -75,7 +75,7 @@ export function useExtensionPricing({
           .single(),
         (supabase as any)
           .from('tenants')
-          .select('weekend_surcharge_percent, weekend_days')
+          .select('weekend_surcharge_percent, weekend_days, stack_surcharges')
           .eq('id', tenant!.id)
           .single(),
       ]);
@@ -88,6 +88,7 @@ export function useExtensionPricing({
           ? {
               weekend_surcharge_percent: tenantRes.data.weekend_surcharge_percent,
               weekend_days: tenantRes.data.weekend_days || [6, 0],
+              stack_surcharges: tenantRes.data.stack_surcharges ?? false,
             } as WeekendConfig
           : null,
       };

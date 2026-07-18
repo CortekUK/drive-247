@@ -74,6 +74,7 @@ export function useExtensionPricing({
     return {
       weekend_surcharge_percent: tenant.weekend_surcharge_percent,
       weekend_days: (tenant as any).weekend_days || [6, 0],
+      stack_surcharges: (tenant as any).stack_surcharges ?? false,
     };
   }, [tenant]);
 

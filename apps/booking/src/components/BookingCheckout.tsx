@@ -115,7 +115,7 @@ const BookingCheckout = () => {
   const calculateVehiclePrice = () => {
     if (!vehicleDetails) return 0;
     const weekendConfig = (tenant?.weekend_surcharge_percent && tenant.weekend_surcharge_percent > 0)
-      ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0] }
+      ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0], stack_surcharges: (tenant as any).stack_surcharges ?? false }
       : null;
     const result = calculateRentalPriceBreakdown(
       pickupDate,

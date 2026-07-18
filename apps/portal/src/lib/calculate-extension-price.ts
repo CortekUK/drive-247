@@ -10,6 +10,7 @@
 export interface WeekendConfig {
   weekend_surcharge_percent: number;
   weekend_days: number[]; // JS day numbers: 0=Sun, 1=Mon, ..., 6=Sat
+  stack_surcharges?: boolean; // when true, weekend + holiday surcharges apply additively
 }
 
 export interface Holiday {
@@ -40,6 +41,7 @@ export interface DayBreakdown {
   baseRate: number;
   surchargePercent: number;
   effectiveRate: number;
+  appliedSurcharges?: { label: string; percent: number }[]; // populated in stacking mode
 }
 
 export interface ExtensionPriceResult {
@@ -117,6 +119,71 @@ function getDayRate(
 ): DayBreakdown {
   const dayOfWeek = date.getDay();
   const dateStr = formatDate(date);
+
+  // ── STACKING MODE ─────────────────────────────────────────────────────────
+  // When enabled (weekendConfig.stack_surcharges), EVERY applicable surcharge
+  // applies additively: effectiveRate = base * (1 + sum(weekend% + holiday%)/100).
+  // A fixed_price override is absolute (holiday wins over weekend); 'excluded'
+  // drops that rule. Skipped when off, so the default path below is unchanged.
+  // Mirrors apps/portal/src/lib/calculate-rental-price.ts.
+  if (weekendConfig?.stack_surcharges) {
+    const applied: { label: string; percent: number }[] = [];
+    let type: DayBreakdown['type'] = 'regular';
+    let holidayNameOut: string | undefined;
+
+    const stackHoliday = findMatchingHoliday(date, holidays, vehicleId);
+    const stackHolidayOv = stackHoliday
+      ? overrides.find(o => o.rule_type === 'holiday' && o.holiday_id === stackHoliday.id)
+      : undefined;
+    const stackWeekendMatch = !!(
+      weekendConfig &&
+      weekendConfig.weekend_surcharge_percent > 0 &&
+      weekendConfig.weekend_days?.includes(dayOfWeek)
+    );
+    const stackWeekendOv = stackWeekendMatch
+      ? overrides.find(o => o.rule_type === 'weekend')
+      : undefined;
+
+    // Fixed-price overrides are absolute → they win the day, no stacking (holiday first).
+    if (stackHoliday && stackHolidayOv?.override_type === 'fixed_price' && stackHolidayOv.fixed_price != null) {
+      return { date: dateStr, dayOfWeek, type: 'holiday', holidayName: stackHoliday.name, baseRate, surchargePercent: 0, effectiveRate: stackHolidayOv.fixed_price, appliedSurcharges: [] };
+    }
+    if (stackWeekendMatch && stackWeekendOv?.override_type === 'fixed_price' && stackWeekendOv.fixed_price != null) {
+      return { date: dateStr, dayOfWeek, type: 'weekend', baseRate, surchargePercent: 0, effectiveRate: stackWeekendOv.fixed_price, appliedSurcharges: [] };
+    }
+
+    // Holiday percentage (skip if excluded).
+    if (stackHoliday && stackHolidayOv?.override_type !== 'excluded') {
+      const pct = (stackHolidayOv?.override_type === 'custom_percent' && stackHolidayOv.custom_percent != null)
+        ? stackHolidayOv.custom_percent
+        : stackHoliday.surcharge_percent;
+      type = 'holiday';
+      holidayNameOut = stackHoliday.name;
+      if (pct) applied.push({ label: stackHoliday.name, percent: pct });
+    }
+
+    // Weekend percentage (skip if excluded/fixed).
+    if (stackWeekendMatch && weekendConfig && stackWeekendOv?.override_type !== 'excluded' && stackWeekendOv?.override_type !== 'fixed_price') {
+      const pct = (stackWeekendOv?.override_type === 'custom_percent' && stackWeekendOv.custom_percent != null)
+        ? stackWeekendOv.custom_percent
+        : weekendConfig.weekend_surcharge_percent;
+      if (type === 'regular') type = 'weekend';
+      if (pct) applied.push({ label: 'Weekend', percent: pct });
+    }
+
+    const totalPct = applied.reduce((s, a) => s + a.percent, 0);
+    return {
+      date: dateStr,
+      dayOfWeek,
+      type,
+      holidayName: holidayNameOut,
+      baseRate,
+      surchargePercent: totalPct,
+      effectiveRate: Math.round(baseRate * (1 + totalPct / 100) * 100) / 100,
+      appliedSurcharges: applied,
+    };
+  }
+  // ── DEFAULT (highest/priority wins) — unchanged ───────────────────────────
 
   // 1. Check for holiday match
   const holiday = findMatchingHoliday(date, holidays, vehicleId);
