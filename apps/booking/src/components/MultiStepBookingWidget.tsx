@@ -15,6 +15,7 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { rentalOccupiesWindow, todayStr } from "@/lib/vehicle-availability";
 import { toast } from "sonner";
 import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, AlertTriangle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase, ExternalLink, Mail, Phone as PhoneIcon, Maximize2 } from "lucide-react";
 import { BlurredImage } from "@/components/ui/blurred-image";
@@ -230,7 +231,7 @@ const MultiStepBookingWidget = () => {
     return () => { clearTimeout(transitionTimerRef.current); clearTimeout(transitionTimer2Ref.current); };
   }, []);
   const [existingRentals, setExistingRentals] = useState<ExistingRental[]>([]); // Completed rentals for buffer time checking
-  const [liveRentalRanges, setLiveRentalRanges] = useState<{ vehicle_id: string; start_date: string; end_date: string | null }[]>([]); // Live rentals with dates — excludes ONLY vehicles booked over the chosen window
+  const [liveRentalRanges, setLiveRentalRanges] = useState<{ vehicle_id: string; start_date: string; end_date: string | null; status: string | null }[]>([]); // Live rentals with dates + status — excludes vehicles booked over the chosen window OR still out on an overdue Active rental
   const [blockedDateRanges, setBlockedDateRanges] = useState<{ vehicle_id: string | null; start_date: string; end_date: string }[]>([]); // Manual blocked_dates (e.g. car rented on Turo); filtered by date overlap at render time
   const submitInFlightRef = useRef(false); // Synchronous re-entrancy lock — blocks double-click duplicate submits before `loading` state updates
   const [errors, setErrors] = useState<{
@@ -1143,12 +1144,12 @@ const MultiStepBookingWidget = () => {
     // A NULL end_date is an open-ended/PAYG rental — it blocks from start onward.
     const { data: liveRentals } = await supabase
       .from("rentals")
-      .select("vehicle_id, start_date, end_date")
+      .select("vehicle_id, start_date, end_date, status")
       .eq("tenant_id", tenant.id)
       .not("status", "in", "(Cancelled,Rejected,Closed,Completed)")
       .not("vehicle_id", "is", null);
 
-    setLiveRentalRanges((liveRentals as { vehicle_id: string; start_date: string; end_date: string | null }[]) || []);
+    setLiveRentalRanges((liveRentals as { vehicle_id: string; start_date: string; end_date: string | null; status: string | null }[]) || []);
 
     // Manual blocks (blocked_dates) — operator-marked unavailable windows such as a
     // car rented out on Turo. Loaded once here; the date-overlap filter runs at
@@ -2750,13 +2751,16 @@ const MultiStepBookingWidget = () => {
         });
       }
 
-      // Filter out vehicles whose LIVE rental overlaps the chosen window.
-      // Overlap: rental.start <= dropoff AND (rental.end >= pickup OR rental.end is null).
-      // NULL end_date = open-ended/PAYG rental, which blocks from its start onward.
+      // Filter out vehicles whose LIVE rental occupies the chosen window.
+      // Occupied = overlaps the window, OR is an Active rental whose end_date is
+      // already past (car physically still out — stale/overdue). See
+      // rentalOccupiesWindow in lib/vehicle-availability.ts (shared with the
+      // vehicles page so both stay consistent).
       if (liveRentalRanges.length > 0) {
+        const today = todayStr();
         const bookedIds = new Set(
           liveRentalRanges
-            .filter(r => r.start_date <= formData.dropoffDate && (r.end_date == null || r.end_date >= formData.pickupDate))
+            .filter(r => rentalOccupiesWindow(r, formData.pickupDate, formData.dropoffDate, today))
             .map(r => r.vehicle_id)
             .filter(Boolean) as string[]
         );

@@ -114,7 +114,19 @@ export const useVehicleBookedDates = (vehicleId: string | undefined, excludeRent
       const [sy, sm, sd] = rental.start_date.split("-").map(Number);
       const start = new Date(sy, sm - 1, sd);
       const [ey, em, ed] = rental.end_date.split("-").map(Number);
-      const end = new Date(ey, em - 1, ed);
+      let end = new Date(ey, em - 1, ed);
+
+      // Overdue Active rental = the car is physically still out (stale/past
+      // end_date from a paused/unrolled auto-extend, or a rental not yet closed).
+      // Extend the occupied range forward (capped) so the operator's calendar
+      // doesn't show the vehicle as free — consistent with the booking-site
+      // rentalOccupiesWindow rule.
+      const _today = new Date();
+      _today.setHours(0, 0, 0, 0);
+      if (type === "active" && end < _today) {
+        end = new Date(_today);
+        end.setDate(end.getDate() + 365);
+      }
 
       const current = new Date(start);
       while (current <= end) {

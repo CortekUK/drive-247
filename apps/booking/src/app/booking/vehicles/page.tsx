@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
+import { rentalOccupiesWindow, todayStr, type OccupancyRental } from "@/lib/vehicle-availability";
 import { toast } from "sonner";
 import { useBookingStore } from "@/stores/booking-store";
 import { Car, Users, Briefcase, Check, ArrowLeft, Loader2 } from "lucide-react";
@@ -159,17 +160,24 @@ const BookingVehiclesContent = () => {
       if (tenant?.id && pickupDate && returnDate) {
         const rentReqStart = pickupDate.split("T")[0];
         const rentReqEnd = returnDate.split("T")[0];
-        const { data: blockedRentals } = await supabase
+        // Fetch all OPEN rentals and decide occupancy with the shared rule so an
+        // Active-but-overdue rental (stale/past end_date = car still out) also
+        // blocks the vehicle — same rule the homepage widget uses.
+        const { data: openRentals } = await supabase
           .from("rentals")
-          .select("vehicle_id")
+          .select("vehicle_id, start_date, end_date, status")
           .eq("tenant_id", tenant.id)
           .not("status", "in", "(Cancelled,Rejected,Closed,Completed)")
-          .not("vehicle_id", "is", null)
-          .lte("start_date", rentReqEnd)
-          .or(`end_date.gte.${rentReqStart},end_date.is.null`);
+          .not("vehicle_id", "is", null);
 
-        if (blockedRentals && blockedRentals.length > 0) {
-          const blockedIds = new Set(blockedRentals.map(r => r.vehicle_id).filter(Boolean));
+        if (openRentals && openRentals.length > 0) {
+          const today = todayStr();
+          const blockedIds = new Set(
+            (openRentals as OccupancyRental[])
+              .filter(r => rentalOccupiesWindow(r, rentReqStart, rentReqEnd, today))
+              .map(r => r.vehicle_id)
+              .filter(Boolean)
+          );
           filteredData = filteredData.filter(v => !blockedIds.has(v.id));
         }
       }
