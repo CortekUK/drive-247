@@ -68,6 +68,7 @@ import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-do
 import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
 import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
 import { useVehiclePricingOverrides } from "@/hooks/use-vehicle-pricing-overrides";
+import { useVehicleDailyPrices } from "@/hooks/use-vehicle-daily-prices";
 import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
 import { calculateRentalPriceBreakdown, type DayBreakdown } from "@/lib/calculate-rental-price";
 import { calcExtrasTotal, extraLineTotal } from "@/lib/calculate-extras-total";
@@ -608,6 +609,8 @@ const CreateRental = () => {
 
   // Dynamic pricing: vehicle-specific overrides
   const { overrides: vehiclePricingOverrides } = useVehiclePricingOverrides(selectedVehicleId || undefined);
+  // Turo-style per-day manual prices for the selected vehicle.
+  const { prices: vehicleDailyPrices } = useVehicleDailyPrices(selectedVehicleId || undefined);
 
   // Fetch source rental for renewal
   const { data: renewalSource } = useQuery({
@@ -1029,6 +1032,8 @@ const CreateRental = () => {
       // surcharges so they don't ride into the stored monthly_amount (which the
       // renewal cron then bills every cycle). Markups stay on short-term rentals.
       isAutoExtend,
+      false, // stackSurcharges is also resolved from weekendConfig.stack_surcharges
+      vehicleDailyPrices, // Turo-style per-day manual prices (ignored when isAutoExtend)
     );
     const amount = breakdown.rentalPrice;
 
@@ -1036,7 +1041,7 @@ const CreateRental = () => {
       form.setValue("monthly_amount", amount, { shouldValidate: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perPeriodRate, selectedVehicleId, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles, weekendPricingSettings, tenantHolidays, vehiclePricingOverrides, isAutoExtend]);
+  }, [perPeriodRate, selectedVehicleId, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles, weekendPricingSettings, tenantHolidays, vehiclePricingOverrides, vehicleDailyPrices, isAutoExtend]);
 
   // PAYG: monthly_amount IS the per-period billing amount (Weekly or Monthly).
   // The duration-based effect above never fires for PAYG (no end_date), so we
@@ -3599,6 +3604,9 @@ const CreateRental = () => {
                                     vehiclePricingOverrides,
                                     selectedVehicleId || undefined,
                                     mtd,
+                                    false, // skipSurcharges — show full breakdown
+                                    false, // stackSurcharges resolved from weekendConfig
+                                    vehicleDailyPrices, // Turo-style per-day manual prices
                                   )
                                 : null;
 
@@ -3611,10 +3619,14 @@ const CreateRental = () => {
                               // Group days for display (all tiers)
                               const regularItems: DayBreakdown[] = [];
                               const weekendItems: DayBreakdown[] = [];
+                              const manualItems: DayBreakdown[] = [];
                               const holidayGroups: Record<string, { name: string; items: DayBreakdown[]; surcharge: number }> = {};
                               if (breakdownResult) {
                                 for (const d of breakdownResult.dayBreakdown) {
-                                  if (d.appliedSurcharges && d.appliedSurcharges.length > 1) {
+                                  if (d.type === 'manual') {
+                                    // Turo-style per-day custom price — shown as its own line.
+                                    manualItems.push(d);
+                                  } else if (d.appliedSurcharges && d.appliedSurcharges.length > 1) {
                                     // Stacked day (2+ surcharges) — group under the combined label so the
                                     // breakdown honestly reads e.g. "Birthday + Weekend (+10100%)" instead
                                     // of hiding one surcharge under the other.
@@ -3697,6 +3709,12 @@ const CreateRental = () => {
                                         </div>
                                       );
                                     })}
+                                    {manualItems.length > 0 && (
+                                      <div className="flex justify-between text-indigo-600 dark:text-indigo-400">
+                                        <span>Custom prices</span>
+                                        <span>{manualItems.length} day{manualItems.length !== 1 ? 's' : ''} = {formatCurrency(manualItems.reduce((s, d) => s + d.effectiveRate, 0), currency)}</span>
+                                      </div>
+                                    )}
                                     <div className="border-t my-1.5" />
                                     {(() => {
                                       // Auto-calculated amount from the shared engine (all tiers, surcharge-inclusive)

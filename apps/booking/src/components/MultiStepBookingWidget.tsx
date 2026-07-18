@@ -154,7 +154,7 @@ const MultiStepBookingWidget = () => {
   } = useBookingStore();
 
   // Dynamic pricing data
-  const { holidays, vehicleOverrides } = useDynamicPricing(formData.vehicleId || undefined);
+  const { holidays, vehicleOverrides, dailyPrices } = useDynamicPricing(formData.vehicleId || undefined);
 
   // Customer authentication state
   const { customerUser, session, loading: authLoading, initialized: authInitialized, refetchCustomerUser } = useCustomerAuthStore();
@@ -1650,7 +1650,10 @@ const MultiStepBookingWidget = () => {
         holidays,
         vehicleOverrides,
         selectedVehicle.id,
-        tenant?.monthly_tier_days ?? 30
+        tenant?.monthly_tier_days ?? 30,
+        false, // skipSurcharges
+        false, // stackSurcharges resolved from weekendConfig
+        dailyPrices, // Turo-style per-day manual prices
       );
 
       rentalPrice = result.rentalPrice;
@@ -2483,7 +2486,10 @@ const MultiStepBookingWidget = () => {
       holidays,
       vehicleOverrides,
       vehicle.id,
-      tenant?.monthly_tier_days ?? 30
+      tenant?.monthly_tier_days ?? 30,
+      false, // skipSurcharges
+      false, // stackSurcharges resolved from weekendConfig
+      vehicle.id === formData.vehicleId ? dailyPrices : [], // per-day manual prices (selected vehicle)
     );
 
     const vehicleTotal = result.rentalPrice;
@@ -2538,7 +2544,8 @@ const MultiStepBookingWidget = () => {
     if (days >= _mtd && monthlyRent > 0) {
       // Monthly rental - show monthly price as primary, surcharge-adjusted when dates set
       let effectiveMonthlyRate = monthlyRent;
-      if (formData.pickupDate && formData.dropoffDate && (weekendConfig || holidays.length > 0)) {
+      const selectedDailyPrices = vehicle.id === formData.vehicleId ? dailyPrices : [];
+      if (formData.pickupDate && formData.dropoffDate && (weekendConfig || holidays.length > 0 || selectedDailyPrices.length > 0)) {
         const result = calculateRentalPriceBreakdown(
           formData.pickupDate,
           formData.dropoffDate,
@@ -2547,7 +2554,10 @@ const MultiStepBookingWidget = () => {
           holidays,
           vehicle.id === formData.vehicleId ? vehicleOverrides : [],
           vehicle.id,
-          _mtd
+          _mtd,
+          false, // skipSurcharges
+          false, // stackSurcharges resolved from weekendConfig
+          selectedDailyPrices, // per-day manual prices (selected vehicle)
         );
         if (result.pricingTier === 'monthly' && result.rentalDays > 0) {
           // Scale total to an effective per-month figure (mtd days = 1 month)
@@ -2561,7 +2571,8 @@ const MultiStepBookingWidget = () => {
     } else if (days >= 7 && days < _mtd && weeklyRent > 0) {
       // Weekly rental - show weekly price as primary, surcharge-adjusted when dates set
       let effectiveWeeklyRate = weeklyRent;
-      if (formData.pickupDate && formData.dropoffDate && (weekendConfig || holidays.length > 0)) {
+      const selectedDailyPrices = vehicle.id === formData.vehicleId ? dailyPrices : [];
+      if (formData.pickupDate && formData.dropoffDate && (weekendConfig || holidays.length > 0 || selectedDailyPrices.length > 0)) {
         const result = calculateRentalPriceBreakdown(
           formData.pickupDate,
           formData.dropoffDate,
@@ -2570,7 +2581,10 @@ const MultiStepBookingWidget = () => {
           holidays,
           vehicle.id === formData.vehicleId ? vehicleOverrides : [],
           vehicle.id,
-          _mtd
+          _mtd,
+          false, // skipSurcharges
+          false, // stackSurcharges resolved from weekendConfig
+          selectedDailyPrices, // per-day manual prices (selected vehicle)
         );
         if (result.pricingTier === 'weekly' && result.rentalDays > 0) {
           // Scale total to an effective per-week figure (7 days = 1 week)
@@ -2584,8 +2598,9 @@ const MultiStepBookingWidget = () => {
     } else if (dailyRent > 0) {
       // Daily rental - apply dynamic pricing to show effective average daily rate
       let effectiveDailyRate = dailyRent;
+      const selectedDailyPrices = vehicle.id === formData.vehicleId ? dailyPrices : [];
       if (formData.pickupDate && formData.dropoffDate) {
-        if (weekendConfig || holidays.length > 0) {
+        if (weekendConfig || holidays.length > 0 || selectedDailyPrices.length > 0) {
           const result = calculateRentalPriceBreakdown(
             formData.pickupDate,
             formData.dropoffDate,
@@ -2594,7 +2609,10 @@ const MultiStepBookingWidget = () => {
             holidays,
             vehicle.id === formData.vehicleId ? vehicleOverrides : [],
             vehicle.id,
-            _mtd
+            _mtd,
+            false, // skipSurcharges
+            false, // stackSurcharges resolved from weekendConfig
+            selectedDailyPrices, // per-day manual prices (selected vehicle)
           );
           if (result.pricingTier === 'daily' && result.rentalDays > 0) {
             effectiveDailyRate = Math.round((result.rentalPrice / result.rentalDays) * 100) / 100;

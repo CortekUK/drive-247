@@ -42,11 +42,12 @@ import { VehiclePhotoGallery } from "@/components/vehicles/vehicle-photo-gallery
 import { BlockedDatesManager } from "@/components/blocked-dates/blocked-dates-manager";
 import { VehicleExtrasManager } from "@/components/vehicles/vehicle-extras-manager";
 import { VehicleDynamicPricing } from "@/components/vehicles/vehicle-dynamic-pricing";
+import { VehicleDailyPricingCalendar } from "@/components/vehicles/vehicle-daily-pricing-calendar";
 import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
 import { TraxIcon } from "@/components/chat/TraxIcon";
 import { VehicleOwnershipPanel } from "@/components/vehicles/vehicle-ownership-panel";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
-import { Package, Loader2 as SpinnerIcon, Zap } from "lucide-react";
+import { Package, Loader2 as SpinnerIcon, Zap, CalendarRange } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -1452,6 +1453,25 @@ export default function VehicleDetail() {
               </CardHeader>
               <CardContent>
                 <VehicleDynamicPricing vehicleId={id} dailyRent={vehicle?.daily_rent || 0} />
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="mt-8">
+            <Card className="shadow-card rounded-lg">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                      <CalendarRange className="h-5 w-5" />
+                      Per-Day Pricing
+                    </CardTitle>
+                    <CardDescription>Set a custom price for specific calendar days (overrides base rate and surcharges)</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <VehicleDailyPricingCalendar vehicleId={id} dailyRent={vehicle?.daily_rent || 0} />
               </CardContent>
             </Card>
           </div>

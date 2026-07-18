@@ -71,7 +71,7 @@ const BookingCheckout = () => {
   const vehicleId = searchParams?.get("vehicle") || "";
 
   // Dynamic pricing
-  const { holidays, vehicleOverrides } = useDynamicPricing(vehicleId || undefined);
+  const { holidays, vehicleOverrides, dailyPrices } = useDynamicPricing(vehicleId || undefined);
 
   useEffect(() => {
     if (!vehicleId || !pickupDate || !returnDate) {
@@ -129,7 +129,10 @@ const BookingCheckout = () => {
       holidays,
       vehicleOverrides,
       vehicleId,
-      tenant?.monthly_tier_days ?? 30
+      tenant?.monthly_tier_days ?? 30,
+      false, // skipSurcharges
+      false, // stackSurcharges resolved from weekendConfig
+      dailyPrices, // Turo-style per-day manual prices
     );
     return result.rentalPrice;
   };

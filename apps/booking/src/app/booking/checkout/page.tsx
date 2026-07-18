@@ -81,7 +81,7 @@ const BookingCheckoutContent = () => {
 
   // Dynamic pricing
   const vehicleIdParam = searchParams?.get("vehicle") || "";
-  const { holidays, vehicleOverrides } = useDynamicPricing(vehicleIdParam || undefined);
+  const { holidays, vehicleOverrides, dailyPrices } = useDynamicPricing(vehicleIdParam || undefined);
 
   // Installment state - read from tenant context
   const [selectedInstallmentPlan, setSelectedInstallmentPlan] = useState<InstallmentOption | null>(null);
@@ -213,7 +213,10 @@ const BookingCheckoutContent = () => {
       holidays,
       vehicleOverrides,
       vehicleIdParam,
-      tenant?.monthly_tier_days ?? 30
+      tenant?.monthly_tier_days ?? 30,
+      false, // skipSurcharges
+      false, // stackSurcharges resolved from weekendConfig
+      dailyPrices, // Turo-style per-day manual prices
     );
   };
 

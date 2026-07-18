@@ -53,10 +53,17 @@ export interface VehicleOverride {
   custom_percent: number | null;
 }
 
+// Turo-style per-day manual price: an operator-set price for a specific vehicle
+// on a specific calendar day. When present it overrides every surcharge/tier rate.
+export interface VehicleDailyPrice {
+  date: string; // YYYY-MM-DD
+  price: number;
+}
+
 export interface DayBreakdown {
   date: string; // YYYY-MM-DD
   dayOfWeek: number;
-  type: 'regular' | 'weekend' | 'holiday';
+  type: 'regular' | 'weekend' | 'holiday' | 'manual';
   holidayName?: string;
   baseRate: number;
   surchargePercent: number;
@@ -165,10 +172,30 @@ function getDayRate(
   holidays: Holiday[],
   overrides: VehicleOverride[],
   vehicleId?: string,
-  stackSurcharges: boolean = false
+  stackSurcharges: boolean = false,
+  dailyPriceMap?: Record<string, number>
 ): DayBreakdown {
   const dayOfWeek = date.getDay();
   const dateStr = formatDate(date);
+
+  // ── MANUAL PER-DAY PRICE (Turo mode) ──────────────────────────────────────
+  // An operator-set price for this exact calendar day wins absolutely over every
+  // surcharge/tier rate. Skipped entirely when no manual price is set for the day,
+  // so all pricing paths below are byte-for-byte unchanged for existing rentals.
+  if (dailyPriceMap) {
+    const manual = dailyPriceMap[dateStr];
+    if (manual != null) {
+      return {
+        date: dateStr,
+        dayOfWeek,
+        type: 'manual',
+        baseRate,
+        surchargePercent: 0,
+        effectiveRate: manual,
+        appliedSurcharges: [],
+      };
+    }
+  }
 
   // ── STACKING MODE ─────────────────────────────────────────────────────────
   // When enabled, EVERY applicable surcharge applies additively (not by priority):
@@ -386,7 +413,10 @@ export function calculateRentalPriceBreakdown(
   skipSurcharges: boolean = false,
   // When true, all applicable weekend/holiday surcharges stack additively on a day
   // instead of only the highest/priority one applying. Off by default.
-  stackSurcharges: boolean = false
+  stackSurcharges: boolean = false,
+  // Turo-style per-day manual prices for this vehicle. A price set for a given
+  // calendar day overrides the tier rate AND all surcharges for that day.
+  dailyPrices?: VehicleDailyPrice[]
 ): RentalPriceResult {
   const pickup = parseDateString(pickupDate);
   const dropoff = parseDateString(dropoffDate);
@@ -406,6 +436,17 @@ export function calculateRentalPriceBreakdown(
   // don't each need a new argument.
   const stack = stackSurcharges || Boolean(weekendConfig?.stack_surcharges);
 
+  // Build a date→manual-price lookup. Manual prices are the operator's explicit
+  // per-day intent, so — like surcharges — they are skipped on auto-extend
+  // ("set price") rentals where a flat advertised rate applies. Passing undefined
+  // when empty keeps getDayRate's manual branch a strict no-op.
+  const safeDailyPrices = skipSurcharges ? [] : (dailyPrices || []);
+  const dailyPriceMap: Record<string, number> = {};
+  // Coerce with Number(): Postgres numeric columns arrive as JSON strings over
+  // PostgREST, and string prices would corrupt the total via `+` concatenation.
+  for (const dp of safeDailyPrices) dailyPriceMap[dp.date] = Number(dp.price);
+  const dailyPriceLookup = safeDailyPrices.length > 0 ? dailyPriceMap : undefined;
+
   // Run the per-day surcharge loop for any tier given its per-day base rate.
   // Non-surcharge days cost `perDayRate`; weekend/holiday days carry the surcharge.
   const runDayLoop = (perDayRate: number): { rentalPrice: number; dayBreakdown: DayBreakdown[] } => {
@@ -422,7 +463,8 @@ export function calculateRentalPriceBreakdown(
         safeHolidays,
         safeOverrides,
         vehicleId,
-        stack
+        stack,
+        dailyPriceLookup
       );
 
       breakdown.push(dayInfo);
