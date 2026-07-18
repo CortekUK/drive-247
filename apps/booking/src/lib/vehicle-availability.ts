@@ -20,8 +20,11 @@ export interface OccupancyRental {
   end_date: string | null;
 }
 
-/** Local calendar day as 'YYYY-MM-DD'. */
+/** UTC calendar day as 'YYYY-MM-DD' (rental date columns are timezone-agnostic). */
 export const todayStr = (): string => new Date().toISOString().split("T")[0];
+
+/** Statuses meaning the car is physically OUT right now (not just future-booked). */
+const OUT_NOW_STATUSES = new Set(["Active", "Started"]);
 
 /**
  * Does this OPEN rental occupy the vehicle for the requested window
@@ -43,6 +46,6 @@ export function rentalOccupiesWindow(
   const overlaps =
     r.start_date <= reqEnd && (r.end_date == null || r.end_date >= reqStart);
   const stillOut =
-    r.status === "Active" && r.end_date != null && r.end_date < today;
+    !!r.status && OUT_NOW_STATUSES.has(r.status) && r.end_date != null && r.end_date < today;
   return overlaps || stillOut;
 }

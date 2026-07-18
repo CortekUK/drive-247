@@ -95,7 +95,20 @@ export const useVehicleBookedDates = (vehicleId: string | undefined, excludeRent
   const resolveEndDate = (rental: BookedRental): { end: Date; isOpenEnded: boolean } => {
     if (rental.end_date) {
       const [ey, em, ed] = rental.end_date.split("-").map(Number);
-      return { end: new Date(ey, em - 1, ed), isOpenEnded: false };
+      const end = new Date(ey, em - 1, ed);
+      // Overdue Active/Started rental = car still physically out (stale/past
+      // end_date from a paused/unrolled auto-extend, or a rental not yet closed).
+      // Treat it as ongoing and extend forward (capped) so the calendar doesn't
+      // show it free — matches the booking-site rentalOccupiesWindow rule and the
+      // portal hook.
+      const t = new Date();
+      t.setHours(0, 0, 0, 0);
+      if (getOccupancyType(rental.status) === "active" && end < t) {
+        const horizon = new Date(t);
+        horizon.setDate(horizon.getDate() + PAYG_HORIZON_DAYS);
+        return { end: horizon, isOpenEnded: true };
+      }
+      return { end, isOpenEnded: false };
     }
     const [sy, sm, sd] = rental.start_date.split("-").map(Number);
     const horizon = new Date(sy, sm - 1, sd);

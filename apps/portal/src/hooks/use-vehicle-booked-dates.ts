@@ -182,7 +182,15 @@ export const useVehicleBookedDates = (vehicleId: string | undefined, excludeRent
       const [sy, sm, sd] = rental.start_date.split("-").map(Number);
       const start = new Date(sy, sm - 1, sd);
       const [ey, em, ed] = rental.end_date.split("-").map(Number);
-      const end = new Date(ey, em - 1, ed);
+      let end = new Date(ey, em - 1, ed);
+      // Overdue Active/Started rental = car still out; extend forward (capped) so
+      // the painted day-cells match the tooltip and the booking-site rule.
+      const _today = new Date();
+      _today.setHours(0, 0, 0, 0);
+      if (type === "active" && end < _today) {
+        end = new Date(_today);
+        end.setDate(end.getDate() + 365);
+      }
       const current = new Date(start);
       while (current <= end) {
         mods[type].push(new Date(current));
@@ -214,7 +222,14 @@ export const useVehicleBookedDates = (vehicleId: string | undefined, excludeRent
       const start = new Date(sy, sm - 1, sd);
       if (!rental.end_date) continue;
       const [ey, em, ed] = rental.end_date.split("-").map(Number);
-      const end = new Date(ey, em - 1, ed);
+      let end = new Date(ey, em - 1, ed);
+      // Overdue Active/Started rental = car still out; extend forward (capped).
+      const _today = new Date();
+      _today.setHours(0, 0, 0, 0);
+      if (getOccupancyType(rental.status) === "active" && end < _today) {
+        end = new Date(_today);
+        end.setDate(end.getDate() + 365);
+      }
       const current = new Date(start);
       while (current <= end) {
         dates.push(new Date(current));
