@@ -1,5 +1,8 @@
 project_id = "hviqoaokxvlancmftwuo"
 
+[functions.notify-operator-email]
+verify_jwt = false
+
 [functions.boldsign-webhook]
 verify_jwt = false
 

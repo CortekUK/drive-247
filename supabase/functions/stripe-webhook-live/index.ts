@@ -1039,52 +1039,10 @@ serve(async (req) => {
             }
           }
 
-          // OPERATOR EMAIL for a captured payment. The in-app BELL is now emitted
-          // universally by the notify_payment_received() DB trigger on public.payments
-          // (which fires from EVERY settlement path), so there is no bell call here.
-          if (finalPaymentId) {
-            let bellTenantId = (session.metadata?.tenant_id as string | undefined) || undefined;
-            if (!bellTenantId) {
-              const { data: bellPayment } = await supabase
-                .from("payments")
-                .select("tenant_id")
-                .eq("id", finalPaymentId)
-                .maybeSingle();
-              bellTenantId = bellPayment?.tenant_id ?? undefined;
-            }
-            if (bellTenantId) {
-              const bellAmount = session.amount_total ? session.amount_total / 100 : 0;
-              const bellCurrency = (session.currency || "USD").toUpperCase();
-              const bellRef = rentalId ? rentalId.substring(0, 8).toUpperCase() : "";
-              // OPERATOR EMAIL. The in-app bell is emitted by the
-              // notify_payment_received() DB trigger, so only the email is sent here. Gated on
-              // the master email switch + "payments" category pref, and sent to the
-              // configured notification recipient (notification_recipient_email ->
-              // contact_email -> admin_email -> env ADMIN_EMAIL). Bell + customer
-              // emails are untouched. Wrapped so a mail failure never fails the webhook.
-              try {
-                if (await isOperatorEmailEnabled(supabase, bellTenantId, "payments")) {
-                  const operatorEmail = await getTenantNotificationRecipient(supabase, bellTenantId);
-                  if (operatorEmail) {
-                    await sendEmail(
-                      operatorEmail,
-                      `Payment received${bellRef ? ` - ${bellRef}` : ""} - ${formatCurrency(bellAmount, bellCurrency)}`,
-                      `<div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1a1a1a;">
-                        <h2 style="color: #16a34a; margin: 0 0 16px;">Payment received</h2>
-                        <p style="margin: 0 0 12px; font-size: 15px; line-height: 1.6;">A payment of <strong>${formatCurrency(bellAmount, bellCurrency)}</strong> has been received${bellRef ? ` for booking <strong>${bellRef}</strong>` : ""}.</p>
-                        <p style="margin: 0; color: #666; font-size: 13px;">You are receiving this because payment email notifications are enabled for your account.</p>
-                      </div>`,
-                      supabase,
-                      bellTenantId
-                    );
-                    console.log("Operator payment-received email sent to:", operatorEmail);
-                  }
-                }
-              } catch (opEmailErr) {
-                console.error("Operator payment-received email failed (non-fatal):", opEmailErr);
-              }
-            }
-          }
+          // Payment received: both the in-app BELL and the operator EMAIL are now
+          // emitted universally by DB triggers (notify_payment_received on payments,
+          // and the notify-operator-email dispatch on notifications), which fire from
+          // EVERY settlement path — so nothing is emitted here.
 
           // Send booking pending notification for booking flow (not portal)
           if (!isPortalPayment && finalPaymentId) {
