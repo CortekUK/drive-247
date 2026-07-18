@@ -2,9 +2,10 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
-import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
+import { sendEmail, getTenantNotificationRecipient, isOperatorEmailEnabled } from "../_shared/resend-service.ts";
 import { renderEmail, resolveEmailData } from "../_shared/email-template-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
+import { notifyOperatorsInApp } from "../_shared/notify-inapp.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -291,27 +292,49 @@ serve(async (req) => {
       console.log('Customer SMS result:', results.customerSMS);
     }
 
-    // Get tenant-specific admin email, fall back to env variable
-    let adminEmail: string | null = null;
-    if (data.tenantId) {
-      adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
-      console.log('Using tenant admin email:', adminEmail);
-    }
-    if (!adminEmail) {
-      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
-      console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
+    // Send operator/admin email — OPERATOR-ONLY. Gated on the master email
+    // switch + "payments" category pref, and sent to the configured notification
+    // recipient (notification_recipient_email -> contact_email -> admin_email ->
+    // env ADMIN_EMAIL). Customer email + SMS above and the bell below are untouched.
+    if (data.tenantId && await isOperatorEmailEnabled(supabase, data.tenantId, "payments")) {
+      const operatorEmail = await getTenantNotificationRecipient(supabase, data.tenantId);
+      if (operatorEmail) {
+        results.adminEmail = await sendEmail(
+          operatorEmail,
+          `Payment Failed - ${data.bookingRef} - ${formatCurrency(data.amount, currencyCode)}`,
+          getAdminEmailHtml(data, currencyCode),
+          supabase,
+          data.tenantId
+        );
+        console.log('Operator email result:', results.adminEmail);
+      } else {
+        console.log('Operator payments email enabled but no recipient resolved, skipping');
+      }
+    } else {
+      console.log('Operator payment-failed email gated off (disabled or no tenant)');
     }
 
-    // Send admin email
-    if (adminEmail) {
-      results.adminEmail = await sendEmail(
-        adminEmail,
-        `Payment Failed - ${data.bookingRef} - ${formatCurrency(data.amount, currencyCode)}`,
-        getAdminEmailHtml(data, currencyCode),
-        supabase,
-        data.tenantId
-      );
-      console.log('Admin email result:', results.adminEmail);
+    // Operator bell notification (in addition to the admin email above)
+    if (data.tenantId) {
+      await notifyOperatorsInApp({
+        tenantId: data.tenantId,
+        type: "payment_failed",
+        title: "Payment failed",
+        message: `Payment of ${formatCurrency(data.amount, currencyCode)} failed for booking ${data.bookingRef}${data.customerName ? ` (${data.customerName})` : ''}.`,
+        link: data.rentalId ? `/rentals/${data.rentalId}` : "/invoices",
+        metadata: {
+          rental_id: data.rentalId,
+          booking_ref: data.bookingRef,
+          amount: data.amount,
+          customer_name: data.customerName,
+          failure_reason: data.failureReason,
+        },
+        // Key on rental + amount + card so a genuinely distinct failure (e.g. a
+        // later installment/extension charge) still alerts, while a true webhook
+        // retry of the SAME failed charge dedupes. (No unique charge/invoice id
+        // is available in this payload.)
+        dedupeKey: [data.rentalId || data.bookingRef, data.amount, data.last4 ?? ''].join(':'),
+      });
     }
 
     return new Response(

@@ -4,6 +4,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
 import { sendEmail } from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData, resolveEmailData } from "../_shared/email-template-service.ts";
+import { notifyOperatorsInApp } from "../_shared/notify-inapp.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -216,6 +217,25 @@ serve(async (req) => {
         data.tenantId
       );
       console.log('Customer SMS result:', results.customerSMS);
+    }
+
+    // Operator bell notification (in addition to the customer email/SMS above)
+    if (data.tenantId) {
+      await notifyOperatorsInApp({
+        tenantId: data.tenantId,
+        type: "booking_rejected",
+        title: "Booking rejected",
+        message: `Booking ${data.bookingRef} for ${data.customerName} (${data.vehicleName}) was rejected.`,
+        link: data.rentalId ? `/rentals/${data.rentalId}` : "/bookings",
+        metadata: {
+          rental_id: data.rentalId,
+          booking_ref: data.bookingRef,
+          customer_name: data.customerName,
+          vehicle_name: data.vehicleName,
+          reason: data.reason,
+        },
+        dedupeKey: data.rentalId,
+      });
     }
 
     return new Response(

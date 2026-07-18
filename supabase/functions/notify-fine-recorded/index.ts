@@ -4,12 +4,14 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
 import {
   sendEmail,
-  getTenantAdminEmail,
+  getTenantNotificationRecipient,
+  isOperatorEmailEnabled,
   getTenantBranding,
   TenantBranding,
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
+import { notifyOperatorsInApp } from "../_shared/notify-inapp.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -228,31 +230,50 @@ serve(async (req) => {
       console.log('Customer SMS result:', results.customerSMS);
     }
 
-    // Get tenant-specific admin email, fall back to env variable
-    let adminEmail: string | null = null;
+    // Send operator/admin email — OPERATOR-ONLY. Gated on the master email
+    // switch + "fines" category pref, and sent to the configured notification
+    // recipient (notification_recipient_email -> contact_email -> admin_email ->
+    // env ADMIN_EMAIL). Customer email + SMS above and the bell below are untouched.
+    if (data.tenantId && await isOperatorEmailEnabled(supabase, data.tenantId, "fines")) {
+      const operatorEmail = await getTenantNotificationRecipient(supabase, data.tenantId);
+      if (operatorEmail) {
+        // Build branded admin email HTML
+        const adminEmailContent = getAdminEmailContent(data, branding, currencyCode);
+        const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
+
+        results.adminEmail = await sendEmail(
+          operatorEmail,
+          `New Fine Recorded - ${data.fineRef} - ${formatCurrency(data.fineAmount, currencyCode)}`,
+          adminEmailHtml,
+          supabase,
+          data.tenantId
+        );
+        console.log('Operator email result:', results.adminEmail);
+      } else {
+        console.log('Operator fines email enabled but no recipient resolved, skipping');
+      }
+    } else {
+      console.log('Operator fine-recorded email gated off (disabled or no tenant)');
+    }
+
+    // Operator bell notification (in addition to the admin email above)
     if (data.tenantId) {
-      adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
-      console.log('Using tenant admin email:', adminEmail);
-    }
-    if (!adminEmail) {
-      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
-      console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
-    }
-
-    // Build branded admin email HTML
-    const adminEmailContent = getAdminEmailContent(data, branding, currencyCode);
-    const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
-
-    // Send admin email
-    if (adminEmail) {
-      results.adminEmail = await sendEmail(
-        adminEmail,
-        `New Fine Recorded - ${data.fineRef} - ${formatCurrency(data.fineAmount, currencyCode)}`,
-        adminEmailHtml,
-        supabase,
-        data.tenantId
-      );
-      console.log('Admin email result:', results.adminEmail);
+      await notifyOperatorsInApp({
+        tenantId: data.tenantId,
+        type: "fine_new",
+        title: "New fine recorded",
+        message: `${data.fineType} fine of ${formatCurrency(data.fineAmount, currencyCode)} recorded for ${data.customerName} (booking ${data.bookingRef}).`,
+        link: "/fines",
+        metadata: {
+          fine_ref: data.fineRef,
+          fine_type: data.fineType,
+          fine_amount: data.fineAmount,
+          booking_ref: data.bookingRef,
+          customer_name: data.customerName,
+          vehicle_reg: data.vehicleReg,
+        },
+        dedupeKey: data.fineRef,
+      });
     }
 
     return new Response(

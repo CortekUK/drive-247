@@ -6,8 +6,11 @@ import {
   sendEmail,
   getTenantBranding,
   TenantBranding,
-  wrapWithBrandedTemplate
+  wrapWithBrandedTemplate,
+  getTenantNotificationRecipient,
+  isOperatorEmailEnabled
 } from "../_shared/resend-service.ts";
+import { notifyOperatorsInApp } from "../_shared/notify-inapp.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -118,6 +121,46 @@ const getEmailContent = (data: NotifyRequest, branding: TenantBranding) => {
                     </tr>`;
 };
 
+// Compact OPERATOR heads-up email for an upcoming/early booking pickup.
+// Distinct from the branded customer reminder above.
+const getOperatorEmailHtml = (data: NotifyRequest, branding: TenantBranding) => {
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Upcoming Pickup</title></head>
+<body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+    <table style="width: 100%; max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden;">
+        <tr>
+            <td style="background: #1a1a1a; padding: 20px; text-align: center;">
+                <h1 style="margin: 0; color: #C5A572; font-size: 24px;">${branding.companyName.toUpperCase()}</h1>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 30px;">
+                <div style="text-align: center; margin-bottom: 25px;">
+                    <span style="display: inline-block; background: #f0f9ff; color: #0ea5e9; padding: 8px 20px; border-radius: 20px; font-weight: 600; font-size: 14px;">
+                        UPCOMING PICKUP
+                    </span>
+                </div>
+                <h2 style="margin: 0 0 20px; color: #1a1a1a;">Pickup Scheduled Soon</h2>
+                <p style="margin: 0 0 20px; color: #444;">A customer's vehicle pickup is coming up. The customer has already been reminded.</p>
+                <table style="width: 100%; border-collapse: collapse; background: #f8f9fa; border-radius: 8px;">
+                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Booking Reference:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 600;">${data.bookingRef}</td></tr>
+                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Customer:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.customerName}</td></tr>
+                    ${data.customerPhone ? `<tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Phone:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.customerPhone}</td></tr>` : ''}
+                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Vehicle:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.vehicleName}${data.vehicleReg ? ` (${data.vehicleReg})` : ''}</td></tr>
+                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Pickup Date:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #0ea5e9; font-weight: 600;">${data.pickupDate}</td></tr>
+                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Pickup Time:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #0ea5e9; font-weight: 600;">${data.pickupTime}</td></tr>
+                    <tr><td style="padding: 12px; color: #666;">Location:</td><td style="padding: 12px;">${data.pickupLocation}${data.pickupAddress ? ` — ${data.pickupAddress}` : ''}</td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+`;
+};
+
 // sendEmail is now imported from resend-service.ts
 
 async function sendSMS(phoneNumber: string, message: string, supabaseClient?: any, tenantId?: string) {
@@ -165,6 +208,7 @@ serve(async (req) => {
     const results = {
       customerEmail: null as any,
       customerSMS: null as any,
+      operatorEmail: null as any,
     };
 
     // Build branded email HTML
@@ -190,6 +234,50 @@ serve(async (req) => {
         data.tenantId
       );
       console.log('Customer SMS result:', results.customerSMS);
+    }
+
+    // Send operator/admin heads-up email — OPERATOR-ONLY. An upcoming pickup is the
+    // START of a rental, so it's gated on the "bookings" category (matching the
+    // Bookings toggle), + the master email switch, and sent to the configured
+    // notification recipient (notification_recipient_email -> contact_email ->
+    // admin_email -> env ADMIN_EMAIL). Customer email + SMS above and the bell
+    // below are untouched.
+    if (data.tenantId && await isOperatorEmailEnabled(supabase, data.tenantId, "bookings")) {
+      const operatorEmail = await getTenantNotificationRecipient(supabase, data.tenantId);
+      if (operatorEmail) {
+        results.operatorEmail = await sendEmail(
+          operatorEmail,
+          `Upcoming Pickup - ${data.bookingRef} - ${data.pickupDate}`,
+          getOperatorEmailHtml(data, branding),
+          supabase,
+          data.tenantId
+        );
+        console.log('Operator email result:', results.operatorEmail);
+      } else {
+        console.log('Operator returns email enabled but no recipient resolved, skipping');
+      }
+    } else {
+      console.log('Operator pickup-reminder email gated off (disabled or no tenant)');
+    }
+
+    // Operator bell: pickup due tomorrow. IN ADDITION to the customer email/SMS
+    // above (which are left untouched). Deduped on booking ref against retries.
+    if (data.tenantId) {
+      await notifyOperatorsInApp({
+        tenantId: data.tenantId,
+        type: "pickup_reminder",
+        title: "Pickup due tomorrow",
+        message: `${data.customerName}'s ${data.vehicleName} (${data.bookingRef}) pickup is scheduled for ${data.pickupDate} at ${data.pickupTime}${data.pickupLocation ? ` — ${data.pickupLocation}` : ''}.`,
+        link: "/rentals",
+        metadata: {
+          booking_ref: data.bookingRef,
+          vehicle_reg: data.vehicleReg,
+          pickup_date: data.pickupDate,
+          pickup_time: data.pickupTime,
+          pickup_location: data.pickupLocation,
+        },
+        dedupeKey: data.bookingRef,
+      });
     }
 
     return new Response(

@@ -5,6 +5,7 @@ import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from 
 import { sendEmail } from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData, resolveEmailData } from "../_shared/email-template-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
+import { notifyOperatorsInApp } from "../_shared/notify-inapp.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -248,6 +249,32 @@ serve(async (req) => {
         data.tenantId
       );
       console.log('Customer SMS result:', results.customerSMS);
+    }
+
+    // Operator bell notification (in addition to the customer email/SMS above)
+    if (data.tenantId) {
+      const refundNote = data.refundType === "full"
+        ? ` Full refund of ${formatCurrency(data.refundAmount || 0, currencyCode)} initiated.`
+        : data.refundType === "partial"
+        ? ` Partial refund of ${formatCurrency(data.refundAmount || 0, currencyCode)} initiated.`
+        : "";
+      await notifyOperatorsInApp({
+        tenantId: data.tenantId,
+        type: "booking_cancelled",
+        title: "Booking cancelled",
+        message: `Booking ${data.bookingRef} for ${data.customerName} (${data.vehicleName}) has been cancelled.${refundNote}`,
+        link: data.rentalId ? `/rentals/${data.rentalId}` : "/bookings",
+        metadata: {
+          rental_id: data.rentalId,
+          booking_ref: data.bookingRef,
+          customer_name: data.customerName,
+          vehicle_name: data.vehicleName,
+          reason: data.reason,
+          refund_type: data.refundType,
+          refund_amount: data.refundAmount,
+        },
+        dedupeKey: data.rentalId,
+      });
     }
 
     return new Response(

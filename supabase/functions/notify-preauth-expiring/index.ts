@@ -4,12 +4,14 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
 import {
   sendEmail,
-  getTenantAdminEmail,
+  getTenantNotificationRecipient,
+  isOperatorEmailEnabled,
   getTenantBranding,
   TenantBranding,
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
+import { notifyOperatorsInApp } from "../_shared/notify-inapp.ts";
 
 interface NotifyRequest {
   bookingRef: string;
@@ -159,33 +161,52 @@ serve(async (req) => {
       adminSMS: null as any,
     };
 
-    // Get tenant-specific admin email, fall back to env variable
-    let adminEmail: string | null = null;
-    if (data.tenantId) {
-      adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
-      console.log('Using tenant admin email:', adminEmail);
-    }
-    if (!adminEmail) {
-      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
-      console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
-    }
-
     const urgencyPrefix = data.hoursRemaining <= 24 ? "URGENT: " : "";
 
     // Build branded admin email HTML
     const adminEmailContent = getEmailContent(data, branding, currencyCode);
     const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
 
-    // Send admin email
-    if (adminEmail) {
-      results.adminEmail = await sendEmail(
-        adminEmail,
-        `${urgencyPrefix}Pre-Auth Expiring in ${data.hoursRemaining}h - ${data.bookingRef}`,
-        adminEmailHtml,
-        supabase,
-        data.tenantId
-      );
-      console.log('Admin email result:', results.adminEmail);
+    // Send operator/admin email — OPERATOR-ONLY. Gated on the master email
+    // switch + "payments" category pref, and sent to the configured notification
+    // recipient (notification_recipient_email -> contact_email -> admin_email ->
+    // env ADMIN_EMAIL). The bell below and the admin SMS are untouched.
+    if (data.tenantId && await isOperatorEmailEnabled(supabase, data.tenantId, "payments")) {
+      const operatorEmail = await getTenantNotificationRecipient(supabase, data.tenantId);
+      if (operatorEmail) {
+        results.adminEmail = await sendEmail(
+          operatorEmail,
+          `${urgencyPrefix}Pre-Auth Expiring in ${data.hoursRemaining}h - ${data.bookingRef}`,
+          adminEmailHtml,
+          supabase,
+          data.tenantId
+        );
+        console.log('Operator email result:', results.adminEmail);
+      } else {
+        console.log('Operator payments email enabled but no recipient resolved, skipping');
+      }
+    } else {
+      console.log('Operator preauth-expiring email gated off (disabled or no tenant)');
+    }
+
+    // Operator bell notification (in addition to the admin email/SMS)
+    if (data.tenantId) {
+      await notifyOperatorsInApp({
+        tenantId: data.tenantId,
+        type: "preauth_expiring",
+        title: "Pre-authorization expiring",
+        message: `Pre-auth hold of ${formatCurrency(data.amount, currencyCode)} for booking ${data.bookingRef} (${data.customerName}) expires in ${data.hoursRemaining}h — approve or reject before it releases.`,
+        link: "/pending-bookings",
+        metadata: {
+          booking_ref: data.bookingRef,
+          amount: data.amount,
+          hours_remaining: data.hoursRemaining,
+          expires_at: data.expiresAt,
+          customer_name: data.customerName,
+          vehicle_name: data.vehicleName,
+        },
+        dedupeKey: `${data.bookingRef}-${data.hoursRemaining}`,
+      });
     }
 
     // Send admin SMS if phone configured (using env variable for now)

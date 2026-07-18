@@ -4,6 +4,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
 import { sendEmail } from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData, resolveEmailData } from "../_shared/email-template-service.ts";
+import { notifyOperatorsInApp } from "../_shared/notify-inapp.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -247,6 +248,27 @@ serve(async (req) => {
         data.tenantId
       );
       console.log('Customer SMS result:', results.customerSMS);
+    }
+
+    // Operator bell notification (in addition to the customer email/SMS above)
+    if (data.tenantId) {
+      await notifyOperatorsInApp({
+        tenantId: data.tenantId,
+        type: "rental_started",
+        title: "Rental started",
+        message: `Rental ${data.bookingRef} for ${data.customerName} has started — ${data.vehicleName} (${data.vehicleReg}), due back ${data.endDate}.`,
+        link: data.rentalId ? `/rentals/${data.rentalId}` : "/rentals",
+        metadata: {
+          rental_id: data.rentalId,
+          booking_ref: data.bookingRef,
+          customer_name: data.customerName,
+          vehicle_name: data.vehicleName,
+          vehicle_reg: data.vehicleReg,
+          start_date: data.startDate,
+          end_date: data.endDate,
+        },
+        dedupeKey: data.rentalId,
+      });
     }
 
     return new Response(

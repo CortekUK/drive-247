@@ -31,6 +31,7 @@ import { LogoUploadWithResize } from '@/components/settings/logo-upload-with-res
 import { FaviconUpload } from '@/components/settings/favicon-upload';
 import { DataCleanupDialog } from '@/components/settings/data-cleanup-dialog';
 import ReminderRulesConfig from '@/components/settings/reminder-rules-config';
+import { EmailNotificationSettings } from '@/components/settings/email-notification-settings';
 import { ColorPicker } from '@/components/settings/color-picker';
 import { Textarea } from '@/components/ui/textarea';
 import { OGImageUpload } from '@/components/settings/og-image-upload';
@@ -2129,6 +2130,9 @@ const Settings = () => {
 
           {/* Advanced Reminder Rules Configuration */}
           <ReminderRulesConfig />
+
+          {/* Operator email notification preferences (per-category, in-app bell always on) */}
+          <EmailNotificationSettings canEdit={canEditSettings('reminders')} />
 
         </TabsContent>
 

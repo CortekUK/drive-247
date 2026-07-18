@@ -5,11 +5,13 @@ import {
 } from "../_shared/aws-config.ts";
 import {
   sendEmail,
-  getTenantAdminEmail,
+  getTenantNotificationRecipient,
+  isOperatorEmailEnabled,
   getTenantBranding,
   TenantBranding,
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
+import { notifyOperatorsInApp } from "../_shared/notify-inapp.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -73,28 +75,49 @@ serve(async (req) => {
       adminEmail: null as any,
     };
 
-    let adminEmail: string | null = null;
+    // Send operator/admin email — OPERATOR-ONLY. Gated on the master email
+    // switch + "verification" category pref, and sent to the configured
+    // notification recipient (notification_recipient_email -> contact_email ->
+    // admin_email -> env ADMIN_EMAIL). The bell below is untouched.
+    if (data.tenantId && await isOperatorEmailEnabled(supabase, data.tenantId, "verification")) {
+      const operatorEmail = await getTenantNotificationRecipient(supabase, data.tenantId);
+      if (operatorEmail) {
+        const adminEmailContent = getAdminEmailContent(data, branding);
+        const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
+
+        results.adminEmail = await sendEmail(
+          operatorEmail,
+          `Contract Signed - ${data.bookingRef} - ${data.customerName}`,
+          adminEmailHtml,
+          supabase,
+          data.tenantId
+        );
+        console.log('Operator email result:', results.adminEmail);
+      } else {
+        console.log('Operator verification email enabled but no recipient resolved, skipping');
+      }
+    } else {
+      console.log('Operator signing-completed email gated off (disabled or no tenant)');
+    }
+
+    // Operator bell notification (in addition to the admin email above)
     if (data.tenantId) {
-      adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
-      console.log('Using tenant admin email:', adminEmail);
-    }
-    if (!adminEmail) {
-      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
-      console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
-    }
-
-    const adminEmailContent = getAdminEmailContent(data, branding);
-    const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
-
-    if (adminEmail) {
-      results.adminEmail = await sendEmail(
-        adminEmail,
-        `Contract Signed - ${data.bookingRef} - ${data.customerName}`,
-        adminEmailHtml,
-        supabase,
-        data.tenantId
-      );
-      console.log('Admin email result:', results.adminEmail);
+      await notifyOperatorsInApp({
+        tenantId: data.tenantId,
+        type: "signing_completed",
+        title: "Agreement signed",
+        message: `${data.customerName} signed the rental agreement for ${data.vehicleName} (${data.vehicleReg}) — booking ${data.bookingRef}.`,
+        link: "/rentals",
+        metadata: {
+          booking_ref: data.bookingRef,
+          envelope_id: data.envelopeId,
+          customer_name: data.customerName,
+          vehicle_reg: data.vehicleReg,
+          signed_at: data.signedAt,
+          document_url: data.documentUrl,
+        },
+        dedupeKey: data.envelopeId,
+      });
     }
 
     return new Response(

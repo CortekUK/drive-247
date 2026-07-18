@@ -17,7 +17,18 @@ export type NotificationType =
   | "mot_reminder"
   | "tax_reminder"
   | "fine_new"
-  | "general";
+  | "general"
+  | "payment_received"
+  | "payment_failed"
+  | "refund_processed"
+  | "return_overdue"
+  | "preauth_expiring"
+  | "signing_completed"
+  | "identity_verified"
+  | "rental_started"
+  | "rental_completed"
+  | "rental_extended"
+  | "pickup_reminder";
 
 /**
  * Base notification options

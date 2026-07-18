@@ -4,6 +4,7 @@ import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from 
 import { sendEmail } from "../_shared/resend-service.ts";
 import { renderEmail, resolveEmailData } from "../_shared/email-template-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
+import { notifyOperatorsInApp } from "../_shared/notify-inapp.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -197,6 +198,28 @@ Deno.serve(async (req) => {
         data.tenantId
       );
       console.log('Customer SMS result:', results.customerSMS);
+    }
+
+    // Operator bell notification (in addition to the customer email/SMS above)
+    if (data.tenantId) {
+      await notifyOperatorsInApp({
+        tenantId: data.tenantId,
+        type: "rental_extended",
+        title: "Rental extended",
+        message: `Rental ${data.bookingRef} for ${data.customerName} extended by ${data.extensionDays} day(s) to ${data.newEndDate} (fee ${formatCurrency(data.extensionAmount, currencyCode)}).`,
+        link: data.rentalId ? `/rentals/${data.rentalId}` : "/rentals",
+        metadata: {
+          rental_id: data.rentalId,
+          booking_ref: data.bookingRef,
+          customer_name: data.customerName,
+          vehicle_reg: data.vehicleReg,
+          previous_end_date: data.previousEndDate,
+          new_end_date: data.newEndDate,
+          extension_days: data.extensionDays,
+          extension_amount: data.extensionAmount,
+        },
+        dedupeKey: data.rentalId,
+      });
     }
 
     return new Response(

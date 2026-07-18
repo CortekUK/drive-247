@@ -4,11 +4,13 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
 import {
   sendEmail,
-  getTenantAdminEmail,
+  getTenantNotificationRecipient,
+  isOperatorEmailEnabled,
   getTenantBranding,
   TenantBranding,
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
+import { notifyOperatorsInApp } from "../_shared/notify-inapp.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -222,32 +224,62 @@ serve(async (req) => {
       console.log('Customer SMS result:', results.customerSMS);
     }
 
+    // Operator bell notification — ALWAYS on for every terminal identity
+    // outcome (approved / declined / resubmission), independent of any email
+    // toggle. A failed verification is the more operationally important case,
+    // so it must never be silenced by the email preference.
+    if (data.tenantId) {
+      const bell = data.verificationStatus === "approved"
+        ? {
+            title: "Identity verified",
+            message: `${data.customerName}'s identity has been verified${data.bookingRef ? ` (booking ${data.bookingRef})` : ''}.`,
+          }
+        : data.verificationStatus === "declined"
+        ? {
+            title: "Identity verification failed",
+            message: `${data.customerName}'s identity verification was declined${data.declineReason ? ` — ${data.declineReason}` : ''}${data.bookingRef ? ` (booking ${data.bookingRef})` : ''}.`,
+          }
+        : {
+            title: "Identity documents need resubmission",
+            message: `${data.customerName} needs to resubmit identity documents${data.bookingRef ? ` (booking ${data.bookingRef})` : ''}.`,
+          };
+      await notifyOperatorsInApp({
+        tenantId: data.tenantId,
+        type: "identity_verified",
+        title: bell.title,
+        message: bell.message,
+        link: "/customers",
+        metadata: {
+          customer_name: data.customerName,
+          customer_email: data.customerEmail,
+          booking_ref: data.bookingRef,
+          verification_status: data.verificationStatus,
+        },
+        // Status-prefixed so a later, different outcome for the same customer
+        // (e.g. declined → approved) is treated as a distinct alert.
+        dedupeKey: `${data.verificationStatus}:${data.bookingRef || data.customerEmail}`,
+      });
+    }
+
     // Send admin notification for declined verifications
     if (data.verificationStatus === "declined") {
-      // Get tenant-specific admin email, fall back to env variable
-      let adminEmail: string | null = null;
-      if (data.tenantId) {
-        adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
-        console.log('Using tenant admin email:', adminEmail);
-      }
-      if (!adminEmail) {
-        adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
-        console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
-      }
-
-      if (adminEmail) {
-        // Build branded admin email HTML
-        const adminEmailContent = getAdminEmailContent(data, branding);
-        const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
-
-        results.adminEmail = await sendEmail(
-          adminEmail,
-          `Identity Verification Failed - ${data.customerName}`,
-          adminEmailHtml,
-          supabase,
-          data.tenantId
-        );
-        console.log('Admin email result:', results.adminEmail);
+      // Operator alert for a failed/declined verification — gated on the
+      // 'verification' email preference and routed to the configured recipient.
+      // (The always-on in-app bell for this decline is emitted above.)
+      if (data.tenantId && await isOperatorEmailEnabled(supabase, data.tenantId, "verification")) {
+        const recipient = await getTenantNotificationRecipient(supabase, data.tenantId);
+        if (recipient) {
+          const adminEmailContent = getAdminEmailContent(data, branding);
+          const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
+          results.adminEmail = await sendEmail(
+            recipient,
+            `Identity Verification Failed - ${data.customerName}`,
+            adminEmailHtml,
+            supabase,
+            data.tenantId
+          );
+          console.log('Operator identity-declined email sent to:', recipient);
+        }
       }
     }
 

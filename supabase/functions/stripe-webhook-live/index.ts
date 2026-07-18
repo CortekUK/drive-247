@@ -6,6 +6,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { formatCurrency } from '../_shared/format-utils.ts';
 import { getStripeClientForAccount, getWebhookSecretCandidates } from '../_shared/stripe-client.ts';
+import { notifyOperatorsInApp } from '../_shared/notify-inapp.ts';
+import { sendEmail, getTenantNotificationRecipient, isOperatorEmailEnabled } from '../_shared/resend-service.ts';
 
 // Initialize Stripe with LIVE secret key (legacy UK platform)
 const ukStripe = new Stripe(Deno.env.get("STRIPE_LIVE_SECRET_KEY") || "", {
@@ -1037,6 +1039,62 @@ serve(async (req) => {
             }
           }
 
+          // PORTAL BELL: a captured payment just landed — notify all operators
+          // of the tenant. Fires once per settled payment; dedupe on the payment
+          // id guards webhook retries. notifyOperatorsInApp never throws.
+          if (finalPaymentId) {
+            let bellTenantId = (session.metadata?.tenant_id as string | undefined) || undefined;
+            if (!bellTenantId) {
+              const { data: bellPayment } = await supabase
+                .from("payments")
+                .select("tenant_id")
+                .eq("id", finalPaymentId)
+                .maybeSingle();
+              bellTenantId = bellPayment?.tenant_id ?? undefined;
+            }
+            if (bellTenantId) {
+              const bellAmount = session.amount_total ? session.amount_total / 100 : 0;
+              const bellCurrency = (session.currency || "USD").toUpperCase();
+              const bellRef = rentalId ? rentalId.substring(0, 8).toUpperCase() : "";
+              await notifyOperatorsInApp({
+                tenantId: bellTenantId,
+                type: "payment_received",
+                title: "Payment received",
+                message: `Payment of ${formatCurrency(bellAmount, bellCurrency)} received for booking ${bellRef}`,
+                link: rentalId ? `/rentals/${rentalId}` : "/invoices",
+                metadata: { rental_id: rentalId, payment_id: finalPaymentId, amount: bellAmount },
+                dedupeKey: finalPaymentId,
+              });
+
+              // OPERATOR EMAIL (in addition to the always-on bell above). Gated on
+              // the master email switch + "payments" category pref, and sent to the
+              // configured notification recipient (notification_recipient_email ->
+              // contact_email -> admin_email -> env ADMIN_EMAIL). Bell + customer
+              // emails are untouched. Wrapped so a mail failure never fails the webhook.
+              try {
+                if (await isOperatorEmailEnabled(supabase, bellTenantId, "payments")) {
+                  const operatorEmail = await getTenantNotificationRecipient(supabase, bellTenantId);
+                  if (operatorEmail) {
+                    await sendEmail(
+                      operatorEmail,
+                      `Payment received${bellRef ? ` - ${bellRef}` : ""} - ${formatCurrency(bellAmount, bellCurrency)}`,
+                      `<div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1a1a1a;">
+                        <h2 style="color: #16a34a; margin: 0 0 16px;">Payment received</h2>
+                        <p style="margin: 0 0 12px; font-size: 15px; line-height: 1.6;">A payment of <strong>${formatCurrency(bellAmount, bellCurrency)}</strong> has been received${bellRef ? ` for booking <strong>${bellRef}</strong>` : ""}.</p>
+                        <p style="margin: 0; color: #666; font-size: 13px;">You are receiving this because payment email notifications are enabled for your account.</p>
+                      </div>`,
+                      supabase,
+                      bellTenantId
+                    );
+                    console.log("Operator payment-received email sent to:", operatorEmail);
+                  }
+                }
+              } catch (opEmailErr) {
+                console.error("Operator payment-received email failed (non-fatal):", opEmailErr);
+              }
+            }
+          }
+
           // Send booking pending notification for booking flow (not portal)
           if (!isPortalPayment && finalPaymentId) {
             try {
@@ -1365,7 +1423,7 @@ serve(async (req) => {
             console.log("Updated payment", payment.id, "with refund status");
           }
 
-          // Create portal notification
+          // Create portal (operator bell) notification
           if (payment.tenant_id) {
             // Get tenant currency for formatting
             let refundCurrencyCode = 'USD';
@@ -1376,28 +1434,20 @@ serve(async (req) => {
               .single();
             if (refundTenant?.currency_code) refundCurrencyCode = refundTenant.currency_code;
 
-            const { error: notificationError } = await supabase
-              .from("notifications")
-              .insert({
-                tenant_id: payment.tenant_id,
-                type: "refund_processed",
-                title: "Refund Processed",
-                message: `Refund of ${formatCurrency(refundAmount, refundCurrencyCode)} has been processed successfully`,
-                data: {
-                  payment_id: payment.id,
-                  rental_id: payment.rental_id,
-                  refund_amount: refundAmount,
-                  stripe_charge_id: charge.id,
-                },
-                is_read: false,
-              });
-
-            if (notificationError) {
-              // Notification table might not exist, log but don't fail
-              console.warn("Could not create notification (table may not exist):", notificationError.message);
-            } else {
-              console.log("Created refund notification for tenant:", payment.tenant_id);
-            }
+            await notifyOperatorsInApp({
+              tenantId: payment.tenant_id,
+              type: "refund_processed",
+              title: "Refund Processed",
+              message: `Refund of ${formatCurrency(refundAmount, refundCurrencyCode)} has been processed successfully`,
+              link: payment.rental_id ? `/rentals/${payment.rental_id}` : "/invoices",
+              metadata: {
+                rental_id: payment.rental_id,
+                payment_id: payment.id,
+                amount: refundAmount,
+                stripe_charge_id: charge.id,
+              },
+              dedupeKey: payment.id,
+            });
           }
         } else {
           console.log("No payment found for payment_intent:", charge.payment_intent);

@@ -181,6 +181,103 @@ export async function getTenantAdminEmail(tenantId: string, supabaseClient: any)
 }
 
 /**
+ * Resolve the recipient for OPERATOR/ADMIN notification emails.
+ *
+ * Send-time recipient rule (first non-empty, trimmed wins):
+ *   notification_recipient_email -> contact_email -> admin_email -> env ADMIN_EMAIL -> null
+ *
+ * IMPORTANT: This applies ONLY to operator/admin emails. Never use this to
+ * reroute CUSTOMER emails — customers always receive their emails unchanged.
+ */
+export async function getTenantNotificationRecipient(
+  supabaseServiceClient: any,
+  tenantId: string
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabaseServiceClient
+      .from('tenants')
+      .select('notification_recipient_email, contact_email, admin_email')
+      .eq('id', tenantId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching tenant notification recipient:', error);
+      return Deno.env.get('ADMIN_EMAIL') ?? null;
+    }
+
+    const candidates = [
+      data?.notification_recipient_email,
+      data?.contact_email,
+      data?.admin_email,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && candidate.trim() !== '') {
+        return candidate.trim();
+      }
+    }
+
+    return Deno.env.get('ADMIN_EMAIL') ?? null;
+  } catch (error) {
+    console.error('Exception fetching tenant notification recipient:', error);
+    return null;
+  }
+}
+
+/**
+ * Gate check for OPERATOR/ADMIN notification emails of a given category.
+ *
+ * Returns true ONLY when BOTH conditions hold:
+ *   1. tenants.email_notifications_enabled = true (master switch)
+ *   2. email_notification_prefs row for (tenant_id, category) has is_enabled = true
+ *      (missing row => disabled)
+ *
+ * Categories: bookings, payments, insurance, returns, verification, fines.
+ *
+ * IMPORTANT: This gate applies ONLY to operator/admin emails. Never gate
+ * CUSTOMER emails, and never gate the always-on in-app bell.
+ */
+export async function isOperatorEmailEnabled(
+  supabaseServiceClient: any,
+  tenantId: string,
+  category: string
+): Promise<boolean> {
+  try {
+    const { data: tenant, error: tenantError } = await supabaseServiceClient
+      .from('tenants')
+      .select('email_notifications_enabled')
+      .eq('id', tenantId)
+      .single();
+
+    if (tenantError) {
+      console.error('Error fetching tenant email master switch:', tenantError);
+      return false;
+    }
+
+    if (tenant?.email_notifications_enabled !== true) {
+      return false;
+    }
+
+    const { data: pref, error: prefError } = await supabaseServiceClient
+      .from('email_notification_prefs')
+      .select('is_enabled')
+      .eq('tenant_id', tenantId)
+      .eq('category', category)
+      .maybeSingle();
+
+    if (prefError) {
+      console.error('Error fetching email notification pref:', prefError);
+      return false;
+    }
+
+    return pref?.is_enabled === true;
+  } catch (error) {
+    console.error('Exception checking operator email enabled:', error);
+    return false;
+  }
+}
+
+/**
  * Send email via Resend API
  * Multi-tenant aware: uses tenant-specific sender if tenantId provided
  */

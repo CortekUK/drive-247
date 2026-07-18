@@ -4,12 +4,14 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
 import {
   sendEmail,
-  getTenantAdminEmail,
   getTenantBranding,
+  getTenantNotificationRecipient,
+  isOperatorEmailEnabled,
   TenantBranding,
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
 import { renderEmail, resolveEmailData } from "../_shared/email-template-service.ts";
+import { notifyOperatorsInApp } from "../_shared/notify-inapp.ts";
 
 interface RentalInfo {
   rentalId?: string;
@@ -162,17 +164,6 @@ serve(async (req) => {
     const overdue = data.rentals.filter(r => r.status === "overdue");
     const dueToday = data.rentals.filter(r => r.status === "due_today");
 
-    // Get tenant-specific admin email, fall back to env variable
-    let adminEmail: string | null = null;
-    if (data.tenantId) {
-      adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
-      console.log('Using tenant admin email:', adminEmail);
-    }
-    if (!adminEmail) {
-      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
-      console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
-    }
-
     // Build subject line
     let subject = "Daily Returns Summary";
     if (overdue.length > 0) {
@@ -185,16 +176,24 @@ serve(async (req) => {
     const adminEmailContent = getAdminEmailContent(data.rentals, branding);
     const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
 
-    // Send admin email
-    if (adminEmail) {
-      results.adminEmail = await sendEmail(
-        adminEmail,
-        subject,
-        adminEmailHtml,
-        supabase,
-        data.tenantId
-      );
-      console.log('Admin email result:', results.adminEmail);
+    // Send operator returns digest — gated on the 'returns' email preference and
+    // routed to the tenant's configured notification recipient (default contact_email).
+    if (data.tenantId && await isOperatorEmailEnabled(supabase, data.tenantId, "returns")) {
+      const recipient = await getTenantNotificationRecipient(supabase, data.tenantId);
+      if (recipient) {
+        results.adminEmail = await sendEmail(
+          recipient,
+          subject,
+          adminEmailHtml,
+          supabase,
+          data.tenantId
+        );
+        console.log('Operator returns digest sent to:', recipient);
+      } else {
+        console.log('No notification recipient resolved; skipping operator returns digest');
+      }
+    } else {
+      console.log('Operator returns email disabled (or no tenant); skipping digest');
     }
 
     // Send individual customer emails using custom templates
@@ -219,6 +218,28 @@ serve(async (req) => {
         } catch (err) {
           console.warn(`Failed to send return-due email to ${rental.customerEmail}:`, err);
         }
+      }
+    }
+
+    // Operator bell: one broadcast per overdue rental. Deduped per rental so
+    // repeat cron runs don't spam the same alert. This is IN ADDITION to the
+    // digest email + customer emails above — none of that is removed.
+    if (data.tenantId && overdue.length > 0) {
+      for (const rental of overdue) {
+        await notifyOperatorsInApp({
+          tenantId: data.tenantId,
+          type: "return_overdue",
+          title: "Vehicle return overdue",
+          message: `${rental.customerName}'s ${rental.vehicleName} (${rental.bookingRef}) is ${rental.daysOverdue ?? 0} day(s) overdue for return.`,
+          link: rental.rentalId ? `/rentals/${rental.rentalId}` : "/rentals",
+          metadata: {
+            rental_id: rental.rentalId ?? null,
+            booking_ref: rental.bookingRef,
+            days_overdue: rental.daysOverdue ?? null,
+            vehicle_reg: rental.vehicleReg,
+          },
+          dedupeKey: rental.rentalId || rental.bookingRef,
+        });
       }
     }
 

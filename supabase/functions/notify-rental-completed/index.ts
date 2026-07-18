@@ -5,6 +5,7 @@ import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from 
 import { sendEmail } from "../_shared/resend-service.ts";
 import { renderEmail, resolveEmailData } from "../_shared/email-template-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
+import { notifyOperatorsInApp } from "../_shared/notify-inapp.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -254,6 +255,31 @@ serve(async (req) => {
         data.tenantId
       );
       console.log('Customer SMS result:', results.customerSMS);
+    }
+
+    // Operator bell notification (in addition to the customer email/SMS above)
+    if (data.tenantId) {
+      const hasExtra = data.additionalCharges && data.additionalCharges > 0;
+      const extraNote = hasExtra
+        ? ` Additional charges: ${formatCurrency(data.additionalCharges || 0, currencyCode)}.`
+        : "";
+      await notifyOperatorsInApp({
+        tenantId: data.tenantId,
+        type: "rental_completed",
+        title: "Rental completed",
+        message: `Rental ${data.bookingRef} for ${data.customerName} (${data.vehicleName}) has been completed.${extraNote}`,
+        link: data.rentalId ? `/rentals/${data.rentalId}` : "/rentals",
+        metadata: {
+          rental_id: data.rentalId,
+          booking_ref: data.bookingRef,
+          customer_name: data.customerName,
+          vehicle_name: data.vehicleName,
+          vehicle_reg: data.vehicleReg,
+          total_amount: data.totalAmount,
+          additional_charges: data.additionalCharges,
+        },
+        dedupeKey: data.rentalId,
+      });
     }
 
     return new Response(

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/aws-config.ts";
-import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
+import { sendEmail, getTenantNotificationRecipient, isOperatorEmailEnabled } from "../_shared/resend-service.ts";
 import { getTenantInfo, wrapEmailHtml } from "../_shared/email-template-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
 
@@ -230,22 +230,25 @@ serve(async (req) => {
     );
     console.log('Customer email result:', results.customerEmail);
 
-    // Get tenant-specific admin email
-    let adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
-    if (!adminEmail) {
-      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
-    }
-
-    // Send admin email
-    if (adminEmail) {
-      results.adminEmail = await sendEmail(
-        adminEmail,
-        `Installment Payment Failed - ${data.customerName} - ${formatCurrency(data.amount, tenantInfo.currency_code)}`,
-        getAdminFailedEmailHtml({ ...data, rentalNumber, vehicleName, dueDate, failureCount }, tenantInfo),
-        supabase,
-        data.tenantId
-      );
-      console.log('Admin email result:', results.adminEmail);
+    // Operator installment-failure email — gated on the 'payments' email
+    // preference and routed to the tenant's configured notification recipient
+    // (default contact_email). The customer email above is unaffected.
+    if (data.tenantId && await isOperatorEmailEnabled(supabase, data.tenantId, 'payments')) {
+      const recipient = await getTenantNotificationRecipient(supabase, data.tenantId);
+      if (recipient) {
+        results.adminEmail = await sendEmail(
+          recipient,
+          `Installment Payment Failed - ${data.customerName} - ${formatCurrency(data.amount, tenantInfo.currency_code)}`,
+          getAdminFailedEmailHtml({ ...data, rentalNumber, vehicleName, dueDate, failureCount }, tenantInfo),
+          supabase,
+          data.tenantId
+        );
+        console.log('Operator installment-failed email sent to:', recipient);
+      } else {
+        console.log('No notification recipient resolved; skipping operator installment-failed email');
+      }
+    } else {
+      console.log('Operator payments email disabled (or no tenant); skipping installment-failed admin email');
     }
 
     // Record notification

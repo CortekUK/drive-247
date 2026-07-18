@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { formatCurrency } from '../_shared/format-utils.ts';
+import { notifyOperatorsInApp } from '../_shared/notify-inapp.ts';
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
   apiVersion: "2023-10-16",
@@ -822,7 +823,7 @@ serve(async (req) => {
             console.log("Updated payment", payment.id, "with refund status");
           }
 
-          // Create portal notification
+          // Create portal (operator bell) notification
           if (payment.tenant_id) {
             // Get tenant currency for formatting
             let refundCurrencyCode = 'USD';
@@ -833,28 +834,20 @@ serve(async (req) => {
               .single();
             if (refundTenant?.currency_code) refundCurrencyCode = refundTenant.currency_code;
 
-            const { error: notificationError } = await supabase
-              .from("notifications")
-              .insert({
-                tenant_id: payment.tenant_id,
-                type: "refund_processed",
-                title: "Refund Processed",
-                message: `Refund of ${formatCurrency(refundAmount, refundCurrencyCode)} has been processed successfully`,
-                data: {
-                  payment_id: payment.id,
-                  rental_id: payment.rental_id,
-                  refund_amount: refundAmount,
-                  stripe_charge_id: charge.id,
-                },
-                is_read: false,
-              });
-
-            if (notificationError) {
-              // Notification table might not exist, log but don't fail
-              console.warn("Could not create notification (table may not exist):", notificationError.message);
-            } else {
-              console.log("Created refund notification for tenant:", payment.tenant_id);
-            }
+            await notifyOperatorsInApp({
+              tenantId: payment.tenant_id,
+              type: "refund_processed",
+              title: "Refund Processed",
+              message: `Refund of ${formatCurrency(refundAmount, refundCurrencyCode)} has been processed successfully`,
+              link: payment.rental_id ? `/rentals/${payment.rental_id}` : "/invoices",
+              metadata: {
+                rental_id: payment.rental_id,
+                payment_id: payment.id,
+                amount: refundAmount,
+                stripe_charge_id: charge.id,
+              },
+              dedupeKey: payment.id,
+            });
           }
         } else {
           console.log("No payment found for payment_intent:", charge.payment_intent);

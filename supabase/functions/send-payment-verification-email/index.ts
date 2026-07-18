@@ -3,7 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { corsHeaders } from "../_shared/aws-config.ts";
 import {
   sendEmail,
-  getTenantAdminEmail,
+  getTenantNotificationRecipient,
+  isOperatorEmailEnabled,
   getTenantBranding,
   TenantBranding,
   wrapWithBrandedTemplate
@@ -123,28 +124,26 @@ serve(async (req) => {
       }
     }
 
-    // Get tenant-specific admin email, fall back to env variable
-    let adminEmail: string | null = null;
-    if (tenantId) {
-      adminEmail = await getTenantAdminEmail(tenantId, supabase);
-      console.log('Using tenant admin email:', adminEmail);
-    }
-    if (!adminEmail) {
-      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
-      console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
-    }
-
-    // Build branded admin email HTML
+    // Build branded operator email HTML
     const emailContent = generateVerificationEmailContent(data, branding, currencyCode);
     const html = wrapWithBrandedTemplate(emailContent, branding);
 
-    // Send verification email to admin
+    // Operator payment-verification email — gated on the 'payments' email
+    // preference and routed to the tenant's configured notification recipient
+    // (default contact_email).
     const subject = `Payment Verification Required - ${formatCurrency(data.amount, currencyCode)} from ${data.customerName}`;
 
     let emailResult;
-    if (adminEmail) {
-      emailResult = await sendEmail(adminEmail, subject, html, supabase, tenantId);
-      console.log('Verification email sent to admin:', emailResult);
+    if (tenantId && await isOperatorEmailEnabled(supabase, tenantId, 'payments')) {
+      const recipient = await getTenantNotificationRecipient(supabase, tenantId);
+      if (recipient) {
+        emailResult = await sendEmail(recipient, subject, html, supabase, tenantId);
+        console.log('Operator payment-verification email sent to:', recipient);
+      } else {
+        console.log('No notification recipient resolved; skipping payment-verification email');
+      }
+    } else {
+      console.log('Operator payments email disabled (or no tenant); skipping payment-verification email');
     }
 
     console.log('Payment verification notification completed');

@@ -9,6 +9,7 @@ import {
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
 import { renderEmail, resolveEmailData } from "../_shared/email-template-service.ts";
+import { notifyOperatorsInApp } from "../_shared/notify-inapp.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -277,6 +278,36 @@ serve(async (req) => {
 
       results.customerSMS = await sendSMS(data.customerPhone, smsMessage, supabase, data.tenantId);
       console.log('Customer SMS result:', results.customerSMS);
+    }
+
+    // Operator bell: rental return reminder (24h / today / overdue). IN ADDITION
+    // to the customer email/SMS above (left untouched). Dedupe key folds in the
+    // reminder stage so each stage still alerts, but retries within a stage don't.
+    if (data.tenantId) {
+      const bellTitle =
+        data.reminderType === "overdue"
+          ? "Rental return overdue"
+          : data.reminderType === "return_today"
+            ? "Rental return due today"
+            : "Rental return due tomorrow";
+      const bellMessage =
+        data.reminderType === "overdue"
+          ? `${data.customerName}'s ${data.vehicleName} (${data.bookingRef}) is ${data.daysOverdue ?? 0} day(s) overdue for return.`
+          : `${data.customerName}'s ${data.vehicleName} (${data.bookingRef}) is due back on ${data.returnDate}${data.returnTime ? ` at ${data.returnTime}` : ''}.`;
+      await notifyOperatorsInApp({
+        tenantId: data.tenantId,
+        type: "rental_reminder",
+        title: bellTitle,
+        message: bellMessage,
+        link: data.rentalId ? `/rentals/${data.rentalId}` : "/rentals",
+        metadata: {
+          rental_id: data.rentalId ?? null,
+          booking_ref: data.bookingRef,
+          reminder_type: data.reminderType,
+          days_overdue: data.daysOverdue ?? null,
+        },
+        dedupeKey: `${data.rentalId ?? data.bookingRef}_${data.reminderType}`,
+      });
     }
 
     return new Response(

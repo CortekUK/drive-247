@@ -3,7 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { corsHeaders } from "../_shared/aws-config.ts";
 import {
   sendEmail,
-  getTenantAdminEmail,
+  getTenantNotificationRecipient,
+  isOperatorEmailEnabled,
   getTenantBranding,
   TenantBranding,
   wrapWithBrandedTemplate
@@ -171,17 +172,6 @@ serve(async (req) => {
       ? await getTenantBranding(tenantId, supabase)
       : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
 
-    // Get tenant-specific admin email, fall back to env variable
-    let adminEmail: string | null = null;
-    if (tenantId) {
-      adminEmail = await getTenantAdminEmail(tenantId, supabase);
-      console.log('Using tenant admin email:', adminEmail);
-    }
-    if (!adminEmail) {
-      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
-      console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
-    }
-
     // Send customer confirmation email
     const customerSubject = `Booking Confirmed - ${data.vehicleMake} ${data.vehicleModel} (${data.vehicleReg})`;
     const customerEmailContent = generateCustomerEmailContent(data, branding);
@@ -190,15 +180,24 @@ serve(async (req) => {
     const customerEmailResult = await sendEmail(data.customerEmail, customerSubject, customerHtml, supabase, tenantId);
     console.log('Customer email sent:', customerEmailResult);
 
-    // Send admin notification email
+    // Operator new-booking email — gated on the 'bookings' email preference and
+    // routed to the tenant's configured notification recipient (default
+    // contact_email). The customer confirmation email above is unaffected.
     let adminEmailResult;
-    if (adminEmail) {
-      const adminSubject = `New Booking: ${data.customerName} - ${data.vehicleReg}`;
-      const adminEmailContent = generateAdminEmailContent(data, branding);
-      const adminHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
+    if (tenantId && await isOperatorEmailEnabled(supabase, tenantId, 'bookings')) {
+      const recipient = await getTenantNotificationRecipient(supabase, tenantId);
+      if (recipient) {
+        const adminSubject = `New Booking: ${data.customerName} - ${data.vehicleReg}`;
+        const adminEmailContent = generateAdminEmailContent(data, branding);
+        const adminHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
 
-      adminEmailResult = await sendEmail(adminEmail, adminSubject, adminHtml, supabase, tenantId);
-      console.log('Admin email sent:', adminEmailResult);
+        adminEmailResult = await sendEmail(recipient, adminSubject, adminHtml, supabase, tenantId);
+        console.log('Operator new-booking email sent to:', recipient);
+      } else {
+        console.log('No notification recipient resolved; skipping operator new-booking email');
+      }
+    } else {
+      console.log('Operator bookings email disabled (or no tenant); skipping new-booking email');
     }
 
     // Note: In-app notifications are created by the frontend (src/lib/notifications.ts)

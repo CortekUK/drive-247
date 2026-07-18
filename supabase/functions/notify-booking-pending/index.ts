@@ -4,8 +4,9 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
 import {
   sendEmail,
-  getTenantAdminEmail,
   getTenantBranding,
+  getTenantNotificationRecipient,
+  isOperatorEmailEnabled,
   TenantBranding,
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
@@ -274,31 +275,36 @@ serve(async (req) => {
       console.log('Customer SMS result:', results.customerSMS);
     }
 
-    // Get tenant-specific admin email, fall back to env variable
-    let adminEmail: string | null = null;
+    // OPERATOR EMAIL GATE (category: bookings). Send the operator heads-up ONLY
+    // when the tenant's master email switch AND the "bookings" pref are both on.
+    // Recipient resolves via notification_recipient_email -> contact_email ->
+    // admin_email -> env ADMIN_EMAIL. The customer email + bell above are left
+    // untouched — this gate/retarget applies to the OPERATOR email only.
     if (data.tenantId) {
-      adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
-      console.log('Using tenant admin email:', adminEmail);
-    }
-    if (!adminEmail) {
-      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
-      console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
-    }
+      const operatorEmailEnabled = await isOperatorEmailEnabled(supabase, data.tenantId, 'bookings');
+      if (operatorEmailEnabled) {
+        const operatorRecipient = await getTenantNotificationRecipient(supabase, data.tenantId);
+        if (operatorRecipient) {
+          // Build branded admin email HTML
+          const adminEmailContent = getAdminEmailContent(data, branding, currencyCode);
+          const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
 
-    // Build branded admin email HTML
-    const adminEmailContent = getAdminEmailContent(data, branding, currencyCode);
-    const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
-
-    // Send admin email
-    if (adminEmail) {
-      results.adminEmail = await sendEmail(
-        adminEmail,
-        `[ACTION REQUIRED] New Booking Pending: ${data.customerName} - ${data.vehicleName}`,
-        adminEmailHtml,
-        supabase,
-        data.tenantId
-      );
-      console.log('Admin email result:', results.adminEmail);
+          results.adminEmail = await sendEmail(
+            operatorRecipient,
+            `[ACTION REQUIRED] New Booking Pending: ${data.customerName} - ${data.vehicleName}`,
+            adminEmailHtml,
+            supabase,
+            data.tenantId
+          );
+          console.log('Operator booking email result:', results.adminEmail);
+        } else {
+          console.log('No operator recipient resolved, skipping operator booking email');
+        }
+      } else {
+        console.log('Operator emails disabled for bookings, skipping operator booking email');
+      }
+    } else {
+      console.log('No tenantId provided, skipping operator booking email');
     }
 
     // Send admin SMS (only if env configured - tenant SMS not yet supported)
