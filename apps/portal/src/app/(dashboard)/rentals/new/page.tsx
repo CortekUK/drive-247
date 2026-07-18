@@ -3483,8 +3483,8 @@ const CreateRental = () => {
                 const hasOverrides = taxOverride !== null || serviceFeeOverride !== null || depositOverride !== null || deliveryFeeOverride !== null || collectionFeeOverride !== null;
 
                 const periodType = watchedRentalPeriodType || "Monthly";
-                const rateLabel = periodType === "Daily" ? "Daily Rate" :
-                  periodType === "Weekly" ? "Weekly Rate" : "Monthly Rate";
+                const rateLabel = periodType === "Daily" ? "Base daily rate" :
+                  periodType === "Weekly" ? "Base weekly rate" : "Base monthly rate";
 
                 return (
                   <div className="rounded-xl border bg-card shadow-sm">
@@ -3632,8 +3632,8 @@ const CreateRental = () => {
                               const weekendTotal = weekendItems.reduce((sum, d) => sum + d.effectiveRate, 0);
 
                               return (
-                                <div className="mt-2 p-3 rounded-lg bg-muted/50 border text-xs space-y-2 animate-in slide-in-from-top-2 duration-200">
-                                  <p className="font-medium text-foreground text-sm">Pricing Breakdown</p>
+                                <div className="mt-2 p-4 rounded-lg bg-primary/5 border-2 border-primary/30 text-xs space-y-2 animate-in slide-in-from-top-2 duration-200">
+                                  <p className="font-semibold text-foreground text-base">Pricing Breakdown</p>
                                   <div className="space-y-1.5 text-muted-foreground">
                                     <div className="flex justify-between">
                                       <span>Vehicle</span>
@@ -3651,19 +3651,19 @@ const CreateRental = () => {
                                     {/* Period rate header (weekly/monthly) */}
                                     {tier === 'monthly' && (
                                       <div className="flex justify-between">
-                                        <span>Monthly Rate</span>
+                                        <span>Base monthly rate</span>
                                         <span>{formatCurrency(ratesForTier.monthly_rent, currency)}/month</span>
                                       </div>
                                     )}
                                     {tier === 'weekly' && (
                                       <div className="flex justify-between">
-                                        <span>Weekly Rate</span>
+                                        <span>Base weekly rate</span>
                                         <span>{formatCurrency(ratesForTier.weekly_rent, currency)}/week</span>
                                       </div>
                                     )}
                                     {/* Per-day equivalent — shown for all tiers since surcharges apply per-day */}
                                     <div className="flex justify-between">
-                                      <span>{tier === 'daily' ? 'Daily Rate' : 'Per-day rate'}</span>
+                                      <span>{tier === 'daily' ? 'Base daily rate' : 'Base per-day rate'}</span>
                                       <span>{formatCurrency(perDayBaseRounded, currency)}/day</span>
                                     </div>
                                     {regularDays > 0 && (

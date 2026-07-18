@@ -463,14 +463,18 @@ export function TraxPriceSuggestion({
   }
 
   // ── inline variant ──────────────────────────────────────────────────────
+  // Dimmed + explicitly badged as an AI estimate — it is a prediction, not a set price.
   return (
-    <div className={cn("inline-block", className)}>
+    <div className={cn("inline-block opacity-75", className)}>
       <span
         className={cn(
           "inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs",
         )}
       >
         <TraxIcon size={15} />
+        <span className="inline-flex items-center rounded-full bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-indigo-500 dark:bg-indigo-950/40 dark:text-indigo-400">
+          AI estimate
+        </span>
         {direction !== "hold" && (
           <span className="text-[#737373] dark:text-gray-500 line-through tabular-nums">
             {money(current)}
