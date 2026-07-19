@@ -3514,8 +3514,8 @@ const CreateRental = () => {
                           return (
                           <FormItem className="space-y-3">
                           <div className={isPayAsYouGo ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
-                            <FormItem>
-                              <FormLabel>{rateLabel} <span className="text-red-500">*</span></FormLabel>
+                            <FormItem className="min-w-0">
+                              <FormLabel className="whitespace-nowrap">{rateLabel} <span className="text-red-500">*</span></FormLabel>
                               <FormControl>
                                 <CurrencyInput
                                   value={perPeriodRate ?? 0}
