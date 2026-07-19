@@ -7,6 +7,7 @@ import {
   type WeekendConfig,
   type Holiday,
   type VehicleOverride,
+  type VehicleDailyPrice,
   type DayBreakdown,
 } from '@/lib/calculate-extension-price';
 
@@ -100,7 +101,7 @@ export function useExtensionPricing({
   const { data: dynamicData, isLoading: loadingDynamic } = useQuery({
     queryKey: ['extension-pricing-dynamic', tenant?.id, vehicleId],
     queryFn: async () => {
-      const [holidaysRes, overridesRes] = await Promise.all([
+      const [holidaysRes, overridesRes, dailyPricesRes] = await Promise.all([
         (supabase as any)
           .from('tenant_holidays')
           .select('*')
@@ -111,11 +112,19 @@ export function useExtensionPricing({
               .select('*')
               .eq('vehicle_id', vehicleId)
           : Promise.resolve({ data: [], error: null }),
+        vehicleId
+          ? (supabase as any)
+              .from('vehicle_daily_prices')
+              .select('date, price')
+              .eq('vehicle_id', vehicleId)
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
       return {
         holidays: (holidaysRes.data || []) as Holiday[],
         overrides: (overridesRes.data || []) as VehicleOverride[],
+        dailyPrices: ((dailyPricesRes.data || []) as { date: string; price: number }[])
+          .map(d => ({ date: d.date, price: Number(d.price) })) as VehicleDailyPrice[],
       };
     },
     enabled: !!tenant?.id && !!vehicleId,
@@ -149,7 +158,8 @@ export function useExtensionPricing({
       pricingData?.weekendConfig,
       dynamicData?.holidays,
       dynamicData?.overrides,
-      vehicleId
+      vehicleId,
+      dynamicData?.dailyPrices, // Turo-style per-day manual prices apply to extensions too
     );
 
     return {

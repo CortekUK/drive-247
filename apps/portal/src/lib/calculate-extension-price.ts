@@ -33,10 +33,16 @@ export interface VehicleOverride {
   custom_percent: number | null;
 }
 
+// Turo-style per-day manual price (overrides base rate + all surcharges for the day).
+export interface VehicleDailyPrice {
+  date: string; // YYYY-MM-DD
+  price: number;
+}
+
 export interface DayBreakdown {
   date: string; // YYYY-MM-DD
   dayOfWeek: number;
-  type: 'regular' | 'weekend' | 'holiday';
+  type: 'regular' | 'weekend' | 'holiday' | 'manual';
   holidayName?: string;
   baseRate: number;
   surchargePercent: number;
@@ -115,10 +121,22 @@ function getDayRate(
   weekendConfig: WeekendConfig | null,
   holidays: Holiday[],
   overrides: VehicleOverride[],
-  vehicleId?: string
+  vehicleId?: string,
+  dailyPriceMap?: Record<string, number>
 ): DayBreakdown {
   const dayOfWeek = date.getDay();
   const dateStr = formatDate(date);
+
+  // ── MANUAL PER-DAY PRICE (Turo mode) ──────────────────────────────────────
+  // An operator-set price for this exact calendar day wins absolutely over every
+  // surcharge/tier rate. Skipped entirely when no manual price is set for the day.
+  // Mirrors apps/portal/src/lib/calculate-rental-price.ts.
+  if (dailyPriceMap) {
+    const manual = dailyPriceMap[dateStr];
+    if (manual != null) {
+      return { date: dateStr, dayOfWeek, type: 'manual', baseRate, surchargePercent: 0, effectiveRate: manual, appliedSurcharges: [] };
+    }
+  }
 
   // ── STACKING MODE ─────────────────────────────────────────────────────────
   // When enabled (weekendConfig.stack_surcharges), EVERY applicable surcharge
@@ -249,7 +267,8 @@ export function calculateExtensionPrice(
   weekendConfig?: WeekendConfig | null,
   holidays?: Holiday[],
   overrides?: VehicleOverride[],
-  vehicleId?: string
+  vehicleId?: string,
+  dailyPrices?: VehicleDailyPrice[]
 ): ExtensionPriceResult {
   const start = parseDateString(startDate);
   const end = parseDateString(endDate);
@@ -261,6 +280,11 @@ export function calculateExtensionPrice(
 
   const safeHolidays = holidays || [];
   const safeOverrides = overrides || [];
+  // Coerce with Number(): Postgres numeric arrives as a JSON string over PostgREST.
+  const safeDailyPrices = dailyPrices || [];
+  const dailyPriceMap: Record<string, number> = {};
+  for (const dp of safeDailyPrices) dailyPriceMap[dp.date] = Number(dp.price);
+  const dailyPriceLookup = safeDailyPrices.length > 0 ? dailyPriceMap : undefined;
   const breakdown: DayBreakdown[] = [];
   let totalCost = 0;
 
@@ -274,7 +298,8 @@ export function calculateExtensionPrice(
       weekendConfig || null,
       safeHolidays,
       safeOverrides,
-      vehicleId
+      vehicleId,
+      dailyPriceLookup
     );
 
     breakdown.push(dayInfo);

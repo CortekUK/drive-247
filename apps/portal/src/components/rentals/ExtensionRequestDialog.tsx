@@ -773,7 +773,11 @@ export function ExtensionRequestDialog({
                         dayBreakdown.forEach((d) => {
                           const key = `${d.type}-${d.effectiveRate}`;
                           if (!groups[key]) {
-                            const label = d.type === 'holiday' ? (d.holidayName || 'Holiday') : d.type === 'weekend' ? 'Weekend' : 'Weekday';
+                            const label = (d.appliedSurcharges && d.appliedSurcharges.length > 1)
+                              ? d.appliedSurcharges.map(s => s.label).join(' + ')
+                              : d.type === 'manual' ? 'Custom price'
+                              : d.type === 'holiday' ? (d.holidayName || 'Holiday')
+                              : d.type === 'weekend' ? 'Weekend' : 'Weekday';
                             groups[key] = { count: 0, rate: d.effectiveRate, label };
                           }
                           groups[key].count++;

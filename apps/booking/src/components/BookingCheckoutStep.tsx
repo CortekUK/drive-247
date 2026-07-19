@@ -363,8 +363,10 @@ export default function BookingCheckoutStep({
         if (last && last.rate === day.effectiveRate && last.type === day.type) {
           last.count++;
         } else {
-          const label = day.type === 'holiday'
-            ? (day.holidayName || 'Holiday')
+          const label = (day.appliedSurcharges && day.appliedSurcharges.length > 1)
+            ? day.appliedSurcharges.map(s => s.label).join(' + ')
+            : day.type === 'manual' ? 'Custom price'
+            : day.type === 'holiday' ? (day.holidayName || 'Holiday')
             : day.type === 'weekend' ? 'Weekend' : 'Weekday';
           groups.push({ type: day.type, rate: day.effectiveRate, count: 1, label });
         }
@@ -1881,8 +1883,10 @@ export default function BookingCheckoutStep({
                         if (last && last.rate === day.effectiveRate && last.type === day.type) {
                           last.count++;
                         } else {
-                          const label = day.type === 'holiday'
-                            ? (day.holidayName || 'Holiday')
+                          const label = (day.appliedSurcharges && day.appliedSurcharges.length > 1)
+                            ? day.appliedSurcharges.map(s => s.label).join(' + ')
+                            : day.type === 'manual' ? 'Custom price'
+                            : day.type === 'holiday' ? (day.holidayName || 'Holiday')
                             : day.type === 'weekend' ? 'Weekend' : 'Weekday';
                           groups.push({ type: day.type, rate: day.effectiveRate, count: 1, label });
                         }

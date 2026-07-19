@@ -53,7 +53,7 @@ export function useExtensionPricing({
   rentalPeriodType,
 }: UseExtensionPricingParams): ExtensionPricingResult {
   const { tenant } = useTenant();
-  const { holidays, vehicleOverrides, isLoading: loadingDynamic } = useDynamicPricing(vehicleId);
+  const { holidays, vehicleOverrides, dailyPrices, isLoading: loadingDynamic } = useDynamicPricing(vehicleId);
 
   // Fetch vehicle rates (all tiers)
   const { data: vehicleData, isLoading: loadingRate } = useQuery({
@@ -96,7 +96,11 @@ export function useExtensionPricing({
       weekendConfig,
       holidays,
       vehicleOverrides,
-      vehicleId
+      vehicleId,
+      mtd,
+      false, // skipSurcharges
+      false, // stackSurcharges resolved from weekendConfig
+      dailyPrices, // Turo-style per-day manual prices apply to extensions too
     );
 
     return {
@@ -106,7 +110,7 @@ export function useExtensionPricing({
       dayBreakdown: priceResult.dayBreakdown,
       hasSurcharges: priceResult.dayBreakdown.some(d => d.type !== 'regular'),
     };
-  }, [vehicleData, currentEndDate, newEndDate, weekendConfig, holidays, vehicleOverrides, vehicleId, rentalPeriodType]);
+  }, [vehicleData, currentEndDate, newEndDate, weekendConfig, holidays, vehicleOverrides, dailyPrices, vehicleId, rentalPeriodType]);
 
   return {
     ...result,
