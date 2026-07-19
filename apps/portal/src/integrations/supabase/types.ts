@@ -4664,6 +4664,55 @@ export type Database = {
           },
         ]
       }
+      email_notification_prefs: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          is_enabled: boolean
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_notification_prefs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_notification_prefs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "email_notification_prefs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
       email_templates: {
         Row: {
           body: string | null
@@ -13748,6 +13797,7 @@ export type Database = {
           delivery_tiers_enabled: boolean
           deposit_mode: string | null
           distance_unit: string | null
+          email_notifications_enabled: boolean
           enquiries_enabled: boolean
           facebook_url: string | null
           favicon_url: string | null
@@ -13809,6 +13859,7 @@ export type Database = {
           monday_open: string | null
           monthly_tier_days: number
           multiple_locations_enabled: boolean | null
+          notification_recipient_email: string | null
           og_image_url: string | null
           own_stripe_account_id: string | null
           own_stripe_connected_at: string | null
@@ -13855,6 +13906,7 @@ export type Database = {
           service_fee_value: number | null
           setup_completed_at: string | null
           slug: string
+          stack_surcharges: boolean
           status: string
           stripe_account_id: string | null
           stripe_account_status: string | null
@@ -13969,6 +14021,7 @@ export type Database = {
           delivery_tiers_enabled?: boolean
           deposit_mode?: string | null
           distance_unit?: string | null
+          email_notifications_enabled?: boolean
           enquiries_enabled?: boolean
           facebook_url?: string | null
           favicon_url?: string | null
@@ -14030,6 +14083,7 @@ export type Database = {
           monday_open?: string | null
           monthly_tier_days?: number
           multiple_locations_enabled?: boolean | null
+          notification_recipient_email?: string | null
           og_image_url?: string | null
           own_stripe_account_id?: string | null
           own_stripe_connected_at?: string | null
@@ -14076,6 +14130,7 @@ export type Database = {
           service_fee_value?: number | null
           setup_completed_at?: string | null
           slug: string
+          stack_surcharges?: boolean
           status?: string
           stripe_account_id?: string | null
           stripe_account_status?: string | null
@@ -14190,6 +14245,7 @@ export type Database = {
           delivery_tiers_enabled?: boolean
           deposit_mode?: string | null
           distance_unit?: string | null
+          email_notifications_enabled?: boolean
           enquiries_enabled?: boolean
           facebook_url?: string | null
           favicon_url?: string | null
@@ -14251,6 +14307,7 @@ export type Database = {
           monday_open?: string | null
           monthly_tier_days?: number
           multiple_locations_enabled?: boolean | null
+          notification_recipient_email?: string | null
           og_image_url?: string | null
           own_stripe_account_id?: string | null
           own_stripe_connected_at?: string | null
@@ -14297,6 +14354,7 @@ export type Database = {
           service_fee_value?: number | null
           setup_completed_at?: string | null
           slug?: string
+          stack_surcharges?: boolean
           status?: string
           stripe_account_id?: string | null
           stripe_account_status?: string | null
@@ -14558,6 +14616,69 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
             referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      vehicle_daily_prices: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          price: number
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          price: number
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          price?: number
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_daily_prices_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_daily_prices_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_daily_prices_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_daily_prices_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_daily_prices_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
           },
         ]
       }
@@ -16827,6 +16948,10 @@ export type Database = {
         Returns: string
       }
       exec_sql: { Args: { query: string }; Returns: undefined }
+      finalize_credit_covered_extension: {
+        Args: { p_extension_id: string }
+        Returns: boolean
+      }
       finalize_rental_extension: {
         Args: { p_extension_id: string; p_payment_id: string }
         Returns: {
@@ -16836,6 +16961,17 @@ export type Database = {
           out_previous_end_date: string
           out_rental_id: string
           out_status: string
+        }[]
+      }
+      find_autoextend_reconcile_candidates: {
+        Args: { p_only_rental_id?: string }
+        Returns: {
+          charge_count: number
+          current_end_date: string
+          new_end_date: string
+          paying_payment_id: string
+          pending_ext_id: string
+          rental_id: string
         }[]
       }
       fine_void_charge: { Args: { f_id: string }; Returns: undefined }
@@ -17209,6 +17345,10 @@ export type Database = {
       rental_create_charge: {
         Args: { amt: number; due: string; r_id: string }
         Returns: string
+      }
+      reverse_extension_credit: {
+        Args: { p_extension_id: string }
+        Returns: undefined
       }
       seed_default_accounting_mappings: {
         Args: {
