@@ -222,7 +222,9 @@ export function PricingPanel({
               )}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              A custom price overrides the base rate and any weekend/holiday surcharge for that day — on both the operator side and customer checkout.
+              A custom price is charged as-is for that day — overriding the base rate, any
+              weekend/holiday surcharge, and the weekly/monthly discount — on both the operator
+              side and customer checkout.
             </p>
           </div>
         )}

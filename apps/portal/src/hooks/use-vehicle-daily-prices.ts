@@ -47,7 +47,11 @@ export const useVehicleDailyPrices = (vehicleId?: string) => {
     return m;
   }, [prices]);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey });
+    // Keep the fleet calendar's Pricing grid in sync when edited from here.
+    queryClient.invalidateQueries({ queryKey: ['fleet-daily-prices'] });
+  };
 
   // Upsert one or many day prices (unique on vehicle_id,date).
   const setPricesMutation = useMutation({

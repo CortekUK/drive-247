@@ -49,7 +49,8 @@ export const useFleetDailyPrices = (
         .select('vehicle_id, date, price')
         .in('vehicle_id', vehicleIds)
         .gte('date', rangeStartStr)
-        .lte('date', rangeEndStr);
+        .lte('date', rangeEndStr)
+        .limit(5000); // well above fleet×range; avoids the PostgREST default-rows cap
       if (error) throw error;
       return (data || []).map((r: any) => ({ vehicle_id: r.vehicle_id, date: r.date, price: Number(r.price) }));
     },

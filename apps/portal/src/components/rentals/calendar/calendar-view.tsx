@@ -226,7 +226,7 @@ export function CalendarView({ filters }: CalendarViewProps) {
             {(["bookings", "pricing"] as const).map((m) => (
               <button
                 key={m}
-                onClick={() => setMode(m)}
+                onClick={() => { setMode(m); setPricingCell(null); }}
                 className={cn(
                   "px-3 py-1 rounded text-xs font-medium capitalize transition-colors",
                   mode === m

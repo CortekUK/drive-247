@@ -54,6 +54,9 @@ const BookingVehiclesContent = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
+  // Turo-style per-day manual prices for the listed vehicles over the chosen dates,
+  // so the "from $X" list total matches the checkout total (not just base+surcharge).
+  const [dailyPriceMap, setDailyPriceMap] = useState<Record<string, { date: string; price: number }[]>>({});
   const enquiriesEnabled = tenant?.enquiries_enabled !== false;
 
   // Extract booking context from URL
@@ -229,6 +232,35 @@ const BookingVehiclesContent = () => {
     }
   };
 
+  // Batch-load manual per-day prices for all listed vehicles over the selected range.
+  useEffect(() => {
+    const ids = vehicles.map((v) => v.id);
+    if (!ids.length || !pickupDate || !returnDate) {
+      setDailyPriceMap({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("vehicle_daily_prices")
+        .select("vehicle_id, date, price")
+        .in("vehicle_id", ids)
+        .gte("date", pickupDate)
+        .lte("date", returnDate)
+        .limit(5000);
+      if (cancelled) return;
+      const m: Record<string, { date: string; price: number }[]> = {};
+      for (const r of data || []) {
+        if (!m[r.vehicle_id]) m[r.vehicle_id] = [];
+        m[r.vehicle_id].push({ date: r.date, price: Number(r.price) });
+      }
+      setDailyPriceMap(m);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [vehicles, pickupDate, returnDate]);
+
   const calculateRentalDays = () => {
     const pickup = parseDateString(pickupDate);
     const dropoff = parseDateString(returnDate);
@@ -257,11 +289,14 @@ const BookingVehiclesContent = () => {
         },
         weekendConfig,
         holidays,
-        // Page renders many vehicles — per-vehicle overrides aren't fetched here;
+        // Page renders many vehicles — per-vehicle surcharge overrides aren't fetched here;
         // tenant-level weekend + holiday surcharges still apply.
         [],
         vehicle.id,
-        tenant?.monthly_tier_days ?? 30
+        tenant?.monthly_tier_days ?? 30,
+        false, // skipSurcharges
+        false, // stackSurcharges resolved from weekendConfig
+        dailyPriceMap[vehicle.id] || [], // Turo-style per-day manual prices → list matches checkout
       );
       return result.rentalPrice;
     }
