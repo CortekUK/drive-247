@@ -9,6 +9,8 @@ import { useCalendarRentals } from "@/hooks/use-calendar-rentals";
 import { useCalendarBlocks } from "@/hooks/use-calendar-blocks";
 import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
 import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
+import { useFleetDailyPrices } from "@/hooks/use-fleet-daily-prices";
+import { useTenant } from "@/contexts/TenantContext";
 import { RentalFilters } from "@/hooks/use-enhanced-rentals";
 import {
   ViewType,
@@ -19,6 +21,8 @@ import {
 } from "@/lib/calendar-utils";
 import { CalendarHeader } from "./calendar-header";
 import { VehicleRow } from "./vehicle-row";
+import { PricingRow, type PricingDateMeta } from "./pricing-row";
+import { PricingPanel } from "./pricing-panel";
 import { AIInsightsPanel } from "./ai-insights-panel";
 import {
   AlertDialog,
@@ -44,6 +48,11 @@ export function CalendarView({ filters }: CalendarViewProps) {
   const [activeStatuses, setActiveStatuses] = useState<Set<string>>(
     new Set(["Active", "Upcoming", "Pending", "Completed", "Cancelled"])
   );
+  // Bookings (bar timeline) vs Pricing (Turo-style per-day price grid).
+  const [mode, setMode] = useState<"bookings" | "pricing">("bookings");
+  const [pricingCell, setPricingCell] = useState<{ vehicleId: string; date: string } | null>(null);
+  const { tenant } = useTenant();
+  const currency = tenant?.currency_code || "USD";
 
   const toggleStatus = (status: string) => {
     setActiveStatuses((prev) => {
@@ -100,6 +109,39 @@ export function CalendarView({ filters }: CalendarViewProps) {
       rentals: v.rentals.filter((r) => activeStatuses.has(r.computed_status)),
     }));
   }, [data?.grouped, activeStatuses]);
+
+  // Pricing mode — fleet-wide per-day prices for the visible vehicles + range.
+  // Only fetched when the operator is in Pricing mode (empty ids skips the query).
+  const vehicleIds = useMemo(() => filteredGrouped.map((v) => v.vehicle.id), [filteredGrouped]);
+  const rangeStartStr = format(rangeStart, "yyyy-MM-dd");
+  const rangeEndStr = format(rangeEnd, "yyyy-MM-dd");
+  const { baseRateMap, priceMap, setPrices, isSetting, clearPrices, isClearing } =
+    useFleetDailyPrices(mode === "pricing" ? vehicleIds : [], rangeStartStr, rangeEndStr);
+
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const dateMeta = useMemo<PricingDateMeta[]>(
+    () =>
+      dates.map((d) => {
+        const p = classifyDatePricing(d, weekendConfig, holidays);
+        const ds = format(d, "yyyy-MM-dd");
+        return {
+          dateStr: ds,
+          isPast: ds < todayStr,
+          isToday: isToday(d),
+          isWeekend: d.getDay() === 0 || d.getDay() === 6,
+          surchargePercent: p.surchargePercent,
+          surchargeType: p.type,
+        };
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dates, weekendConfig, holidays, todayStr]
+  );
+
+  const getManualFor = (vehicleId: string) => (date: string) => priceMap[`${vehicleId}::${date}`];
+  const pricingVehicle = pricingCell
+    ? filteredGrouped.find((v) => v.vehicle.id === pricingCell.vehicleId)?.vehicle ?? null
+    : null;
+  const pricingBaseRate = pricingCell ? baseRateMap[pricingCell.vehicleId] ?? 0 : 0;
 
   const handleCreateBlock = (
     vehicleId: string,
@@ -178,7 +220,36 @@ export function CalendarView({ filters }: CalendarViewProps) {
           <AIInsightsPanel grouped={data?.grouped || []} />
         )}
 
-        {/* Status filter buttons */}
+        {/* Mode toggle — Bookings (bar timeline) vs Pricing (per-day price grid) */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="inline-flex rounded-md border p-0.5 bg-muted/30">
+            {(["bookings", "pricing"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={cn(
+                  "px-3 py-1 rounded text-xs font-medium capitalize transition-colors",
+                  mode === m
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+          {mode === "pricing" && (
+            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-indigo-500 inline-block" /> Custom price
+              </span>
+              <span>Click a day to set a price</span>
+            </div>
+          )}
+        </div>
+
+        {/* Status filter buttons (bookings mode only) */}
+        {mode === "bookings" && (
         <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 pb-1 scrollbar-thin">
           <span className="text-[11px] text-muted-foreground font-medium mr-1 shrink-0">Status:</span>
           {[
@@ -209,6 +280,7 @@ export function CalendarView({ filters }: CalendarViewProps) {
             );
           })}
         </div>
+        )}
 
         {/* Calendar grid */}
         <div className={cn(
@@ -222,9 +294,13 @@ export function CalendarView({ filters }: CalendarViewProps) {
           ) : !filteredGrouped.length ? (
             <div className="text-center py-16">
               <CalendarIcon className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-              <h3 className="text-sm font-medium mb-1">No rentals found</h3>
+              <h3 className="text-sm font-medium mb-1">
+                {mode === "pricing" ? "No vehicles found" : "No rentals found"}
+              </h3>
               <p className="text-xs text-muted-foreground">
-                No rentals match the current filters for this date range.
+                {mode === "pricing"
+                  ? "Add a vehicle to your fleet to set per-day prices."
+                  : "No rentals match the current filters for this date range."}
               </p>
             </div>
           ) : (
@@ -308,20 +384,33 @@ export function CalendarView({ filters }: CalendarViewProps) {
                     />
                   )}
 
-                  {filteredGrouped.map((vehicleData, index) => (
-                    <VehicleRow
-                      key={vehicleData.vehicle.id}
-                      data={vehicleData}
-                      rangeStart={rangeStart}
-                      rangeEnd={rangeEnd}
-                      index={index}
-                      dates={dates}
-                      onCreateBlock={handleCreateBlock}
-                      onAddBlock={handleAddBlockForVehicle}
-                      onRemoveBlock={handleRemoveBlock}
-                      removingBlockId={removeBlock.isPending ? (removeBlock.variables as string) : null}
-                    />
-                  ))}
+                  {filteredGrouped.map((vehicleData, index) =>
+                    mode === "pricing" ? (
+                      <PricingRow
+                        key={vehicleData.vehicle.id}
+                        vehicle={vehicleData.vehicle}
+                        dateMeta={dateMeta}
+                        baseRate={baseRateMap[vehicleData.vehicle.id] ?? 0}
+                        currency={currency}
+                        index={index}
+                        getManual={getManualFor(vehicleData.vehicle.id)}
+                        onCellClick={(vehicleId, date) => setPricingCell({ vehicleId, date })}
+                      />
+                    ) : (
+                      <VehicleRow
+                        key={vehicleData.vehicle.id}
+                        data={vehicleData}
+                        rangeStart={rangeStart}
+                        rangeEnd={rangeEnd}
+                        index={index}
+                        dates={dates}
+                        onCreateBlock={handleCreateBlock}
+                        onAddBlock={handleAddBlockForVehicle}
+                        onRemoveBlock={handleRemoveBlock}
+                        removingBlockId={removeBlock.isPending ? (removeBlock.variables as string) : null}
+                      />
+                    )
+                  )}
                 </div>
               </div>
 
@@ -406,6 +495,21 @@ export function CalendarView({ filters }: CalendarViewProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Pricing mode — right-side panel to set/adjust a vehicle day's price */}
+      <PricingPanel
+        open={!!pricingCell}
+        onOpenChange={(o) => !o && setPricingCell(null)}
+        vehicle={pricingVehicle}
+        baseRate={pricingBaseRate}
+        startDate={pricingCell?.date ?? null}
+        currency={currency}
+        getManual={pricingCell ? getManualFor(pricingCell.vehicleId) : () => undefined}
+        onApply={(vehicleId, entries) => setPrices({ vehicleId, entries })}
+        onClear={(vehicleId, dates) => clearPrices({ vehicleId, dates })}
+        isSetting={isSetting}
+        isClearing={isClearing}
+      />
     </TooltipProvider>
   );
 }
