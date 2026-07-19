@@ -185,7 +185,6 @@ const CreateRental = () => {
 
   // Fee override state — admin can override per-rental
   const [taxOverride, setTaxOverride] = useState<number | null>(null);
-  const [showPricingBreakdown, setShowPricingBreakdown] = useState(false);
   const [serviceFeeOverride, setServiceFeeOverride] = useState<number | null>(null);
   const [depositOverride, setDepositOverride] = useState<number | null>(null);
 
@@ -3499,7 +3498,9 @@ const CreateRental = () => {
                       </div>
                       <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Pricing & Fees</h2>
                     </div>
-                    <div className="p-5 space-y-5">
+                    <div className="p-5">
+                      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6 items-start">
+                        <div className="space-y-5 min-w-0">
                       {/* Rate + Total side by side */}
                       <FormField
                         control={form.control}
@@ -3565,180 +3566,6 @@ const CreateRental = () => {
                               </div>
                             )}
                           </div>
-                          {vehicle && days > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => setShowPricingBreakdown(!showPricingBreakdown)}
-                              className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 transition-colors"
-                            >
-                              <Info className="h-3 w-3" />
-                              {showPricingBreakdown ? 'Hide' : 'How is this calculated?'}
-                            </button>
-                          )}
-                            {showPricingBreakdown && vehicle && days > 0 && (() => {
-                              const weeklyRent = vehicle.weekly_rent || 0;
-                              const monthlyRent = vehicle.monthly_rent || 0;
-                              // perPeriodRate stands in for the daily base rate when on the daily tier,
-                              // so user edits to the rate are reflected in the breakdown.
-                              const dailyRent = (perPeriodRate && perPeriodRate > 0) ? perPeriodRate : (vehicle.daily_rent || 0);
-                              const tier = days >= mtd && monthlyRent > 0 ? 'monthly'
-                                : days >= 7 && days < mtd && weeklyRent > 0 ? 'weekly'
-                                : dailyRent > 0 ? 'daily'
-                                : weeklyRent > 0 ? 'weekly' : 'monthly';
-
-                              // Slot the user-editable perPeriodRate into the active tier's rate so
-                              // the breakdown matches the form value. Surcharges apply across all tiers
-                              // via the shared pricing helper (incl. weekend + holiday + vehicle overrides).
-                              const ratesForTier = {
-                                daily_rent: tier === 'daily' ? dailyRent : (vehicle.daily_rent || 0),
-                                weekly_rent: tier === 'weekly' && perPeriodRate ? perPeriodRate : weeklyRent,
-                                monthly_rent: tier === 'monthly' && perPeriodRate ? perPeriodRate : monthlyRent,
-                              };
-                              const breakdownResult = (watchedStartDate && watchedEndDate)
-                                ? calculateRentalPriceBreakdown(
-                                    format(watchedStartDate, 'yyyy-MM-dd'),
-                                    format(watchedEndDate, 'yyyy-MM-dd'),
-                                    ratesForTier,
-                                    weekendPricingSettings,
-                                    tenantHolidays,
-                                    vehiclePricingOverrides,
-                                    selectedVehicleId || undefined,
-                                    mtd,
-                                    false, // skipSurcharges — show full breakdown
-                                    false, // stackSurcharges resolved from weekendConfig
-                                    vehicleDailyPrices, // Turo-style per-day manual prices
-                                  )
-                                : null;
-
-                              // Per-day equivalent rate for the active tier (what each non-surcharge day costs)
-                              const perDayBase = tier === 'monthly' ? (ratesForTier.monthly_rent / mtd)
-                                : tier === 'weekly' ? (ratesForTier.weekly_rent / 7)
-                                : ratesForTier.daily_rent;
-                              const perDayBaseRounded = Math.round(perDayBase * 100) / 100;
-
-                              // Group days for display (all tiers)
-                              const regularItems: DayBreakdown[] = [];
-                              const weekendItems: DayBreakdown[] = [];
-                              const manualItems: DayBreakdown[] = [];
-                              const holidayGroups: Record<string, { name: string; items: DayBreakdown[]; surcharge: number }> = {};
-                              if (breakdownResult) {
-                                for (const d of breakdownResult.dayBreakdown) {
-                                  if (d.type === 'manual') {
-                                    // Turo-style per-day custom price — shown as its own line.
-                                    manualItems.push(d);
-                                  } else if (d.appliedSurcharges && d.appliedSurcharges.length > 1) {
-                                    // Stacked day (2+ surcharges) — group under the combined label so the
-                                    // breakdown honestly reads e.g. "Birthday + Weekend (+10100%)" instead
-                                    // of hiding one surcharge under the other.
-                                    const label = d.appliedSurcharges.map(s => s.label).join(' + ');
-                                    const key = `stack::${label}::${d.surchargePercent}`;
-                                    if (!holidayGroups[key]) {
-                                      holidayGroups[key] = { name: label, items: [], surcharge: d.surchargePercent };
-                                    }
-                                    holidayGroups[key].items.push(d);
-                                  } else if (d.type === 'holiday') {
-                                    const key = `${d.holidayName ?? 'Holiday'}::${d.surchargePercent}`;
-                                    if (!holidayGroups[key]) {
-                                      holidayGroups[key] = { name: d.holidayName ?? 'Holiday', items: [], surcharge: d.surchargePercent };
-                                    }
-                                    holidayGroups[key].items.push(d);
-                                  } else if (d.type === 'weekend') {
-                                    weekendItems.push(d);
-                                  } else {
-                                    regularItems.push(d);
-                                  }
-                                }
-                              }
-                              const regularDays = regularItems.length;
-                              const weekendDays = weekendItems.length;
-                              const weekendTotal = weekendItems.reduce((sum, d) => sum + d.effectiveRate, 0);
-
-                              return (
-                                <div className="mt-2 p-4 rounded-lg bg-primary/5 border-2 border-primary/30 text-xs space-y-2 animate-in slide-in-from-top-2 duration-200">
-                                  <p className="font-semibold text-foreground text-base">Pricing Breakdown</p>
-                                  <div className="space-y-1.5 text-muted-foreground">
-                                    <div className="flex justify-between">
-                                      <span>Vehicle</span>
-                                      <span className="font-medium text-foreground">{vehicle.make} {vehicle.model} ({vehicle.reg})</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Duration</span>
-                                      <span className="font-medium text-foreground">{days} day{days !== 1 ? 's' : ''}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Pricing Tier</span>
-                                      <Badge variant="outline" className="text-[10px] h-5 capitalize">{tier}</Badge>
-                                    </div>
-                                    <div className="border-t my-1.5" />
-                                    {/* Period rate header (weekly/monthly) */}
-                                    {tier === 'monthly' && (
-                                      <div className="flex justify-between">
-                                        <span>Base monthly rate</span>
-                                        <span>{formatCurrency(ratesForTier.monthly_rent, currency)}/month</span>
-                                      </div>
-                                    )}
-                                    {tier === 'weekly' && (
-                                      <div className="flex justify-between">
-                                        <span>Base weekly rate</span>
-                                        <span>{formatCurrency(ratesForTier.weekly_rent, currency)}/week</span>
-                                      </div>
-                                    )}
-                                    {/* Per-day equivalent — shown for all tiers since surcharges apply per-day */}
-                                    <div className="flex justify-between">
-                                      <span>{tier === 'daily' ? 'Base daily rate' : 'Base per-day rate'}</span>
-                                      <span>{formatCurrency(perDayBaseRounded, currency)}/day</span>
-                                    </div>
-                                    {regularDays > 0 && (
-                                      <div className="flex justify-between">
-                                        <span>Regular days</span>
-                                        <span>{regularDays} &times; {formatCurrency(perDayBaseRounded, currency)} = {formatCurrency(regularItems.reduce((s, d) => s + d.effectiveRate, 0), currency)}</span>
-                                      </div>
-                                    )}
-                                    {weekendDays > 0 && (
-                                      <div className="flex justify-between text-amber-600 dark:text-amber-400">
-                                        <span>Weekend days (+{weekendPricingSettings.weekend_surcharge_percent}%)</span>
-                                        <span>{weekendDays} day{weekendDays !== 1 ? 's' : ''} = {formatCurrency(weekendTotal, currency)}</span>
-                                      </div>
-                                    )}
-                                    {Object.values(holidayGroups).map((g) => {
-                                      const total = g.items.reduce((s, d) => s + d.effectiveRate, 0);
-                                      return (
-                                        <div key={g.name + g.surcharge} className="flex justify-between text-orange-600 dark:text-orange-400">
-                                          <span>{g.name} {g.surcharge > 0 ? `(+${g.surcharge}%)` : '(override)'}</span>
-                                          <span>{g.items.length} day{g.items.length !== 1 ? 's' : ''} = {formatCurrency(total, currency)}</span>
-                                        </div>
-                                      );
-                                    })}
-                                    {manualItems.length > 0 && (
-                                      <div className="flex justify-between text-indigo-600 dark:text-indigo-400">
-                                        <span>Custom prices</span>
-                                        <span>{manualItems.length} day{manualItems.length !== 1 ? 's' : ''} = {formatCurrency(manualItems.reduce((s, d) => s + d.effectiveRate, 0), currency)}</span>
-                                      </div>
-                                    )}
-                                    <div className="border-t my-1.5" />
-                                    {(() => {
-                                      // Auto-calculated amount from the shared engine (all tiers, surcharge-inclusive)
-                                      const autoTotal = breakdownResult ? breakdownResult.rentalPrice : 0;
-                                      const isOverridden = autoTotal > 0 && Math.abs((field.value || 0) - autoTotal) > 0.01;
-                                      return (
-                                        <>
-                                          <div className="flex justify-between font-medium text-foreground">
-                                            <span>Auto-Calculated</span>
-                                            <span className={isOverridden ? 'line-through text-muted-foreground' : ''}>{formatCurrency(autoTotal, currency)}</span>
-                                          </div>
-                                          {isOverridden && (
-                                            <div className="flex justify-between font-medium text-amber-600 dark:text-amber-400">
-                                              <span>Admin Override</span>
-                                              <span>{formatCurrency(field.value || 0, currency)}</span>
-                                            </div>
-                                          )}
-                                        </>
-                                      );
-                                    })()}
-                                  </div>
-                                </div>
-                              );
-                            })()}
                             <FormMessage />
                           </FormItem>
                           );
@@ -4019,6 +3846,168 @@ const CreateRental = () => {
                           )}
                         </>
                       )}
+                        </div>
+                        <div className="lg:sticky lg:top-6 h-fit">
+                          {(() => {
+                            const vehicle = vehicles?.find(v => v.id === selectedVehicleId);
+                            const days = watchedStartDate && watchedEndDate
+                              ? Math.max(1, differenceInDays(watchedEndDate, watchedStartDate))
+                              : 0;
+                            if (!vehicle || days <= 0) {
+                              return (
+                                <div className="p-4 rounded-lg bg-primary/5 border-2 border-primary/30 text-xs text-muted-foreground">
+                                  <p className="font-semibold text-foreground text-base mb-1">Pricing Breakdown</p>
+                                  <p>Select a vehicle and rental dates to see the price breakdown.</p>
+                                </div>
+                              );
+                            }
+                            const weeklyRent = vehicle.weekly_rent || 0;
+                            const monthlyRent = vehicle.monthly_rent || 0;
+                            const dailyRent = (perPeriodRate && perPeriodRate > 0) ? perPeriodRate : (vehicle.daily_rent || 0);
+                            const tier = days >= mtd && monthlyRent > 0 ? 'monthly'
+                              : days >= 7 && days < mtd && weeklyRent > 0 ? 'weekly'
+                              : dailyRent > 0 ? 'daily'
+                              : weeklyRent > 0 ? 'weekly' : 'monthly';
+                            const ratesForTier = {
+                              daily_rent: tier === 'daily' ? dailyRent : (vehicle.daily_rent || 0),
+                              weekly_rent: tier === 'weekly' && perPeriodRate ? perPeriodRate : weeklyRent,
+                              monthly_rent: tier === 'monthly' && perPeriodRate ? perPeriodRate : monthlyRent,
+                            };
+                            const breakdownResult = (watchedStartDate && watchedEndDate)
+                              ? calculateRentalPriceBreakdown(
+                                  format(watchedStartDate, 'yyyy-MM-dd'),
+                                  format(watchedEndDate, 'yyyy-MM-dd'),
+                                  ratesForTier,
+                                  weekendPricingSettings,
+                                  tenantHolidays,
+                                  vehiclePricingOverrides,
+                                  selectedVehicleId || undefined,
+                                  mtd,
+                                  false, // skipSurcharges — show full breakdown
+                                  false, // stackSurcharges resolved from weekendConfig
+                                  vehicleDailyPrices, // Turo-style per-day manual prices
+                                )
+                              : null;
+                            const perDayBase = tier === 'monthly' ? (ratesForTier.monthly_rent / mtd)
+                              : tier === 'weekly' ? (ratesForTier.weekly_rent / 7)
+                              : ratesForTier.daily_rent;
+                            const perDayBaseRounded = Math.round(perDayBase * 100) / 100;
+                            const regularItems: DayBreakdown[] = [];
+                            const weekendItems: DayBreakdown[] = [];
+                            const manualItems: DayBreakdown[] = [];
+                            const holidayGroups: Record<string, { name: string; items: DayBreakdown[]; surcharge: number }> = {};
+                            if (breakdownResult) {
+                              for (const d of breakdownResult.dayBreakdown) {
+                                if (d.type === 'manual') {
+                                  manualItems.push(d);
+                                } else if (d.appliedSurcharges && d.appliedSurcharges.length > 1) {
+                                  const label = d.appliedSurcharges.map(s => s.label).join(' + ');
+                                  const key = `stack::${label}::${d.surchargePercent}`;
+                                  if (!holidayGroups[key]) {
+                                    holidayGroups[key] = { name: label, items: [], surcharge: d.surchargePercent };
+                                  }
+                                  holidayGroups[key].items.push(d);
+                                } else if (d.type === 'holiday') {
+                                  const key = `${d.holidayName ?? 'Holiday'}::${d.surchargePercent}`;
+                                  if (!holidayGroups[key]) {
+                                    holidayGroups[key] = { name: d.holidayName ?? 'Holiday', items: [], surcharge: d.surchargePercent };
+                                  }
+                                  holidayGroups[key].items.push(d);
+                                } else if (d.type === 'weekend') {
+                                  weekendItems.push(d);
+                                } else {
+                                  regularItems.push(d);
+                                }
+                              }
+                            }
+                            const regularDays = regularItems.length;
+                            const weekendDays = weekendItems.length;
+                            const weekendTotal = weekendItems.reduce((sum, d) => sum + d.effectiveRate, 0);
+                            return (
+                              <div className="p-4 rounded-lg bg-primary/5 border-2 border-primary/30 text-xs space-y-2">
+                                <p className="font-semibold text-foreground text-base">Pricing Breakdown</p>
+                                <div className="space-y-1.5 text-muted-foreground">
+                                  <div className="flex justify-between">
+                                    <span>Vehicle</span>
+                                    <span className="font-medium text-foreground">{vehicle.make} {vehicle.model} ({vehicle.reg})</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Duration</span>
+                                    <span className="font-medium text-foreground">{days} day{days !== 1 ? 's' : ''}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Pricing Tier</span>
+                                    <Badge variant="outline" className="text-[10px] h-5 capitalize">{tier}</Badge>
+                                  </div>
+                                  <div className="border-t my-1.5" />
+                                  {tier === 'monthly' && (
+                                    <div className="flex justify-between">
+                                      <span>Base monthly rate</span>
+                                      <span>{formatCurrency(ratesForTier.monthly_rent, currency)}/month</span>
+                                    </div>
+                                  )}
+                                  {tier === 'weekly' && (
+                                    <div className="flex justify-between">
+                                      <span>Base weekly rate</span>
+                                      <span>{formatCurrency(ratesForTier.weekly_rent, currency)}/week</span>
+                                    </div>
+                                  )}
+                                  <div className="flex justify-between">
+                                    <span>{tier === 'daily' ? 'Base daily rate' : 'Base per-day rate'}</span>
+                                    <span>{formatCurrency(perDayBaseRounded, currency)}/day</span>
+                                  </div>
+                                  {regularDays > 0 && (
+                                    <div className="flex justify-between">
+                                      <span>Regular days</span>
+                                      <span>{regularDays} &times; {formatCurrency(perDayBaseRounded, currency)} = {formatCurrency(regularItems.reduce((s, d) => s + d.effectiveRate, 0), currency)}</span>
+                                    </div>
+                                  )}
+                                  {weekendDays > 0 && (
+                                    <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                                      <span>Weekend days (+{weekendPricingSettings.weekend_surcharge_percent}%)</span>
+                                      <span>{weekendDays} day{weekendDays !== 1 ? 's' : ''} = {formatCurrency(weekendTotal, currency)}</span>
+                                    </div>
+                                  )}
+                                  {Object.values(holidayGroups).map((g) => {
+                                    const total = g.items.reduce((s, d) => s + d.effectiveRate, 0);
+                                    return (
+                                      <div key={g.name + g.surcharge} className="flex justify-between text-orange-600 dark:text-orange-400">
+                                        <span>{g.name} {g.surcharge > 0 ? `(+${g.surcharge}%)` : '(override)'}</span>
+                                        <span>{g.items.length} day{g.items.length !== 1 ? 's' : ''} = {formatCurrency(total, currency)}</span>
+                                      </div>
+                                    );
+                                  })}
+                                  {manualItems.length > 0 && (
+                                    <div className="flex justify-between text-indigo-600 dark:text-indigo-400">
+                                      <span>Custom prices</span>
+                                      <span>{manualItems.length} day{manualItems.length !== 1 ? 's' : ''} = {formatCurrency(manualItems.reduce((s, d) => s + d.effectiveRate, 0), currency)}</span>
+                                    </div>
+                                  )}
+                                  <div className="border-t my-1.5" />
+                                  {(() => {
+                                    const autoTotal = breakdownResult ? breakdownResult.rentalPrice : 0;
+                                    const isOverridden = autoTotal > 0 && Math.abs((watchedMonthlyAmount || 0) - autoTotal) > 0.01;
+                                    return (
+                                      <>
+                                        <div className="flex justify-between font-medium text-foreground">
+                                          <span>Auto-Calculated</span>
+                                          <span className={isOverridden ? 'line-through text-muted-foreground' : ''}>{formatCurrency(autoTotal, currency)}</span>
+                                        </div>
+                                        {isOverridden && (
+                                          <div className="flex justify-between font-medium text-amber-600 dark:text-amber-400">
+                                            <span>Admin Override</span>
+                                            <span>{formatCurrency(watchedMonthlyAmount || 0, currency)}</span>
+                                          </div>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );
