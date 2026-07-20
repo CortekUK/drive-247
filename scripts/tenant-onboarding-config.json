@@ -85,6 +85,17 @@
       "specialty": "Exotic and luxury vehicle rentals",
       "branding": "Black, Gold, Grey, White",
       "logo_url": "https://hviqoaokxvlancmftwuo.supabase.co/storage/v1/object/public/company-logos/the-company-car-collection/logo.png"
+    },
+    "steezz-rentals": {
+      "company_name": "Steezz Rentals",
+      "contact_email": "jinaro@steezzrentals.com",
+      "phone": "+1 (754) 223-8522",
+      "city": "Miami",
+      "state": "FL",
+      "hours": "Mon - Sat",
+      "specialty": "Premium, exotic and luxury vehicle rentals",
+      "branding": "default",
+      "logo_url": "https://hviqoaokxvlancmftwuo.supabase.co/storage/v1/object/public/company-logos/steezz-rentals/logo.png"
     }
   }
 }
