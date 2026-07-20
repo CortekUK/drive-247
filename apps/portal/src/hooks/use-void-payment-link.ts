@@ -34,6 +34,7 @@ export function useVoidPaymentLink() {
       queryClient.invalidateQueries({ queryKey: ["payments-data"] });
       queryClient.invalidateQueries({ queryKey: ["payment-summary"] });
       queryClient.invalidateQueries({ queryKey: ["payments-chart-data"] });
+      queryClient.invalidateQueries({ queryKey: ["tenant-payment-requests", tenant?.id] });
     },
   });
 }

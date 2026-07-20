@@ -498,12 +498,15 @@ const PaymentsList = () => {
                           </TableCell>
                           <TableCell>
                             {(() => {
-                              // Check if payment is reversed first
+                              // Check if payment is reversed/voided first
                               if (payment.status === 'Reversed' || payment.refund_reason?.includes('[REVERSED]')) {
+                                // A voided unpaid pay-link reads "Voided" (matching the rental/customer
+                                // Payment Links panels); a genuinely reversed captured payment reads "Reversed".
+                                const isVoidedLink = payment.refund_reason?.includes('[VOIDED]');
                                 return (
                                   <Badge className="bg-orange-100 text-orange-800 border-orange-200">
                                     <Undo2 className="h-3 w-3 mr-1" />
-                                    Reversed
+                                    {isVoidedLink ? 'Voided' : 'Reversed'}
                                   </Badge>
                                 );
                               }
@@ -584,8 +587,11 @@ const PaymentsList = () => {
                                       Remove payment link
                                     </DropdownMenuItem>
                                   )}
-                                  {/* Show Reverse Payment for non-reversed, non-refunded payments without Stripe intent */}
+                                  {/* Show Reverse Payment for non-reversed, non-refunded manual payments without Stripe intent.
+                                      NOT for an unpaid pay-link — that must be removed via "Remove payment link", which
+                                      expires the Stripe session; Reverse would leave the link live and still chargeable. */}
                                   {canEdit('payments') &&
+                                   !isVoidableLink(payment) &&
                                    !payment.stripe_payment_intent_id &&
                                    payment.status !== 'Reversed' &&
                                    !payment.refund_reason?.includes('[REVERSED]') &&
