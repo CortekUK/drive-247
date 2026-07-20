@@ -264,6 +264,18 @@ function formatDate(dateStr: string | null) {
   });
 }
 
+// supabase-js throws FunctionsHttpError on a non-2xx edge response whose `.message`
+// is generic; the real server message lives in `.context` (the Response). Best-effort.
+async function fnErrorMessage(e: any, fallback: string): Promise<string> {
+  try {
+    const body = await e?.context?.json?.();
+    if (body?.error) return body.error;
+  } catch {
+    // ignore \u2014 fall through to the generic message
+  }
+  return e?.message || fallback;
+}
+
 export default function TenantDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -453,7 +465,7 @@ export default function TenantDetailsPage() {
       setShowDiscountModal(false);
       setDiscountValue('');
     } catch (e: any) {
-      toast.error(e?.message || 'Failed to apply discount');
+      toast.error(await fnErrorMessage(e, 'Failed to apply discount'));
     } finally {
       setDiscountBusy(false);
     }
@@ -470,7 +482,7 @@ export default function TenantDetailsPage() {
       setCurrentDiscount(null);
       toast.success('Discount removed');
     } catch (e: any) {
-      toast.error(e?.message || 'Failed to remove discount');
+      toast.error(await fnErrorMessage(e, 'Failed to remove discount'));
     } finally {
       setDiscountBusy(false);
     }

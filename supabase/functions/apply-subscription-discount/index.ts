@@ -112,6 +112,7 @@ Deno.serve(async (req) => {
         coupon = await stripe.coupons.create({
           percent_off: num,
           duration: "once",
+          max_redemptions: 1,
           name: `One-time ${num}% off`,
         });
       } else {
@@ -120,12 +121,20 @@ Deno.serve(async (req) => {
           amount_off: Math.round(num * 100),
           currency: cur,
           duration: "once",
+          max_redemptions: 1,
           name: `One-time ${num} ${cur.toUpperCase()} off`,
         });
       }
 
       // Attaching a duration:'once' coupon discounts ONLY the next invoice.
-      const updated = await stripe.subscriptions.update(subId, { coupon: coupon.id });
+      let updated;
+      try {
+        updated = await stripe.subscriptions.update(subId, { coupon: coupon.id });
+      } catch (attachErr) {
+        // Don't leave an orphaned coupon behind if the attach fails.
+        try { await stripe.coupons.del(coupon.id); } catch { /* best effort */ }
+        throw attachErr;
+      }
       return jsonResponse({ success: true, discount: summarizeDiscount(updated.discount) });
     }
 
