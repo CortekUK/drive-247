@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Sidebar from '@/components/admin/Sidebar';
 import { SidebarProvider } from '@/components/admin/SidebarContext';
@@ -47,6 +47,7 @@ export default function ProtectedLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, loading, checkAuth } = useAuthStore();
 
   useEffect(() => {
@@ -58,6 +59,18 @@ export default function ProtectedLayout({
       router.push('/admin/login');
     }
   }, [user, loading, router]);
+
+  // Sales-only users (sales agent without super admin) are confined to /admin/sales.
+  useEffect(() => {
+    if (loading || !user) return;
+    if (
+      user.is_sales_agent &&
+      !user.is_super_admin &&
+      !pathname.startsWith('/admin/sales')
+    ) {
+      router.replace('/admin/sales');
+    }
+  }, [user, loading, pathname, router]);
 
   if (loading) {
     return <LoadingScreen />;

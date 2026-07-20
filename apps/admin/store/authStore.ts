@@ -6,6 +6,8 @@ interface SuperAdmin {
   email: string;
   name: string;
   is_primary_super_admin: boolean;
+  is_super_admin?: boolean;
+  is_sales_agent?: boolean;
 }
 
 interface AuthState {
@@ -29,21 +31,22 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (error) throw error;
 
     // Fetch user details from app_users table
-    const { data: userData, error: userError } = await supabase
+    // Cast to any: is_sales_agent is not yet in the generated Supabase types.
+    const { data: userData, error: userError } = await (supabase as any)
       .from('app_users')
-      .select('id, email, name, is_super_admin, is_primary_super_admin')
+      .select('id, email, name, is_super_admin, is_primary_super_admin, is_sales_agent')
       .eq('auth_user_id', data.user.id)
       .single();
 
     if (userError) throw userError;
 
-    // Verify user is a super admin
-    if (!userData.is_super_admin) {
+    // Verify user is a super admin or a sales agent
+    if (!userData.is_super_admin && !userData.is_sales_agent) {
       await supabase.auth.signOut();
       throw new Error('Access denied. Super admin privileges required.');
     }
 
-    set({ user: userData });
+    set({ user: userData as SuperAdmin });
   },
 
   logout: async () => {
@@ -62,14 +65,15 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
 
     // Fetch user details
-    const { data: userData } = await supabase
+    // Cast to any: is_sales_agent is not yet in the generated Supabase types.
+    const { data: userData } = await (supabase as any)
       .from('app_users')
-      .select('id, email, name, is_super_admin, is_primary_super_admin')
+      .select('id, email, name, is_super_admin, is_primary_super_admin, is_sales_agent')
       .eq('auth_user_id', session.user.id)
       .single();
 
-    if (userData && userData.is_super_admin) {
-      set({ user: userData, loading: false });
+    if (userData && (userData.is_super_admin || userData.is_sales_agent)) {
+      set({ user: userData as SuperAdmin, loading: false });
     } else {
       await supabase.auth.signOut();
       set({ user: null, loading: false });

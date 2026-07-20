@@ -27,6 +27,13 @@ export default function ManageAdminsPage() {
     password: '',
   });
   const [creating, setCreating] = useState(false);
+  const [showSalesModal, setShowSalesModal] = useState(false);
+  const [salesFormData, setSalesFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+  });
+  const [creatingSales, setCreatingSales] = useState(false);
 
   useEffect(() => {
     // Only primary super admin can access this page
@@ -98,6 +105,33 @@ export default function ManageAdminsPage() {
     }
   };
 
+  const handleCreateSalesAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreatingSales(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-create-sales-agent', {
+        body: {
+          email: salesFormData.email,
+          name: salesFormData.name,
+          password: salesFormData.password,
+        },
+      });
+
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+
+      setShowSalesModal(false);
+      setSalesFormData({ name: '', email: '', password: '' });
+      loadAdmins();
+      toast.success('Sales agent created successfully!');
+    } catch (error: any) {
+      toast.error(`Error creating sales agent: ${error.message}`);
+    } finally {
+      setCreatingSales(false);
+    }
+  };
+
   if (!user?.is_primary_super_admin) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -125,12 +159,20 @@ export default function ManageAdminsPage() {
           <p className="mt-2 text-gray-400">Add and manage super admin accounts</p>
           <p className="mt-1 text-sm text-red-400">Primary super admin access only</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
-        >
-          + Add Super Admin
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowSalesModal(true)}
+            className="px-6 py-3 bg-dark-card border border-dark-border text-white rounded-lg hover:bg-dark-hover font-medium"
+          >
+            + Add Sales Agent
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
+          >
+            + Add Super Admin
+          </button>
+        </div>
       </div>
 
       <div className="bg-dark-card rounded-lg shadow overflow-hidden border border-dark-border">
@@ -260,6 +302,83 @@ export default function ManageAdminsPage() {
                   className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
                 >
                   {creating ? 'Creating...' : 'Create Admin'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Sales Agent Modal */}
+      {showSalesModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+          <div className="bg-dark-card rounded-lg p-8 max-w-md w-full border border-dark-border">
+            <h2 className="text-2xl font-bold text-white mb-4">Add Sales Agent</h2>
+
+            <form onSubmit={handleCreateSalesAgent} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={salesFormData.name}
+                  onChange={(e) => setSalesFormData({ ...salesFormData, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="George Sales"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={salesFormData.email}
+                  onChange={(e) => setSalesFormData({ ...salesFormData, email: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="george@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Password *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={salesFormData.password}
+                  onChange={(e) => setSalesFormData({ ...salesFormData, password: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Minimum 8 characters"
+                  minLength={8}
+                />
+              </div>
+
+              <div className="bg-blue-900/20 border border-blue-700 rounded-md p-3">
+                <p className="text-xs text-blue-400">
+                  Sales agents can only access the Sales onboarding tab — no platform or tenant data.
+                </p>
+              </div>
+
+              <div className="flex space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowSalesModal(false)}
+                  className="flex-1 px-4 py-2 border border-dark-border rounded-md text-gray-300 hover:bg-dark-hover"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingSales}
+                  className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {creatingSales ? 'Creating...' : 'Create Sales Agent'}
                 </button>
               </div>
             </form>

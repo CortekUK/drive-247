@@ -46,7 +46,20 @@ function useNavigation() {
   const { user } = useAuthStore();
   const bonzahPendingCount = useBonzahPendingCount();
 
+  const salesOnly = !!user?.is_sales_agent && !user?.is_super_admin;
+
+  const salesGroup: NavGroup = {
+    label: 'Sales',
+    items: [{ name: 'Onboarding', href: '/admin/sales', icon: TrendingUp }],
+  };
+
+  // Sales agents (without super admin) only see the Sales group.
+  if (salesOnly) {
+    return [salesGroup];
+  }
+
   const groups: NavGroup[] = [
+    salesGroup,
     {
       label: 'Overview',
       items: [

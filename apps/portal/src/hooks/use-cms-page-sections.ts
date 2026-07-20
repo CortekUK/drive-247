@@ -11,7 +11,13 @@ export const useCMSPageSections = (pageSlug: string) => {
   const { tenant } = useTenant();
   const { logAction } = useAuditLog();
 
-  // Helper to get page by slug with tenant filtering
+  // Helper to get page by slug with tenant filtering.
+  // A slug can resolve to both a tenant-specific row AND a shared global row
+  // (tenant_id null) — e.g. "site-settings". `.single()` threw on that (2 rows)
+  // and also on 0 rows, which broke CMS logo saves. Prefer the tenant row, fall
+  // back to the global one: order tenant-first (non-null tenant_id sorts ahead
+  // of null via nullsFirst:false), take one, and use `.maybeSingle()` so 0/2
+  // rows no longer throw. Behaviour is identical when exactly one row exists.
   const getPageBySlug = async () => {
     let query = supabase
       .from("cms_pages")
@@ -20,10 +26,12 @@ export const useCMSPageSections = (pageSlug: string) => {
 
     // Filter by tenant if available
     if (tenant?.id) {
-      query = query.or(`tenant_id.eq.${tenant.id},tenant_id.is.null`);
+      query = query
+        .or(`tenant_id.eq.${tenant.id},tenant_id.is.null`)
+        .order("tenant_id", { ascending: false, nullsFirst: false });
     }
 
-    return query.single();
+    return query.limit(1).maybeSingle();
   };
 
   // Update a single section
@@ -39,6 +47,7 @@ export const useCMSPageSections = (pageSlug: string) => {
       const { data: page, error: pageError } = await getPageBySlug();
 
       if (pageError) throw pageError;
+      if (!page) throw new Error(`CMS page "${pageSlug}" not found`);
 
       // Upsert the section
       const { error } = await supabase
@@ -97,6 +106,7 @@ export const useCMSPageSections = (pageSlug: string) => {
       const { data: page, error: pageError } = await getPageBySlug();
 
       if (pageError) throw pageError;
+      if (!page) throw new Error(`CMS page "${pageSlug}" not found`);
 
       // Prepare upsert data
       const upsertData = sections.map((s) => ({

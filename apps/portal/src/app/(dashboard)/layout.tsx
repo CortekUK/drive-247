@@ -10,6 +10,7 @@ import { useTenantSubscriptionRealtime } from "@/hooks/use-tenant-subscription-r
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useSubscriptionGateDisabled } from "@/hooks/use-subscription-gate-disabled";
 import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
+import { SetupReminderDialog } from "@/components/dashboard/setup-reminder-dialog";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { HeaderSearch } from "@/components/shared/layout/header-search";
 import { UserMenu } from "@/components/shared/layout/user-menu";
@@ -189,6 +190,11 @@ export default function DashboardLayout({
           }
           variant={showExpiredGate ? "expired" : "setup"}
         />
+
+        {/* Recurring post-subscription nudge for outstanding setup tasks.
+            Self-gates on `isSubscribed`, so it never shows while the hard
+            paywall above is up. */}
+        <SetupReminderDialog />
       </SidebarProvider>
     </DynamicThemeProvider>
   );
