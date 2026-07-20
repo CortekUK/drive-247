@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   Info,
   BarChart3,
+  Link2Off,
 } from "lucide-react";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -40,6 +41,7 @@ import { PaymentFilters, PaymentFilters as IPaymentFilters } from "@/components/
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { usePaymentsData, exportPaymentsCSV } from "@/hooks/use-payments-data";
 import { usePaymentVerificationActions, getVerificationStatusInfo, VerificationStatus } from "@/hooks/use-payment-verification";
+import { useVoidPaymentLink } from "@/hooks/use-void-payment-link";
 import { useOrgSettings } from "@/hooks/use-org-settings";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -79,9 +81,14 @@ const PaymentsList = () => {
   const [reverseReason, setReverseReason] = useState('');
   const [isReversing, setIsReversing] = useState(false);
 
+  // Void payment-link state — remove a duplicate/stale UNPAID pay-link without
+  // touching the rental (the safe alternative to "Reject", which closes the rental).
+  const [voidTarget, setVoidTarget] = useState<{ id: string; customerName: string; amount: number } | null>(null);
+
   // Get settings and verification actions
   const { settings } = useOrgSettings();
   const { approvePayment, rejectPayment, isLoading: isVerifying } = usePaymentVerificationActions();
+  const voidLink = useVoidPaymentLink();
 
   // Initialize date filters for "thisMonth" on mount
   const getInitialFilters = (): IPaymentFilters => {
@@ -128,6 +135,44 @@ const PaymentsList = () => {
       router.push(`/rentals/${payment.rentals.id}#ledger`);
     } else if (payment.customers?.id) {
       router.push(`/customers/${payment.customers.id}?tab=payments`);
+    }
+  };
+
+  // Approve/Reject only apply to a genuinely pending (not-yet-reversed/voided) payment.
+  const isPendingActionable = (p: any) =>
+    p.verification_status === 'pending' &&
+    p.status !== 'Reversed' &&
+    p.capture_status !== 'cancelled';
+
+  // A payments row that is an UNPAID checkout LINK (Turo-style pay-link) — safe to remove
+  // without touching the rental. The void-payment-link edge function enforces this
+  // fail-closed (refuses anything carrying money), so this UI gate is just for surfacing.
+  const isVoidableLink = (p: any) =>
+    isPendingActionable(p) &&
+    !!p.stripe_checkout_session_id &&
+    !p.stripe_payment_intent_id &&
+    !p.paid_at &&
+    p.capture_status !== 'captured' &&
+    // Mirror the server's isCaptured() status clause so the UI never offers Void where
+    // the edge function would refuse it as already paid/captured.
+    !(['Applied', 'Completed', 'Partial'].includes(p.status) && p.capture_status !== 'requires_capture') &&
+    p.payment_type !== 'InitialFee';
+
+  const handleVoidLink = async () => {
+    if (!voidTarget) return;
+    try {
+      await voidLink.mutateAsync({
+        paymentId: voidTarget.id,
+        reason: 'Duplicate/stale payment link removed from Payments tab',
+      });
+      queryClient.invalidateQueries({ queryKey: ['payments-data'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['payments-chart-data'] });
+      toast({ title: 'Payment link removed', description: 'The duplicate link was cancelled — the rental is unaffected.' });
+    } catch (e: any) {
+      toast({ title: 'Could not remove link', description: e?.message || 'Please try again.', variant: 'destructive' });
+    } finally {
+      setVoidTarget(null);
     }
   };
 
@@ -477,8 +522,8 @@ const PaymentsList = () => {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              {/* Show Accept/Reject buttons for pending payments */}
-                              {payment.verification_status === 'pending' && (
+                              {/* Show Accept/Reject buttons for pending payments (hidden once voided/reversed) */}
+                              {isPendingActionable(payment) && (
                                 <>
                                   {canEdit('payments') && (
                                     <TooltipProvider>
@@ -529,6 +574,16 @@ const PaymentsList = () => {
                                     <FileText className="h-4 w-4 mr-2" />
                                     View Ledger
                                   </DropdownMenuItem>
+                                  {/* Remove a duplicate/stale UNPAID pay-link — safe, never touches the rental */}
+                                  {canEdit('payments') && isVoidableLink(payment) && (
+                                    <DropdownMenuItem
+                                      onClick={() => setVoidTarget({ id: payment.id, customerName: payment.customers?.name || 'the customer', amount: payment.amount })}
+                                      className="text-red-600 focus:text-red-600"
+                                    >
+                                      <Link2Off className="h-4 w-4 mr-2" />
+                                      Remove payment link
+                                    </DropdownMenuItem>
+                                  )}
                                   {/* Show Reverse Payment for non-reversed, non-refunded payments without Stripe intent */}
                                   {canEdit('payments') &&
                                    !payment.stripe_payment_intent_id &&
@@ -613,10 +668,10 @@ const PaymentsList = () => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <XCircle className="h-5 w-5" />
-              Reject Payment
+              Reject payment &amp; close rental
             </DialogTitle>
             <DialogDescription>
-              This will reject the payment and mark the associated rental as rejected. The customer will be notified via email.
+              Heads up — this does more than reject the payment. It <strong className="text-destructive">closes the entire rental</strong>: ends it today, frees the vehicle back to Available, writes off any outstanding charges, and emails the customer. To remove a duplicate or unpaid payment link <em>without</em> cancelling the rental, use &ldquo;Remove payment link&rdquo; from the row&rsquo;s &#8943; menu instead.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -640,7 +695,36 @@ const PaymentsList = () => {
               onClick={handleRejectPayment}
               disabled={!rejectReason.trim() || isVerifying}
             >
-              {isVerifying ? 'Rejecting...' : 'Reject Payment'}
+              {isVerifying ? 'Rejecting...' : 'Reject & close rental'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove Payment Link (void) Dialog — the SAFE alternative to Reject */}
+      <Dialog open={!!voidTarget} onOpenChange={(o) => !o && setVoidTarget(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2Off className="h-5 w-5 text-red-600" />
+              Remove payment link
+            </DialogTitle>
+            <DialogDescription>
+              This cancels only this one <strong>unpaid</strong> payment link
+              {voidTarget ? <> for <span className="font-semibold">{voidTarget.customerName}</span> ({formatCurrency(voidTarget.amount || 0, tenant?.currency_code || 'USD')})</> : null}, so it can no longer be paid.
+              The rental, the vehicle, and any payment the customer has already made are <strong>not affected</strong>. Nothing was charged on this link, so there is nothing to refund.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setVoidTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleVoidLink}
+              disabled={voidLink.isPending}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {voidLink.isPending ? 'Removing...' : 'Remove link'}
             </Button>
           </DialogFooter>
         </DialogContent>

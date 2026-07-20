@@ -26,6 +26,10 @@ export interface PaymentRow {
   stripe_payment_intent_id: string | null;
   refund_status: string | null;
   refund_reason: string | null;
+  // Fields needed to detect a voidable unpaid payment LINK (Turo-style pay-link cleanup)
+  stripe_checkout_session_id: string | null;
+  capture_status: string | null;
+  paid_at: string | null;
 
   customers: {
     id: string;

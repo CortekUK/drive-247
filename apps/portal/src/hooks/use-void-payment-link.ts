@@ -27,9 +27,13 @@ export function useVoidPaymentLink() {
       return data;
     },
     onSuccess: () => {
-      // Both panels read from the payments table; refresh whichever is mounted.
+      // Every surface that reads the payments table must refresh, no matter which
+      // entry point voided the link (rental/customer detail panel OR the Payments tab).
       queryClient.invalidateQueries({ queryKey: ["rental-payment-links", tenant?.id] });
       queryClient.invalidateQueries({ queryKey: ["customer-payment-links", tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ["payments-data"] });
+      queryClient.invalidateQueries({ queryKey: ["payment-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["payments-chart-data"] });
     },
   });
 }
