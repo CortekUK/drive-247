@@ -343,6 +343,12 @@ export default function TenantDetailsPage() {
   const [pendingModeChange, setPendingModeChange] = useState<{ type: 'stripe' | 'bonzah' | 'boldsign' | 'subscription_stripe'; newMode: 'test' | 'live' } | null>(null);
   const [showSubscriptionDetail, setShowSubscriptionDetail] = useState(false);
   const [showCreditsDetail, setShowCreditsDetail] = useState(false);
+  // One-time subscription discount (Stripe coupon, duration:once → next invoice only)
+  const [showDiscountModal, setShowDiscountModal] = useState(false);
+  const [discountType, setDiscountType] = useState<'percent' | 'amount'>('percent');
+  const [discountValue, setDiscountValue] = useState('');
+  const [discountBusy, setDiscountBusy] = useState(false);
+  const [currentDiscount, setCurrentDiscount] = useState<{ percentOff: number | null; amountOff: number | null; currency: string | null } | null>(null);
   const [showBannerDialog, setShowBannerDialog] = useState(false);
 
   useEffect(() => {
@@ -396,6 +402,20 @@ export default function TenantDetailsPage() {
 
       setSubscription(subData);
 
+      // Load any pending one-time discount live from Stripe (source of truth).
+      if (subData) {
+        try {
+          const { data: dd } = await supabase.functions.invoke('apply-subscription-discount', {
+            body: { tenantId, action: 'get' },
+          });
+          setCurrentDiscount(dd?.discount ?? null);
+        } catch {
+          setCurrentDiscount(null);
+        }
+      } else {
+        setCurrentDiscount(null);
+      }
+
       const { data: invoiceData } = await supabase
         .from('tenant_subscription_invoices')
         .select('*')
@@ -408,6 +428,51 @@ export default function TenantDetailsPage() {
       console.error('Error loading subscription:', error);
     } finally {
       setSubscriptionLoading(false);
+    }
+  };
+
+  const handleApplyDiscount = async () => {
+    const num = Number(discountValue);
+    if (!Number.isFinite(num) || num <= 0) {
+      toast.error('Enter a positive discount value');
+      return;
+    }
+    if (discountType === 'percent' && num > 100) {
+      toast.error('Percentage cannot exceed 100');
+      return;
+    }
+    setDiscountBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('apply-subscription-discount', {
+        body: { tenantId: params.id, action: 'apply', discountType, value: num },
+      });
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data.error || 'Failed to apply discount');
+      setCurrentDiscount(data?.discount ?? null);
+      toast.success('Discount applied to the next invoice');
+      setShowDiscountModal(false);
+      setDiscountValue('');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to apply discount');
+    } finally {
+      setDiscountBusy(false);
+    }
+  };
+
+  const handleRemoveDiscount = async () => {
+    setDiscountBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('apply-subscription-discount', {
+        body: { tenantId: params.id, action: 'remove' },
+      });
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data.error || 'Failed to remove discount');
+      setCurrentDiscount(null);
+      toast.success('Discount removed');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to remove discount');
+    } finally {
+      setDiscountBusy(false);
     }
   };
 
@@ -1609,9 +1674,16 @@ export default function TenantDetailsPage() {
                     <p className="text-xs text-muted-foreground">Platform billing and plan management</p>
                   </div>
                 </div>
-                <Button size="sm" onClick={() => setShowSubscriptionDetail(true)}>
-                  Manage Plans
-                </Button>
+                <div className="flex items-center gap-2">
+                  {subscription && (
+                    <Button size="sm" variant="outline" onClick={() => setShowDiscountModal(true)}>
+                      Discount next invoice
+                    </Button>
+                  )}
+                  <Button size="sm" onClick={() => setShowSubscriptionDetail(true)}>
+                    Manage Plans
+                  </Button>
+                </div>
               </div>
               <Separator className="mb-5" />
               <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
@@ -1639,6 +1711,22 @@ export default function TenantDetailsPage() {
                       : <span className="text-muted-foreground">—</span>
                     }
                   </p>
+                  {currentDiscount && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-500">
+                      −{currentDiscount.percentOff != null
+                        ? `${currentDiscount.percentOff}%`
+                        : formatCurrency((currentDiscount.amountOff || 0) * 100, currentDiscount.currency || subscription?.currency || 'usd')} next invoice
+                      <button
+                        type="button"
+                        onClick={handleRemoveDiscount}
+                        disabled={discountBusy}
+                        className="text-muted-foreground hover:text-red-500 disabled:opacity-50"
+                        title="Remove discount"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Mode</span>
@@ -2140,6 +2228,79 @@ export default function TenantDetailsPage() {
       </Tabs>
 
       {/* Subscription Detail Dialog */}
+      {/* One-time discount modal — next invoice only, then auto-reverts */}
+      <Dialog open={showDiscountModal} onOpenChange={(o) => { if (!o) setShowDiscountModal(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>One-time discount — next invoice only</DialogTitle>
+            <DialogDescription>
+              Applies to {tenant?.company_name}&rsquo;s very next invoice, then billing reverts to normal automatically. The plan is not changed.
+            </DialogDescription>
+          </DialogHeader>
+          {(() => {
+            const normalCents = subscription?.amount || 0;
+            const cur = subscription?.currency || 'usd';
+            const v = Number(discountValue) || 0;
+            const valid = Number.isFinite(v) && v > 0 && (discountType !== 'percent' || v <= 100);
+            const discountedCents = discountType === 'percent'
+              ? Math.max(0, Math.round(normalCents * (1 - v / 100)))
+              : Math.max(0, normalCents - Math.round(v * 100));
+            return (
+              <div className="space-y-4 py-1">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Discount type</Label>
+                  <div className="inline-flex rounded-md border border-border p-0.5">
+                    {(['percent', 'amount'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setDiscountType(t)}
+                        className={cn(
+                          'px-3 py-1 rounded text-xs font-medium transition-colors',
+                          discountType === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        {t === 'percent' ? 'Percentage' : 'Fixed amount'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">{discountType === 'percent' ? 'Percentage off' : `Amount off (${cur.toUpperCase()})`}</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={discountType === 'percent' ? 100 : undefined}
+                    step="0.01"
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(e.target.value)}
+                    placeholder={discountType === 'percent' ? '50' : '0.00'}
+                  />
+                </div>
+                {subscription && valid && (
+                  <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Next invoice</span>
+                      <span className="font-semibold">
+                        {formatCurrency(discountedCents, cur)}{' '}
+                        <span className="text-muted-foreground text-xs line-through">{formatCurrency(normalCents, cur)}</span>
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1">Then reverts to {formatCurrency(normalCents, cur)}/{subscription.interval}.</p>
+                  </div>
+                )}
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button variant="outline" onClick={() => setShowDiscountModal(false)} disabled={discountBusy}>Cancel</Button>
+                  <Button onClick={handleApplyDiscount} disabled={!valid || discountBusy}>
+                    {discountBusy ? 'Applying…' : 'Apply discount'}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showSubscriptionDetail} onOpenChange={setShowSubscriptionDetail}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
