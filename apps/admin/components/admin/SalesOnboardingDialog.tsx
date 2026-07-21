@@ -240,9 +240,17 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
     }
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(`${label} copied to clipboard!`);
+  // writeText REJECTS in a non-secure context, when the document isn't focused,
+  // or when permission is denied. Toasting success without awaiting means the
+  // sales person pastes stale clipboard content to a client believing the copy
+  // worked — and this is now the only copy control in the pane.
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied to clipboard!`);
+    } catch {
+      toast.error('Could not copy — select the text and copy it manually.');
+    }
   };
 
   return (
