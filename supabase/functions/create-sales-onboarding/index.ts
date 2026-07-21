@@ -51,6 +51,20 @@ const MAX = {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+/**
+ * Opening hours as the sales form now collects them: days ticked, times picked
+ * from a fixed list. Sent ALONGSIDE `operatingHours` (the human-readable form),
+ * and preferred over parsing that text. Optional so older clients still work.
+ */
+interface OperatingSchedule {
+  alwaysOpen?: boolean;
+  /** tenants.* day prefixes: "monday" … "sunday". */
+  days?: string[];
+  /** "HH:MM", 24-hour. */
+  opensAt?: string;
+  closesAt?: string;
+}
+
 interface OnboardingRequest {
   companyName?: string;
   firstName?: string;
@@ -61,6 +75,7 @@ interface OnboardingRequest {
   fleetSize?: string;
   location?: string;
   operatingHours?: string;
+  operatingSchedule?: OperatingSchedule;
   businessColours?: string;
   logoUrl?: string;
   wantsMarketing?: boolean;
@@ -258,6 +273,53 @@ function parseOperatingHours(text: string): HourCols {
 
   const named = parseOpenDays(text);
   return { business_hours: text, ...dayCols(open, close, false, named.length ? named : allDays) };
+}
+
+/**
+ * Opening hours the sales form collected as STRUCTURED values (days ticked,
+ * times picked from a list) rather than free text.
+ *
+ * Preferred over parseOperatingHours(): there is nothing to interpret, so
+ * "9-6", "nine to five" and "Mon-Sat" can never be mis-read. Returns null when
+ * the payload is absent or unusable so the caller can fall back to parsing.
+ */
+function scheduleToHourCols(
+  schedule: OperatingSchedule | undefined,
+  displayText: string,
+): HourCols | null {
+  if (!schedule || typeof schedule !== "object") return null;
+
+  const alwaysOpen = schedule.alwaysOpen === true;
+  // "HH:MM" from the picker -> "HH:MM:SS" as the columns store it.
+  const toSql = (v: unknown): string | null =>
+    typeof v === "string" && /^\d{2}:\d{2}$/.test(v) ? `${v}:00` : null;
+
+  const open = alwaysOpen ? "00:00:00" : toSql(schedule.opensAt);
+  const close = alwaysOpen ? "23:59:00" : toSql(schedule.closesAt);
+  if (!open || !close) return null;
+
+  const days = Array.isArray(schedule.days) ? schedule.days : [];
+  const openIdx = DAY_KEYS.map((d, i) => (alwaysOpen || days.includes(d) ? i : -1)).filter(
+    (i) => i >= 0,
+  );
+  // No day selected and not 24/7 => nothing meaningful to store.
+  if (openIdx.length === 0) return null;
+
+  const cols: HourCols = {};
+  DAY_KEYS.forEach((day, i) => {
+    cols[`${day}_enabled`] = openIdx.includes(i);
+    cols[`${day}_open`] = open;
+    cols[`${day}_close`] = close;
+  });
+
+  return {
+    ...cols,
+    business_hours: displayText || (alwaysOpen ? "Open 24/7" : null),
+    working_hours_enabled: true,
+    working_hours_always_open: alwaysOpen,
+    working_hours_open: open,
+    working_hours_close: close,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1000,6 +1062,23 @@ Deno.serve(async (req) => {
       return errorResponse("Slug already taken", 409);
     }
 
+    // Business name must be unique too. Unlike the slug there is no DB unique
+    // index on company_name, so this check IS the constraint — two tenants
+    // sharing a name makes them indistinguishable in the admin lists, in the
+    // onboarding digest and in support conversations. Case-insensitive, with
+    // an exact JS re-check so an underscore in the name can't wildcard-match.
+    const { data: nameMatches } = await supabase
+      .from("tenants")
+      .select("id, company_name")
+      .ilike("company_name", companyName);
+    const nameTaken = (nameMatches || []).some(
+      (t: { company_name: string | null }) =>
+        (t.company_name || "").trim().toLowerCase() === companyName.toLowerCase(),
+    );
+    if (nameTaken) {
+      return errorResponse("Another rental company already uses this name", 409);
+    }
+
     // Case-insensitive email match. `ilike` narrows; JS verifies exactly so a
     // legal underscore in the address can't cause a false duplicate.
     const { data: emailMatches } = await supabase
@@ -1060,8 +1139,14 @@ Deno.serve(async (req) => {
         : `Car rental services from ${companyName}.`,
     };
 
-    // Free-text hours -> the structured columns the portal/booking site read.
-    const hourCols = parseOperatingHours(operatingHours);
+    // Opening hours -> the structured columns the portal/booking site read.
+    // Prefer the STRUCTURED payload (days ticked + times picked in the form):
+    // there is nothing to interpret, so "9-6" or "Mon-Sat" can't be mis-read.
+    // Fall back to parsing the free text for older clients or a malformed
+    // schedule, and finally to nothing at all.
+    const hourCols =
+      scheduleToHourCols(body.operatingSchedule, operatingHours) ??
+      parseOperatingHours(operatingHours);
 
     // Location -> IANA timezone. Only set when we could actually work it out;
     // otherwise the column default (America/New_York) stands, exactly as it does

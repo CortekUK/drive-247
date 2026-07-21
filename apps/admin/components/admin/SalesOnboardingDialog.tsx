@@ -48,6 +48,38 @@ interface SalesOnboardingDialogProps {
   onCreated?: () => void;
 }
 
+/** Exactly the options on the Google form. "Other" reveals a free-text box. */
+const VEHICLE_TYPE_OPTIONS = ['Economy', 'Premium', 'Exotic and Luxury'] as const;
+
+/** Monday-first, matching how operators describe a week. `col` is the tenants.* prefix. */
+const DAY_OPTIONS = [
+  { col: 'monday', short: 'Mon' },
+  { col: 'tuesday', short: 'Tue' },
+  { col: 'wednesday', short: 'Wed' },
+  { col: 'thursday', short: 'Thu' },
+  { col: 'friday', short: 'Fri' },
+  { col: 'saturday', short: 'Sat' },
+  { col: 'sunday', short: 'Sun' },
+] as const;
+
+/**
+ * Half-hour slots for the whole day. Operators PICK a time instead of typing,
+ * so we never have to guess what "9-6" or "nine am" meant. `value` is 24h
+ * (what the DB stores); `label` is the 12h + AM/PM form the team asked for.
+ */
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
+  const h24 = Math.floor(i / 2);
+  const mins = i % 2 === 0 ? '00' : '30';
+  const period = h24 < 12 ? 'AM' : 'PM';
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return { value: `${String(h24).padStart(2, '0')}:${mins}`, label: `${h12}:${mins} ${period}` };
+});
+
+// Fleet size is a count of vehicles: whole, positive, and sanity-capped so a
+// mistyped "120000" cannot sail through.
+const MIN_FLEET_SIZE = 1;
+const MAX_FLEET_SIZE = 10_000;
+
 const EMPTY_FORM = {
   firstName: '',
   companyName: '',
@@ -57,9 +89,16 @@ const EMPTY_FORM = {
   tenantType: 'production' as 'production' | 'test',
   subscriptionAmount: '',
   location: '',
-  vehicleType: '',
+  /** Multi-select, mirroring the Google form's checkboxes. */
+  vehicleTypes: [] as string[],
+  /** Only used when "Other" is ticked. */
+  vehicleTypeOther: '',
   fleetSize: '',
-  operatingHours: '',
+  /** Structured opening hours — no free-text parsing guesswork. */
+  hoursAlwaysOpen: false,
+  hoursDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as string[],
+  hoursOpen: '09:00',
+  hoursClose: '18:00',
   businessColours: '',
   logoUrl: '',
   wantsMarketing: false,
@@ -112,6 +151,47 @@ const isHttpUrl = (value: string): boolean => {
   }
 };
 
+/** Deliberately permissive: catch typos, never reject a legitimate address. */
+const isEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim());
+
+/**
+ * Digits only after an optional leading "+". 7–15 digits covers every E.164
+ * number; the edge function normalises formatting separately.
+ */
+const isPhone = (value: string): boolean => {
+  const digits = value.replace(/[^\d]/g, '');
+  return /^\+?[\d\s()./-]+$/.test(value.trim()) && digits.length >= 7 && digits.length <= 15;
+};
+
+const timeLabel = (value: string): string =>
+  TIME_OPTIONS.find((t) => t.value === value)?.label ?? value;
+
+/**
+ * Human-readable opening hours for `tenants.business_hours` and the booking
+ * site. The structured day/time values are ALSO sent to the edge function, so
+ * this string is for display only — nothing has to parse it back.
+ * Collapses a run of consecutive days into "Mon–Fri" the way an operator writes it.
+ */
+const buildOperatingHoursText = (
+  alwaysOpen: boolean,
+  days: string[],
+  open: string,
+  close: string,
+): string => {
+  if (alwaysOpen) return 'Open 24/7';
+  const picked = DAY_OPTIONS.filter((d) => days.includes(d.col));
+  if (picked.length === 0) return '';
+  const idx = picked.map((d) => DAY_OPTIONS.findIndex((o) => o.col === d.col));
+  const consecutive = idx.every((n, i) => i === 0 || n === idx[i - 1] + 1);
+  const label =
+    picked.length === 7
+      ? 'Mon–Sun'
+      : consecutive && picked.length > 1
+        ? `${picked[0].short}–${picked[picked.length - 1].short}`
+        : picked.map((d) => d.short).join(', ');
+  return `${label} ${timeLabel(open)}–${timeLabel(close)}`;
+};
+
 export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }: SalesOnboardingDialogProps) {
   const [formData, setFormData] = useState({ ...EMPTY_FORM });
   const [creating, setCreating] = useState(false);
@@ -119,7 +199,14 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
     slug?: string;
     subscriptionAmount?: string;
     logoUrl?: string;
+    companyName?: string;
+    contactEmail?: string;
+    businessPhone?: string;
+    fleetSize?: string;
+    hours?: string;
   }>({});
+  /** Set while we check the business name isn't already taken. */
+  const [checkingName, setCheckingName] = useState(false);
   const [result, setResult] = useState<OnboardingResult | null>(null);
   const [showResult, setShowResult] = useState(false);
 
@@ -152,32 +239,121 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
       amountError = `Amount must be ${MAX_SUBSCRIPTION_AMOUNT.toLocaleString()} or less`;
     }
 
+    const companyName = formData.companyName.trim();
+
+    const email = formData.contactEmail.trim().toLowerCase();
+    const emailError = !isEmail(email) ? 'Enter a valid email address' : null;
+
+    // Phone is optional on the Google form, so only validate what was typed.
+    const phone = formData.businessPhone.trim();
+    const phoneError =
+      phone && !isPhone(phone) ? 'Enter a valid phone number, including the country code' : null;
+
+    // Fleet size is a vehicle COUNT: whole and positive. Explicitly rejects
+    // negatives and decimals rather than silently coercing them.
+    const fleetRaw = formData.fleetSize.trim();
+    let fleetError: string | null = null;
+    if (fleetRaw) {
+      const n = Number(fleetRaw);
+      if (!Number.isFinite(n) || !Number.isInteger(n)) {
+        fleetError = 'Fleet size must be a whole number';
+      } else if (n < MIN_FLEET_SIZE) {
+        fleetError = `Fleet size must be at least ${MIN_FLEET_SIZE}`;
+      } else if (n > MAX_FLEET_SIZE) {
+        fleetError = `Fleet size must be ${MAX_FLEET_SIZE.toLocaleString()} or less`;
+      }
+    }
+
+    // "HH:MM" is zero-padded 24h, so a plain string compare orders correctly.
+    // Overnight shifts aren't representable per-day — those are "Open 24/7".
+    let hoursError: string | null = null;
+    if (!formData.hoursAlwaysOpen) {
+      if (formData.hoursDays.length === 0) {
+        hoursError = 'Pick at least one opening day, or choose Open 24/7';
+      } else if (formData.hoursOpen >= formData.hoursClose) {
+        hoursError = 'Closing time must be after opening time (use Open 24/7 for overnight)';
+      }
+    }
+
     const logoUrl = formData.logoUrl.trim();
     const logoError = logoUrl && !isHttpUrl(logoUrl) ? 'Enter a full http(s) URL, e.g. https://…/logo.png' : null;
 
-    if (slugError || amountError || logoError) {
+    if (slugError || amountError || emailError || phoneError || fleetError || hoursError || logoError) {
       setFormErrors({
         slug: slugError || undefined,
         subscriptionAmount: amountError || undefined,
+        contactEmail: emailError || undefined,
+        businessPhone: phoneError || undefined,
+        fleetSize: fleetError || undefined,
+        hours: hoursError || undefined,
         logoUrl: logoError || undefined,
       });
       return;
     }
     setFormErrors({});
+
+    // Business-name uniqueness. The edge function re-checks this atomically and
+    // is the authority; doing it here just saves the sales person a round trip
+    // and a scary error mid-call. A failure to check is deliberately non-fatal.
+    setCheckingName(true);
+    try {
+      const { data: clash } = await (supabase as any)
+        .from('tenants')
+        .select('id')
+        .ilike('company_name', companyName)
+        .limit(1);
+      if (clash && clash.length > 0) {
+        setFormErrors({ companyName: 'Another rental company already uses this name' });
+        return;
+      }
+    } catch {
+      // Let the edge function have the final say.
+    } finally {
+      setCheckingName(false);
+    }
+
     setCreating(true);
+
+    // Ticked options, with the free-text "Other" substituted in for the literal
+    // word "Other" so the stored value reads like something a human wrote.
+    const vehicleTypeValue = [
+      ...formData.vehicleTypes.filter((v) => v !== 'Other'),
+      ...(formData.vehicleTypes.includes('Other') && formData.vehicleTypeOther.trim()
+        ? [formData.vehicleTypeOther.trim()]
+        : []),
+    ].join(', ');
+
+    const operatingHoursText = buildOperatingHoursText(
+      formData.hoursAlwaysOpen,
+      formData.hoursDays,
+      formData.hoursOpen,
+      formData.hoursClose,
+    );
 
     try {
       const { data, error } = await supabase.functions.invoke('create-sales-onboarding', {
         body: {
-          companyName: formData.companyName.trim(),
+          companyName,
           firstName: formData.firstName.trim() || undefined,
           slug,
-          contactEmail: formData.contactEmail.trim().toLowerCase(),
-          businessPhone: formData.businessPhone.trim() || undefined,
-          vehicleType: formData.vehicleType.trim() || undefined,
-          fleetSize: formData.fleetSize.trim() || undefined,
+          contactEmail: email,
+          businessPhone: phone || undefined,
+          // Selected options plus whatever they typed under "Other", as one
+          // comma-separated string (what the column and the CMS copy expect).
+          vehicleType: vehicleTypeValue || undefined,
+          fleetSize: fleetRaw || undefined,
           location: formData.location.trim() || undefined,
-          operatingHours: formData.operatingHours.trim() || undefined,
+          // Display string for tenants.business_hours...
+          operatingHours: operatingHoursText || undefined,
+          // ...plus the STRUCTURED values, so the edge function never has to
+          // guess what free text meant. It writes the per-day open/close
+          // columns straight from these.
+          operatingSchedule: {
+            alwaysOpen: formData.hoursAlwaysOpen,
+            days: formData.hoursAlwaysOpen ? DAY_OPTIONS.map((d) => d.col) : formData.hoursDays,
+            opensAt: formData.hoursAlwaysOpen ? '00:00' : formData.hoursOpen,
+            closesAt: formData.hoursAlwaysOpen ? '23:59' : formData.hoursClose,
+          },
           businessColours: formData.businessColours.trim() || undefined,
           logoUrl: logoUrl || undefined,
           wantsMarketing: formData.wantsMarketing,
@@ -281,12 +457,20 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                   required
                   maxLength={100}
                   value={formData.companyName}
-                  onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, companyName: e.target.value });
+                    if (formErrors.companyName) setFormErrors({ ...formErrors, companyName: undefined });
+                  }}
+                  className={formErrors.companyName ? 'border-destructive' : ''}
                   placeholder="Acme Rentals"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Used as the portal app name, page titles and SEO for their site.
-                </p>
+                {formErrors.companyName ? (
+                  <p className="text-xs text-destructive mt-1">{formErrors.companyName}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Used as the portal app name, page titles and SEO for their site.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -322,9 +506,16 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                   type="email"
                   required
                   value={formData.contactEmail}
-                  onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, contactEmail: e.target.value });
+                    if (formErrors.contactEmail) setFormErrors({ ...formErrors, contactEmail: undefined });
+                  }}
+                  className={formErrors.contactEmail ? 'border-destructive' : ''}
                   placeholder="admin@acmerentals.com"
                 />
+                {formErrors.contactEmail && (
+                  <p className="text-xs text-destructive mt-1">{formErrors.contactEmail}</p>
+                )}
               </div>
               <div>
                 <Label className="mb-1.5 block">Business Phone</Label>
@@ -332,12 +523,20 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                   type="tel"
                   maxLength={40}
                   value={formData.businessPhone}
-                  onChange={(e) => setFormData({ ...formData, businessPhone: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, businessPhone: e.target.value });
+                    if (formErrors.businessPhone) setFormErrors({ ...formErrors, businessPhone: undefined });
+                  }}
+                  className={formErrors.businessPhone ? 'border-destructive' : ''}
                   placeholder="+1 555 123 4567"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Include the country code — it&apos;s never guessed for you.
-                </p>
+                {formErrors.businessPhone ? (
+                  <p className="text-xs text-destructive mt-1">{formErrors.businessPhone}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Include the country code — it&apos;s never guessed for you.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -425,13 +624,47 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                   placeholder="Los Angeles, CA"
                 />
               </div>
+              {/* Multi-select, mirroring the Google form's checkboxes. "Other"
+                  reveals a free-text box instead of forcing a fixed option. */}
               <div>
                 <Label className="mb-1.5 block">Vehicle Type</Label>
-                <Input
-                  value={formData.vehicleType}
-                  onChange={(e) => setFormData({ ...formData, vehicleType: e.target.value })}
-                  placeholder="Luxury SUVs"
-                />
+                <div className="flex flex-wrap gap-2">
+                  {[...VEHICLE_TYPE_OPTIONS, 'Other'].map((opt) => {
+                    const selected = formData.vehicleTypes.includes(opt);
+                    return (
+                      <Button
+                        key={opt}
+                        type="button"
+                        size="sm"
+                        variant={selected ? 'default' : 'outline'}
+                        aria-pressed={selected}
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            vehicleTypes: selected
+                              ? formData.vehicleTypes.filter((v) => v !== opt)
+                              : [...formData.vehicleTypes, opt],
+                            // Drop stale text if "Other" is unticked.
+                            vehicleTypeOther:
+                              selected && opt === 'Other' ? '' : formData.vehicleTypeOther,
+                          })
+                        }
+                      >
+                        {opt}
+                      </Button>
+                    );
+                  })}
+                </div>
+                {formData.vehicleTypes.includes('Other') && (
+                  <Input
+                    className="mt-2"
+                    maxLength={120}
+                    value={formData.vehicleTypeOther}
+                    onChange={(e) => setFormData({ ...formData, vehicleTypeOther: e.target.value })}
+                    placeholder="e.g. Vans, Motorhomes"
+                  />
+                )}
+                <p className="text-xs text-muted-foreground mt-1">Pick all that apply.</p>
               </div>
             </div>
 
@@ -439,23 +672,126 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
               <div>
                 <Label className="mb-1.5 block">Fleet Size</Label>
                 <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={MIN_FLEET_SIZE}
+                  max={MAX_FLEET_SIZE}
+                  step={1}
                   value={formData.fleetSize}
-                  onChange={(e) => setFormData({ ...formData, fleetSize: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, fleetSize: e.target.value });
+                    if (formErrors.fleetSize) setFormErrors({ ...formErrors, fleetSize: undefined });
+                  }}
+                  className={formErrors.fleetSize ? 'border-destructive' : ''}
                   placeholder="12"
                 />
+                {formErrors.fleetSize ? (
+                  <p className="text-xs text-destructive mt-1">{formErrors.fleetSize}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Whole number of vehicles ({MIN_FLEET_SIZE}–{MAX_FLEET_SIZE.toLocaleString()}).
+                  </p>
+                )}
               </div>
-              <div>
-                <Label className="mb-1.5 block">Operating Hours</Label>
-                <Input
-                  maxLength={120}
-                  value={formData.operatingHours}
-                  onChange={(e) => setFormData({ ...formData, operatingHours: e.target.value })}
-                  placeholder="Mon–Sat 9am–6pm"
-                />
+            </div>
+
+            {/* Structured opening hours. Days are picked, times are picked from
+                half-hour slots in 12h + AM/PM — nothing is typed, so there is
+                nothing to mis-parse later. */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <Label>Operating Hours</Label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className="text-xs text-muted-foreground">Open 24/7</span>
+                  <Switch
+                    checked={formData.hoursAlwaysOpen}
+                    onCheckedChange={(v) => {
+                      setFormData({ ...formData, hoursAlwaysOpen: v });
+                      if (formErrors.hours) setFormErrors({ ...formErrors, hours: undefined });
+                    }}
+                  />
+                </label>
+              </div>
+
+              {!formData.hoursAlwaysOpen && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {DAY_OPTIONS.map((d) => {
+                      const on = formData.hoursDays.includes(d.col);
+                      return (
+                        <Button
+                          key={d.col}
+                          type="button"
+                          size="sm"
+                          variant={on ? 'default' : 'outline'}
+                          aria-pressed={on}
+                          className="w-16"
+                          onClick={() => {
+                            setFormData({
+                              ...formData,
+                              hoursDays: on
+                                ? formData.hoursDays.filter((x) => x !== d.col)
+                                : [...formData.hoursDays, d.col],
+                            });
+                            if (formErrors.hours) setFormErrors({ ...formErrors, hours: undefined });
+                          }}
+                        >
+                          {d.short}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      aria-label="Opening time"
+                      value={formData.hoursOpen}
+                      onChange={(e) => {
+                        setFormData({ ...formData, hoursOpen: e.target.value });
+                        if (formErrors.hours) setFormErrors({ ...formErrors, hours: undefined });
+                      }}
+                      className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      {TIME_OPTIONS.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-sm text-muted-foreground shrink-0">to</span>
+                    <select
+                      aria-label="Closing time"
+                      value={formData.hoursClose}
+                      onChange={(e) => {
+                        setFormData({ ...formData, hoursClose: e.target.value });
+                        if (formErrors.hours) setFormErrors({ ...formErrors, hours: undefined });
+                      }}
+                      className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      {TIME_OPTIONS.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {formErrors.hours ? (
+                <p className="text-xs text-destructive mt-1">{formErrors.hours}</p>
+              ) : (
                 <p className="text-xs text-muted-foreground mt-1">
-                  Read into their opening days &amp; times — use &quot;Mon–Sat 9am–6pm&quot; or &quot;24/7&quot;.
+                  Saved as:{' '}
+                  <span className="font-medium">
+                    {buildOperatingHoursText(
+                      formData.hoursAlwaysOpen,
+                      formData.hoursDays,
+                      formData.hoursOpen,
+                      formData.hoursClose,
+                    ) || '—'}
+                  </span>
                 </p>
-              </div>
+              )}
             </div>
 
             <div>
@@ -546,9 +882,13 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={creating}>
-                {creating && <Loader2 className="h-4 w-4 animate-spin" />}
-                {creating ? 'Provisioning...' : 'Create Onboarding'}
+              <Button type="submit" disabled={creating || checkingName}>
+                {(creating || checkingName) && <Loader2 className="h-4 w-4 animate-spin" />}
+                {checkingName
+                  ? 'Checking name...'
+                  : creating
+                    ? 'Provisioning...'
+                    : 'Create Onboarding'}
               </Button>
             </DialogFooter>
           </form>
