@@ -30,6 +30,15 @@ interface OnboardingResult {
   bookingUrl: string;
   subscriptionAmount: number; // cents
   subscriptionCurrency: string;
+  /**
+   * false => the tenant is live but their booking site is still rendering
+   * Drive247's placeholder CMS copy. Optional because an older deployment of
+   * create-sales-onboarding does not return the field — only an explicit
+   * `false` means seeding actually failed.
+   */
+  contentSeeded?: boolean;
+  /** IANA zone derived from the location, or null when it could not be worked out. */
+  timezone?: string | null;
   message: string;
 }
 
@@ -196,6 +205,10 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
         bookingUrl: data.bookingUrl,
         subscriptionAmount: data.subscriptionAmount,
         subscriptionCurrency: data.subscriptionCurrency,
+        // CMS seeding is deliberately non-fatal on the server, so the only way
+        // George learns it failed is by carrying the flag through to the pane.
+        contentSeeded: typeof data.contentSeeded === 'boolean' ? data.contentSeeded : undefined,
+        timezone: typeof data.timezone === 'string' ? data.timezone : data.timezone === null ? null : undefined,
         message: data.message,
       });
       setShowResult(true);
@@ -516,6 +529,28 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
 
           {result && (
             <>
+              {/* Website content did not seed — the site is live on placeholder copy. */}
+              {result.contentSeeded === false && (
+                <Card className="border-warning/50 bg-warning/10">
+                  <CardContent className="p-4 flex items-start gap-3">
+                    <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-semibold">Website content did not seed</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {result.companyName}&apos;s portal and booking site are live, but the site is still
+                        rendering Drive247&apos;s placeholder content — our contact email, a promo badge and
+                        Drive247 wording on their privacy page.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Fix it before you send this message: open{' '}
+                        <span className="font-medium text-foreground">{result.portalUrl}</span> → CMS and
+                        re-publish the pages.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Copy-paste message */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">

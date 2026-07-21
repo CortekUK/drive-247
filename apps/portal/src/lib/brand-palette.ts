@@ -152,14 +152,15 @@ export function deriveDark(field: BrandField, lightHex: string): string {
  * NEITHER `lightHex` nor `baseHex` is provided: with no reference colour we
  * cannot prove a derivation, so we assume deliberate intent and never clobber.
  *
- * `baseHex` is optional only for backwards compatibility; pass it whenever the
- * base column is in hand, which is every real call site.
+ * `baseHex` is REQUIRED (pass `null` if genuinely unavailable). It carries the
+ * base-comparison fix above, and leaving it optional let a future call site
+ * silently regress to the permanent-no-op bug with no compiler error.
  */
 export function isAutoDerivedDark(
   field: BrandField,
   darkHex: string | null | undefined,
   lightHex: string | null | undefined,
-  baseHex?: string | null | undefined,
+  baseHex: string | null | undefined,
 ): boolean {
   const dark = typeof darkHex === "string" ? darkHex.trim() : "";
   if (!dark) return true;
@@ -168,8 +169,20 @@ export function isAutoDerivedDark(
   const light = typeof lightHex === "string" ? lightHex.trim() : "";
   if (light && target === deriveDark(field, light).toLowerCase()) return true;
 
+  // The base arm counts as proof of auto-derivation ONLY when the derivation
+  // actually TRANSFORMED the base value. `deriveDark` is the identity for
+  // `secondary` (and for a primary/accent that is already light enough to need
+  // no lightening), so there `dark === base` is equally consistent with the
+  // operator deliberately re-picking their brand colour for dark mode. Treating
+  // that as "auto" would overwrite a hand-picked value — exactly the clobber the
+  // light-only check used to prevent. Requiring a real transform keeps the fix
+  // for the lightened fields without reintroducing that regression.
   const base = typeof baseHex === "string" ? baseHex.trim() : "";
-  if (base && target === deriveDark(field, base).toLowerCase()) return true;
+  if (base) {
+    const baseDerived = deriveDark(field, base);
+    const transformed = baseDerived.toLowerCase() !== base.toLowerCase();
+    if (transformed && target === baseDerived.toLowerCase()) return true;
+  }
 
   return false;
 }

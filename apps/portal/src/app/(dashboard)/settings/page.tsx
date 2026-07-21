@@ -21,7 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Undo2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -1899,7 +1899,7 @@ const Settings = () => {
                             {darkSyncPreview.length > 0 && (
                               <ul className="space-y-1.5">
                                 {darkSyncPreview.map((row) => (
-                                  <li key={row.label} className="flex items-center gap-2">
+                                  <li key={row.label} className="flex flex-wrap items-center gap-2">
                                     <span className="font-medium text-foreground">{row.label}</span>
                                     <span className="inline-flex items-center gap-1.5">
                                       <span
@@ -1982,8 +1982,8 @@ const Settings = () => {
                   <p className="text-xs text-muted-foreground">
                     You changed a light colour. On save, {pendingDarkSync.changed.join(', ')} will be
                     refreshed to match — {pendingDarkSync.changed.length === 1 ? 'it is' : 'they are'} empty
-                    or still the shade derived from your previous light colour. Dark colours you picked
-                    yourself are never overwritten.
+                    or still the shade auto-derived from your previous light or default colour. Dark colours
+                    you picked yourself are never overwritten.
                   </p>
                 )}
 
@@ -2025,8 +2025,9 @@ const Settings = () => {
               <div className="space-y-4">
                 <h3 className="font-medium">Background Colors</h3>
                 <p className="text-sm text-muted-foreground">
-                  Page surfaces: this portal&apos;s sidebar and page background, and the booking site&apos;s
-                  page background. Leave empty to use defaults.
+                  Page surfaces: this portal&apos;s page background, sidebar, cards and popovers are all
+                  tinted from this colour, as is the booking site&apos;s page background. Leave empty to
+                  use defaults.
                 </p>
 
                 <div className="grid gap-6 md:grid-cols-2">
@@ -2034,13 +2035,13 @@ const Settings = () => {
                     label="Light Mode Background"
                     value={brandingForm.light_background_color || '#F5F3EE'}
                     onChange={(color) => setBrandingForm(prev => ({ ...prev, light_background_color: color }))}
-                    description="Portal sidebar & page background, and booking site page background, in light mode."
+                    description="Portal page background, sidebar & cards, and booking site page background, in light mode."
                   />
                   <ColorPicker
                     label="Dark Mode Background"
                     value={brandingForm.dark_background_color || '#1A2B25'}
                     onChange={(color) => setBrandingForm(prev => ({ ...prev, dark_background_color: color }))}
-                    description="Portal sidebar & page background, and booking site page background, in dark mode."
+                    description="Portal page background, sidebar & cards, and booking site page background, in dark mode."
                   />
                 </div>
 
@@ -2087,9 +2088,10 @@ const Settings = () => {
                 Header & Footer Colors
               </CardTitle>
               <CardDescription>
-                The booking site&apos;s nav/header and footer background. This is the only setting that
-                controls that bar — Primary and Accent do not. Both default to #1A2B25 (dark forest green)
-                if not set.
+                The booking site&apos;s nav/header and footer background — and the sidebar of the
+                logged-in customer portal on that site. This is the only setting that controls those
+                surfaces; Primary and Accent do not. Both default to #1A2B25 (dark forest green) if not
+                set.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -2098,13 +2100,13 @@ const Settings = () => {
                   label="Light Theme Header/Footer"
                   value={brandingForm.light_header_footer_color || '#1A2B25'}
                   onChange={(color) => setBrandingForm(prev => ({ ...prev, light_header_footer_color: color }))}
-                  description="Booking site nav/header & footer background in light mode."
+                  description="Booking site nav/header, footer & customer-portal sidebar background in light mode."
                 />
                 <ColorPicker
                   label="Dark Theme Header/Footer"
                   value={brandingForm.dark_header_footer_color || '#1A2B25'}
                   onChange={(color) => setBrandingForm(prev => ({ ...prev, dark_header_footer_color: color }))}
-                  description="Booking site nav/header & footer background in dark mode — usually the one visitors see."
+                  description="Booking site nav/header, footer & customer-portal sidebar background in dark mode — usually the one visitors see."
                 />
               </div>
 
@@ -2275,6 +2277,18 @@ const Settings = () => {
                 </AlertDialogContent>
               </AlertDialog>
 
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              {/* Undo for anything unsaved — including a "Sync dark theme from light". */}
+              <Button
+                variant="outline"
+                onClick={resetBrandingForm}
+                disabled={isSavingBranding || !brandingFormDirty}
+                className="w-full sm:w-auto"
+                title="Discard unsaved branding edits and restore your saved colours"
+              >
+                <Undo2 className="mr-2 h-4 w-4" />
+                Revert changes
+              </Button>
               <Button
                 onClick={handleSaveBranding}
                 disabled={isSavingBranding}
@@ -2292,6 +2306,7 @@ const Settings = () => {
                   </>
                 )}
               </Button>
+              </div>
             </div>
           )}
         </TabsContent>
