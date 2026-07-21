@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Copy, CheckCircle, Loader2, PartyPopper } from 'lucide-react';
+import { AlertTriangle, Copy, CheckCircle, Loader2, PartyPopper } from 'lucide-react';
 
 interface OnboardingResult {
   tenantId: string;
@@ -595,6 +595,13 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                       </div>
                     </div>
                   ))}
+                  {result.timezone !== undefined && (
+                    <p className="text-xs text-muted-foreground">
+                      {result.timezone
+                        ? `Timezone set to ${result.timezone} from the location you entered.`
+                        : 'Timezone could not be worked out from the location — the tenant is on the America/New_York default. Change it in Portal → Settings if that is wrong.'}
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             </>

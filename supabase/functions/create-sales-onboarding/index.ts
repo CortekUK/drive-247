@@ -1298,8 +1298,19 @@ Deno.serve(async (req) => {
           today: new Date().toISOString().split("T")[0],
         }),
       );
-      contentSeeded = sections > 0;
+      // `sections > 0` was a lie: with only the 'site-settings' shell present we
+      // write 5 sections and publish 1 page while all eight real content pages
+      // are skipped — i.e. the client's site still shows Drive247's phone
+      // number, email and copy. Only claim success when the pages that carry
+      // the customer-facing copy actually landed, home page included.
+      const homeSeeded = !missing.includes("home");
+      contentSeeded = sections > 0 && homeSeeded && missing.length === 0;
       console.log(`${LOG} CMS: published ${sections} sections across ${pages} pages for ${slug}`);
+      if (missing.length) {
+        console.error(
+          `${LOG} CMS: no page shell for [${missing.join(", ")}] on ${slug} — those pages still render platform defaults`,
+        );
+      }
     } catch (e) {
       // Loud, because the site is live either way — it just renders the platform
       // defaults until someone re-publishes from Portal → CMS.
@@ -1351,8 +1362,10 @@ Deno.serve(async (req) => {
       subscriptionAmount: amountCents,
       subscriptionCurrency: currency,
       colors,
-      // false => the booking site is live but still rendering platform default
-      // copy; re-publish the pages from Portal → CMS.
+      // true only when EVERY generated page landed and published. false => the
+      // booking site is live but at least one page (possibly all of them) still
+      // renders platform default copy; re-publish from Portal → CMS. The
+      // function logs exactly which slugs were missing.
       contentSeeded,
       timezone: derivedTimezone,
       message,

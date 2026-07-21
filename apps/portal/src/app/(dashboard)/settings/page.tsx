@@ -80,6 +80,33 @@ const effectiveBrandColor = (source: any, themeKey: string, baseKey: string): st
   String(source?.[themeKey] || source?.[baseKey] || '');
 
 /**
+ * Black or white text for a given background hex, for the theme previews.
+ *
+ * The previews used to hardcode `text-white`, which made a pale brand colour
+ * (e.g. #FACC15) render as an unreadable white-on-yellow sample and misrepresent
+ * how the real component looks — the app itself pairs each brand colour with its
+ * `*-foreground` token, not with white.
+ *
+ * Uses the WCAG relative-luminance formula; the white/black crossover sits at
+ * L ≈ 0.179. Falls back to white for anything that isn't a 6-digit hex, matching
+ * the old behaviour for half-typed values.
+ */
+const readableTextOn = (hex: string): string => {
+  const match = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || '').trim());
+  if (!match) return '#FFFFFF';
+  const int = parseInt(match[1], 16);
+  const [r, g, b] = [(int >> 16) & 255, (int >> 8) & 255, int & 255].map((channel) => {
+    const v = channel / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.179 ? '#000000' : '#FFFFFF';
+};
+
+/** Suffix appended to a theme picker's help text when the field inherits the base colour. */
+const INHERITED_HINT = ' Showing the default — not set for this theme.';
+
+/**
  * Which dark colours may safely be refreshed from the light ones on save.
  *
  * A dark colour is only touched when BOTH hold:
@@ -1697,7 +1724,8 @@ const Settings = () => {
                   The light/dark Primary colours style this portal only; the booking site&apos;s
                   nav/header uses the Header &amp; Footer colour. The base Primary and Accent under{' '}
                   <span className="font-medium text-foreground">Default Theme Colors</span> also brand
-                  every transactional email sent to your customers.
+                  most of your transactional customer emails — a few emails ship with fixed colours
+                  and ignore your branding.
                 </p>
               </div>
             </AlertDescription>
@@ -1760,7 +1788,8 @@ const Settings = () => {
                 <h3 className="font-medium">Default Theme Colors</h3>
                 <p className="text-sm text-muted-foreground">
                   Fallbacks. Used for a theme where the matching light/dark colour below is left empty —
-                  and, for Primary and Accent, always used to brand your transactional customer emails.
+                  and, for Primary and Accent, used to brand most of your transactional customer emails
+                  (a few have fixed colours built in and never read these).
                 </p>
 
                 <div className="grid gap-6 md:grid-cols-3">
@@ -1768,7 +1797,7 @@ const Settings = () => {
                     label="Primary Color"
                     value={brandingForm.primary_color}
                     onChange={(color) => setBrandingForm(prev => ({ ...prev, primary_color: color }))}
-                    description="Fallback for Primary — portal buttons, focus rings & active group label. Also brands customer emails."
+                    description="Fallback for Primary — portal buttons, focus rings & the active sidebar group icon. Also brands most customer emails."
                   />
                   <ColorPicker
                     label="Secondary Color"
@@ -1780,7 +1809,7 @@ const Settings = () => {
                     label="Accent Color"
                     value={brandingForm.accent_color}
                     onChange={(color) => setBrandingForm(prev => ({ ...prev, accent_color: color }))}
-                    description="Fallback for Accent — booking site buttons, portal active nav & highlights. Also brands customer emails."
+                    description="Fallback for Accent — booking site buttons, portal active nav & highlights. Also brands most customer emails."
                   />
                 </div>
               </div>
@@ -1815,47 +1844,60 @@ const Settings = () => {
                     label="Light Primary"
                     value={brandingForm.light_primary_color || brandingForm.primary_color}
                     onChange={(color) => setBrandingForm(prev => ({ ...prev, light_primary_color: color }))}
-                    description="Portal buttons, focus rings & active group label in light mode. Not used on the booking site."
+                    description={`Portal buttons, focus rings & the active sidebar group icon in light mode. Not used on the booking site.${brandingForm.light_primary_color ? '' : INHERITED_HINT}`}
                   />
                   <ColorPicker
                     label="Light Secondary"
                     value={brandingForm.light_secondary_color || brandingForm.secondary_color}
                     onChange={(color) => setBrandingForm(prev => ({ ...prev, light_secondary_color: color }))}
-                    description="Secondary buttons & badges, muted panels in light mode (portal + booking site)."
+                    description={`Secondary buttons & badges, muted panels in light mode (portal + booking site).${brandingForm.light_secondary_color ? '' : INHERITED_HINT}`}
                   />
                   <ColorPicker
                     label="Light Accent"
                     value={brandingForm.light_accent_color || brandingForm.accent_color}
                     onChange={(color) => setBrandingForm(prev => ({ ...prev, light_accent_color: color }))}
-                    description="Booking site buttons & accents in light mode. Also this portal's active nav item and hover highlights."
+                    description={`Booking site buttons & accents in light mode. Also this portal's active nav item and hover highlights.${brandingForm.light_accent_color ? '' : INHERITED_HINT}`}
                   />
                 </div>
 
                 {/* Light Theme Preview */}
                 <div className="p-4 border rounded-lg" style={{ backgroundColor: brandingForm.light_background_color || '#F5F3EE' }}>
                   <p className="text-sm font-medium mb-3" style={{ color: '#1A2B25' }}>Light Mode Preview</p>
+                  {/*
+                    Every sample is FILLED with the colour it demonstrates, because that is what
+                    each token actually drives: --secondary paints solid surfaces (secondary
+                    buttons, badges, slider/progress tracks, bg-secondary panels) and is never
+                    used for outline buttons — those are `border border-input bg-background`.
+                    Foreground text is computed, not hardcoded white, so a pale brand colour
+                    still reads.
+                  */}
                   <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                     <button
                       type="button"
-                      style={{ backgroundColor: brandingForm.light_primary_color || brandingForm.primary_color }}
-                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-3 sm:px-4 py-2 text-white hover:opacity-90 transition-opacity"
+                      style={{
+                        backgroundColor: brandingForm.light_primary_color || brandingForm.primary_color,
+                        color: readableTextOn(brandingForm.light_primary_color || brandingForm.primary_color)
+                      }}
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-3 sm:px-4 py-2 hover:opacity-90 transition-opacity"
                     >
                       Primary · portal
                     </button>
                     <button
                       type="button"
                       style={{
-                        borderColor: brandingForm.light_secondary_color || brandingForm.secondary_color,
-                        color: brandingForm.light_secondary_color || brandingForm.secondary_color,
-                        backgroundColor: 'transparent'
+                        backgroundColor: brandingForm.light_secondary_color || brandingForm.secondary_color,
+                        color: readableTextOn(brandingForm.light_secondary_color || brandingForm.secondary_color)
                       }}
-                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-3 sm:px-4 py-2 border-2 hover:opacity-90 transition-opacity"
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-3 sm:px-4 py-2 hover:opacity-90 transition-opacity"
                     >
-                      Secondary
+                      Secondary · surfaces
                     </button>
                     <span
-                      style={{ backgroundColor: brandingForm.light_accent_color || brandingForm.accent_color }}
-                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold text-white"
+                      style={{
+                        backgroundColor: brandingForm.light_accent_color || brandingForm.accent_color,
+                        color: readableTextOn(brandingForm.light_accent_color || brandingForm.accent_color)
+                      }}
+                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
                     >
                       Accent · booking buttons
                     </span>
@@ -1881,7 +1923,7 @@ const Settings = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          title="Replaces all three dark colours below — lightens Primary and Accent for dark backgrounds, and copies Secondary across"
+                          title="Replaces the dark colours below from each light colour — or, where a light colour is empty, from the matching Default Theme Color. Lightens Primary and Accent for dark backgrounds, and copies Secondary across"
                         >
                           <RefreshCw className="mr-2 h-4 w-4" />
                           Sync dark theme from light
@@ -1889,12 +1931,15 @@ const Settings = () => {
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Replace all three dark colours?</AlertDialogTitle>
+                          <AlertDialogTitle>Replace the dark colours below?</AlertDialogTitle>
                           <div className="space-y-3 text-sm text-muted-foreground">
                             <p>
-                              This overwrites every dark colour below — including any you picked
-                              yourself. It lightens Primary and Accent for dark backgrounds, and copies
-                              Secondary across unchanged.
+                              Each dark colour is re-derived from its light colour — or, where the light
+                              colour is empty, from the matching{' '}
+                              <span className="font-medium text-foreground">Default Theme Color</span>.
+                              It lightens Primary and Accent for dark backgrounds, and copies Secondary
+                              across unchanged. Anything listed here is overwritten, including colours you
+                              picked yourself; a colour with no light value and no default is left alone.
                             </p>
                             {darkSyncPreview.length > 0 && (
                               <ul className="space-y-1.5">
@@ -1952,9 +1997,10 @@ const Settings = () => {
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  Syncing replaces all three colours below: it lightens Primary and Accent for dark
-                  backgrounds, and copies Secondary across unchanged. You confirm the exact hexes first,
-                  and nothing is stored until you press Save Changes.
+                  Syncing replaces the dark colours below, deriving each from its light colour — or from
+                  the matching default when the light one is empty. It lightens Primary and Accent for
+                  dark backgrounds, and copies Secondary across unchanged. You confirm the exact hexes
+                  first, and nothing is stored until you press Save Changes.
                 </p>
 
                 <div className="grid gap-6 md:grid-cols-3">
@@ -1962,19 +2008,19 @@ const Settings = () => {
                     label="Dark Primary"
                     value={brandingForm.dark_primary_color || brandingForm.primary_color}
                     onChange={(color) => setBrandingForm(prev => ({ ...prev, dark_primary_color: color }))}
-                    description="Portal buttons, focus rings & active group label in dark mode. Not used on the booking site."
+                    description={`Portal buttons, focus rings & the active sidebar group icon in dark mode. Not used on the booking site.${brandingForm.dark_primary_color ? '' : INHERITED_HINT}`}
                   />
                   <ColorPicker
                     label="Dark Secondary"
                     value={brandingForm.dark_secondary_color || brandingForm.secondary_color}
                     onChange={(color) => setBrandingForm(prev => ({ ...prev, dark_secondary_color: color }))}
-                    description="Secondary buttons & badges, muted panels in dark mode (portal + booking site)."
+                    description={`Secondary buttons & badges, muted panels in dark mode (portal + booking site).${brandingForm.dark_secondary_color ? '' : INHERITED_HINT}`}
                   />
                   <ColorPicker
                     label="Dark Accent"
                     value={brandingForm.dark_accent_color || brandingForm.accent_color}
                     onChange={(color) => setBrandingForm(prev => ({ ...prev, dark_accent_color: color }))}
-                    description="Booking site buttons & accents in dark mode — the one most customers actually see. Also this portal's active nav item."
+                    description={`Booking site buttons & accents in dark mode — the one most customers actually see. Also this portal's active nav item.${brandingForm.dark_accent_color ? '' : INHERITED_HINT}`}
                   />
                 </div>
 
@@ -1983,7 +2029,9 @@ const Settings = () => {
                     You changed a light colour. On save, {pendingDarkSync.changed.join(', ')} will be
                     refreshed to match — {pendingDarkSync.changed.length === 1 ? 'it is' : 'they are'} empty
                     or still the shade auto-derived from your previous light or default colour. Dark colours
-                    you picked yourself are never overwritten.
+                    you picked yourself are never overwritten. Note that <span className="font-medium text-foreground">Clear</span>{' '}
+                    does not opt out: a cleared dark colour counts as empty, so it will be re-derived here.
+                    To keep a dark colour fixed, pick it explicitly instead of clearing it.
                   </p>
                 )}
 
