@@ -577,16 +577,12 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                 </Card>
               )}
 
-              {/* Copy-paste message */}
+              {/* Copy-paste message. The only copy control lives in the sticky
+                  footer beside Done, so both of the sales person's actions sit
+                  together and stay reachable without scrolling this long pane. */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold">Client message</Label>
-                  {/* The only copy control in this pane — the message already carries the
-                      email, password, both URLs and the monthly amount. */}
-                  <Button size="sm" onClick={() => copyToClipboard(result.message, 'All details')}>
-                    <Copy className="h-4 w-4" />
-                    Copy all details
-                  </Button>
                 </div>
                 <Textarea
                   readOnly
@@ -631,8 +627,16 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
             </>
           )}
 
-          <DialogFooter>
+          {/* STICKY on purpose. DialogContent scrolls (max-h-[90vh]
+              overflow-y-auto) and DialogFooter is a plain flex div, so a normal
+              footer would sit below the whole details list — the sales person
+              would have to scroll to the bottom just to copy the handover
+              message. Negative margins bleed it to the DialogContent p-6 edges.
+              Copy is last so it is rightmost on desktop and, because the footer
+              is flex-col-reverse on mobile, topmost there. */}
+          <DialogFooter className="sticky bottom-0 -mx-6 -mb-6 gap-2 border-t bg-background px-6 py-4">
             <Button
+              variant="outline"
               onClick={() => {
                 setShowResult(false);
                 setResult(null);
@@ -641,6 +645,18 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
               <CheckCircle className="h-4 w-4" />
               Done
             </Button>
+            {/* The only copy control in this pane — the message already carries
+                the email, password, both URLs and the monthly amount.
+                Guarded on `result`: this footer sits OUTSIDE the `result &&`
+                block, and Done sets result to null while the dialog is still
+                mounted for its close animation, so an unguarded result.message
+                would throw during that frame. */}
+            {result && (
+              <Button onClick={() => copyToClipboard(result.message, 'All details')}>
+                <Copy className="h-4 w-4" />
+                Copy all details
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

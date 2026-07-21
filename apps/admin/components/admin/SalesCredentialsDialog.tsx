@@ -131,14 +131,12 @@ export default function SalesCredentialsDialog({ open, onOpenChange, target }: S
               </CardContent>
             </Card>
 
-            {/* Copy-paste message */}
+            {/* Copy-paste message. The copy action lives in the sticky footer
+                next to Done, so both of the sales person's actions sit together
+                and stay reachable without scrolling this long pane. */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold">Client message</Label>
-                <Button size="sm" onClick={copyEverything}>
-                  <Copy className="h-4 w-4" />
-                  Copy all details
-                </Button>
               </div>
               <Textarea
                 readOnly
@@ -166,10 +164,22 @@ export default function SalesCredentialsDialog({ open, onOpenChange, target }: S
           </>
         )}
 
-        <DialogFooter>
-          <Button onClick={() => onOpenChange(false)}>
+        {/* STICKY on purpose. DialogContent scrolls (max-h-[90vh]
+            overflow-y-auto) and DialogFooter is a plain flex div, so a normal
+            footer would sit below the whole details list — the sales person
+            would have to scroll to the bottom just to copy. Negative margins
+            bleed it to the DialogContent p-6 edges.
+            Copy is last so it is rightmost on desktop and, because the footer is
+            flex-col-reverse on mobile, topmost there — the primary action in
+            both layouts. */}
+        <DialogFooter className="sticky bottom-0 -mx-6 -mb-6 gap-2 border-t bg-background px-6 py-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             <CheckCircle className="h-4 w-4" />
             Done
+          </Button>
+          <Button onClick={copyEverything}>
+            <Copy className="h-4 w-4" />
+            Copy all details
           </Button>
         </DialogFooter>
       </DialogContent>
