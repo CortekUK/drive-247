@@ -191,7 +191,25 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
         },
       });
 
-      if (error) throw new Error(error.message);
+      // supabase-js collapses EVERY non-2xx into a generic FunctionsHttpError
+      // ("Edge Function returned a non-2xx status code") and hides the response
+      // body — which is where create-sales-onboarding puts the actionable reason
+      // ("Slug already taken", "An account already exists for this email",
+      // validation failures, or the underlying Postgres/Stripe error). Read the
+      // body back so the operator sees what actually went wrong.
+      if (error) {
+        let detail = error.message;
+        const res = (error as any)?.context;
+        if (res && typeof res.json === 'function') {
+          try {
+            const body = await res.clone().json();
+            if (body?.error) detail = String(body.error);
+          } catch {
+            // not JSON (e.g. a gateway/boot failure) — keep the generic message
+          }
+        }
+        throw new Error(detail);
+      }
       if (data?.error) throw new Error(data.error);
       if (!data?.success) throw new Error('Onboarding failed — no data returned');
 
