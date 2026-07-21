@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSetupReminder } from "@/hooks/use-setup-reminder";
@@ -14,7 +17,15 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, CreditCard, ImageIcon, ShieldCheck } from "lucide-react";
+import { ArrowRight, ImageIcon, Loader2, ShieldCheck, Upload } from "lucide-react";
+
+/**
+ * Logo upload limits. The `company-logos` bucket has NO server-side MIME or
+ * size restriction, so these checks are the ONLY gate — not decoration.
+ */
+const LOGO_MIME_TYPES = ["image/png", "image/jpeg"];
+const MAX_LOGO_MB = 5;
+const MAX_LOGO_BYTES = MAX_LOGO_MB * 1024 * 1024;
 
 /**
  * "Don't show me again" — permanent, so it must OUTLIVE the browser session.
@@ -37,6 +48,13 @@ interface ReminderTask {
   description: string;
   path: string;
   icon: React.ReactNode;
+  /**
+   * When true the row uploads a file in place instead of navigating away.
+   * The logo is the one task a tenant can finish without leaving this dialog,
+   * and it is the one the sales person most often could not do during the
+   * onboarding call — so make it a single click here.
+   */
+  upload?: boolean;
 }
 
 interface ReminderFlags {
@@ -64,7 +82,8 @@ interface ReminderFlags {
  */
 export function SetupReminderDialog() {
   const router = useRouter();
-  const { tenant } = useTenant();
+  const { tenant, refetchTenant } = useTenant();
+  const queryClient = useQueryClient();
   const { isSubscribed, hasExpiredSubscription, isResolved } =
     useTenantSubscription();
   const { needsLogo, needsStripe, needsBonzah, allDone, isReady } =
@@ -93,6 +112,96 @@ export function SetupReminderDialog() {
     });
   }, [tenantId]);
 
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  /**
+   * Upload a logo without leaving the dialog.
+   *
+   * Writes `tenants.logo_url`, which is exactly what `useSetupReminder` reads
+   * for `needsLogo`, so a successful upload makes this row disappear on its
+   * own — and closes the dialog entirely once it was the last outstanding task.
+   */
+  const handleLogoUpload = async (file: File | null) => {
+    const clearInput = () => {
+      // Reset so re-picking the SAME file after a failure still fires onChange.
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    };
+    if (!file || !tenantId) return;
+
+    if (!LOGO_MIME_TYPES.includes(file.type)) {
+      toast({
+        title: "Unsupported file",
+        description: "Your logo must be a PNG, JPG or JPEG image.",
+        variant: "destructive",
+      });
+      clearInput();
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      toast({
+        title: "File too large",
+        description: `Your logo must be ${MAX_LOGO_MB}MB or smaller.`,
+        variant: "destructive",
+      });
+      clearInput();
+      return;
+    }
+
+    setUploadingLogo(true);
+    try {
+      const ext = file.type === "image/png" ? "png" : "jpg";
+      // Namespaced by tenant so two tenants uploading "logo.png" cannot collide
+      // in this shared bucket.
+      const path = `tenant-${tenantId}/logo-${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("company-logos")
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from("company-logos").getPublicUrl(path);
+
+      // .select() is load-bearing: without it PostgREST answers 204 for an
+      // UPDATE that matched ZERO rows, so an RLS refusal (tenants_update_own_or_super
+      // filters rather than errors) would leave dbError null and we'd cheerfully
+      // toast "Logo uploaded" while logo_url never changed.
+      const { data: updated, error: dbError } = await supabase
+        .from("tenants")
+        .update({ logo_url: data.publicUrl })
+        .eq("id", tenantId)
+        .select("id");
+      if (dbError) throw dbError;
+      if (!updated || updated.length === 0) {
+        throw new Error(
+          "You don't have permission to update this account's logo. Please ask an admin."
+        );
+      }
+
+      // Refresh both the reminder's own state and the branding the rest of the
+      // portal renders, so the new logo appears immediately. Note refetchTenant()
+      // does NOT carry logo_url (portal's TenantContext never selects it) — the
+      // tenant-branding invalidation below is what actually repaints the sidebar.
+      await refetchTenant();
+      queryClient.invalidateQueries({ queryKey: ["setup-reminder", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["tenant-branding", tenantId] });
+
+      toast({
+        title: "Logo uploaded",
+        description: "It's now live on your booking site and customer emails.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Upload failed",
+        description: err?.message || "Could not upload your logo. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingLogo(false);
+      clearInput();
+    }
+  };
+
   // Only surface the tasks that are still outstanding.
   const tasks: ReminderTask[] = [];
   if (needsBonzah) {
@@ -106,12 +215,12 @@ export function SetupReminderDialog() {
           <img
             src="/bonzah-logo.svg"
             alt="Bonzah"
-            className="h-5 w-auto dark:hidden"
+            className="max-h-5 max-w-full object-contain dark:hidden"
           />
           <img
             src="/bonzah-logo-dark.svg"
             alt="Bonzah"
-            className="hidden h-5 w-auto dark:block"
+            className="hidden max-h-5 max-w-full object-contain dark:block"
           />
         </>
       ),
@@ -121,9 +230,10 @@ export function SetupReminderDialog() {
     tasks.push({
       key: "logo",
       label: "Upload your logo",
-      description: "Brand your booking site and customer emails.",
+      description: "PNG, JPG or JPEG — brands your site and emails.",
       path: "/settings?tab=branding",
       icon: <ImageIcon className="h-5 w-5 text-muted-foreground" />,
+      upload: true,
     });
   }
   if (needsStripe) {
@@ -132,7 +242,24 @@ export function SetupReminderDialog() {
       label: "Connect Stripe",
       description: "Accept live payments from your customers.",
       path: "/settings?tab=payments",
-      icon: <CreditCard className="h-5 w-5 text-muted-foreground" />,
+      // Real Stripe wordmark rather than a generic card glyph — the row reads as
+      // "connect THIS service", matching the Bonzah row above. Sized with
+      // max-h/max-w + object-contain (not `h-5 w-auto`) so a wide wordmark
+      // letterboxes inside the 36px box instead of overflowing the row.
+      icon: (
+        <>
+          <img
+            src="/stripe-wordmark.svg"
+            alt="Stripe"
+            className="max-h-5 max-w-full object-contain dark:hidden"
+          />
+          <img
+            src="/stripe-wordmark-dark.svg"
+            alt="Stripe"
+            className="hidden max-h-5 max-w-full object-contain dark:block"
+          />
+        </>
+      ),
     });
   }
 
@@ -180,7 +307,12 @@ export function SetupReminderDialog() {
         if (!next) snoozeAndClose();
       }}
     >
-      <DialogContent className="sm:max-w-md">
+      {/* max-h + overflow-y is not cosmetic: with all three tasks outstanding the
+          dialog is ~428px tall, which overflows a landscape phone (375px). Radix
+          centers via translate and locks body scroll, so the overflow clips BOTH
+          ends — taking the close button and "Don't show me again" with it and
+          leaving the tenant unable to dismiss the dialog at all. */}
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
             <ShieldCheck className="h-5 w-5 text-primary" />
@@ -191,13 +323,30 @@ export function SetupReminderDialog() {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-2.5">
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+          className="hidden"
+          onChange={(e) => void handleLogoUpload(e.target.files?.[0] ?? null)}
+        />
+
+        {/* min-w-0 is required, not cosmetic: DialogContent is `display: grid`,
+            and a grid item defaults to `min-width: auto`, so this list would
+            refuse to shrink below its content width and spill outside the
+            dialog instead of letting the description truncate. */}
+        <div className="min-w-0 space-y-2.5">
           {tasks.map((task) => (
             <div
               key={task.key}
-              className="flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-3"
+              className="flex min-w-0 items-center gap-3 rounded-lg border bg-muted/30 px-3 py-3"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-background">
+              {/* overflow-hidden matters: the Bonzah asset is a 343x108
+                  wordmark, so an unconstrained `h-5 w-auto` renders ~64px wide
+                  inside this 36px box and pushed the whole row past the dialog
+                  edge. The img is object-contain + max-w-full so it scales to
+                  fit instead. */}
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-background">
                 {task.icon}
               </div>
               <div className="min-w-0 flex-1">
@@ -206,14 +355,37 @@ export function SetupReminderDialog() {
                   {task.description}
                 </p>
               </div>
-              <Button
-                size="sm"
-                className="shrink-0"
-                onClick={() => handleSetup(task.path)}
-              >
-                Set up
-                <ArrowRight className="ml-1 h-3.5 w-3.5" />
-              </Button>
+              {task.upload ? (
+                // Finish this one in place — no navigation, no losing the
+                // dialog. The row vanishes by itself once logo_url is set.
+                <Button
+                  size="sm"
+                  className="shrink-0"
+                  disabled={uploadingLogo}
+                  onClick={() => logoInputRef.current?.click()}
+                >
+                  {uploadingLogo ? (
+                    <>
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                      Uploading
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mr-1 h-3.5 w-3.5" />
+                      Upload
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => handleSetup(task.path)}
+                >
+                  Set up
+                  <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
           ))}
         </div>

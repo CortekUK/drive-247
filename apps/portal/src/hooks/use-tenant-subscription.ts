@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuth } from "@/stores/auth-store";
 import { toast } from "sonner";
 
 export interface TenantSubscription {
@@ -53,9 +54,21 @@ export interface TenantSubscriptionInvoice {
 export function useTenantSubscription() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  // See the long note in use-subscription-plans.ts. `tenant` resolves before
+  // anyone is signed in (TenantProvider sits above AuthInitializer and `tenants`
+  // is anon-readable), so gating only on `!!tenant` let these three billing
+  // queries run with the anon key. RLS filters instead of erroring, so the
+  // signed-out answer ("no subscription") was cached as a success and reused
+  // after login — the same class of bug that hid the paywall. The user id is
+  // appended to each key so one identity's billing state is never served to
+  // another; it goes last so the prefix invalidations in `refetch()` below and
+  // in use-tenant-subscription-realtime.ts keep matching.
+  const { session, user } = useAuth();
+  const authed = !!tenant && !!session;
+  const userKey = user?.id ?? "anon";
 
   const subscriptionQuery = useQuery({
-    queryKey: ["tenant-subscription", tenant?.id],
+    queryKey: ["tenant-subscription", tenant?.id, userKey],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("tenant_subscriptions")
@@ -67,13 +80,13 @@ export function useTenantSubscription() {
       if (error) throw error;
       return data as TenantSubscription | null;
     },
-    enabled: !!tenant,
+    enabled: authed,
     staleTime: 30_000,
     retry: false,
   });
 
   const invoicesQuery = useQuery({
-    queryKey: ["tenant-subscription-invoices", tenant?.id],
+    queryKey: ["tenant-subscription-invoices", tenant?.id, userKey],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("tenant_subscription_invoices")
@@ -84,14 +97,14 @@ export function useTenantSubscription() {
       if (error) throw error;
       return (data || []) as TenantSubscriptionInvoice[];
     },
-    enabled: !!tenant,
+    enabled: authed,
     staleTime: 30_000,
     retry: false,
   });
 
   // Check for past subscriptions (expired trials / canceled)
   const pastSubscriptionQuery = useQuery({
-    queryKey: ["tenant-past-subscription", tenant?.id],
+    queryKey: ["tenant-past-subscription", tenant?.id, userKey],
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("tenant_subscriptions")
@@ -103,7 +116,7 @@ export function useTenantSubscription() {
         .maybeSingle();
       return data;
     },
-    enabled: !!tenant && !subscriptionQuery.data,
+    enabled: authed && !subscriptionQuery.data,
     staleTime: 60_000,
     // The dashboard gate blocks on this query resolving — don't sit through
     // three exponential-backoff retries before the paywall can render.
@@ -231,7 +244,7 @@ export function useTenantSubscription() {
   const pastSubscriptionSettled =
     pastSubscriptionQuery.isSuccess || pastSubscriptionQuery.isError;
   const isResolved =
-    !!tenant &&
+    authed &&
     subscriptionSettled &&
     (!pastSubscriptionNeeded || pastSubscriptionSettled);
 

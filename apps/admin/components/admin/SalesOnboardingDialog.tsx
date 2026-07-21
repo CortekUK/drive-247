@@ -298,6 +298,14 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Belt-and-braces for the disabled submit button: any other submit path
+    // (implicit Enter-key submission, programmatic) must not race the upload
+    // and provision a logo-less tenant.
+    if (logoUploading) {
+      toast.error('Your logo is still uploading — give it a second.');
+      return;
+    }
+
     const slug = normalizeSlug(formData.slug);
     const slugError = validateSlug(slug);
 
@@ -1052,13 +1060,21 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={creating || checkingName}>
-                {(creating || checkingName) && <Loader2 className="h-4 w-4 animate-spin" />}
+              {/* logoUploading is in here for a reason: the upload only writes
+                  formData.logoUrl once it RESOLVES, so submitting mid-upload ships
+                  logoUrl: undefined and the tenant is provisioned with no logo at
+                  all. Provisioning is one-shot — the fix would be manual. */}
+              <Button type="submit" disabled={creating || checkingName || logoUploading}>
+                {(creating || checkingName || logoUploading) && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
                 {checkingName
                   ? 'Checking name...'
-                  : creating
-                    ? 'Provisioning...'
-                    : 'Create Onboarding'}
+                  : logoUploading
+                    ? 'Uploading logo...'
+                    : creating
+                      ? 'Provisioning...'
+                      : 'Create Onboarding'}
               </Button>
             </DialogFooter>
           </form>
