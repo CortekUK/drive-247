@@ -671,10 +671,12 @@ const Settings = () => {
       setBrandingForm(prev => ({ ...prev, ...updates }));
     }
 
+    // Wording note: the source is effectiveBrandColor() — the light column when set,
+    // otherwise the base "Default Theme Colors" value — so never promise "from light" alone.
     toast({
-      title: changed.length > 0 ? 'Dark theme synced from light' : 'Dark theme already matches light',
+      title: changed.length > 0 ? 'Dark colours synced' : 'Dark colours already in sync',
       description: changed.length > 0
-        ? `${changed.join(', ')} updated to match your light colours. Check the preview, then Save Changes.`
+        ? `${changed.join(', ')} updated to match your light colours (or the defaults, where no light colour is set). Check the preview, then Save Changes.`
         : 'No dark colours needed changing.',
     });
   }, [brandingForm]);
@@ -1822,7 +1824,8 @@ const Settings = () => {
                   <div>
                     <h3 className="font-medium">Light Theme Colors</h3>
                     <p className="text-sm text-muted-foreground">
-                      Shown to visitors in light mode only. Leave empty to use the defaults above.
+                      Shown to visitors in light mode only. Leave a colour empty to inherit the default
+                      above — any picker that is inheriting says so under its label.
                     </p>
                   </div>
                   <Button
@@ -1914,7 +1917,8 @@ const Settings = () => {
                     <h3 className="font-medium">Dark Theme Colors</h3>
                     <p className="text-sm text-muted-foreground">
                       Shown to visitors in dark mode — which is what most booking site visitors see.
-                      Leave empty to use the defaults above.
+                      Leave a colour empty to inherit the default above — any picker that is inheriting
+                      says so under its label.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -2038,28 +2042,34 @@ const Settings = () => {
                 {/* Dark Theme Preview */}
                 <div className="p-4 border rounded-lg" style={{ backgroundColor: brandingForm.dark_background_color || '#1A2B25' }}>
                   <p className="text-sm font-medium mb-3" style={{ color: '#F5F3EE' }}>Dark Mode Preview</p>
+                  {/* Filled samples + computed foreground — see the light preview above for why. */}
                   <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                     <button
                       type="button"
-                      style={{ backgroundColor: brandingForm.dark_primary_color || brandingForm.primary_color }}
-                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-3 sm:px-4 py-2 text-white hover:opacity-90 transition-opacity"
+                      style={{
+                        backgroundColor: brandingForm.dark_primary_color || brandingForm.primary_color,
+                        color: readableTextOn(brandingForm.dark_primary_color || brandingForm.primary_color)
+                      }}
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-3 sm:px-4 py-2 hover:opacity-90 transition-opacity"
                     >
                       Primary · portal
                     </button>
                     <button
                       type="button"
                       style={{
-                        borderColor: brandingForm.dark_secondary_color || brandingForm.secondary_color,
-                        color: brandingForm.dark_secondary_color || brandingForm.secondary_color,
-                        backgroundColor: 'transparent'
+                        backgroundColor: brandingForm.dark_secondary_color || brandingForm.secondary_color,
+                        color: readableTextOn(brandingForm.dark_secondary_color || brandingForm.secondary_color)
                       }}
-                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-3 sm:px-4 py-2 border-2 hover:opacity-90 transition-opacity"
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-3 sm:px-4 py-2 hover:opacity-90 transition-opacity"
                     >
-                      Secondary
+                      Secondary · surfaces
                     </button>
                     <span
-                      style={{ backgroundColor: brandingForm.dark_accent_color || brandingForm.accent_color }}
-                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold text-white"
+                      style={{
+                        backgroundColor: brandingForm.dark_accent_color || brandingForm.accent_color,
+                        color: readableTextOn(brandingForm.dark_accent_color || brandingForm.accent_color)
+                      }}
+                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
                     >
                       Accent · booking buttons
                     </span>
