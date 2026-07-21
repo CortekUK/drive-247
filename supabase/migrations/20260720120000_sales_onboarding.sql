@@ -114,11 +114,21 @@ CREATE TRIGGER trg_sales_onboarding_updated_at
 --    These were created by hand in the dashboard and have NO tracked policies,
 --    which is why logo upload silently breaks on some environments.
 -- -----------------------------------------------------------------------------
+-- NOTE: these buckets usually already exist (created by hand in the dashboard),
+-- so the ON CONFLICT branch is the one that actually runs on an existing
+-- project. It must therefore re-assert file_size_limit too — only setting
+-- `public` left the live buckets with file_size_limit = NULL, i.e. no server
+-- side cap at all, which is how prod ended up unbounded.
+-- allowed_mime_types is deliberately NOT set: these buckets also carry favicons
+-- (image/x-icon) and CMS media, and an over-tight allowlist would break those
+-- existing upload paths.
 INSERT INTO storage.buckets (id, name, public, file_size_limit)
 VALUES
   ('company-logos', 'company-logos', true, 10485760),
   ('cms-media',     'cms-media',     true, 10485760)
-ON CONFLICT (id) DO UPDATE SET public = true;
+ON CONFLICT (id) DO UPDATE
+  SET public = true,
+      file_size_limit = COALESCE(storage.buckets.file_size_limit, EXCLUDED.file_size_limit);
 
 -- Public read for both buckets (logos/CMS media are shown on public sites).
 DROP POLICY IF EXISTS "Public read company-logos" ON storage.objects;

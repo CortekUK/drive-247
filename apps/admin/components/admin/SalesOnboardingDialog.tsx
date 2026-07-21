@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
@@ -79,6 +79,15 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
 // mistyped "120000" cannot sail through.
 const MIN_FLEET_SIZE = 1;
 const MAX_FLEET_SIZE = 10_000;
+
+/**
+ * Logo upload limits. The `company-logos` bucket has NO server-side MIME or
+ * size restriction (verified on prod: allowed_mime_types and file_size_limit
+ * are both null), so these checks are the ONLY gate — not decoration.
+ */
+const LOGO_MIME_TYPES = ['image/png', 'image/jpeg'];
+const MAX_LOGO_MB = 5;
+const MAX_LOGO_BYTES = MAX_LOGO_MB * 1024 * 1024;
 
 const EMPTY_FORM = {
   firstName: '',
@@ -222,6 +231,57 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
 
   // Live preview of the subdomain the tenant will actually get.
   const previewSlug = normalizeSlug(formData.slug);
+
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+
+  /**
+   * Upload the client's logo straight into the public `company-logos` bucket
+   * and keep the resulting URL in `logoUrl`. The edge-function contract is
+   * unchanged — it still just receives a URL — so nothing server-side moves.
+   *
+   * Uploading on SELECT (rather than at submit) means a failure surfaces while
+   * the sales person is still on the logo field, not after they have filled in
+   * the whole form.
+   */
+  const handleLogoSelect = async (file: File | null) => {
+    if (!file) return;
+
+    if (!LOGO_MIME_TYPES.includes(file.type)) {
+      toast.error('Logo must be a PNG, JPG or JPEG image');
+      if (logoInputRef.current) logoInputRef.current.value = '';
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      toast.error(`Logo must be ${MAX_LOGO_MB}MB or smaller`);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+      return;
+    }
+
+    setLogoUploading(true);
+    try {
+      const ext = file.type === 'image/png' ? 'png' : 'jpg';
+      // Random name: two clients called "logo.png" must not overwrite each
+      // other, and the bucket is shared across every tenant.
+      const path = `onboarding/${crypto.randomUUID()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('company-logos')
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('company-logos').getPublicUrl(path);
+      setFormData((prev) => ({ ...prev, logoUrl: data.publicUrl }));
+      setFormErrors((prev) => ({ ...prev, logoUrl: undefined }));
+      toast.success('Logo uploaded');
+    } catch (err: any) {
+      toast.error(`Logo upload failed: ${err?.message || 'unknown error'}`);
+    } finally {
+      setLogoUploading(false);
+      // Reset so re-picking the SAME file after a failure still fires onChange.
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  };
 
   const validateSlug = (slug: string): string | null => {
     if (slug.length < 3) return 'Slug must be at least 3 characters long';
@@ -864,23 +924,61 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
               </p>
             </div>
 
+            {/* Real file upload, matching the Google form ("Upload your business
+                logo"). Goes straight into the public company-logos bucket; the
+                resulting URL is what gets sent, so the edge function is
+                unchanged. A URL box was useless when the client emails a PNG. */}
             <div>
-              <Label className="mb-1.5 block">Logo URL</Label>
-              <Input
-                type="url"
-                maxLength={2048}
-                value={formData.logoUrl}
-                onChange={(e) => {
-                  setFormData({ ...formData, logoUrl: e.target.value });
-                  if (formErrors.logoUrl) setFormErrors({ ...formErrors, logoUrl: undefined });
-                }}
-                className={formErrors.logoUrl ? 'border-destructive' : ''}
-                placeholder="https://example.com/logo.png"
+              <Label className="mb-1.5 block">Business Logo</Label>
+
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+                className="hidden"
+                onChange={(e) => void handleLogoSelect(e.target.files?.[0] ?? null)}
               />
+
+              {formData.logoUrl ? (
+                <div className="flex items-center gap-3 rounded-md border border-input p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={formData.logoUrl}
+                    alt="Uploaded logo preview"
+                    className="h-12 w-12 rounded object-contain bg-muted"
+                  />
+                  <span className="flex-1 text-xs text-muted-foreground truncate">
+                    Logo uploaded — it will be set as their logo, dark logo, login logo and favicon.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={logoUploading}
+                    onClick={() => setFormData({ ...formData, logoUrl: '' })}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={logoUploading}
+                  onClick={() => logoInputRef.current?.click()}
+                >
+                  {logoUploading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {logoUploading ? 'Uploading...' : 'Upload logo'}
+                </Button>
+              )}
+
               {formErrors.logoUrl ? (
                 <p className="text-xs text-destructive mt-1">{formErrors.logoUrl}</p>
               ) : (
-                <p className="text-xs text-muted-foreground mt-1">Optional — the client can upload their own later.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Optional — PNG, JPG or JPEG, up to {MAX_LOGO_MB}MB. The client can change it later
+                  in Settings.
+                </p>
               )}
             </div>
 
