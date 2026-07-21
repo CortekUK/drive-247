@@ -30,12 +30,17 @@ interface PricingCardProps {
 }
 
 function formatPrice(amount: number, currency: string) {
+  const value = amount / 100;
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency.toUpperCase(),
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount / 100);
+    // Show cents ONLY when the amount actually has them. Pinning both bounds to
+    // 0 rounded a $299.99 plan to "$300" on the very screen where the client
+    // agrees to be charged — the quoted price must equal the charged price.
+    // Whole amounts still render clean ("$300", not "$300.00").
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 // "Upfront monthly" plans charge exactly one calendar month after the tenant's
