@@ -5274,14 +5274,50 @@ const RentalDetail = () => {
                             Link to Rental
                           </Button>
                         )}
+                        {/* Approve / Reject buttons for unverified insurance documents */}
+                        {canEdit('rentals') && !doc.verified && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-green-600 hover:text-green-700 hover:bg-green-50 border-green-300"
+                              onClick={() => approveInsuranceMutation.mutate(doc.id)}
+                              disabled={approveInsuranceMutation.isPending}
+                            >
+                              {approveInsuranceMutation.isPending ? (
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              ) : (
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                              )}
+                              Approve
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300"
+                              onClick={() => handleRejectInsurance()}
+                            >
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Reject
+                            </Button>
+                          </>
+                        )}
                       </div>
 
-                      {doc.status?.toLowerCase() === 'expired' && (
-                        <Badge variant="destructive">
-                          <XCircle className="h-3 w-3 mr-1" />
-                          Expired
-                        </Badge>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {doc.verified && (
+                          <Badge className="bg-green-600">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Verified
+                          </Badge>
+                        )}
+                        {doc.status?.toLowerCase() === 'expired' && (
+                          <Badge variant="destructive">
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Expired
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
