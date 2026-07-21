@@ -573,9 +573,11 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold">Client message</Label>
-                  <Button size="sm" onClick={() => copyToClipboard(result.message, 'Message')}>
+                  {/* The only copy control in this pane — the message already carries the
+                      email, password, both URLs and the monthly amount. */}
+                  <Button size="sm" onClick={() => copyToClipboard(result.message, 'All details')}>
                     <Copy className="h-4 w-4" />
-                    Copy message
+                    Copy all details
                   </Button>
                 </div>
                 <Textarea
@@ -587,7 +589,8 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                 />
               </div>
 
-              {/* Individual copy chips */}
+              {/* Read-only recap — no copy buttons here on purpose, "Copy all details"
+                  above is the single copy control. Text stays selectable. */}
               <Card>
                 <CardContent className="p-4 space-y-3">
                   <h3 className="text-sm font-semibold">Details</h3>
@@ -603,14 +606,9 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                   ].map(([label, value]) => (
                     <div key={label}>
                       <Label className="text-xs mb-1 block">{label}</Label>
-                      <div className="flex items-center gap-2">
-                        <code className="flex-1 bg-muted/40 px-3 py-2 rounded-md border border-border text-sm font-mono break-all">
-                          {value}
-                        </code>
-                        <Button variant="outline" size="sm" onClick={() => copyToClipboard(value, label)}>
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <code className="block bg-muted/40 px-3 py-2 rounded-md border border-border text-sm font-mono break-all select-all">
+                        {value}
+                      </code>
                     </div>
                   ))}
                   {result.timezone !== undefined && (
