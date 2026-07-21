@@ -44,6 +44,20 @@ export const useSubscriptionPlans = () => {
     // Appended last, so existing prefix-based invalidations still match.
     queryKey: ["subscription-plans", tenant?.id, user?.id ?? "anon"],
     queryFn: async () => {
+      // Second line of defence, because `session` in the store is a snapshot and
+      // the client is the thing that actually signs the request. If GoTrue's
+      // token refresh fails (its own 5xx while PostgREST is healthy), supabase-js
+      // falls back to the anon key — and an anon read of this table is not an
+      // error, it is an empty list, which reads as "no plans to sell" and quietly
+      // drops the paywall. Ask the client what it will actually send, and treat
+      // "nothing" as a failure so the query lands on the ERROR path: the layout
+      // treats errored plans as "unknown" and KEEPS the gate up (fail-closed),
+      // rather than trusting a zero-row answer nobody was authorised to receive.
+      const { data: sessionNow } = await supabase.auth.getSession();
+      if (!sessionNow.session) {
+        throw new Error("Not authenticated — refusing to read plans anonymously");
+      }
+
       const { data, error } = await (supabase as any)
         .from("subscription_plans")
         .select("*")

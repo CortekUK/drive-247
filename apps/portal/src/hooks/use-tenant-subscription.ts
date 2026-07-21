@@ -175,13 +175,22 @@ export function useTenantSubscription() {
     },
   });
 
+  // Deliberately invalidated by BARE prefix, with no tenant id.
+  //
+  // `refetch` is recreated every render and closes over `tenant?.id`. The
+  // post-Stripe-checkout poll on /subscription captures it ONCE (its effect deps
+  // are [searchParams], which is identity-stable for a fixed URL) and then calls
+  // that same closure every 2s for 15s. /subscription is exempt from the layout's
+  // gate hold, so the page can mount while `tenant` is still null — in which case
+  // the captured closure invalidates ["tenant-subscription", undefined], and
+  // TanStack's partialMatchKey fails at index 1, matching NOTHING. The poll then
+  // silently refetches nothing and the freshly-paid tenant keeps seeing the
+  // paywall until they reload — the same "only a refresh fixes it" complaint.
+  // A bare prefix matches regardless of tenant/user suffix, and the portal only
+  // ever holds one tenant per session, so there is nothing else to over-match.
   const refetch = () => {
-    queryClient.invalidateQueries({
-      queryKey: ["tenant-subscription", tenant?.id],
-    });
-    queryClient.invalidateQueries({
-      queryKey: ["tenant-subscription-invoices", tenant?.id],
-    });
+    queryClient.invalidateQueries({ queryKey: ["tenant-subscription"] });
+    queryClient.invalidateQueries({ queryKey: ["tenant-subscription-invoices"] });
   };
 
   const isSubscribed =

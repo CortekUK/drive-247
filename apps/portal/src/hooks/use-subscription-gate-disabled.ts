@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabaseUntyped as supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/stores/auth-store";
 
 /**
  * Global super-admin kill-switch for the subscription blocker.
@@ -14,8 +15,19 @@ import { supabaseUntyped as supabase } from "@/integrations/supabase/client";
  * any authenticated user SELECT admin_settings.
  */
 export function useSubscriptionGateDisabled(): boolean {
+  // This flag short-circuits EVERYTHING in the dashboard gate — gateOpen, the
+  // latch, showGate and even the fail-closed skeleton hold — so it is the single
+  // most dangerous value to get wrong. It is the last gate input that was still
+  // running unauthenticated with a key carrying no identity: exactly the shape
+  // that hid the paywall via subscription_plans.
+  //
+  // It fails SAFE today rather than open (admin_settings RLS filters for anon, so
+  // maybeSingle() yields null -> `!!data` false -> gate NOT suppressed), so this
+  // is defence in depth, not a live bypass. Guarding it anyway stops a pointless
+  // signed-out request and stops one account's answer being reused for another.
+  const { session, user } = useAuth();
   const { data } = useQuery({
-    queryKey: ["subscription-gate-disabled"],
+    queryKey: ["subscription-gate-disabled", user?.id ?? "anon"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("admin_settings")
@@ -27,6 +39,7 @@ export function useSubscriptionGateDisabled(): boolean {
       if (error) throw error;
       return !!data;
     },
+    enabled: !!session,
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
