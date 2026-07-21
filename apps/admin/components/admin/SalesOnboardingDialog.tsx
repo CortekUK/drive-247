@@ -94,9 +94,14 @@ const EMPTY_FORM = {
   /** Only used when "Other" is ticked. */
   vehicleTypeOther: '',
   fleetSize: '',
-  /** Structured opening hours — no free-text parsing guesswork. */
+  /**
+   * Structured opening hours — no free-text parsing guesswork.
+   * Starts EMPTY on purpose: hours aren't required on the Google form, and
+   * pre-selecting Mon–Fri 9–6 would publish invented opening times on the
+   * client's live booking site for any client who was never asked.
+   */
   hoursAlwaysOpen: false,
-  hoursDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as string[],
+  hoursDays: [] as string[],
   hoursOpen: '09:00',
   hoursClose: '18:00',
   businessColours: '',
@@ -159,8 +164,12 @@ const isEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test
  * number; the edge function normalises formatting separately.
  */
 const isPhone = (value: string): boolean => {
-  const digits = value.replace(/[^\d]/g, '');
-  return /^\+?[\d\s()./-]+$/.test(value.trim()) && digits.length >= 7 && digits.length <= 15;
+  // Strip a trailing extension first ("x102", "ext. 4", "#9"). Business lines
+  // are commonly written that way and the bare pattern rejected them outright,
+  // which blocks a real sale — a false rejection costs more than a false accept.
+  const base = value.trim().replace(/\s*(?:ext\.?|x|#)\s*\d{1,6}$/i, '').trim();
+  const digits = base.replace(/[^\d]/g, '');
+  return /^\+?[\d\s()./-]+$/.test(base) && digits.length >= 7 && digits.length <= 15;
 };
 
 const timeLabel = (value: string): string =>
@@ -203,6 +212,7 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
     contactEmail?: string;
     businessPhone?: string;
     fleetSize?: string;
+    vehicleTypeOther?: string;
     hours?: string;
   }>({});
   /** Set while we check the business name isn't already taken. */
@@ -249,45 +259,66 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
     const phoneError =
       phone && !isPhone(phone) ? 'Enter a valid phone number, including the country code' : null;
 
-    // Fleet size is a vehicle COUNT: whole and positive. Explicitly rejects
-    // negatives and decimals rather than silently coercing them.
+    // Fleet size is a vehicle COUNT. Must LOOK like a plain whole number, not
+    // merely survive Number(): "1e3", "0x10", "5.0" and "+5" all parse to a
+    // valid integer but are not counts, and were previously forwarded to the
+    // database verbatim. `\d+` also rejects negatives outright.
     const fleetRaw = formData.fleetSize.trim();
     let fleetError: string | null = null;
+    let fleetValue: string | undefined;
     if (fleetRaw) {
-      const n = Number(fleetRaw);
-      if (!Number.isFinite(n) || !Number.isInteger(n)) {
+      if (!/^\d+$/.test(fleetRaw)) {
         fleetError = 'Fleet size must be a whole number';
-      } else if (n < MIN_FLEET_SIZE) {
-        fleetError = `Fleet size must be at least ${MIN_FLEET_SIZE}`;
-      } else if (n > MAX_FLEET_SIZE) {
-        fleetError = `Fleet size must be ${MAX_FLEET_SIZE.toLocaleString()} or less`;
+      } else {
+        const n = Number(fleetRaw);
+        if (n < MIN_FLEET_SIZE) {
+          fleetError = `Fleet size must be at least ${MIN_FLEET_SIZE}`;
+        } else if (n > MAX_FLEET_SIZE) {
+          fleetError = `Fleet size must be ${MAX_FLEET_SIZE.toLocaleString()} or less`;
+        } else {
+          fleetValue = String(n); // normalised — never the raw typed string
+        }
       }
     }
 
-    // "HH:MM" is zero-padded 24h, so a plain string compare orders correctly.
-    // Overnight shifts aren't representable per-day — those are "Open 24/7".
+    // Ticking "Other" and leaving the box blank used to discard the whole
+    // answer silently. Make it explicit instead.
+    const vehicleOtherError =
+      formData.vehicleTypes.includes('Other') && !formData.vehicleTypeOther.trim()
+        ? 'Tell us what "Other" means, or untick it'
+        : null;
+
+    // Hours are NOT required on the Google form. No days + not 24/7 simply
+    // means "they didn't say", and we send nothing rather than inventing a
+    // schedule that would be published on the client's live website.
+    const hoursGiven = formData.hoursAlwaysOpen || formData.hoursDays.length > 0;
     let hoursError: string | null = null;
-    if (!formData.hoursAlwaysOpen) {
-      if (formData.hoursDays.length === 0) {
-        hoursError = 'Pick at least one opening day, or choose Open 24/7';
-      } else if (formData.hoursOpen >= formData.hoursClose) {
-        hoursError = 'Closing time must be after opening time (use Open 24/7 for overnight)';
-      }
+    if (hoursGiven && !formData.hoursAlwaysOpen && formData.hoursOpen >= formData.hoursClose) {
+      // "HH:MM" is zero-padded 24h, so a plain string compare orders correctly.
+      hoursError = 'Closing time must be after opening time';
     }
 
     const logoUrl = formData.logoUrl.trim();
     const logoError = logoUrl && !isHttpUrl(logoUrl) ? 'Enter a full http(s) URL, e.g. https://…/logo.png' : null;
 
-    if (slugError || amountError || emailError || phoneError || fleetError || hoursError || logoError) {
+    const firstError =
+      slugError || amountError || emailError || phoneError || fleetError ||
+      vehicleOtherError || hoursError || logoError;
+
+    if (firstError) {
       setFormErrors({
         slug: slugError || undefined,
         subscriptionAmount: amountError || undefined,
         contactEmail: emailError || undefined,
         businessPhone: phoneError || undefined,
         fleetSize: fleetError || undefined,
+        vehicleTypeOther: vehicleOtherError || undefined,
         hours: hoursError || undefined,
         logoUrl: logoError || undefined,
       });
+      // The dialog scrolls and the offending field is often far above the
+      // submit button, so a red border alone reads as "the button did nothing".
+      toast.error(firstError);
       return;
     }
     setFormErrors({});
@@ -297,13 +328,23 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
     // and a scary error mid-call. A failure to check is deliberately non-fatal.
     setCheckingName(true);
     try {
+      // Select the NAME too and re-verify it exactly, mirroring the server.
+      // In ILIKE the pattern is raw operator input, so `_` and `%` are
+      // wildcards: without this re-check "Rent_A_Car" falsely matches an
+      // existing "RentXACar" and hard-blocks a legitimate submission that the
+      // server would have allowed.
       const { data: clash } = await (supabase as any)
         .from('tenants')
-        .select('id')
-        .ilike('company_name', companyName)
-        .limit(1);
-      if (clash && clash.length > 0) {
-        setFormErrors({ companyName: 'Another rental company already uses this name' });
+        .select('id, company_name')
+        .ilike('company_name', companyName);
+      const taken = (clash || []).some(
+        (t: { company_name: string | null }) =>
+          (t.company_name || '').trim().toLowerCase() === companyName.toLowerCase(),
+      );
+      if (taken) {
+        const msg = 'Another rental company already uses this name';
+        setFormErrors({ companyName: msg });
+        toast.error(msg);
         return;
       }
     } catch {
@@ -341,19 +382,23 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
           // Selected options plus whatever they typed under "Other", as one
           // comma-separated string (what the column and the CMS copy expect).
           vehicleType: vehicleTypeValue || undefined,
-          fleetSize: fleetRaw || undefined,
+          // Normalised, never the raw typed string.
+          fleetSize: fleetValue,
           location: formData.location.trim() || undefined,
-          // Display string for tenants.business_hours...
-          operatingHours: operatingHoursText || undefined,
+          // Hours are only sent when the client actually gave them. Sending a
+          // default would publish invented opening times on their live site.
+          operatingHours: hoursGiven ? operatingHoursText || undefined : undefined,
           // ...plus the STRUCTURED values, so the edge function never has to
           // guess what free text meant. It writes the per-day open/close
           // columns straight from these.
-          operatingSchedule: {
-            alwaysOpen: formData.hoursAlwaysOpen,
-            days: formData.hoursAlwaysOpen ? DAY_OPTIONS.map((d) => d.col) : formData.hoursDays,
-            opensAt: formData.hoursAlwaysOpen ? '00:00' : formData.hoursOpen,
-            closesAt: formData.hoursAlwaysOpen ? '23:59' : formData.hoursClose,
-          },
+          operatingSchedule: hoursGiven
+            ? {
+                alwaysOpen: formData.hoursAlwaysOpen,
+                days: formData.hoursAlwaysOpen ? DAY_OPTIONS.map((d) => d.col) : formData.hoursDays,
+                opensAt: formData.hoursAlwaysOpen ? '00:00' : formData.hoursOpen,
+                closesAt: formData.hoursAlwaysOpen ? '23:59' : formData.hoursClose,
+              }
+            : undefined,
           businessColours: formData.businessColours.trim() || undefined,
           logoUrl: logoUrl || undefined,
           wantsMarketing: formData.wantsMarketing,
@@ -657,14 +702,26 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                 </div>
                 {formData.vehicleTypes.includes('Other') && (
                   <Input
-                    className="mt-2"
-                    maxLength={120}
+                    className={`mt-2 ${formErrors.vehicleTypeOther ? 'border-destructive' : ''}`}
+                    // 60, not 120: the value is JOINED with the ticked options
+                    // ("Economy, Premium, Exotic and Luxury, " is already 37
+                    // chars) and the server caps the combined string at 120,
+                    // truncating mid-word without warning.
+                    maxLength={60}
                     value={formData.vehicleTypeOther}
-                    onChange={(e) => setFormData({ ...formData, vehicleTypeOther: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, vehicleTypeOther: e.target.value });
+                      if (formErrors.vehicleTypeOther)
+                        setFormErrors({ ...formErrors, vehicleTypeOther: undefined });
+                    }}
                     placeholder="e.g. Vans, Motorhomes"
                   />
                 )}
-                <p className="text-xs text-muted-foreground mt-1">Pick all that apply.</p>
+                {formErrors.vehicleTypeOther ? (
+                  <p className="text-xs text-destructive mt-1">{formErrors.vehicleTypeOther}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">Pick all that apply.</p>
+                )}
               </div>
             </div>
 
@@ -835,7 +892,16 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                 </div>
                 <Switch
                   checked={formData.wantsMarketing}
-                  onCheckedChange={(v) => setFormData({ ...formData, wantsMarketing: v })}
+                  onCheckedChange={(v) =>
+                    setFormData({
+                      ...formData,
+                      wantsMarketing: v,
+                      // Clear the budget when marketing is switched off — the
+                      // input is hidden but its value was still submitted, so a
+                      // corrected answer left a stale budget on the record.
+                      metaDailyBudget: v ? formData.metaDailyBudget : '',
+                    })
+                  }
                 />
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -848,10 +914,16 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                   onCheckedChange={(v) => setFormData({ ...formData, hasMetaAdAccount: v })}
                 />
               </div>
-              {formData.hasMetaAdAccount && (
+              {/* Gated on wantsMarketing, NOT hasMetaAdAccount. On the Google
+                  form "Budget per day for Meta Marketing?" is required and
+                  independent of whether they already have an ad account — the
+                  commonest case is "wants marketing, no account yet", and
+                  gating on the account made that budget impossible to record. */}
+              {formData.wantsMarketing && (
                 <div>
                   <Label className="mb-1.5 block">Meta daily budget</Label>
                   <Input
+                    maxLength={60}
                     value={formData.metaDailyBudget}
                     onChange={(e) => setFormData({ ...formData, metaDailyBudget: e.target.value })}
                     placeholder="$50/day"

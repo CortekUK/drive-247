@@ -291,8 +291,19 @@ function scheduleToHourCols(
 
   const alwaysOpen = schedule.alwaysOpen === true;
   // "HH:MM" from the picker -> "HH:MM:SS" as the columns store it.
-  const toSql = (v: unknown): string | null =>
-    typeof v === "string" && /^\d{2}:\d{2}$/.test(v) ? `${v}:00` : null;
+  // RANGE-checked, not just shape-checked: the targets are Postgres `time`
+  // columns, so a shape-valid but impossible value like "99:99" does not merely
+  // store nonsense — it throws on INSERT and aborts the whole provisioning run.
+  // Returning null here instead makes it fall back to text parsing.
+  const toSql = (v: unknown): string | null => {
+    if (typeof v !== "string") return null;
+    const m = v.match(/^(\d{2}):(\d{2})$/);
+    if (!m) return null;
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+    if (h > 23 || min > 59) return null;
+    return `${v}:00`;
+  };
 
   const open = alwaysOpen ? "00:00:00" : toSql(schedule.opensAt);
   const close = alwaysOpen ? "23:59:00" : toSql(schedule.closesAt);
@@ -1020,7 +1031,16 @@ Deno.serve(async (req) => {
       business_name: companyName,
       slug,
       vehicle_type: cleanOrNull(body.vehicleType, MAX.short),
-      fleet_size: cleanOrNull(body.fleetSize, MAX.short),
+      // Fleet size is a vehicle COUNT. The dialog validates it, but the client
+      // is not a trust boundary — a direct call could otherwise persist "-5" or
+      // "banana" into a record the onboarding digest reads as real. Anything
+      // that isn't a plain positive whole number is dropped rather than stored.
+      fleet_size: (() => {
+        const raw = (cleanOrNull(body.fleetSize, MAX.short) || "").trim();
+        if (!/^\d+$/.test(raw)) return null;
+        const n = Number(raw);
+        return n >= 1 && n <= 10_000 ? String(n) : null;
+      })(),
       location,
       business_phone: phoneDisplay,
       business_email: contactEmail,
