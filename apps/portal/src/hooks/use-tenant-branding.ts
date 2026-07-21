@@ -39,8 +39,19 @@ export interface TenantBranding {
   linkedin_url: string | null;
 }
 
+/**
+ * The platform's own brand string that `tenants.app_name` used to default to.
+ * Treated as "unset" so it is never rendered as a tenant's own brand.
+ */
+const PLATFORM_DEFAULT_APP_NAME = 'Drive 917';
+
+/**
+ * Platform-neutral defaults. `app_name` is intentionally null — the display name
+ * is always resolved from the tenant itself (app_name → company_name) so a tenant
+ * that never set an app name never sees the platform's own brand in their portal.
+ */
 const DEFAULT_BRANDING: TenantBranding = {
-  app_name: 'Drive 917',
+  app_name: null,
   primary_color: '#223331',
   secondary_color: '#223331',
   accent_color: '#E9B63E',
@@ -81,6 +92,55 @@ const DEFAULT_BRANDING: TenantBranding = {
 export const useTenantBranding = () => {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+
+  // The tenant's own display name — never the platform default.
+  // `tenants.app_name` is optional (never set for tenants provisioned without one),
+  // so we fall back to the company name the tenant was created with.
+  const tenantAny = tenant as (typeof tenant & Partial<TenantBranding>) | null;
+  const resolveAppName = (appName?: string | null): string | null => {
+    const trimmed = appName?.trim();
+    // Belt-and-braces: `tenants.app_name` used to carry the platform default
+    // 'Drive 917' as a column default. The default was dropped and every row
+    // backfilled, but treat the literal as "unset" so a stale/reintroduced value
+    // can never be rendered as a tenant's own brand.
+    const own = trimmed && trimmed !== PLATFORM_DEFAULT_APP_NAME ? trimmed : null;
+    return own || tenant?.company_name?.trim() || null;
+  };
+
+  // Build immediate branding from tenant while the query runs.
+  // This prevents a flash of platform-default branding.
+  const immediateFromTenant: TenantBranding = tenant ? {
+    app_name: resolveAppName(tenantAny?.app_name),
+    primary_color: tenantAny?.primary_color || DEFAULT_BRANDING.primary_color,
+    secondary_color: tenantAny?.secondary_color || DEFAULT_BRANDING.secondary_color,
+    accent_color: tenantAny?.accent_color || DEFAULT_BRANDING.accent_color,
+    light_primary_color: tenantAny?.light_primary_color ?? null,
+    light_secondary_color: tenantAny?.light_secondary_color ?? null,
+    light_accent_color: tenantAny?.light_accent_color ?? null,
+    light_background_color: tenantAny?.light_background_color ?? null,
+    dark_primary_color: tenantAny?.dark_primary_color ?? null,
+    dark_secondary_color: tenantAny?.dark_secondary_color ?? null,
+    dark_accent_color: tenantAny?.dark_accent_color ?? null,
+    dark_background_color: tenantAny?.dark_background_color ?? null,
+    light_header_footer_color: tenantAny?.light_header_footer_color ?? null,
+    dark_header_footer_color: tenantAny?.dark_header_footer_color ?? null,
+    logo_url: tenantAny?.logo_url ?? null,
+    dark_logo_url: tenantAny?.dark_logo_url ?? null,
+    auth_logo_url: tenantAny?.auth_logo_url ?? null,
+    favicon_url: tenantAny?.favicon_url ?? null,
+    hero_background_url: tenantAny?.hero_background_url ?? null,
+    meta_title: tenantAny?.meta_title ?? null,
+    meta_description: tenantAny?.meta_description ?? null,
+    og_image_url: tenantAny?.og_image_url ?? null,
+    phone: tenantAny?.phone ?? null,
+    address: tenantAny?.address ?? null,
+    business_hours: tenantAny?.business_hours ?? null,
+    google_maps_url: tenantAny?.google_maps_url ?? null,
+    facebook_url: tenantAny?.facebook_url ?? null,
+    instagram_url: tenantAny?.instagram_url ?? null,
+    twitter_url: tenantAny?.twitter_url ?? null,
+    linkedin_url: tenantAny?.linkedin_url ?? null,
+  } : DEFAULT_BRANDING;
 
   // Fetch branding from tenants table
   const {
@@ -141,11 +201,12 @@ export const useTenantBranding = () => {
       }
 
       console.log('[TenantBranding] Branding loaded:', data);
-      return { ...DEFAULT_BRANDING, ...data } as TenantBranding;
+      const merged = { ...DEFAULT_BRANDING, ...data } as TenantBranding;
+      return { ...merged, app_name: resolveAppName(merged.app_name) };
     },
     enabled: !!tenant?.id,
     staleTime: 30 * 1000, // 30 seconds
-    placeholderData: DEFAULT_BRANDING,
+    placeholderData: immediateFromTenant,
   });
 
   // Update branding mutation
@@ -206,7 +267,8 @@ export const useTenantBranding = () => {
       }
 
       console.log('[TenantBranding] Branding updated:', data[0]);
-      return { ...DEFAULT_BRANDING, ...data[0] } as TenantBranding;
+      const merged = { ...DEFAULT_BRANDING, ...data[0] } as TenantBranding;
+      return { ...merged, app_name: resolveAppName(merged.app_name) };
     },
     onSuccess: (data) => {
       // Update the cache with new data
@@ -227,43 +289,14 @@ export const useTenantBranding = () => {
     },
   });
 
-  // Build immediate branding from tenant while query runs
-  // This prevents flash of default "Drive 917" branding
-  const immediateFromTenant: TenantBranding = tenant ? {
-    app_name: tenant.app_name || tenant.company_name || DEFAULT_BRANDING.app_name,
-    primary_color: tenant.primary_color || DEFAULT_BRANDING.primary_color,
-    secondary_color: tenant.secondary_color || DEFAULT_BRANDING.secondary_color,
-    accent_color: tenant.accent_color || DEFAULT_BRANDING.accent_color,
-    light_primary_color: tenant.light_primary_color,
-    light_secondary_color: tenant.light_secondary_color,
-    light_accent_color: tenant.light_accent_color,
-    light_background_color: tenant.light_background_color,
-    dark_primary_color: tenant.dark_primary_color,
-    dark_secondary_color: tenant.dark_secondary_color,
-    dark_accent_color: tenant.dark_accent_color,
-    dark_background_color: tenant.dark_background_color,
-    light_header_footer_color: tenant.light_header_footer_color,
-    dark_header_footer_color: tenant.dark_header_footer_color,
-    logo_url: tenant.logo_url,
-    dark_logo_url: tenant.dark_logo_url,
-    auth_logo_url: (tenant as any).auth_logo_url ?? null,
-    favicon_url: tenant.favicon_url,
-    hero_background_url: tenant.hero_background_url,
-    meta_title: tenant.meta_title,
-    meta_description: tenant.meta_description,
-    og_image_url: tenant.og_image_url,
-    phone: tenant.phone,
-    address: tenant.address,
-    business_hours: tenant.business_hours,
-    google_maps_url: tenant.google_maps_url,
-    facebook_url: tenant.facebook_url,
-    instagram_url: tenant.instagram_url,
-    twitter_url: tenant.twitter_url,
-    linkedin_url: tenant.linkedin_url,
-  } : DEFAULT_BRANDING;
+  const resolvedBranding = branding || immediateFromTenant;
 
   return {
-    branding: branding || immediateFromTenant,
+    branding: resolvedBranding,
+    // Display name to render anywhere the tenant's brand is shown (sidebar, login,
+    // invoices). Always the tenant's own name — falls back to a neutral label, never
+    // to the platform's brand.
+    brandName: resolvedBranding.app_name || tenant?.company_name || 'Portal',
     isLoading,
     error,
     refetch,

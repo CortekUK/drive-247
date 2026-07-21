@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuth } from "@/stores/auth-store";
 import {
   Dialog,
   DialogContent,
@@ -45,6 +47,16 @@ export function SubscriptionGateDialog({
   const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
   const { createCheckoutSession } = useTenantSubscription();
   const { tenant } = useTenant();
+  const { signOut } = useAuth();
+  const router = useRouter();
+
+  // The modal is deliberately inescapable (no close button, no Esc, no
+  // outside-click) and covers the header, so signing out would otherwise be
+  // impossible — e.g. staff who logged into the wrong account.
+  const handleSignOut = async () => {
+    await signOut();
+    router.replace("/login");
+  };
 
   // Go-live date drives the upfront_monthly first-charge date shown on the card.
   const billingAnchor = (
@@ -153,6 +165,16 @@ export function SubscriptionGateDialog({
               ))}
             </div>
           </>
+        )}
+
+        {!plansLoading && (
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="mx-auto mt-1 text-xs text-muted-foreground underline-offset-4 hover:underline"
+          >
+            Sign out
+          </button>
         )}
       </DialogContent>
     </Dialog>

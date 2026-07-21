@@ -37,5 +37,9 @@ export const useSubscriptionPlans = () => {
     },
     enabled: !!tenant,
     staleTime: 60_000,
+    // The dashboard paywall holds the first paint until this query settles,
+    // so cap the failure path at one retry instead of the default three
+    // exponential-backoff attempts.
+    retry: 1,
   });
 };

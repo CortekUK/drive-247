@@ -18,6 +18,9 @@ import { ArrowRight, CreditCard, ImageIcon, ShieldCheck } from "lucide-react";
 
 const SNOOZE_MS = 24 * 60 * 60 * 1000;
 
+const dismissedKey = (tenantId: string) => `setup-reminder-dismissed-${tenantId}`;
+const snoozedKey = (tenantId: string) => `setup-reminder-snoozed-${tenantId}`;
+
 interface ReminderTask {
   key: string;
   label: string;
@@ -26,65 +29,55 @@ interface ReminderTask {
   icon: React.ReactNode;
 }
 
+interface ReminderFlags {
+  /** Which tenant these flags were read for — guards against a stale render after a tenant switch. */
+  tenantId: string;
+  permanentlyDismissed: boolean;
+  dueBySnooze: boolean;
+}
+
 /**
  * Recurring, dismissible nudge shown to a subscribed tenant who still has
  * outstanding setup tasks (logo, Stripe Connect, Bonzah insurance).
  *
- * Self-gates on `isSubscribed`, so it never appears while the hard subscription
- * paywall (SubscriptionGateDialog) is up. Closing it (X / outside-click / escape)
- * snoozes it for 24h; "Don't show me again" dismisses it permanently. Both are
- * stored per-tenant in localStorage.
+ * It can never fight the subscription paywall: it requires a *resolved*,
+ * currently-active subscription (`isResolved && isSubscribed`) and explicitly
+ * bails when `hasExpiredSubscription` is set — the two states the dashboard
+ * layout uses to raise the non-dismissible SubscriptionGateDialog are exactly
+ * the states in which this dialog stays closed.
+ *
+ * Closing it (X / outside-click / escape) snoozes it for 24h; "Don't show me
+ * again" dismisses it permanently. Both are stored per-tenant in localStorage,
+ * so switching tenants re-evaluates from that tenant's own keys.
  */
 export function SetupReminderDialog() {
   const router = useRouter();
   const { tenant } = useTenant();
-  const { isSubscribed } = useTenantSubscription();
-  const { needsLogo, needsStripe, needsBonzah, allDone, isLoading } =
+  const { isSubscribed, hasExpiredSubscription, isResolved } =
+    useTenantSubscription();
+  const { needsLogo, needsStripe, needsBonzah, allDone, isReady } =
     useSetupReminder();
 
-  // Default both to false so nothing renders before the localStorage read runs
-  // in the effect below — avoids an SSR/hydration mismatch and an open flash.
-  const [permanentlyDismissed, setPermanentlyDismissed] = useState(false);
-  const [dueBySnooze, setDueBySnooze] = useState(false);
+  const tenantId = tenant?.id ?? null;
+
+  // Null until the localStorage read for the *current* tenant has run, so
+  // nothing renders before then — avoids an SSR/hydration mismatch, an open
+  // flash, and showing tenant B the dialog using tenant A's flags.
+  const [flags, setFlags] = useState<ReminderFlags | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !tenant?.id) return;
-    const dismissed =
-      localStorage.getItem(`setup-reminder-dismissed-${tenant.id}`) === "true";
-    setPermanentlyDismissed(dismissed);
-
-    const snoozedAt = localStorage.getItem(`setup-reminder-snoozed-${tenant.id}`);
-    setDueBySnooze(!snoozedAt || Date.now() - Number(snoozedAt) > SNOOZE_MS);
-  }, [tenant?.id]);
-
-  const open =
-    isSubscribed &&
-    !allDone &&
-    !isLoading &&
-    !permanentlyDismissed &&
-    dueBySnooze;
-
-  const snoozeAndClose = () => {
-    if (typeof window !== "undefined" && tenant?.id) {
-      localStorage.setItem(
-        `setup-reminder-snoozed-${tenant.id}`,
-        Date.now().toString()
-      );
+    if (typeof window === "undefined" || !tenantId) {
+      setFlags(null);
+      return;
     }
-    setDueBySnooze(false);
-  };
-
-  const dismissForever = () => {
-    if (typeof window !== "undefined" && tenant?.id) {
-      localStorage.setItem(`setup-reminder-dismissed-${tenant.id}`, "true");
-    }
-    setPermanentlyDismissed(true);
-  };
-
-  const handleSetup = (path: string) => {
-    snoozeAndClose();
-    router.push(path);
-  };
+    const snoozedAt = localStorage.getItem(snoozedKey(tenantId));
+    setFlags({
+      tenantId,
+      permanentlyDismissed:
+        localStorage.getItem(dismissedKey(tenantId)) === "true",
+      dueBySnooze: !snoozedAt || Date.now() - Number(snoozedAt) > SNOOZE_MS,
+    });
+  }, [tenantId]);
 
   // Only surface the tasks that are still outstanding.
   const tasks: ReminderTask[] = [];
@@ -128,6 +121,39 @@ export function SetupReminderDialog() {
       icon: <CreditCard className="h-5 w-5 text-muted-foreground" />,
     });
   }
+
+  const open =
+    // Paywall interlock — never render alongside SubscriptionGateDialog.
+    isResolved &&
+    isSubscribed &&
+    !hasExpiredSubscription &&
+    // Setup state must be positively known; an errored query must not nag.
+    isReady &&
+    !allDone &&
+    tasks.length > 0 &&
+    !!flags &&
+    flags.tenantId === tenantId &&
+    !flags.permanentlyDismissed &&
+    flags.dueBySnooze;
+
+  const snoozeAndClose = () => {
+    if (typeof window !== "undefined" && tenantId) {
+      localStorage.setItem(snoozedKey(tenantId), Date.now().toString());
+    }
+    setFlags((prev) => (prev ? { ...prev, dueBySnooze: false } : prev));
+  };
+
+  const dismissForever = () => {
+    if (typeof window !== "undefined" && tenantId) {
+      localStorage.setItem(dismissedKey(tenantId), "true");
+    }
+    setFlags((prev) => (prev ? { ...prev, permanentlyDismissed: true } : prev));
+  };
+
+  const handleSetup = (path: string) => {
+    snoozeAndClose();
+    router.push(path);
+  };
 
   return (
     <Dialog

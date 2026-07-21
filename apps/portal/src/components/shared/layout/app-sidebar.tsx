@@ -28,7 +28,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useReminderStats } from "@/hooks/use-reminders";
 import { useOrgSettings } from "@/hooks/use-org-settings";
-import { useTenantBranding } from "@/hooks/use-tenant-branding";
+import { BrandLogo } from "@/components/shared/layout/brand-logo";
 import { useTenant } from "@/contexts/TenantContext";
 import { UserPlus, Workflow } from "lucide-react";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
@@ -40,7 +40,6 @@ import { useSetupStatus } from "@/hooks/use-setup-status";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { ROUTE_TO_TAB } from "@/lib/permissions";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useTheme } from "next-themes";
 
 const AnimatedBlocks = wrapAnimatedIcon(BlocksIcon);
 const AnimatedFileText = wrapAnimatedIcon(FileTextIcon);
@@ -143,7 +142,6 @@ export function AppSidebar() {
   }, [isMobile, setOpenMobile]);
   const { data: reminderStats } = useReminderStats();
   const { settings } = useOrgSettings();
-  const { branding } = useTenantBranding();
   const { tenant } = useTenant();
   const leadManagementEnabled = (tenant as { lead_management_enabled?: boolean } | null)?.lead_management_enabled === true;
   const automationsEnabled = (tenant as { automations_enabled?: boolean } | null)?.automations_enabled === true;
@@ -156,10 +154,6 @@ export function AppSidebar() {
   const { isLive } = useSetupStatus();
   const { isManager, canView, canViewSettings } = useManagerPermissions();
 
-  const { resolvedTheme } = useTheme();
-  const appName = branding?.app_name || 'DRIVE247';
-  const shortName = appName.length > 4 ? appName.substring(0, 4) : appName;
-  const logoUrl = resolvedTheme === 'dark' && branding?.dark_logo_url ? branding.dark_logo_url : branding?.logo_url;
   const showPendingBookings = settings?.payment_mode === 'manual';
   const collapsed = state === "collapsed";
 
@@ -523,22 +517,7 @@ export function AppSidebar() {
       {/* Branding Header */}
       <SidebarHeader className="h-16 border-b">
         <div className="flex items-center justify-center w-full h-full transition-all duration-300 ease-in-out">
-          {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt={appName}
-              className={`object-contain transition-all duration-300 ease-in-out ${collapsed ? "h-10 w-10" : "h-16 w-full max-w-[180px]"}`}
-              style={{ imageRendering: 'auto' }}
-            />
-          ) : !collapsed ? (
-            <span className="text-xl font-bold text-primary tracking-wide transition-all duration-300 ease-in-out">
-              {appName}
-            </span>
-          ) : (
-            <span className="text-sm font-bold text-primary transition-all duration-300 ease-in-out">
-              {shortName}
-            </span>
-          )}
+          <BrandLogo collapsed={collapsed} />
         </div>
       </SidebarHeader>
 

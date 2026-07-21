@@ -176,9 +176,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuthStore();
   const groups = useNavigation();
 
+  const salesOnly = !!user?.is_sales_agent && !user?.is_super_admin;
+
   const isActive = (href: string) => {
     if (href === '/admin/dashboard') return pathname === href;
-    return pathname.startsWith(href);
+    return !!pathname?.startsWith(href);
   };
 
   return (
@@ -190,7 +192,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </div>
         <div>
           <h1 className="text-sm font-semibold text-sidebar-foreground">Drive247</h1>
-          <p className="text-[10px] text-sidebar-muted">Super Admin</p>
+          <p className="text-[10px] text-sidebar-muted">
+            {salesOnly ? 'Sales Agent' : 'Super Admin'}
+          </p>
         </div>
       </div>
 

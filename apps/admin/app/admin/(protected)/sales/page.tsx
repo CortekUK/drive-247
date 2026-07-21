@@ -15,7 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import SalesOnboardingDialog from '@/components/admin/SalesOnboardingDialog';
-import { TrendingUp, Plus } from 'lucide-react';
+import { TrendingUp, Plus, AlertCircle } from 'lucide-react';
 
 interface SubmissionRow {
   id: string;
@@ -24,6 +24,7 @@ interface SubmissionRow {
   subscription_amount: number | null; // cents
   subscription_currency: string | null;
   status: string | null;
+  error_message: string | null;
   created_at: string;
 }
 
@@ -45,17 +46,38 @@ const currencySymbol = (currency: string | null): string => {
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
 
-const fmtAmount = (row: SubmissionRow) =>
-  row.subscription_amount != null
-    ? `${currencySymbol(row.subscription_currency)}${(row.subscription_amount / 100).toFixed(0)}/mo`
-    : '—';
+// subscription_amount is stored in CENTS (see sales_onboarding_submissions).
+// Show whole dollars for round amounts, cents when there are any — never round
+// $199.50 up to "$200".
+const fmtAmount = (row: SubmissionRow) => {
+  if (row.subscription_amount == null) return '—';
+  const major = row.subscription_amount / 100;
+  return `${currencySymbol(row.subscription_currency)}${major.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}/mo`;
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  created: 'Created',
+  failed: 'Failed',
+};
+
+const statusClass = (status: string | null) => {
+  if (status === 'created') return 'text-sm font-medium text-success';
+  if (status === 'failed') return 'text-sm font-medium text-destructive';
+  // Unknown/pending statuses are informational, not errors.
+  return 'text-sm font-medium text-muted-foreground';
+};
 
 export default function SalesPage() {
   const [rows, setRows] = useState<SubmissionRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
   const loadRows = async () => {
+    setLoadError(null);
     try {
       const { data, error } = await (supabase as any)
         .from('sales_onboarding_submissions')
@@ -65,7 +87,9 @@ export default function SalesPage() {
       if (error) throw error;
       setRows((data || []) as SubmissionRow[]);
     } catch (err: any) {
-      toast.error('Failed to load submissions: ' + err.message);
+      const message = err?.message || 'Unknown error';
+      setLoadError(message);
+      toast.error('Failed to load submissions: ' + message);
     } finally {
       setLoading(false);
     }
@@ -103,6 +127,16 @@ export default function SalesPage() {
                 <Skeleton key={i} className="h-14 w-full" />
               ))}
             </div>
+          ) : loadError ? (
+            <div className="text-center py-16">
+              <AlertCircle className="h-10 w-10 text-destructive/60 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground mb-4">
+                Couldn&apos;t load onboardings. {loadError}
+              </p>
+              <Button variant="outline" size="sm" onClick={() => { setLoading(true); void loadRows(); }}>
+                Try again
+              </Button>
+            </div>
           ) : rows.length === 0 ? (
             <div className="text-center py-16">
               <TrendingUp className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
@@ -132,15 +166,17 @@ export default function SalesPage() {
                     </TableCell>
                     <TableCell className="whitespace-nowrap tabular-nums">{fmtAmount(row)}</TableCell>
                     <TableCell>
-                      <span
-                        className={
-                          row.status === 'created'
-                            ? 'text-sm font-medium text-success'
-                            : 'text-sm font-medium text-destructive'
-                        }
-                      >
-                        {row.status === 'created' ? 'Created' : row.status === 'failed' ? 'Failed' : row.status || '—'}
+                      <span className={statusClass(row.status)}>
+                        {(row.status && STATUS_LABELS[row.status]) || row.status || '—'}
                       </span>
+                      {row.status === 'failed' && row.error_message && (
+                        <p
+                          className="text-xs text-muted-foreground truncate max-w-[280px]"
+                          title={row.error_message}
+                        >
+                          {row.error_message}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell className="text-right text-sm text-muted-foreground whitespace-nowrap">
                       {fmtDate(row.created_at)}

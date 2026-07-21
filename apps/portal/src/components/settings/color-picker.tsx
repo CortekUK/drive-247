@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,8 @@ interface ColorPickerProps {
   description?: string;
   className?: string;
 }
+
+const DEFAULT_COLOR = '#C6A256';
 
 const presetColors = [
   '#C6A256', // Gold (current)
@@ -28,33 +30,85 @@ const presetColors = [
   '#14B8A6', // Teal
 ];
 
+/**
+ * Strict: only a complete 6-digit hex is accepted. Used while typing so that a
+ * half-finished value like "#D4A" is never committed to the form.
+ */
+function toHex6(raw: string): string | null {
+  const cleaned = raw.trim().replace(/^#/, '');
+  return /^[0-9A-Fa-f]{6}$/.test(cleaned) ? `#${cleaned.toUpperCase()}` : null;
+}
+
+/**
+ * Forgiving: also accepts a missing "#" and 3-digit shorthand. Used on blur and
+ * when reading the incoming prop, so a value pasted as "d4af37" or "#FFF" still
+ * resolves instead of being silently discarded.
+ */
+function normalizeHex(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const cleaned = raw.trim().replace(/^#/, '');
+  if (/^[0-9A-Fa-f]{6}$/.test(cleaned)) return `#${cleaned.toUpperCase()}`;
+  if (/^[0-9A-Fa-f]{3}$/.test(cleaned)) {
+    const [r, g, b] = cleaned.toUpperCase().split('');
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  return null;
+}
+
 export function ColorPicker({ label, value, onChange, description, className }: ColorPickerProps) {
-  const [localValue, setLocalValue] = useState(value || '#C6A256');
+  const inputId = useId();
+  // Last known-good colour coming from the parent form.
+  const committed = normalizeHex(value) ?? DEFAULT_COLOR;
+
+  // Raw text the user sees/edits. Kept separate from `committed` so a partially
+  // typed hex doesn't corrupt the swatches.
+  const [text, setText] = useState(committed);
   const [isOpen, setIsOpen] = useState(false);
 
+  // Sync unconditionally — the previous `if (value)` guard meant a parent that
+  // cleared/reset the field left this picker showing a stale colour.
   useEffect(() => {
-    if (value) {
-      setLocalValue(value);
-    }
+    setText(normalizeHex(value) ?? DEFAULT_COLOR);
   }, [value]);
 
-  const handleColorChange = (newColor: string) => {
-    setLocalValue(newColor);
-    onChange(newColor);
+  // Anything that renders a real CSS colour (native picker, swatch, preview)
+  // must use a guaranteed-valid hex, otherwise <input type="color"> silently
+  // snaps to #000000 and the swatches render transparent mid-typing.
+  const swatch = toHex6(text) ?? committed;
+  const isInvalid = text.trim().length > 0 && normalizeHex(text) === null;
+
+  const commit = (newColor: string) => {
+    const normalized = normalizeHex(newColor);
+    if (!normalized) return;
+    setText(normalized);
+    onChange(normalized);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setLocalValue(newValue);
-    // Only update parent if it's a valid hex color
-    if (/^#[0-9A-Fa-f]{6}$/.test(newValue)) {
-      onChange(newValue);
+    let next = e.target.value;
+    // Users routinely paste/type without the leading "#".
+    if (next.length > 0 && !next.startsWith('#')) next = `#${next}`;
+    setText(next.toUpperCase());
+
+    const normalized = toHex6(next);
+    if (normalized) onChange(normalized);
+  };
+
+  const handleInputBlur = () => {
+    const normalized = normalizeHex(text);
+    if (normalized) {
+      // Expands shorthand ("#FFF" → "#FFFFFF") and pushes it to the form.
+      setText(normalized);
+      if (normalized !== committed) onChange(normalized);
+      return;
     }
+    // Never leave the field showing a value that was never committed.
+    setText(committed);
   };
 
   return (
     <div className={cn("space-y-2", className)}>
-      <Label className="text-sm font-medium">{label}</Label>
+      <Label htmlFor={inputId} className="text-sm font-medium">{label}</Label>
       {description && (
         <p className="text-xs text-muted-foreground">{description}</p>
       )}
@@ -62,9 +116,11 @@ export function ColorPicker({ label, value, onChange, description, className }: 
         <Popover open={isOpen} onOpenChange={setIsOpen}>
           <PopoverTrigger asChild>
             <Button
+              type="button"
               variant="outline"
-              className="w-12 h-10 p-1 border-2"
-              style={{ backgroundColor: localValue }}
+              className="w-12 h-10 p-1 border-2 flex-shrink-0"
+              style={{ backgroundColor: swatch }}
+              aria-label={`Pick ${label}`}
             >
               <span className="sr-only">Pick a color</span>
             </Button>
@@ -74,22 +130,35 @@ export function ColorPicker({ label, value, onChange, description, className }: 
               <div className="flex items-center justify-center">
                 <input
                   type="color"
-                  value={localValue}
-                  onChange={(e) => handleColorChange(e.target.value)}
+                  // <input type="color"> lowercases its value per the HTML value
+                  // sanitization algorithm, so an uppercase controlled value never
+                  // matches node.value — React sees a permanently dirty input and
+                  // the picker can snap. Lowercase here ONLY; `swatch` (and the
+                  // stored/displayed hex) stays uppercase everywhere else.
+                  value={swatch.toLowerCase()}
+                  onChange={(e) => commit(e.target.value)}
                   className="w-full h-32 cursor-pointer rounded border-0"
+                  aria-label={`${label} color picker`}
                 />
               </div>
               <div className="grid grid-cols-6 gap-2">
                 {presetColors.map((color) => (
                   <button
                     key={color}
+                    type="button"
+                    title={color}
+                    aria-label={color}
                     className={cn(
                       "w-8 h-8 rounded-md border-2 transition-all hover:scale-110",
-                      localValue === color ? "border-foreground ring-2 ring-offset-2 ring-primary" : "border-transparent"
+                      // Case-insensitive: <input type="color"> always reports
+                      // lowercase hex, so a strict === never matched a preset.
+                      swatch.toLowerCase() === color.toLowerCase()
+                        ? "border-foreground ring-2 ring-offset-2 ring-primary"
+                        : "border-transparent"
                     )}
                     style={{ backgroundColor: color }}
                     onClick={() => {
-                      handleColorChange(color);
+                      commit(color);
                       setIsOpen(false);
                     }}
                   />
@@ -99,17 +168,25 @@ export function ColorPicker({ label, value, onChange, description, className }: 
           </PopoverContent>
         </Popover>
         <Input
+          id={inputId}
           type="text"
-          value={localValue}
+          value={text}
           onChange={handleInputChange}
+          onBlur={handleInputBlur}
           placeholder="#000000"
-          className="w-28 font-mono text-sm uppercase"
+          className={cn(
+            "w-28 font-mono text-sm uppercase",
+            isInvalid && "border-destructive focus-visible:ring-destructive"
+          )}
           maxLength={7}
+          spellCheck={false}
+          autoComplete="off"
+          aria-invalid={isInvalid}
         />
         <div
           className="flex-1 h-10 rounded-md border"
           style={{
-            background: `linear-gradient(135deg, ${localValue} 0%, ${localValue}88 100%)`
+            background: `linear-gradient(135deg, ${swatch} 0%, ${swatch}88 100%)`
           }}
         />
       </div>

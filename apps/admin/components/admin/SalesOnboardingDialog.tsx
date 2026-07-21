@@ -74,32 +74,84 @@ const currencySymbol = (currency: string): string => {
   }
 };
 
+// The subscription (what Drive247 charges the tenant) is billed in USD.
+// This is NOT the tenant's rental currency — that stays on tenants.currency_code.
+const SUBSCRIPTION_CURRENCY = 'usd';
+
+// Stripe caps unit_amount at 99,999,999 cents; keep the form well inside it.
+const MAX_SUBSCRIPTION_AMOUNT = 999_999;
+
+/**
+ * Canonical subdomain form — must match normalizeSlug() in the
+ * create-sales-onboarding edge function, otherwise the preview shown to George
+ * differs from the subdomain the tenant actually gets. Repeated/edge hyphens
+ * are stripped because they are illegal DNS labels.
+ */
+const normalizeSlug = (raw: string): string =>
+  raw
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+const isHttpUrl = (value: string): boolean => {
+  try {
+    const u = new URL(value);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
 export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }: SalesOnboardingDialogProps) {
   const [formData, setFormData] = useState({ ...EMPTY_FORM });
   const [creating, setCreating] = useState(false);
-  const [formErrors, setFormErrors] = useState<{ slug?: string; subscriptionAmount?: string }>({});
+  const [formErrors, setFormErrors] = useState<{
+    slug?: string;
+    subscriptionAmount?: string;
+    logoUrl?: string;
+  }>({});
   const [result, setResult] = useState<OnboardingResult | null>(null);
   const [showResult, setShowResult] = useState(false);
 
+  // Live preview of the subdomain the tenant will actually get.
+  const previewSlug = normalizeSlug(formData.slug);
+
   const validateSlug = (slug: string): string | null => {
-    const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    if (cleanSlug.length < 3) return 'Slug must be at least 3 characters long';
-    if (cleanSlug.length > 50) return 'Slug must be 50 characters or less';
-    if (!/^[a-z][a-z0-9-]*$/.test(cleanSlug))
+    if (slug.length < 3) return 'Slug must be at least 3 characters long';
+    if (slug.length > 50) return 'Slug must be 50 characters or less';
+    if (!/^[a-z][a-z0-9-]*$/.test(slug))
       return 'Slug must start with a letter and contain only letters, numbers, and hyphens';
+    // The client's first-login password is derived from the slug's
+    // alphanumerics; too few and the generated password is rejected by auth.
+    if (slug.replace(/[^a-z0-9]/g, '').length < 3)
+      return 'Slug must contain at least 3 letters or numbers';
     return null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const slug = formData.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    const slug = normalizeSlug(formData.slug);
     const slugError = validateSlug(slug);
-    const amount = parseFloat(formData.subscriptionAmount);
-    const amountError = !Number.isFinite(amount) || amount <= 0 ? 'Enter a monthly amount greater than 0' : null;
 
-    if (slugError || amountError) {
-      setFormErrors({ slug: slugError || undefined, subscriptionAmount: amountError || undefined });
+    const amount = parseFloat(formData.subscriptionAmount);
+    let amountError: string | null = null;
+    if (!Number.isFinite(amount) || amount <= 0) {
+      amountError = 'Enter a monthly amount greater than 0';
+    } else if (amount > MAX_SUBSCRIPTION_AMOUNT) {
+      amountError = `Amount must be ${MAX_SUBSCRIPTION_AMOUNT.toLocaleString()} or less`;
+    }
+
+    const logoUrl = formData.logoUrl.trim();
+    const logoError = logoUrl && !isHttpUrl(logoUrl) ? 'Enter a full http(s) URL, e.g. https://…/logo.png' : null;
+
+    if (slugError || amountError || logoError) {
+      setFormErrors({
+        slug: slugError || undefined,
+        subscriptionAmount: amountError || undefined,
+        logoUrl: logoError || undefined,
+      });
       return;
     }
     setFormErrors({});
@@ -111,21 +163,22 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
           companyName: formData.companyName.trim(),
           firstName: formData.firstName.trim() || undefined,
           slug,
-          contactEmail: formData.contactEmail.trim(),
+          contactEmail: formData.contactEmail.trim().toLowerCase(),
           businessPhone: formData.businessPhone.trim() || undefined,
           vehicleType: formData.vehicleType.trim() || undefined,
           fleetSize: formData.fleetSize.trim() || undefined,
           location: formData.location.trim() || undefined,
           operatingHours: formData.operatingHours.trim() || undefined,
           businessColours: formData.businessColours.trim() || undefined,
-          logoUrl: formData.logoUrl.trim() || undefined,
+          logoUrl: logoUrl || undefined,
           wantsMarketing: formData.wantsMarketing,
           hasMetaAdAccount: formData.hasMetaAdAccount,
           metaDailyBudget: formData.metaDailyBudget.trim() || undefined,
           otherInfo: formData.otherInfo.trim() || undefined,
           tenantType: formData.tenantType,
-          subscriptionAmount: amount,
-          subscriptionCurrency: 'usd',
+          // Round to whole cents — Stripe rejects fractional cents.
+          subscriptionAmount: Math.round(amount * 100) / 100,
+          subscriptionCurrency: SUBSCRIPTION_CURRENCY,
         },
       });
 
@@ -187,10 +240,14 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                 <Label className="mb-1.5 block">Rental Business Name *</Label>
                 <Input
                   required
+                  maxLength={100}
                   value={formData.companyName}
                   onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                   placeholder="Acme Rentals"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Used as the portal app name, page titles and SEO for their site.
+                </p>
               </div>
             </div>
 
@@ -203,9 +260,8 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                 value={formData.slug}
                 onChange={(e) => {
                   setFormData({ ...formData, slug: e.target.value });
-                  if (formErrors.slug) {
-                    const newSlug = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-                    if (newSlug.length >= 3) setFormErrors({ ...formErrors, slug: undefined });
+                  if (formErrors.slug && !validateSlug(normalizeSlug(e.target.value))) {
+                    setFormErrors({ ...formErrors, slug: undefined });
                   }
                 }}
                 className={formErrors.slug ? 'border-destructive' : ''}
@@ -215,7 +271,7 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                 <p className="text-xs text-destructive mt-1">{formErrors.slug}</p>
               ) : (
                 <p className="text-xs text-muted-foreground mt-1">
-                  Portal: {formData.slug || 'slug'}.portal.drive-247.com | Booking: {formData.slug || 'slug'}.drive-247.com
+                  Portal: {previewSlug || 'slug'}.portal.drive-247.com | Booking: {previewSlug || 'slug'}.drive-247.com
                 </p>
               )}
             </div>
@@ -234,10 +290,15 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
               <div>
                 <Label className="mb-1.5 block">Business Phone</Label>
                 <Input
+                  type="tel"
+                  maxLength={40}
                   value={formData.businessPhone}
                   onChange={(e) => setFormData({ ...formData, businessPhone: e.target.value })}
                   placeholder="+1 555 123 4567"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Include the country code — it&apos;s never guessed for you.
+                </p>
               </div>
             </div>
 
@@ -275,7 +336,8 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                   type="number"
                   required
                   min="1"
-                  step="1"
+                  max={MAX_SUBSCRIPTION_AMOUNT}
+                  step="0.01"
                   value={formData.subscriptionAmount}
                   onChange={(e) => {
                     setFormData({ ...formData, subscriptionAmount: e.target.value });
@@ -323,16 +385,21 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
               <div>
                 <Label className="mb-1.5 block">Operating Hours</Label>
                 <Input
+                  maxLength={120}
                   value={formData.operatingHours}
                   onChange={(e) => setFormData({ ...formData, operatingHours: e.target.value })}
                   placeholder="Mon–Sat 9am–6pm"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Read into their opening days &amp; times — use &quot;Mon–Sat 9am–6pm&quot; or &quot;24/7&quot;.
+                </p>
               </div>
             </div>
 
             <div>
               <Label className="mb-1.5 block">Business Colours (for website)</Label>
               <Input
+                maxLength={300}
                 value={formData.businessColours}
                 onChange={(e) => setFormData({ ...formData, businessColours: e.target.value })}
                 placeholder="Black and Gold, minimalistic"
@@ -346,11 +413,20 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
               <Label className="mb-1.5 block">Logo URL</Label>
               <Input
                 type="url"
+                maxLength={2048}
                 value={formData.logoUrl}
-                onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, logoUrl: e.target.value });
+                  if (formErrors.logoUrl) setFormErrors({ ...formErrors, logoUrl: undefined });
+                }}
+                className={formErrors.logoUrl ? 'border-destructive' : ''}
                 placeholder="https://example.com/logo.png"
               />
-              <p className="text-xs text-muted-foreground mt-1">Optional — the client can upload their own later.</p>
+              {formErrors.logoUrl ? (
+                <p className="text-xs text-destructive mt-1">{formErrors.logoUrl}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">Optional — the client can upload their own later.</p>
+              )}
             </div>
 
             <div className="space-y-3 rounded-md border border-border p-4">
@@ -390,6 +466,7 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
               <Label className="mb-1.5 block">Any other info</Label>
               <Textarea
                 rows={3}
+                maxLength={5000}
                 value={formData.otherInfo}
                 onChange={(e) => setFormData({ ...formData, otherInfo: e.target.value })}
                 placeholder="Anything else worth noting for this onboarding..."

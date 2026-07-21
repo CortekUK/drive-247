@@ -423,6 +423,11 @@ const Settings = () => {
   });
   const [isSavingBranding, setIsSavingBranding] = useState(false);
 
+  // Fallback for the Application Name field. Never fall back to the platform
+  // brand ("Drive 917") — tenants provisioned without an app_name would both
+  // display it and, on the next branding save, persist it into tenants.app_name.
+  const defaultAppName = tenant?.company_name || '';
+
   // Sync form with tenant branding ONLY (not org_settings to avoid cross-tenant data leakage)
   useEffect(() => {
     // Only use tenantBranding - org_settings is not tenant-aware for branding
@@ -430,7 +435,7 @@ const Settings = () => {
     if (!b) return; // Wait for tenant branding to load
 
     setBrandingForm({
-      app_name: b.app_name || 'Drive 917',
+      app_name: b.app_name || defaultAppName,
       primary_color: b.primary_color || '#C6A256',
       secondary_color: b.secondary_color || '#C6A256',
       accent_color: b.accent_color || '#C6A256',
@@ -449,7 +454,7 @@ const Settings = () => {
       og_image_url: b.og_image_url || '',
       favicon_url: b.favicon_url || '',
     });
-  }, [tenantBranding]);
+  }, [tenantBranding, defaultAppName]);
 
   // Helper to reset form to current tenant branding
   const resetBrandingForm = () => {
@@ -457,7 +462,7 @@ const Settings = () => {
     if (!b) return;
 
     setBrandingForm({
-      app_name: b.app_name || 'Drive 917',
+      app_name: b.app_name || defaultAppName,
       primary_color: b.primary_color || '#C6A256',
       secondary_color: b.secondary_color || '#C6A256',
       accent_color: b.accent_color || '#C6A256',
@@ -500,7 +505,7 @@ const Settings = () => {
     const b = tenantBranding;
     if (!b) return false;
     return (
-      brandingForm.app_name !== (b.app_name || 'Drive 917') ||
+      brandingForm.app_name !== (b.app_name || defaultAppName) ||
       brandingForm.primary_color !== (b.primary_color || '#C6A256') ||
       brandingForm.secondary_color !== (b.secondary_color || '#C6A256') ||
       brandingForm.accent_color !== (b.accent_color || '#C6A256') ||
@@ -519,7 +524,7 @@ const Settings = () => {
       brandingForm.og_image_url !== (b.og_image_url || '') ||
       brandingForm.favicon_url !== (b.favicon_url || '')
     );
-  }, [brandingForm, tenantBranding]);
+  }, [brandingForm, tenantBranding, defaultAppName]);
 
   const rentalFormDirty = useMemo(() => {
     if (!rentalSettings) return false;
@@ -1953,10 +1958,12 @@ const Settings = () => {
                     <div className="text-sm text-muted-foreground">
                       This will reset all branding settings to their original values:
                       <ul className="mt-2 text-sm list-disc list-inside space-y-1">
-                        <li>App Name: "Drive 917"</li>
+                        <li>App Name: &quot;{defaultAppName || 'Drive 917'}&quot;</li>
                         <li>Primary Color: Gold (#C6A256)</li>
-                        <li>Secondary & Accent: Gold (#C6A256)</li>
+                        <li>Secondary &amp; Accent: Gold (#C6A256)</li>
+                        <li>Light &amp; Dark theme colors: Cleared</li>
                         <li>Background Colors: Theme defaults</li>
+                        <li>Header &amp; Footer Colors: Theme defaults</li>
                         <li>SEO settings: Default values</li>
                       </ul>
                     </div>
@@ -1967,8 +1974,9 @@ const Settings = () => {
                       onClick={async () => {
                         setIsSavingBranding(true);
                         try {
+                          const resetAppName = defaultAppName || 'Drive 917';
                           const defaultBranding = {
-                            app_name: 'Drive 917',
+                            app_name: resetAppName,
                             primary_color: '#C6A256',
                             secondary_color: '#C6A256',
                             accent_color: '#C6A256',
@@ -1980,7 +1988,11 @@ const Settings = () => {
                             dark_accent_color: null,
                             light_background_color: null,
                             dark_background_color: null,
-                            meta_title: 'Drive 917 - Portal',
+                            // Previously omitted, so custom header/footer colors
+                            // survived a "Reset All to Defaults".
+                            light_header_footer_color: null,
+                            dark_header_footer_color: null,
+                            meta_title: `${resetAppName} - Portal`,
                             meta_description: 'Fleet management portal',
                             og_image_url: '',
                             favicon_url: null,

@@ -105,6 +105,9 @@ export function useTenantSubscription() {
     },
     enabled: !!tenant && !subscriptionQuery.data,
     staleTime: 60_000,
+    // The dashboard gate blocks on this query resolving — don't sit through
+    // three exponential-backoff retries before the paywall can render.
+    retry: false,
   });
 
   const createCheckoutSession = useMutation({
@@ -214,13 +217,23 @@ export function useTenantSubscription() {
   // True once the subscription query has actually resolved at least once
   // (even with null data). Use this for gate decisions instead of !isLoading,
   // because isLoading is also false while the query is disabled (no tenant yet).
+  //
+  // The past-subscription query only runs when there is no active subscription
+  // (see `enabled` above), so it only has to be waited on in that case — a
+  // tenant WITH an active subscription is resolved the moment the main query
+  // settles, even though the past query sits at `pending` (disabled) forever.
+  // `pastSubscriptionNeeded` is therefore gated on the main query having
+  // settled: while it is still in flight `data` is `undefined`, which must not
+  // be read as "no subscription, go wait on the past query".
+  const subscriptionSettled =
+    subscriptionQuery.isSuccess || subscriptionQuery.isError;
+  const pastSubscriptionNeeded = subscriptionSettled && !subscriptionQuery.data;
+  const pastSubscriptionSettled =
+    pastSubscriptionQuery.isSuccess || pastSubscriptionQuery.isError;
   const isResolved =
     !!tenant &&
-    (subscriptionQuery.isSuccess || subscriptionQuery.isError) &&
-    (pastSubscriptionQuery.isSuccess ||
-      pastSubscriptionQuery.isError ||
-      !pastSubscriptionQuery.fetchStatus ||
-      pastSubscriptionQuery.fetchStatus === "idle");
+    subscriptionSettled &&
+    (!pastSubscriptionNeeded || pastSubscriptionSettled);
 
   return {
     subscription: subscriptionQuery.data,

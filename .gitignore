@@ -19,6 +19,9 @@ out/
 # Turbo
 .turbo/
 
+# Incremental TypeScript build caches — regenerated on every build, noise in diffs
+apps/*/tsconfig.tsbuildinfo
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

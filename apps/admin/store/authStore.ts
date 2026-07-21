@@ -43,15 +43,23 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Verify user is a super admin or a sales agent
     if (!userData.is_super_admin && !userData.is_sales_agent) {
       await supabase.auth.signOut();
-      throw new Error('Access denied. Super admin privileges required.');
+      throw new Error('Access denied. Super admin or sales agent privileges required.');
     }
 
     set({ user: userData as SuperAdmin });
   },
 
   logout: async () => {
-    await supabase.auth.signOut();
-    set({ user: null });
+    // Always clear local state, even if the network sign-out call fails —
+    // otherwise a transient error leaves the user stuck in the dashboard with
+    // no way out (the protected layout only redirects when `user` is null).
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Sign out failed, clearing local session anyway:', err);
+    } finally {
+      set({ user: null });
+    }
   },
 
   checkAuth: async () => {
@@ -66,7 +74,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     // Fetch user details
     // Cast to any: is_sales_agent is not yet in the generated Supabase types.
-    const { data: userData } = await (supabase as any)
+    const { data: userData, error } = await (supabase as any)
       .from('app_users')
       .select('id, email, name, is_super_admin, is_primary_super_admin, is_sales_agent')
       .eq('auth_user_id', session.user.id)
@@ -74,9 +82,21 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     if (userData && (userData.is_super_admin || userData.is_sales_agent)) {
       set({ user: userData as SuperAdmin, loading: false });
-    } else {
-      await supabase.auth.signOut();
-      set({ user: null, loading: false });
+      return;
     }
+
+    // PGRST116 = "no rows" from .single(); that IS a definitive "not permitted".
+    // Any other error means we couldn't determine privileges (network/RLS
+    // hiccup) — drop to the login screen without destroying a valid session,
+    // since signing out would log a sales agent out on a transient failure.
+    if (error && error.code !== 'PGRST116') {
+      console.error('checkAuth: failed to load app_user:', error);
+      set({ user: null, loading: false });
+      return;
+    }
+
+    // Positively not permitted (no app_users row, or neither flag set).
+    await supabase.auth.signOut();
+    set({ user: null, loading: false });
   },
 }));

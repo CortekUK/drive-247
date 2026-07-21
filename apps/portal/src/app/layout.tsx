@@ -6,6 +6,12 @@ import "@/global.css";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * The platform's own brand string that `tenants.app_name` used to default to.
+ * Treated as "unset" so it is never rendered as a tenant's own brand.
+ */
+const PLATFORM_DEFAULT_APP_NAME = "Drive 917";
+
 const defaultMetadata: Metadata = {
   title: "Drive247 Portal",
   description: "Multi-tenant fleet management portal",
@@ -40,8 +46,16 @@ export async function generateMetadata(): Promise<Metadata> {
 
     if (!tenant) return defaultMetadata;
 
+    // Belt-and-braces: `tenants.app_name` used to carry the platform default
+    // 'Drive 917' as a column default. The default was dropped and every row
+    // backfilled, but treat the literal as "unset" so a stale/reintroduced value
+    // is never served as a tenant's own <title> / og:site_name.
+    const ownAppName =
+      tenant.app_name?.trim() && tenant.app_name.trim() !== PLATFORM_DEFAULT_APP_NAME
+        ? tenant.app_name.trim()
+        : null;
     const brandName =
-      tenant.app_name || tenant.company_name || "Drive247";
+      ownAppName || tenant.company_name || "Drive247";
     const title =
       tenant.meta_title || `${brandName} - Portal`;
     const description =

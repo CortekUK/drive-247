@@ -15,6 +15,13 @@ export interface SetupReminderState {
   needsStripe: boolean;
   needsBonzah: boolean;
   allDone: boolean;
+  /**
+   * True only once the underlying query has resolved successfully. The dialog
+   * must gate on this rather than `!isLoading`: an errored query leaves every
+   * field undefined, which would otherwise read as "nothing is set up" and nag
+   * the tenant about tasks they have already completed.
+   */
+  isReady: boolean;
   isLoading: boolean;
 }
 
@@ -23,6 +30,14 @@ export interface SetupReminderState {
  * finish (logo, Stripe Connect, Bonzah insurance). Drives the recurring
  * setup-reminder dialog. Reads fresh values from the DB rather than the cached
  * tenant context so a task flips to "done" as soon as the tenant completes it.
+ *
+ * Completion rules are deliberately kept in step with the dashboard's own
+ * checklist so the two can never disagree:
+ *  - Stripe   → `use-setup-status.ts` (`stripe_onboarding_complete` + status active)
+ *  - Bonzah   → `use-bonzah-balance.ts` `hasOwnCredentials`, plus an in-flight
+ *               onboarding submission (pending/approved) so we stop nagging the
+ *               moment the tenant has applied and is waiting on review.
+ *  - Logo     → `use-platform-status.ts` `hasLogo` (`tenants.logo_url`)
  */
 export function useSetupReminder(): SetupReminderState {
   const { tenant } = useTenant();
@@ -38,17 +53,23 @@ export function useSetupReminder(): SetupReminderState {
           )
           .eq("id", tenant!.id)
           .single(),
+        // A rejected application does not count — the tenant still has work to do.
         (supabase as any)
           .from("bonzah_onboarding_submissions")
           .select("id", { count: "exact", head: true })
-          .eq("tenant_id", tenant!.id),
+          .eq("tenant_id", tenant!.id)
+          .in("status", ["pending", "approved"]),
       ]);
 
       if (tenantRes.error) throw tenantRes.error;
 
       return {
         tenantFields: tenantRes.data as TenantReminderFields,
-        bonzahSubmissionCount: (bonzahRes.count as number | null) ?? 0,
+        // `null` = we could not determine it (RLS/network). Treated as "assume
+        // handled" below so we never nag about a task that may already be done.
+        bonzahSubmissionCount: bonzahRes.error
+          ? null
+          : ((bonzahRes.count as number | null) ?? 0),
       };
     },
     enabled: !!tenant?.id,
@@ -56,13 +77,14 @@ export function useSetupReminder(): SetupReminderState {
   });
 
   const fields = query.data?.tenantFields;
-  const bonzahSubmissionCount = query.data?.bonzahSubmissionCount ?? 0;
+  const bonzahSubmissionCount = query.data?.bonzahSubmissionCount;
 
   const needsLogo = !fields?.logo_url;
   const needsStripe = !(
     fields?.stripe_onboarding_complete === true &&
     fields?.stripe_account_status === "active"
   );
+  // Mirrors `hasOwnCredentials` in use-bonzah-balance.ts.
   const bonzahConnected = !!fields?.integration_bonzah && !!fields?.bonzah_username;
   const needsBonzah = bonzahSubmissionCount === 0 && !bonzahConnected;
 
@@ -73,6 +95,7 @@ export function useSetupReminder(): SetupReminderState {
     needsStripe,
     needsBonzah,
     allDone,
+    isReady: query.isSuccess,
     isLoading: query.isLoading,
   };
 }

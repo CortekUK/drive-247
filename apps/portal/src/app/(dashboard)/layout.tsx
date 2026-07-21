@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/stores/auth-store";
 import { useTenant } from "@/contexts/TenantContext";
@@ -77,7 +77,11 @@ export default function DashboardLayout({
     isResolved: subscriptionResolved,
   } = useTenantSubscription();
   const { isManager, canAccessRoute, isLoading: permissionsLoading } = useManagerPermissions();
-  const { data: plans, isSuccess: plansResolved } = useSubscriptionPlans();
+  const {
+    data: plans,
+    isSuccess: plansSuccess,
+    isError: plansErrored,
+  } = useSubscriptionPlans();
 
   // Global super-admin kill-switch: when on, never show the subscription
   // blocker to any tenant (everything else stays as-is).
@@ -96,23 +100,117 @@ export default function DashboardLayout({
 
   const hasActivePlans = !!plans && plans.length > 0;
 
-  // Fail-CLOSED gate: until BOTH subscription + plans queries have actually
-  // resolved (and tenant context has loaded), we treat the user as gated.
-  // This prevents the "modal sometimes doesn't appear" race where transient
-  // loading-false states briefly satisfied the negation-based check.
-  const gateStateKnown = !tenantLoading && subscriptionResolved && plansResolved;
+  // Super admins are platform staff inspecting a tenant's portal for support
+  // and QA — they are never the paying party, so the paywall must not lock
+  // them out. This is the ONLY sanctioned bypass: a tenant's own head_admin
+  // (or any other tenant-scoped role) is always subject to the gate.
+  const isSuperAdmin = appUser?.is_super_admin === true;
+
+  // Every reason the blocker must stay hidden, in one place.
+  const gateSuppressed =
+    isSuperAdmin ||
+    subscriptionGateDisabled ||
+    tenant?.subscription_gate_disabled === true;
+
+  // A query that errored IS resolved — we are never getting an answer by
+  // waiting longer. Keying off `isSuccess` alone wedged this flag at `false`
+  // forever whenever the plans query failed, which silently disabled the
+  // paywall (and the expired-subscription blocker, which doesn't even depend
+  // on plans) for the rest of the session.
+  const plansResolved = plansSuccess || plansErrored;
+
+  // Plans only ever decide the never-subscribed "Finish Setup" gate. A tenant
+  // with an active subscription is never blocked, and an expired one is always
+  // blocked — in both cases the plans query is irrelevant, so don't make the
+  // first paint wait on a second round-trip that cannot change the outcome.
+  const plansNeededForGate = !isSubscribed && !hasExpiredSubscription;
+
+  const gateStateKnown =
+    !!tenant &&
+    !tenantLoading &&
+    subscriptionResolved &&
+    (!plansNeededForGate || plansResolved);
 
   // Expired/canceled subscription — same hard modal, different copy.
   const showExpiredGate =
     gateStateKnown && hasExpiredSubscription && !isSubscriptionPage;
 
-  // Never-subscribed but plans exist — Finish Setup modal.
+  // Never-subscribed — Finish Setup modal. We gate when the tenant either has a
+  // plan to buy OR when we could not load their plans at all: an errored plans
+  // query means "unknown", and treating unknown as "nothing to sell" left the
+  // paywall bypassable by blocking a single request (or by a transient 5xx).
+  // Only a plans query that genuinely SUCCEEDED with zero rows leaves a tenant
+  // un-gated, so an operator with no plan configured is never locked out of a
+  // product they cannot buy. With no plans loaded the dialog falls back to its
+  // contact-support copy, and the sign-out escape still applies.
   const showSetupGate =
     gateStateKnown &&
     !isSubscribed &&
     !hasExpiredSubscription &&
-    hasActivePlans &&
+    (hasActivePlans || plansErrored) &&
     !isSubscriptionPage;
+
+  const gateOpen = (showSetupGate || showExpiredGate) && !gateSuppressed;
+
+  // A latched gate with nothing left to sell is a dead end: if a super admin
+  // deactivates the tenant's last plan, there is no longer anything the tenant
+  // could buy to clear it. Release the latch in that case — `gateOpen` still
+  // wins below, so an expired subscription (which blocks regardless of plans)
+  // keeps its modal.
+  //
+  // Deliberately `plansSuccess`, not `plansResolved`: an errored plans query
+  // means "unknown", which must stay gated rather than unlatch the paywall.
+  // NOTE: nothing invalidates or refetches the plans query mid-session, so in
+  // practice this releases on the tenant's next page load, not live.
+  const nothingToBuy = plansSuccess && !hasActivePlans;
+
+  // Once a session has been blocked it stays blocked until the tenant
+  // actually subscribes. Without this latch a background refetch that
+  // momentarily flips a query back to `pending` (or a realtime invalidation)
+  // would drop `gateStateKnown` and hand the dashboard back mid-session.
+  const [gateLatched, setGateLatched] = useState(false);
+  useEffect(() => {
+    if (gateOpen) setGateLatched(true);
+    else if (isSubscribed || gateSuppressed || nothingToBuy)
+      setGateLatched(false);
+  }, [gateOpen, isSubscribed, gateSuppressed, nothingToBuy]);
+
+  const showGate =
+    !gateSuppressed && !isSubscriptionPage && (gateOpen || gateLatched);
+
+  // Has this session ever rendered the dashboard with a *trustworthy* gate
+  // decision? Only the very first paint may be held back; after that the page
+  // stays mounted no matter what the billing queries do. A webhook flipping an
+  // active subscription to null mid-session momentarily returns the gate state
+  // to "unknown", and swapping the whole dashboard for a skeleton at that
+  // point destroys unsaved form state — the modal goes over the live page
+  // instead (via `gateOpen` / `gateLatched`, which don't unmount anything).
+  const authReady = !loading && !!user && !!appUser?.is_active;
+  const [hasPaintedOnce, setHasPaintedOnce] = useState(false);
+  useEffect(() => {
+    // `gateStateKnown` implies the hold below is false, i.e. this render did
+    // paint the real dashboard rather than the skeleton.
+    if (!hasPaintedOnce && authReady && gateStateKnown) setHasPaintedOnce(true);
+  }, [hasPaintedOnce, authReady, gateStateKnown]);
+
+  // Fail-CLOSED first paint. Previously the dashboard rendered fully
+  // interactive while the billing queries were still in flight (and forever
+  // if one of them errored), because every gate condition was ANDed with
+  // `gateStateKnown`. Hold the skeleton instead until we actually know.
+  // Applies while the tenant is still loading AND once it has resolved, so the
+  // dashboard never paints ungated in the window before TenantContext lands
+  // (which also removed a dashboard -> skeleton -> dashboard flash). If tenant
+  // lookup itself FAILED (null, not loading) we deliberately do not hold, since
+  // there is nothing to gate on and holding would strand the user forever.
+  // Only until the first known-good paint (see `hasPaintedOnce`). The queries
+  // it waits on are all capped at retry <= 1, so an outage settles the hold in
+  // one round-trip instead of hanging the skeleton on exponential backoff.
+  const holdForGateState =
+    !hasPaintedOnce &&
+    !gateSuppressed &&
+    !isSubscriptionPage &&
+    (!!tenant || tenantLoading) &&
+    !gateStateKnown;
 
   useEffect(() => {
     if (!loading) {
@@ -144,6 +242,11 @@ export default function DashboardLayout({
 
   // Not authenticated - show nothing while redirecting
   if (!user || !appUser || !appUser.is_active) {
+    return <LoadingSkeleton />;
+  }
+
+  // Billing state not yet known — do not paint an unprotected dashboard.
+  if (holdForGateState) {
     return <LoadingSkeleton />;
   }
 
@@ -183,12 +286,8 @@ export default function DashboardLayout({
             `open` so we avoid Radix mount/unmount races that previously
             caused the modal to fail to appear without a page refresh. */}
         <SubscriptionGateDialog
-          open={
-            (showSetupGate || showExpiredGate) &&
-            !subscriptionGateDisabled &&
-            !tenant?.subscription_gate_disabled
-          }
-          variant={showExpiredGate ? "expired" : "setup"}
+          open={showGate}
+          variant={hasExpiredSubscription ? "expired" : "setup"}
         />
 
         {/* Recurring post-subscription nudge for outstanding setup tasks.
