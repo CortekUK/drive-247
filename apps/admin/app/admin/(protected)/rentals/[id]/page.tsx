@@ -1131,7 +1131,29 @@ export default function TenantDetailsPage() {
         body: { tenant_id: tenant.id }
       });
 
-      if (error) throw error;
+      // supabase-js collapses ANY non-2xx into a generic FunctionsHttpError
+      // ("Edge Function returned a non-2xx status code") and hides the response
+      // body — which is exactly where admin-delete-tenant puts the actionable
+      // reason (invalid session / not a super admin / the Postgres error, plus
+      // per-table deletionResults). Read it back instead of throwing the useless
+      // generic message.
+      if (error) {
+        let detail = error.message;
+        const res = (error as any)?.context;
+        if (res && typeof res.json === 'function') {
+          try {
+            const body = await res.clone().json();
+            if (body?.error) detail = String(body.error);
+            const failed = Object.entries(body?.deletionResults ?? {})
+              .filter(([, v]) => typeof v === 'string')
+              .map(([table, v]) => `${table}: ${v}`);
+            if (failed.length) detail += ` — failed: ${failed.join('; ')}`;
+          } catch {
+            // body wasn't JSON (e.g. a boot failure) — keep the generic message
+          }
+        }
+        throw new Error(detail);
+      }
 
       if (data?.error) {
         throw new Error(data.error);

@@ -140,8 +140,20 @@ Deno.serve(async (req) => {
       deletionResults.pnl_entries = pnlError ? pnlError.message : (pnlData?.length || 0);
     }
 
-    // Delete tables with tenant_id
+    // Delete tables with tenant_id.
+    //
+    // The first four have FKs to tenants(id) with NO ACTION (verified against
+    // prod: bonzah_insurance_policies, gig_driver_images, promocodes,
+    // rental_additional_drivers). They are NOT covered by a cascade, so if a
+    // tenant has any such rows the final `DELETE FROM tenants` fails with a
+    // foreign-key violation and the whole call 500s. Everything else here either
+    // cascades or is cleaned up for tidiness. rental_additional_drivers is first
+    // because it also references rentals.
     const tablesWithTenantId = [
+      'rental_additional_drivers',
+      'bonzah_insurance_policies',
+      'gig_driver_images',
+      'promocodes',
       'ledger_entries',
       'payments',
       'fines',
