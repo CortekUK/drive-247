@@ -16,9 +16,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { ArrowRight, CreditCard, ImageIcon, ShieldCheck } from "lucide-react";
 
-const SNOOZE_MS = 24 * 60 * 60 * 1000;
-
+/**
+ * "Don't show me again" — permanent, so it must OUTLIVE the browser session.
+ * localStorage.
+ */
 const dismissedKey = (tenantId: string) => `setup-reminder-dismissed-${tenantId}`;
+
+/**
+ * Closing the dialog only silences it for the CURRENT portal session, so it
+ * comes back every time the tenant opens the portal until the tasks are
+ * actually done. Deliberately sessionStorage, not a localStorage timestamp: a
+ * 24h clock let a tenant close it once and then not see it again for the rest
+ * of the day, including across several fresh logins.
+ */
 const snoozedKey = (tenantId: string) => `setup-reminder-snoozed-${tenantId}`;
 
 interface ReminderTask {
@@ -46,9 +56,11 @@ interface ReminderFlags {
  * layout uses to raise the non-dismissible SubscriptionGateDialog are exactly
  * the states in which this dialog stays closed.
  *
- * Closing it (X / outside-click / escape) snoozes it for 24h; "Don't show me
- * again" dismisses it permanently. Both are stored per-tenant in localStorage,
- * so switching tenants re-evaluates from that tenant's own keys.
+ * Closing it (X / outside-click / escape) silences it for the CURRENT portal
+ * session only (sessionStorage), so it reappears every time the tenant opens
+ * the portal until Bonzah / logo / Stripe Connect are actually done. "Don't
+ * show me again" dismisses it permanently (localStorage). Both keys are
+ * per-tenant, so switching tenants re-evaluates from that tenant's own state.
  */
 export function SetupReminderDialog() {
   const router = useRouter();
@@ -70,12 +82,14 @@ export function SetupReminderDialog() {
       setFlags(null);
       return;
     }
-    const snoozedAt = localStorage.getItem(snoozedKey(tenantId));
+    // sessionStorage: cleared when the tab/session ends, so opening the portal
+    // again re-shows the reminder. Only "Don't show me again" (localStorage)
+    // and actually completing the tasks stop it for good.
     setFlags({
       tenantId,
       permanentlyDismissed:
         localStorage.getItem(dismissedKey(tenantId)) === "true",
-      dueBySnooze: !snoozedAt || Date.now() - Number(snoozedAt) > SNOOZE_MS,
+      dueBySnooze: sessionStorage.getItem(snoozedKey(tenantId)) !== "true",
     });
   }, [tenantId]);
 
@@ -136,9 +150,12 @@ export function SetupReminderDialog() {
     !flags.permanentlyDismissed &&
     flags.dueBySnooze;
 
+  // sessionStorage, so it silences the reminder for THIS portal session only —
+  // next time the tenant opens the portal it shows again, until the tasks are
+  // done or they explicitly pick "Don't show me again".
   const snoozeAndClose = () => {
     if (typeof window !== "undefined" && tenantId) {
-      localStorage.setItem(snoozedKey(tenantId), Date.now().toString());
+      sessionStorage.setItem(snoozedKey(tenantId), "true");
     }
     setFlags((prev) => (prev ? { ...prev, dueBySnooze: false } : prev));
   };
@@ -159,7 +176,7 @@ export function SetupReminderDialog() {
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        // X / outside-click / escape → snooze for 24h.
+        // X / outside-click / escape → silence for this session only.
         if (!next) snoozeAndClose();
       }}
     >

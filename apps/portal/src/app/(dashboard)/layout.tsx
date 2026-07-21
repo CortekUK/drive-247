@@ -100,17 +100,18 @@ export default function DashboardLayout({
 
   const hasActivePlans = !!plans && plans.length > 0;
 
-  // Super admins are platform staff inspecting a tenant's portal for support
-  // and QA — they are never the paying party, so the paywall must not lock
-  // them out. This is the ONLY sanctioned bypass: a tenant's own head_admin
-  // (or any other tenant-scoped role) is always subject to the gate.
-  const isSuperAdmin = appUser?.is_super_admin === true;
-
   // Every reason the blocker must stay hidden, in one place.
+  //
+  // Deliberately NO super-admin bypass. An earlier version exempted super
+  // admins so support could inspect a tenant's portal, but that made the
+  // paywall invisible from the exact account staff test with — it repeatedly
+  // read as "the paywall is broken" when the tenant was simply unpaid. The
+  // gate must look identical for everyone. When staff genuinely need to get
+  // inside an unpaid tenant, use the per-tenant "Hide subscription blocker"
+  // toggle in the admin panel (tenants.subscription_gate_disabled), which is
+  // explicit, auditable and scoped to one tenant.
   const gateSuppressed =
-    isSuperAdmin ||
-    subscriptionGateDisabled ||
-    tenant?.subscription_gate_disabled === true;
+    subscriptionGateDisabled || tenant?.subscription_gate_disabled === true;
 
   // A query that errored IS resolved — we are never getting an answer by
   // waiting longer. Keying off `isSuccess` alone wedged this flag at `false`
@@ -280,20 +281,6 @@ export default function DashboardLayout({
 
         {/* Global voice call — always listening for inbound calls */}
         <GlobalVoiceCallProvider />
-
-        {/* Super admins bypass the paywall so support can inspect a tenant's
-            portal. That bypass is SILENT by default, which repeatedly read as
-            "the paywall is broken" when staff tested an unpaid tenant from
-            their own super-admin account. Say it out loud instead: the tenant
-            IS gated, this viewer just isn't. Only rendered when the gate would
-            otherwise be up, so it never nags on a healthy tenant. */}
-        {isSuperAdmin && (showSetupGate || showExpiredGate) && (
-          <div className="fixed bottom-4 left-1/2 z-[60] -translate-x-1/2 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-center text-xs text-amber-600 shadow-lg backdrop-blur dark:text-amber-400">
-            <span className="font-semibold">Paywall hidden — super-admin view.</span>{" "}
-            This tenant has {hasExpiredSubscription ? "no active subscription" : "not subscribed yet"};
-            a real tenant user is blocked here.
-          </div>
-        )}
 
         {/* Hard gate modal. Same component for both states — different copy
             via `variant`. Dialog stays mounted; visibility is driven by
