@@ -365,8 +365,31 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                     Test
                   </Button>
                 </div>
+                {/* This toggle silently decided BoldSign live-vs-sandbox and
+                    whether the paywall charges real money, which repeatedly
+                    read as "BoldSign isn't going live / the paywall is broken"
+                    when a Test tenant was used. Spell out exactly what changes.
+                    Kept accurate to the edge function: ONLY these two modes
+                    differ — stripe_mode (booking payments) and bonzah_mode stay
+                    on 'test' for BOTH types, because live Stripe Connect and
+                    live Bonzah each need their own per-tenant onboarding. */}
+                {formData.tenantType === 'production' ? (
+                  <p className="text-xs text-success mt-1">
+                    <span className="font-semibold">Real client.</span> The paywall charges{' '}
+                    <span className="font-semibold">real money</span>, and e-signatures are legally
+                    binding (BoldSign live).
+                  </p>
+                ) : (
+                  <p className="text-xs text-warning mt-1">
+                    <span className="font-semibold">Safe dry run.</span> Paywall uses a Stripe test
+                    card (no real charge) and e-signatures are watermarked sandbox docs that
+                    auto-delete after 14 days.
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground mt-1">
-                  Production = live money (real paywall). Test = safe end-to-end.
+                  Either way they get 100 live + 1000 test credits, branding, and their website
+                  content. Stripe Connect and Bonzah always start in test — the client turns those
+                  on themselves from Portal → Settings.
                 </p>
               </div>
               <div>
