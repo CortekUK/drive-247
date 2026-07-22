@@ -101,12 +101,11 @@ export function OperatorPromptCard({ tenantId }: { tenantId: string }) {
   const save = async () => {
     setSaving(true);
     try {
-      // Clear any previous dismissal when the setting changes: otherwise you
-      // enable a prompt and the operator sees nothing because their 24h
-      // suppression from an earlier dismissal is still running.
+      // Saving only changes the mode — the operator's 24h dismissal cycle is
+      // deliberately left untouched. Use "Show now" to override it manually.
       const { error } = await supabase
         .from('tenants')
-        .update({ migration_blocker: selected, migration_blocker_dismissed_at: null })
+        .update({ migration_blocker: selected })
         .eq('id', tenantId);
       if (error) throw error;
       toast.success(
@@ -301,9 +300,21 @@ export function OperatorPromptCard({ tenantId }: { tenantId: string }) {
               <Button variant="outline" size="sm" onClick={openEmail}>
                 <Mail className="mr-2 h-4 w-4" /> Compose email
               </Button>
-              {tenant.migration_blocker === 'soft' && suppressedHoursLeft > 0 && (
-                <Button variant="outline" size="sm" onClick={resetDismissal} disabled={saving}>
-                  <Bell className="mr-2 h-4 w-4" /> Show now
+              {tenant.migration_blocker === 'soft' && !bothDone && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={resetDismissal}
+                  disabled={saving}
+                  title={
+                    suppressedHoursLeft > 0
+                      ? `Currently hidden for ${suppressedHoursLeft}h — show it on their next page load`
+                      : 'Prompt is already showing on their next page load'
+                  }
+                >
+                  <Bell className="mr-2 h-4 w-4" />
+                  Show now
+                  {suppressedHoursLeft > 0 ? ` (hidden ${suppressedHoursLeft}h)` : ''}
                 </Button>
               )}
             </div>
