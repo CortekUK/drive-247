@@ -37,6 +37,14 @@ Deno.serve(async (req) => {
     const creditAmount = parseInt(credits, 10);
     if (isNaN(creditAmount) || creditAmount < 1 || creditAmount > 10000)
       return errorResponse("credits must be between 1 and 10,000");
+    // Stripe rejects a Checkout Session whose total converts to under ~200 fils
+    // on the AED-settling account, so anything below this floor would 500.
+    if (creditAmount < CREDIT_CONFIG.MIN_PURCHASE_CREDITS)
+      return errorResponse(
+        `Minimum purchase is ${CREDIT_CONFIG.MIN_PURCHASE_CREDITS} credits ($${(
+          CREDIT_CONFIG.MIN_PURCHASE_CREDITS * CREDIT_CONFIG.CREDIT_PRICE_USD
+        ).toFixed(2)}).`
+      );
 
     const priceCents = Math.round(creditAmount * CREDIT_CONFIG.CREDIT_PRICE_USD * 100); // $0.20/credit
 

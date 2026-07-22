@@ -117,6 +117,10 @@ export default function CreditsPage() {
     refetch,
   } = useCreditWallet();
 
+  // Mirrors CREDIT_CONFIG.MIN_PURCHASE_CREDITS in the edge function: the
+  // credits account settles in AED and Stripe rejects Checkout totals under
+  // ~200 fils, so a sub-$1 purchase can never succeed.
+  const MIN_PURCHASE_CREDITS = 5;
   const [liveBuyAmount, setLiveBuyAmount] = useState(10);
   const [autoRefillEnabled, setAutoRefillEnabled] = useState(false);
   const [autoRefillThreshold, setAutoRefillThreshold] = useState(10);
@@ -253,17 +257,17 @@ export default function CreditsPage() {
               <div className="flex items-center rounded-lg border bg-background w-fit">
                 <button
                   type="button"
-                  onClick={() => setLiveBuyAmount((v) => Math.max(1, v - 5))}
+                  onClick={() => setLiveBuyAmount((v) => Math.max(MIN_PURCHASE_CREDITS, v - 5))}
                   className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <Minus className="h-4 w-4" />
                 </button>
                 <input
                   type="number"
-                  min={1}
+                  min={MIN_PURCHASE_CREDITS}
                   max={10000}
                   value={liveBuyAmount}
-                  onChange={(e) => setLiveBuyAmount(Math.max(1, parseInt(e.target.value) || 1))}
+                  onChange={(e) => setLiveBuyAmount(Math.max(MIN_PURCHASE_CREDITS, parseInt(e.target.value) || MIN_PURCHASE_CREDITS))}
                   className="h-9 w-16 border-x bg-transparent text-center text-sm font-semibold focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
                 <button

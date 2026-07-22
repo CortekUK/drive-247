@@ -1,6 +1,11 @@
 export const CREDIT_CONFIG = {
   // Exchange rate: how much USD 1 credit costs
   CREDIT_PRICE_USD: 0.20,
+  // Smallest purchasable pack. Credits bill on the UAE account, which settles
+  // in AED, and Stripe enforces a ~200 fils (~AED 2 ≈ $0.55) minimum per
+  // Checkout Session — so a 1-credit ($0.20) purchase is rejected outright.
+  // 5 credits = $1.00 clears that floor with headroom for FX movement.
+  MIN_PURCHASE_CREDITS: 5,
   // Default test credits granted to new tenants
   DEFAULT_TEST_CREDITS: 1000,
   // Service costs in credits
