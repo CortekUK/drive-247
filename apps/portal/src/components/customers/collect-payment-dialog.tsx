@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
+import { extractFunctionError } from "@/lib/edge-error";
 
 interface CollectPaymentDialogProps {
   open: boolean;
@@ -168,7 +169,7 @@ export const CollectPaymentDialog = ({ open, onOpenChange, customerId }: Collect
         cancelUrl: opts.cancelUrl,
       },
     });
-    if (error) throw new Error(error.message || "Failed to create checkout session");
+    if (error) throw new Error(await extractFunctionError(error, "Failed to create checkout session"));
     if (!data?.url) throw new Error("No checkout URL returned");
     return data as { url: string; sessionId: string };
   };

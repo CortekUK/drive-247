@@ -41,11 +41,8 @@ export const useCMSPageSections = (pageSlug: string) => {
     // zero rows, reports success, and the change never goes live. That silent
     // dead end is exactly what a logo upload ran into.
     //
-    // Give the tenant its own page instead, seeded with whatever the global row
-    // was showing them so nothing they were looking at disappears.
+    // Give the tenant its own page instead (deliberately empty — see below).
     if (tenant?.id && result.data && result.data.tenant_id === null) {
-      const globalPageId = result.data.id;
-
       const { data: created, error: createError } = await supabase
         .from("cms_pages")
         .insert({
@@ -74,28 +71,21 @@ export const useCMSPageSections = (pageSlug: string) => {
         return result;
       }
 
-      // Copy the global page's sections across so the tenant starts from what
-      // they saw, not from an empty page.
-      const { data: globalSections } = await supabase
-        .from("cms_page_sections")
-        .select("section_key, content, is_visible, display_order")
-        .eq("page_id", globalPageId);
-
-      if (globalSections && globalSections.length > 0) {
-        await supabase.from("cms_page_sections").insert(
-          globalSections.map((s) => ({
-            page_id: created.id,
-            // cms_page_sections carries its own tenant_id; leaving it null on a
-            // tenant-owned page would recreate the very ambiguity being fixed.
-            tenant_id: tenant.id,
-            section_key: s.section_key,
-            content: s.content,
-            is_visible: s.is_visible ?? true,
-            display_order: s.display_order ?? 0,
-          }))
-        );
-      }
-
+      // The new page is left EMPTY on purpose — its sections are NOT copied
+      // from the global row.
+      //
+      // Seeding from the global page looks helpful and is actively harmful: the
+      // global site-settings sections hold Drive 247's OWN contact details
+      // (+19725156635, info@drive247.com, facebook.com/drive247, "© Drive 247").
+      // Today those are inert, because booking's site-settings reader is
+      // tenant-scoped and never falls back to the global row. Copying them makes
+      // them tenant-OWNED, and useSiteSettings applies `contact.phone ||
+      // tenantSettings.phone` — so a copied value would WIN over the operator's
+      // real phone number and publish another company's details on their site.
+      //
+      // Empty is strictly safer: the editor already supplies per-section
+      // defaults, and booking already falls back to the tenants row for phone,
+      // email, address and copyright.
       return { data: created, error: null };
     }
 

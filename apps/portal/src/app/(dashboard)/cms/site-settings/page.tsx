@@ -70,7 +70,9 @@ export default function CMSSiteSettingsEditor() {
   // `Record<string, any>` mirrors updateSection's own parameter type. `unknown`
   // would reject the CMS content interfaces, which have no index signature.
   const saveSection = async (sectionKey: string, content: Record<string, any>) => {
-    const wasPublished = page?.status === "published";
+    // Row identity matters, not just status: `page` may be the SHARED GLOBAL row while the write lands on a freshly created tenant row. Publishing off the global row's status would push live a page this tenant never chose to publish.
+    const wasPublished =
+      page?.status === "published" && page?.tenant_id === (tenant?.id ?? null);
     // Publish the row that was ACTUALLY written, not the one this component
     // happens to be rendering. getPageBySlug may resolve (or newly create) a
     // tenant-owned row that differs from `page`, and publishing the wrong id
@@ -260,7 +262,9 @@ export default function CMSSiteSettingsEditor() {
               // Re-publishing below restores it. Deliberately NOT fixed by
               // removing the demotion in the shared hook: version snapshots are
               // only written on publish, so saves must keep going through it.
-              const wasPublished = page?.status === "published";
+              // Row identity matters, not just status: `page` may be the SHARED GLOBAL row while the write lands on a freshly created tenant row. Publishing off the global row's status would push live a page this tenant never chose to publish.
+              const wasPublished =
+                page?.status === "published" && page?.tenant_id === (tenant?.id ?? null);
 
               // Capture the row actually written — getPageBySlug may resolve or
               // create a tenant-owned row different from the rendered `page`.

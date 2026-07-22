@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCMSPage, useCMSPages } from "@/hooks/use-cms-pages";
 import { useCMSPageSections } from "@/hooks/use-cms-page-sections";
+import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { SEOEditor } from "@/components/website-content/seo-editor";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +26,7 @@ export default function BlogSettingsPage() {
   const { data: page, isLoading: pageLoading } = useCMSPage("blog");
   const { updateSectionAsync, isUpdating } = useCMSPageSections("blog");
   const { publishPage } = useCMSPages();
+  const { tenant } = useTenant();
 
   // Get section content helper
   const getSectionContent = <T,>(key: string, defaultVal: T): T => {
@@ -62,7 +64,9 @@ export default function BlogSettingsPage() {
    * did not choose to publish.
    */
   const saveSection = async (sectionKey: string, content: Record<string, any>) => {
-    const wasPublished = page?.status === "published";
+    // Row identity matters, not just status: `page` may be the SHARED GLOBAL row while the write lands on a freshly created tenant row. Publishing off the global row's status would push live a page this tenant never chose to publish.
+    const wasPublished =
+      page?.status === "published" && page?.tenant_id === (tenant?.id ?? null);
     // Publish the row actually written, not the rendered one — see the same
     // note in cms/site-settings/page.tsx.
     const savedPageId = await updateSectionAsync({ sectionKey, content });

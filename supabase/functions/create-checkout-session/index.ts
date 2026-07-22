@@ -27,6 +27,22 @@ serve(async (req) => {
     // Support both bookingId (legacy) and rentalId (portal integration)
     const referenceId = rentalId || bookingId
 
+    // Callers pass a COMPUTED total (charges.reduce(...), rentalFee + tax, ...) which
+    // can legitimately evaluate to 0 when every selected charge is $0.00. Stripe happily
+    // accepts a 0-amount line item, so we'd hand the operator a live checkout link that
+    // collects nothing — and whose completion still fires checkout.session.completed.
+    // Reject it here with a message that says what to do. (Deposit card-capture does NOT
+    // come through this function; it uses create-hold-checkout / create-preauth-checkout.)
+    // Amounts that are positive but under Stripe's per-currency minimum are left to
+    // Stripe, whose own error names the exact threshold for the tenant's currency.
+    const amountNum = Number(totalAmount)
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      throw new Error(
+        `Cannot create a payment link for an amount of ${totalAmount ?? 0}. ` +
+        `Select at least one charge with an amount greater than zero.`
+      )
+    }
+
     // Initialize Supabase client to fetch tenant info
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',

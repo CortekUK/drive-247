@@ -57,6 +57,7 @@ import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { getActiveCoverageLabels } from "@/lib/coverage-labels";
 import { getPacificTomorrow } from "@/lib/bonzah-dates";
+import { extractFunctionError } from "@/lib/edge-error";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { LocationMap } from "@/components/ui/location-map";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -2930,7 +2931,7 @@ const RentalDetail = () => {
                   paygAccrualId,
                 },
               });
-              if (error) throw error;
+              if (error) throw new Error(await extractFunctionError(error, 'Failed to create checkout session'));
               if (!data?.url) throw new Error('No checkout URL returned');
               window.open(data.url, '_blank');
               toast({

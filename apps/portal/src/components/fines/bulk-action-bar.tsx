@@ -8,6 +8,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/format-utils";
+import { extractFunctionError } from "@/lib/edge-error";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
@@ -213,7 +214,7 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
           },
         },
       );
-      if (sessionError) throw sessionError;
+      if (sessionError) throw new Error(await extractFunctionError(sessionError, 'Failed to create checkout session'));
       const payUrl = sessionData?.url;
       if (!payUrl) throw new Error('No payment link was returned by checkout.');
 

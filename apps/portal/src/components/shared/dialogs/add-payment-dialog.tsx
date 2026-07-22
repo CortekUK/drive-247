@@ -22,6 +22,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerVehicleRental } from "@/hooks/use-customer-vehicle-rental";
 import { useCustomerBalanceWithStatus, useRentalChargesAndPayments } from "@/hooks/use-customer-balance";
 import { createInvoice } from "@/lib/invoice-utils";
+import { extractFunctionError } from "@/lib/edge-error";
 import { cn } from "@/lib/utils";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 
@@ -124,24 +125,6 @@ const PAYMENT_METHODS = [
   { value: "Check", label: "Check", icon: FileText },
   { value: "Other", label: "Other", icon: MoreHorizontal },
 ];
-
-// supabase.functions.invoke wraps non-2xx responses in FunctionsHttpError whose
-// .message is always the generic "Edge Function returned a non-2xx status code";
-// the edge function's real JSON error body hides behind error.context. Without
-// unwrapping it, operators see an opaque failure and retry blindly (Kedic
-// incident: 12 retries against a stale Stripe customer id, real error unseen).
-const extractFunctionError = async (error: unknown, fallback: string): Promise<string> => {
-  const ctx = (error as { context?: Response })?.context;
-  if (ctx && typeof ctx.clone === "function") {
-    try {
-      const body = await ctx.clone().json();
-      const msg = body?.error || body?.message;
-      if (typeof msg === "string" && msg.trim()) return msg;
-    } catch { /* body wasn't JSON — fall through to fallback */ }
-  }
-  const m = (error as { message?: string })?.message;
-  return m && m !== "Edge Function returned a non-2xx status code" ? m : fallback;
-};
 
 export const AddPaymentDialog = ({
   open,
