@@ -199,7 +199,10 @@ export function useMigrationBlocker() {
     mutationFn: async () => {
       const { data: res, error } = await supabase.functions.invoke(
         "migration-blocker-dismiss",
-        { body: {} },
+        // tenantId is only honoured for super admins (who have no tenant_id of
+        // their own); for a normal operator the function ignores it and uses
+        // their own tenant.
+        { body: { tenantId: data?.id } },
       );
       if (error) throw error;
       return res;

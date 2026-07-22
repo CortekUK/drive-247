@@ -147,17 +147,33 @@ async function handleCheckoutCompleted(
         // or it double-bills invisibly.
         const oldAccount = oldSub.stripe_account === "uae" ? "uae" : "uk";
         const oldStripe = getSubscriptionStripeClientForAccount(oldAccount, mode);
-        if (oldAccount === "uae" || oldSub.status === "past_due") {
-          // Duplicate UAE sub = redundant; past-due UK sub has no paid period to
-          // preserve and its open invoice would keep smart-retrying. Kill both now.
-          await oldStripe.subscriptions.cancel(oldSub.stripe_subscription_id);
-          console.log(`UAE migration: canceled ${oldAccount} subscription ${oldSub.stripe_subscription_id} (status ${oldSub.status}) for tenant ${tenantId}`);
-        } else {
-          // Active/trialing UK sub: let the already-paid period run out.
-          await oldStripe.subscriptions.update(oldSub.stripe_subscription_id, {
-            cancel_at_period_end: true,
-          });
-          console.log(`UAE migration: set UK subscription ${oldSub.stripe_subscription_id} to cancel_at_period_end for tenant ${tenantId}`);
+        try {
+          if (oldAccount === "uae" || oldSub.status === "past_due") {
+            // Duplicate UAE sub = redundant; past-due UK sub has no paid period to
+            // preserve and its open invoice would keep smart-retrying. Kill both now.
+            await oldStripe.subscriptions.cancel(oldSub.stripe_subscription_id);
+            console.log(`UAE migration: canceled ${oldAccount} subscription ${oldSub.stripe_subscription_id} (status ${oldSub.status}) for tenant ${tenantId}`);
+          } else {
+            // Active/trialing UK sub: let the already-paid period run out.
+            await oldStripe.subscriptions.update(oldSub.stripe_subscription_id, {
+              cancel_at_period_end: true,
+            });
+            console.log(`UAE migration: set UK subscription ${oldSub.stripe_subscription_id} to cancel_at_period_end for tenant ${tenantId}`);
+          }
+        } catch (cancelErr) {
+          // A subscription that doesn't exist on that account can't double-bill,
+          // so a stale/foreign DB reference must NOT block the migration forever
+          // (it would 500 → Stripe retries → stuck). Anything else (network,
+          // auth, rate limit) still propagates so we never retire a row whose
+          // Stripe subscription is genuinely still live.
+          const code = (cancelErr as any)?.code;
+          const msg = String((cancelErr as any)?.message ?? cancelErr);
+          const alreadyGone =
+            code === "resource_missing" || /no such subscription/i.test(msg);
+          if (!alreadyGone) throw cancelErr;
+          console.warn(
+            `UAE migration: subscription ${oldSub.stripe_subscription_id} not found on the ${oldAccount} account — treating as already cancelled. (${msg})`
+          );
         }
       }
       // Only reached once the Stripe-side cancel above succeeded.

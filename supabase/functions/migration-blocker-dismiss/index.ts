@@ -29,15 +29,21 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // The operator may only dismiss their OWN tenant's prompt — derive the
-    // tenant from the caller, never trust a tenantId in the body.
     const { data: appUser } = await supabase
       .from("app_users")
       .select("tenant_id, is_super_admin")
       .eq("auth_user_id", user.id)
       .single();
 
-    const tenantId = appUser?.tenant_id;
+    // A normal operator may only ever dismiss their OWN tenant's prompt, so the
+    // tenant is derived from the caller and any body value is ignored. A super
+    // admin has tenant_id = NULL (by design) and can be viewing any tenant's
+    // portal, so for them we accept the tenant from the body.
+    let tenantId: string | null = appUser?.tenant_id ?? null;
+    if (!tenantId && appUser?.is_super_admin === true) {
+      const body = await req.json().catch(() => ({}));
+      tenantId = body?.tenantId ?? null;
+    }
     if (!tenantId) return errorResponse("No tenant for this user", 403);
 
     const { data: tenant, error: tErr } = await supabase
