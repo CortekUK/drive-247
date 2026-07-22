@@ -394,6 +394,35 @@ export function TenantPaymentsTab({ tenantId }: { tenantId: string }) {
                 <p className="text-sm font-semibold mb-2 flex items-center gap-2">
                   <CreditCard className="h-4 w-4" /> Subscription → UAE
                 </p>
+                {(() => {
+                  const d = readiness.subscription.details as
+                    | { renewalDate?: string | null; daysUntilRenewal?: number | null; renewalTooClose?: boolean }
+                    | undefined;
+                  if (!d?.renewalDate) return null;
+                  const days = d.daysUntilRenewal;
+                  return (
+                    <div
+                      className={`mb-3 rounded-md border px-3 py-2 text-sm ${
+                        d.renewalTooClose
+                          ? 'border-amber-300 bg-amber-50 text-amber-900'
+                          : 'border-border bg-muted/40'
+                      }`}
+                    >
+                      <span className="font-medium">Renews {d.renewalDate}</span>
+                      {typeof days === 'number' && (
+                        <span className="text-muted-foreground">
+                          {' '}· {days} day{days === 1 ? '' : 's'} away
+                          {!d.renewalTooClose && ` → new subscription shows "${days} days free"`}
+                        </span>
+                      )}
+                      {d.renewalTooClose && (
+                        <span className="block mt-1 font-medium">
+                          ⚠️ Too close to renewal — wait until after this date to send the capture link.
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
                 <TrackVerdict track={readiness.subscription} />
               </div>
               <div className="rounded-lg border p-4">

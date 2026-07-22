@@ -25,6 +25,11 @@ import {
 
 type TrackStatus = "ready" | "warning" | "blocked";
 
+/** Stripe requires trial_end to be at least 48h out; mirrors MIN_TRIAL_END_MS
+ *  in create-uae-subscription-capture. Inside this window the first UAE charge
+ *  cannot be deferred to the existing period end. */
+const MIN_TRIAL_HOURS = 48;
+
 async function verifySuperAdmin(supabase: any, userId: string): Promise<boolean> {
   const { data } = await supabase
     .from("app_users")
@@ -180,6 +185,35 @@ Deno.serve(async (req) => {
       subReasons.push(
         "No active subscription plan exists on the UAE account for this tenant — create one before migrating so the tenant has something to subscribe to."
       );
+    }
+
+    // Renewal timing. The UAE subscription defers its first charge to the UK
+    // period end (so the tenant never pays twice), but Stripe requires
+    // trial_end to be >= 48h out. Inside that window there is no trial: UAE
+    // bills immediately and the tenant is briefly covered by both.
+    let daysUntilRenewal: number | null = null;
+    let renewalTooClose = false;
+    if (!alreadyOnUae && ukPeriodEnd) {
+      const msUntil = new Date(ukPeriodEnd).getTime() - Date.now();
+      daysUntilRenewal = Math.floor(msUntil / (24 * 60 * 60 * 1000));
+      const hoursUntil = msUntil / (60 * 60 * 1000);
+      const renewalStr = new Date(ukPeriodEnd).toISOString().slice(0, 10);
+      if (msUntil <= 0) {
+        subWarning = true;
+        subReasons.push(
+          `The current period ended on ${renewalStr} — UAE billing will start immediately on capture.`
+        );
+      } else if (hoursUntil < MIN_TRIAL_HOURS) {
+        renewalTooClose = true;
+        subWarning = true;
+        subReasons.push(
+          `Renews in under ${MIN_TRIAL_HOURS}h (on ${renewalStr}). Stripe can't defer a first charge that close, so the tenant would be billed immediately and briefly pay both accounts. Wait until after ${renewalStr} to send the capture link.`
+        );
+      } else {
+        subReasons.push(
+          `Renews ${renewalStr} (${daysUntilRenewal} day${daysUntilRenewal === 1 ? "" : "s"} away) — the new subscription will show "${daysUntilRenewal} days free" and take over on that exact date, so no double billing.`
+        );
+      }
     }
 
     const subscriptionStatus: TrackStatus = subBlocked
@@ -382,6 +416,9 @@ Deno.serve(async (req) => {
         details: {
           ukSubStatus,
           ukPeriodEnd,
+          renewalDate: ukPeriodEnd ? ukPeriodEnd.slice(0, 10) : null,
+          daysUntilRenewal,
+          renewalTooClose,
           ukSubLiveChecked,
           openInvoices,
           openInvoicesDb: openInvoicesDb ?? 0,
