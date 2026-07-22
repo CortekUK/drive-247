@@ -172,9 +172,14 @@ export function useMigrationBlocker() {
   const confirmPayment = useCallback(async () => {
     setConfirmingPayment(true);
     try {
+      // Always send the tenant explicitly: a SUPER ADMIN viewing a tenant's
+      // portal has app_users.tenant_id = NULL, so the function cannot infer it
+      // (it only derives the tenant for non-super-admin self-serve callers).
+      // For a normal operator the function still validates this against their
+      // own tenant, so passing it changes nothing security-wise.
       const { data: res, error } = await supabase.functions.invoke(
         "create-uae-subscription-capture",
-        { body: {} },
+        { body: { tenantId: data?.id } },
       );
       if (error) throw error;
       if (!res?.url)
@@ -188,7 +193,7 @@ export function useMigrationBlocker() {
       });
       setConfirmingPayment(false);
     }
-  }, []);
+  }, [data?.id]);
 
   const dismissMutation = useMutation({
     mutationFn: async () => {
