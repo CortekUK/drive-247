@@ -101,9 +101,12 @@ export function OperatorPromptCard({ tenantId }: { tenantId: string }) {
   const save = async () => {
     setSaving(true);
     try {
+      // Clear any previous dismissal when the setting changes: otherwise you
+      // enable a prompt and the operator sees nothing because their 24h
+      // suppression from an earlier dismissal is still running.
       const { error } = await supabase
         .from('tenants')
-        .update({ migration_blocker: selected })
+        .update({ migration_blocker: selected, migration_blocker_dismissed_at: null })
         .eq('id', tenantId);
       if (error) throw error;
       toast.success(
@@ -114,6 +117,23 @@ export function OperatorPromptCard({ tenantId }: { tenantId: string }) {
       await fetchTenant();
     } catch (e) {
       toast.error(`Could not save: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const resetDismissal = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('tenants')
+        .update({ migration_blocker_dismissed_at: null })
+        .eq('id', tenantId);
+      if (error) throw error;
+      toast.success('Dismissal cleared — the prompt shows again on their next page load');
+      await fetchTenant();
+    } catch (e) {
+      toast.error(`Could not reset: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setSaving(false);
     }
@@ -164,6 +184,18 @@ export function OperatorPromptCard({ tenantId }: { tenantId: string }) {
     : !!tenant.own_stripe_account_id;
   const paymentConfirmed = tenant.subscription_account === 'uae';
   const bothDone = stripeConnected && paymentConfirmed;
+  // How long a soft prompt stays hidden after the operator dismissed it (24h).
+  const suppressedHoursLeft =
+    tenant.migration_blocker === 'soft' && tenant.migration_blocker_dismissed_at && !bothDone
+      ? Math.max(
+          0,
+          Math.ceil(
+            (new Date(tenant.migration_blocker_dismissed_at).getTime() +
+              24 * 3600 * 1000 -
+              Date.now()) / 3600000
+          )
+        )
+      : 0;
   const dirty = selected !== tenant.migration_blocker;
 
   return (
@@ -251,6 +283,11 @@ export function OperatorPromptCard({ tenantId }: { tenantId: string }) {
                   {tenant.migration_blocker_dismissed_at
                     ? ` · last ${relTime(tenant.migration_blocker_dismissed_at)}`
                     : ''}
+                  {suppressedHoursLeft > 0 && (
+                    <span className="text-amber-600">
+                      {' '}· hidden for {suppressedHoursLeft}h more
+                    </span>
+                  )}
                 </span>
               </div>
             </div>
@@ -264,6 +301,11 @@ export function OperatorPromptCard({ tenantId }: { tenantId: string }) {
               <Button variant="outline" size="sm" onClick={openEmail}>
                 <Mail className="mr-2 h-4 w-4" /> Compose email
               </Button>
+              {tenant.migration_blocker === 'soft' && suppressedHoursLeft > 0 && (
+                <Button variant="outline" size="sm" onClick={resetDismissal} disabled={saving}>
+                  <Bell className="mr-2 h-4 w-4" /> Show now
+                </Button>
+              )}
             </div>
             <Button onClick={save} disabled={saving || !dirty}>
               {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
