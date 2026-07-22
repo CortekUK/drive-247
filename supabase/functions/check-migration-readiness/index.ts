@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     const { data: tenant, error: tenantError } = await supabase
       .from("tenants")
       .select(
-        "id, name, stripe_mode, subscription_stripe_mode, subscription_account, payment_model, stripe_account_id, stripe_subscription_customer_id, own_stripe_account_id, own_stripe_test_account_id"
+        "id, company_name, stripe_mode, subscription_stripe_mode, subscription_account, payment_model, stripe_account_id, stripe_subscription_customer_id, own_stripe_account_id, own_stripe_test_account_id"
       )
       .eq("id", tenantId)
       .single();
@@ -375,7 +375,7 @@ Deno.serve(async (req) => {
     return jsonResponse({
       checkedAt: new Date().toISOString(),
       tenantId,
-      tenantName: tenant.name,
+      tenantName: tenant.company_name,
       subscription: {
         status: subscriptionStatus,
         reasons: subReasons,
