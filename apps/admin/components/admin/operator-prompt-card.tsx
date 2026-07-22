@@ -178,9 +178,10 @@ export function OperatorPromptCard({ tenantId }: { tenantId: string }) {
     return <Card><CardContent className="py-8"><Skeleton className="h-28 w-full" /></CardContent></Card>;
   }
 
-  const stripeConnected = tenant.stripe_mode === 'test'
-    ? !!tenant.own_stripe_test_account_id
-    : !!tenant.own_stripe_account_id;
+  // Matches the prompt + reward rule: the operator's task is connecting their
+  // LIVE account. (A test connection is rehearsal only and is shown separately
+  // in the Payments status card above.)
+  const stripeConnected = !!tenant.own_stripe_account_id;
   const paymentConfirmed = tenant.subscription_account === 'uae';
   const bothDone = stripeConnected && paymentConfirmed;
   // How long a soft prompt stays hidden after the operator dismissed it (24h).
@@ -252,10 +253,7 @@ export function OperatorPromptCard({ tenantId }: { tenantId: string }) {
                   <span className="flex items-center gap-1.5 text-green-600">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     <code className="text-xs">
-                      {(tenant.stripe_mode === 'test'
-                        ? tenant.own_stripe_test_account_id
-                        : tenant.own_stripe_account_id
-                      )?.slice(0, 16)}…
+                      {tenant.own_stripe_account_id?.slice(0, 16)}…
                     </code>
                   </span>
                 ) : (

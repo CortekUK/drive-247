@@ -72,9 +72,15 @@ export function useMigrationBlocker() {
   });
 
   // ── Derived task state ────────────────────────────────────────────────────
-  const mode = data?.stripe_mode ?? "test";
-  const connectedAccountId =
-    mode === "test" ? data?.own_stripe_test_account_id : data?.own_stripe_account_id;
+  // The migration prompt ALWAYS connects the operator's real (live) Stripe
+  // account, regardless of the tenant's current stripe_mode. Connecting is a
+  // one-time business action — the operator links the account they actually
+  // get paid into — so a tenant still in test mode would otherwise link a test
+  // account that never appears in the live dashboard and can't take real money.
+  // Test-mode connections remain possible, but only via the admin's explicit
+  // "Generate OAuth link (test)" button.
+  const OAUTH_MODE = "live" as const;
+  const connectedAccountId = data?.own_stripe_account_id;
   const stripeConnected = !!connectedAccountId;
   const paymentConfirmed = data?.subscription_account === "uae";
   const bothComplete = stripeConnected && paymentConfirmed;
@@ -149,7 +155,7 @@ export function useMigrationBlocker() {
         {
           body: {
             tenantId: data.id,
-            mode,
+            mode: OAUTH_MODE,
             returnTo: "portal",
             origin: window.location.origin,
           },
@@ -167,7 +173,7 @@ export function useMigrationBlocker() {
       });
       setConnectingStripe(false);
     }
-  }, [data?.id, mode]);
+  }, [data?.id]);
 
   const confirmPayment = useCallback(async () => {
     setConfirmingPayment(true);
@@ -230,7 +236,7 @@ export function useMigrationBlocker() {
     paymentConfirmed,
     bothComplete,
     connectedAccountId: connectedAccountId ?? null,
-    stripeMode: mode,
+    stripeMode: OAUTH_MODE,
     connectStripe,
     confirmPayment,
     dismiss,

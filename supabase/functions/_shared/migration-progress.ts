@@ -34,11 +34,17 @@ interface TenantProgressRow {
 const PROGRESS_COLUMNS =
   "id, company_name, slug, stripe_mode, payment_model, subscription_account, own_stripe_account_id, own_stripe_test_account_id, migration_reward_granted_at";
 
-/** Task 1 complete = an own Stripe account is connected for the tenant's mode. */
+/**
+ * Task 1 complete = the operator's LIVE Stripe account is connected.
+ *
+ * The migration prompt always runs OAuth in live mode (connecting the account
+ * they actually get paid into), regardless of the tenant's current stripe_mode
+ * — so completion is keyed off the live account only. A test connection made
+ * via the admin's explicit test link is for rehearsal and does not complete
+ * the operator's task or trigger the reward.
+ */
 export function isStripeConnected(t: Partial<TenantProgressRow>): boolean {
-  return t.stripe_mode === "test"
-    ? !!t.own_stripe_test_account_id
-    : !!t.own_stripe_account_id;
+  return !!t.own_stripe_account_id;
 }
 
 /** Task 2 complete = billing has moved to the new account. */
