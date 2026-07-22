@@ -98,20 +98,33 @@ Deno.serve(async (req) => {
 
     if (!tenantId) return errorResponse("tenantId is required");
 
-    // Auto-mirror: when no plan is given (operator self-serve), reuse the plan
-    // the tenant is already on so their price never changes during migration.
+    // Auto-mirror: when no plan is given (operator self-serve), reuse whatever
+    // the tenant is already paying so their price never changes on migration.
+    // Resolution order, most-authoritative first:
+    //   1. the plan their live subscription points at (if still active)
+    //   2. their single active configured plan
+    //   3. mirror the live subscription itself into a new plan row
+    // Step 3 matters: legacy subscriptions predate plan_id linking, and a plan
+    // can be deactivated — without it those tenants can't self-serve at all.
+    const explicitPlan = !!planId;
     if (!planId) {
       const { data: activeSub } = await supabase
         .from("tenant_subscriptions")
-        .select("plan_id")
+        .select("plan_id, plan_name, amount, currency, interval")
         .eq("tenant_id", tenantId)
         .in("status", ["active", "trialing", "past_due"])
         .maybeSingle();
-      planId = activeSub?.plan_id ?? null;
+
+      if (activeSub?.plan_id) {
+        const { data: linked } = await supabase
+          .from("subscription_plans")
+          .select("id, is_active")
+          .eq("id", activeSub.plan_id)
+          .maybeSingle();
+        if (linked?.is_active) planId = linked.id;
+      }
 
       if (!planId) {
-        // No live subscription to mirror — fall back to the tenant's single
-        // active configured plan, if unambiguous.
         const { data: plans } = await supabase
           .from("subscription_plans")
           .select("id")
@@ -119,6 +132,31 @@ Deno.serve(async (req) => {
           .eq("is_active", true);
         if (plans?.length === 1) planId = plans[0].id;
       }
+
+      if (!planId && activeSub?.amount) {
+        // Mirror the live subscription exactly. stripe_price_id is left null on
+        // purpose — the price-creation step below mints it on the UAE account.
+        const { data: mirrored, error: mirrorErr } = await supabase
+          .from("subscription_plans")
+          .insert({
+            tenant_id: tenantId,
+            name: activeSub.plan_name || "Subscription",
+            amount: activeSub.amount,
+            currency: (activeSub.currency || "usd").toLowerCase(),
+            interval: activeSub.interval || "month",
+            is_active: true,
+            description: "Mirrored from the tenant's active subscription during payment migration",
+          })
+          .select("id")
+          .single();
+        if (mirrorErr || !mirrored) {
+          console.error("Failed to mirror active subscription into a plan:", mirrorErr?.message);
+        } else {
+          planId = mirrored.id;
+          console.log(`Auto-mirrored active subscription into plan ${planId} for tenant ${tenantId}`);
+        }
+      }
+
       if (!planId) {
         return errorResponse(
           "Could not determine which plan to use for this tenant — a super admin must generate the link with an explicit plan.",
@@ -146,7 +184,9 @@ Deno.serve(async (req) => {
 
     if (planError || !plan) return errorResponse("Plan not found", 404);
     if (plan.tenant_id !== tenantId) return errorResponse("Plan does not belong to this tenant", 403);
-    if (!plan.is_active) return errorResponse("Plan is no longer active", 400);
+    // Only hard-fail on an inactive plan when an admin explicitly chose it —
+    // an auto-resolved plan is always active by construction above.
+    if (explicitPlan && !plan.is_active) return errorResponse("Plan is no longer active", 400);
 
     const mode = await getSubscriptionStripeMode(supabase, tenantId);
 
