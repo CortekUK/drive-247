@@ -123,8 +123,17 @@ Deno.serve(async (req) => {
     );
 
     const now = new Date().toISOString();
+    // Connecting the operator's REAL Stripe account is itself the go-live
+    // moment for payments: from here every booking settles directly into their
+    // account, so leaving them in test mode would only mean their customers
+    // can't actually pay. Flip stripe_mode to 'live' alongside storing the
+    // account. (Bonzah/e-sign keep their own modes and their own go-live.)
     const update = state.mode === 'live'
-      ? { own_stripe_account_id: connectedAccountId, own_stripe_connected_at: now }
+      ? {
+          own_stripe_account_id: connectedAccountId,
+          own_stripe_connected_at: now,
+          stripe_mode: 'live',
+        }
       : { own_stripe_test_account_id: connectedAccountId, own_stripe_test_connected_at: now };
 
     const { data: updatedRows, error: updateError } = await supabase
