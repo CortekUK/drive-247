@@ -123,13 +123,31 @@ export const useCMSPages = () => {
         updateQuery = updateQuery.eq("tenant_id", tenant.id);
       }
 
-      const { error } = await updateQuery;
+      // .select("id") is load-bearing. The demote-to-draft in
+      // use-cms-page-sections.ts is NOT tenant-filtered while this publish IS,
+      // so the write that takes a page off the live site has wider reach than
+      // the one that restores it. Without a row count, a publish that matched
+      // ZERO rows (e.g. the shared global row, whose tenant_id is NULL) returned
+      // error: null and still toasted "Your changes are now live on the
+      // website" — while the page stayed draft and the site never updated.
+      const { data: publishedRows, error } = await updateQuery.select("id");
 
       if (error) throw error;
+      if (!publishedRows || publishedRows.length === 0) {
+        throw new Error(
+          "This page could not be published for your account. Please contact support."
+        );
+      }
     },
     onSuccess: (_data, pageId) => {
       queryClient.invalidateQueries({ queryKey: ["cms-pages"] });
       queryClient.invalidateQueries({ queryKey: ["cms-versions"] });
+      // The editor screens render from ["cms-page", slug, tenantId] (useCMSPage),
+      // which was NOT invalidated here — so after a successful publish the badge
+      // still read "Draft" and the Publish button stayed enabled. That reads as
+      // "publishing didn't work", and users click it again or give up. Prefix
+      // invalidation covers every slug/tenant variant.
+      queryClient.invalidateQueries({ queryKey: ["cms-page"] });
       toast({
         title: "Page Published",
         description: "Your changes are now live on the website.",
@@ -271,12 +289,22 @@ export const useCMSPage = (slug: string) => {
         `)
         .eq("slug", slug);
 
-      // Filter by tenant if available
+      // Filter by tenant if available. Prefer the tenant's OWN row over the
+      // shared global (tenant_id IS NULL) one — same resolution getPageBySlug
+      // uses in use-cms-page-sections.ts, so the editor, the writer and the
+      // publisher can never disagree about which row is "the" page.
       if (tenant?.id) {
-        query = query.or(`tenant_id.eq.${tenant.id},tenant_id.is.null`);
+        query = query
+          .or(`tenant_id.eq.${tenant.id},tenant_id.is.null`)
+          .order("tenant_id", { ascending: false, nullsFirst: false });
       }
 
-      const { data, error } = await query.single();
+      // .limit(1).maybeSingle() rather than .single(): this filter can legitimately
+      // match TWO rows (the tenant's own AND the global fallback), and PostgREST
+      // reports that as PGRST116 — the same code as "no rows". So .single() made a
+      // perfectly healthy page render the dead-end "Site Settings page not found
+      // in CMS. Please run the SQL migration" card.
+      const { data, error } = await query.limit(1).maybeSingle();
 
       if (error) {
         if (error.code === "PGRST116") return null;

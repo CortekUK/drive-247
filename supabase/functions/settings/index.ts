@@ -221,6 +221,12 @@ serve(async (req) => {
       // 3. Validate required fields
       const validFields = [
         'company_name', 'timezone', 'currency_code', 'distance_unit', 'date_format',
+        // NOTE: dark_logo_url / auth_logo_url deliberately NOT listed here. This
+        // allowlist gates writes to `org_settings`, which only has `logo_url`
+        // (20251219083413_remote_schema.sql:4498) — adding them would send
+        // non-existent columns to PostgREST and fail the whole settings save.
+        // Those two columns live on `tenants` and are kept in step with
+        // logo_url by use-tenant-branding.ts, which writes `tenants` directly.
         'logo_url', 'reminder_due_today', 'reminder_overdue_1d',
         'reminder_overdue_multi', 'reminder_due_soon_2d', 'payment_mode',
         'tests_last_run_dashboard', 'tests_last_result_dashboard',

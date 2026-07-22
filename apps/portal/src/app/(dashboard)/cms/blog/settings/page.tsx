@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCMSPage } from "@/hooks/use-cms-pages";
+import { useCMSPage, useCMSPages } from "@/hooks/use-cms-pages";
 import { useCMSPageSections } from "@/hooks/use-cms-page-sections";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { SEOEditor } from "@/components/website-content/seo-editor";
@@ -23,7 +23,8 @@ export default function BlogSettingsPage() {
   const hasEditAccess = canEdit("cms");
 
   const { data: page, isLoading: pageLoading } = useCMSPage("blog");
-  const { updateSection, isUpdating } = useCMSPageSections("blog");
+  const { updateSectionAsync, isUpdating } = useCMSPageSections("blog");
+  const { publishPage } = useCMSPages();
 
   // Get section content helper
   const getSectionContent = <T,>(key: string, defaultVal: T): T => {
@@ -48,12 +49,34 @@ export default function BlogSettingsPage() {
     setHeroSubtitle(heroContent.subtitle || "");
   }, [heroContent.title, heroContent.subtitle]);
 
+  /**
+   * Save a blog-settings section without stranding the page off the live site.
+   *
+   * updateSection unconditionally demotes cms_pages.status to "draft"
+   * (use-cms-page-sections.ts), and the booking site only reads published pages.
+   * This screen has NO Publish button anywhere, so editing the blog hero or SEO
+   * once used to take the live /blog page's content off permanently, with no way
+   * to restore it from the portal at all. Re-publishing here closes that trap.
+   *
+   * A page that was already draft stays draft — never publish content the tenant
+   * did not choose to publish.
+   */
+  const saveSection = async (sectionKey: string, content: Record<string, any>) => {
+    const wasPublished = page?.status === "published";
+    // Publish the row actually written, not the rendered one — see the same
+    // note in cms/site-settings/page.tsx.
+    const savedPageId = await updateSectionAsync({ sectionKey, content });
+    if (wasPublished && savedPageId) {
+      publishPage(savedPageId);
+    }
+  };
+
   const handleSaveHero = () => {
-    updateSection({ sectionKey: "hero", content: { title: heroTitle, subtitle: heroSubtitle } });
+    saveSection("hero", { title: heroTitle, subtitle: heroSubtitle });
   };
 
   const handleSaveSEO = (data: SEOContent) => {
-    updateSection({ sectionKey: "seo", content: data });
+    saveSection("seo", data);
   };
 
   if (pageLoading) {

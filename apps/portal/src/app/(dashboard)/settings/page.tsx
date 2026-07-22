@@ -818,7 +818,14 @@ const Settings = () => {
               meta_description: form.meta_description,
               og_image_url: form.og_image_url,
               favicon_url: form.favicon_url || null,
-              logo_url: tenantBranding?.logo_url || null,
+              // logo_url deliberately NOT sent. The logo persists the instant it
+              // is uploaded (see the LogoUploadWithResize onLogoChange handler),
+              // so re-sending it here could only ever echo a cached value back —
+              // and `tenantBranding` falls back to a placeholder whose logo_url
+              // is ALWAYS null, because portal's TenantContext never selects
+              // logo_url. If the branding query errored, this passthrough wrote
+              // `logo_url: null` and silently wiped the tenant's logo on a save
+              // the user thought only changed a colour.
             };
             await updateTenantBranding(brandingData);
             await updateOrgBranding(brandingData);
@@ -1308,7 +1315,9 @@ const Settings = () => {
         meta_description: form.meta_description,
         og_image_url: form.og_image_url,
         favicon_url: form.favicon_url || null,
-        logo_url: tenantBranding?.logo_url || null,
+        // logo_url deliberately NOT sent — see the matching note on the
+        // unsaved-changes save above. The logo saves itself on upload; echoing
+        // a cached (possibly null) value back here could only clobber it.
       };
 
       console.log('Saving branding data:', brandingData);

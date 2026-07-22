@@ -195,14 +195,14 @@ export function LogoUploadWithResize({
     if (!currentLogoUrl) return;
 
     try {
-      // Extract file path from URL
-      const urlParts = currentLogoUrl.split('/');
-      const fileName = urlParts[urlParts.length - 1];
-
-      await supabase.storage
-        .from('company-logos')
-        .remove([fileName]);
-
+      // Deliberately does NOT delete the storage object.
+      //
+      // It used to, by bare filename at the bucket root — which (a) destroyed the
+      // image before the removal was ever saved, so abandoning the edit left the
+      // live site serving a 404, and (b) could delete a DIFFERENT tenant's file,
+      // because `company-logos` is shared and DELETE is granted bucket-wide to
+      // any authenticated user. Clearing the reference is reversible and cannot
+      // damage anyone else; an unreferenced object is cheap.
       onLogoChange('');
 
       toast({

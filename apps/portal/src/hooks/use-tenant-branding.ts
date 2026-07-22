@@ -218,9 +218,93 @@ export const useTenantBranding = () => {
 
       console.log(`[TenantBranding] Updating branding for tenant ${tenant.id}:`, updates);
 
+      // Keep the companion logo columns in step with logo_url.
+      //
+      // THE BUG THIS FIXES: onboarding stamps logo_url, dark_logo_url AND
+      // auth_logo_url with the same uploaded image, but every UPDATE path only
+      // ever wrote logo_url — no code anywhere in the product wrote the other
+      // two. Meanwhile the readers PREFER them: the portal login page reads
+      // auth_logo_url first, the sidebar reads dark_logo_url in dark mode, and
+      // booking's header/footer read dark_logo_url unconditionally. So changing
+      // your logo left most surfaces rendering the ORIGINAL image forever —
+      // "it still shows the previous one". It is a stale column, not a cache,
+      // which is why no refresh ever fixed it.
+      //
+      // Only columns that were still TRACKING logo_url (or were never set) get
+      // updated. A tenant who deliberately uploaded a distinct dark-mode logo
+      // keeps it — several live tenants have real ones, and blindly copying the
+      // light logo over them would be a different, worse bug.
+      const patch: Record<string, unknown> = { ...updates };
+
+      if (Object.prototype.hasOwnProperty.call(patch, 'logo_url')) {
+        // Read the current values fresh. The cached `branding` above has a 30s
+        // staleTime and placeholderData, and deciding whether a column was
+        // customised off a stale snapshot is exactly how real dark logos would
+        // get clobbered.
+        const { data: current, error: currentError } = await supabase
+          .from('tenants')
+          .select('logo_url, dark_logo_url, auth_logo_url')
+          .eq('id', tenant.id)
+          .single();
+
+        const cur = (currentError ? null : current) as {
+          logo_url?: string | null;
+          dark_logo_url?: string | null;
+          auth_logo_url?: string | null;
+        } | null;
+
+        // Skip the sync entirely if we could not read the current row. Without
+        // this guard `cur` is null, every column looks "unset" to tracksLogo,
+        // and we would happily overwrite a tenant's deliberate dark-mode logo
+        // on the strength of a failed SELECT. Not syncing is always recoverable
+        // (re-save the logo); destroying a custom asset is not.
+        // A caller that echoes the CURRENT logo back (a passthrough on an
+        // unrelated save) is not a logo change, so it must not touch the
+        // companion columns. Without this, any bulk save that happens to carry
+        // logo_url would drag dark/auth along with it — which is exactly how a
+        // colours-only save could have wiped three columns instead of none.
+        const logoUnchanged = cur ? patch.logo_url === cur.logo_url : false;
+
+        if (cur && !logoUnchanged) {
+          const nextLogo = patch.logo_url;
+          const tracksLogo = (value: string | null | undefined) =>
+            !value || value === cur.logo_url;
+
+          // Never override a value the caller passed explicitly — a future
+          // dark-logo uploader must win over this convenience sync.
+
+          // dark_logo_url is cleared, NOT copied. Every reader resolves it as
+          // `dark_logo_url || logo_url` (booking Navigation/Footer, brand-logo,
+          // useSiteSettings), so NULL renders the identical image while leaving
+          // exactly one source of truth. Copying the URL here would duplicate
+          // state that has to be re-synced on every future save — which is the
+          // very thing that produced this bug. A tenant with a real dark-mode
+          // asset never reaches this branch (tracksLogo is false for them).
+          if (
+            !Object.prototype.hasOwnProperty.call(patch, 'dark_logo_url') &&
+            tracksLogo(cur.dark_logo_url)
+          ) {
+            patch.dark_logo_url = null;
+          }
+          // auth_logo_url IS copied, deliberately unlike dark_logo_url above.
+          // The login page does not merely fall back on it — it branches its
+          // whole layout on it (login/page.tsx:313-320: a 256px logo on a black
+          // panel when set, a smaller treatment when not). Clearing it would
+          // silently restyle the first screen every staff member sees, so it
+          // keeps tracking logo_url until someone deliberately changes that
+          // design.
+          if (
+            !Object.prototype.hasOwnProperty.call(patch, 'auth_logo_url') &&
+            tracksLogo(cur.auth_logo_url)
+          ) {
+            patch.auth_logo_url = nextLogo;
+          }
+        }
+      }
+
       const { data, error } = await supabase
         .from('tenants')
-        .update(updates)
+        .update(patch)
         .eq('id', tenant.id)
         .select(`
           app_name,

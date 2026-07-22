@@ -102,7 +102,18 @@ export function SiteSettingsEditor({
             <LogoUploadWithResize
               currentLogoUrl={logoData.logo_url}
               logoAlt={logoData.logo_alt}
-              onLogoChange={(url) => setLogoData({ ...logoData, logo_url: url })}
+              onLogoChange={(url) => {
+                // Persist IMMEDIATELY, do not merely stage. The uploader has
+                // already told the user "Logo Uploaded ... successfully" and
+                // swapped the preview by this point, so leaving the value in
+                // local state meant a user who uploaded and navigated away lost
+                // it silently — which is exactly how a real logo upload was
+                // reported as "it's still using the default one". This also
+                // matches Settings -> Branding, where uploading IS saving.
+                const next = { ...logoData, logo_url: url };
+                setLogoData(next);
+                onSaveLogo(next);
+              }}
               onAltChange={(alt) => setLogoData({ ...logoData, logo_alt: alt })}
               label="Site Logo"
               description="Upload your logo (recommended: PNG with transparent background)"

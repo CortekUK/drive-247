@@ -21,7 +21,7 @@ export const useCMSPageSections = (pageSlug: string) => {
   const getPageBySlug = async () => {
     let query = supabase
       .from("cms_pages")
-      .select("id, tenant_id")
+      .select("id, tenant_id, name, description")
       .eq("slug", pageSlug);
 
     // Filter by tenant if available
@@ -31,7 +31,75 @@ export const useCMSPageSections = (pageSlug: string) => {
         .order("tenant_id", { ascending: false, nullsFirst: false });
     }
 
-    return query.limit(1).maybeSingle();
+    const result = await query.limit(1).maybeSingle();
+
+    // CROSS-TENANT GUARD. If the only row for this slug is the SHARED global one
+    // (tenant_id IS NULL), we must not write to it: that row is the fallback for
+    // every tenant that lacks its own, so one operator's edits would surface on
+    // other operators' sites. It is also unpublishable from here — publishPage
+    // filters `.eq("tenant_id", tenant.id)`, so publishing a global row matches
+    // zero rows, reports success, and the change never goes live. That silent
+    // dead end is exactly what a logo upload ran into.
+    //
+    // Give the tenant its own page instead, seeded with whatever the global row
+    // was showing them so nothing they were looking at disappears.
+    if (tenant?.id && result.data && result.data.tenant_id === null) {
+      const globalPageId = result.data.id;
+
+      const { data: created, error: createError } = await supabase
+        .from("cms_pages")
+        .insert({
+          slug: pageSlug,
+          name: result.data.name ?? pageSlug,
+          description: result.data.description ?? null,
+          status: "draft",
+          tenant_id: tenant.id,
+        })
+        .select("id, tenant_id, name, description")
+        .single();
+
+      // If we cannot create one (RLS, race with another tab), fall through to
+      // the original result rather than blocking the save outright — the
+      // pre-existing behaviour — but never silently prefer the global row when
+      // a tenant row now exists.
+      if (createError || !created) {
+        const { data: retry } = await supabase
+          .from("cms_pages")
+          .select("id, tenant_id, name, description")
+          .eq("slug", pageSlug)
+          .eq("tenant_id", tenant.id)
+          .limit(1)
+          .maybeSingle();
+        if (retry) return { data: retry, error: null };
+        return result;
+      }
+
+      // Copy the global page's sections across so the tenant starts from what
+      // they saw, not from an empty page.
+      const { data: globalSections } = await supabase
+        .from("cms_page_sections")
+        .select("section_key, content, is_visible, display_order")
+        .eq("page_id", globalPageId);
+
+      if (globalSections && globalSections.length > 0) {
+        await supabase.from("cms_page_sections").insert(
+          globalSections.map((s) => ({
+            page_id: created.id,
+            // cms_page_sections carries its own tenant_id; leaving it null on a
+            // tenant-owned page would recreate the very ambiguity being fixed.
+            tenant_id: tenant.id,
+            section_key: s.section_key,
+            content: s.content,
+            is_visible: s.is_visible ?? true,
+            display_order: s.display_order ?? 0,
+          }))
+        );
+      }
+
+      return { data: created, error: null };
+    }
+
+    return result;
   };
 
   // Update a single section

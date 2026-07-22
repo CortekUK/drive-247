@@ -162,13 +162,39 @@ export function SetupReminderDialog() {
 
       const { data } = supabase.storage.from("company-logos").getPublicUrl(path);
 
+      // Mirror the sync in use-tenant-branding.ts: the login page reads
+      // auth_logo_url first, the sidebar and booking's header read
+      // dark_logo_url, and nothing else in the product ever writes them — so
+      // updating logo_url alone leaves those surfaces on the OLD image forever.
+      // Only follow columns that were still tracking logo_url (or unset), so a
+      // deliberately different dark-mode logo survives.
+      const { data: current, error: currentError } = await supabase
+        .from("tenants")
+        .select("logo_url, dark_logo_url, auth_logo_url")
+        .eq("id", tenantId)
+        .single();
+
+      const logoPatch: Record<string, string | null> = { logo_url: data.publicUrl };
+      // Only sync when we actually read the row. On a failed SELECT every
+      // column would look unset and we'd overwrite a deliberate dark logo.
+      if (!currentError && current) {
+        const tracksLogo = (value: string | null | undefined) =>
+          !value || value === current.logo_url;
+        // dark_logo_url is CLEARED (readers fall back to logo_url, so one
+        // source of truth and no future drift); auth_logo_url is COPIED because
+        // the login page branches its layout on whether it is set. See the
+        // fuller explanation in use-tenant-branding.ts.
+        if (tracksLogo(current.dark_logo_url)) logoPatch.dark_logo_url = null;
+        if (tracksLogo(current.auth_logo_url)) logoPatch.auth_logo_url = data.publicUrl;
+      }
+
       // .select() is load-bearing: without it PostgREST answers 204 for an
       // UPDATE that matched ZERO rows, so an RLS refusal (tenants_update_own_or_super
       // filters rather than errors) would leave dbError null and we'd cheerfully
       // toast "Logo uploaded" while logo_url never changed.
       const { data: updated, error: dbError } = await supabase
         .from("tenants")
-        .update({ logo_url: data.publicUrl })
+        .update(logoPatch)
         .eq("id", tenantId)
         .select("id");
       if (dbError) throw dbError;

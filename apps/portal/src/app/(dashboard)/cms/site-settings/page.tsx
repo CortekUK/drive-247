@@ -2,8 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCMSPage, useCMSPages } from "@/hooks/use-cms-pages";
 import { useCMSPageSections } from "@/hooks/use-cms-page-sections";
+import { useTenant } from "@/contexts/TenantContext";
+import { syncTenantLogoColumns } from "@/lib/tenant-logo-sync";
+import { toast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,10 +44,43 @@ export default function CMSSiteSettingsEditor() {
   const router = useRouter();
   const { data: page, isLoading } = useCMSPage("site-settings");
   const { publishPage, isPublishing } = useCMSPages();
-  const { updateSection, isUpdating } = useCMSPageSections("site-settings");
+  const { updateSection, updateSectionAsync, isUpdating } = useCMSPageSections("site-settings");
+  const { tenant, refetchTenant } = useTenant();
+  const queryClient = useQueryClient();
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const { canEdit } = useManagerPermissions();
+
+  /**
+   * Save a section WITHOUT knocking the page off the live site.
+   *
+   * updateSection unconditionally demotes cms_pages.status to "draft"
+   * (use-cms-page-sections.ts), and the booking site only applies this page when
+   * it is published — so editing one field used to silently revert every other
+   * published field (footer tagline, copyright, formatted phone) until someone
+   * noticed the Draft badge and pressed Publish. Re-publishing here restores it.
+   *
+   * A page that was already a draft STAYS a draft: publishing content the tenant
+   * never chose to publish would be a worse bug than the one being fixed.
+   *
+   * Deliberately not fixed by removing the demotion from the shared hook —
+   * version snapshots are only written on publish, so saves must keep flowing
+   * through it or History/restore silently stops accumulating.
+   */
+  // `Record<string, any>` mirrors updateSection's own parameter type. `unknown`
+  // would reject the CMS content interfaces, which have no index signature.
+  const saveSection = async (sectionKey: string, content: Record<string, any>) => {
+    const wasPublished = page?.status === "published";
+    // Publish the row that was ACTUALLY written, not the one this component
+    // happens to be rendering. getPageBySlug may resolve (or newly create) a
+    // tenant-owned row that differs from `page`, and publishing the wrong id
+    // updates zero rows while still reporting success — leaving the row that
+    // holds the new content stuck in draft forever.
+    const savedPageId = await updateSectionAsync({ sectionKey, content });
+    if (wasPublished && savedPageId) {
+      publishPage(savedPageId);
+    }
+  };
 
   const handleResetToDefaults = async () => {
     setIsResetting(true);
@@ -211,10 +248,59 @@ export default function CMSSiteSettingsEditor() {
             contact={contactContent}
             social={socialContent}
             footer={footerContent}
-            onSaveLogo={(content) => updateSection({ sectionKey: "logo", content })}
-            onSaveContact={(content) => updateSection({ sectionKey: "contact", content })}
-            onSaveSocial={(content) => updateSection({ sectionKey: "social", content })}
-            onSaveFooter={(content) => updateSection({ sectionKey: "footer", content })}
+            onSaveLogo={async (content) => {
+              // Remember whether the page was LIVE before we write.
+              //
+              // updateSection unconditionally demotes the page to draft
+              // (use-cms-page-sections.ts:73). That is fine for a page that was
+              // already a draft, but on a published page it would take the whole
+              // site-settings override off the live site as a side effect of
+              // uploading a logo — the tenant's footer tagline and copyright
+              // would silently revert while they were only changing an image.
+              // Re-publishing below restores it. Deliberately NOT fixed by
+              // removing the demotion in the shared hook: version snapshots are
+              // only written on publish, so saves must keep going through it.
+              const wasPublished = page?.status === "published";
+
+              // Capture the row actually written — getPageBySlug may resolve or
+              // create a tenant-owned row different from the rendered `page`.
+              const savedPageId = await updateSectionAsync({ sectionKey: "logo", content });
+
+              // Write through to the tenants row as well.
+              //
+              // The CMS section alone is not enough to change the visible logo:
+              // the booking site only reads this page when it is PUBLISHED, and
+              // even then its header/footer resolve `dark_logo_url || logo_url`,
+              // so a stale dark column shadows the CMS value. Every other
+              // branded surface (portal sidebar, login, invoices, e-sign PDFs,
+              // emails, favicon) reads tenants.* and never looks at the CMS at
+              // all. Mirroring here is what makes uploading from this screen
+              // behave the same as uploading from Settings -> Branding.
+              if (tenant?.id && content.logo_url) {
+                const result = await syncTenantLogoColumns(tenant.id, content.logo_url);
+                if (result.ok) {
+                  queryClient.invalidateQueries({ queryKey: ["tenant-branding", tenant.id] });
+                  await refetchTenant();
+                } else {
+                  // The CMS section still saved; only the mirror failed. Say so
+                  // rather than letting the logo look updated everywhere.
+                  toast({
+                    title: "Logo saved, but not applied everywhere",
+                    description: `Your site content was saved, but the site-wide logo could not be updated (${result.reason}). Try Settings → Branding.`,
+                    variant: "destructive",
+                  });
+                }
+              }
+
+              // Put the page back live if it was live. A logo upload must never
+              // be the reason a tenant's published content disappears.
+              if (wasPublished && savedPageId) {
+                publishPage(savedPageId);
+              }
+            }}
+            onSaveContact={(content) => saveSection("contact", content)}
+            onSaveSocial={(content) => saveSection("social", content)}
+            onSaveFooter={(content) => saveSection("footer", content)}
             isSaving={isUpdating}
           />
           </div>
