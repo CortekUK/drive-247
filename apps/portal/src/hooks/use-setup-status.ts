@@ -32,7 +32,7 @@ export function useSetupStatus() {
       const { data, error } = await (supabase as any)
         .from("tenants")
         .select(
-          "stripe_account_id, stripe_onboarding_complete, stripe_account_status, stripe_mode, bonzah_mode, bonzah_username, integration_bonzah, setup_completed_at"
+          "stripe_account_id, stripe_onboarding_complete, stripe_account_status, stripe_mode, payment_model, own_stripe_account_id, own_stripe_test_account_id, bonzah_mode, bonzah_username, integration_bonzah, setup_completed_at"
         )
         .eq("id", tenant!.id)
         .single();
@@ -52,9 +52,21 @@ export function useSetupStatus() {
 
   const data = setupQuery.data;
 
+  // Own Stripe tenants connect their OWN account via OAuth — the legacy
+  // Express fields stay empty for them forever, so deriving readiness purely
+  // from those would show "Stripe Connect incomplete" to an operator who has
+  // already connected. Treat a connected own-account for the current mode as
+  // complete.
+  const d = data as (typeof data & {
+    payment_model?: string | null;
+    own_stripe_account_id?: string | null;
+    own_stripe_test_account_id?: string | null;
+  }) | undefined;
+  const ownAccountForMode =
+    d?.stripe_mode === "test" ? d?.own_stripe_test_account_id : d?.own_stripe_account_id;
   const stripeComplete =
-    !!data?.stripe_onboarding_complete &&
-    data?.stripe_account_status === "active";
+    !!ownAccountForMode ||
+    (!!data?.stripe_onboarding_complete && data?.stripe_account_status === "active");
   const bonzahComplete =
     (data?.bonzah_mode === 'test') || (!!data?.integration_bonzah && !!data?.bonzah_username);
 

@@ -31,7 +31,7 @@ export function StripeConnectSettings() {
 
       const { data: tenant, error: tenantError } = await supabase
         .from('tenants')
-        .select('id, stripe_account_id, stripe_onboarding_complete, stripe_account_status, stripe_mode, company_name, contact_email, payment_model')
+        .select('id, stripe_account_id, stripe_onboarding_complete, stripe_account_status, stripe_mode, company_name, contact_email, payment_model, own_stripe_account_id, own_stripe_test_account_id')
         .eq('id', tenantContext.id)
         .single();
 
@@ -118,7 +118,21 @@ export function StripeConnectSettings() {
 
   // Own Stripe tenants connect their own account via OAuth — completely
   // different flow from the managed Express onboarding below.
-  if ((tenantStatus as { payment_model?: string } | null)?.payment_model === 'own') {
+  //
+  // Show it as soon as an own account EXISTS for the tenant's current mode, not
+  // only once payment_model has been flipped: the operator connects first and
+  // the flip happens later, so gating purely on payment_model bounced them back
+  // to the legacy Express panel — reading "Onboarding Incomplete" about the OLD
+  // account they no longer use.
+  const ts = tenantStatus as {
+    payment_model?: string;
+    stripe_mode?: string;
+    own_stripe_account_id?: string | null;
+    own_stripe_test_account_id?: string | null;
+  } | null;
+  const ownAccountForMode =
+    ts?.stripe_mode === 'test' ? ts?.own_stripe_test_account_id : ts?.own_stripe_account_id;
+  if (ts?.payment_model === 'own' || !!ownAccountForMode) {
     return <OwnStripeSettings />;
   }
 
