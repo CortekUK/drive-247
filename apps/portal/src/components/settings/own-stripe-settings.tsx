@@ -69,7 +69,8 @@ export function OwnStripeSettings() {
   // account they get paid into, and only a live connection appears in the
   // platform's live dashboard. Test connections exist for rehearsals and are
   // created from the admin's explicit test link, not from here.
-  const mode = 'live' as const;
+  const mode = 'live' as const;              // OAuth always connects the real account
+  const tenantMode = status?.stripe_mode || 'test';  // what the tenant actually trades in
   const connectedAccountId = status?.own_stripe_account_id;
   const connectedAt = status?.own_stripe_connected_at;
 
@@ -109,8 +110,8 @@ export function OwnStripeSettings() {
         <CardTitle className="flex items-center gap-2">
           <Link2 className="h-5 w-5" /> Your Stripe Account
           <Badge variant="outline" className="ml-2 gap-1">
-            {mode === 'live' ? <Zap className="h-3 w-3" /> : <TestTube2 className="h-3 w-3" />}
-            {mode === 'live' ? 'Live' : 'Test'} mode
+            {tenantMode === 'live' ? <Zap className="h-3 w-3" /> : <TestTube2 className="h-3 w-3" />}
+            {tenantMode === 'live' ? 'Live' : 'Test'} mode
           </Badge>
         </CardTitle>
         <CardDescription>
