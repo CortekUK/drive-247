@@ -2,7 +2,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import {
   getSubscriptionStripeMode,
-  getTenantSubscriptionAccount,
   getSubscriptionStripeClientForAccount,
 } from "../_shared/subscription-stripe.ts";
 import { CREDIT_CONFIG } from "../_shared/credit-config.ts";
@@ -41,15 +40,16 @@ Deno.serve(async (req) => {
 
     const priceCents = Math.round(creditAmount * CREDIT_CONFIG.CREDIT_PRICE_USD * 100); // $0.20/credit
 
-    // Get tenant's Stripe mode + platform account (UK legacy vs UAE).
-    // Credits are platform billing — same account as subscriptions.
+    // Credits ALWAYS bill on the UAE account, for every tenant — regardless of
+    // where their subscription still bills. Credits are one-time purchases with
+    // no saved-card or renewal dependency, so they need no per-tenant migration.
     const mode = await getSubscriptionStripeMode(supabaseAdmin, tenantId);
-    const account = await getTenantSubscriptionAccount(supabaseAdmin, tenantId);
+    const account = "uae" as const;
     const stripe = getSubscriptionStripeClientForAccount(account, mode);
 
     const { data: tenant, error: tenantErr } = await supabaseAdmin
       .from("tenants")
-      .select("stripe_subscription_customer_id, company_name")
+      .select("stripe_subscription_customer_id, uae_customer_id, subscription_account, company_name")
       .eq("id", tenantId)
       .single();
     // Was previously selecting a non-existent column ("name"), which errored
@@ -60,13 +60,19 @@ Deno.serve(async (req) => {
       return errorResponse(`Tenant not found: ${tenantErr?.message ?? tenantId}`, 404);
     }
 
-    // Create or reuse Stripe customer. Customer IDs are account-specific:
-    // tenants.stripe_subscription_customer_id was originally created on the UK
-    // account, so for a migrated ('uae') tenant — or after a test→live mode
-    // switch — the stored ID may not exist on the target account. Verify it
-    // and create a fresh customer if not (same pattern as
-    // create-subscription-checkout).
-    let customerId = tenant?.stripe_subscription_customer_id;
+    // Stripe customers are account-scoped, so pick the id that belongs to the
+    // UAE account and NEVER clobber the other one:
+    //  - subscription already on UAE → stripe_subscription_customer_id is a UAE
+    //    customer, reuse it.
+    //  - subscription still on the legacy account → that column must stay
+    //    untouched (the subscription webhook resolves legacy invoices with it),
+    //    so credits use their own uae_customer_id.
+    const subsOnUae = tenant.subscription_account === "uae";
+    const customerColumn = subsOnUae ? "stripe_subscription_customer_id" : "uae_customer_id";
+    let customerId = subsOnUae
+      ? tenant.stripe_subscription_customer_id
+      : tenant.uae_customer_id;
+
     if (customerId) {
       try {
         const existing = await stripe.customers.retrieve(customerId);
@@ -82,12 +88,12 @@ Deno.serve(async (req) => {
       const customer = await stripe.customers.create({
         email: user.email,
         name: tenant?.company_name || undefined,
-        metadata: { tenant_id: tenantId },
+        metadata: { tenant_id: tenantId, purpose: "credits" },
       });
       customerId = customer.id;
       await supabaseAdmin
         .from("tenants")
-        .update({ stripe_subscription_customer_id: customerId })
+        .update({ [customerColumn]: customerId })
         .eq("id", tenantId);
     }
 

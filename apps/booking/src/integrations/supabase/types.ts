@@ -14062,10 +14062,15 @@ export type Database = {
           slug: string
           stack_surcharges: boolean
           status: string
+          stripe_account_disabled_reason: string | null
           stripe_account_id: string | null
           stripe_account_status: string | null
+          stripe_charges_enabled: boolean | null
           stripe_mode: string
           stripe_onboarding_complete: boolean | null
+          stripe_payouts_enabled: boolean | null
+          stripe_requirements_due: Json | null
+          stripe_status_synced_at: string | null
           stripe_subscription_customer_id: string | null
           subscription_account: string
           subscription_billing_anchor: string | null
@@ -14104,6 +14109,7 @@ export type Database = {
           twilio_whatsapp_lockbox_template_sid: string | null
           twilio_whatsapp_number: string | null
           twitter_url: string | null
+          uae_customer_id: string | null
           updated_at: string | null
           vehicle_owners_enabled: boolean
           verification_document_type: string
@@ -14290,10 +14296,15 @@ export type Database = {
           slug: string
           stack_surcharges?: boolean
           status?: string
+          stripe_account_disabled_reason?: string | null
           stripe_account_id?: string | null
           stripe_account_status?: string | null
+          stripe_charges_enabled?: boolean | null
           stripe_mode?: string
           stripe_onboarding_complete?: boolean | null
+          stripe_payouts_enabled?: boolean | null
+          stripe_requirements_due?: Json | null
+          stripe_status_synced_at?: string | null
           stripe_subscription_customer_id?: string | null
           subscription_account?: string
           subscription_billing_anchor?: string | null
@@ -14332,6 +14343,7 @@ export type Database = {
           twilio_whatsapp_lockbox_template_sid?: string | null
           twilio_whatsapp_number?: string | null
           twitter_url?: string | null
+          uae_customer_id?: string | null
           updated_at?: string | null
           vehicle_owners_enabled?: boolean
           verification_document_type?: string
@@ -14518,10 +14530,15 @@ export type Database = {
           slug?: string
           stack_surcharges?: boolean
           status?: string
+          stripe_account_disabled_reason?: string | null
           stripe_account_id?: string | null
           stripe_account_status?: string | null
+          stripe_charges_enabled?: boolean | null
           stripe_mode?: string
           stripe_onboarding_complete?: boolean | null
+          stripe_payouts_enabled?: boolean | null
+          stripe_requirements_due?: Json | null
+          stripe_status_synced_at?: string | null
           stripe_subscription_customer_id?: string | null
           subscription_account?: string
           subscription_billing_anchor?: string | null
@@ -14560,6 +14577,7 @@ export type Database = {
           twilio_whatsapp_lockbox_template_sid?: string | null
           twilio_whatsapp_number?: string | null
           twitter_url?: string | null
+          uae_customer_id?: string | null
           updated_at?: string | null
           vehicle_owners_enabled?: boolean
           verification_document_type?: string

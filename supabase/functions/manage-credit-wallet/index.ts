@@ -3,6 +3,7 @@ import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import {
   getSubscriptionStripeClient,
   getSubscriptionStripeMode,
+  getSubscriptionStripeClientForAccount,
 } from "../_shared/subscription-stripe.ts";
 import { CREDIT_CONFIG } from "../_shared/credit-config.ts";
 
@@ -144,21 +145,30 @@ Deno.serve(async (req) => {
         if (wallet.balance > wallet.auto_refill_threshold)
           return jsonResponse({ skipped: true, reason: "balance above threshold" });
 
-        // Get Stripe mode and client
+        // Credits (purchases AND auto-refill) always bill on the UAE account,
+        // so the saved card must be looked up on that same account — using the
+        // legacy client here would look for a customer/card that doesn't exist
+        // there. Mirrors the customer resolution in create-credit-checkout.
         const mode = await getSubscriptionStripeMode(supabaseAdmin, tenantId);
-        const stripe = getSubscriptionStripeClient(mode);
+        const stripe = getSubscriptionStripeClientForAccount("uae", mode);
 
-        // Need a saved payment method
         const { data: tenant } = await supabaseAdmin
           .from("tenants")
-          .select("stripe_subscription_customer_id")
+          .select("stripe_subscription_customer_id, uae_customer_id, subscription_account")
           .eq("id", tenantId)
           .single();
 
-        if (!tenant?.stripe_subscription_customer_id)
-          return errorResponse("No Stripe customer for auto-refill");
+        // Subscription already on UAE → its customer IS the UAE customer.
+        // Otherwise credits use the dedicated uae_customer_id.
+        const customerId =
+          tenant?.subscription_account === "uae"
+            ? tenant?.stripe_subscription_customer_id
+            : tenant?.uae_customer_id;
 
-        const customerId = tenant.stripe_subscription_customer_id;
+        if (!customerId)
+          return errorResponse(
+            "No Stripe customer on the credits account for auto-refill — the tenant must buy credits once first."
+          );
 
         // Get default payment method
         const customer = await stripe.customers.retrieve(customerId) as any;
