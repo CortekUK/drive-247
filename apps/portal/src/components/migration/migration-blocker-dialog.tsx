@@ -5,27 +5,24 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useMigrationBlocker } from "@/hooks/use-migration-blocker";
 import {
   Check,
   CheckCircle2,
-  Circle,
   CreditCard,
   Link2,
   Loader2,
-  ShieldAlert,
+  Sparkles,
   X,
 } from "lucide-react";
 
 const BENEFITS = [
-  "Customer payments land straight in your own account",
-  "Full Stripe Dashboard — every payout and fee visible",
+  "Payments land straight in your own account",
+  "Full Stripe Dashboard — payouts and fees visible",
   "You control your payout schedule and bank details",
   "Faster access to your money",
 ];
@@ -33,73 +30,70 @@ const BENEFITS = [
 /** How long the "You're all set" confirmation lingers before the modal closes. */
 const SUCCESS_LINGER_MS = 6000;
 
-interface TaskRowProps {
+/**
+ * Everything here is deliberately light-mode only (no `dark:` variants and
+ * explicit colours rather than theme tokens): this prompt must look identical
+ * and friendly for every operator regardless of their theme.
+ */
+
+interface TaskCardProps {
+  step: number;
   title: string;
   done: boolean;
   doneLabel?: string | null;
   actionLabel: string;
-  actionIcon: React.ReactNode;
+  icon: React.ReactNode;
   loading: boolean;
   onAction: () => void;
 }
 
-function TaskRow({
+function TaskCard({
+  step,
   title,
   done,
   doneLabel,
   actionLabel,
-  actionIcon,
+  icon,
   loading,
   onAction,
-}: TaskRowProps) {
+}: TaskCardProps) {
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 rounded-lg border p-3 transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-4",
-        done
-          ? "border-green-200 bg-green-50/60 dark:border-green-900/50 dark:bg-green-950/20"
-          : "border-[#f1f5f9] bg-white dark:border-border dark:bg-card",
+        "flex flex-col rounded-2xl border p-4 transition-colors",
+        done ? "border-emerald-200 bg-emerald-50/70" : "border-slate-200 bg-white",
       )}
     >
-      <div className="flex min-w-0 items-start gap-3">
-        <span aria-hidden="true" className="mt-0.5 shrink-0">
-          {done ? (
-            <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-500" />
-          ) : (
-            <Circle className="h-5 w-5 text-muted-foreground/50" />
+      <div className="mb-3 flex items-center gap-2.5">
+        <span
+          aria-hidden="true"
+          className={cn(
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+            done ? "bg-emerald-500 text-white" : "bg-indigo-100 text-indigo-600",
           )}
+        >
+          {done ? <Check className="h-4 w-4" /> : step}
         </span>
-        <div className="min-w-0">
-          <p
-            className={cn(
-              "text-sm font-medium leading-snug",
-              done
-                ? "text-green-800 dark:text-green-300"
-                : "text-foreground",
-            )}
-          >
-            {title}
-          </p>
-          {done && doneLabel ? (
-            <p className="mt-1 truncate text-xs text-muted-foreground">
-              <code className="text-[11px]">{doneLabel}</code>
-            </p>
-          ) : null}
-        </div>
+        <p
+          className={cn(
+            "text-sm font-semibold leading-snug",
+            done ? "text-emerald-900" : "text-slate-900",
+          )}
+        >
+          {title}
+        </p>
       </div>
 
       {done ? (
-        <Badge
-          variant="outline"
-          className="shrink-0 self-start border-green-300 bg-white text-green-700 dark:border-green-900 dark:bg-transparent dark:text-green-400 sm:self-center"
-        >
-          <Check className="mr-1 h-3 w-3" aria-hidden="true" /> Connected
-        </Badge>
+        <p className="mt-auto flex min-h-[2.75rem] items-center text-xs font-medium text-emerald-700">
+          <CheckCircle2 className="mr-1.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="truncate">{doneLabel ? doneLabel : "All done"}</span>
+        </p>
       ) : (
         <Button
           onClick={onAction}
           disabled={loading}
-          className="min-h-11 w-full shrink-0 bg-[#6366f1] text-white hover:bg-[#4f46e5] sm:w-auto"
+          className="mt-auto min-h-11 w-full rounded-xl bg-indigo-600 text-white shadow-sm hover:bg-indigo-700"
         >
           {loading ? (
             <>
@@ -109,7 +103,7 @@ function TaskRow({
           ) : (
             <>
               <span className="mr-2 inline-flex" aria-hidden="true">
-                {actionIcon}
+                {icon}
               </span>
               {actionLabel}
             </>
@@ -123,11 +117,11 @@ function TaskRow({
 /**
  * Operator-facing migration prompt. ONE component, two variants off `state`:
  *
- *   soft — dismissible reminder (X and "Remind me later" both record a dismissal,
- *          which suppresses it for 24h).
- *   hard — full-screen, genuinely inescapable: no close button, `onOpenChange`
- *          is a no-op and Esc / outside-click are both prevented. The only exit
- *          is completing both tasks (the hook then reports `state === 'off'`).
+ *   soft — dismissible (X and "Remind me later" both record a dismissal, which
+ *          suppresses it for 24h).
+ *   hard — genuinely inescapable: no close button, `onOpenChange` is a no-op and
+ *          Esc / outside-click are prevented. The only exit is completing both
+ *          tasks (the hook then reports `state === 'off'`).
  */
 export function MigrationBlockerDialog() {
   const {
@@ -147,8 +141,6 @@ export function MigrationBlockerDialog() {
   const isHard = state === "hard";
   const isSoft = state === "soft";
 
-  // If the tasks complete while the modal is open, hold it open briefly on a
-  // success screen rather than yanking it away the instant `state` flips off.
   const wasOpenRef = useRef(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -169,8 +161,8 @@ export function MigrationBlockerDialog() {
   if (!open) return null;
 
   const truncatedAccount = connectedAccountId
-    ? connectedAccountId.length > 18
-      ? `${connectedAccountId.slice(0, 12)}…${connectedAccountId.slice(-4)}`
+    ? connectedAccountId.length > 20
+      ? `${connectedAccountId.slice(0, 14)}…${connectedAccountId.slice(-4)}`
       : connectedAccountId
     : null;
 
@@ -178,22 +170,18 @@ export function MigrationBlockerDialog() {
   if (showSuccess) {
     return (
       <Dialog open onOpenChange={() => setShowSuccess(false)}>
-        <DialogContent className="max-h-[90dvh] w-[calc(100vw-2rem)] max-w-md overflow-y-auto rounded-lg p-6 [&>button:last-child]:hidden">
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-3xl border-slate-200 !bg-white p-7 text-slate-900 [&>button:last-child]:hidden">
           <div className="flex flex-col items-center text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100 dark:bg-green-950/40">
-              <CheckCircle2
-                className="h-7 w-7 text-green-600 dark:text-green-500"
-                aria-hidden="true"
-              />
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+              <CheckCircle2 className="h-8 w-8 text-emerald-600" aria-hidden="true" />
             </div>
-            <DialogTitle className="text-xl font-medium">
-              You&apos;re all set
+            <DialogTitle className="text-xl font-semibold text-slate-900">
+              You&apos;re all set 🎉
             </DialogTitle>
-            <DialogDescription className="mt-2 text-sm leading-relaxed">
-              Your Stripe account is connected and your payment details are
-              confirmed.
+            <DialogDescription className="mt-2 text-sm leading-relaxed text-slate-600">
+              Your Stripe account is connected and your payment details are confirmed.
             </DialogDescription>
-            <p className="mt-4 w-full rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
+            <p className="mt-5 w-full rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
               🎁 100 credits have been added to your balance.
             </p>
           </div>
@@ -202,63 +190,113 @@ export function MigrationBlockerDialog() {
     );
   }
 
-  // ── Soft / Hard ───────────────────────────────────────────────────────────
-  const body = (
+  // ── Shared card body (fits without scrolling) ─────────────────────────────
+  const card = (
     <>
-      <p className="text-sm leading-relaxed text-muted-foreground">
-        Stripe now requires rental platforms in our region to settle payments
-        through a Stripe account that you own and control directly — rather than
-        one managed on your behalf.
+      {/* Friendly header */}
+      <div className="flex items-start gap-3.5 pr-10">
+        <span
+          aria-hidden="true"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow-sm"
+        >
+          <Sparkles className="h-5 w-5 text-white" />
+        </span>
+        <div className="min-w-0">
+          <DialogTitle className="text-lg font-semibold leading-tight tracking-tight text-slate-900 sm:text-xl">
+            {isHard ? "Action required" : "Payment upgrade — action needed"}
+          </DialogTitle>
+          <DialogDescription className="mt-1 text-sm text-slate-500">
+            {isHard
+              ? "Complete your payment setup to continue"
+              : "Takes about 3 minutes"}
+          </DialogDescription>
+        </div>
+      </div>
+
+      <p className="mt-4 text-sm leading-relaxed text-slate-600">
+        Stripe now requires rental platforms in our region to settle payments through a
+        Stripe account that you own and control directly — rather than one managed on
+        your behalf.
       </p>
 
-      <ul className="mt-4 space-y-2.5">
+      {/* Benefits — 2×2 grid keeps it compact */}
+      <div className="mt-4 grid gap-x-5 gap-y-2.5 rounded-2xl bg-indigo-50/60 p-4 sm:grid-cols-2">
         {BENEFITS.map((b) => (
-          <li key={b} className="flex items-start gap-2.5">
+          <div key={b} className="flex items-start gap-2.5">
             <span
               aria-hidden="true"
-              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#e0e7ff] dark:bg-[#6366f1]/20"
+              className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-600"
             >
-              <Check className="h-3 w-3 text-[#6366f1]" />
+              <Check className="h-2.5 w-2.5 text-white" strokeWidth={3.5} />
             </span>
-            <span className="text-sm leading-snug text-foreground/90">{b}</span>
-          </li>
+            <span className="text-[13px] leading-snug text-slate-700">{b}</span>
+          </div>
         ))}
-      </ul>
+      </div>
 
-      <p className="mt-5 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-4 py-3 text-sm font-medium text-foreground dark:border-border dark:bg-muted/30">
-        {isHard
-          ? "This takes about 3 minutes. Complete both steps to restore full access to your dashboard."
-          : "Complete both steps below to keep your payments running without interruption."}
-      </p>
-
-      <div className="mt-5 space-y-3">
-        <TaskRow
+      {/* Tasks — side by side on desktop, stacked on mobile */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <TaskCard
+          step={1}
           title="Connect your Stripe account"
           done={stripeConnected}
           doneLabel={truncatedAccount}
           actionLabel="Connect with Stripe"
-          actionIcon={<Link2 className="h-4 w-4" />}
+          icon={<Link2 className="h-4 w-4" />}
           loading={connectingStripe}
           onAction={connectStripe}
         />
-        <TaskRow
+        <TaskCard
+          step={2}
           title="Confirm your payment details"
           done={paymentConfirmed}
           doneLabel={null}
           actionLabel="Confirm details"
-          actionIcon={<CreditCard className="h-4 w-4" />}
+          icon={<CreditCard className="h-4 w-4" />}
           loading={confirmingPayment}
           onAction={confirmPayment}
         />
       </div>
 
-      <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium leading-snug text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
-        🎁 Complete both and we&apos;ll add 100 free credits to your account — on
-        us.
-      </p>
+      {/* Reward + dismiss on one line — keeps everything above the fold */}
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="rounded-2xl bg-amber-50 px-4 py-2.5 text-[13px] font-medium leading-snug text-amber-900">
+          🎁 Complete both and we&apos;ll add{" "}
+          <span className="font-semibold">100 free credits</span> to your account — on us.
+        </p>
+        {!isHard && (
+          <Button
+            variant="ghost"
+            onClick={dismiss}
+            disabled={dismissing}
+            className="min-h-11 shrink-0 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+          >
+            {dismissing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : null}
+            Remind me later
+          </Button>
+        )}
+      </div>
+
+      {isHard && (
+        <p className="mt-4 border-t border-slate-100 pt-4 text-[13px] text-slate-500">
+          Need a hand?{" "}
+          <a
+            href="mailto:support@drive-247.com"
+            className="font-medium text-indigo-600 underline-offset-4 hover:underline"
+          >
+            support@drive-247.com
+          </a>
+        </p>
+      )}
     </>
   );
 
+  const contentClasses =
+    "w-[calc(100vw-1.5rem)] max-w-2xl rounded-3xl border-slate-200 !bg-white p-5 text-slate-900 shadow-xl sm:p-7 max-h-[92dvh] overflow-y-auto [&>button:last-child]:hidden";
+
+  // ── Hard: inescapable ─────────────────────────────────────────────────────
   if (isHard) {
     return (
       <Dialog open onOpenChange={() => undefined}>
@@ -266,47 +304,15 @@ export function MigrationBlockerDialog() {
           onEscapeKeyDown={(e) => e.preventDefault()}
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
-          className={cn(
-            // Full-screen on every breakpoint — this is a hard block, not a modal.
-            "left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-y-auto rounded-none border-0 p-0 shadow-none sm:rounded-none",
-            // No close affordance at all.
-            "[&>button:last-child]:hidden",
-          )}
+          className={contentClasses}
         >
-          <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-8 sm:py-14">
-            <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-[#e0e7ff] dark:bg-[#6366f1]/20">
-              <ShieldAlert
-                className="h-6 w-6 text-[#6366f1]"
-                aria-hidden="true"
-              />
-            </div>
-            <DialogHeader className="space-y-2 text-left sm:text-left">
-              <DialogTitle className="text-2xl font-medium tracking-tight sm:text-3xl">
-                Action required
-              </DialogTitle>
-              <DialogDescription className="text-base">
-                Complete your payment setup to continue
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="mt-6">{body}</div>
-
-            <p className="mt-8 border-t border-[#f1f5f9] pt-5 text-sm text-muted-foreground dark:border-border">
-              Need a hand?{" "}
-              <a
-                href="mailto:support@drive-247.com"
-                className="font-medium text-[#6366f1] underline-offset-4 hover:underline"
-              >
-                support@drive-247.com
-              </a>
-            </p>
-          </div>
+          {card}
         </DialogContent>
       </Dialog>
     );
   }
 
-  // Soft — dismissible.
+  // ── Soft: dismissible (X always visible, pinned to the card) ───────────────
   return (
     <Dialog
       open
@@ -314,44 +320,16 @@ export function MigrationBlockerDialog() {
         if (!next) dismiss();
       }}
     >
-      <DialogContent className="max-h-[90dvh] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto rounded-lg p-5 sm:p-6 [&>button:last-child]:hidden">
+      <DialogContent className={contentClasses}>
         <button
           type="button"
           onClick={dismiss}
           aria-label="Remind me later"
-          className="absolute right-4 top-4 rounded-sm text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:ring-offset-2"
+          className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
-
-        <DialogHeader className="space-y-2 pr-8 text-left sm:text-left">
-          <DialogTitle className="text-xl font-medium tracking-tight">
-            Payment upgrade — action needed
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            Connect your own Stripe account and confirm your payment details.
-          </DialogDescription>
-        </DialogHeader>
-
-        {body}
-
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button
-            variant="ghost"
-            onClick={dismiss}
-            disabled={dismissing}
-            className="min-h-11 w-full text-muted-foreground sm:w-auto"
-          >
-            {dismissing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                Remind me later
-              </>
-            ) : (
-              "Remind me later"
-            )}
-          </Button>
-        </div>
+        {card}
       </DialogContent>
     </Dialog>
   );
