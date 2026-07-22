@@ -327,7 +327,13 @@ export function getWebhookSecretCandidates(mode: StripeMode): string[] {
     Deno.env.get(mode === 'live' ? 'STRIPE_UAE_LIVE_WEBHOOK_SECRET' : 'STRIPE_UAE_TEST_WEBHOOK_SECRET'),
     // Belt-and-suspenders: own-tenant direct charges produce connected-account
     // events; whichever UAE endpoint they land on, its secret verifies here.
-    Deno.env.get(mode === 'live' ? 'STRIPE_LIVE_CONNECT_WEBHOOK_SECRET' : ''),
+    // Only a LIVE connect secret exists. This must be spread in conditionally
+    // rather than selected with a ternary: Deno.env.get('') throws
+    // "TypeError: Key is an empty string", and it throws while the array literal
+    // is being built — before .filter() can discard it. A ternary falling back to
+    // '' therefore takes down every TEST-mode webhook event with an HTTP 500
+    // instead of yielding one fewer candidate secret.
+    ...(mode === 'live' ? [Deno.env.get('STRIPE_LIVE_CONNECT_WEBHOOK_SECRET')] : []),
     Deno.env.get('STRIPE_UAE_CONNECT_WEBHOOK_SECRET'),
   ].filter((s): s is string => !!s);
 }
