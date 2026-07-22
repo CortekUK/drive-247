@@ -11,6 +11,7 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useSubscriptionGateDisabled } from "@/hooks/use-subscription-gate-disabled";
 import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
 import { SetupReminderDialog } from "@/components/dashboard/setup-reminder-dialog";
+import { MigrationBlockerDialog } from "@/components/migration/migration-blocker-dialog";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { HeaderSearch } from "@/components/shared/layout/header-search";
 import { UserMenu } from "@/components/shared/layout/user-menu";
@@ -295,6 +296,14 @@ export default function DashboardLayout({
             Self-gates on `isSubscribed`, so it never shows while the hard
             paywall above is up. */}
         <SetupReminderDialog />
+
+        {/* Stripe migration prompt — soft reminder or hard full-screen block,
+            driven entirely by `tenants.migration_blocker` + the two derived
+            operator tasks. Self-gates (renders nothing when `state === 'off'`)
+            and auto-hides the moment both tasks are complete. Mounted last so
+            it sits above the dashboard; the subscription paywall above still
+            renders on top when both happen to be up. */}
+        <MigrationBlockerDialog />
       </SidebarProvider>
     </DynamicThemeProvider>
   );

@@ -31,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { OperatorPromptCard } from './operator-prompt-card';
 import {
   Copy,
   RefreshCw,
@@ -635,6 +636,9 @@ export function TenantPaymentsTab({ tenantId }: { tenantId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* What the operator is prompted with (off by default) */}
+      <OperatorPromptCard tenantId={tenantId} />
 
       <Separator />
       <p className="text-xs text-muted-foreground">

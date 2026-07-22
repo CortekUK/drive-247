@@ -1,6 +1,7 @@
 import { jsonResponse, errorResponse } from "../_shared/cors.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { onMigrationTaskComplete } from "../_shared/migration-progress.ts";
 import {
   getSubscriptionStripeClientForAccount,
   getSubscriptionWebhookSecretCandidates,
@@ -172,6 +173,10 @@ async function handleCheckoutCompleted(
     }
   }
 
+  // Set when this checkout completes the operator's "confirm payment details"
+  // migration task, so we notify + reward once the tenant row is updated.
+  let migrationPaymentCaptured = false;
+
   let resolvedPlanName = planName || "pro";
   if (planId) {
     const { data: plan } = await supabase
@@ -227,6 +232,7 @@ async function handleCheckoutCompleted(
   };
   if (isUaeMigration) {
     tenantUpdate.subscription_account = "uae";
+    migrationPaymentCaptured = true;
     console.log(`UAE migration complete for tenant ${tenantId} — subscription now bills on the UAE account`);
   } else if (subscription.status === "trialing") {
     tenantUpdate.stripe_mode = "test";
@@ -276,6 +282,41 @@ async function handleCheckoutCompleted(
     } catch (refundErr) {
       console.warn(`Failed to auto-refund verification charge for tenant ${tenantId}:`, refundErr.message);
     }
+  }
+
+  // Silently attach the metered e-sign usage price to the subscription. It is
+  // deliberately kept OFF the Checkout page (it renders as a confusing duplicate
+  // "Drive247 Platform Subscription" row), so we add it here after the fact.
+  // Per-signature billing (report-usage-event → Stripe meter) needs this price on
+  // the subscription to actually bill. Non-fatal: a failure here must never block
+  // the subscription setup or the $1 refund above — worst case, e-sign usage is
+  // uncharged until re-synced, which we surface with an error log. Idempotent on
+  // Stripe retries via the existing-item guard (the price only ever appears once).
+  const meteredPriceId = session.metadata?.esign_metered_price_id;
+  if (meteredPriceId) {
+    try {
+      const alreadyAttached = subscription.items.data.some(
+        (i: any) => i.price?.id === meteredPriceId
+      );
+      if (!alreadyAttached) {
+        await stripe.subscriptionItems.create({
+          subscription: subscription.id,
+          price: meteredPriceId,
+          proration_behavior: "none",
+        });
+        console.log(`Attached metered e-sign price ${meteredPriceId} to subscription ${subscription.id} for tenant ${tenantId}`);
+      }
+    } catch (meterErr) {
+      console.error(`Failed to attach metered e-sign price to subscription ${subscription.id} for tenant ${tenantId}:`, (meterErr as any)?.message ?? meterErr);
+    }
+  }
+
+  // Task 2 done: notify the admin and grant the 100-credit reward if the
+  // operator has now completed both migration steps. Best-effort by design —
+  // it must never fail the webhook (which would trigger a Stripe retry of an
+  // already-successful subscription setup).
+  if (migrationPaymentCaptured) {
+    await onMigrationTaskComplete(supabase, tenantId, "payment");
   }
 
   console.log(`Subscription ${subscription.id} activated for tenant ${tenantId}, plan: ${resolvedPlanName}`);

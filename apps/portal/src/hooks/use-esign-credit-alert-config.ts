@@ -8,7 +8,7 @@ import { useTenant } from '@/contexts/TenantContext';
  * Mirrors the Bonzah low-balance alert-config pattern (use-bonzah-alert-config):
  * the threshold + enabled flag live in `reminder_config`
  * (config_key = 'esign_low_credit'). The alert itself is raised reactively by the
- * esign API route (see apps/*/src/lib/esign-credit-alert.ts) after each credit
+ * esign API route (see apps/<app>/src/lib/esign-credit-alert.ts) after each credit
  * deduction — this hook only reads/writes the tunable config.
  *
  * `threshold` is expressed in credits. When unset, the route defaults to

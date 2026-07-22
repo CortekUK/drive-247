@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       _orphaned_data_audit: {
@@ -657,6 +682,7 @@ export type Database = {
           is_active: boolean
           is_bonzah_partner: boolean
           is_primary_super_admin: boolean | null
+          is_sales_agent: boolean
           is_super_admin: boolean | null
           must_change_password: boolean
           name: string | null
@@ -674,6 +700,7 @@ export type Database = {
           is_active?: boolean
           is_bonzah_partner?: boolean
           is_primary_super_admin?: boolean | null
+          is_sales_agent?: boolean
           is_super_admin?: boolean | null
           must_change_password?: boolean
           name?: string | null
@@ -691,6 +718,7 @@ export type Database = {
           is_active?: boolean
           is_bonzah_partner?: boolean
           is_primary_super_admin?: boolean | null
+          is_sales_agent?: boolean
           is_super_admin?: boolean | null
           must_change_password?: boolean
           name?: string | null
@@ -12655,6 +12683,128 @@ export type Database = {
           },
         ]
       }
+      sales_onboarding_submissions: {
+        Row: {
+          booking_url: string | null
+          business_colours: string | null
+          business_email: string | null
+          business_name: string | null
+          business_phone: string | null
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          extracted_colors: Json | null
+          first_name: string | null
+          fleet_size: string | null
+          generated_email: string | null
+          has_meta_ad_account: boolean | null
+          id: string
+          location: string | null
+          logo_url: string | null
+          meta_daily_budget: string | null
+          operating_hours: string | null
+          other_info: string | null
+          portal_url: string | null
+          slug: string | null
+          status: string
+          subscription_amount: number | null
+          subscription_currency: string | null
+          tenant_id: string | null
+          updated_at: string
+          vehicle_type: string | null
+          wants_marketing: boolean | null
+        }
+        Insert: {
+          booking_url?: string | null
+          business_colours?: string | null
+          business_email?: string | null
+          business_name?: string | null
+          business_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          extracted_colors?: Json | null
+          first_name?: string | null
+          fleet_size?: string | null
+          generated_email?: string | null
+          has_meta_ad_account?: boolean | null
+          id?: string
+          location?: string | null
+          logo_url?: string | null
+          meta_daily_budget?: string | null
+          operating_hours?: string | null
+          other_info?: string | null
+          portal_url?: string | null
+          slug?: string | null
+          status?: string
+          subscription_amount?: number | null
+          subscription_currency?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+          vehicle_type?: string | null
+          wants_marketing?: boolean | null
+        }
+        Update: {
+          booking_url?: string | null
+          business_colours?: string | null
+          business_email?: string | null
+          business_name?: string | null
+          business_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          extracted_colors?: Json | null
+          first_name?: string | null
+          fleet_size?: string | null
+          generated_email?: string | null
+          has_meta_ad_account?: boolean | null
+          id?: string
+          location?: string | null
+          logo_url?: string | null
+          meta_daily_budget?: string | null
+          operating_hours?: string | null
+          other_info?: string | null
+          portal_url?: string | null
+          slug?: string | null
+          status?: string
+          subscription_amount?: number | null
+          subscription_currency?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+          vehicle_type?: string | null
+          wants_marketing?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_onboarding_submissions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_onboarding_submissions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_onboarding_submissions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "sales_onboarding_submissions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
       scheduled_installments: {
         Row: {
           amount: number
@@ -13851,6 +14001,10 @@ export type Database = {
           meta_whatsapp_phone_number: string | null
           meta_whatsapp_phone_number_id: string | null
           meta_whatsapp_waba_id: string | null
+          migration_blocker: string
+          migration_blocker_dismiss_count: number
+          migration_blocker_dismissed_at: string | null
+          migration_reward_granted_at: string | null
           min_rental_days: number | null
           min_rental_hours: number
           minimum_rental_age: number | null
@@ -14075,6 +14229,10 @@ export type Database = {
           meta_whatsapp_phone_number?: string | null
           meta_whatsapp_phone_number_id?: string | null
           meta_whatsapp_waba_id?: string | null
+          migration_blocker?: string
+          migration_blocker_dismiss_count?: number
+          migration_blocker_dismissed_at?: string | null
+          migration_reward_granted_at?: string | null
           min_rental_days?: number | null
           min_rental_hours?: number
           minimum_rental_age?: number | null
@@ -14299,6 +14457,10 @@ export type Database = {
           meta_whatsapp_phone_number?: string | null
           meta_whatsapp_phone_number_id?: string | null
           meta_whatsapp_waba_id?: string | null
+          migration_blocker?: string
+          migration_blocker_dismiss_count?: number
+          migration_blocker_dismissed_at?: string | null
+          migration_reward_granted_at?: string | null
           min_rental_days?: number | null
           min_rental_hours?: number
           minimum_rental_age?: number | null
@@ -17210,6 +17372,7 @@ export type Database = {
         }[]
       }
       is_primary_super_admin: { Args: never; Returns: boolean }
+      is_sales_agent: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
       mark_installment_failed: {
         Args: {
@@ -17654,6 +17817,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       accounting_connection_status: ["active", "expired", "revoked", "error"],

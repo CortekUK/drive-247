@@ -159,12 +159,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Build line items: fixed plan price + optional metered e-sign price + $1 card verification
+    // Build line items: fixed plan price + $1 card verification.
+    // The metered e-sign usage price is intentionally NOT added as a checkout
+    // line item — Stripe renders it as a confusing second "Drive247 Platform
+    // Subscription" row (it shares the product) that clutters the checkout. We
+    // instead attach it to the subscription SILENTLY in the subscription-webhook
+    // right after checkout completes, so per-signature billing still works but
+    // the tenant never sees the usage line at signup. Its id is passed through
+    // session metadata (`esign_metered_price_id`) so the webhook uses the exact
+    // price for this account/mode.
     const lineItems: Array<any> = [
       { price: priceId, quantity: 1 },
     ];
     // Metered price ids are account-specific: never attach the UK price id to a
-    // UAE checkout (it doesn't exist on that account and the session would fail).
+    // UAE subscription (it doesn't exist on that account).
     const meteredPriceId = account === "uae"
       ? (mode === "live"
           ? Deno.env.get("STRIPE_UAE_ESIGN_METERED_PRICE_ID_LIVE")
@@ -172,9 +180,6 @@ Deno.serve(async (req) => {
       : (mode === "live"
           ? Deno.env.get("STRIPE_ESIGN_METERED_PRICE_ID_LIVE")
           : (Deno.env.get("STRIPE_ESIGN_METERED_PRICE_ID_TEST") || Deno.env.get("STRIPE_ESIGN_METERED_PRICE_ID")));
-    if (meteredPriceId) {
-      lineItems.push({ price: meteredPriceId }); // no quantity for metered
-    }
 
     // Add a one-time $1 card verification fee ONLY when the plan's first real charge
     // is deferred (a free trial or upfront_monthly). Stripe bills one-time items
@@ -192,7 +197,7 @@ Deno.serve(async (req) => {
       lineItems.push({
         price_data: {
           currency: (plan.currency || "usd").toLowerCase(),
-          product_data: { name: "Card verification (refunded automatically)" },
+          product_data: { name: "Card verification — $1.00, refunded instantly (net $0 today)" },
           unit_amount: 100, // $1.00
         },
         quantity: 1,
@@ -210,7 +215,7 @@ Deno.serve(async (req) => {
       // setup_fee flags the webhook to auto-refund the $1 verification. Only set it
       // when the $1 was actually added (deferred-charge plans); a charge-now plan has
       // no $1 to refund and must keep its full first-period charge.
-      metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, source: "platform_subscription", ...(chargesDeferredToday ? { setup_fee: "true" } : {}) },
+      metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, source: "platform_subscription", ...(chargesDeferredToday ? { setup_fee: "true" } : {}), ...(meteredPriceId ? { esign_metered_price_id: meteredPriceId } : {}) },
       subscription_data: {
         metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, billing_model: plan.billing_model || "trial" },
         // Exact anchored date for upfront_monthly; a positive rounded day count for a

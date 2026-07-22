@@ -71,12 +71,61 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const isSuperAdmin = await verifySuperAdmin(supabase, user.id);
-    if (!isSuperAdmin) return errorResponse("Only super admins can start a UAE subscription migration", 403);
+    const body = await req.json();
+    const { successUrl, cancelUrl } = body;
+    let { tenantId, planId } = body;
 
-    const { tenantId, planId, successUrl, cancelUrl } = await req.json();
+    // Authorization: a super admin may act for any tenant; a tenant's own
+    // head_admin/admin may act ONLY for their own tenant (this is what lets the
+    // operator self-serve "Confirm payment details" from the migration prompt).
+    const isSuperAdmin = await verifySuperAdmin(supabase, user.id);
+    if (!isSuperAdmin) {
+      const { data: appUser } = await supabase
+        .from("app_users")
+        .select("tenant_id, role")
+        .eq("auth_user_id", user.id)
+        .single();
+      const canSelfServe =
+        appUser?.tenant_id &&
+        (appUser.role === "head_admin" || appUser.role === "admin") &&
+        (!tenantId || tenantId === appUser.tenant_id);
+      if (!canSelfServe) {
+        return errorResponse("Not authorized to start a subscription migration for this tenant", 403);
+      }
+      // Never trust a caller-supplied tenantId for a non-super-admin.
+      tenantId = appUser.tenant_id;
+    }
+
     if (!tenantId) return errorResponse("tenantId is required");
-    if (!planId) return errorResponse("planId is required");
+
+    // Auto-mirror: when no plan is given (operator self-serve), reuse the plan
+    // the tenant is already on so their price never changes during migration.
+    if (!planId) {
+      const { data: activeSub } = await supabase
+        .from("tenant_subscriptions")
+        .select("plan_id")
+        .eq("tenant_id", tenantId)
+        .in("status", ["active", "trialing", "past_due"])
+        .maybeSingle();
+      planId = activeSub?.plan_id ?? null;
+
+      if (!planId) {
+        // No live subscription to mirror — fall back to the tenant's single
+        // active configured plan, if unambiguous.
+        const { data: plans } = await supabase
+          .from("subscription_plans")
+          .select("id")
+          .eq("tenant_id", tenantId)
+          .eq("is_active", true);
+        if (plans?.length === 1) planId = plans[0].id;
+      }
+      if (!planId) {
+        return errorResponse(
+          "Could not determine which plan to use for this tenant — a super admin must generate the link with an explicit plan.",
+          400
+        );
+      }
+    }
 
     const { data: tenant, error: tenantError } = await supabase
       .from("tenants")

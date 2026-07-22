@@ -13,6 +13,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { getStripeClientForAccount, type StripeMode } from "../_shared/stripe-client.ts";
+import { onMigrationTaskComplete } from "../_shared/migration-progress.ts";
 
 function base64urlDecode(input: string): string {
   const padded = input.replace(/-/g, '+').replace(/_/g, '/');
@@ -140,6 +141,10 @@ Deno.serve(async (req) => {
     if (!updatedRows || updatedRows.length === 0) {
       throw new Error(`No tenant matched id ${state.tenantId} — connected account not stored`);
     }
+
+    // Task 1 done: notify the admin and grant the reward if both tasks are now
+    // complete. Best-effort — never let this break the redirect back.
+    await onMigrationTaskComplete(supabase, state.tenantId, "stripe");
 
     console.log(`[stripe-oauth-callback] Connected ${state.mode} account ${connectedAccountId} for tenant ${state.tenantId}`);
     return redirectBack(state, 'ok');
