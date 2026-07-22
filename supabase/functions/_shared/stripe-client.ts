@@ -105,21 +105,28 @@ export function getConnectAccountId(tenant: {
   // Callers that don't select the new columns fall through to the managed path,
   // which is correct for every tenant until their payment_model is flipped.
   if (tenant.payment_model === 'own') {
-    const ownId = tenant.stripe_mode === 'test'
-      ? tenant.own_stripe_test_account_id
-      : tenant.own_stripe_account_id;
-    // NEVER fall through to a null (= no stripeAccount) charge here: that would
-    // silently create the charge on the Drive247 platform balance instead of
-    // the operator's account. A flipped tenant with no connected account for
-    // the current mode is a misconfiguration — fail loud so no customer money
-    // is misrouted. (Readiness/flip should prevent this; this is the backstop.)
-    if (!ownId) {
-      throw new Error(
-        `Tenant is on Own Stripe (payment_model='own') but has no connected account for ${tenant.stripe_mode} mode. ` +
-        `Reconnect Stripe (OAuth) or revert payment_model to 'managed' before taking payments.`
+    if (tenant.stripe_mode === 'test') {
+      // Setup phase: new tenants are born on the Own model but only connect
+      // their real Stripe account at go-live. Until then let their TEST
+      // bookings run on the shared test Connect account, exactly as managed
+      // test tenants do. No real money can move in test mode, so there is
+      // nothing to misroute.
+      return (
+        tenant.own_stripe_test_account_id ||
+        Deno.env.get('STRIPE_TEST_CONNECT_ACCOUNT_ID') ||
+        null
       );
     }
-    return ownId;
+    // LIVE: never fall through to a null (= no stripeAccount) charge — that
+    // would silently create the charge on the Drive247 platform balance
+    // instead of the operator's account. Fail loud instead.
+    if (!tenant.own_stripe_account_id) {
+      throw new Error(
+        `Tenant is on Own Stripe (payment_model='own') but has no connected LIVE account. ` +
+        `Connect Stripe (OAuth) before taking live payments.`
+      );
+    }
+    return tenant.own_stripe_account_id;
   }
 
   if (tenant.stripe_mode === 'test') {

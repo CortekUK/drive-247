@@ -65,9 +65,13 @@ export function OwnStripeSettings() {
     enabled: !!tenantContext?.id,
   });
 
-  const mode = status?.stripe_mode || 'test';
-  const connectedAccountId = mode === 'live' ? status?.own_stripe_account_id : status?.own_stripe_test_account_id;
-  const connectedAt = mode === 'live' ? status?.own_stripe_connected_at : status?.own_stripe_test_connected_at;
+  // Operators always connect their REAL (live) Stripe account — it's the
+  // account they get paid into, and only a live connection appears in the
+  // platform's live dashboard. Test connections exist for rehearsals and are
+  // created from the admin's explicit test link, not from here.
+  const mode = 'live' as const;
+  const connectedAccountId = status?.own_stripe_account_id;
+  const connectedAt = status?.own_stripe_connected_at;
 
   const startOAuth = async () => {
     if (!status?.id) return;

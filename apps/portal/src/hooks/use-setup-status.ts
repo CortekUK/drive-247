@@ -62,10 +62,12 @@ export function useSetupStatus() {
     own_stripe_account_id?: string | null;
     own_stripe_test_account_id?: string | null;
   }) | undefined;
-  const ownAccountForMode =
-    d?.stripe_mode === "test" ? d?.own_stripe_test_account_id : d?.own_stripe_account_id;
+  // Operators connect their LIVE account (see own-stripe-settings), so a live
+  // connection completes this item whatever mode the tenant is currently in.
+  // A test connection still counts for tenants rehearsing in test mode.
+  const ownConnected = !!d?.own_stripe_account_id || !!d?.own_stripe_test_account_id;
   const stripeComplete =
-    !!ownAccountForMode ||
+    ownConnected ||
     (!!data?.stripe_onboarding_complete && data?.stripe_account_status === "active");
   const bonzahComplete =
     (data?.bonzah_mode === 'test') || (!!data?.integration_bonzah && !!data?.bonzah_username);
