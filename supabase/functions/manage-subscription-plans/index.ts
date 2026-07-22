@@ -261,7 +261,7 @@ async function handleDeactivate(supabase: any, body: any) {
 
   if (plan.stripe_price_id) {
     const stripe = await getStripeForPlan(supabase, plan.tenant_id, plan.stripe_account);
-    await stripe.prices.update(plan.stripe_price_id, { active: false });
+    await archivePriceIfPresent(stripe, plan.stripe_price_id);
   }
 
   const { error } = await supabase
@@ -301,6 +301,25 @@ async function handleActivate(supabase: any, body: any) {
   return jsonResponse({ success: true });
 }
 
+/**
+ * Archive a Stripe price, tolerating one that no longer exists.
+ *
+ * Plan rows can reference a price on an account we're no longer talking to
+ * (legacy platform accounts, mode switches). A price that doesn't exist can't
+ * bill anyone, so it must never block deactivating or deleting the plan row —
+ * anything else (network, auth) still propagates.
+ */
+async function archivePriceIfPresent(stripe: any, priceId: string): Promise<void> {
+  try {
+    await stripe.prices.update(priceId, { active: false });
+  } catch (err: any) {
+    const msg = String(err?.message ?? err);
+    const gone = err?.code === "resource_missing" || /no such price/i.test(msg);
+    if (!gone) throw err;
+    console.warn(`[manage-subscription-plans] price ${priceId} not found on this account — treating as already archived. (${msg})`);
+  }
+}
+
 async function handleDelete(supabase: any, body: any) {
   const { planId } = body;
   if (!planId) return errorResponse("planId is required");
@@ -326,7 +345,7 @@ async function handleDelete(supabase: any, body: any) {
 
   if (plan?.stripe_price_id) {
     const stripe = await getStripeForPlan(supabase, plan.tenant_id, plan.stripe_account);
-    await stripe.prices.update(plan.stripe_price_id, { active: false });
+    await archivePriceIfPresent(stripe, plan.stripe_price_id);
   }
 
   const { error } = await supabase
