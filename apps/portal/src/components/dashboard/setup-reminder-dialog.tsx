@@ -338,7 +338,7 @@ export function SetupReminderDialog() {
           centers via translate and locks body scroll, so the overflow clips BOTH
           ends — taking the close button and "Don't show me again" with it and
           leaving the tenant unable to dismiss the dialog at all. */}
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
             <ShieldCheck className="h-5 w-5 text-primary" />
@@ -371,13 +371,20 @@ export function SetupReminderDialog() {
                   wordmark, so an unconstrained `h-5 w-auto` renders ~64px wide
                   inside this 36px box and pushed the whole row past the dialog
                   edge. The img is object-contain + max-w-full so it scales to
-                  fit instead. */}
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-background">
+                  fit instead.
+                  No `bg-background` here: it painted a lighter tile behind each
+                  logo. The brand marks are transparent PNG/SVG and read better
+                  directly on the row. */}
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md">
                 {task.icon}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{task.label}</p>
-                <p className="truncate text-xs text-muted-foreground">
+                {/* Wraps instead of truncating — `truncate` cut every
+                    description mid-sentence ("Offer collision & liability cover
+                    to you…"), which is the one line telling the operator why the
+                    step matters. min-w-0 above still lets the row shrink. */}
+                <p className="text-xs leading-relaxed text-muted-foreground">
                   {task.description}
                 </p>
               </div>
