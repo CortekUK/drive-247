@@ -6,6 +6,9 @@ interface TenantReminderFields {
   logo_url: string | null;
   stripe_onboarding_complete: boolean | null;
   stripe_account_status: string | null;
+  // Own-Stripe (migration/OAuth) connection — the operator's own account.
+  own_stripe_account_id: string | null;
+  own_stripe_test_account_id: string | null;
   integration_bonzah: boolean | null;
   bonzah_username: string | null;
 }
@@ -49,7 +52,7 @@ export function useSetupReminder(): SetupReminderState {
         (supabase as any)
           .from("tenants")
           .select(
-            "logo_url, stripe_onboarding_complete, stripe_account_status, integration_bonzah, bonzah_username"
+            "logo_url, stripe_onboarding_complete, stripe_account_status, own_stripe_account_id, own_stripe_test_account_id, integration_bonzah, bonzah_username"
           )
           .eq("id", tenant!.id)
           .single(),
@@ -80,9 +83,17 @@ export function useSetupReminder(): SetupReminderState {
   const bonzahSubmissionCount = query.data?.bonzahSubmissionCount;
 
   const needsLogo = !fields?.logo_url;
+  // Mirror use-setup-status.ts: an operator who connected their OWN Stripe
+  // account via the migration/OAuth flow leaves the legacy Express fields empty
+  // forever, so checking only those would keep nagging "Connect Stripe" after
+  // they have already connected. An own-account connection (either mode) OR a
+  // completed legacy Express onboarding counts as done.
+  const ownStripeConnected =
+    !!fields?.own_stripe_account_id || !!fields?.own_stripe_test_account_id;
   const needsStripe = !(
-    fields?.stripe_onboarding_complete === true &&
-    fields?.stripe_account_status === "active"
+    ownStripeConnected ||
+    (fields?.stripe_onboarding_complete === true &&
+      fields?.stripe_account_status === "active")
   );
   // Mirrors `hasOwnCredentials` in use-bonzah-balance.ts.
   const bonzahConnected = !!fields?.integration_bonzah && !!fields?.bonzah_username;

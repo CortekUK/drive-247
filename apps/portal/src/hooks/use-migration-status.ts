@@ -61,12 +61,17 @@ export function useMigrationStatus() {
     retry: 1,
   });
 
-  // Mirrors the derivation in use-migration-blocker.ts.
-  const mode = data?.stripe_mode ?? "test";
-  const connectedAccountId =
-    mode === "test"
-      ? data?.own_stripe_test_account_id
-      : data?.own_stripe_account_id;
+  // Mirror use-migration-blocker.ts EXACTLY — these two derivations run off the
+  // SAME shared cache row and MUST agree, or the setup dialog and migration
+  // dialog fall out of sync. The migration prompt ALWAYS connects the operator's
+  // real (LIVE) account (`own_stripe_account_id`), regardless of stripe_mode; a
+  // test-mode rehearsal connection (`own_stripe_test_account_id`) does NOT count
+  // as migrated. Deriving this mode-dependently (as an earlier version here did)
+  // made this hook report migration "complete" off a test connection — dropping
+  // `migrationInProgress` to false — while the migration dialog, correctly keyed
+  // on the live account, stayed open, so the setup nudge rendered on top of it.
+  // If use-migration-blocker.ts changes this derivation, change it here too.
+  const connectedAccountId = data?.own_stripe_account_id;
   const stripeConnected = !!connectedAccountId;
   const paymentConfirmed = data?.subscription_account === "uae";
   const bothComplete = stripeConnected && paymentConfirmed;
