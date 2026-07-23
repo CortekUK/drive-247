@@ -41,7 +41,8 @@ export default function RentalCompaniesPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<'all' | 'production' | 'test' | 'suspended'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'production' | 'test'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(() => {
@@ -56,7 +57,7 @@ export default function RentalCompaniesPage() {
 
   useEffect(() => {
     loadTenants();
-  }, [typeFilter]);
+  }, [typeFilter, statusFilter]);
 
   const loadTenants = async () => {
     try {
@@ -65,13 +66,13 @@ export default function RentalCompaniesPage() {
         .select('*')
         .order('created_at', { ascending: false });
 
-      // 'suspended' filters on the tenant's live status (active/suspended),
-      // which is orthogonal to tenant_type (production/test) — a suspended
-      // tenant can be either type.
-      if (typeFilter === 'suspended') {
-        query = query.eq('status', 'suspended');
-      } else if (typeFilter !== 'all') {
+      // Type (production/test) and status (active/suspended) are independent
+      // axes and combine with AND, so e.g. "Production + Suspended" works.
+      if (typeFilter !== 'all') {
         query = query.eq('tenant_type', typeFilter);
+      }
+      if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
       }
 
       const { data, error } = await query;
@@ -192,9 +193,9 @@ export default function RentalCompaniesPage() {
               Favorites{favorites.size > 0 && ` (${favorites.size})`}
             </button>
 
-            {/* Type pills */}
+            {/* Type pills (production/test) */}
             <div className="flex items-center gap-1.5">
-              {(['all', 'production', 'test', 'suspended'] as const).map((type) => (
+              {(['all', 'production', 'test'] as const).map((type) => (
                 <button
                   key={type}
                   onClick={() => setTypeFilter(type)}
@@ -205,13 +206,36 @@ export default function RentalCompaniesPage() {
                         ? 'bg-sky-500/15 text-sky-400 border-sky-500/30'
                         : type === 'test'
                         ? 'bg-warning/15 text-amber-400 border-warning/30'
-                        : type === 'suspended'
-                        ? 'bg-destructive/15 text-destructive border-destructive/30'
                         : 'bg-primary/15 text-primary border-primary/30'
                       : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
                   )}
                 >
                   {type}
+                </button>
+              ))}
+            </div>
+
+            {/* Divider between the two independent filter axes */}
+            <div className="hidden sm:block w-px self-stretch bg-border" />
+
+            {/* Status pills (active/suspended) — combines with type via AND */}
+            <div className="flex items-center gap-1.5">
+              {(['all', 'active', 'suspended'] as const).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className={cn(
+                    'px-3 py-2 rounded-md text-xs font-semibold transition-all capitalize border',
+                    statusFilter === status
+                      ? status === 'active'
+                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                        : status === 'suspended'
+                        ? 'bg-destructive/15 text-destructive border-destructive/30'
+                        : 'bg-primary/15 text-primary border-primary/30'
+                      : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
+                  )}
+                >
+                  {status === 'all' ? 'Any status' : status}
                 </button>
               ))}
             </div>
