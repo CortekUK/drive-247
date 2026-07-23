@@ -12,6 +12,7 @@ import { useSubscriptionGateDisabled } from "@/hooks/use-subscription-gate-disab
 import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
 import { SetupReminderDialog } from "@/components/dashboard/setup-reminder-dialog";
 import { MigrationBlockerDialog } from "@/components/migration/migration-blocker-dialog";
+import { TenantSuspendedScreen } from "@/components/tenant/tenant-suspended-screen";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { HeaderSearch } from "@/components/shared/layout/header-search";
 import { UserMenu } from "@/components/shared/layout/user-menu";
@@ -250,6 +251,12 @@ export default function DashboardLayout({
   // Billing state not yet known — do not paint an unprotected dashboard.
   if (holdForGateState) {
     return <LoadingSkeleton />;
+  }
+
+  // Suspended tenants are frozen: no dashboard, no way past this screen. Only a
+  // Drive247 super admin flipping status back to 'active' restores access.
+  if (tenant?.status === "suspended") {
+    return <TenantSuspendedScreen />;
   }
 
   return (

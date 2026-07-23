@@ -41,7 +41,7 @@ export default function RentalCompaniesPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<'all' | 'production' | 'test'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'production' | 'test' | 'suspended'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(() => {
@@ -65,7 +65,12 @@ export default function RentalCompaniesPage() {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (typeFilter !== 'all') {
+      // 'suspended' filters on the tenant's live status (active/suspended),
+      // which is orthogonal to tenant_type (production/test) — a suspended
+      // tenant can be either type.
+      if (typeFilter === 'suspended') {
+        query = query.eq('status', 'suspended');
+      } else if (typeFilter !== 'all') {
         query = query.eq('tenant_type', typeFilter);
       }
 
@@ -189,7 +194,7 @@ export default function RentalCompaniesPage() {
 
             {/* Type pills */}
             <div className="flex items-center gap-1.5">
-              {(['all', 'production', 'test'] as const).map((type) => (
+              {(['all', 'production', 'test', 'suspended'] as const).map((type) => (
                 <button
                   key={type}
                   onClick={() => setTypeFilter(type)}
@@ -200,6 +205,8 @@ export default function RentalCompaniesPage() {
                         ? 'bg-sky-500/15 text-sky-400 border-sky-500/30'
                         : type === 'test'
                         ? 'bg-warning/15 text-amber-400 border-warning/30'
+                        : type === 'suspended'
+                        ? 'bg-destructive/15 text-destructive border-destructive/30'
                         : 'bg-primary/15 text-primary border-primary/30'
                       : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
                   )}

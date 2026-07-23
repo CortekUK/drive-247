@@ -17,6 +17,7 @@ import { CustomerAuthProvider } from '@/providers/CustomerAuthProvider';
 import { BookingPersistenceGuard } from '@/components/BookingPersistenceGuard';
 import DevJumpPanel from '@/components/DevJumpPanel';
 import { MaintenanceBanner } from '@/components/MaintenanceBanner';
+import { SuspendedGate } from '@/components/SuspendedGate';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -116,7 +117,7 @@ export default function RootLayout({
                   <GDPRConsent />
                   <DevJumpPanel />
                   <MaintenanceBanner />
-                  {children}
+                  <SuspendedGate>{children}</SuspendedGate>
                 </TooltipProvider>
               </ThemeInitializer>
               </ThemeProvider>

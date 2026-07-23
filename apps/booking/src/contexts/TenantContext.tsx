@@ -300,7 +300,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           .from('tenants')
           .select('slug')
           .eq('custom_booking_domain', host)
-          .eq('status', 'active')
+          // Include suspended so a suspended custom-domain tenant still resolves
+          // and the SuspendedGate shows the "unavailable" screen.
+          .in('status', ['active', 'suspended'])
           .single();
 
         if (customDomainTenant) {
@@ -459,7 +461,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           gig_driver_enabled
         `)
         .eq('slug', slug)
-        .eq('status', 'active')
+        // Load active AND suspended tenants so a suspended tenant resolves and
+        // the SuspendedGate can show a clean "unavailable" screen. Suspension is
+        // enforced by that gate, not by hiding the tenant here.
+        .in('status', ['active', 'suspended'])
         .single();
 
       if (queryError) {
