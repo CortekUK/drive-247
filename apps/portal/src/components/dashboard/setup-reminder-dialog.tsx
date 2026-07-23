@@ -89,10 +89,15 @@ export function SetupReminderDialog() {
     useTenantSubscription();
   const { needsLogo, needsStripe, needsBonzah, allDone, isReady } =
     useSetupReminder();
-  // Never render over — or before — the Stripe UK→UAE migration prompt. While a
-  // tenant is mid-migration the migration dialog owns the screen; the Bonzah /
-  // Connect-Stripe setup nudge must wait until BOTH migration steps are done.
-  const { migrationInProgress, isLoading: migrationLoading } =
+  // Coordinate with the Stripe UK→UAE migration prompt:
+  //  - `migrationPromptShowing` — the migration dialog (or its success
+  //    celebration) is on screen, so suppress this reminder entirely and let the
+  //    migration flow own the screen. Goes false once a soft prompt is dismissed,
+  //    which is when this reminder is allowed to take over.
+  //  - `hideStripeTask` — the tenant is mid-migration, so drop the "Connect
+  //    Stripe" row: the migration flow handles Stripe, and a hard block forces it
+  //    anyway, so showing it here is redundant.
+  const { migrationPromptShowing, hideStripeTask, isLoading: migrationLoading } =
     useMigrationStatus();
 
   const tenantId = tenant?.id ?? null;
@@ -268,7 +273,7 @@ export function SetupReminderDialog() {
       upload: true,
     });
   }
-  if (needsStripe) {
+  if (needsStripe && !hideStripeTask) {
     tasks.push({
       key: "stripe",
       label: "Connect Stripe",
@@ -301,9 +306,10 @@ export function SetupReminderDialog() {
     isSubscribed &&
     !hasExpiredSubscription &&
     // Migration interlock — wait until migration status is known, then stay
-    // hidden until the tenant has finished migrating to their own Stripe.
+    // hidden while the migration prompt (or its success celebration) is on
+    // screen. Once a soft prompt is dismissed the reminder is free to show.
     !migrationLoading &&
-    !migrationInProgress &&
+    !migrationPromptShowing &&
     // Setup state must be positively known; an errored query must not nag.
     isReady &&
     !allDone &&

@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "@/hooks/use-toast";
+import { deriveMigrationView } from "./migration-view";
 
 export type MigrationBlockerState = "off" | "soft" | "hard";
 
@@ -28,8 +29,6 @@ interface MigrationBlockerRow {
 
 const MIGRATION_COLUMNS =
   "id, migration_blocker, migration_blocker_dismissed_at, migration_blocker_dismiss_count, payment_model, stripe_mode, subscription_account, own_stripe_account_id, own_stripe_test_account_id, setup_completed_at";
-
-const DISMISS_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Drives the operator-facing "move to your own Stripe account" prompt.
@@ -71,34 +70,23 @@ export function useMigrationBlocker() {
     retry: 1,
   });
 
-  // ── Derived task state ────────────────────────────────────────────────────
-  // The migration prompt ALWAYS connects the operator's real (live) Stripe
-  // account, regardless of the tenant's current stripe_mode. Connecting is a
-  // one-time business action — the operator links the account they actually
-  // get paid into — so a tenant still in test mode would otherwise link a test
-  // account that never appears in the live dashboard and can't take real money.
-  // Test-mode connections remain possible, but only via the admin's explicit
-  // "Generate OAuth link (test)" button.
+  // ── Derived migration view ─────────────────────────────────────────────────
+  // The migration ALWAYS connects the operator's real (live) Stripe account,
+  // regardless of the tenant's current stripe_mode. Connecting is a one-time
+  // business action — the operator links the account they actually get paid into
+  // — so a tenant still in test mode would otherwise link a test account that
+  // never appears in the live dashboard and can't take real money. Test-mode
+  // connections remain possible, but only via the admin's explicit "Generate
+  // OAuth link (test)" button. OAUTH_MODE is passed to stripe-oauth-start and
+  // surfaced to callers as `stripeMode`.
   const OAUTH_MODE = "live" as const;
   const connectedAccountId = data?.own_stripe_account_id;
-  const stripeConnected = !!connectedAccountId;
-  const paymentConfirmed = data?.subscription_account === "uae";
-  const bothComplete = stripeConnected && paymentConfirmed;
 
-  const dismissedAt = data?.migration_blocker_dismissed_at
-    ? new Date(data.migration_blocker_dismissed_at).getTime()
-    : null;
-  const dismissedRecently =
-    dismissedAt !== null && Date.now() - dismissedAt < DISMISS_WINDOW_MS;
-
-  const stored: MigrationBlockerState = (data?.migration_blocker ??
-    "off") as MigrationBlockerState;
-
-  let state: MigrationBlockerState = "off";
-  if (data && !bothComplete) {
-    if (stored === "hard") state = "hard";
-    else if (stored === "soft") state = dismissedRecently ? "off" : "soft";
-  }
+  // Completion + visible prompt state come from the single shared derivation, so
+  // this dialog and the setup-reminder interlock (use-migration-status) can
+  // never disagree off the same cached row. See migration-view.ts.
+  const { stripeConnected, paymentConfirmed, bothComplete, state } =
+    deriveMigrationView(data);
 
   // ── OAuth return handling (?oauth=ok|error) ───────────────────────────────
   // Mirrors `own-stripe-settings.tsx`. That component only mounts on the
