@@ -8,6 +8,7 @@ import { toast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSetupReminder } from "@/hooks/use-setup-reminder";
+import { useMigrationStatus } from "@/hooks/use-migration-status";
 import {
   Dialog,
   DialogContent,
@@ -88,6 +89,11 @@ export function SetupReminderDialog() {
     useTenantSubscription();
   const { needsLogo, needsStripe, needsBonzah, allDone, isReady } =
     useSetupReminder();
+  // Never render over — or before — the Stripe UK→UAE migration prompt. While a
+  // tenant is mid-migration the migration dialog owns the screen; the Bonzah /
+  // Connect-Stripe setup nudge must wait until BOTH migration steps are done.
+  const { migrationInProgress, isLoading: migrationLoading } =
+    useMigrationStatus();
 
   const tenantId = tenant?.id ?? null;
 
@@ -294,6 +300,10 @@ export function SetupReminderDialog() {
     isResolved &&
     isSubscribed &&
     !hasExpiredSubscription &&
+    // Migration interlock — wait until migration status is known, then stay
+    // hidden until the tenant has finished migrating to their own Stripe.
+    !migrationLoading &&
+    !migrationInProgress &&
     // Setup state must be positively known; an errored query must not nag.
     isReady &&
     !allDone &&

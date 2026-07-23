@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
+import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,174 +10,234 @@ interface ForceLogoutRequest {
   tenantId?: string | null;
 }
 
-Deno.serve(async (req) => {
-  console.log('admin-force-logout function called');
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
 
-  // Handle CORS preflight requests
+/**
+ * Force-logout all users of a tenant (or, globally, of every tenant) by
+ * REVOKING their Supabase sessions server-side.
+ *
+ * Why the rewrite: the previous version called
+ * `supabaseAdmin.auth.admin.signOut(auth_user_id, 'global')`. That admin method
+ * expects the user's ACCESS-TOKEN JWT, not a user-id UUID, so GoTrue rejected
+ * every call ("invalid JWT: token contains an invalid number of segments").
+ * Worse, supabase-js RETURNS that error instead of throwing, so the old loop
+ * counted each failure as a success and reported "Successfully logged out N
+ * users" while revoking absolutely nothing — the "decorative button" bug.
+ *
+ * The correct, GoTrue-supported way to revoke sessions by user id is to delete
+ * the rows from `auth.sessions` (refresh_tokens cascade / are cleared too). That
+ * kills the refresh token so the session cannot be renewed. To make logout
+ * *immediate* (rather than waiting up to an access-token lifetime for the next
+ * refresh to fail), we also emit a realtime BROADCAST on the tenant's auth
+ * channel; the portal's `useSessionGuard` listens and signs the operator out at
+ * once. Broadcast — not postgres_changes — so it never depends on the
+ * `supabase_realtime` publication being configured.
+ */
+Deno.serve(async (req) => {
+  console.log('admin-force-logout function called')
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders })
   }
 
+  let sql: ReturnType<typeof postgres> | null = null
   try {
-    // Get the authorization header
-    const authHeader = req.headers.get('authorization');
+    // ── AuthN: require a bearer token ──────────────────────────────────────
+    const authHeader = req.headers.get('authorization')
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.error('No authorization header provided');
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('No authorization header provided')
+      return json({ error: 'Unauthorized' }, 401)
     }
 
-    // Create Supabase clients
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
 
-    // Client with user's JWT for verification
+    // Client bound to the caller's JWT — used only to identify + authorize them.
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
+      global: { headers: { Authorization: authHeader } },
+    })
+    // Service-role client for privileged reads (bypasses RLS).
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Service role client for admin operations
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Verify user session
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    // ── AuthZ: caller must be a super admin ────────────────────────────────
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
     if (userError || !user) {
-      console.error('Failed to verify user session:', userError);
-      return new Response(
-        JSON.stringify({ error: 'Invalid session' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('Failed to verify user session:', userError)
+      return json({ error: 'Invalid session' }, 401)
     }
 
-    // Check if user is a super admin
     const { data: currentUserData, error: roleError } = await supabase
       .from('app_users')
       .select('id, role, is_active, is_super_admin')
       .eq('auth_user_id', user.id)
-      .single();
+      .single()
 
     if (roleError || !currentUserData) {
-      console.error('Failed to get user role:', roleError);
-      return new Response(
-        JSON.stringify({ error: 'User not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('Failed to get user role:', roleError)
+      return json({ error: 'User not found' }, 404)
     }
 
     if (!currentUserData.is_super_admin) {
-      console.error('User is not a super admin');
-      return new Response(
-        JSON.stringify({ error: 'Only super admins can force logout users' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('User is not a super admin')
+      return json({ error: 'Only super admins can force logout users' }, 403)
     }
 
-    const { tenantId }: ForceLogoutRequest = await req.json();
-    const isGlobal = !tenantId;
+    const { tenantId }: ForceLogoutRequest = await req.json().catch(() => ({}))
+    const isGlobal = !tenantId
 
-    console.log(isGlobal ? 'Global force logout requested' : `Force logout for tenant: ${tenantId}`);
+    console.log(isGlobal ? 'Global force logout requested' : `Force logout for tenant: ${tenantId}`)
 
-    // Gather auth_user_ids to sign out
-    const authUserIds: string[] = [];
+    // ── Collect the auth user ids to revoke ────────────────────────────────
+    const authUserIds: string[] = []
+    // Super admins are NEVER revoked on a global logout — track them so we can
+    // also exclude any that slip in via customer_users (a super admin who is
+    // also a booking customer).
+    const superAdminIds = new Set<string>()
 
-    // Get app_users (portal staff)
+    // Portal staff
     const appUsersQuery = supabaseAdmin
       .from('app_users')
-      .select('auth_user_id, is_super_admin');
+      .select('auth_user_id, is_super_admin')
+    if (tenantId) appUsersQuery.eq('tenant_id', tenantId)
 
-    if (tenantId) {
-      appUsersQuery.eq('tenant_id', tenantId);
-    }
-
-    const { data: appUsers, error: appUsersError } = await appUsersQuery;
-
+    const { data: appUsers, error: appUsersError } = await appUsersQuery
     if (appUsersError) {
-      console.error('Error fetching app_users:', appUsersError);
+      console.error('Error fetching app_users:', appUsersError)
     } else if (appUsers) {
       for (const u of appUsers) {
-        // Skip super admins on global logout to prevent locking out the caller
-        if (isGlobal && u.is_super_admin) continue;
-        if (u.auth_user_id) authUserIds.push(u.auth_user_id);
+        if (u.is_super_admin && u.auth_user_id) superAdminIds.add(u.auth_user_id)
+        // Never revoke a super admin on a GLOBAL logout — that would lock out
+        // the caller and every other platform admin.
+        if (isGlobal && u.is_super_admin) continue
+        if (u.auth_user_id) authUserIds.push(u.auth_user_id)
       }
     }
 
-    // Get customer_users (booking customers)
+    // Booking customers
     const customerUsersQuery = supabaseAdmin
       .from('customer_users')
-      .select('auth_user_id');
+      .select('auth_user_id')
+    if (tenantId) customerUsersQuery.eq('tenant_id', tenantId)
 
-    if (tenantId) {
-      customerUsersQuery.eq('tenant_id', tenantId);
-    }
-
-    const { data: customerUsers, error: customerUsersError } = await customerUsersQuery;
-
+    const { data: customerUsers, error: customerUsersError } = await customerUsersQuery
     if (customerUsersError) {
-      console.error('Error fetching customer_users:', customerUsersError);
+      console.error('Error fetching customer_users:', customerUsersError)
     } else if (customerUsers) {
       for (const u of customerUsers) {
-        if (u.auth_user_id) authUserIds.push(u.auth_user_id);
+        if (u.auth_user_id) authUserIds.push(u.auth_user_id)
       }
     }
 
-    // Deduplicate
-    const uniqueIds = [...new Set(authUserIds)];
+    // On a global logout, defensively drop any super-admin id that slipped in
+    // through customer_users, so a platform admin can never be caught by it.
+    const uniqueIds = [...new Set(authUserIds)].filter(
+      (id) => !(isGlobal && superAdminIds.has(id)),
+    )
+    console.log(`Found ${uniqueIds.length} user(s) to force logout`)
 
-    console.log(`Found ${uniqueIds.length} users to sign out`);
-
-    // Sign out each user
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const authUserId of uniqueIds) {
-      try {
-        await supabaseAdmin.auth.admin.signOut(authUserId, 'global');
-        successCount++;
-      } catch (err) {
-        failCount++;
-        console.warn(`Failed to sign out ${authUserId}:`, err);
+    // ── Revoke sessions server-side (the ACTUAL logout) ────────────────────
+    let revokedSessions = 0
+    if (uniqueIds.length > 0) {
+      const dbUrl = Deno.env.get('SUPABASE_DB_URL')
+      if (!dbUrl) {
+        // We could not revoke anything — do NOT report a false success like the
+        // old implementation did.
+        console.error('SUPABASE_DB_URL not available; cannot revoke sessions')
+        return json(
+          { error: 'Server misconfiguration: sessions were not revoked' },
+          500,
+        )
       }
+
+      sql = postgres(dbUrl, { prepare: false })
+
+      // Text-cast comparison so a uuid column vs. text[] parameter can never
+      // raise "operator does not exist: uuid = text".
+      const deleted = await sql`
+        DELETE FROM auth.sessions
+        WHERE user_id::text = ANY(${uniqueIds})
+        RETURNING id
+      `
+      // Belt-and-suspenders: clear any refresh tokens the session-cascade missed.
+      await sql`DELETE FROM auth.refresh_tokens WHERE user_id::text = ANY(${uniqueIds})`
+
+      revokedSessions = deleted.length
+      console.log(`Revoked ${revokedSessions} session(s) across ${uniqueIds.length} user(s)`)
     }
 
-    // Audit log
+    // ── Instant client eviction via realtime broadcast (best-effort) ───────
+    // The session deletion above is authoritative even if this fails; the
+    // portal's mount/focus re-validation is the backstop for a missed message.
+    const topic = tenantId ? `tenant:${tenantId}:auth` : 'platform:auth'
     try {
-      await supabaseAdmin
-        .from('audit_logs')
-        .insert({
-          actor_id: currentUserData.id,
-          action: isGlobal ? 'force_logout_global' : 'force_logout_tenant',
-          tenant_id: tenantId || null,
-          details: {
-            target_tenant_id: tenantId || 'all',
-            total_users: uniqueIds.length,
-            success_count: successCount,
-            fail_count: failCount,
-          }
-        });
-    } catch (auditError) {
-      console.warn('Failed to write audit log:', auditError);
+      const resp = await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: supabaseServiceKey,
+          Authorization: `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              topic,
+              event: 'force_logout',
+              payload: { tenantId: tenantId ?? null },
+              private: false,
+            },
+          ],
+        }),
+      })
+      if (!resp.ok) {
+        console.warn(`Force-logout broadcast returned ${resp.status} (sessions already revoked)`)
+      }
+    } catch (broadcastError) {
+      console.warn('Force-logout broadcast failed (sessions already revoked):', broadcastError)
     }
 
-    console.log(`Force logout complete: ${successCount} success, ${failCount} failed out of ${uniqueIds.length} total`);
+    // ── Audit ──────────────────────────────────────────────────────────────
+    try {
+      await supabaseAdmin.from('audit_logs').insert({
+        actor_id: currentUserData.id,
+        action: isGlobal ? 'force_logout_global' : 'force_logout_tenant',
+        tenant_id: tenantId || null,
+        details: {
+          target_tenant_id: tenantId || 'all',
+          total_users: uniqueIds.length,
+          revoked_sessions: revokedSessions,
+        },
+      })
+    } catch (auditError) {
+      console.warn('Failed to write audit log:', auditError)
+    }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        totalUsers: uniqueIds.length,
-        successCount,
-        failCount,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
+    // Response contract preserved for the admin UI: it reads successCount /
+    // failCount. Every targeted user is now guaranteed to have no live session,
+    // so successCount === uniqueIds.length and failCount === 0. revokedSessions
+    // is the extra detail (how many sessions were actually live).
+    return json({
+      success: true,
+      totalUsers: uniqueIds.length,
+      successCount: uniqueIds.length,
+      failCount: 0,
+      revokedSessions,
+    })
   } catch (error) {
-    console.error('Unexpected error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error('Unexpected error:', error)
+    return json({ error: 'Internal server error' }, 500)
+  } finally {
+    if (sql) {
+      try {
+        await sql.end()
+      } catch (_) {
+        /* ignore */
+      }
+    }
   }
-});
+})

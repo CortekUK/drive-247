@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useMigrationBlocker } from "@/hooks/use-migration-blocker";
+import { SUCCESS_LINGER_MS } from "./constants";
 import {
   Check,
   CheckCircle2,
@@ -26,9 +27,6 @@ const BENEFITS = [
   "You control your payout schedule and bank details",
   "Faster access to your money",
 ];
-
-/** How long the "You're all set" confirmation lingers before the modal closes. */
-const SUCCESS_LINGER_MS = 6000;
 
 /**
  * Everything here is deliberately light-mode only (no `dark:` variants and

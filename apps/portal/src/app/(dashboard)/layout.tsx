@@ -7,6 +7,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { useTenantSubscriptionRealtime } from "@/hooks/use-tenant-subscription-realtime";
+import { useSessionGuard } from "@/hooks/use-session-guard";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useSubscriptionGateDisabled } from "@/hooks/use-subscription-gate-disabled";
 import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
@@ -92,6 +93,11 @@ export default function DashboardLayout({
   // Keep subscription state fresh via Supabase realtime — webhook updates
   // invalidate the query immediately instead of waiting for a refresh.
   useTenantSubscriptionRealtime();
+
+  // Bulletproof force-logout: sign the operator out the instant a super admin
+  // revokes their session — immediately via realtime broadcast, and on tab
+  // focus / reopen via a server-authoritative session check.
+  useSessionGuard();
 
   // Pages where the user MUST be able to reach even without a subscription —
   // otherwise they'd have no way to subscribe or contact us.
