@@ -128,11 +128,20 @@ Deno.serve(async (req) => {
     // account, so leaving them in test mode would only mean their customers
     // can't actually pay. Flip stripe_mode to 'live' alongside storing the
     // account. (Bonzah/e-sign keep their own modes and their own go-live.)
+    //
+    // We ALSO flip payment_model to 'own' immediately: the operator just
+    // authorized their own account, so from this moment every booking must
+    // settle there — there is no manual super-admin verification step. Until
+    // this flip, getConnectAccountId still routes charges to the legacy managed
+    // (Express) account, so an un-flipped connected tenant would silently keep
+    // paying into the old account. Test connections are admin rehearsals and do
+    // NOT change routing.
     const update = state.mode === 'live'
       ? {
           own_stripe_account_id: connectedAccountId,
           own_stripe_connected_at: now,
           stripe_mode: 'live',
+          payment_model: 'own',
         }
       : { own_stripe_test_account_id: connectedAccountId, own_stripe_test_connected_at: now };
 

@@ -66,14 +66,14 @@ function getMigrationState(t: Tenant): MigrationState {
 }
 
 function getPushStatus(t: Tenant, state: MigrationState): PushStatus {
+  // Fully migrated (both axes UAE + own account actually connected) is Done,
+  // regardless of any leftover blocker value the DB hasn't cleared yet.
+  if (state === 'uae' && t.own_stripe_account_id) return 'done';
   if (t.migration_blocker === 'hard') return 'hard';
   if (t.migration_blocker === 'soft') return 'soft';
-  if (state === 'uae') {
-    // "Done" only when they've ACTUALLY connected their own Stripe account.
-    // Flags pointing to UAE without a connected account = configured-but-idle
-    // (e.g. a brand-new empty tenant) → "UAE-ready", not "Done".
-    return t.own_stripe_account_id ? 'done' : 'ready';
-  }
+  // Flags point to UAE but nothing is actually connected/subscribed yet
+  // (e.g. a brand-new empty tenant) → "UAE-ready", not "Done".
+  if (state === 'uae') return 'ready';
   if (state === 'uk') return 'not-started';
   return 'auto';
 }

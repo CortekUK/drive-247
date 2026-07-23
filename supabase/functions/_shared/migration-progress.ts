@@ -125,7 +125,11 @@ export async function onMigrationTaskComplete(
       const nowIso = new Date().toISOString();
       const { data: claimed, error: claimErr } = await supabase
         .from("tenants")
-        .update({ migration_reward_granted_at: nowIso })
+        // Both tasks done: clear the blocker in the same claim so the tenant is
+        // never nagged again and the admin migration column reads "Done" — no
+        // manual step. (The operator's dialog already auto-hides on completion;
+        // this makes the stored state match.)
+        .update({ migration_reward_granted_at: nowIso, migration_blocker: "off" })
         .eq("id", tenantId)
         .is("migration_reward_granted_at", null)
         .select("id");
