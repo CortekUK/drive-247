@@ -24,6 +24,7 @@ import {
   Search,
   Star,
   Building2,
+  ArrowLeftRight,
 } from 'lucide-react';
 
 interface Tenant {
@@ -35,7 +36,57 @@ interface Tenant {
   contact_email: string;
   created_at: string;
   tenant_type: 'production' | 'test' | null;
+  subscription_account: 'uk' | 'uae' | null;
+  payment_model: 'managed' | 'own' | null;
+  own_stripe_account_id: string | null;
+  migration_blocker: 'off' | 'soft' | 'hard' | null;
 }
+
+/**
+ * Derives a tenant's UK→UAE migration picture from its raw fields.
+ *
+ * Two independent axes move from UK to UAE:
+ *   - Subscription: subscription_account  ('uk' | 'uae')
+ *   - Connect:      payment_model         ('managed' = UK Express | 'own' = UAE)
+ *
+ * A tenant on payment_model='own' is counted as UAE on the Connect axis even
+ * before they OAuth a real account — the model routes them to UAE the moment
+ * they connect ("configured for UAE"). own_stripe_account_id only refines the
+ * push status (Done vs Auto/UAE-ready), not the state chip.
+ */
+type MigrationState = 'uk' | 'partial-sub' | 'partial-connect' | 'uae';
+type PushStatus = 'hard' | 'soft' | 'done' | 'auto' | 'not-started';
+
+function getMigrationState(t: Tenant): MigrationState {
+  const subUae = t.subscription_account === 'uae';
+  const payUae = t.payment_model === 'own';
+  if (subUae && payUae) return 'uae';
+  if (!subUae && !payUae) return 'uk';
+  return subUae ? 'partial-sub' : 'partial-connect';
+}
+
+function getPushStatus(t: Tenant, state: MigrationState): PushStatus {
+  if (t.migration_blocker === 'hard') return 'hard';
+  if (t.migration_blocker === 'soft') return 'soft';
+  if (state === 'uae') return 'done';
+  if (state === 'uk') return 'not-started';
+  return 'auto';
+}
+
+const MIGRATION_STATE_META: Record<MigrationState, { label: string; className: string }> = {
+  uk: { label: '🇬🇧 UK', className: 'bg-secondary text-muted-foreground border-border' },
+  'partial-sub': { label: '🟡 Partial · Sub UAE', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  'partial-connect': { label: '🟡 Partial · Connect UAE', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  uae: { label: '🇦🇪 UAE', className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+};
+
+const PUSH_STATUS_META: Record<PushStatus, { label: string; className: string }> = {
+  hard: { label: 'Hard blocker', className: 'text-destructive' },
+  soft: { label: 'Soft blocker', className: 'text-amber-400' },
+  done: { label: 'Done', className: 'text-emerald-400' },
+  auto: { label: 'Auto (UAE-ready)', className: 'text-sky-400' },
+  'not-started': { label: 'Not started', className: 'text-muted-foreground' },
+};
 
 export default function RentalCompaniesPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -43,6 +94,7 @@ export default function RentalCompaniesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [typeFilter, setTypeFilter] = useState<'all' | 'production' | 'test'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended'>('all');
+  const [showMigration, setShowMigration] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(() => {
@@ -239,6 +291,23 @@ export default function RentalCompaniesPage() {
                 </button>
               ))}
             </div>
+
+            {/* Divider before the migration toggle */}
+            <div className="hidden sm:block w-px self-stretch bg-border" />
+
+            {/* Migration status toggle — reveals the UK→UAE column */}
+            <button
+              onClick={() => setShowMigration((v) => !v)}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all border whitespace-nowrap',
+                showMigration
+                  ? 'bg-primary/15 text-primary border-primary/30'
+                  : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
+              )}
+            >
+              <ArrowLeftRight className="h-4 w-4" />
+              {showMigration ? 'Hide migration' : 'Show migration status'}
+            </button>
           </div>
         </CardContent>
       </Card>
@@ -252,6 +321,7 @@ export default function RentalCompaniesPage() {
               <TableHead>Company</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Status</TableHead>
+              {showMigration && <TableHead>Migration</TableHead>}
               <TableHead>Created</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -290,6 +360,24 @@ export default function RentalCompaniesPage() {
                     {tenant.status}
                   </Badge>
                 </TableCell>
+                {showMigration && (() => {
+                  const state = getMigrationState(tenant);
+                  const push = getPushStatus(tenant, state);
+                  const sm = MIGRATION_STATE_META[state];
+                  const pm = PUSH_STATUS_META[push];
+                  return (
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <span className={cn('inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap', sm.className)}>
+                          {sm.label}
+                        </span>
+                        <span className={cn('text-[11px] font-medium whitespace-nowrap', pm.className)}>
+                          {pm.label}
+                        </span>
+                      </div>
+                    </TableCell>
+                  );
+                })()}
                 <TableCell className="text-muted-foreground tabular-nums">
                   {new Date(tenant.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </TableCell>
