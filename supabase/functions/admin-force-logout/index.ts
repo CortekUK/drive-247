@@ -1,5 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,7 +44,6 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
-  let sql: ReturnType<typeof postgres> | null = null
   try {
     // ── AuthN: require a bearer token ──────────────────────────────────────
     const authHeader = req.headers.get('authorization')
@@ -142,32 +140,25 @@ Deno.serve(async (req) => {
     console.log(`Found ${uniqueIds.length} user(s) to force logout`)
 
     // ── Revoke sessions server-side (the ACTUAL logout) ────────────────────
+    // Revoke via rpc() to a SECURITY DEFINER function over PostgREST (pure HTTP).
+    // We do NOT open a direct postgres.js connection: it crashes in the current
+    // Supabase Edge runtime ("Deno.core.runMicrotasks() is not supported"), which
+    // made this function throw a non-2xx and revoke nothing.
     let revokedSessions = 0
     if (uniqueIds.length > 0) {
-      const dbUrl = Deno.env.get('SUPABASE_DB_URL')
-      if (!dbUrl) {
-        // We could not revoke anything — do NOT report a false success like the
-        // old implementation did.
-        console.error('SUPABASE_DB_URL not available; cannot revoke sessions')
+      const { data: revoked, error: revokeError } = await supabaseAdmin.rpc(
+        'admin_revoke_user_sessions',
+        { p_user_ids: uniqueIds },
+      )
+      if (revokeError) {
+        // Do NOT report a false success — surface the failure.
+        console.error('Failed to revoke sessions:', revokeError)
         return json(
-          { error: 'Server misconfiguration: sessions were not revoked' },
+          { error: `Failed to revoke sessions: ${revokeError.message}` },
           500,
         )
       }
-
-      sql = postgres(dbUrl, { prepare: false })
-
-      // Text-cast comparison so a uuid column vs. text[] parameter can never
-      // raise "operator does not exist: uuid = text".
-      const deleted = await sql`
-        DELETE FROM auth.sessions
-        WHERE user_id::text = ANY(${uniqueIds})
-        RETURNING id
-      `
-      // Belt-and-suspenders: clear any refresh tokens the session-cascade missed.
-      await sql`DELETE FROM auth.refresh_tokens WHERE user_id::text = ANY(${uniqueIds})`
-
-      revokedSessions = deleted.length
+      revokedSessions = typeof revoked === 'number' ? revoked : 0
       console.log(`Revoked ${revokedSessions} session(s) across ${uniqueIds.length} user(s)`)
     }
 
@@ -231,13 +222,5 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Unexpected error:', error)
     return json({ error: 'Internal server error' }, 500)
-  } finally {
-    if (sql) {
-      try {
-        await sql.end()
-      } catch (_) {
-        /* ignore */
-      }
-    }
   }
 })
