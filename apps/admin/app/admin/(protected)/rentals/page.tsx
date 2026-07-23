@@ -55,7 +55,7 @@ interface Tenant {
  * push status (Done vs Auto/UAE-ready), not the state chip.
  */
 type MigrationState = 'uk' | 'partial-sub' | 'partial-connect' | 'uae';
-type PushStatus = 'hard' | 'soft' | 'done' | 'auto' | 'not-started';
+type PushStatus = 'hard' | 'soft' | 'done' | 'ready' | 'auto' | 'not-started';
 
 function getMigrationState(t: Tenant): MigrationState {
   const subUae = t.subscription_account === 'uae';
@@ -68,7 +68,12 @@ function getMigrationState(t: Tenant): MigrationState {
 function getPushStatus(t: Tenant, state: MigrationState): PushStatus {
   if (t.migration_blocker === 'hard') return 'hard';
   if (t.migration_blocker === 'soft') return 'soft';
-  if (state === 'uae') return 'done';
+  if (state === 'uae') {
+    // "Done" only when they've ACTUALLY connected their own Stripe account.
+    // Flags pointing to UAE without a connected account = configured-but-idle
+    // (e.g. a brand-new empty tenant) → "UAE-ready", not "Done".
+    return t.own_stripe_account_id ? 'done' : 'ready';
+  }
   if (state === 'uk') return 'not-started';
   return 'auto';
 }
@@ -84,7 +89,8 @@ const PUSH_STATUS_META: Record<PushStatus, { label: string; className: string }>
   hard: { label: 'Hard blocker', className: 'text-destructive' },
   soft: { label: 'Soft blocker', className: 'text-amber-400' },
   done: { label: 'Done', className: 'text-emerald-400' },
-  auto: { label: 'Auto (UAE-ready)', className: 'text-sky-400' },
+  ready: { label: 'UAE-ready', className: 'text-sky-400' },
+  auto: { label: 'In progress', className: 'text-sky-400' },
   'not-started': { label: 'Not started', className: 'text-muted-foreground' },
 };
 
@@ -367,8 +373,8 @@ export default function RentalCompaniesPage() {
                   const pm = PUSH_STATUS_META[push];
                   return (
                     <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className={cn('inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap', sm.className)}>
+                      <div className="flex items-center gap-2">
+                        <span className={cn('inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap', sm.className)}>
                           {sm.label}
                         </span>
                         <span className={cn('text-[11px] font-medium whitespace-nowrap', pm.className)}>
