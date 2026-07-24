@@ -424,7 +424,17 @@ serve(async (req) => {
             .single();
           if (!pRec) continue;
 
-          const newTotalRefund = Number(pRec.refund_amount || 0) + allocateToThisPayment;
+          // The Stripe block above already added this refund to `payment.id`'s
+          // refund_amount (the "sync with Stripe's authoritative value" update).
+          // Re-adding `allocateToThisPayment` here would count the SAME refund a
+          // second time — the $1.22 charge → $2.44 refund_amount bug. So for that
+          // one payment keep the already-synced value and only refresh its
+          // status/reason below; every OTHER (manual) contributing payment still
+          // needs its share added here.
+          const alreadyCountedByStripeBlock = !!(stripeRefundId && payment && pid === payment.id);
+          const newTotalRefund = alreadyCountedByStripeBlock
+            ? Number(pRec.refund_amount || 0)
+            : Number(pRec.refund_amount || 0) + allocateToThisPayment;
           const paymentUpdate: Record<string, any> = {
             updated_at: new Date().toISOString(),
             refund_amount: newTotalRefund,
