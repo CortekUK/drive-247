@@ -1687,6 +1687,44 @@ const RentalDetail = () => {
     return originalCategories + extensionOutstanding;
   }, [categoryRemainingAmounts, extensionTotals]);
 
+  // PAYG upfront requirement, hoisted to component scope so the GENERIC "Record
+  // Payment" dialog can surface it too — not just the Collect Now flow. Mirrors
+  // the Collect Now banner's firstPeriodTotal (~line 2722): a PAYG rental owes its
+  // first period (+ % tax + % service fee) BEFORE key handover, but nothing has
+  // accrued to the ledger yet, so `outstandingBalance` is 0 and the dialog wrongly
+  // showed "No outstanding balance". `unmetDue` is what still must be collected
+  // toward that requirement (drops to 0 once satisfied, so the accrued ledger then
+  // takes over naturally). Guarded to the exact same condition as the banner, so
+  // it is 0 for non-PAYG, post-key-handover, or upfront-not-required rentals.
+  const paygUpfront = useMemo(() => {
+    const active =
+      !!rental &&
+      !!(rental as any).is_pay_as_you_go &&
+      !!(rentalSettings as any)?.payg_upfront_required &&
+      !isKeyHandoverCompleted;
+    if (!active) return { required: 0, satisfied: true, unmetDue: 0 };
+    const base = Number((rental as any)?.monthly_amount) || 0;
+    const taxPct = (rentalSettings as any)?.tax_enabled
+      ? Number((rentalSettings as any)?.tax_percentage || 0)
+      : 0;
+    const svcPct =
+      (rentalSettings as any)?.service_fee_enabled &&
+      (rentalSettings as any)?.service_fee_type === "percentage"
+        ? Number((rentalSettings as any)?.service_fee_value || 0)
+        : 0;
+    // Identical formula to firstPeriodTotal at ~line 2720-2722.
+    const required =
+      Math.round(
+        (base + Math.round(base * taxPct) / 100 + Math.round(base * svcPct) / 100) *
+          100,
+      ) / 100;
+    const satisfied = rentalPaymentsTotal >= required - 0.01;
+    const unmetDue = satisfied
+      ? 0
+      : Math.round((required - rentalPaymentsTotal) * 100) / 100;
+    return { required, satisfied, unmetDue };
+  }, [rental, rentalSettings, isKeyHandoverCompleted, rentalPaymentsTotal]);
+
   if (isLoading) {
     return <div>Loading rental details...</div>;
   }
@@ -5725,7 +5763,10 @@ const RentalDetail = () => {
           customer_id={rental.customers?.id}
           vehicle_id={rental.vehicles?.id}
           rental_id={rental.id}
-          outstandingBalanceOverride={outstandingBalance}
+          // Surface the PAYG upfront requirement when nothing has accrued yet, so
+          // Record Payment agrees with the Collect Now banner instead of wrongly
+          // saying "No outstanding balance". Editable (override, not defaultAmount).
+          outstandingBalanceOverride={Math.max(outstandingBalance, paygUpfront.unmetDue)}
         />
       )}
 
