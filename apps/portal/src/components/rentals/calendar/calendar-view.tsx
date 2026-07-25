@@ -310,12 +310,19 @@ export function CalendarView({ filters }: CalendarViewProps) {
             </div>
           ) : (
             <div
-              // pointer-events-auto: Radix Select/Popover (used by the header's
-              // date-jump picker) sets `document.body { pointer-events: none }`
-              // while open; if that lock leaks after a jump it would silently
-              // swallow every price-cell click. This guarantees the grid is always
-              // interactive regardless of body state.
-              className="overflow-x-auto pointer-events-auto [--vehicle-col:160px] sm:[--vehicle-col:240px]"
+              // ONE scroll container for BOTH axes. Previously the date header and
+              // the vehicle rows lived in separate scrollers (the rows used
+              // overflow-y-auto, which CSS forces to overflow-x:auto too), so they
+              // drifted out of horizontal sync — the header's "day 27" ended up over
+              // empty body space and clicks there hit nothing. Now the header
+              // (sticky top-0) and the vehicle column (sticky left-0) stay pinned
+              // while everything scrolls together, so columns always align.
+              // pointer-events-auto also guards against a Radix body pointer-events
+              // lock leaking from the header's jump picker and swallowing cell clicks.
+              className={cn(
+                "overflow-auto pointer-events-auto [--vehicle-col:160px] sm:[--vehicle-col:240px]",
+                isFullscreen ? "max-h-[calc(100vh-120px)]" : "max-h-[calc(100vh-380px)]"
+              )}
             >
               {/* Date header row */}
               <div className="flex border-b sticky top-0 z-20 bg-background">
@@ -376,13 +383,9 @@ export function CalendarView({ filters }: CalendarViewProps) {
                 </div>
               </div>
 
-              {/* Vehicle rows */}
-              <div
-                className={cn(
-                  "overflow-y-auto",
-                  isFullscreen ? "max-h-[calc(100vh-120px)]" : "max-h-[calc(100vh-380px)]"
-                )}
-              >
+              {/* Vehicle rows — no own scroll; the outer container scrolls both axes
+                  so header + rows stay aligned (vertical scroll bounded by its max-h). */}
+              <div>
                 <div className="relative">
                   {/* Today indicator line */}
                   {todayIndex >= 0 && (
