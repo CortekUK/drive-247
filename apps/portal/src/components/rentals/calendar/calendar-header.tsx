@@ -8,9 +8,90 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CalendarIcon, ChevronLeft, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
 import { ViewType, formatDateRange } from "@/lib/calendar-utils";
 import { cn } from "@/lib/utils";
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+// Clean month/year jumper. Two on-brand <Select>s drive a controlled calendar,
+// so the operator can leap to any month/year (Sam books far ahead) in a single
+// pick — no react-day-picker native dropdown clutter. Mounted fresh each time the
+// popover opens (Radix unmounts content on close), so it always starts on the
+// current view.
+function JumpPicker({
+  anchor,
+  onJump,
+}: {
+  anchor: Date;
+  onJump: (date: Date) => void;
+}) {
+  const [displayMonth, setDisplayMonth] = useState<Date>(anchor);
+  const thisYear = new Date().getFullYear();
+  const years = Array.from({ length: 12 }, (_, i) => thisYear - 1 + i); // last year → +10
+
+  return (
+    <div className="w-[268px] space-y-3 p-3">
+      <div className="flex items-center gap-2">
+        <Select
+          value={String(displayMonth.getMonth())}
+          onValueChange={(v) =>
+            setDisplayMonth(new Date(displayMonth.getFullYear(), Number(v), 1))
+          }
+        >
+          <SelectTrigger className="h-8 flex-1 text-sm" aria-label="Month">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {MONTHS.map((m, i) => (
+              <SelectItem key={m} value={String(i)}>
+                {m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={String(displayMonth.getFullYear())}
+          onValueChange={(v) =>
+            setDisplayMonth(new Date(Number(v), displayMonth.getMonth(), 1))
+          }
+        >
+          <SelectTrigger className="h-8 w-[86px] text-sm" aria-label="Year">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {years.map((y) => (
+              <SelectItem key={y} value={String(y)}>
+                {y}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <Calendar
+        mode="single"
+        month={displayMonth}
+        onMonthChange={setDisplayMonth}
+        selected={anchor}
+        onSelect={(date) => date && onJump(date)}
+        // The selects are the month/year control, so hide the calendar's own
+        // caption entirely to keep the popover clean and minimal.
+        classNames={{ caption: "hidden" }}
+        className="p-0 pointer-events-auto"
+      />
+    </div>
+  );
+}
 
 interface CalendarHeaderProps {
   rangeStart: Date;
@@ -66,21 +147,11 @@ export function CalendarHeader({
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={rangeStart}
-              defaultMonth={rangeStart}
-              // Month + year dropdowns so the operator can jump years ahead in one
-              // pick (Sam gets bookings well out) instead of paging month-by-month.
-              captionLayout="dropdown-buttons"
-              fromYear={new Date().getFullYear() - 1}
-              toYear={new Date().getFullYear() + 3}
-              className="p-3 pointer-events-auto"
-              onSelect={(date) => {
-                if (date) {
-                  onJumpToDate(date);
-                  setJumpOpen(false);
-                }
+            <JumpPicker
+              anchor={rangeStart}
+              onJump={(date) => {
+                onJumpToDate(date);
+                setJumpOpen(false);
               }}
             />
           </PopoverContent>
