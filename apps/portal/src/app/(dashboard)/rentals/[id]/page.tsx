@@ -1766,7 +1766,11 @@ const RentalDetail = () => {
       if (!file) return;
       try {
         toast({ title: 'Uploading...', description: 'Uploading insurance document' });
-        const fileName = `${rental.customer_id}/${Date.now()}_${file.name}`;
+        // Sanitize the filename before it becomes part of the Supabase Storage key.
+        // Supabase rejects keys with characters outside its allow-list (e.g. the
+        // U+202F narrow-no-break-space macOS puts before AM/PM in screenshot names),
+        // failing with "Invalid key". The original name is kept for display below.
+        const fileName = `${rental.customer_id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
         const { error: uploadError } = await supabase.storage
           .from('customer-documents')
           .upload(fileName, file);
@@ -4909,7 +4913,11 @@ const RentalDetail = () => {
                       try {
                         toast({ title: "Uploading...", description: "Uploading insurance document" });
 
-                        const fileName = `${rental.customer_id}/${Date.now()}_${file.name}`;
+                        // Sanitize the filename before it becomes part of the Supabase Storage key.
+        // Supabase rejects keys with characters outside its allow-list (e.g. the
+        // U+202F narrow-no-break-space macOS puts before AM/PM in screenshot names),
+        // failing with "Invalid key". The original name is kept for display below.
+        const fileName = `${rental.customer_id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
                         const { error: uploadError } = await supabase.storage
                           .from('customer-documents')
                           .upload(fileName, file);

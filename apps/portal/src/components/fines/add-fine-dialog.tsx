@@ -215,7 +215,9 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId, prese
 
       if (evidenceFiles.length > 0) {
         for (const file of evidenceFiles) {
-          const fileName = `${fine.id}/${Date.now()}-${file.name}`;
+          // Sanitize the filename for the Supabase Storage key — see rentals upload:
+          // macOS screenshot names carry a U+202F space that Storage rejects ("Invalid key").
+          const fileName = `${fine.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
           const { error: uploadError } = await supabase.storage
             .from('fine-evidence')
