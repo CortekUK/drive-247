@@ -191,6 +191,10 @@ export function CalendarView({ filters }: CalendarViewProps) {
     setAnchorDate(new Date());
   };
 
+  const handleJumpToDate = (date: Date) => {
+    setAnchorDate(date);
+  };
+
   const totalDays = dates.length;
   const todayIndex = dates.findIndex((d) => isToday(d));
 
@@ -211,6 +215,7 @@ export function CalendarView({ filters }: CalendarViewProps) {
           onPrev={handlePrev}
           onNext={handleNext}
           onToday={handleToday}
+          onJumpToDate={handleJumpToDate}
           isFullscreen={isFullscreen}
           onToggleFullscreen={() => setIsFullscreen((f) => !f)}
         />
