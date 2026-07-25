@@ -310,7 +310,12 @@ export function CalendarView({ filters }: CalendarViewProps) {
             </div>
           ) : (
             <div
-              className="overflow-x-auto [--vehicle-col:160px] sm:[--vehicle-col:240px]"
+              // pointer-events-auto: Radix Select/Popover (used by the header's
+              // date-jump picker) sets `document.body { pointer-events: none }`
+              // while open; if that lock leaks after a jump it would silently
+              // swallow every price-cell click. This guarantees the grid is always
+              // interactive regardless of body state.
+              className="overflow-x-auto pointer-events-auto [--vehicle-col:160px] sm:[--vehicle-col:240px]"
             >
               {/* Date header row */}
               <div className="flex border-b sticky top-0 z-20 bg-background">

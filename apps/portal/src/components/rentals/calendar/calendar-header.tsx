@@ -150,8 +150,13 @@ export function CalendarHeader({
             <JumpPicker
               anchor={rangeStart}
               onJump={(date) => {
-                onJumpToDate(date);
+                // Close the popover FIRST, then defer navigation to the next frame.
+                // Radix restores `document.body { pointer-events }` in its close
+                // handler; navigating (which remounts the grid) in the same tick can
+                // race that cleanup and leave the body pointer-events locked, making
+                // price cells unclickable. Deferring lets the cleanup run first.
                 setJumpOpen(false);
+                requestAnimationFrame(() => onJumpToDate(date));
               }}
             />
           </PopoverContent>
