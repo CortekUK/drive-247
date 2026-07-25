@@ -324,9 +324,10 @@ export function CalendarView({ filters }: CalendarViewProps) {
                 isFullscreen ? "max-h-[calc(100vh-120px)]" : "max-h-[calc(100vh-380px)]"
               )}
             >
-              {/* Date header row */}
-              <div className="flex border-b sticky top-0 z-20 bg-background">
-                <div className="sticky left-0 z-30 w-[160px] min-w-[160px] sm:w-[240px] sm:min-w-[240px] border-r bg-background px-3 py-2">
+              {/* Date header row — solid bg + subtle bottom shadow so it stays
+                  clearly visible (not see-through) as rows scroll underneath it. */}
+              <div className="flex border-b sticky top-0 z-20 bg-background shadow-[0_2px_4px_-2px_rgba(0,0,0,0.08)]">
+                <div className="sticky left-0 z-30 w-[160px] min-w-[160px] sm:w-[240px] sm:min-w-[240px] border-r bg-background px-3 py-2 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.08)]">
                   <span className="text-xs font-medium text-muted-foreground">
                     Vehicle
                   </span>

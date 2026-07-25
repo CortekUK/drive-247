@@ -28,7 +28,7 @@ export function PricingRow({ vehicle, dateMeta, baseRate, currency, index, getMa
   return (
     <div className={cn("flex border-b", index % 2 === 0 ? "bg-background" : "bg-muted/20")} style={{ minHeight: "56px" }}>
       {/* Vehicle info — sticky left (mirrors the bookings row) */}
-      <div className="sticky left-0 z-10 w-[160px] min-w-[160px] sm:w-[240px] sm:min-w-[240px] border-r bg-inherit px-2 sm:px-3 py-2 flex items-center gap-2 sm:gap-3">
+      <div className="sticky left-0 z-10 w-[160px] min-w-[160px] sm:w-[240px] sm:min-w-[240px] border-r bg-background px-2 sm:px-3 py-2 flex items-center gap-2 sm:gap-3 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.08)]">
         <VehiclePhotoThumbnail
           photoUrl={vehicle.photo_url}
           vehicleReg={vehicle.reg}

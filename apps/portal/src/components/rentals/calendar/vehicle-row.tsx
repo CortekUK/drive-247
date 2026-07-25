@@ -105,7 +105,7 @@ export function VehicleRow({
       style={{ minHeight: `${rowHeight}px` }}
     >
       {/* Vehicle info — sticky left */}
-      <div className="group/veh sticky left-0 z-10 w-[160px] min-w-[160px] sm:w-[240px] sm:min-w-[240px] border-r bg-inherit px-2 sm:px-3 py-2 flex items-center gap-2 sm:gap-3">
+      <div className="group/veh sticky left-0 z-10 w-[160px] min-w-[160px] sm:w-[240px] sm:min-w-[240px] border-r bg-background px-2 sm:px-3 py-2 flex items-center gap-2 sm:gap-3 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.08)]">
         <div
           className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={() => router.push(`/vehicles/${vehicle.id}`)}
