@@ -1,7 +1,12 @@
 "use client";
 
+import { useState } from "react";
+import { Download } from "lucide-react";
 import { TenantSubscriptionInvoice } from "@/hooks/use-tenant-subscription";
 import { Skeleton } from "@/components/ui/skeleton";
+
+/** How many invoices to show before the tenant asks for more. */
+const RECENT_INVOICE_COUNT = 3;
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -34,11 +39,21 @@ function InvoiceHistoryTable({
   invoices: TenantSubscriptionInvoice[];
   onViewInvoice: (invoice: TenantSubscriptionInvoice) => void;
 }) {
+  const [showAll, setShowAll] = useState(false);
+
   if (invoices.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-4">No invoices yet</p>
     );
   }
+
+  // Show the three most recent transactions by default. Older invoices stay
+  // reachable behind "Show all" rather than being discarded — a tenant may
+  // legitimately need to pull an older receipt for their accountant.
+  const visibleInvoices = showAll
+    ? invoices
+    : invoices.slice(0, RECENT_INVOICE_COUNT);
+  const hiddenCount = invoices.length - visibleInvoices.length;
 
   return (
     <div className="overflow-x-auto">
@@ -66,8 +81,15 @@ function InvoiceHistoryTable({
           </tr>
         </thead>
         <tbody>
-          {invoices.map((inv) => {
+          {visibleInvoices.map((inv) => {
             const hasUsageBreakdown = inv.base_amount != null;
+            // Prefer the PDF (a real downloadable receipt); fall back to the
+            // hosted invoice page. Verified in prod: all existing invoice rows
+            // carry both, so this is populated in practice — but a row whose
+            // webhook never landed can have neither, and we show a disabled
+            // control rather than a dead link.
+            const documentUrl =
+              inv.stripe_invoice_pdf || inv.stripe_hosted_invoice_url || null;
             return (
               <tr key={inv.id} className="border-b last:border-0">
                 <td className="py-2.5 px-3 text-sm text-muted-foreground">
@@ -121,6 +143,26 @@ function InvoiceHistoryTable({
                         Pay
                       </a>
                     )}
+                    {documentUrl ? (
+                      <a
+                        href={documentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Download invoice"
+                        aria-label={`Download invoice for ${formatDate(inv.period_start)}`}
+                        className="text-muted-foreground transition-colors hover:text-primary"
+                      >
+                        <Download className="h-4 w-4" />
+                      </a>
+                    ) : (
+                      <span
+                        title="Invoice document not available"
+                        aria-label="Invoice document not available"
+                        className="cursor-not-allowed text-muted-foreground/40"
+                      >
+                        <Download className="h-4 w-4" />
+                      </span>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -128,6 +170,16 @@ function InvoiceHistoryTable({
           })}
         </tbody>
       </table>
+      {(hiddenCount > 0 || showAll) && (
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="mt-3 px-3 text-sm font-medium text-primary hover:underline"
+        >
+          {showAll
+            ? "Show less"
+            : `Show all ${invoices.length} invoices`}
+        </button>
+      )}
     </div>
   );
 }

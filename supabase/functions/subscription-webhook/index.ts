@@ -98,6 +98,59 @@ Deno.serve(async (req) => {
   return jsonResponse({ received: true });
 });
 
+/**
+ * Convert a Stripe unix-seconds timestamp to ISO, or null if it is absent or
+ * unusable. `new Date(undefined * 1000)` is an Invalid Date whose .toISOString()
+ * THROWS RangeError — the bug this guards against.
+ */
+function toIsoOrNull(unixSeconds: unknown): string | null {
+  const n = Number(unixSeconds);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const d = new Date(n * 1000);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/**
+ * Resolve a subscription's billing window.
+ *
+ * Stripe REMOVED `current_period_start` / `current_period_end` from the
+ * Subscription object in API version 2025-03-31 (basil) and moved them onto the
+ * subscription ITEMS. A webhook payload is rendered at the *endpoint's*
+ * configured API version, which can be newer than the SDK version we pin
+ * (2023-10-16) — so the raw event may omit these fields even though an SDK
+ * `subscriptions.retrieve()` still returns them.
+ *
+ * Reading them unguarded threw `RangeError: Invalid time value`, which 500'd
+ * EVERY customer.subscription.updated event and silently froze the DB (Stripe
+ * then retried and failed again). Prefer the SDK-retrieved object, fall back to
+ * the raw event, then to item-level fields, and never throw.
+ *
+ * Returns nulls when nothing is resolvable; callers must OMIT the columns in
+ * that case rather than writing null over a previously-good value.
+ */
+function resolveSubscriptionPeriod(
+  ...candidates: any[]
+): { start: string | null; end: string | null } {
+  for (const sub of candidates) {
+    if (!sub) continue;
+    const item = sub.items?.data?.[0];
+    const start =
+      toIsoOrNull(sub.current_period_start) ?? toIsoOrNull(item?.current_period_start);
+    const end =
+      toIsoOrNull(sub.current_period_end) ?? toIsoOrNull(item?.current_period_end);
+    if (start || end) return { start, end };
+  }
+  return { start: null, end: null };
+}
+
+/** Spread-able patch that never clobbers a good stored period with null. */
+function periodPatch(period: { start: string | null; end: string | null }) {
+  return {
+    ...(period.start ? { current_period_start: period.start } : {}),
+    ...(period.end ? { current_period_end: period.end } : {}),
+  };
+}
+
 async function handleCheckoutCompleted(
   stripe: Stripe,
   supabase: any,
@@ -222,8 +275,7 @@ async function handleCheckoutCompleted(
       amount: subscription.items.data[0]?.price?.unit_amount || 0,
       currency: subscription.currency,
       interval: subscription.items.data[0]?.price?.recurring?.interval || "month",
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      ...periodPatch(resolveSubscriptionPeriod(subscription)),
       card_brand: card?.brand || null,
       card_last4: card?.last4 || null,
       card_exp_month: card?.exp_month || null,
@@ -374,8 +426,10 @@ async function handleSubscriptionUpdated(
     .from("tenant_subscriptions")
     .update({
       status: subscription.status,
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      // fullSub first: it comes from the SDK pinned to apiVersion 2023-10-16, so
+      // it still carries top-level period fields even when the newer-versioned
+      // webhook payload omits them.
+      ...periodPatch(resolveSubscriptionPeriod(fullSub, subscription)),
       cancel_at: subscription.cancel_at ? new Date(subscription.cancel_at * 1000).toISOString() : null,
       canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
       ended_at: subscription.ended_at ? new Date(subscription.ended_at * 1000).toISOString() : null,

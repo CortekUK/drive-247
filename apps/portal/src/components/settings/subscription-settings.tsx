@@ -371,8 +371,13 @@ export function SubscriptionSettings() {
         </div>
       )}
 
-      {/* Plan Section */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between rounded-lg border bg-card p-4 sm:p-6 gap-3 sm:gap-4">
+      {/* Plan Section
+          No "Adjust plan" control by design: we do not offer self-serve plan
+          changes — pricing is agreed per-tenant on a sales call. The server
+          already enforces this (create-subscription-portal-session sets
+          subscription_update: false), so this is the UI catching up to the
+          actual product rule rather than a feature being hidden. */}
+      <div className="flex rounded-lg border bg-card p-4 sm:p-6">
         <div className="flex items-start gap-3 sm:gap-4 min-w-0">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 shrink-0">
             <Crown className="h-6 w-6 text-primary" />
@@ -390,9 +395,6 @@ export function SubscriptionSettings() {
             </p>
           </div>
         </div>
-        <Button variant="outline" disabled className="w-full sm:w-auto shrink-0">
-          Adjust plan
-        </Button>
       </div>
 
       <Separator />
