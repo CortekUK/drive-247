@@ -125,6 +125,8 @@ interface SubscriptionRow {
 }
 
 interface InvoiceRow {
+  /** tenant_subscription_invoices.id — the handle mark-invoice-paid expects. */
+  id: string;
   tenant_id: string;
   status: string;
   amount_due: number | null;
@@ -290,7 +292,8 @@ export default function RentalCompaniesPage() {
           supabase.from('subscription_plans').select('tenant_id').eq('is_active', true),
           supabase
             .from('tenant_subscription_invoices')
-            .select('tenant_id, status, amount_due, amount_paid, period_end, created_at')
+            // `id` is required to settle an invoice via mark-invoice-paid.
+            .select('id, tenant_id, status, amount_due, amount_paid, period_end, created_at')
             .order('created_at', { ascending: false }),
         ]);
 
@@ -399,13 +402,19 @@ export default function RentalCompaniesPage() {
       'paywall-set': 0, 'paywall-not-set': 0,
     };
     let mrrMinor = 0;
+    let atRiskMinor = 0;
     for (const t of filteredTenants) {
       const sub = selectSubscription(subsByTenant.get(t.id));
       const status = getSubStatus(sub, planTenantIds.has(t.id));
       tally[status] += 1;
       if (status === 'active' && sub?.amount) mrrMinor += sub.amount;
+      // Past-due revenue is OWED, not lost. Excluding it entirely made a
+      // collections problem look like churn: the moment a card failed, the
+      // headline figure silently dropped by that tenant's full amount with
+      // nothing on screen saying why. Surface it separately instead.
+      if (status === 'past-due' && sub?.amount) atRiskMinor += sub.amount;
     }
-    return { tally, mrrMinor };
+    return { tally, mrrMinor, atRiskMinor };
   })();
 
   if (loading) {
@@ -603,7 +612,20 @@ export default function RentalCompaniesPage() {
                   <span className="text-xs text-muted-foreground">{label}</span>
                 </div>
               ))}
-              <div className="flex flex-col ml-auto text-right">
+              {subscriptionSummary.atRiskMinor > 0 && (
+                <div className="flex flex-col ml-auto text-right">
+                  <span className="text-xl font-semibold tabular-nums text-amber-400">
+                    {formatMinor(subscriptionSummary.atRiskMinor, 'usd')}
+                  </span>
+                  <span className="text-xs text-muted-foreground">At risk (past due)</span>
+                </div>
+              )}
+              <div
+                className={cn(
+                  'flex flex-col text-right',
+                  subscriptionSummary.atRiskMinor > 0 ? '' : 'ml-auto'
+                )}
+              >
                 <span className="text-xl font-semibold tabular-nums text-emerald-400">
                   {formatMinor(subscriptionSummary.mrrMinor, 'usd')}
                 </span>
