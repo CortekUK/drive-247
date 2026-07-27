@@ -90,9 +90,9 @@ export function ContactInfoEditor({ content, onSave, isSaving }: ContactInfoEdit
                       {workingHoursSummary && (
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="h-7 gap-1.5 text-xs text-primary hover:text-primary"
+                          className="h-7 gap-1.5 rounded-md border-primary/40 bg-primary/5 px-2.5 text-xs font-medium text-primary shadow-sm transition-colors hover:bg-primary/15 hover:text-primary"
                           onClick={() =>
                             form.setValue("phone.availability", workingHoursSummary, {
                               shouldDirty: true,
