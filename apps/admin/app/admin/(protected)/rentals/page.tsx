@@ -19,12 +19,21 @@ import {
 } from '@/components/ui/table';
 import CreateTenantDialog from '@/components/admin/CreateTenantDialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Plus,
   ArrowRight,
   Search,
   Star,
   Building2,
   ArrowLeftRight,
+  ChevronDown,
+  CreditCard,
 } from 'lucide-react';
 
 interface Tenant {
@@ -94,13 +103,124 @@ const PUSH_STATUS_META: Record<PushStatus, { label: string; className: string }>
   'not-started': { label: 'Not started', className: 'text-muted-foreground' },
 };
 
+// ─── Subscription view ───────────────────────────────────────────────────────
+// Deliberately independent of the migration axes above: a tenant can be fully
+// migrated to UAE and still have never subscribed, and vice versa.
+
+/** Which extra column set the listing is focused on. Mutually exclusive. */
+type ViewMode = 'default' | 'migration' | 'subscription';
+
+interface SubscriptionRow {
+  tenant_id: string;
+  status: string;
+  amount: number | null;
+  currency: string | null;
+  interval: string | null;
+  plan_name: string | null;
+  current_period_end: string | null;
+  trial_end: string | null;
+  created_at: string;
+}
+
+interface InvoiceRow {
+  tenant_id: string;
+  status: string;
+  amount_due: number | null;
+  amount_paid: number | null;
+  created_at: string;
+}
+
+/**
+ * Two-level taxonomy.
+ *   Level 2 (has a subscription): active | trialing | past_due | expired
+ *   Level 1 (no subscription):    paywall-set (a plan exists, they just never
+ *                                 subscribed) | paywall-not-set (nothing to
+ *                                 subscribe TO — the paywall was never built).
+ * The level-1 split is the point: it separates "chase the client" from
+ * "we haven't done our own setup yet".
+ */
+type SubStatus =
+  | 'active'
+  | 'trialing'
+  | 'past-due'
+  | 'expired'
+  | 'paywall-set'
+  | 'paywall-not-set';
+
+const SUB_STATUS_META: Record<SubStatus, { label: string; className: string }> = {
+  active: { label: 'Subscribed', className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+  trialing: { label: 'Trialing', className: 'bg-sky-500/15 text-sky-400 border-sky-500/30' },
+  'past-due': { label: 'Past due', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  expired: { label: 'Expired', className: 'bg-destructive/15 text-destructive border-destructive/30' },
+  'paywall-set': { label: 'Not subscribed', className: 'bg-secondary text-muted-foreground border-border' },
+  'paywall-not-set': { label: 'Paywall not set', className: 'bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/30' },
+};
+
+/** Statuses Stripe considers a live billing relationship. */
+const LIVE_STATUSES = new Set(['active', 'trialing', 'past_due']);
+
+/**
+ * Pick the one subscription that represents a tenant today.
+ * A migrated tenant keeps a retired UK row alongside the live UAE one, so
+ * prefer a live status and fall back to the most recent row.
+ */
+function selectSubscription(rows: SubscriptionRow[] | undefined): SubscriptionRow | null {
+  if (!rows || rows.length === 0) return null;
+  const live = rows.filter((r) => LIVE_STATUSES.has(r.status));
+  const pool = live.length > 0 ? live : rows;
+  return pool.reduce((a, b) => (a.created_at >= b.created_at ? a : b));
+}
+
+function getSubStatus(sub: SubscriptionRow | null, hasActivePlan: boolean): SubStatus {
+  if (sub) {
+    if (sub.status === 'active') return 'active';
+    if (sub.status === 'trialing') return 'trialing';
+    if (sub.status === 'past_due') return 'past-due';
+    return 'expired'; // canceled | unpaid | incomplete_expired | paused | incomplete
+  }
+  return hasActivePlan ? 'paywall-set' : 'paywall-not-set';
+}
+
+/** Minor units → display. Amounts are stored in cents (verified in prod). */
+function formatMinor(amount: number | null, currency: string | null): string {
+  if (amount == null) return '—';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: (currency || 'usd').toUpperCase(),
+  }).format(amount / 100);
+}
+
+function formatDay(value: string | null): string {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+/**
+ * When the next invoice falls due. NOTE: tenant_subscription_invoices.due_date
+ * is NULL for every row in production because these subscriptions all bill
+ * charge_automatically — Stripe charges at period end rather than issuing a
+ * dated invoice. current_period_end is therefore the authoritative "next
+ * payment" date; a trial that has not yet converted bills at trial_end.
+ */
+function nextInvoiceDue(sub: SubscriptionRow | null): string | null {
+  if (!sub || !LIVE_STATUSES.has(sub.status)) return null;
+  if (sub.status === 'trialing' && sub.trial_end) return sub.trial_end;
+  return sub.current_period_end;
+}
+
 export default function RentalCompaniesPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [typeFilter, setTypeFilter] = useState<'all' | 'production' | 'test'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended'>('all');
-  const [showMigration, setShowMigration] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('default');
+  const [subsByTenant, setSubsByTenant] = useState<Map<string, SubscriptionRow[]>>(new Map());
+  const [planTenantIds, setPlanTenantIds] = useState<Set<string>>(new Set());
+  const [latestInvoice, setLatestInvoice] = useState<Map<string, InvoiceRow>>(new Map());
+  const [subsLoaded, setSubsLoaded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(() => {
@@ -116,6 +236,53 @@ export default function RentalCompaniesPage() {
   useEffect(() => {
     loadTenants();
   }, [typeFilter, statusFilter]);
+
+  // Subscription data is fetched lazily the first time the subscription view is
+  // opened, and kept thereafter. It is deliberately NOT part of loadTenants():
+  // that reruns on every type/status filter change, and these three tables do
+  // not depend on those filters. Reads are global (no tenant filter) — the
+  // super-admin dashboard already does the same, so RLS permits it.
+  useEffect(() => {
+    if (viewMode !== 'subscription' || subsLoaded) return;
+
+    (async () => {
+      try {
+        const [subsRes, plansRes, invoicesRes] = await Promise.all([
+          supabase
+            .from('tenant_subscriptions')
+            .select('tenant_id, status, amount, currency, interval, plan_name, current_period_end, trial_end, created_at'),
+          supabase.from('subscription_plans').select('tenant_id').eq('is_active', true),
+          supabase
+            .from('tenant_subscription_invoices')
+            .select('tenant_id, status, amount_due, amount_paid, created_at')
+            .order('created_at', { ascending: false }),
+        ]);
+
+        const subs = new Map<string, SubscriptionRow[]>();
+        for (const row of (subsRes.data as SubscriptionRow[] | null) ?? []) {
+          const list = subs.get(row.tenant_id);
+          if (list) list.push(row);
+          else subs.set(row.tenant_id, [row]);
+        }
+        setSubsByTenant(subs);
+
+        setPlanTenantIds(
+          new Set(((plansRes.data as { tenant_id: string }[] | null) ?? []).map((p) => p.tenant_id))
+        );
+
+        // Rows arrive newest-first, so the first hit per tenant is the latest.
+        const latest = new Map<string, InvoiceRow>();
+        for (const inv of (invoicesRes.data as InvoiceRow[] | null) ?? []) {
+          if (!latest.has(inv.tenant_id)) latest.set(inv.tenant_id, inv);
+        }
+        setLatestInvoice(latest);
+
+        setSubsLoaded(true);
+      } catch (error) {
+        console.error('Error loading subscription data:', error);
+      }
+    })();
+  }, [viewMode, subsLoaded]);
 
   const loadTenants = async () => {
     try {
@@ -172,6 +339,29 @@ export default function RentalCompaniesPage() {
       if (aFav !== bFav) return aFav - bFav;
       return 0; // preserve original order otherwise
     });
+
+  const isSubscriptionView = viewMode === 'subscription';
+
+  /**
+   * Roll-up across the tenants currently in view (so it respects search and the
+   * type/status filters). MRR counts only genuinely-billing subscriptions —
+   * trialing tenants are not paying yet and expired ones never will, so folding
+   * either into the headline number would overstate revenue.
+   */
+  const subscriptionSummary = (() => {
+    const tally: Record<SubStatus, number> = {
+      active: 0, trialing: 0, 'past-due': 0, expired: 0,
+      'paywall-set': 0, 'paywall-not-set': 0,
+    };
+    let mrrMinor = 0;
+    for (const t of filteredTenants) {
+      const sub = selectSubscription(subsByTenant.get(t.id));
+      const status = getSubStatus(sub, planTenantIds.has(t.id));
+      tally[status] += 1;
+      if (status === 'active' && sub?.amount) mrrMinor += sub.amount;
+    }
+    return { tally, mrrMinor };
+  })();
 
   if (loading) {
     return (
@@ -298,25 +488,88 @@ export default function RentalCompaniesPage() {
               ))}
             </div>
 
-            {/* Divider before the migration toggle */}
+            {/* Divider before the view-mode picker */}
             <div className="hidden sm:block w-px self-stretch bg-border" />
 
-            {/* Migration status toggle — reveals the UK→UAE column */}
-            <button
-              onClick={() => setShowMigration((v) => !v)}
-              className={cn(
-                'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all border whitespace-nowrap',
-                showMigration
-                  ? 'bg-primary/15 text-primary border-primary/30'
-                  : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
-              )}
-            >
-              <ArrowLeftRight className="h-4 w-4" />
-              {showMigration ? 'Hide migration' : 'Show migration status'}
-            </button>
+            {/* View focus — migration and subscription are separate concerns and
+                are mutually exclusive, so a radio group rather than two toggles. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all border whitespace-nowrap',
+                    viewMode !== 'default'
+                      ? 'bg-primary/15 text-primary border-primary/30'
+                      : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
+                  )}
+                >
+                  {viewMode === 'subscription' ? (
+                    <CreditCard className="h-4 w-4" />
+                  ) : (
+                    <ArrowLeftRight className="h-4 w-4" />
+                  )}
+                  {viewMode === 'migration'
+                    ? 'Migration status'
+                    : viewMode === 'subscription'
+                    ? 'Subscription status'
+                    : 'Show status'}
+                  <ChevronDown className="h-4 w-4 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuRadioGroup
+                  value={viewMode}
+                  onValueChange={(v) => setViewMode(v as ViewMode)}
+                >
+                  <DropdownMenuRadioItem value="default">None</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="migration">
+                    Show migration status
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="subscription">
+                    Show Subscription Status
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </CardContent>
       </Card>
+
+      {/* Subscription roll-up — the numbers George is chasing, before he
+          starts reading rows. Only rendered in the subscription view. */}
+      {isSubscriptionView && subsLoaded && (
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+              {(
+                [
+                  ['active', 'Subscribed'],
+                  ['trialing', 'Trialing'],
+                  ['past-due', 'Past due'],
+                  ['expired', 'Expired'],
+                  ['paywall-set', 'Not subscribed'],
+                  ['paywall-not-set', 'Paywall not set'],
+                ] as [SubStatus, string][]
+              ).map(([key, label]) => (
+                <div key={key} className="flex flex-col">
+                  <span className="text-xl font-semibold tabular-nums">
+                    {subscriptionSummary.tally[key]}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{label}</span>
+                </div>
+              ))}
+              <div className="flex flex-col ml-auto text-right">
+                <span className="text-xl font-semibold tabular-nums text-emerald-400">
+                  {formatMinor(subscriptionSummary.mrrMinor, 'usd')}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Active subscription volume
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Table */}
       <Card>
@@ -325,10 +578,22 @@ export default function RentalCompaniesPage() {
             <TableRow className="bg-primary/5 hover:bg-primary/5">
               <TableHead className="w-10"></TableHead>
               <TableHead>Company</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Status</TableHead>
-              {showMigration && <TableHead>Migration</TableHead>}
-              <TableHead>Created</TableHead>
+              {/* Subscription view drops Type/Status/Created: when you are
+                  chasing billing, "production / active / created 3 months ago"
+                  is noise. The middle belongs entirely to subscription data. */}
+              {!isSubscriptionView && <TableHead>Type</TableHead>}
+              {!isSubscriptionView && <TableHead>Status</TableHead>}
+              {viewMode === 'migration' && <TableHead>Migration</TableHead>}
+              {isSubscriptionView && (
+                <>
+                  <TableHead>Subscription</TableHead>
+                  <TableHead>Plan</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Next invoice due</TableHead>
+                  <TableHead>Last invoice</TableHead>
+                </>
+              )}
+              {!isSubscriptionView && <TableHead>Created</TableHead>}
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -352,21 +617,25 @@ export default function RentalCompaniesPage() {
                   </button>
                 </TableCell>
                 <TableCell className="font-medium">{tenant.company_name}</TableCell>
-                <TableCell>
-                  {tenant.tenant_type ? (
-                    <Badge variant={tenant.tenant_type === 'production' ? 'info' : 'warning'} className="capitalize whitespace-nowrap">
-                      {tenant.tenant_type}
+                {!isSubscriptionView && (
+                  <TableCell>
+                    {tenant.tenant_type ? (
+                      <Badge variant={tenant.tenant_type === 'production' ? 'info' : 'warning'} className="capitalize whitespace-nowrap">
+                        {tenant.tenant_type}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                )}
+                {!isSubscriptionView && (
+                  <TableCell>
+                    <Badge variant={tenant.status === 'active' ? 'success' : 'destructive'} className="capitalize whitespace-nowrap">
+                      {tenant.status}
                     </Badge>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={tenant.status === 'active' ? 'success' : 'destructive'} className="capitalize whitespace-nowrap">
-                    {tenant.status}
-                  </Badge>
-                </TableCell>
-                {showMigration && (() => {
+                  </TableCell>
+                )}
+                {viewMode === 'migration' && (() => {
                   const state = getMigrationState(tenant);
                   const push = getPushStatus(tenant, state);
                   const sm = MIGRATION_STATE_META[state];
@@ -384,9 +653,80 @@ export default function RentalCompaniesPage() {
                     </TableCell>
                   );
                 })()}
-                <TableCell className="text-muted-foreground tabular-nums">
-                  {new Date(tenant.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
-                </TableCell>
+                {isSubscriptionView && (() => {
+                  const sub = selectSubscription(subsByTenant.get(tenant.id));
+                  const subStatus = getSubStatus(sub, planTenantIds.has(tenant.id));
+                  const meta = SUB_STATUS_META[subStatus];
+                  const inv = latestInvoice.get(tenant.id);
+                  const due = nextInvoiceDue(sub);
+
+                  // Until the fetch lands, render placeholders rather than
+                  // "Paywall not set" — an absent Map would otherwise libel
+                  // every tenant as unconfigured for a frame.
+                  if (!subsLoaded) {
+                    return (
+                      <>
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <TableCell key={i}><Skeleton className="h-5 w-20" /></TableCell>
+                        ))}
+                      </>
+                    );
+                  }
+
+                  return (
+                    <>
+                      <TableCell>
+                        <span className={cn('inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap', meta.className)}>
+                          {meta.label}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground whitespace-nowrap">
+                        {sub?.plan_name || '—'}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums whitespace-nowrap">
+                        {sub ? (
+                          <>
+                            {formatMinor(sub.amount, sub.currency)}
+                            <span className="text-muted-foreground text-xs">
+                              /{sub.interval || 'month'}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground tabular-nums whitespace-nowrap">
+                        {formatDay(due)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {inv ? (
+                          <span
+                            className={cn(
+                              'text-[11px] font-medium',
+                              inv.status === 'paid'
+                                ? 'text-emerald-400'
+                                : inv.status === 'open'
+                                ? 'text-amber-400'
+                                : 'text-destructive'
+                            )}
+                          >
+                            {inv.status === 'paid' ? 'Paid' : inv.status === 'open' ? 'Unpaid' : 'Failed'}
+                            <span className="text-muted-foreground ml-1">
+                              {formatDay(inv.created_at)}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    </>
+                  );
+                })()}
+                {!isSubscriptionView && (
+                  <TableCell className="text-muted-foreground tabular-nums">
+                    {new Date(tenant.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </TableCell>
+                )}
                 <TableCell className="text-right">
                   <Button variant="ghost" size="sm" asChild>
                     <Link href={`/admin/rentals/${tenant.id}`}>
