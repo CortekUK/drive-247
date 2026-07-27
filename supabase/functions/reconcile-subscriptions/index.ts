@@ -75,6 +75,48 @@ function resolvePeriod(sub: any): { start: string | null; end: string | null } {
   };
 }
 
+/**
+ * The subscription's headline recurring price, in minor units.
+ *
+ * DO NOT use items.data[0] — these subscriptions routinely carry MORE THAN ONE
+ * item: the plan itself, a silently-attached metered e-sign usage price, and
+ * (for the $1 card-verification flow) a 100-minor-unit line. Stripe does not
+ * guarantee item ordering, so [0] is a coin flip. Reading it that way once
+ * rewrote a $350/mo plan as $1/mo.
+ *
+ * Rule: ignore metered items (they have no fixed unit_amount and are billed on
+ * usage), then take the LARGEST licensed recurring amount — the plan always
+ * dominates the incidental $1 verification line.
+ */
+function resolveAmount(sub: any): number {
+  const items: any[] = sub?.items?.data ?? [];
+  const licensed = items.filter(
+    (i) => i?.price?.recurring && i.price.recurring.usage_type !== "metered",
+  );
+  // Stripe bills unit_amount x quantity — a 2-seat $175 item is a $350 charge.
+  // Ignoring quantity once made a $350 plan read as $175.
+  const amounts = licensed
+    .map((i) => Number(i?.price?.unit_amount) * (Number(i?.quantity) || 1))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (amounts.length === 0) return 0;
+  return Math.max(...amounts);
+}
+
+/** Interval of the item that produced the headline amount. */
+function resolveInterval(sub: any): string {
+  const items: any[] = sub?.items?.data ?? [];
+  const licensed = items.filter(
+    (i) => i?.price?.recurring && i.price.recurring.usage_type !== "metered",
+  );
+  let best: any = null;
+  for (const i of licensed) {
+    const n = Number(i?.price?.unit_amount);
+    if (!Number.isFinite(n)) continue;
+    if (!best || n > Number(best.price.unit_amount)) best = i;
+  }
+  return best?.price?.recurring?.interval ?? "month";
+}
+
 function toSnapshot(
   sub: any,
   account: SubscriptionAccount,
@@ -92,9 +134,9 @@ function toSnapshot(
       ? sub.customer
       : sub.customer?.id ?? null,
     status: sub.status,
-    amount: sub.items?.data?.[0]?.price?.unit_amount ?? 0,
+    amount: resolveAmount(sub),
     currency: sub.currency ?? "usd",
-    interval: sub.items?.data?.[0]?.price?.recurring?.interval ?? "month",
+    interval: resolveInterval(sub),
     current_period_start: period.start,
     current_period_end: period.end,
     cancel_at: toIso(sub.cancel_at),
@@ -329,7 +371,9 @@ Deno.serve(async (req) => {
             stripe_subscription_id: snap.stripe_subscription_id,
             stripe_customer_id: snap.stripe_customer_id,
             status: snap.status,
-            amount: snap.amount,
+            // amount is NOT NULL, so an insert must supply something; but never
+            // let an unresolvable price (0) overwrite a good stored figure.
+            ...(snap.amount > 0 || !row ? { amount: snap.amount } : {}),
             currency: snap.currency,
             interval: snap.interval,
             cancel_at: snap.cancel_at,
