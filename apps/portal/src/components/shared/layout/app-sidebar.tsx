@@ -154,6 +154,7 @@ export function AppSidebar() {
     isTrialing,
     trialDaysRemaining,
     isInGracePeriod,
+    isGraceExpired,
     graceDaysRemaining,
     graceSeverity,
   } = useTenantSubscription();
@@ -161,9 +162,18 @@ export function AppSidebar() {
   // A failed payment outranks trial/live in the footer badge: it is the only
   // one of the three that needs the operator to DO something, and it escalates
   // amber → red as the 7-day grace window runs out.
-  const paymentDue = isInGracePeriod;
-  const paymentDueCritical = graceSeverity === "critical";
-  const paymentDueLabel = `Your payment is due · ${graceDaysRemaining}d left`;
+  //
+  // Covers the EXPIRED state too. Gating on isInGracePeriod alone meant that the
+  // moment the window closed the badge fell back to a green "Live" chip sitting
+  // behind a modal telling the operator their access had been canceled — the two
+  // surfaces flatly contradicting each other at the worst possible moment.
+  const paymentDue = isInGracePeriod || isGraceExpired;
+  const paymentDueCritical = graceSeverity === "critical" || isGraceExpired;
+  // The client's wording, verbatim. The countdown rides alongside it rather
+  // than being folded into the sentence.
+  const paymentDueLabel = "Your payment is due.";
+  // Past the window there are no days left to count down — say so.
+  const paymentDueDetail = isGraceExpired ? "Overdue" : `${graceDaysRemaining}d left`;
   const paymentDueClass = paymentDueCritical
     ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400"
     : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400";
@@ -502,7 +512,7 @@ export function AppSidebar() {
                     </TooltipTrigger>
                     <TooltipContent side="right">
                       {paymentDue
-                        ? paymentDueLabel
+                        ? `${paymentDueLabel} ${paymentDueDetail}`
                         : isTrialing
                         ? `Setup Mode · ${trialDaysRemaining}d left`
                         : "Live"}
@@ -520,6 +530,7 @@ export function AppSidebar() {
                       <>
                         <AlertTriangle className="h-3.5 w-3.5" />
                         <span>{paymentDueLabel}</span>
+                        <span className="opacity-70">{paymentDueDetail}</span>
                       </>
                     ) : isTrialing ? (
                       <>
@@ -682,7 +693,7 @@ export function AppSidebar() {
                   </TooltipTrigger>
                   <TooltipContent side="right">
                     {paymentDue
-                      ? paymentDueLabel
+                      ? `${paymentDueLabel} ${paymentDueDetail}`
                       : isTrialing
                       ? `Setup Mode · ${trialDaysRemaining}d left`
                       : "Live"}
@@ -700,6 +711,7 @@ export function AppSidebar() {
                     <>
                       <AlertTriangle className="h-3.5 w-3.5" />
                       <span>{paymentDueLabel}</span>
+                        <span className="opacity-70">{paymentDueDetail}</span>
                     </>
                   ) : isTrialing ? (
                     <>

@@ -292,6 +292,8 @@ export function SubscriptionSettings() {
   const {
     subscription,
     isSubscribed,
+    isGraceExpired,
+    outstandingInvoiceUrl,
     isLoading,
     invoices,
     invoicesLoading,
@@ -350,6 +352,59 @@ export function SubscriptionSettings() {
       <div className="space-y-6">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-[300px] w-full rounded-xl" />
+      </div>
+    );
+  }
+
+  // An existing customer whose grace window lapsed is NOT an unsubscribed
+  // prospect. Sending them down the "choose a plan" path is a dead end:
+  // create-subscription-checkout rejects them with 409 "Tenant already has an
+  // active subscription", so the Subscribe button can only ever produce an
+  // error toast. What they need is the outstanding invoice.
+  if (isGraceExpired || subscription?.status === "past_due") {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Payment required
+            </CardTitle>
+            <CardDescription>
+              Your last subscription payment did not go through.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {isGraceExpired
+                ? "Your subscription has expired, and your access has been canceled. Please pay your pending invoice to restore access."
+                : "Please settle your outstanding invoice to keep your subscription active."}
+            </p>
+            {outstandingInvoiceUrl ? (
+              <Button asChild>
+                <a
+                  href={outstandingInvoiceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Pay your pending invoice
+                </a>
+              </Button>
+            ) : (
+              <p className="text-sm">
+                Please contact{" "}
+                <a
+                  href="mailto:support@drive-247.com"
+                  className="font-medium text-primary hover:underline"
+                >
+                  support@drive-247.com
+                </a>{" "}
+                to settle your invoice.
+              </p>
+            )}
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -463,10 +518,31 @@ export function SubscriptionSettings() {
             <p className="text-sm text-muted-foreground">
               {formatCurrency(subscription?.amount || 20000, subscription?.currency || "usd")}/{subscription?.interval || "month"}
             </p>
-            <p className="text-sm text-muted-foreground">
-              Your subscription will auto renew on{" "}
-              {formatDateLong(subscription?.current_period_end ?? null)}.
-            </p>
+            {/* Never promise a renewal that is not going to happen. A tenant
+                who has cancelled is scheduled to TERMINATE on cancel_at — and
+                telling them they will "auto renew" on the very day their access
+                ends is a support incident (or a chargeback) waiting to happen.
+                Same for a failed payment: renewal is not the next event, paying
+                the outstanding invoice is. */}
+            {subscription?.cancel_at || subscription?.canceled_at ? (
+              <p className="text-sm text-amber-600 dark:text-amber-500">
+                Your subscription is scheduled to end on{" "}
+                {formatDateLong(
+                  subscription?.cancel_at ?? subscription?.current_period_end ?? null,
+                )}
+                . You will keep access until then.
+              </p>
+            ) : subscription?.status === "past_due" ? (
+              <p className="text-sm text-amber-600 dark:text-amber-500">
+                Your last payment failed. Please settle your outstanding invoice
+                to keep your subscription active.
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Your subscription will auto renew on{" "}
+                {formatDateLong(subscription?.current_period_end ?? null)}.
+              </p>
+            )}
           </div>
         </div>
       </div>

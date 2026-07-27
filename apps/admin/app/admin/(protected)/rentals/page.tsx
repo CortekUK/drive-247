@@ -258,6 +258,7 @@ export default function RentalCompaniesPage() {
   const [planTenantIds, setPlanTenantIds] = useState<Set<string>>(new Set());
   const [latestInvoice, setLatestInvoice] = useState<Map<string, InvoiceRow>>(new Map());
   const [oldestUnpaidInvoice, setOldestUnpaidInvoice] = useState<Map<string, InvoiceRow>>(new Map());
+  const [settlingInvoiceId, setSettlingInvoiceId] = useState<string | null>(null);
   const [subsLoaded, setSubsLoaded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -355,6 +356,45 @@ export default function RentalCompaniesPage() {
       console.error('Error loading tenants:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Settle an overdue invoice that was paid outside Stripe.
+   *
+   * Deliberately routed through the mark-invoice-paid edge function rather than
+   * updating the row here: Stripe is the authority and the reconciler rewrites
+   * this table from it, so a client-side status write would be reverted within
+   * the hour while the tenant carried on being dunned.
+   */
+  const handleMarkPaid = async (invoice: InvoiceRow, company: string) => {
+    const reason = window.prompt(
+      `Mark ${company}'s ${formatMinor(invoice.amount_due, 'usd')} invoice as paid?\n\n` +
+        `This settles it in Stripe as paid out of band and is recorded against your account.\n` +
+        `Give a reason (min 10 characters) — e.g. "paid by bank transfer ref 12345":`,
+    );
+    if (reason === null) return;
+    if (reason.trim().length < 10) {
+      alert('A reason of at least 10 characters is required.');
+      return;
+    }
+
+    setSettlingInvoiceId(invoice.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('mark-invoice-paid', {
+        body: { invoiceId: invoice.id, reason: reason.trim() },
+      });
+      if (error) throw error;
+      alert(
+        `Settled in Stripe (${data?.stripeStatus ?? 'paid'}).\n\n` +
+          `The dashboard updates once Stripe's invoice.paid webhook lands.`,
+      );
+      // Force a refetch of subscription data on next open.
+      setSubsLoaded(false);
+    } catch (e: any) {
+      alert(`Could not settle this invoice:\n\n${e?.message ?? e}`);
+    } finally {
+      setSettlingInvoiceId(null);
     }
   };
 
@@ -792,9 +832,22 @@ export default function RentalCompaniesPage() {
                             Ended {formatDay(endedOn)}
                           </span>
                         ) : due.date ? (
-                          <span className={due.overdue ? 'font-medium text-destructive' : 'text-muted-foreground'}>
-                            {due.overdue ? `Overdue since ${formatDay(due.date)}` : formatDay(due.date)}
-                          </span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className={due.overdue ? 'font-medium text-destructive' : 'text-muted-foreground'}>
+                              {due.overdue ? `Overdue since ${formatDay(due.date)}` : formatDay(due.date)}
+                            </span>
+                            {/* Settle-out-of-band escape hatch, only where there
+                                is genuinely an unpaid invoice to settle. */}
+                            {due.overdue && unpaid && (
+                              <button
+                                onClick={() => handleMarkPaid(unpaid, tenant.company_name)}
+                                disabled={settlingInvoiceId === unpaid.id}
+                                className="w-fit text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
+                              >
+                                {settlingInvoiceId === unpaid.id ? 'Settling…' : 'Mark as paid'}
+                              </button>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

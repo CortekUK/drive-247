@@ -83,6 +83,13 @@ export function useTenantSubscription() {
     enabled: authed,
     staleTime: 30_000,
     retry: false,
+    // Grace expiry is a pure CLOCK event — no row changes when the window
+    // closes, so Realtime never fires and nothing would re-render. Without a
+    // poll, a tab left open across the boundary keeps showing a stale day count
+    // AND keeps full dashboard access indefinitely. One minute is well inside
+    // the smallest meaningful unit here (a day).
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 
   const invoicesQuery = useQuery({
@@ -323,10 +330,18 @@ export function useTenantSubscription() {
   const pastSubscriptionNeeded = subscriptionSettled && !subscriptionQuery.data;
   const pastSubscriptionSettled =
     pastSubscriptionQuery.isSuccess || pastSubscriptionQuery.isError;
+  // The grace decision is driven by the OPEN INVOICE, which lives in the
+  // invoices query. Resolving before it lands makes the blocker render its
+  // "contact support" fallback instead of the working Pay button, purely
+  // because the URL had not arrived yet. So when the tenant is past_due, wait
+  // for invoices too.
+  const invoicesSettled = invoicesQuery.isSuccess || invoicesQuery.isError;
+
   const isResolved =
     authed &&
     subscriptionSettled &&
-    (!pastSubscriptionNeeded || pastSubscriptionSettled);
+    (!pastSubscriptionNeeded || pastSubscriptionSettled) &&
+    (!isPastDue || invoicesSettled);
 
   return {
     subscription: subscriptionQuery.data,

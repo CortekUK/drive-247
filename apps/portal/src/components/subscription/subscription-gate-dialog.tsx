@@ -119,9 +119,24 @@ export function SubscriptionGateDialog({
               <DialogTitle className="text-xl">
                 Your subscription has expired
               </DialogTitle>
+              {/* Copy is the client's, verbatim. "here" is the link, so when we
+                  have a hosted invoice URL the word itself is the anchor. */}
               <p className="text-sm text-muted-foreground">
                 Your subscription has expired, and your access has been canceled.
-                Please pay your pending invoice to restore access.
+                Please pay your pending invoice{" "}
+                {outstandingInvoiceUrl ? (
+                  <a
+                    href={outstandingInvoiceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary underline underline-offset-2"
+                  >
+                    here
+                  </a>
+                ) : (
+                  "here"
+                )}
+                .
               </p>
             </DialogHeader>
 
