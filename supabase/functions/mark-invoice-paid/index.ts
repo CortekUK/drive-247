@@ -36,13 +36,22 @@ import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 
 const MIN_REASON_LENGTH = 10;
 
-async function verifySuperAdmin(supabase: any, userId: string): Promise<boolean> {
+/**
+ * app_users has its OWN primary key; the Supabase auth user is linked via
+ * auth_user_id. Matching on `id` silently matches nothing (verified: zero of 48
+ * app_users rows have an id equal to an auth.users id), which fails closed and
+ * would reject every super admin. Mirrors manage-subscription-plans.
+ */
+async function loadSuperAdmin(
+  supabase: any,
+  authUserId: string,
+): Promise<{ id: string } | null> {
   const { data } = await supabase
     .from("app_users")
-    .select("is_super_admin")
-    .eq("id", userId)
+    .select("id, is_super_admin")
+    .eq("auth_user_id", authUserId)
     .maybeSingle();
-  return data?.is_super_admin === true;
+  return data?.is_super_admin === true ? { id: data.id } : null;
 }
 
 Deno.serve(async (req) => {
@@ -61,9 +70,9 @@ Deno.serve(async (req) => {
 
   const { data: userData, error: userErr } = await supabase.auth.getUser(token);
   if (userErr || !userData?.user) return errorResponse("Invalid token", 401);
-  if (!(await verifySuperAdmin(supabase, userData.user.id))) {
-    return errorResponse("Super admin access required", 403);
-  }
+
+  const actor = await loadSuperAdmin(supabase, userData.user.id);
+  if (!actor) return errorResponse("Super admin access required", 403);
 
   // ── Input ───────────────────────────────────────────────────────────────
   let invoiceId = "";
@@ -130,7 +139,9 @@ Deno.serve(async (req) => {
   // Written after the fact so we only ever record overrides that really happened.
   const { error: auditErr } = await supabase.from("audit_logs").insert({
     action: "subscription_invoice_marked_paid",
-    actor_id: userData.user.id,
+    // app_users.id, not the auth uid — matches the convention in
+    // admin-create-user and keeps audit_logs joinable to app_users.
+    actor_id: actor.id,
     tenant_id: invoice.tenant_id,
     entity_type: "tenant_subscription_invoice",
     entity_id: invoice.id,
