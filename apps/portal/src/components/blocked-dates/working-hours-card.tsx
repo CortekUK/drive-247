@@ -379,6 +379,15 @@ export function WorkingHoursCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* These hours are the booking gate — NOT the public "availability" copy.
+            Point operators to where that text lives so the two don't silently drift. */}
+        <p className="text-sm text-muted-foreground rounded-lg border bg-muted/30 p-3">
+          These hours control <span className="font-medium text-foreground">when customers can book</span>. They
+          don&apos;t change the hours shown on your public site — set that under{' '}
+          <span className="font-medium text-foreground">Website Content → Contact</span>, where a{' '}
+          <span className="font-medium text-foreground">&ldquo;Use my Working Hours&rdquo;</span> button fills it to match.
+        </p>
+
         {/* Always Open Toggle */}
         <div className="flex items-center justify-between p-4 border rounded-lg">
           <div className="space-y-1">

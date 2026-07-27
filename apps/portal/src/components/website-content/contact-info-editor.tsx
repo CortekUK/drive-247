@@ -6,8 +6,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Save, Loader2, Phone, Mail, MapPin, MessageCircle } from "lucide-react";
+import { Save, Loader2, Phone, Mail, MapPin, MessageCircle, Clock } from "lucide-react";
 import type { ContactInfoContent } from "@/types/cms";
+import { useWorkingHoursSummary } from "@/hooks/use-working-hours-summary";
 
 const contactInfoSchema = z.object({
   phone: z.object({
@@ -38,6 +39,10 @@ export function ContactInfoEditor({ content, onSave, isSaving }: ContactInfoEdit
     resolver: zodResolver(contactInfoSchema),
     defaultValues: content,
   });
+
+  // Opt-in: lets the operator fill the public availability text from the hours
+  // they configured in Working Hours (booking gate). Never applied automatically.
+  const { summary: workingHoursSummary } = useWorkingHoursSummary();
 
   const handleSubmit = (data: ContactInfoContent) => {
     onSave(data);
@@ -80,11 +85,35 @@ export function ContactInfoEditor({ content, onSave, isSaving }: ContactInfoEdit
                 name="phone.availability"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Availability Text</FormLabel>
+                    <div className="flex items-center justify-between gap-2">
+                      <FormLabel>Availability Text</FormLabel>
+                      {workingHoursSummary && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1.5 text-xs text-primary hover:text-primary"
+                          onClick={() =>
+                            form.setValue("phone.availability", workingHoursSummary, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                          }
+                          title={`Fill with: ${workingHoursSummary}`}
+                        >
+                          <Clock className="h-3.5 w-3.5" />
+                          Use my Working Hours
+                        </Button>
+                      )}
+                    </div>
                     <FormControl>
                       <Input {...field} placeholder="24 hours a day, 7 days a week, 365 days a year" />
                     </FormControl>
-                    <FormDescription>Text shown below the phone number</FormDescription>
+                    <FormDescription>
+                      Text shown below the phone number and in the Availability card. This is separate
+                      from your Working Hours booking gate — use “Use my Working Hours” to match them,
+                      then edit the wording however you like before saving.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
