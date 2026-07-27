@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, ShieldX, Bolt, Search, X, Inbox, Wallet } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, ShieldX, Bolt, Search, X, Inbox, Wallet, AlertTriangle } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -150,7 +150,23 @@ export function AppSidebar() {
   const { unreadCount: chatUnreadCount } = useUnreadCount();
   const { data: enquiryStats } = useEnquiryStats();
   const { appUser } = useAuthStore();
-  const { isTrialing, trialDaysRemaining } = useTenantSubscription();
+  const {
+    isTrialing,
+    trialDaysRemaining,
+    isInGracePeriod,
+    graceDaysRemaining,
+    graceSeverity,
+  } = useTenantSubscription();
+
+  // A failed payment outranks trial/live in the footer badge: it is the only
+  // one of the three that needs the operator to DO something, and it escalates
+  // amber → red as the 7-day grace window runs out.
+  const paymentDue = isInGracePeriod;
+  const paymentDueCritical = graceSeverity === "critical";
+  const paymentDueLabel = `Your payment is due · ${graceDaysRemaining}d left`;
+  const paymentDueClass = paymentDueCritical
+    ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400"
+    : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400";
   const { isLive } = useSetupStatus();
   const { isManager, canView, canViewSettings } = useManagerPermissions();
 
@@ -467,13 +483,17 @@ export function AppSidebar() {
         {/* Footer — trial/live status */}
         <SidebarFooter className="border-t p-1.5">
           <SidebarMenu>
-            {(isTrialing || isLive) && (
+            {(paymentDue || isTrialing || isLive) && (
               <SidebarMenuItem>
                 {collapsed ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="flex items-center justify-center h-8">
-                        {isTrialing ? (
+                        {paymentDue ? (
+                          <AlertTriangle
+                            className={`h-4 w-4 ${paymentDueCritical ? "text-red-500" : "text-amber-500"}`}
+                          />
+                        ) : isTrialing ? (
                           <Timer className="h-4 w-4 text-blue-500" />
                         ) : (
                           <Zap className="h-4 w-4 text-green-500" />
@@ -481,16 +501,27 @@ export function AppSidebar() {
                       </div>
                     </TooltipTrigger>
                     <TooltipContent side="right">
-                      {isTrialing ? `Setup Mode · ${trialDaysRemaining}d left` : "Live"}
+                      {paymentDue
+                        ? paymentDueLabel
+                        : isTrialing
+                        ? `Setup Mode · ${trialDaysRemaining}d left`
+                        : "Live"}
                     </TooltipContent>
                   </Tooltip>
                 ) : (
                   <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium ${
-                    isTrialing
+                    paymentDue
+                      ? paymentDueClass
+                      : isTrialing
                       ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
                       : "bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-400"
                   }`}>
-                    {isTrialing ? (
+                    {paymentDue ? (
+                      <>
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        <span>{paymentDueLabel}</span>
+                      </>
+                    ) : isTrialing ? (
                       <>
                         <Timer className="h-3.5 w-3.5" />
                         <span>Setup Mode · {trialDaysRemaining}d left</span>
@@ -632,13 +663,17 @@ export function AppSidebar() {
       <SidebarFooter className="border-t p-1.5">
         <SidebarMenu>
           {/* Trial/Live Status Badge */}
-          {(isTrialing || isLive) && (
+          {(paymentDue || isTrialing || isLive) && (
             <SidebarMenuItem>
               {collapsed ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="flex items-center justify-center h-8">
-                      {isTrialing ? (
+                      {paymentDue ? (
+                        <AlertTriangle
+                          className={`h-4 w-4 ${paymentDueCritical ? "text-red-500" : "text-amber-500"}`}
+                        />
+                      ) : isTrialing ? (
                         <Timer className="h-4 w-4 text-blue-500" />
                       ) : (
                         <Zap className="h-4 w-4 text-green-500" />
@@ -646,16 +681,27 @@ export function AppSidebar() {
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="right">
-                    {isTrialing ? `Setup Mode · ${trialDaysRemaining}d left` : "Live"}
+                    {paymentDue
+                      ? paymentDueLabel
+                      : isTrialing
+                      ? `Setup Mode · ${trialDaysRemaining}d left`
+                      : "Live"}
                   </TooltipContent>
                 </Tooltip>
               ) : (
                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium ${
-                  isTrialing
+                  paymentDue
+                    ? paymentDueClass
+                    : isTrialing
                     ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
                     : "bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-400"
                 }`}>
-                  {isTrialing ? (
+                  {paymentDue ? (
+                    <>
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      <span>{paymentDueLabel}</span>
+                    </>
+                  ) : isTrialing ? (
                     <>
                       <Timer className="h-3.5 w-3.5" />
                       <span>Setup Mode · {trialDaysRemaining}d left</span>

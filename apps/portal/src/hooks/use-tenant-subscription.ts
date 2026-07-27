@@ -193,12 +193,83 @@ export function useTenantSubscription() {
     queryClient.invalidateQueries({ queryKey: ["tenant-subscription-invoices"] });
   };
 
+  // ── Dunning / grace period ────────────────────────────────────────────────
+  // A declined card must NOT lock an operator out of their business on day one.
+  // Stripe moves the subscription to `past_due` and keeps retrying; we give the
+  // tenant 7 days to fix it, warning with escalating urgency, and only hard-block
+  // once that window closes.
+  //
+  // ANCHOR: the oldest still-open invoice, NOT current_period_end. When a charge
+  // fails Stripe still rolls current_period_end forward to the next cycle, so
+  // anchoring on it would put the deadline a month in the future and the block
+  // would never fire. The unpaid invoice is the thing that is actually overdue.
+  const GRACE_DAYS = 7;
+  const isPastDue = subscriptionQuery.data?.status === "past_due";
+
+  const openInvoice = (() => {
+    const rows = invoicesQuery.data || [];
+    const unpaid = rows.filter(
+      (i) => i.status === "open" || i.status === "uncollectible"
+    );
+    if (unpaid.length === 0) return null;
+    // Oldest unpaid — that is the one whose clock started first.
+    return unpaid.reduce((a, b) =>
+      new Date(a.created_at).getTime() <= new Date(b.created_at).getTime() ? a : b
+    );
+  })();
+
+  const graceStartedAt = (() => {
+    if (!isPastDue) return null;
+    const anchor =
+      openInvoice?.period_end || openInvoice?.created_at || subscriptionQuery.data?.current_period_start;
+    if (!anchor) return null;
+    const t = new Date(anchor).getTime();
+    return Number.isNaN(t) ? null : t;
+  })();
+
+  const graceEndsAt =
+    graceStartedAt != null ? graceStartedAt + GRACE_DAYS * 86_400_000 : null;
+
+  /** Whole days left in the window; 0 on the final day. Never negative. */
+  const graceDaysRemaining =
+    graceEndsAt != null
+      ? Math.max(0, Math.ceil((graceEndsAt - Date.now()) / 86_400_000))
+      : 0;
+
+  /** Inside the 7 days — warn, do not block. */
+  const isInGracePeriod = isPastDue && graceEndsAt != null && Date.now() < graceEndsAt;
+
+  /**
+   * Past the window — hard block. Fails SAFE: if we cannot establish an anchor
+   * (graceEndsAt null, e.g. the invoice never synced) we treat the tenant as
+   * still in grace rather than locking them out on missing data.
+   */
+  const isGraceExpired = isPastDue && graceEndsAt != null && Date.now() >= graceEndsAt;
+
+  /** Escalate the warning's urgency over the window. */
+  const graceSeverity: "none" | "warning" | "critical" = !isInGracePeriod
+    ? "none"
+    : graceDaysRemaining <= 3
+      ? "critical"
+      : "warning";
+
+  /** Where to actually pay the outstanding invoice (not a new checkout). */
+  const outstandingInvoiceUrl =
+    openInvoice?.stripe_hosted_invoice_url || openInvoice?.stripe_invoice_pdf || null;
+
+  // A tenant inside the grace window keeps full access — they are still a
+  // customer with a payment problem, not a stranger who must "finish setup".
   const isSubscribed =
     subscriptionQuery.data?.status === "active" ||
-    subscriptionQuery.data?.status === "trialing";
+    subscriptionQuery.data?.status === "trialing" ||
+    isInGracePeriod ||
+    // Fail-open: past_due with no resolvable anchor must not lock anyone out.
+    (isPastDue && graceEndsAt == null);
 
-  // Tenant had a subscription that's no longer active (expired trial or canceled)
-  const hasExpiredSubscription = !isSubscribed && !!pastSubscriptionQuery.data;
+  // Tenant had a subscription that's no longer active (expired trial or canceled),
+  // or blew through the grace window on an unpaid invoice.
+  const hasExpiredSubscription =
+    (!isSubscribed && !!pastSubscriptionQuery.data) || isGraceExpired;
 
   // A trial whose end date has already passed is NOT actively trialing — the
   // subscription has (or should have) converted to active. Guard against a
@@ -263,6 +334,15 @@ export function useTenantSubscription() {
     hasExpiredSubscription,
     isTrialing,
     trialDaysRemaining,
+    // Dunning / grace
+    isPastDue,
+    isInGracePeriod,
+    isGraceExpired,
+    graceDaysRemaining,
+    graceSeverity,
+    graceEndsAt,
+    openInvoice,
+    outstandingInvoiceUrl,
     isLoading,
     isResolved,
     invoices: invoicesQuery.data || [],

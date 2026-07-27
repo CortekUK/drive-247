@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useTenant } from "@/contexts/TenantContext";
@@ -23,11 +24,18 @@ interface SubscriptionGateDialogProps {
    */
   open?: boolean;
   /**
-   * "setup" — never-subscribed tenant, Finish Setup copy.
-   * "expired" — subscription ended/canceled, harder language.
-   * Both are equally non-dismissible.
+   * "setup"    — never-subscribed tenant, Finish Setup copy.
+   * "expired"  — subscription ended/canceled, harder language.
+   * "past_due" — an existing customer whose payment failed and who has now
+   *              exhausted the 7-day grace window. They must PAY AN EXISTING
+   *              INVOICE, not buy a new subscription, so this variant shows the
+   *              outstanding invoice link instead of pricing cards. Showing
+   *              "choose a plan" to a paying customer is both confusing and
+   *              broken — create-subscription-checkout rejects them with
+   *              "Tenant already has an active subscription".
+   * All three are equally non-dismissible.
    */
-  variant?: "setup" | "expired";
+  variant?: "setup" | "expired" | "past_due";
 }
 
 /**
@@ -42,10 +50,11 @@ export function SubscriptionGateDialog({
   open = true,
   variant = "setup",
 }: SubscriptionGateDialogProps = {}) {
-  const isExpired = variant === "expired";
+  const isPastDue = variant === "past_due";
+  const isExpired = variant === "expired" || isPastDue;
   const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
   const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
-  const { createCheckoutSession } = useTenantSubscription();
+  const { createCheckoutSession, outstandingInvoiceUrl } = useTenantSubscription();
   const { tenant } = useTenant();
   const { signOut } = useAuth();
   const router = useRouter();
@@ -98,6 +107,52 @@ export function SubscriptionGateDialog({
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             <p className="mt-3 text-sm text-muted-foreground">Loading plans...</p>
           </div>
+        ) : isPastDue ? (
+          /* ── Existing customer, grace window exhausted ──
+             They already have a subscription; the problem is an unpaid invoice.
+             Send them straight to Stripe's hosted invoice page to settle it. */
+          <>
+            <DialogHeader className="text-center sm:text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+                <ShieldAlert className="h-6 w-6 text-destructive" />
+              </div>
+              <DialogTitle className="text-xl">
+                Your subscription has expired
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                Your subscription has expired, and your access has been canceled.
+                Please pay your pending invoice to restore access.
+              </p>
+            </DialogHeader>
+
+            <div className="mt-2 flex flex-col gap-3">
+              {outstandingInvoiceUrl ? (
+                <Button asChild className="w-full" size="lg">
+                  <a
+                    href={outstandingInvoiceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    Pay your pending invoice
+                  </a>
+                </Button>
+              ) : (
+                /* No invoice URL synced — never render a dead button; give them
+                   a human instead. */
+                <a
+                  href="mailto:support@drive-247.com"
+                  className="mx-auto inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+                >
+                  <Mail className="h-4 w-4" />
+                  Contact support@drive-247.com to settle your invoice
+                </a>
+              )}
+              <p className="text-center text-xs text-muted-foreground">
+                Access is restored automatically once your payment clears.
+              </p>
+            </div>
+          </>
         ) : !hasPlans ? (
           /* ── No plans configured ── */
           <>

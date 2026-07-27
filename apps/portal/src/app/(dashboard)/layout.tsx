@@ -77,6 +77,7 @@ export default function DashboardLayout({
   const {
     isSubscribed,
     hasExpiredSubscription,
+    isGraceExpired,
     isResolved: subscriptionResolved,
   } = useTenantSubscription();
   const { isManager, canAccessRoute, isLoading: permissionsLoading } = useManagerPermissions();
@@ -302,7 +303,9 @@ export default function DashboardLayout({
             caused the modal to fail to appear without a page refresh. */}
         <SubscriptionGateDialog
           open={showGate}
-          variant={hasExpiredSubscription ? "expired" : "setup"}
+          variant={
+            isGraceExpired ? "past_due" : hasExpiredSubscription ? "expired" : "setup"
+          }
         />
 
         {/* Recurring post-subscription nudge for outstanding setup tasks.

@@ -151,6 +151,57 @@ function periodPatch(period: { start: string | null; end: string | null }) {
   };
 }
 
+/** Columns the go-live readiness gate needs. */
+const GO_LIVE_SELECT =
+  "setup_completed_at, stripe_charges_enabled, own_stripe_account_id, stripe_onboarding_complete, bonzah_username";
+
+/**
+ * Decide which capabilities may switch from test to live now that the tenant is
+ * paying.
+ *
+ * WHY THIS GATE EXISTS. Paying for the platform is not the same as being ready
+ * to take real money or bind real insurance. This previously flipped BOTH
+ * stripe_mode and bonzah_mode to 'live' on the sole condition that
+ * setup_completed_at was NULL — which is an idempotency guard ("only once"),
+ * not a readiness check. Production evidence when this was found: of the 9
+ * tenants due to auto-go-live, EIGHT had no Bonzah credentials at all and none
+ * had stripe_charges_enabled=true. Flipping those would have pointed real
+ * customer bookings at an unconfigured live insurance integration.
+ *
+ * Rule: switch a capability to live only when THAT capability is configured.
+ * They are decided independently — a tenant with Connect ready but no Bonzah
+ * credentials goes live on payments only.
+ *
+ * setup_completed_at is stamped ONLY when everything went live, so a tenant
+ * that finishes configuring later is still picked up by a subsequent event
+ * instead of being permanently marked done while stuck in test mode.
+ */
+function resolveGoLive(tenant: any): {
+  patch: Record<string, unknown>;
+  reason: string;
+} {
+  if (!tenant || tenant.setup_completed_at) return { patch: {}, reason: "already-complete" };
+
+  const connectReady =
+    tenant.stripe_charges_enabled === true ||
+    (!!tenant.own_stripe_account_id && tenant.stripe_onboarding_complete === true);
+  const bonzahReady = !!tenant.bonzah_username;
+
+  const patch: Record<string, unknown> = {};
+  if (connectReady) patch.stripe_mode = "live";
+  if (bonzahReady) patch.bonzah_mode = "live";
+
+  // Only "done" when there is nothing left to switch on.
+  if (connectReady && bonzahReady) {
+    patch.setup_completed_at = new Date().toISOString();
+  }
+
+  return {
+    patch,
+    reason: `connectReady=${connectReady} bonzahReady=${bonzahReady}`,
+  };
+}
+
 async function handleCheckoutCompleted(
   stripe: Stripe,
   supabase: any,
@@ -460,20 +511,22 @@ async function handleSubscriptionUpdated(
       activePlan = existingSub?.plan_name || "pro";
     }
   }
-  // Auto go-live: when trial ends and subscription becomes active, switch to live mode (once)
+  // Auto go-live: when the subscription becomes active, switch the capabilities
+  // the tenant has actually configured to live mode. See resolveGoLive().
   const goLiveUpdate: Record<string, any> = { subscription_plan: activePlan };
   if (subscription.status === "active") {
     const { data: currentTenant } = await supabase
       .from("tenants")
-      .select("setup_completed_at")
+      .select(GO_LIVE_SELECT)
       .eq("id", tenantId)
       .single();
 
-    if (currentTenant && !currentTenant.setup_completed_at) {
-      goLiveUpdate.stripe_mode = "live";
-      goLiveUpdate.bonzah_mode = "live";
-      goLiveUpdate.setup_completed_at = new Date().toISOString();
-      console.log(`Auto go-live for tenant ${tenantId} — switching Stripe Connect & Bonzah to live mode`);
+    const { patch, reason } = resolveGoLive(currentTenant);
+    Object.assign(goLiveUpdate, patch);
+    if (Object.keys(patch).length > 0) {
+      console.log(`Auto go-live for tenant ${tenantId}: ${JSON.stringify(patch)} (${reason})`);
+    } else if (reason !== "already-complete") {
+      console.log(`Auto go-live SKIPPED for tenant ${tenantId} — not configured (${reason})`);
     }
   }
 
@@ -611,22 +664,18 @@ async function handleInvoicePaid(supabase: any, invoice: any) {
         })
         .eq("id", sub.id);
 
-      // Auto go-live once (mirrors handleSubscriptionUpdated)
+      // Auto go-live (mirrors handleSubscriptionUpdated — same readiness gate).
       const { data: t } = await supabase
         .from("tenants")
-        .select("setup_completed_at")
+        .select(GO_LIVE_SELECT)
         .eq("id", tenant.id)
         .single();
-      if (t && !t.setup_completed_at) {
-        await supabase
-          .from("tenants")
-          .update({
-            stripe_mode: "live",
-            bonzah_mode: "live",
-            setup_completed_at: new Date().toISOString(),
-          })
-          .eq("id", tenant.id);
-        console.log(`Auto go-live (via invoice.paid) for tenant ${tenant.id}`);
+      const { patch, reason } = resolveGoLive(t);
+      if (Object.keys(patch).length > 0) {
+        await supabase.from("tenants").update(patch).eq("id", tenant.id);
+        console.log(`Auto go-live (via invoice.paid) for tenant ${tenant.id}: ${JSON.stringify(patch)} (${reason})`);
+      } else if (reason !== "already-complete") {
+        console.log(`Auto go-live SKIPPED (via invoice.paid) for tenant ${tenant.id} — not configured (${reason})`);
       }
       console.log(`Subscription ${subscriptionId} promoted trialing→active via invoice.paid for tenant ${tenant.id}`);
     }
