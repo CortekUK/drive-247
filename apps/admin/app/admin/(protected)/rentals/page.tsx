@@ -119,6 +119,8 @@ interface SubscriptionRow {
   plan_name: string | null;
   current_period_end: string | null;
   trial_end: string | null;
+  cancel_at: string | null;
+  canceled_at: string | null;
   created_at: string;
 }
 
@@ -127,6 +129,7 @@ interface InvoiceRow {
   status: string;
   amount_due: number | null;
   amount_paid: number | null;
+  period_end: string | null;
   created_at: string;
 }
 
@@ -204,10 +207,42 @@ function formatDay(value: string | null): string {
  * dated invoice. current_period_end is therefore the authoritative "next
  * payment" date; a trial that has not yet converted bills at trial_end.
  */
-function nextInvoiceDue(sub: SubscriptionRow | null): string | null {
-  if (!sub || !LIVE_STATUSES.has(sub.status)) return null;
-  if (sub.status === 'trialing' && sub.trial_end) return sub.trial_end;
-  return sub.current_period_end;
+function nextInvoiceDue(
+  sub: SubscriptionRow | null,
+  unpaid?: InvoiceRow | null
+): { date: string | null; overdue: boolean } {
+  if (!sub || !LIVE_STATUSES.has(sub.status)) return { date: null, overdue: false };
+
+  // PAST DUE: report the date the money was actually owed, not the next cycle.
+  // When a charge fails Stripe still advances current_period_end by a full
+  // period, so showing it told George "next invoice due 16 Aug" about a tenant
+  // who had owed $300 since 16 Jul — the single most misleading cell on the
+  // page, on the one row he most needed to act on.
+  if (sub.status === 'past_due') {
+    const owed = unpaid?.period_end || unpaid?.created_at || null;
+    return { date: owed ?? sub.current_period_end, overdue: true };
+  }
+
+  if (sub.status === 'trialing' && sub.trial_end) return { date: sub.trial_end, overdue: false };
+  return { date: sub.current_period_end, overdue: false };
+}
+
+/**
+ * When a lapsed subscription actually ended — so a tenant that churned in March
+ * is visibly different from one that churned last week.
+ */
+function subscriptionEndedOn(sub: SubscriptionRow | null): string | null {
+  if (!sub) return null;
+  return sub.canceled_at || sub.cancel_at || null;
+}
+
+/**
+ * A $1.00 charge is the card-verification hold from the paywall signup flow, not
+ * a real subscription payment. Reporting it as "Paid" made six tenants look like
+ * they were current when they had never paid a real invoice.
+ */
+function isVerificationCharge(inv: InvoiceRow | null | undefined): boolean {
+  return !!inv && (inv.amount_due ?? 0) <= 100;
 }
 
 export default function RentalCompaniesPage() {
@@ -220,6 +255,7 @@ export default function RentalCompaniesPage() {
   const [subsByTenant, setSubsByTenant] = useState<Map<string, SubscriptionRow[]>>(new Map());
   const [planTenantIds, setPlanTenantIds] = useState<Set<string>>(new Set());
   const [latestInvoice, setLatestInvoice] = useState<Map<string, InvoiceRow>>(new Map());
+  const [oldestUnpaidInvoice, setOldestUnpaidInvoice] = useState<Map<string, InvoiceRow>>(new Map());
   const [subsLoaded, setSubsLoaded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -250,11 +286,11 @@ export default function RentalCompaniesPage() {
         const [subsRes, plansRes, invoicesRes] = await Promise.all([
           supabase
             .from('tenant_subscriptions')
-            .select('tenant_id, status, amount, currency, interval, plan_name, current_period_end, trial_end, created_at'),
+            .select('tenant_id, status, amount, currency, interval, plan_name, current_period_end, trial_end, cancel_at, canceled_at, created_at'),
           supabase.from('subscription_plans').select('tenant_id').eq('is_active', true),
           supabase
             .from('tenant_subscription_invoices')
-            .select('tenant_id, status, amount_due, amount_paid, created_at')
+            .select('tenant_id, status, amount_due, amount_paid, period_end, created_at')
             .order('created_at', { ascending: false }),
         ]);
 
@@ -271,11 +307,20 @@ export default function RentalCompaniesPage() {
         );
 
         // Rows arrive newest-first, so the first hit per tenant is the latest.
+        // Separately track the OLDEST still-unpaid invoice: for a past_due
+        // tenant that, not current_period_end, is what is actually overdue.
         const latest = new Map<string, InvoiceRow>();
+        const oldestUnpaid = new Map<string, InvoiceRow>();
         for (const inv of (invoicesRes.data as InvoiceRow[] | null) ?? []) {
           if (!latest.has(inv.tenant_id)) latest.set(inv.tenant_id, inv);
+          if (inv.status === 'open' || inv.status === 'uncollectible') {
+            // Iterating newest-first means each later hit is older, so
+            // overwriting always leaves the oldest unpaid invoice.
+            oldestUnpaid.set(inv.tenant_id, inv);
+          }
         }
         setLatestInvoice(latest);
+        setOldestUnpaidInvoice(oldestUnpaid);
 
         setSubsLoaded(true);
       } catch (error) {
@@ -658,7 +703,9 @@ export default function RentalCompaniesPage() {
                   const subStatus = getSubStatus(sub, planTenantIds.has(tenant.id));
                   const meta = SUB_STATUS_META[subStatus];
                   const inv = latestInvoice.get(tenant.id);
-                  const due = nextInvoiceDue(sub);
+                  const unpaid = oldestUnpaidInvoice.get(tenant.id);
+                  const due = nextInvoiceDue(sub, unpaid);
+                  const endedOn = subStatus === 'expired' ? subscriptionEndedOn(sub) : null;
 
                   // Until the fetch lands, render placeholders rather than
                   // "Paywall not set" — an absent Map would otherwise libel
@@ -676,9 +723,30 @@ export default function RentalCompaniesPage() {
                   return (
                     <>
                       <TableCell>
-                        <span className={cn('inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap', meta.className)}>
-                          {meta.label}
-                        </span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className={cn('inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap', meta.className)}>
+                            {meta.label}
+                          </span>
+                          {/* For a tenant with a paywall but no subscription, the
+                              question is "did they ever enter a card?". The $1
+                              authorization leaves a paid verification invoice, so
+                              its presence is real evidence of card capture rather
+                              than an inference from the missing subscription row. */}
+                          {subStatus === 'paywall-set' && (
+                            <span
+                              className={cn(
+                                'text-[10px] font-medium whitespace-nowrap',
+                                isVerificationCharge(inv) && inv?.status === 'paid'
+                                  ? 'text-sky-400'
+                                  : 'text-muted-foreground'
+                              )}
+                            >
+                              {isVerificationCharge(inv) && inv?.status === 'paid'
+                                ? 'Card captured · did not convert'
+                                : 'No card entered'}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground whitespace-nowrap">
                         {sub?.plan_name || '—'}
@@ -695,22 +763,41 @@ export default function RentalCompaniesPage() {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-muted-foreground tabular-nums whitespace-nowrap">
-                        {formatDay(due)}
+                      <TableCell className="tabular-nums whitespace-nowrap">
+                        {endedOn ? (
+                          // Expired rows have no "next" invoice — show when it ended.
+                          <span className="text-muted-foreground">
+                            Ended {formatDay(endedOn)}
+                          </span>
+                        ) : due.date ? (
+                          <span className={due.overdue ? 'font-medium text-destructive' : 'text-muted-foreground'}>
+                            {due.overdue ? `Overdue since ${formatDay(due.date)}` : formatDay(due.date)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         {inv ? (
                           <span
                             className={cn(
                               'text-[11px] font-medium',
-                              inv.status === 'paid'
+                              isVerificationCharge(inv)
+                                ? 'text-muted-foreground'
+                                : inv.status === 'paid'
                                 ? 'text-emerald-400'
                                 : inv.status === 'open'
                                 ? 'text-amber-400'
                                 : 'text-destructive'
                             )}
                           >
-                            {inv.status === 'paid' ? 'Paid' : inv.status === 'open' ? 'Unpaid' : 'Failed'}
+                            {isVerificationCharge(inv)
+                              ? 'Card verified'
+                              : inv.status === 'paid'
+                              ? 'Paid'
+                              : inv.status === 'open'
+                              ? 'Unpaid'
+                              : 'Failed'}
                             <span className="text-muted-foreground ml-1">
                               {formatDay(inv.created_at)}
                             </span>

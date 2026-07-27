@@ -13,8 +13,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertTriangle,
+  Check,
+  ChevronRight,
   CreditCard,
   Crown,
+  FileText,
   Loader2,
   Download,
 } from "lucide-react";
@@ -67,15 +70,27 @@ function StatusBadge({ status }: { status: string }) {
 function LocalInvoiceView({
   invoice,
   tenantName,
+  cardBrand,
+  cardLast4,
   open,
   onClose,
 }: {
   invoice: TenantSubscriptionInvoice | null;
   tenantName: string;
+  /** Card on file, shown as Stripe shows it ("Visa •••• 4242"). */
+  cardBrand?: string | null;
+  cardLast4?: string | null;
   open: boolean;
   onClose: () => void;
 }) {
   if (!invoice) return null;
+
+  // Only claim a payment method when we actually know it — a receipt that
+  // invents "•••• ••••" is worse than one that omits the row.
+  const paymentMethodLabel =
+    cardBrand && cardLast4
+      ? `${cardBrand.charAt(0).toUpperCase()}${cardBrand.slice(1)} •••• ${cardLast4}`
+      : null;
 
   const handlePrint = () => {
     window.print();
@@ -91,40 +106,84 @@ function LocalInvoiceView({
         </DialogHeader>
 
         <div className="space-y-6 print:text-black" id="invoice-content">
-          {/* Header */}
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-xl font-bold">Drive247</h2>
-              <p className="text-sm text-muted-foreground print:text-gray-600">
-                Platform Subscription Invoice
-              </p>
+          {/* ── Stripe-style receipt header ──
+              Mirrors Stripe's hosted receipt: a status-marked document glyph,
+              the outcome as a sentence, then the amount as the largest element
+              on screen. The amount is what a tenant actually opens this to see,
+              so it leads rather than sitting in a table footer. */}
+          <div className="flex flex-col items-center gap-3 pt-2 text-center">
+            <div className="relative">
+              <div className="flex h-14 w-14 items-center justify-center rounded-lg border-2 border-muted bg-muted/30">
+                <FileText className="h-7 w-7 text-muted-foreground" />
+              </div>
+              {invoice.status === "paid" && (
+                <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-green-500 ring-2 ring-background print:ring-0">
+                  <Check className="h-4 w-4 text-white" strokeWidth={3} />
+                </span>
+              )}
             </div>
-            <div className="text-right">
-              <StatusBadge status={invoice.status} />
-            </div>
+
+            <p className="text-sm text-muted-foreground print:text-gray-600">
+              {invoice.status === "paid"
+                ? "Invoice paid"
+                : invoice.status === "open"
+                  ? "Invoice due"
+                  : `Invoice ${invoice.status}`}
+            </p>
+
+            <p className="text-4xl font-semibold tracking-tight">
+              {formatCurrency(
+                invoice.status === "paid" ? invoice.amount_paid : invoice.amount_due,
+                invoice.currency,
+              )}
+            </p>
+
+            {/* Stripe's "View invoice and payment details ›" affordance — only
+                rendered when there is a genuine hosted page behind it. */}
+            {invoice.stripe_hosted_invoice_url && (
+              <a
+                href={invoice.stripe_hosted_invoice_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline print:hidden"
+              >
+                View invoice and payment details
+                <ChevronRight className="h-4 w-4" />
+              </a>
+            )}
           </div>
 
           <Separator />
 
-          {/* Invoice Details */}
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-muted-foreground print:text-gray-500">Bill To</p>
-              <p className="font-medium">{tenantName}</p>
+          {/* Receipt facts, in Stripe's label/value rows */}
+          <div className="space-y-2.5 text-sm">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-muted-foreground print:text-gray-500">Invoice number</span>
+              <span className="font-medium tabular-nums">{invoice.invoice_number || "—"}</span>
             </div>
-            <div className="text-right">
-              <p className="text-muted-foreground print:text-gray-500">Invoice Number</p>
-              <p className="font-medium">{invoice.invoice_number || "—"}</p>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-muted-foreground print:text-gray-500">
+                {invoice.paid_at ? "Payment date" : "Invoice date"}
+              </span>
+              <span className="font-medium">
+                {formatDateLong(invoice.paid_at || invoice.created_at)}
+              </span>
             </div>
-            <div>
-              <p className="text-muted-foreground print:text-gray-500">Invoice Date</p>
-              <p className="font-medium">{formatDateLong(invoice.created_at)}</p>
+            {paymentMethodLabel && (
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-muted-foreground print:text-gray-500">Payment method</span>
+                <span className="font-medium">{paymentMethodLabel}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-muted-foreground print:text-gray-500">Billed to</span>
+              <span className="font-medium">{tenantName}</span>
             </div>
-            <div className="text-right">
-              <p className="text-muted-foreground print:text-gray-500">Period</p>
-              <p className="font-medium">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-muted-foreground print:text-gray-500">Period</span>
+              <span className="font-medium">
                 {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)}
-              </p>
+              </span>
             </div>
           </div>
 
@@ -198,13 +257,28 @@ function LocalInvoiceView({
           )}
         </div>
 
-        <div className="flex justify-end gap-2 print:hidden">
-          <Button variant="outline" size="sm" onClick={onClose}>
+        {/* Stripe pairs "Download invoice" (outline) with "Download receipt"
+            (solid). We map the first to Stripe's own PDF when we have it, and
+            keep local print as the fallback so the button is never dead. */}
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end print:hidden">
+          <Button variant="ghost" size="sm" onClick={onClose}>
             Close
           </Button>
+          {invoice.stripe_invoice_pdf && (
+            <Button variant="outline" size="sm" asChild>
+              <a
+                href={invoice.stripe_invoice_pdf}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download invoice
+              </a>
+            </Button>
+          )}
           <Button size="sm" onClick={handlePrint}>
             <Download className="mr-2 h-4 w-4" />
-            Print / Save PDF
+            Download receipt
           </Button>
         </div>
       </DialogContent>
@@ -462,6 +536,8 @@ export function SubscriptionSettings() {
       <LocalInvoiceView
         invoice={viewingInvoice}
         tenantName={tenant?.company_name || "Tenant"}
+        cardBrand={subscription?.card_brand}
+        cardLast4={subscription?.card_last4}
         open={!!viewingInvoice}
         onClose={() => setViewingInvoice(null)}
       />

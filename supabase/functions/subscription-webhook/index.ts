@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
         await handleSubscriptionDeleted(supabase, event.data.object, account);
         break;
       case "invoice.paid":
-        await handleInvoicePaid(supabase, event.data.object);
+        await handleInvoicePaid(supabase, event.data.object, stripe);
         break;
       case "invoice.payment_failed":
         await handleInvoicePaymentFailed(supabase, event.data.object);
@@ -149,6 +149,26 @@ function periodPatch(period: { start: string | null; end: string | null }) {
     ...(period.start ? { current_period_start: period.start } : {}),
     ...(period.end ? { current_period_end: period.end } : {}),
   };
+}
+
+/**
+ * The subscription an invoice belongs to.
+ *
+ * Stripe relocated this in the 2025 API versions: `invoice.subscription` became
+ * `invoice.parent.subscription_details.subscription`. Same class of change as
+ * the current_period_* move that took the webhook down — and because a webhook
+ * payload is rendered at the ENDPOINT's API version, a newer endpoint silently
+ * yields undefined here, which would strand every invoice event with
+ * "No tenant found". Read both shapes.
+ */
+function resolveInvoiceSubscriptionId(invoice: any): string | null {
+  const direct = invoice?.subscription;
+  if (typeof direct === "string" && direct) return direct;
+  if (direct?.id) return direct.id;
+  const nested = invoice?.parent?.subscription_details?.subscription;
+  if (typeof nested === "string" && nested) return nested;
+  if (nested?.id) return nested.id;
+  return null;
 }
 
 /** Columns the go-live readiness gate needs. */
@@ -587,8 +607,8 @@ function parseInvoiceLineItems(invoice: any): { baseAmount: number; usageAmount:
   return { baseAmount, usageAmount, usageQuantity };
 }
 
-async function handleInvoicePaid(supabase: any, invoice: any) {
-  const subscriptionId = invoice.subscription;
+async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
+  const subscriptionId = resolveInvoiceSubscriptionId(invoice);
   const customerId = invoice.customer;
 
   let { data: tenant } = await supabase.from("tenants").select("id").eq("stripe_subscription_customer_id", customerId).maybeSingle();
@@ -664,6 +684,46 @@ async function handleInvoicePaid(supabase: any, invoice: any) {
         })
         .eq("id", sub.id);
 
+      // ── Cycle reset on a LATE payment (requirement E7) ──────────────────
+      // "If they pay on the 29th, start their new billing cycle from the 29th,
+      // not the 22nd. We absorb the 7 lost days to give them a fresh start."
+      //
+      // Paying an overdue invoice does NOT move Stripe's anchor by itself — the
+      // subscription resumes on its original schedule, so a tenant who paid 7
+      // days late would be billed again only 23 days later. Resetting the anchor
+      // to now gives them the full period they just paid for.
+      //
+      // SAFETY:
+      //  - only when the subscription was actually PAST_DUE (a normal on-time
+      //    renewal must never have its anchor moved)
+      //  - proration_behavior 'none' is essential: the default would issue
+      //    proration line items and could charge the customer a second time
+      //    within minutes of the payment that just cleared
+      //  - idempotency_key is the invoice id, so Stripe collapses duplicate
+      //    deliveries/retries of this same invoice.paid event into one update
+      //  - non-fatal: a failure here must not fail the webhook and cause Stripe
+      //    to retry the whole event (which already applied the payment).
+      if (currentSub.status === "past_due" && stripe && subscriptionId) {
+        try {
+          await stripe.subscriptions.update(
+            subscriptionId,
+            {
+              billing_cycle_anchor: "now",
+              proration_behavior: "none",
+            },
+            { idempotencyKey: `cycle-reset-${invoice.id}` },
+          );
+          console.log(
+            `Cycle reset for subscription ${subscriptionId} after late payment (invoice ${invoice.id}) — new period starts now`,
+          );
+        } catch (anchorErr) {
+          console.error(
+            `Failed to reset billing cycle for ${subscriptionId} (non-fatal):`,
+            (anchorErr as any)?.message ?? anchorErr,
+          );
+        }
+      }
+
       // Auto go-live (mirrors handleSubscriptionUpdated — same readiness gate).
       const { data: t } = await supabase
         .from("tenants")
@@ -688,7 +748,7 @@ async function handleInvoicePaymentFailed(supabase: any, invoice: any) {
   const { data: tenant } = await supabase.from("tenants").select("id, company_name, contact_email").eq("stripe_subscription_customer_id", customerId).maybeSingle();
   if (!tenant) { console.log("No tenant found for customer:", customerId); return; }
 
-  const { data: sub } = await supabase.from("tenant_subscriptions").select("id").eq("stripe_subscription_id", invoice.subscription).maybeSingle();
+  const { data: sub } = await supabase.from("tenant_subscriptions").select("id").eq("stripe_subscription_id", resolveInvoiceSubscriptionId(invoice)).maybeSingle();
 
   const { baseAmount, usageAmount, usageQuantity } = parseInvoiceLineItems(invoice);
 
