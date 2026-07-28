@@ -935,8 +935,17 @@ async function handleInvoiceClosed(supabase: any, invoice: any, eventType: strin
     console.error(`${eventType}: failed to close invoice ${invoice.id}:`, error);
     return;
   }
+  // Only 'void' actually frees the tenant. The portal's grace anchor treats
+  // open AND uncollectible as still-owed (use-tenant-subscription.ts), which is
+  // deliberate: 'void' means we cancelled the debt (e.g. goodwill), whereas
+  // 'uncollectible' means we wrote it off as bad debt and they still have not
+  // paid — so they stay blocked. Say which happened rather than implying both
+  // release the block.
   console.log(
-    `${eventType}: invoice ${invoice.id} marked ${status} for tenant ${existing.tenant_id} — grace anchor released`,
+    `${eventType}: invoice ${invoice.id} marked ${status} for tenant ${existing.tenant_id}` +
+      (status === "void"
+        ? " — grace anchor released, tenant unblocked"
+        : " — still counts as owed, tenant remains gated"),
   );
 }
 
