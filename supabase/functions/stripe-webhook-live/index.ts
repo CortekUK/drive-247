@@ -91,9 +91,31 @@ serve(async (req) => {
         );
       }
     } else {
-      // For testing without signature verification
-      event = JSON.parse(body) as Stripe.Event;
-      console.warn("[LIVE MODE] Webhook signature not verified - no secret configured");
+      // FAIL CLOSED. This branch used to do `event = JSON.parse(body)`, i.e. trust
+      // the request body as a genuine Stripe event. The guard above is an AND, so
+      // simply OMITTING the stripe-signature header short-circuited it and landed
+      // here — no signature, no secret, no check. Confirmed exploitable against
+      // production: an unauthenticated POST with no signature header returned
+      // HTTP 200. With the service_role client built at the top of this handler,
+      // a forged checkout.session.completed could mint account credit, mark
+      // invoices paid, or insert a captured payment.
+      //
+      // An invalid-signature probe cannot detect this: an invalid signature is
+      // still a PRESENT signature, so it takes the verify path and 400s. Only a
+      // missing-header probe reaches this branch.
+      const missingSignature = !signature;
+      console.error(
+        `[LIVE MODE] Rejected unverified webhook: ${missingSignature ? "missing stripe-signature header" : "no webhook secret configured"}`
+      );
+      return new Response(
+        JSON.stringify({ error: missingSignature ? "Missing stripe-signature header" : "Webhook not configured" }),
+        {
+          // 400 = caller's fault (Stripe always sends the header).
+          // 500 = our misconfiguration, so Stripe retries instead of giving up.
+          status: missingSignature ? 400 : 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     console.log("[LIVE MODE] Stripe webhook received:", event.type);

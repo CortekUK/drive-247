@@ -58,9 +58,23 @@ serve(async (req) => {
         )
       }
     } else {
-      // Parse event without verification (development mode)
-      event = JSON.parse(body)
-      console.warn('Webhook signature not verified - no Connect webhook secret set')
+      // FAIL CLOSED — see the matching comment in stripe-webhook-live. Omitting
+      // the stripe-signature header short-circuited the AND above and landed
+      // here, where the raw body was trusted as a genuine Stripe event.
+      // Confirmed exploitable against production before this change: a forged
+      // account.application.deauthorized nulls own_stripe_account_id and reverts
+      // payment_model to 'managed' — a denial-of-payments primitive.
+      const missingSignature = !signature
+      console.error(
+        `Rejected unverified webhook: ${missingSignature ? 'missing stripe-signature header' : 'no Connect webhook secret configured'}`
+      )
+      return new Response(
+        JSON.stringify({ error: missingSignature ? 'Missing stripe-signature header' : 'Webhook not configured' }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: missingSignature ? 400 : 500,
+        }
+      )
     }
 
     // Initialize Supabase client
