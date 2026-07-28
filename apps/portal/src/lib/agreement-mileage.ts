@@ -48,7 +48,7 @@ export interface AgreementMileageVehicle {
 export interface AgreementMileage {
   /** Human string for the agreement, e.g. "1,800 miles (60 per day x 30 days)". */
   allowance: string;
-  /** Human string, e.g. "$0.50 per additional mile". */
+  /** Human string, e.g. "$0.50 per additional mile" (currency/unit per tenant). */
   excessRate: string;
   /** True only when the operator explicitly marked the rental unlimited. */
   isUnlimited: boolean;
@@ -103,11 +103,35 @@ export function resolveMileageTier(
  *   3. vehicle.<tier>_mileage                (the vehicle default)
  *   4. nothing                               -> "Not specified"
  */
+export interface AgreementMileageOptions {
+  monthlyTierDays?: number;
+  /** ISO code from tenants.currency_code. The excess rate is a MONEY TERM in a
+   *  signed contract — hardcoding "$" would state dollars to a GBP tenant. */
+  currencyCode?: string;
+  /** tenants.distance_unit ('miles' | 'km'). Same reasoning. */
+  distanceUnit?: string;
+}
+
 export function resolveAgreementMileage(
   rental: AgreementMileageRental | null | undefined,
   vehicle: AgreementMileageVehicle | null | undefined,
-  monthlyTierDays = 30,
+  options: AgreementMileageOptions | number = {},
 ): AgreementMileage {
+  // Back-compat: earlier callers passed monthlyTierDays positionally.
+  const opts: AgreementMileageOptions =
+    typeof options === "number" ? { monthlyTierDays: options } : options || {};
+  const monthlyTierDays = opts.monthlyTierDays ?? 30;
+  const currencyCode = (opts.currencyCode || "USD").toUpperCase();
+  const unitPlural = opts.distanceUnit === "km" ? "km" : "miles";
+  const unitSingular = opts.distanceUnit === "km" ? "km" : "mile";
+  const money = (n: number) => {
+    try {
+      return new Intl.NumberFormat("en-US", { style: "currency", currency: currencyCode }).format(n);
+    } catch {
+      // Unknown/invalid ISO code — state the code rather than an arbitrary symbol.
+      return `${n.toFixed(2)} ${currencyCode}`;
+    }
+  };
   const { tier, days } = resolveMileageTier(rental, monthlyTierDays);
   const unitWord = tier === "daily" ? "day" : tier === "weekly" ? "week" : "month";
 
@@ -115,7 +139,7 @@ export function resolveAgreementMileage(
     rental?.excess_mileage_rate_override ?? vehicle?.excess_mileage_rate ?? null;
   const excessRate =
     excessRaw != null && Number.isFinite(Number(excessRaw))
-      ? `$${Number(excessRaw).toFixed(2)} per additional mile`
+      ? `${money(Number(excessRaw))} per additional ${unitSingular}`
       : NOT_SPECIFIED;
 
   // 1. Explicit unlimited always wins, and is the ONLY route to "Unlimited".
@@ -167,7 +191,7 @@ export function resolveAgreementMileage(
   // Open-ended rental: no total exists, state the recurring allowance.
   if (days == null) {
     return {
-      allowance: `${formatInt(perUnit)} miles per ${unitWord} (open-ended rental — allowance accrues each ${unitWord})`,
+      allowance: `${formatInt(perUnit)} ${unitPlural} per ${unitWord} (open-ended rental — allowance accrues each ${unitWord})`,
       excessRate,
       isUnlimited: false,
       isUnspecified: false,
@@ -188,7 +212,7 @@ export function resolveAgreementMileage(
 
   const dayWord = days === 1 ? "day" : "days";
   return {
-    allowance: `${formatInt(total)} miles total (${formatInt(perUnit)} per ${unitWord} over ${days} ${dayWord})`,
+    allowance: `${formatInt(total)} ${unitPlural} total (${formatInt(perUnit)} per ${unitWord} over ${days} ${dayWord})`,
     excessRate,
     isUnlimited: false,
     isUnspecified: false,

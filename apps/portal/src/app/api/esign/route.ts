@@ -166,6 +166,13 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
     const documentExpiry = verification?.document_expiry_date || '';
     const documentType = verification?.document_type || '';
 
+    // One resolution, reused by every mileage placeholder.
+    const _agreementMileage = resolveAgreementMileage(rental, vehicle, {
+        monthlyTierDays: (tenant as any)?.monthly_tier_days ?? 30,
+        currencyCode: (tenant as any)?.currency_code || currencyCode,
+        distanceUnit: (tenant as any)?.distance_unit,
+    });
+
     const variables: Record<string, string> = {
         // Customer — basic
         customer_name: customer?.name || '',
@@ -210,29 +217,23 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         vehicle_daily_mileage: vehicle?.daily_mileage?.toString() || '',
         vehicle_weekly_mileage: vehicle?.weekly_mileage?.toString() || '',
         vehicle_monthly_mileage: vehicle?.monthly_mileage?.toString() || '',
-        // Canonical agreement mileage — see lib/agreement-mileage.ts. Unlike the
-        // legacy vehicle_allowed_mileage below, this honours rental-level
-        // overrides and the is_unlimited flag, and NEVER reports an
-        // unconfigured vehicle as "Unlimited".
-        mileage_allowance: resolveAgreementMileage(rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30).allowance,
-        excess_mileage_rate: resolveAgreementMileage(rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30).excessRate,
+        // Canonical agreement mileage — see lib/agreement-mileage.ts. Honours
+        // rental-level overrides and the is_unlimited flag, and NEVER reports an
+        // unconfigured vehicle as "Unlimited". Computed once above so the
+        // allowance and the excess rate can never come from different tiers.
+        mileage_allowance: _agreementMileage.allowance,
+        excess_mileage_rate: _agreementMileage.excessRate,
         // Tenant's own published T&Cs, or '' when they have none (the template
         // block then renders as nothing rather than an empty heading).
         terms_and_conditions: termsBlock || '',
 
-        vehicle_allowed_mileage: (() => {
-            if (!vehicle?.daily_mileage && !vehicle?.weekly_mileage && !vehicle?.monthly_mileage) return 'Unlimited';
-            if (rental?.start_date && rental?.end_date) {
-                const days = Math.max(1, Math.ceil((parseLocalDate(rental.end_date).getTime() - parseLocalDate(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
-                const _mtd = (tenant as any)?.monthly_tier_days ?? 30;
-                let tier: 'daily' | 'weekly' | 'monthly' = days >= _mtd ? 'monthly' : days >= 7 ? 'weekly' : 'daily';
-                const perUnit = tier === 'daily' ? vehicle.daily_mileage : tier === 'weekly' ? vehicle.weekly_mileage : vehicle.monthly_mileage;
-                if (perUnit == null) return 'Unlimited';
-                const total = Math.round(tier === 'daily' ? days * perUnit : tier === 'weekly' ? (perUnit / 7) * days : (perUnit / _mtd) * days);
-                return total.toString();
-            }
-            return vehicle?.monthly_mileage?.toString() || '';
-        })(),
+        // LEGACY placeholder, kept for templates that already reference it.
+        // It used to return the literal 'Unlimited' whenever a vehicle had no
+        // allowance configured — which, in a document the customer signs, grants
+        // unlimited mileage for free. It now delegates to the same resolver as
+        // {{mileage_allowance}} so both placeholders are safe and agree with
+        // each other; a template using either name gets identical wording.
+        vehicle_allowed_mileage: _agreementMileage.allowance,
 
         // Rental — for extensions, show extension period dates instead of original
         rental_number: rental?.rental_number || rental?.id?.substring(0, 8)?.toUpperCase() || '',

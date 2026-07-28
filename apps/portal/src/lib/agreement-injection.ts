@@ -33,6 +33,34 @@ const MILEAGE_ROWS_HTML =
   "<tr><td><strong>Mileage Allowance</strong></td><td>{{mileage_allowance}}</td></tr>\n" +
   "<tr><td><strong>Excess Mileage Rate</strong></td><td>{{excess_mileage_rate}}</td></tr>";
 
+
+/**
+ * Walk back from `index` to the start of the enclosing block-level element, so
+ * an injected block is never spliced into the middle of a <p>.
+ */
+function blockStartBefore(template: string, index: number): number {
+  const before = template.slice(0, index);
+  const lastOpen = Math.max(
+    before.lastIndexOf("<p"),
+    before.lastIndexOf("<div"),
+    before.lastIndexOf("<table"),
+    before.lastIndexOf("<h1"),
+    before.lastIndexOf("<h2"),
+    before.lastIndexOf("<h3"),
+  );
+  if (lastOpen === -1) return index;
+  // Only rewind if that element is still OPEN at `index`.
+  const lastClose = Math.max(
+    before.lastIndexOf("</p>"),
+    before.lastIndexOf("</div>"),
+    before.lastIndexOf("</table>"),
+    before.lastIndexOf("</h1>"),
+    before.lastIndexOf("</h2>"),
+    before.lastIndexOf("</h3>"),
+  );
+  return lastOpen > lastClose ? lastOpen : index;
+}
+
 export interface InjectionOptions {
   /** Skip mileage injection when nothing is configured for this rental. */
   hasMileage: boolean;
@@ -87,7 +115,12 @@ function injectTerms(template: string): string {
   for (const re of markers) {
     const m = template.match(re);
     if (m && m.index != null) {
-      return template.slice(0, m.index) + block + "\n" + template.slice(m.index);
+      // Splice at the start of the enclosing BLOCK, never mid-paragraph. Some
+      // templates put the signature marker inside <p>...</p>; inserting an <h2>
+      // there produces invalid nesting that the PDF block parser renders as
+      // literal internal markers (BLOCK_18) with the headings dropped.
+      const safeIndex = blockStartBefore(template, m.index);
+      return template.slice(0, safeIndex) + block + "\n" + template.slice(safeIndex);
     }
   }
   return template + block;
@@ -107,7 +140,13 @@ export function injectAgreementClauses(
   if (!template) return template;
   let out = template;
 
-  if (hasMileage && !hasPlaceholder(out, "mileage_allowance")) {
+  // Also check the LEGACY name. A template written before the rename uses
+  // {{vehicle_allowed_mileage}}; injecting on top of it would state the
+  // allowance twice, in two different formats, in the same contract.
+  const alreadyStatesMileage =
+    hasPlaceholder(out, "mileage_allowance") ||
+    hasPlaceholder(out, "vehicle_allowed_mileage");
+  if (hasMileage && !alreadyStatesMileage) {
     out = injectMileage(out);
   }
   if (hasTerms && !hasPlaceholder(out, "terms_and_conditions")) {
