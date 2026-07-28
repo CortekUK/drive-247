@@ -280,6 +280,30 @@ function AgreementCard({
               {format(parseLocalDate(agreement.period_start_date), 'MMM d, yyyy')} – {format(parseLocalDate(agreement.period_end_date), 'MMM d, yyyy')}
             </p>
 
+            {/* Email delivery failure.
+                BoldSign is sent with DisableEmails:true, so our email is the
+                ONLY way the customer receives the signing link. A failure here
+                means they got nothing — previously invisible, because the send
+                endpoint reported success unconditionally.
+                NULL status = agreement predates delivery tracking; show nothing
+                rather than implying a failure we have no evidence for. */}
+            {(agreement.email_delivery_status === 'failed' ||
+              agreement.email_delivery_status === 'skipped_no_email') && (
+              <div className="mt-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-2.5">
+                <p className="text-xs text-amber-800 dark:text-amber-400">
+                  {agreement.email_delivery_status === 'skipped_no_email'
+                    ? 'The customer has no email address on file, so the signing link was not emailed.'
+                    : 'The signing email could not be delivered — the customer has not received the link.'}
+                  {' '}Use Resend, or share the signing link directly.
+                </p>
+                {agreement.email_delivery_error && (
+                  <p className="mt-1 text-[11px] text-amber-700/80 dark:text-amber-500/80 break-words">
+                    {agreement.email_delivery_error}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Credit failed alert */}
             {agreement.document_status === 'credit_failed' && (
               <div className="mt-2 rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-2.5">

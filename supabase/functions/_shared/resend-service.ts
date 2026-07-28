@@ -288,7 +288,34 @@ export async function sendResendEmail(
   const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 
   if (!RESEND_API_KEY) {
-    console.log('RESEND_API_KEY not configured, simulating email send');
+    // A missing key means NOTHING WAS DELIVERED. Reporting success for that is
+    // how a total outage stays invisible: callers store "sent", the operator
+    // sees a green tick, and the customer never receives the email.
+    //
+    // Simulated success is only legitimate in local development, where there is
+    // deliberately no key. Anywhere else this is a real failure and must be
+    // reported as one. Supabase sets SUPABASE_URL to a *.supabase.co host on
+    // hosted projects; a local stack points at localhost/127.0.0.1.
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const isLocalDev =
+      supabaseUrl.includes('localhost') ||
+      supabaseUrl.includes('127.0.0.1') ||
+      Deno.env.get('EMAIL_SIMULATION_ALLOWED') === 'true';
+
+    if (!isLocalDev) {
+      console.error(
+        'RESEND_API_KEY is not configured — email NOT sent to',
+        options.to,
+        '| subject:',
+        options.subject,
+      );
+      return {
+        success: false,
+        error: 'Email service is not configured (RESEND_API_KEY missing) — no email was delivered',
+      };
+    }
+
+    console.log('RESEND_API_KEY not configured (local dev), simulating email send');
     console.log('To:', options.to);
     console.log('Subject:', options.subject);
     return {

@@ -19,6 +19,11 @@ export interface RentalAgreement {
   period_end_date: string | null;
   created_at: string | null;
   updated_at: string | null;
+  /** sent | failed | skipped_no_email | simulated. NULL predates delivery
+   *  tracking and means UNKNOWN — never render it as a failure. */
+  email_delivery_status?: string | null;
+  email_delivery_error?: string | null;
+  email_delivered_at?: string | null;
   signed_document: {
     id: string;
     file_url: string | null;

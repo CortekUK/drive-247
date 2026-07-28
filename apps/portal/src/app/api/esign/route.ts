@@ -1597,9 +1597,24 @@ export async function POST(request: NextRequest) {
             console.log('Using signing redirect URL:', signingLink);
         }
 
-        // Send signing email (we handle emails ourselves since DisableEmails is true)
+        // Send signing email.
+        //
+        // CRITICAL: DisableEmails is set to 'true' on the BoldSign request above,
+        // so BoldSign never emails the customer. This request is the ONLY delivery
+        // channel — if it fails, the customer receives nothing at all. That makes
+        // honest reporting here more important than it looks: the previous code
+        // computed the real outcome and then returned a hardcoded `true`, so a
+        // total delivery failure was indistinguishable from success and the
+        // operator saw a green "sent" for an email nobody received.
         let emailSent = false;
-        try {
+        let emailStatus: 'sent' | 'failed' | 'skipped_no_email' = 'failed';
+        let emailError: string | null = null;
+
+        if (!body.customerEmail) {
+            emailStatus = 'skipped_no_email';
+            emailError = 'Customer has no email address on file';
+            console.warn('Signing email skipped: customer has no email address');
+        } else try {
             const refId = body.rentalId.substring(0, 8).toUpperCase();
             const companyName = tenant?.company_name || 'Drive 247';
             const vehicleDesc = [vehicle?.make, vehicle?.model].filter(Boolean).join(' ') || 'your vehicle';
@@ -1626,11 +1641,33 @@ export async function POST(request: NextRequest) {
             });
             emailSent = signingEmailResponse.ok;
             if (!emailSent) {
-                console.warn('Signing email error:', await signingEmailResponse.text());
+                emailError = (await signingEmailResponse.text())?.slice(0, 500) || `HTTP ${signingEmailResponse.status}`;
+                console.warn('Signing email error:', emailError);
             }
-            console.log('Signing email:', emailSent ? 'sent' : 'failed');
-        } catch (e) {
-            console.warn('Signing email error:', e);
+            emailStatus = emailSent ? 'sent' : 'failed';
+            console.log('Signing email:', emailStatus);
+        } catch (e: any) {
+            emailError = String(e?.message ?? e).slice(0, 500);
+            emailStatus = 'failed';
+            console.warn('Signing email error:', emailError);
+        }
+
+        // Record the outcome so a failed delivery is visible on the rental
+        // instead of vanishing into the logs. Best-effort: never let bookkeeping
+        // fail a send whose document already exists and whose credits are spent.
+        if (agreementId) {
+            try {
+                await supabase
+                    .from('rental_agreements')
+                    .update({
+                        email_delivery_status: emailStatus,
+                        email_delivery_error: emailError,
+                        email_delivered_at: emailStatus === 'sent' ? new Date().toISOString() : null,
+                    })
+                    .eq('id', agreementId);
+            } catch (persistErr) {
+                console.error('Failed to record email delivery status:', persistErr);
+            }
         }
 
         // Send WhatsApp notification
@@ -1696,7 +1733,11 @@ export async function POST(request: NextRequest) {
         }
 
         console.log('SUCCESS! Document ID:', documentId, 'Agreement ID:', agreementId);
-        return NextResponse.json({ ok: true, envelopeId: documentId, agreementId, emailSent: true, whatsAppSent });
+        // emailSent reports what ACTUALLY happened. A false value does not make the
+        // request a failure — the document exists, credits are spent and the
+        // agreement row is written — but the caller must be able to tell the
+        // operator that the customer was not emailed.
+        return NextResponse.json({ ok: true, envelopeId: documentId, agreementId, emailSent, emailStatus, emailError, whatsAppSent });
 
     } catch (error: any) {
         console.error('API Error:', error);
