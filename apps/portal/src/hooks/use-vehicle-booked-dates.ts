@@ -42,8 +42,12 @@ export const useVehicleBookedDates = (vehicleId: string | undefined, excludeRent
         .select("id, rental_number, start_date, end_date, status")
         .eq("vehicle_id", vehicleId)
         .eq("tenant_id", tenant.id)
-        .in("status", ["Pending", "Active", "Upcoming", "Confirmed", "Started"])
-        .not("end_date", "is", null);
+        .in("status", ["Pending", "Active", "Upcoming", "Confirmed", "Started"]);
+      // NOTE: deliberately NO `.not("end_date","is",null)`. Open-ended rentals
+      // (PAYG / rolling monthly) have a NULL end_date, and filtering them out
+      // here made an occupied vehicle render as completely free on every date —
+      // the operator-reported bug. The booking app already handles these via
+      // resolveEndDate(); this hook now matches it.
 
       if (error) throw error;
       let results = (data || []) as BookedRental[];
@@ -84,22 +88,62 @@ export const useVehicleBookedDates = (vehicleId: string | undefined, excludeRent
     return "upcoming"; // Confirmed, Upcoming
   };
 
+  // PAYG rentals have NULL end_date. Cap the rendered range at start + 365
+  // days so the calendar shows the vehicle as booked far enough out to be
+  // unmistakable, without trying to paint every date until the year 9999.
+  const PAYG_HORIZON_DAYS = 365;
+
+  /**
+   * The date a rental stops occupying the vehicle, and whether that end is real
+   * or synthetic. Two cases produce a synthetic (open-ended) end:
+   *   1. end_date IS NULL — a PAYG / rolling rental with no scheduled return.
+   *   2. an Active rental whose end_date is already in the past — the car is
+   *      physically still out (a paused auto-extend, or simply not closed yet).
+   * Both must keep painting the calendar forward, or the operator sees a car as
+   * free while someone is driving it. Ported from the booking app, which fixed
+   * this first; keep the two in step.
+   */
+  const resolveEndDate = (
+    rental: BookedRental,
+  ): { end: Date; isOpenEnded: boolean } => {
+    if (rental.end_date) {
+      const [ey, em, ed] = rental.end_date.split("-").map(Number);
+      const end = new Date(ey, em - 1, ed);
+      const t = new Date();
+      t.setHours(0, 0, 0, 0);
+      if (getOccupancyType(rental.status) === "active" && end < t) {
+        const horizon = new Date(t);
+        horizon.setDate(horizon.getDate() + PAYG_HORIZON_DAYS);
+        return { end: horizon, isOpenEnded: true };
+      }
+      return { end, isOpenEnded: false };
+    }
+    const [sy, sm, sd] = rental.start_date.split("-").map(Number);
+    const horizon = new Date(sy, sm - 1, sd);
+    horizon.setDate(horizon.getDate() + PAYG_HORIZON_DAYS);
+    return { end: horizon, isOpenEnded: true };
+  };
+
   // Build occupancy map: dateString -> DateOccupancy[]
   const getOccupancyMap = (): Map<string, DateOccupancy[]> => {
     const map = new Map<string, DateOccupancy[]>();
 
-    const formatDateLabel = (start: string, end: string) => {
+    const formatDateLabel = (
+      start: string,
+      end: string | null,
+      isOpenEnded: boolean,
+    ) => {
       const s = new Date(start + "T00:00:00");
-      const e = new Date(end + "T00:00:00");
       const fmt = (d: Date) =>
         d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      return `${fmt(s)} - ${fmt(e)}`;
+      // An open-ended rental has no meaningful end to print — saying
+      // "Jan 1 - Jan 1 2027" would imply a return date that does not exist.
+      if (isOpenEnded || !end) return `${fmt(s)} - ongoing`;
+      return `${fmt(s)} - ${fmt(new Date(end + "T00:00:00"))}`;
     };
 
     // Add rental occupancies
     for (const rental of bookedRentals) {
-      if (!rental.end_date) continue;
-
       const type = getOccupancyType(rental.status);
       const ref = rental.rental_number || rental.id.substring(0, 8).toUpperCase();
       const typeLabel =
@@ -108,25 +152,16 @@ export const useVehicleBookedDates = (vehicleId: string | undefined, excludeRent
           : type === "pending"
           ? "Pending"
           : "Upcoming";
-      const dateRange = formatDateLabel(rental.start_date, rental.end_date);
+      const { end, isOpenEnded } = resolveEndDate(rental);
+      const dateRange = formatDateLabel(
+        rental.start_date,
+        rental.end_date,
+        isOpenEnded,
+      );
       const label = `${typeLabel}: ${ref} (${dateRange})`;
 
       const [sy, sm, sd] = rental.start_date.split("-").map(Number);
       const start = new Date(sy, sm - 1, sd);
-      const [ey, em, ed] = rental.end_date.split("-").map(Number);
-      let end = new Date(ey, em - 1, ed);
-
-      // Overdue Active rental = the car is physically still out (stale/past
-      // end_date from a paused/unrolled auto-extend, or a rental not yet closed).
-      // Extend the occupied range forward (capped) so the operator's calendar
-      // doesn't show the vehicle as free — consistent with the booking-site
-      // rentalOccupiesWindow rule.
-      const _today = new Date();
-      _today.setHours(0, 0, 0, 0);
-      if (type === "active" && end < _today) {
-        end = new Date(_today);
-        end.setDate(end.getDate() + 365);
-      }
 
       const current = new Date(start);
       while (current <= end) {
@@ -177,20 +212,10 @@ export const useVehicleBookedDates = (vehicleId: string | undefined, excludeRent
     };
 
     for (const rental of bookedRentals) {
-      if (!rental.end_date) continue;
       const type = getOccupancyType(rental.status);
       const [sy, sm, sd] = rental.start_date.split("-").map(Number);
       const start = new Date(sy, sm - 1, sd);
-      const [ey, em, ed] = rental.end_date.split("-").map(Number);
-      let end = new Date(ey, em - 1, ed);
-      // Overdue Active/Started rental = car still out; extend forward (capped) so
-      // the painted day-cells match the tooltip and the booking-site rule.
-      const _today = new Date();
-      _today.setHours(0, 0, 0, 0);
-      if (type === "active" && end < _today) {
-        end = new Date(_today);
-        end.setDate(end.getDate() + 365);
-      }
+      const { end } = resolveEndDate(rental);
       const current = new Date(start);
       while (current <= end) {
         mods[type].push(new Date(current));
@@ -220,16 +245,7 @@ export const useVehicleBookedDates = (vehicleId: string | undefined, excludeRent
     for (const rental of bookedRentals) {
       const [sy, sm, sd] = rental.start_date.split("-").map(Number);
       const start = new Date(sy, sm - 1, sd);
-      if (!rental.end_date) continue;
-      const [ey, em, ed] = rental.end_date.split("-").map(Number);
-      let end = new Date(ey, em - 1, ed);
-      // Overdue Active/Started rental = car still out; extend forward (capped).
-      const _today = new Date();
-      _today.setHours(0, 0, 0, 0);
-      if (getOccupancyType(rental.status) === "active" && end < _today) {
-        end = new Date(_today);
-        end.setDate(end.getDate() + 365);
-      }
+      const { end } = resolveEndDate(rental);
       const current = new Date(start);
       while (current <= end) {
         dates.push(new Date(current));
