@@ -690,37 +690,94 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
       //
       // Paying an overdue invoice does NOT move Stripe's anchor by itself — the
       // subscription resumes on its original schedule, so a tenant who paid 7
-      // days late would be billed again only 23 days later. Resetting the anchor
-      // to now gives them the full period they just paid for.
+      // days late would be billed again only ~23 days later.
+      //
+      // WHY trial_end AND NOT billing_cycle_anchor
+      // This previously used `billing_cycle_anchor: "now"`. Resetting the anchor
+      // makes Stripe invoice the customer IMMEDIATELY for the newly-started
+      // period — so a tenant who had just settled their overdue invoice was
+      // charged a second full period seconds later. `proration_behavior: "none"`
+      // did not prevent that; it only suppressed the credit for the days they
+      // had already paid for, which made the outcome worse rather than safer.
+      //
+      // `trial_end` is the mechanism Stripe provides for moving the next billing
+      // date WITHOUT raising an invoice now, and it is already how this codebase
+      // defers the first UAE charge during the UK→UAE migration
+      // (create-uae-subscription-capture: "zero double-billing"). At trial_end
+      // Stripe bills once and re-anchors the cycle there, which is exactly the
+      // "fresh start" the requirement asks for.
+      //
+      // The new end date is one BILLING INTERVAL from now, derived from the span
+      // of the invoice just settled (period_end - period_start). Taking it from
+      // the invoice avoids an extra API round-trip and automatically respects
+      // whatever interval/interval_count the plan uses.
       //
       // SAFETY:
       //  - only when the subscription was actually PAST_DUE (a normal on-time
-      //    renewal must never have its anchor moved)
-      //  - proration_behavior 'none' is essential: the default would issue
-      //    proration line items and could charge the customer a second time
-      //    within minutes of the payment that just cleared
+      //    renewal must never have its billing date moved)
+      //  - proration_behavior 'none' so entering the deferral raises no invoice
+      //    and issues no credit — we are granting time, not refunding money
+      //  - Stripe rejects a trial_end under 48h out, so we skip rather than
+      //    throw when the derived interval is too short or unknown; billing then
+      //    simply continues on its original schedule
       //  - idempotency_key is the invoice id, so Stripe collapses duplicate
       //    deliveries/retries of this same invoice.paid event into one update
       //  - non-fatal: a failure here must not fail the webhook and cause Stripe
-      //    to retry the whole event (which already applied the payment).
+      //    to retry the whole event (which already applied the payment)
+      //
+      // NOTE: this leaves the subscription at status 'trialing' until the new
+      // date. Portal access is unaffected (isSubscribed covers 'trialing') and
+      // the "Setup Mode" UI does not reappear, because use-tenant-subscription
+      // suppresses it for any tenant with setup_completed_at set.
       if (currentSub.status === "past_due" && stripe && subscriptionId) {
-        try {
-          await stripe.subscriptions.update(
-            subscriptionId,
-            {
-              billing_cycle_anchor: "now",
-              proration_behavior: "none",
-            },
-            { idempotencyKey: `cycle-reset-${invoice.id}` },
+        // Stripe Checkout/Subscriptions require trial_end >= 48h in the future.
+        const MIN_TRIAL_END_MS = 48 * 60 * 60 * 1000;
+        const intervalMs =
+          invoice.period_start && invoice.period_end && invoice.period_end > invoice.period_start
+            ? (invoice.period_end - invoice.period_start) * 1000
+            : null;
+        const newPeriodEndMs = intervalMs != null ? Date.now() + intervalMs : null;
+
+        if (newPeriodEndMs == null) {
+          console.warn(
+            `Cycle reset skipped for ${subscriptionId}: invoice ${invoice.id} has no usable period span — billing stays on the original schedule`,
           );
-          console.log(
-            `Cycle reset for subscription ${subscriptionId} after late payment (invoice ${invoice.id}) — new period starts now`,
+        } else if (newPeriodEndMs - Date.now() < MIN_TRIAL_END_MS) {
+          console.warn(
+            `Cycle reset skipped for ${subscriptionId}: derived interval is under Stripe's 48h trial_end minimum`,
           );
-        } catch (anchorErr) {
-          console.error(
-            `Failed to reset billing cycle for ${subscriptionId} (non-fatal):`,
-            (anchorErr as any)?.message ?? anchorErr,
-          );
+        } else {
+          try {
+            await stripe.subscriptions.update(
+              subscriptionId,
+              {
+                trial_end: Math.floor(newPeriodEndMs / 1000),
+                proration_behavior: "none",
+              },
+              { idempotencyKey: `cycle-reset-${invoice.id}` },
+            );
+
+            // Mirror the new window locally so Settings shows the correct "next
+            // payment" date immediately, rather than the pre-reset date until
+            // customer.subscription.updated lands.
+            await supabase
+              .from("tenant_subscriptions")
+              .update({
+                current_period_start: new Date().toISOString(),
+                current_period_end: new Date(newPeriodEndMs).toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", sub.id);
+
+            console.log(
+              `Cycle reset for subscription ${subscriptionId} after late payment (invoice ${invoice.id}) — next charge deferred to ${new Date(newPeriodEndMs).toISOString()}, no invoice raised now`,
+            );
+          } catch (anchorErr) {
+            console.error(
+              `Failed to reset billing cycle for ${subscriptionId} (non-fatal):`,
+              (anchorErr as any)?.message ?? anchorErr,
+            );
+          }
         }
       }
 
