@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { PDFDocument, PDFPage, PDFFont, StandardFonts, rgb } from 'pdf-lib';
 import { parseLocalDate } from '@/lib/date-utils';
 import { raiseEsignCreditAlert } from '@/lib/esign-credit-alert';
+import { computePaygDailyRate } from '@/lib/payg-rate';
 import { resolveAgreementMileage } from '@/lib/agreement-mileage';
 import { fetchTenantTermsBlock, buildTermsPlainText } from '@/lib/agreement-terms';
 import { injectAgreementClauses } from '@/lib/agreement-injection';
@@ -226,6 +227,45 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         // Tenant's own published T&Cs, or '' when they have none (the template
         // block then renders as nothing rather than an empty heading).
         terms_and_conditions: termsBlock || '',
+
+        // Present in the shipped default template and in the editor's preview,
+        // but absent from this map — so it rendered as the literal text
+        // "{{is_gig_driver}}" in customer-facing PDFs. Reads the rental first
+        // (the flag is captured per booking) then the customer record.
+        is_gig_driver:
+            (rental as any)?.is_gig_driver ?? (customer as any)?.is_gig_driver
+                ? 'Yes'
+                : 'No',
+
+        // PAYG variables. All six are used by the SHIPPED PAYG template and are
+        // offered in the editor's variable picker, but none was ever added to
+        // this map — so every Pay-As-You-Go agreement printed six literal
+        // "{{payg_*}}" strings into the customer's contract. Empty on non-PAYG
+        // rentals, which removeEmptyFields() then strips.
+        ...(() => {
+            const isPayg = !!(rental as any)?.is_pay_as_you_go;
+            if (!isPayg) {
+                return {
+                    payg_daily_rate: '', payg_weekly_rate: '', payg_monthly_rate: '',
+                    payg_billing_amount: '', payg_period_label: '', payg_reminder_interval: '',
+                };
+            }
+            const periodType = (rental as any)?.rental_period_type || 'Monthly';
+            const daily = computePaygDailyRate((rental as any)?.monthly_amount, periodType);
+            const intervalDays =
+                (rental as any)?.payg_reminder_interval_days ??
+                (tenant as any)?.payg_reminder_interval_days ?? null;
+            return {
+                payg_daily_rate: daily > 0 ? formatCurrency(daily, currencyCode) : '',
+                payg_weekly_rate: daily > 0 ? formatCurrency(daily * 7, currencyCode) : '',
+                payg_monthly_rate: daily > 0 ? formatCurrency(daily * 30, currencyCode) : '',
+                payg_billing_amount: formatCurrency((rental as any)?.monthly_amount, currencyCode),
+                payg_period_label: String(periodType),
+                payg_reminder_interval: intervalDays
+                    ? `every ${intervalDays} day${Number(intervalDays) === 1 ? '' : 's'}`
+                    : '',
+            };
+        })(),
 
         // LEGACY placeholder, kept for templates that already reference it.
         // It used to return the literal 'Unlimited' whenever a vehicle had no

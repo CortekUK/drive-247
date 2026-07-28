@@ -401,6 +401,29 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
     sample: '$4,500.00',
     category: 'vehicle',
   },
+  {
+    key: 'mileage_allowance',
+    label: 'Mileage Allowance',
+    description:
+      "Mileage included for this rental, resolved from the rental's override or the vehicle's allowance for the billing tier. Shows 'Not specified' when none is configured — never 'Unlimited'.",
+    sample: '4,500 miles total (4,500 per month over 30 days)',
+    category: 'vehicle',
+  },
+  {
+    key: 'excess_mileage_rate',
+    label: 'Excess Mileage Rate',
+    description: 'Charge per additional mile/km beyond the allowance, in the tenant currency.',
+    sample: '$0.30 per additional mile',
+    category: 'vehicle',
+  },
+  {
+    key: 'terms_and_conditions',
+    label: 'Terms & Conditions',
+    description:
+      "Your own Terms & Conditions from the CMS Terms page. Added automatically before the signature if you don't place it yourself.",
+    sample: 'Operator Terms & Conditions\n1. Agreement to Terms...',
+    category: 'rental',
+  },
 
   // Rental variables
   {
