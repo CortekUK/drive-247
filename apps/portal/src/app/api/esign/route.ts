@@ -3,6 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 import { PDFDocument, PDFPage, PDFFont, StandardFonts, rgb } from 'pdf-lib';
 import { parseLocalDate } from '@/lib/date-utils';
 import { raiseEsignCreditAlert } from '@/lib/esign-credit-alert';
+import { resolveAgreementMileage } from '@/lib/agreement-mileage';
+import { fetchTenantTermsBlock, buildTermsPlainText } from '@/lib/agreement-terms';
+import { injectAgreementClauses } from '@/lib/agreement-injection';
 
 // BoldSign configuration — resolved per-request based on tenant mode
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
@@ -148,7 +151,7 @@ function buildAdditionalDriverSlotFields(drivers: AdditionalDriverRow[]): Record
     return fields;
 }
 
-function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number; extensionAmount?: number }, installment?: InstallmentData | null): string {
+function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number; extensionAmount?: number }, installment?: InstallmentData | null, termsBlock: string = ''): string {
     // Compose full address from separate fields (DB stores street/city/state/zip separately)
     const customerAddress = [
         customer?.address_street,
@@ -207,6 +210,16 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         vehicle_daily_mileage: vehicle?.daily_mileage?.toString() || '',
         vehicle_weekly_mileage: vehicle?.weekly_mileage?.toString() || '',
         vehicle_monthly_mileage: vehicle?.monthly_mileage?.toString() || '',
+        // Canonical agreement mileage — see lib/agreement-mileage.ts. Unlike the
+        // legacy vehicle_allowed_mileage below, this honours rental-level
+        // overrides and the is_unlimited flag, and NEVER reports an
+        // unconfigured vehicle as "Unlimited".
+        mileage_allowance: resolveAgreementMileage(rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30).allowance,
+        excess_mileage_rate: resolveAgreementMileage(rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30).excessRate,
+        // Tenant's own published T&Cs, or '' when they have none (the template
+        // block then renders as nothing rather than an empty heading).
+        terms_and_conditions: termsBlock || '',
+
         vehicle_allowed_mileage: (() => {
             if (!vehicle?.daily_mileage && !vehicle?.weekly_mileage && !vehicle?.monthly_mileage) return 'Unlimited';
             if (rental?.start_date && rental?.end_date) {
@@ -890,7 +903,7 @@ function renderTextToPdf(ctx: PdfCtx, text: string) {
 // DEFAULT TEXT TEMPLATE (when tenant has no custom template)
 // ============================================================================
 
-function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number; extensionAmount?: number }): string {
+function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number; extensionAmount?: number }, termsText: string = ''): string {
     const companyName = tenant?.company_name || 'Drive 247';
     const line = (label: string, value: string | null | undefined) => value ? `${label}: ${value}` : '';
     const lines = (...parts: string[]) => parts.filter(Boolean).join('\n');
@@ -944,7 +957,11 @@ ${lines(
         const type = rental?.rental_period_type || 'Monthly';
         const rate = type === 'Daily' ? vehicle?.daily_rent : type === 'Weekly' ? vehicle?.weekly_rent : vehicle?.monthly_rent;
         return `${formatCurrency(rate, currencyCode)} (${type})`;
-    })())
+    })()),
+    // Mileage must appear in the contract the customer signs — an excess-mileage
+    // charge cannot be enforced against a limit the document never stated.
+    line('Mileage Allowance', resolveAgreementMileage(rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30).allowance),
+    line('Excess Mileage Rate', resolveAgreementMileage(rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30).excessRate)
 )}
 ${isExtension ? `
 ${'='.repeat(70)}
@@ -970,6 +987,7 @@ TERMS:
 1. Customer agrees to rent the vehicle for the specified period.
 2. Customer will maintain the vehicle in good condition.
 3. Customer is responsible for any damage during rental.
+${termsText ? `\n${'-'.repeat(70)}\nOPERATOR TERMS & CONDITIONS:\n\n${termsText}\n` : ''}
 
 ${'='.repeat(70)}
 
@@ -1181,11 +1199,18 @@ export async function POST(request: NextRequest) {
                 templateData = fallback;
             }
 
+            // Tenant's own T&Cs and whether a real mileage allowance resolves for
+            // this rental. Both drive conditional injection below: we only add a
+            // clause the operator has actually configured, never an invented one.
+            const termsBlockHtml = await fetchTenantTermsBlock(supabase, rental?.tenant_id);
+            const _mileage = resolveAgreementMileage(rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30);
+            const hasMileageConfigured = !_mileage.isUnspecified;
+
             if (templateData?.template_content) {
                 console.log('Using admin template (structured HTML → PDF)');
                 hasCustomTemplate = true;
                 processedHtml = removeEmptyFields(
-                    processTemplate(templateData.template_content, rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined, installment)
+                    processTemplate(injectAgreementClauses(templateData.template_content, { hasMileage: hasMileageConfigured, hasTerms: !!termsBlockHtml }), rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined, installment, termsBlockHtml)
                 );
 
                 // Ensure a signature tag exists
@@ -1202,7 +1227,7 @@ export async function POST(request: NextRequest) {
 
         if (!hasCustomTemplate) {
             console.log('Using default template (text → PDF)');
-            let textContent = generateDefaultAgreement(rental, customer, vehicle, tenant, currencyCode, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined);
+            let textContent = generateDefaultAgreement(rental, customer, vehicle, tenant, currencyCode, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined, buildTermsPlainText(termsBlockHtml ? [{ section_key: 'terms_content', content: { content: termsBlockHtml }, is_visible: true }] : null));
 
             // Inject sig tag
             const hasSig = /\{\{@sig1\}\}/.test(textContent);

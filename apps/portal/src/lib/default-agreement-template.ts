@@ -13,6 +13,8 @@ export const DEFAULT_AGREEMENT_TEMPLATE = `<h1>RENTAL AGREEMENT</h1>
 <tr><td><strong>Year</strong></td><td>{{vehicle_year}}</td></tr>
 <tr><td><strong>Registration</strong></td><td>{{vehicle_reg}}</td></tr>
 <tr><td><strong>Color</strong></td><td>{{vehicle_color}}</td></tr>
+<tr><td><strong>Mileage Allowance</strong></td><td>{{mileage_allowance}}</td></tr>
+<tr><td><strong>Excess Mileage Rate</strong></td><td>{{excess_mileage_rate}}</td></tr>
 </table>
 
 <h2>Customer Details</h2>
@@ -54,6 +56,8 @@ export const DEFAULT_AGREEMENT_TEMPLATE = `<h1>RENTAL AGREEMENT</h1>
 <p>The Customer is solely responsible for all traffic violations, parking tickets, tolls, congestion charges, and related administrative fees incurred during the rental period, including those processed after vehicle return.</p>
 <p>The rental company reserves the right to terminate this agreement immediately in the event of misuse, non-payment, or breach of these terms. Early termination does not relieve the Customer of outstanding charges.</p>
 <p>This agreement shall be governed by the laws of the State in which the rental company operates, without regard to conflict-of-law principles.</p>
+{{terms_and_conditions}}
+
 <p><strong>By signing below, the Customer acknowledges that they have read, understood, and agree to these Terms & Conditions.</strong></p>
 
 <hr>
@@ -83,6 +87,8 @@ export const PAYG_AGREEMENT_TEMPLATE = `<h1>PAY AS YOU GO RENTAL AGREEMENT</h1>
 <tr><td><strong>Registration</strong></td><td>{{vehicle_reg}}</td></tr>
 <tr><td><strong>Color</strong></td><td>{{vehicle_color}}</td></tr>
 <tr><td><strong>VIN</strong></td><td>{{vehicle_vin}}</td></tr>
+<tr><td><strong>Mileage Allowance</strong></td><td>{{mileage_allowance}}</td></tr>
+<tr><td><strong>Excess Mileage Rate</strong></td><td>{{excess_mileage_rate}}</td></tr>
 </table>
 
 <h2>Customer Details</h2>
@@ -152,6 +158,8 @@ export const PAYG_AGREEMENT_TEMPLATE = `<h1>PAY AS YOU GO RENTAL AGREEMENT</h1>
 <h2>Governing Law</h2>
 <p>This Agreement shall be governed by the laws of the jurisdiction in which the Rental Company operates, without regard to conflict-of-law principles.</p>
 
+{{terms_and_conditions}}
+
 <p><strong>By signing below, the Customer acknowledges that they have read, understood, and agree to the Pay As You Go billing model and all Terms & Conditions above, and authorizes the Rental Company to charge the payment method on file for all amounts that accrue under this Agreement until the rental is closed.</strong></p>
 
 <hr>
@@ -190,6 +198,8 @@ export const EXTENSION_AGREEMENT_TEMPLATE = `<h1>RENTAL EXTENSION AGREEMENT</h1>
 <tr><td><strong>New End Date</strong></td><td>{{extension_new_end_date}}</td></tr>
 <tr><td><strong>Additional Days</strong></td><td>{{extension_days}}</td></tr>
 <tr><td><strong>Rate ({{rental_period_type}})</strong></td><td>{{rental_price}}</td></tr>
+<tr><td><strong>Mileage Allowance</strong></td><td>{{mileage_allowance}}</td></tr>
+<tr><td><strong>Excess Mileage Rate</strong></td><td>{{excess_mileage_rate}}</td></tr>
 </table>
 
 {{installment_schedule}}

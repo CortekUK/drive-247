@@ -196,3 +196,39 @@ export async function fetchTenantTermsBlock(
     return "";
   }
 }
+
+/**
+ * Plain-text form of the terms block, for the text-rendered agreement path
+ * (tenants with no stored HTML template). Same content, no markup — otherwise
+ * the customer's contract would contain raw <p> tags.
+ */
+export function buildTermsPlainText(
+  sections: TermsSectionRow[] | null | undefined,
+): string {
+  const html = buildTermsBlock(sections);
+  if (!html) return "";
+  return html
+    .replace(/<h2>[\s\S]*?<\/h2>/i, "")           // drop our own heading
+    .replace(/<li[^>]*>/gi, "\n  - ")
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** Fetch + build the plain-text block. Never throws. */
+export async function fetchTenantTermsPlainText(
+  supabase: any,
+  tenantId: string | null | undefined,
+): Promise<string> {
+  const html = await fetchTenantTermsBlock(supabase, tenantId);
+  if (!html) return "";
+  return buildTermsPlainText([
+    { section_key: "terms_content", content: { content: html }, is_visible: true },
+  ]);
+}
