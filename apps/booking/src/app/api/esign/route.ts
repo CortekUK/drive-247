@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { raiseEsignCreditAlert } from '@/lib/esign-credit-alert';
+import { resolveAgreementMileage } from '@/lib/agreement-mileage';
+import { fetchTenantTermsBlock, buildTermsPlainText } from '@/lib/agreement-terms';
+import { injectAgreementClauses } from '@/lib/agreement-injection';
 
 // BoldSign configuration — resolved per-request based on tenant mode
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
@@ -94,7 +97,7 @@ function formatCurrency(amount: number | null, currencyCode: string = 'USD'): st
 }
 
 // Process template variables
-function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, verification?: any): string {
+function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, verification?: any, termsBlock: string = ''): string {
     const cc = tenant?.currency_code || 'USD';
 
     // Compose full address from separate fields
@@ -111,7 +114,15 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
     const documentExpiry = verification?.document_expiry_date || '';
     const documentType = verification?.document_type || '';
 
+    // Canonical mileage + the tenant's own T&Cs, identical to the portal engine.
+    // A customer self-service booking must produce the same contract as an
+    // operator-created one.
+    const _mileage = resolveAgreementMileage(rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30);
+
     const variables: Record<string, string> = {
+        mileage_allowance: _mileage.allowance,
+        excess_mileage_rate: _mileage.excessRate,
+        terms_and_conditions: termsBlock || '',
         // Customer — basic
         customer_name: customer?.name || '',
         customer_email: customer?.email || '',
@@ -257,7 +268,7 @@ function htmlToText(html: string): string {
 }
 
 // Generate default agreement
-function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any): string {
+function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, termsText: string = ''): string {
     const companyName = tenant?.company_name || 'Drive 247';
     const cc = tenant?.currency_code || 'USD';
 
@@ -292,6 +303,8 @@ RENTAL TERMS:
 Start Date: ${formatDate(rental?.start_date)}
 End Date: ${rental?.end_date ? formatDate(rental.end_date) : 'Ongoing'}
 Amount: ${formatCurrency(rental?.monthly_amount, cc)}
+Mileage Allowance: ${resolveAgreementMileage(rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30).allowance}
+Excess Mileage Rate: ${resolveAgreementMileage(rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30).excessRate}
 
 ${'='.repeat(70)}
 
@@ -299,6 +312,7 @@ TERMS:
 1. Customer agrees to rent the vehicle for the specified period.
 2. Customer will maintain the vehicle in good condition.
 3. Customer is responsible for any damage during rental.
+${termsText ? `\n${'-'.repeat(70)}\nOPERATOR TERMS & CONDITIONS:\n\n${termsText}\n` : ''}
 
 ${'='.repeat(70)}
 
@@ -416,13 +430,30 @@ export async function POST(request: NextRequest) {
                 templateData = fallback;
             }
 
+            // Same conditional-injection rule as the portal engine: surface the
+            // operator's OWN configured mileage and published terms, and only
+            // when they exist. Declared outside the branches so both can use it.
+            const termsBlockHtml = await fetchTenantTermsBlock(supabase, tenantId);
+            const termsPlain = termsBlockHtml
+                ? buildTermsPlainText([{ section_key: 'terms_content', content: { content: termsBlockHtml }, is_visible: true }])
+                : '';
+            const hasMileageConfigured = !resolveAgreementMileage(
+                rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30
+            ).isUnspecified;
+
             if (templateData?.template_content) {
                 console.log('Using admin custom template:', templateData.template_name);
-                const processed = processTemplate(templateData.template_content, rental, customer, vehicle, tenant, verification);
+                const processed = processTemplate(
+                    injectAgreementClauses(templateData.template_content, {
+                        hasMileage: hasMileageConfigured,
+                        hasTerms: !!termsBlockHtml,
+                    }),
+                    rental, customer, vehicle, tenant, verification, termsBlockHtml
+                );
                 documentContent = htmlToText(processed);
             } else {
                 console.log('No active template found, using default');
-                documentContent = generateDefaultAgreement(rental, customer, vehicle, tenant);
+                documentContent = generateDefaultAgreement(rental, customer, vehicle, tenant, termsPlain);
             }
         } else {
             console.log('No tenant ID, using default template');
