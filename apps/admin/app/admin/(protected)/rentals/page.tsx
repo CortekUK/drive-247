@@ -244,7 +244,11 @@ function subscriptionEndedOn(sub: SubscriptionRow | null): string | null {
  * they were current when they had never paid a real invoice.
  */
 function isVerificationCharge(inv: InvoiceRow | null | undefined): boolean {
-  return !!inv && (inv.amount_due ?? 0) <= 100;
+  const amt = inv?.amount_due ?? 0;
+  // Lower bound matters: a $0.00 invoice (fully discounted, or a proration that
+  // nets to nothing) is NOT a card verification, and treating it as one would
+  // claim a tenant had entered a card when they had not.
+  return amt > 0 && amt <= 100;
 }
 
 export default function RentalCompaniesPage() {
@@ -258,6 +262,8 @@ export default function RentalCompaniesPage() {
   const [planTenantIds, setPlanTenantIds] = useState<Set<string>>(new Set());
   const [latestInvoice, setLatestInvoice] = useState<Map<string, InvoiceRow>>(new Map());
   const [oldestUnpaidInvoice, setOldestUnpaidInvoice] = useState<Map<string, InvoiceRow>>(new Map());
+  /** Tenants with ANY paid $0.01-$1.00 invoice — evidence the card was captured. */
+  const [cardVerifiedTenants, setCardVerifiedTenants] = useState<Set<string>>(new Set());
   const [settlingInvoiceId, setSettlingInvoiceId] = useState<string | null>(null);
   const [subsLoaded, setSubsLoaded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -325,6 +331,18 @@ export default function RentalCompaniesPage() {
         }
         setLatestInvoice(latest);
         setOldestUnpaidInvoice(oldestUnpaid);
+
+        // Card capture is proven by the $1 authorization having been PAID at any
+        // point — not by it happening to be the most recent invoice. A tenant
+        // who verified their card and later received a real invoice still
+        // captured a card.
+        const verified = new Set<string>();
+        for (const inv of (invoicesRes.data as InvoiceRow[] | null) ?? []) {
+          if (inv.status === 'paid' && (inv.amount_due ?? 0) > 0 && (inv.amount_due ?? 0) <= 100) {
+            verified.add(inv.tenant_id);
+          }
+        }
+        setCardVerifiedTenants(verified);
 
         setSubsLoaded(true);
       } catch (error) {
@@ -798,12 +816,12 @@ export default function RentalCompaniesPage() {
                             <span
                               className={cn(
                                 'text-[10px] font-medium whitespace-nowrap',
-                                isVerificationCharge(inv) && inv?.status === 'paid'
+                                cardVerifiedTenants.has(tenant.id)
                                   ? 'text-sky-400'
                                   : 'text-muted-foreground'
                               )}
                             >
-                              {isVerificationCharge(inv) && inv?.status === 'paid'
+                              {cardVerifiedTenants.has(tenant.id)
                                 ? 'Card captured · did not convert'
                                 : 'No card entered'}
                             </span>
