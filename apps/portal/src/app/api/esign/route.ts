@@ -903,6 +903,59 @@ function renderTextToPdf(ctx: PdfCtx, text: string) {
 // DEFAULT TEXT TEMPLATE (when tenant has no custom template)
 // ============================================================================
 
+
+/**
+ * Record an agreement send that failed, so the operator can see WHY and retry.
+ *
+ * Before this, every failure path except insufficient-credits wrote nothing at
+ * all: no row, no error, no attempt log. A rental simply stayed at
+ * document_status='pending' with envelope_sent_at NULL, and an operator
+ * reporting "I couldn't get the agreement to send" could not be answered even
+ * with database access. The credit_failed path was the one place that did this
+ * properly; this generalises it.
+ *
+ * Deliberately best-effort and never throws: this runs on the way out of an
+ * already-failing request, and a bookkeeping error must not mask the real one.
+ *
+ * document_status has no CHECK constraint (verified against production), so
+ * 'send_failed' needs no migration. agreement_type DOES have one
+ * (original|extension) — hence the normalisation.
+ */
+async function recordSendFailure(
+    supabase: any,
+    body: any,
+    rental: any,
+    boldsignMode: 'test' | 'live',
+    reason: string,
+    detail?: string | null,
+): Promise<void> {
+    try {
+        const rawType = body?.agreementType || 'original';
+        const agreementType = rawType === 'extension' ? 'extension' : 'original';
+        await supabase.from('rental_agreements').insert({
+            rental_id: body?.rentalId,
+            tenant_id: body?.tenantId,
+            agreement_type: agreementType,
+            document_status: 'send_failed',
+            boldsign_mode: boldsignMode,
+            email_delivery_error: [reason, detail].filter(Boolean).join(' — ').slice(0, 500),
+            period_start_date: agreementType === 'extension' && body?.extensionPreviousEndDate
+                ? body.extensionPreviousEndDate : rental?.start_date || null,
+            period_end_date: agreementType === 'extension' && body?.extensionNewEndDate
+                ? body.extensionNewEndDate : rental?.end_date || null,
+        });
+        // Mirror onto the rental so the list view reflects it too, but never
+        // overwrite a rental that already has a good agreement.
+        if (agreementType === 'original' && rental?.document_status !== 'completed') {
+            await supabase.from('rentals')
+                .update({ document_status: 'send_failed' })
+                .eq('id', body?.rentalId);
+        }
+    } catch (e) {
+        console.error('Failed to record agreement send failure:', e);
+    }
+}
+
 function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number; extensionAmount?: number }, termsText: string = ''): string {
     const companyName = tenant?.company_name || 'Drive 247';
     const line = (label: string, value: string | null | undefined) => value ? `${label}: ${value}` : '';
@@ -1030,8 +1083,17 @@ const PLATFORM_DISCLAIMER_BLOCKS: PdfBlock[] = [
 // ============================================================================
 
 export async function POST(request: NextRequest) {
+    // Hoisted so the outer catch can still record WHY a send failed. Everything
+    // below is declared inside the try, so without this an unexpected throw
+    // leaves no trace at all — which is precisely the gap being closed here.
+    let outerBody: any = null;
+    let outerRental: any = null;
+    let outerMode: 'test' | 'live' = 'test';
+    let outerSupabase: any = null;
+
     try {
         const body = await request.json() as ESignRequest;
+        outerBody = body;
 
         console.log('='.repeat(50));
         console.log('PORTAL ESIGN API (BoldSign)');
@@ -1045,6 +1107,7 @@ export async function POST(request: NextRequest) {
         }
 
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        outerSupabase = supabase;
 
         // Fetch rental with related data
         const { data: rental } = await supabase
@@ -1247,8 +1310,11 @@ export async function POST(request: NextRequest) {
 
         // ── Resolve BoldSign mode + API key ──
         const boldsignMode: 'test' | 'live' = tenant?.boldsign_mode || 'test';
+        outerMode = boldsignMode;
+        outerRental = rental;
         const BOLDSIGN_API_KEY = getBoldSignApiKey(boldsignMode);
         if (!BOLDSIGN_API_KEY) {
+            await recordSendFailure(supabase, body, rental, boldsignMode, 'BoldSign is not configured', `No API key for ${boldsignMode} mode`);
             return NextResponse.json({ ok: false, error: 'BoldSign not configured' }, { status: 500 });
         }
         console.log('BoldSign mode:', boldsignMode);
@@ -1456,6 +1522,7 @@ export async function POST(request: NextRequest) {
                     console.error('Failed to refund credits:', refundErr);
                 }
             }
+            await recordSendFailure(supabase, body, rental, boldsignMode, `BoldSign rejected the document (HTTP ${boldSignResponse!.status})`, errorText);
             return NextResponse.json({ ok: false, error: 'Failed to create document', detail: errorText, boldsignStatus: boldSignResponse!.status, boldsignMode, hasApiKey: !!BOLDSIGN_API_KEY, apiKeyPrefix: BOLDSIGN_API_KEY.substring(0, 8) + '...' }, { status: 500 });
         }
 
@@ -1741,6 +1808,19 @@ export async function POST(request: NextRequest) {
 
     } catch (error: any) {
         console.error('API Error:', error);
+        // An unexpected throw previously vanished entirely — the rental stayed
+        // at 'pending' with no record of an attempt. Record it so the operator
+        // sees a failure they can act on rather than silence.
+        if (outerSupabase && outerBody?.rentalId) {
+            await recordSendFailure(
+                outerSupabase,
+                outerBody,
+                outerRental,
+                outerMode,
+                'Unexpected error while preparing the agreement',
+                error?.message ?? String(error),
+            );
+        }
         return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 }

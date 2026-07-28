@@ -137,6 +137,11 @@ function AgreementCard({
   const statusInfo = getStatusInfo(agreement);
   const isSigned = statusInfo.label === 'Signed';
   const isCreditFailed = agreement.document_status === 'credit_failed';
+  // A send that never reached BoldSign is retryable in exactly the same way
+  // as a credit failure — nothing was created, so retrying cannot duplicate
+  // a document.
+  const isSendFailed = agreement.document_status === 'send_failed';
+  const isRetryable = isCreditFailed || isSendFailed;
   const isExtension = agreement.agreement_type === 'extension';
   const hasSentDoc = !!agreement.document_id;
   const isTestMode = agreement.boldsign_mode === 'test';
@@ -304,6 +309,24 @@ function AgreementCard({
               </div>
             )}
 
+            {/* Send failure — the agreement never reached BoldSign at all.
+                Distinct from a delivery failure (document created, email
+                didn't arrive) and from credit_failed (a known, actionable
+                cause). Previously these wrote nothing anywhere, so an operator
+                reporting "it wouldn't send" could not be answered. */}
+            {agreement.document_status === 'send_failed' && (
+              <div className="mt-2 rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-2.5">
+                <p className="text-xs text-red-700 dark:text-red-400">
+                  This agreement could not be sent. Use Resend to try again.
+                </p>
+                {agreement.email_delivery_error && (
+                  <p className="mt-1 text-[11px] text-red-600/80 dark:text-red-500/80 break-words">
+                    {agreement.email_delivery_error}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Credit failed alert */}
             {agreement.document_status === 'credit_failed' && (
               <div className="mt-2 rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-2.5">
@@ -352,7 +375,7 @@ function AgreementCard({
               {resending ? 'Sending...' : effectiveResendCooldown > 0 ? `Wait ${effectiveResendCooldown}s` : 'Resend'}
             </Button>
           )}
-          {canEdit && isCreditFailed && (
+          {canEdit && isRetryable && (
             <Button variant="outline" size="sm" onClick={handleResend} disabled={resending}>
               <Send className="h-3.5 w-3.5 mr-1" />
               {resending ? 'Retrying...' : 'Retry Send'}
