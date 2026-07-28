@@ -33,6 +33,7 @@ import {
   Building2,
   ArrowLeftRight,
   ChevronDown,
+  AlertTriangle,
   CreditCard,
 } from 'lucide-react';
 
@@ -281,6 +282,8 @@ export default function RentalCompaniesPage() {
   const [cardVerifiedTenants, setCardVerifiedTenants] = useState<Set<string>>(new Set());
   /** Tenants with at least one real (>$1) paid invoice — see MRR note below. */
   const [paidInvoiceTenantIds, setPaidInvoiceTenantIds] = useState<Set<string>>(new Set());
+  /** Non-null when the subscription reads failed — the view must say so, not guess. */
+  const [subsError, setSubsError] = useState<string | null>(null);
   const [settlingInvoiceId, setSettlingInvoiceId] = useState<string | null>(null);
   /** Click a summary tile to narrow the table to that bucket. */
   const [subStatusFilter, setSubStatusFilter] = useState<SubStatus | null>(null);
@@ -333,6 +336,24 @@ export default function RentalCompaniesPage() {
             .select('id, tenant_id, status, amount_due, amount_paid, currency, period_end, created_at, attempt_count')
             .order('created_at', { ascending: false }),
         ]);
+
+        // supabase-js RESOLVES with an { error } instead of throwing, so a
+        // try/catch alone cannot see an RLS denial, a renamed column, or a
+        // network 5xx. Ignoring these left all three maps empty while
+        // subsLoaded was still set true — so the screen rendered every tenant as
+        // "Paywall not set" with $0 volume and no indication anything was wrong.
+        // That is worse than an error: it is confident, actionable-looking, and
+        // false, on the exact screen used to chase clients about their billing.
+        const failed = [subsRes.error, plansRes.error, invoicesRes.error].filter(Boolean);
+        if (failed.length > 0) {
+          console.error('Subscription view failed to load:', failed);
+          setSubsError(
+            failed.map((e: any) => e?.message ?? String(e)).join('; ') ||
+              'Could not load subscription data.',
+          );
+          return; // leave subsLoaded false so the table keeps showing skeletons
+        }
+        setSubsError(null);
 
         const subs = new Map<string, SubscriptionRow[]>();
         for (const row of (subsRes.data as SubscriptionRow[] | null) ?? []) {
@@ -388,8 +409,9 @@ export default function RentalCompaniesPage() {
         setPaidInvoiceTenantIds(everPaid);
 
         setSubsLoaded(true);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error loading subscription data:', error);
+        setSubsError(error?.message ?? 'Could not load subscription data.');
       }
     })();
   }, [viewMode, subsLoaded]);
@@ -524,8 +546,8 @@ export default function RentalCompaniesPage() {
       active: 0, trialing: 0, 'past-due': 0, expired: 0, 'not-converted': 0,
       'paywall-set': 0, 'paywall-not-set': 0,
     };
-    let mrrMinor = 0;
-    let atRiskMinor = 0;
+    const mrrByCurrency: Record<string, number> = {};
+    const atRiskByCurrency: Record<string, number> = {};
     for (const t of filteredTenants) {
       const sub = selectSubscription(subsByTenant.get(t.id));
       const status = getSubStatus(sub, planTenantIds.has(t.id));
@@ -543,16 +565,43 @@ export default function RentalCompaniesPage() {
       const hasPaidBefore = (paidInvoiceTenantIds?.has(t.id) ?? false);
       const isRevenueBearing =
         status === 'active' || (status === 'trialing' && hasPaidBefore);
-      if (isRevenueBearing && sub?.amount) mrrMinor += sub.amount;
+
+      // Amounts are kept PER CURRENCY. The plan editor offers USD, GBP and EUR,
+      // and these were previously summed into one integer and rendered with a
+      // hardcoded 'usd' — so a GBP tenant plus a USD tenant produced a single
+      // fabricated dollar figure. This is the one number a super-admin quotes,
+      // so an invented total is worse than no total.
+      //
+      // Yearly plans are normalised to a monthly equivalent, since MRR means
+      // MONTHLY recurring revenue and a folded-in annual plan overstates it 12x.
+      const monthly =
+        sub?.amount && sub.interval === 'year' ? Math.round(sub.amount / 12) : sub?.amount ?? 0;
+      const cur = (sub?.currency || 'usd').toLowerCase();
+
+      if (isRevenueBearing && monthly) {
+        mrrByCurrency[cur] = (mrrByCurrency[cur] ?? 0) + monthly;
+      }
 
       // Past-due revenue is OWED, not lost. Excluding it entirely made a
       // collections problem look like churn: the moment a card failed, the
       // headline figure silently dropped by that tenant's full amount with
       // nothing on screen saying why. Surface it separately instead.
-      if (status === 'past-due' && sub?.amount) atRiskMinor += sub.amount;
+      if (status === 'past-due' && monthly) {
+        atRiskByCurrency[cur] = (atRiskByCurrency[cur] ?? 0) + monthly;
+      }
     }
-    return { tally, mrrMinor, atRiskMinor };
+    return { tally, mrrByCurrency, atRiskByCurrency };
   })();
+
+  /** "$1,307.00" or, for a mixed portfolio, "$1,307.00 + £450.00". */
+  const formatByCurrency = (totals: Record<string, number>): string => {
+    const entries = Object.entries(totals).filter(([, v]) => v > 0);
+    if (entries.length === 0) return formatMinor(0, 'usd');
+    return entries
+      .sort((a, b) => b[1] - a[1])
+      .map(([cur, v]) => formatMinor(v, cur))
+      .join(' + ');
+  };
 
   if (loading) {
     return (
@@ -762,10 +811,10 @@ export default function RentalCompaniesPage() {
                   </button>
                 );
               })}
-              {subscriptionSummary.atRiskMinor > 0 && (
+              {Object.keys(subscriptionSummary.atRiskByCurrency).length > 0 && (
                 <div className="flex flex-col ml-auto text-right">
                   <span className="text-xl font-semibold tabular-nums text-amber-400">
-                    {formatMinor(subscriptionSummary.atRiskMinor, 'usd')}
+                    {formatByCurrency(subscriptionSummary.atRiskByCurrency)}
                   </span>
                   <span className="text-xs text-muted-foreground">At risk (past due)</span>
                 </div>
@@ -773,16 +822,46 @@ export default function RentalCompaniesPage() {
               <div
                 className={cn(
                   'flex flex-col text-right',
-                  subscriptionSummary.atRiskMinor > 0 ? '' : 'ml-auto'
+                  Object.keys(subscriptionSummary.atRiskByCurrency).length > 0 ? '' : 'ml-auto'
                 )}
               >
                 <span className="text-xl font-semibold tabular-nums text-emerald-400">
-                  {formatMinor(subscriptionSummary.mrrMinor, 'usd')}
+                  {formatByCurrency(subscriptionSummary.mrrByCurrency)}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Active subscription volume
+                  Active subscription volume{' '}
+                  <span className="opacity-70">(monthly)</span>
                 </span>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* The subscription reads failed. Say so loudly: this screen is used to
+          chase clients about billing, so silently rendering every tenant as
+          "Paywall not set" with $0 volume would send someone after the wrong
+          people with total confidence. */}
+      {isSubscriptionView && subsError && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="py-4 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium text-destructive">
+                Could not load subscription data — the figures below are not shown because they
+                would be wrong.
+              </p>
+              <p className="text-muted-foreground mt-1">{subsError}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSubsError(null);
+                  setSubsLoaded(false);
+                }}
+                className="mt-2 text-sm font-medium text-primary hover:underline"
+              >
+                Retry
+              </button>
             </div>
           </CardContent>
         </Card>
