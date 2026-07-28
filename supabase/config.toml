@@ -27,6 +27,17 @@ verify_jwt = false
 [functions.check-policy-acceptance]
 verify_jwt = false
 
+# Stripe calls these unauthenticated — it has no Supabase JWT to present. With
+# verify_jwt on (the default), the gateway returns 401 before the function ever
+# runs, so Stripe can never deliver and the endpoint looks silently dead.
+# Authenticity is established by Stripe SIGNATURE VERIFICATION inside each
+# handler, which is the correct mechanism for webhooks.
+[functions.stripe-connect-webhook]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
 [functions.stripe-webhook-test]
 verify_jwt = false
 
