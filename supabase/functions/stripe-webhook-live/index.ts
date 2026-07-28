@@ -59,7 +59,13 @@ serve(async (req) => {
 
       for (const secret of secretCandidates) {
         try {
-          event = stripe.webhooks.constructEvent(body, signature, secret);
+          // MUST be constructEventAsync. The synchronous constructEvent() throws
+          // "SubtleCryptoProvider cannot be used in a synchronous context" on Deno,
+          // because WebCrypto there is async-only. It threw for EVERY candidate
+          // secret, so verification always fell through to HTTP 400 and Stripe read
+          // it as a hard failure — 84 consecutive failures and a pending
+          // auto-disable notice. Nothing to do with which secret is configured.
+          event = await stripe.webhooks.constructEventAsync(body, signature, secret);
           verified = true;
           if (uaeSecret && secret === uaeSecret) {
             stripe = getStripeClientForAccount("uae", "live");
