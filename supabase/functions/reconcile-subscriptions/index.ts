@@ -219,6 +219,178 @@ function norm(v: unknown): string {
   return String(v);
 }
 
+/**
+ * How many invoices to re-read per subscription. A year of monthly cycles is
+ * enough to repair a stale row without walking the whole history every hour.
+ */
+const INVOICE_LOOKBACK = 12;
+
+/**
+ * Fields that constitute REAL invoice drift.
+ *
+ * Deliberately excludes stripe_invoice_pdf / stripe_hosted_invoice_url. Stripe
+ * appends a rotating token to those links, so their value changes between reads
+ * for an otherwise untouched invoice. A first dry run against production
+ * confirmed it: 29 of 29 existing invoices reported "drift" and every single one
+ * was URL-only, with identical status and amounts. Comparing them literally
+ * would rewrite the whole table every hour, generate pointless churn, and bury
+ * the one thing this pass exists to surface — a status that disagrees with
+ * Stripe. Those URLs are still FILLED when we have none (see below).
+ */
+const INVOICE_COMPARED = ["status", "amount_due", "amount_paid"] as const;
+
+/** Links we will fill if missing, but never rewrite. */
+const INVOICE_LINK_FIELDS = ["stripe_invoice_pdf", "stripe_hosted_invoice_url"] as const;
+
+/**
+ * Reconcile ONE subscription's invoices against Stripe.
+ *
+ * WHY THIS EXISTS — this is the gap that can permanently lock out a paying
+ * customer. The portal's 7-day grace clock is anchored on the oldest LOCAL
+ * invoice whose status is open/uncollectible. Webhooks are the only thing that
+ * ever moved an invoice off 'open', and webhooks drop (this project has already
+ * had an outage where every delivery failed for days). When an invoice.paid is
+ * lost, the local row stays 'open' forever:
+ *
+ *   tenant pays -> Stripe says paid -> our row still says open
+ *   -> grace clock keeps counting -> hard paywall
+ *   -> the screen tells them to "pay your pending invoice", pointing at an
+ *      invoice Stripe already considers settled, with no self-service way out.
+ *
+ * Reconciling subscriptions alone did not help: the subscription row self-heals
+ * within the hour while the invoice that is actually doing the blocking is
+ * never looked at.
+ *
+ * DISCIPLINE (mirrors the subscription pass):
+ *  - never INVENT a row we cannot attribute to a tenant
+ *  - never blank a stored value with null
+ *  - never touch the webhook-owned analytics columns (base_amount,
+ *    usage_amount, usage_quantity) — this pass only owns what it can derive
+ *    reliably from the Stripe invoice object
+ *  - report in dry-run without writing
+ */
+async function reconcileInvoicesForSubscription(
+  stripe: any,
+  supabase: any,
+  subscriptionId: string,
+  tenantId: string,
+  localSubscriptionId: string | null,
+  dryRun: boolean,
+): Promise<{ seen: number; changes: any[]; errors: any[] }> {
+  const changes: any[] = [];
+  const errors: any[] = [];
+  let seen = 0;
+
+  let list: any;
+  try {
+    list = await stripe.invoices.list({
+      subscription: subscriptionId,
+      limit: INVOICE_LOOKBACK,
+    });
+  } catch (e) {
+    errors.push({
+      stripe_subscription_id: subscriptionId,
+      scope: "invoices.list",
+      error: String((e as any)?.message ?? e),
+    });
+    return { seen, changes, errors };
+  }
+
+  for (const inv of list?.data ?? []) {
+    seen++;
+
+    const { data: existing, error: readErr } = await supabase
+      .from("tenant_subscription_invoices")
+      .select("id, status, amount_due, amount_paid, stripe_invoice_pdf, stripe_hosted_invoice_url")
+      .eq("stripe_invoice_id", inv.id)
+      .maybeSingle();
+
+    if (readErr) {
+      errors.push({ stripe_invoice_id: inv.id, scope: "read", error: readErr.message });
+      continue;
+    }
+
+    const desired: Record<string, unknown> = {
+      status: inv.status,
+      amount_due: inv.amount_due ?? 0,
+      amount_paid: inv.amount_paid ?? 0,
+      stripe_invoice_pdf: inv.invoice_pdf ?? null,
+      stripe_hosted_invoice_url: inv.hosted_invoice_url ?? null,
+    };
+
+    const diff: Record<string, { db: unknown; stripe: unknown }> = {};
+    for (const f of INVOICE_COMPARED) {
+      const dbVal = existing ? (existing as any)[f] : null;
+      const stVal = desired[f];
+      // Do not report "Stripe has null, we have a value" as drift — that is the
+      // blank-out case we deliberately refuse to write.
+      if (stVal === null && dbVal != null) continue;
+      if (norm(dbVal) !== norm(stVal)) diff[f] = { db: dbVal, stripe: stVal };
+    }
+    // Links count as drift ONLY when we are missing one Stripe can supply.
+    for (const f of INVOICE_LINK_FIELDS) {
+      const dbVal = existing ? (existing as any)[f] : null;
+      const stVal = desired[f];
+      if (!dbVal && stVal) diff[f] = { db: dbVal, stripe: stVal };
+    }
+
+    const isNew = !existing;
+    if (!isNew && Object.keys(diff).length === 0) continue;
+
+    changes.push({
+      tenant_id: tenantId,
+      stripe_subscription_id: subscriptionId,
+      stripe_invoice_id: inv.id,
+      action: isNew ? "insert" : "update",
+      diff,
+    });
+
+    if (dryRun) continue;
+
+    const payload: Record<string, unknown> = {
+      tenant_id: tenantId,
+      subscription_id: localSubscriptionId,
+      stripe_invoice_id: inv.id,
+      status: inv.status,
+      amount_due: inv.amount_due ?? 0,
+      amount_paid: inv.amount_paid ?? 0,
+      currency: inv.currency || "usd",
+      // Links are FILLED, never rewritten. Stripe rotates the token on these
+      // URLs, so rewriting them would churn every row on every run; and Stripe
+      // drops them entirely once an invoice is voided, so blindly writing would
+      // also destroy a receipt link the tenant may still need. Only supply one
+      // when we genuinely have none.
+      ...(!(existing as any)?.stripe_invoice_pdf && inv.invoice_pdf
+        ? { stripe_invoice_pdf: inv.invoice_pdf }
+        : {}),
+      ...(!(existing as any)?.stripe_hosted_invoice_url && inv.hosted_invoice_url
+        ? { stripe_hosted_invoice_url: inv.hosted_invoice_url }
+        : {}),
+      ...(inv.period_start
+        ? { period_start: new Date(inv.period_start * 1000).toISOString() }
+        : {}),
+      ...(inv.period_end
+        ? { period_end: new Date(inv.period_end * 1000).toISOString() }
+        : {}),
+      ...(inv.due_date ? { due_date: new Date(inv.due_date * 1000).toISOString() } : {}),
+      ...(inv.status_transitions?.paid_at
+        ? { paid_at: new Date(inv.status_transitions.paid_at * 1000).toISOString() }
+        : {}),
+      ...(inv.number ? { invoice_number: inv.number } : {}),
+    };
+
+    const { error } = await supabase
+      .from("tenant_subscription_invoices")
+      .upsert(payload, { onConflict: "stripe_invoice_id" });
+
+    if (error) {
+      errors.push({ stripe_invoice_id: inv.id, scope: "upsert", error: error.message });
+    }
+  }
+
+  return { seen, changes, errors };
+}
+
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
@@ -246,6 +418,9 @@ Deno.serve(async (req) => {
   /** Legacy UK subscriptions intentionally left alone for UAE-migrated tenants. */
   const retiredUk: any[] = [];
   let stripeCount = 0;
+  /** Invoice-level drift, reported separately so it is not lost in the noise. */
+  const invoiceChanges: any[] = [];
+  let invoicesSeen = 0;
 
   const cells: Array<{ account: SubscriptionAccount; mode: Mode }> = [
     { account: "uk", mode: "live" },
@@ -344,6 +519,24 @@ Deno.serve(async (req) => {
           .eq("stripe_subscription_id", snap.stripe_subscription_id)
           .maybeSingle();
 
+        // Invoices are reconciled HERE, before the "subscription already in
+        // sync -> continue" short-circuit below. A subscription row can be
+        // perfectly in sync while one of its invoices is stale, and that stale
+        // invoice is what the paywall actually decides on — so hanging this off
+        // the subscription diff would skip exactly the tenants who look fine
+        // and are silently locked out.
+        const invRes = await reconcileInvoicesForSubscription(
+          stripe,
+          supabase,
+          snap.stripe_subscription_id,
+          tenantId,
+          (row as any)?.id ?? null,
+          dryRun,
+        );
+        invoicesSeen += invRes.seen;
+        invoiceChanges.push(...invRes.changes);
+        errors.push(...invRes.errors);
+
         const diff: Record<string, { db: unknown; stripe: unknown }> = {};
         for (const f of COMPARED) {
           const dbVal = row ? (row as any)[f] : null;
@@ -380,8 +573,16 @@ Deno.serve(async (req) => {
             canceled_at: snap.canceled_at,
             ended_at: snap.ended_at,
             trial_end: snap.trial_end,
-            card_brand: snap.card_brand,
-            card_last4: snap.card_last4,
+            // Card details: never blank a stored value, same discipline as
+            // `amount` above. Stripe's subscription.default_payment_method is
+            // frequently null even when a card IS on file — the Billing Portal
+            // sets the CUSTOMER's default payment method, not necessarily the
+            // subscription's. Writing it unconditionally meant an ordinary
+            // hourly run could wipe correct card_brand/card_last4 that the
+            // webhook had captured at checkout, leaving the tenant's billing
+            // screen showing no card while Stripe charges one happily.
+            ...(snap.card_brand || !row ? { card_brand: snap.card_brand } : {}),
+            ...(snap.card_last4 || !row ? { card_last4: snap.card_last4 } : {}),
             stripe_account: account,
             last_synced_at: new Date().toISOString(),
             last_sync_source: "reconcile",
@@ -423,6 +624,11 @@ Deno.serve(async (req) => {
     stripeSubscriptionsSeen: stripeCount,
     wouldChange: changes.length,
     changes,
+    // Invoice drift is reported separately: a stale invoice is what actually
+    // paywalls a tenant, so it must not be buried inside the subscription list.
+    stripeInvoicesSeen: invoicesSeen,
+    invoicesWouldChange: invoiceChanges.length,
+    invoiceChanges,
     orphans,
     retiredUkIgnored: retiredUk,
     skippedCells: skipped,
