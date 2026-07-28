@@ -133,6 +133,10 @@ interface InvoiceRow {
   amount_paid: number | null;
   period_end: string | null;
   created_at: string;
+  /** >0 means Stripe attempted the charge and was declined — the only way to
+   *  tell a FAILED invoice from one that is simply not due yet, since Stripe
+   *  leaves both at status 'open'. */
+  attempt_count: number | null;
 }
 
 /**
@@ -149,6 +153,7 @@ type SubStatus =
   | 'trialing'
   | 'past-due'
   | 'expired'
+  | 'not-converted'
   | 'paywall-set'
   | 'paywall-not-set';
 
@@ -157,6 +162,13 @@ const SUB_STATUS_META: Record<SubStatus, { label: string; className: string }> =
   trialing: { label: 'Trialing', className: 'bg-sky-500/15 text-sky-400 border-sky-500/30' },
   'past-due': { label: 'Past due', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
   expired: { label: 'Expired', className: 'bg-destructive/15 text-destructive border-destructive/30' },
+  // Stripe 'incomplete' / 'incomplete_expired' means a Checkout was started and
+  // a card was attached, but the first payment never cleared (SCA challenge
+  // abandoned, declined, or the 23h window lapsed). That is a DIFFERENT problem
+  // from a lapsed customer: they tried to pay us and could not. Previously both
+  // were swept into red "Expired", hiding exactly the cohort the $1
+  // authorization question was aimed at.
+  'not-converted': { label: 'Card added · not converted', className: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
   'paywall-set': { label: 'Not subscribed', className: 'bg-secondary text-muted-foreground border-border' },
   'paywall-not-set': { label: 'Paywall not set', className: 'bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/30' },
 };
@@ -181,7 +193,8 @@ function getSubStatus(sub: SubscriptionRow | null, hasActivePlan: boolean): SubS
     if (sub.status === 'active') return 'active';
     if (sub.status === 'trialing') return 'trialing';
     if (sub.status === 'past_due') return 'past-due';
-    return 'expired'; // canceled | unpaid | incomplete_expired | paused | incomplete
+    if (sub.status === 'incomplete' || sub.status === 'incomplete_expired') return 'not-converted';
+    return 'expired'; // canceled | unpaid | paused
   }
   return hasActivePlan ? 'paywall-set' : 'paywall-not-set';
 }
@@ -313,7 +326,7 @@ export default function RentalCompaniesPage() {
           supabase
             .from('tenant_subscription_invoices')
             // `id` is required to settle an invoice via mark-invoice-paid.
-            .select('id, tenant_id, status, amount_due, amount_paid, period_end, created_at')
+            .select('id, tenant_id, status, amount_due, amount_paid, period_end, created_at, attempt_count')
             .order('created_at', { ascending: false }),
         ]);
 
@@ -481,7 +494,7 @@ export default function RentalCompaniesPage() {
 
   const subscriptionSummary = (() => {
     const tally: Record<SubStatus, number> = {
-      active: 0, trialing: 0, 'past-due': 0, expired: 0,
+      active: 0, trialing: 0, 'past-due': 0, expired: 0, 'not-converted': 0,
       'paywall-set': 0, 'paywall-not-set': 0,
     };
     let mrrMinor = 0;
@@ -684,6 +697,7 @@ export default function RentalCompaniesPage() {
                   ['trialing', 'Trialing'],
                   ['past-due', 'Past due'],
                   ['expired', 'Expired'],
+                  ['not-converted', 'Not converted'],
                   ['paywall-set', 'Not subscribed'],
                   ['paywall-not-set', 'Paywall not set'],
                 ] as [SubStatus, string][]
@@ -917,7 +931,7 @@ export default function RentalCompaniesPage() {
                                 : inv.status === 'paid'
                                 ? 'text-emerald-400'
                                 : inv.status === 'open'
-                                ? 'text-amber-400'
+                                ? ((inv.attempt_count ?? 0) > 0 ? 'text-destructive' : 'text-amber-400')
                                 : 'text-destructive'
                             )}
                           >
@@ -926,7 +940,10 @@ export default function RentalCompaniesPage() {
                               : inv.status === 'paid'
                               ? 'Paid'
                               : inv.status === 'open'
-                              ? 'Unpaid'
+                              // Stripe keeps a declined invoice at 'open'. Only
+                              // attempt_count tells us it was actually tried and
+                              // refused, versus simply not due yet.
+                              ? ((inv.attempt_count ?? 0) > 0 ? 'Payment failed' : 'Unpaid')
                               : 'Failed'}
                             <span className="text-muted-foreground ml-1">
                               {formatDay(inv.created_at)}
