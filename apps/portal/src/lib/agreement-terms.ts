@@ -174,12 +174,24 @@ export async function fetchTenantTermsBlock(
 ): Promise<string> {
   if (!supabase || !tenantId) return "";
   try {
+    // NOTE: deliberately NOT filtered on status='published'.
+    //
+    // cms_pages.status is a SINGLE field, and every section save sets it back to
+    // 'draft' (use-cms-page-sections.ts). There is no published snapshot kept
+    // alongside the draft — so requiring 'published' meant that the moment an
+    // operator edited the very terms they had asked us to include, the terms
+    // silently disappeared from every subsequent agreement, with nothing in the
+    // UI to say so.
+    //
+    // The status field answers "is this page live on the marketing site", which
+    // is a different question from "what are this operator's terms". The row
+    // holds their terms either way, and stale-by-one-edit is far better than
+    // absent.
     const { data: page } = await supabase
       .from("cms_pages")
-      .select("id")
+      .select("id, status")
       .eq("tenant_id", tenantId)
       .eq("slug", "terms")
-      .eq("status", "published")
       .maybeSingle();
 
     if (!page?.id) return "";

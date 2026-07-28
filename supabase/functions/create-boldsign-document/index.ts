@@ -3,6 +3,9 @@ import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { formatCurrency as sharedFormatCurrency } from '../_shared/format-utils.ts';
 import { getBoldSignApiKey, getBoldSignBaseUrl, getTenantBoldSignMode, getBoldSignBrandId } from '../_shared/boldsign-client.ts';
 import type { BoldSignMode } from '../_shared/boldsign-client.ts';
+import { resolveAgreementMileage } from '../_shared/agreement-mileage.ts';
+import { fetchTenantTermsBlock } from '../_shared/agreement-terms.ts';
+import { injectAgreementClauses } from '../_shared/agreement-injection.ts';
 
 interface CreateDocumentRequest {
   rentalId: string;
@@ -130,7 +133,8 @@ function processTemplate(
   vehicle: Record<string, unknown>,
   tenant: Record<string, unknown>,
   verification?: Record<string, unknown> | null,
-  installment?: InstallmentData | null
+  installment?: InstallmentData | null,
+  termsBlock: string = ''
 ): string {
   // Compose full address from separate fields
   const customerAddress = [
@@ -145,6 +149,14 @@ function processTemplate(
   const documentNumber = (customer?.license_number as string) || (verification?.document_number as string) || '';
   const documentExpiry = (verification?.document_expiry_date as string) || '';
   const documentType = (verification?.document_type as string) || '';
+
+  // Single resolution, shared with the portal and booking engines.
+  const _agreementMileage = resolveAgreementMileage(rental as any, vehicle as any, {
+    monthlyTierDays: (tenant?.monthly_tier_days as number) ?? 30,
+    currencyCode: (tenant?.currency_code as string) || 'USD',
+    distanceUnit: tenant?.distance_unit as string,
+  });
+  const _termsBlockHtml = termsBlock;
 
   const variables: Record<string, string> = {
     // Customer — basic
@@ -261,30 +273,16 @@ function processTemplate(
     vehicle_daily_mileage: vehicle?.daily_mileage?.toString() || '',
     vehicle_weekly_mileage: vehicle?.weekly_mileage?.toString() || '',
     vehicle_monthly_mileage: vehicle?.monthly_mileage?.toString() || '',
-    vehicle_allowed_mileage: (() => {
-      // Calculate total allowed mileage based on rental tier and duration
-      const startDate = rental?.start_date as string | undefined;
-      const endDate = rental?.end_date as string | undefined;
-      if (!startDate || !endDate) return vehicle?.monthly_mileage?.toString() || 'Unlimited';
-      const days = Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)));
-
-      // Use rental-level mileage overrides if present, otherwise fall back to vehicle
-      const dailyMileage = (rental?.daily_mileage_override as number | null) ?? (vehicle?.daily_mileage as number | null);
-      const weeklyMileage = (rental?.weekly_mileage_override as number | null) ?? (vehicle?.weekly_mileage as number | null);
-      const monthlyMileage = (rental?.monthly_mileage_override as number | null) ?? (vehicle?.monthly_mileage as number | null);
-
-      const _mtd = (tenant?.monthly_tier_days as number) ?? 30;
-      if (days >= _mtd) {
-        if (monthlyMileage == null) return 'Unlimited';
-        return (monthlyMileage * Math.ceil(days / _mtd)).toString();
-      } else if (days >= 7) {
-        if (weeklyMileage == null) return 'Unlimited';
-        return (weeklyMileage * Math.ceil(days / 7)).toString();
-      } else {
-        if (dailyMileage == null) return 'Unlimited';
-        return (dailyMileage * days).toString();
-      }
-    })(),
+    // Was a local copy of the mileage logic that returned the literal string
+    // 'Unlimited' in FOUR branches whenever an allowance was missing — i.e. it
+    // contractually granted unlimited mileage to any renter of any tenant who
+    // had not filled the field in. Now uses the same resolver as the portal and
+    // booking engines, where "not configured" renders "Not specified" and only
+    // an explicit is_unlimited_mileage flag can produce "Unlimited".
+    vehicle_allowed_mileage: _agreementMileage.allowance,
+    mileage_allowance: _agreementMileage.allowance,
+    excess_mileage_rate: _agreementMileage.excessRate,
+    terms_and_conditions: _termsBlockHtml || '',
     mileage_tier: (() => {
       const startDate = rental?.start_date as string | undefined;
       const endDate = rental?.end_date as string | undefined;
@@ -561,6 +559,10 @@ async function generateDocument(
   const templateCategory = (rental as Record<string, unknown>)?.is_pay_as_you_go ? 'payg' : 'standard';
   const template = await getActiveTemplate(supabase, tenantId, templateCategory);
 
+  // The tenant's own published terms. Declared here, in the scope shared by
+  // both the template and default branches below.
+  const termsBlockHtml = await fetchTenantTermsBlock(supabase, tenantId);
+
   // Inject the additional drivers list and granular per-slot fields as
   // synthetic rental fields so they flow through processTemplate's variables
   // map without changing the function signature for every caller.
@@ -572,7 +574,20 @@ async function generateDocument(
 
   if (template) {
     console.log('Using custom template from portal');
-    const processedContent = processTemplate(template, rentalWithExtras, customer, vehicle, tenant || {}, verification, installment);
+    // Same conditional-injection rule as the other two engines: surface only
+    // what the operator has actually configured.
+    const _mileageForInject = resolveAgreementMileage(
+      rentalWithExtras as any,
+      vehicle as any,
+      { monthlyTierDays: (tenant?.monthly_tier_days as number) ?? 30 },
+    );
+    const processedContent = processTemplate(
+      injectAgreementClauses(template, {
+        hasMileage: !_mileageForInject.isUnspecified,
+        hasTerms: !!termsBlockHtml,
+      }),
+      rentalWithExtras, customer, vehicle, tenant || {}, verification, installment, termsBlockHtml,
+    );
     return htmlToText(processedContent);
   }
 

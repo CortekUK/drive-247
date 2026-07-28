@@ -43,6 +43,10 @@ export interface AgreementMileageVehicle {
   weekly_mileage?: number | null;
   monthly_mileage?: number | null;
   excess_mileage_rate?: number | null;
+  /** Rates are read ONLY to pick the billing tier — see resolveMileageTier. */
+  daily_rent?: number | null;
+  weekly_rent?: number | null;
+  monthly_rent?: number | null;
 }
 
 export interface AgreementMileage {
@@ -79,6 +83,7 @@ function formatInt(n: number): string {
 export function resolveMileageTier(
   rental: AgreementMileageRental | null | undefined,
   monthlyTierDays: number,
+  vehicle?: AgreementMileageVehicle | null,
 ): { tier: MileageTier; days: number | null } {
   const mtd = monthlyTierDays > 0 ? monthlyTierDays : 30;
   if (!rental?.start_date || !rental?.end_date) {
@@ -90,8 +95,32 @@ export function resolveMileageTier(
     parseLocalDate(rental.end_date).getTime() -
     parseLocalDate(rental.start_date).getTime();
   const days = Math.max(1, Math.ceil(ms / 86_400_000));
-  const tier: MileageTier = days >= mtd ? "monthly" : days >= 7 ? "weekly" : "daily";
-  return { tier, days };
+
+  // Mirror calculate-rental-price.ts:477-497 exactly. Pricing does NOT choose a
+  // tier on day count alone — it also requires that tier's RATE to exist, and
+  // falls back when it does not. Gating on days only meant a vehicle with
+  // monthly_rent = 0 on a 40-day rental was BILLED weekly while the agreement
+  // stated the MONTHLY allowance.
+  //
+  // When no rates are supplied we fall back to the day-count rule, which is the
+  // previous behaviour and correct whenever rates are configured normally.
+  const daily = Number(vehicle?.daily_rent) || 0;
+  const weekly = Number(vehicle?.weekly_rent) || 0;
+  const monthly = Number(vehicle?.monthly_rent) || 0;
+  const haveRates = daily > 0 || weekly > 0 || monthly > 0;
+
+  if (!haveRates) {
+    const tier: MileageTier = days >= mtd ? "monthly" : days >= 7 ? "weekly" : "daily";
+    return { tier, days };
+  }
+
+  if (days >= mtd && monthly > 0) return { tier: "monthly", days };
+  if (days >= 7 && days < mtd && weekly > 0) return { tier: "weekly", days };
+  if (days < 7 && daily > 0) return { tier: "daily", days };
+  // Fallbacks, in the same order pricing uses.
+  if (daily > 0) return { tier: "daily", days };
+  if (weekly > 0) return { tier: "weekly", days };
+  return { tier: "monthly", days };
 }
 
 /**
@@ -132,7 +161,7 @@ export function resolveAgreementMileage(
       return `${n.toFixed(2)} ${currencyCode}`;
     }
   };
-  const { tier, days } = resolveMileageTier(rental, monthlyTierDays);
+  const { tier, days } = resolveMileageTier(rental, monthlyTierDays, vehicle);
   const unitWord = tier === "daily" ? "day" : tier === "weekly" ? "week" : "month";
 
   const excessRaw =
