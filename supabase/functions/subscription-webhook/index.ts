@@ -672,8 +672,29 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
       .eq("id", sub.id)
       .single();
 
-    // Only promote non-terminal states — never resurrect a canceled subscription.
-    if (currentSub && ["trialing", "past_due", "incomplete"].includes(currentSub.status)) {
+    // Was this invoice settled LATE? Decided from the INVOICE, which is
+    // immutable and arrives with the event — never from tenant_subscriptions.
+    //
+    // Paying an overdue invoice makes Stripe emit BOTH invoice.paid and
+    // customer.subscription.updated, with no ordering guarantee, and Supabase
+    // serves them in separate concurrent isolates. If the latter wins the race
+    // it writes status='active' before we read it here. Deriving "was this
+    // late" from our own row therefore silently skipped the tenant's fresh
+    // start on roughly half of all late payments, with nothing logged.
+    const paidAtMs =
+      (invoice.status_transitions?.paid_at ? invoice.status_transitions.paid_at * 1000 : 0) ||
+      Date.now();
+    const dueMs =
+      (invoice.due_date ? invoice.due_date * 1000 : 0) ||
+      (invoice.period_end ? invoice.period_end * 1000 : 0);
+    const wasLate = (invoice.attempt_count || 0) > 1 || (dueMs > 0 && paidAtMs > dueMs);
+
+    // "active" is included so a racing customer.subscription.updated cannot
+    // make this whole block a no-op. Re-running it for an already-active
+    // subscription is harmless: the status write is idempotent and resolveGoLive
+    // has its own readiness gate. Terminal states are still excluded so a
+    // canceled subscription is never resurrected.
+    if (currentSub && ["trialing", "past_due", "incomplete", "active"].includes(currentSub.status)) {
       await supabase
         .from("tenant_subscriptions")
         .update({
@@ -713,8 +734,11 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
       // whatever interval/interval_count the plan uses.
       //
       // SAFETY:
-      //  - only when the subscription was actually PAST_DUE (a normal on-time
-      //    renewal must never have its billing date moved)
+      //  - only when the invoice was settled LATE (see `wasLate` above); a
+      //    normal on-time renewal must never have its billing date moved
+      //  - skipped entirely while any OTHER invoice is still open, so we never
+      //    hand out a free period to a tenant who still owes money, and never
+      //    move the subscription off past_due while dunning should be running
       //  - proration_behavior 'none' so entering the deferral raises no invoice
       //    and issues no credit — we are granting time, not refunding money
       //  - Stripe rejects a trial_end under 48h out, so we skip rather than
@@ -725,18 +749,54 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
       //  - non-fatal: a failure here must not fail the webhook and cause Stripe
       //    to retry the whole event (which already applied the payment)
       //
-      // NOTE: this leaves the subscription at status 'trialing' until the new
-      // date. Portal access is unaffected (isSubscribed covers 'trialing') and
-      // the "Setup Mode" UI does not reappear, because use-tenant-subscription
-      // suppresses it for any tenant with setup_completed_at set.
-      if (currentSub.status === "past_due" && stripe && subscriptionId) {
+      // KNOWN TRADE-OFFS while the deferral is active (all cost Drive247, not
+      // the tenant — recorded here so they are not rediscovered as surprises):
+      //  - the subscription sits at Stripe status 'trialing' until the new date.
+      //    Portal access is unaffected (isSubscribed covers 'trialing', as does
+      //    _shared/subscription-gate.ts) and Setup Mode does not reappear
+      //    because setup_completed_at is backfilled for live tenants
+      //    (migration 20260725100000).
+      //  - the super-admin MRR tile sums status === 'active' only, so a tenant
+      //    who has just PAID drops out of the headline for the deferral window.
+      //  - metered e-sign usage may not bill during a Stripe trial. UNVERIFIED
+      //    against Stripe — must be confirmed in test mode before relying on it.
+      //  - the absorbed time is a full interval from the payment, not capped at
+      //    GRACE_DAYS, so an unusually late settlement (e.g. via the admin
+      //    manual override) buys more free time than the 7 days the requirement
+      //    describes.
+      if (wasLate && stripe && subscriptionId) {
         // Stripe Checkout/Subscriptions require trial_end >= 48h in the future.
         const MIN_TRIAL_END_MS = 48 * 60 * 60 * 1000;
         const intervalMs =
           invoice.period_start && invoice.period_end && invoice.period_end > invoice.period_start
             ? (invoice.period_end - invoice.period_start) * 1000
             : null;
-        const newPeriodEndMs = intervalMs != null ? Date.now() + intervalMs : null;
+        // Anchor on when the tenant actually PAID, not on when we happened to
+        // process the event. After a webhook retry backlog those can differ by
+        // days, which would silently hand out extra free time and make the
+        // result depend on delivery timing rather than on the payment.
+        const newPeriodEndMs = intervalMs != null ? paidAtMs + intervalMs : null;
+
+        // Deferring while the customer still owes money would be wrong twice
+        // over: they would get a free period they have not paid for, and moving
+        // the subscription off past_due silences the portal's dunning banner and
+        // grace countdown (both keyed on status) while an invoice is still open.
+        let otherOpenInvoices = 0;
+        try {
+          const openList = await stripe.invoices.list({
+            customer: invoice.customer,
+            status: "open",
+            limit: 100,
+          });
+          otherOpenInvoices = (openList.data || []).filter((i: any) => i.id !== invoice.id).length;
+        } catch (listErr) {
+          // Unknown means unsafe — skip the perk rather than risk the above.
+          otherOpenInvoices = -1;
+          console.error(
+            `Cycle reset: could not list open invoices for ${invoice.customer} (non-fatal):`,
+            (listErr as any)?.message ?? listErr,
+          );
+        }
 
         if (newPeriodEndMs == null) {
           console.warn(
@@ -745,6 +805,10 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
         } else if (newPeriodEndMs - Date.now() < MIN_TRIAL_END_MS) {
           console.warn(
             `Cycle reset skipped for ${subscriptionId}: derived interval is under Stripe's 48h trial_end minimum`,
+          );
+        } else if (otherOpenInvoices !== 0) {
+          console.warn(
+            `Cycle reset skipped for ${subscriptionId}: ${otherOpenInvoices < 0 ? "could not confirm" : otherOpenInvoices} other open invoice(s) — tenant still owes money, leaving billing and dunning untouched`,
           );
         } else {
           try {
@@ -760,14 +824,22 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
             // Mirror the new window locally so Settings shows the correct "next
             // payment" date immediately, rather than the pre-reset date until
             // customer.subscription.updated lands.
-            await supabase
+            const { error: mirrorErr } = await supabase
               .from("tenant_subscriptions")
               .update({
-                current_period_start: new Date().toISOString(),
+                current_period_start: new Date(paidAtMs).toISOString(),
                 current_period_end: new Date(newPeriodEndMs).toISOString(),
                 updated_at: new Date().toISOString(),
               })
               .eq("id", sub.id);
+            if (mirrorErr) {
+              // Stripe is authoritative and already updated; surface the drift
+              // rather than leaving the row silently showing the old date.
+              console.error(
+                `Cycle reset: Stripe updated but local mirror failed for ${subscriptionId}:`,
+                mirrorErr,
+              );
+            }
 
             console.log(
               `Cycle reset for subscription ${subscriptionId} after late payment (invoice ${invoice.id}) — next charge deferred to ${new Date(newPeriodEndMs).toISOString()}, no invoice raised now`,
@@ -794,7 +866,7 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
       } else if (reason !== "already-complete") {
         console.log(`Auto go-live SKIPPED (via invoice.paid) for tenant ${tenant.id} — not configured (${reason})`);
       }
-      console.log(`Subscription ${subscriptionId} promoted trialing→active via invoice.paid for tenant ${tenant.id}`);
+      console.log(`Subscription ${subscriptionId} synced to active via invoice.paid for tenant ${tenant.id} (was ${currentSub.status})`);
     }
   }
 }
