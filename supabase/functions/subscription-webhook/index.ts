@@ -745,10 +745,24 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
 async function handleInvoicePaymentFailed(supabase: any, invoice: any) {
   const customerId = invoice.customer;
 
-  const { data: tenant } = await supabase.from("tenants").select("id, company_name, contact_email").eq("stripe_subscription_customer_id", customerId).maybeSingle();
-  if (!tenant) { console.log("No tenant found for customer:", customerId); return; }
+  const subscriptionId = resolveInvoiceSubscriptionId(invoice);
 
-  const { data: sub } = await supabase.from("tenant_subscriptions").select("id").eq("stripe_subscription_id", resolveInvoiceSubscriptionId(invoice)).maybeSingle();
+  let { data: tenant } = await supabase.from("tenants").select("id, company_name, contact_email").eq("stripe_subscription_customer_id", customerId).maybeSingle();
+  // Fallback via the subscription, mirroring handleInvoicePaid. Resolving on the
+  // customer id alone silently dropped the event for any tenant whose
+  // stripe_subscription_customer_id was never backfilled.
+  if (!tenant && subscriptionId) {
+    const { data: viaSub } = await supabase
+      .from("tenant_subscriptions").select("tenant_id").eq("stripe_subscription_id", subscriptionId).maybeSingle();
+    if (viaSub?.tenant_id) {
+      const { data: t } = await supabase
+        .from("tenants").select("id, company_name, contact_email").eq("id", viaSub.tenant_id).maybeSingle();
+      tenant = t;
+    }
+  }
+  if (!tenant) { console.log("No tenant found for customer:", customerId, "sub:", subscriptionId); return; }
+
+  const { data: sub } = await supabase.from("tenant_subscriptions").select("id").eq("stripe_subscription_id", subscriptionId).maybeSingle();
 
   const { baseAmount, usageAmount, usageQuantity } = parseInvoiceLineItems(invoice);
 
@@ -760,7 +774,17 @@ async function handleInvoicePaymentFailed(supabase: any, invoice: any) {
       stripe_invoice_id: invoice.id,
       stripe_invoice_pdf: invoice.invoice_pdf || null,
       stripe_hosted_invoice_url: invoice.hosted_invoice_url || null,
-      status: "open",
+      // Stripe keeps a failed invoice at status 'open' — identical to one nobody
+      // has attempted yet — so status alone cannot answer the operator question
+      // "did this payment FAIL, or is it simply not due?". attempt_count is the
+      // distinguishing fact: Stripe tried and was declined. Persist it (and the
+      // next dunning retry) so the admin can tell the two apart.
+      status: invoice.status || "open",
+      attempt_count: invoice.attempt_count ?? 1,
+      next_payment_attempt: invoice.next_payment_attempt
+        ? new Date(invoice.next_payment_attempt * 1000).toISOString()
+        : null,
+      billing_reason: invoice.billing_reason || null,
       amount_due: invoice.amount_due || 0,
       amount_paid: invoice.amount_paid || 0,
       currency: invoice.currency || "usd",

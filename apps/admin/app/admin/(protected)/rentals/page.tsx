@@ -265,6 +265,8 @@ export default function RentalCompaniesPage() {
   /** Tenants with ANY paid $0.01-$1.00 invoice — evidence the card was captured. */
   const [cardVerifiedTenants, setCardVerifiedTenants] = useState<Set<string>>(new Set());
   const [settlingInvoiceId, setSettlingInvoiceId] = useState<string | null>(null);
+  /** Click a summary tile to narrow the table to that bucket. */
+  const [subStatusFilter, setSubStatusFilter] = useState<SubStatus | null>(null);
   const [subsLoaded, setSubsLoaded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -296,7 +298,18 @@ export default function RentalCompaniesPage() {
           supabase
             .from('tenant_subscriptions')
             .select('tenant_id, status, amount, currency, interval, plan_name, current_period_end, trial_end, cancel_at, canceled_at, created_at'),
-          supabase.from('subscription_plans').select('tenant_id').eq('is_active', true),
+          // A plan is only a usable paywall if it can actually be checked out.
+          // create-subscription-checkout rejects a plan with no stripe_price_id
+          // ("Plan has no Stripe price configured"), and
+          // create-uae-subscription-capture deliberately inserts is_active rows
+          // with a NULL price — so is_active alone reported "paywall set" for
+          // tenants who physically cannot pay, which is the exact failure the
+          // requirement ("ensure paywalls are being set properly") exists to catch.
+          supabase
+            .from('subscription_plans')
+            .select('tenant_id')
+            .eq('is_active', true)
+            .not('stripe_price_id', 'is', null),
           supabase
             .from('tenant_subscription_invoices')
             // `id` is required to settle an invoice via mark-invoice-paid.
@@ -454,6 +467,18 @@ export default function RentalCompaniesPage() {
    * trialing tenants are not paying yet and expired ones never will, so folding
    * either into the headline number would overstate revenue.
    */
+  // Rows shown in the table: search/type/status/favourites, PLUS the bucket
+  // chosen from a summary tile. Deliberately a SEPARATE list from the one the
+  // tally uses — computing the tally from this would make clicking "Past due"
+  // zero every other tile, leaving no way back.
+  const visibleTenants =
+    subStatusFilter && isSubscriptionView && subsLoaded
+      ? filteredTenants.filter((t) => {
+          const sub = selectSubscription(subsByTenant.get(t.id));
+          return getSubStatus(sub, planTenantIds.has(t.id)) === subStatusFilter;
+        })
+      : filteredTenants;
+
   const subscriptionSummary = (() => {
     const tally: Record<SubStatus, number> = {
       active: 0, trialing: 0, 'past-due': 0, expired: 0,
@@ -631,7 +656,7 @@ export default function RentalCompaniesPage() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuRadioGroup
                   value={viewMode}
-                  onValueChange={(v) => setViewMode(v as ViewMode)}
+                  onValueChange={(v) => { setViewMode(v as ViewMode); setSubStatusFilter(null); }}
                 >
                   <DropdownMenuRadioItem value="default">None</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="migration">
@@ -662,14 +687,26 @@ export default function RentalCompaniesPage() {
                   ['paywall-set', 'Not subscribed'],
                   ['paywall-not-set', 'Paywall not set'],
                 ] as [SubStatus, string][]
-              ).map(([key, label]) => (
-                <div key={key} className="flex flex-col">
-                  <span className="text-xl font-semibold tabular-nums">
-                    {subscriptionSummary.tally[key]}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{label}</span>
-                </div>
-              ))}
+              ).map(([key, label]) => {
+                const active = subStatusFilter === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSubStatusFilter(active ? null : key)}
+                    title={active ? 'Show all' : `Show only ${label}`}
+                    className={cn(
+                      'flex flex-col items-start rounded-md px-2 py-1 -mx-2 transition-colors text-left',
+                      active ? 'bg-primary/15 ring-1 ring-primary/30' : 'hover:bg-secondary/60'
+                    )}
+                  >
+                    <span className="text-xl font-semibold tabular-nums">
+                      {subscriptionSummary.tally[key]}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{label}</span>
+                  </button>
+                );
+              })}
               {subscriptionSummary.atRiskMinor > 0 && (
                 <div className="flex flex-col ml-auto text-right">
                   <span className="text-xl font-semibold tabular-nums text-amber-400">
@@ -723,7 +760,7 @@ export default function RentalCompaniesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredTenants.map((tenant) => (
+            {visibleTenants.map((tenant) => (
               <TableRow key={tenant.id}>
                 <TableCell className="pr-0">
                   <button
@@ -920,7 +957,7 @@ export default function RentalCompaniesPage() {
           </TableBody>
         </Table>
 
-        {filteredTenants.length === 0 && (
+        {visibleTenants.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Building2 className="h-10 w-10 text-muted-foreground/40 mb-3" />
             <p className="text-sm text-muted-foreground">
