@@ -1,0 +1,22 @@
+{
+  // Type-check config for CI / pre-commit use.
+  //
+  // WHY THIS EXISTS
+  // `npx tsc --noEmit -p apps/portal` is NOT a valid check on its own. The base
+  // tsconfig includes ".next/dev/types/**/*.ts", which Next.js generates and
+  // which currently contains SYNTAX errors (TS1109/TS1128). A syntax error
+  // aborts semantic checking, so tsc reports only those two lines and never
+  // type-checks src/ at all. Filtering them out of the output and concluding
+  // "clean" is exactly backwards — they are the reason nothing else was checked.
+  //
+  // That masked a real ReferenceError in api/esign/route.ts (a const referenced
+  // from a sibling block) which shipped as "tsc clean".
+  //
+  // Note also that `npm run build` does not type-check either: next.config.js
+  // sets typescript.ignoreBuildErrors = true.
+  //
+  // Usage:  npx tsc --noEmit -p apps/portal/tsconfig.check.json
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules", ".next"]
+}

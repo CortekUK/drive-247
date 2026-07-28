@@ -1193,6 +1193,12 @@ export async function POST(request: NextRequest) {
         const ctx: PdfCtx = { doc: pdfDoc, page: pdfDoc.addPage([PAGE_W, PAGE_H]), y: PAGE_H - MARGIN, font, boldFont, italicFont, boldItalicFont };
 
         let hasCustomTemplate = false;
+        // Declared HERE, in the scope shared by both render branches. These were
+        // originally declared inside the stored-template block, which made them
+        // unreachable from the plain-text fallback below — a ReferenceError for
+        // every tenant without a stored template.
+        let termsBlockHtml = '';
+        let hasMileageConfigured = false;
         let processedHtml = '';
 
         // ── Hardcoded Agreement Type banner at the top of every PDF ──
@@ -1265,9 +1271,9 @@ export async function POST(request: NextRequest) {
             // Tenant's own T&Cs and whether a real mileage allowance resolves for
             // this rental. Both drive conditional injection below: we only add a
             // clause the operator has actually configured, never an invented one.
-            const termsBlockHtml = await fetchTenantTermsBlock(supabase, rental?.tenant_id);
+            termsBlockHtml = await fetchTenantTermsBlock(supabase, rental?.tenant_id);
             const _mileage = resolveAgreementMileage(rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30);
-            const hasMileageConfigured = !_mileage.isUnspecified;
+            hasMileageConfigured = !_mileage.isUnspecified;
 
             if (templateData?.template_content) {
                 console.log('Using admin template (structured HTML → PDF)');
