@@ -83,6 +83,19 @@ Deno.serve(async (req) => {
       case "invoice.payment_failed":
         await handleInvoicePaymentFailed(supabase, event.data.object);
         break;
+      // An invoice can stop being owed WITHOUT being paid — support voids it as
+      // goodwill, or Stripe writes it off. Nothing used to tell us, so the local
+      // row stayed 'open' forever. That matters because the portal anchors the
+      // 7-day grace clock on the OLDEST open invoice: a long-dead voided invoice
+      // silently pinned the anchor in the past, which means graceEndsAt was
+      // permanently expired and the tenant was hard-blocked with a "pay your
+      // pending invoice" link pointing at an invoice Stripe considers settled —
+      // with no self-service way out.
+      case "invoice.voided":
+      case "invoice.marked_uncollectible":
+      case "invoice.deleted":
+        await handleInvoiceClosed(supabase, event.data.object, event.type);
+        break;
       default:
         console.log(`Unhandled subscription webhook event: ${event.type}`);
     }
@@ -869,6 +882,62 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
       console.log(`Subscription ${subscriptionId} synced to active via invoice.paid for tenant ${tenant.id} (was ${currentSub.status})`);
     }
   }
+}
+
+/**
+ * An invoice stopped being owed WITHOUT being paid — voided, written off as
+ * uncollectible, or deleted while still a draft.
+ *
+ * Why this matters more than it looks: the portal anchors the 7-day grace clock
+ * on the OLDEST invoice whose LOCAL status is open/uncollectible
+ * (use-tenant-subscription.ts). Nothing previously told us an invoice had been
+ * closed out in the Stripe dashboard, so the row stayed 'open' indefinitely and
+ * pinned that anchor in the past — leaving graceEndsAt permanently expired. The
+ * tenant was then hard-blocked and handed a "pay your pending invoice" link for
+ * an invoice Stripe already considers settled, with no self-service way out.
+ *
+ * Only ever updates a row we already have: if we never recorded the invoice
+ * there is nothing to correct, and inserting a voided invoice would add noise to
+ * the tenant's billing history.
+ */
+async function handleInvoiceClosed(supabase: any, invoice: any, eventType: string) {
+  // Stripe's own terminal status is authoritative; fall back per event type for
+  // invoice.deleted, which carries no useful status.
+  const status =
+    invoice.status === "void" || invoice.status === "uncollectible"
+      ? invoice.status
+      : eventType === "invoice.marked_uncollectible"
+        ? "uncollectible"
+        : "void";
+
+  const { data: existing } = await supabase
+    .from("tenant_subscription_invoices")
+    .select("id, tenant_id, status")
+    .eq("stripe_invoice_id", invoice.id)
+    .maybeSingle();
+
+  if (!existing) {
+    console.log(`${eventType}: no local row for invoice ${invoice.id} — nothing to close`);
+    return;
+  }
+  if (existing.status === "paid") {
+    // Defensive: never walk a paid invoice backwards on a late/duplicate event.
+    console.warn(`${eventType}: refusing to reopen already-paid invoice ${invoice.id}`);
+    return;
+  }
+
+  const { error } = await supabase
+    .from("tenant_subscription_invoices")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", existing.id);
+
+  if (error) {
+    console.error(`${eventType}: failed to close invoice ${invoice.id}:`, error);
+    return;
+  }
+  console.log(
+    `${eventType}: invoice ${invoice.id} marked ${status} for tenant ${existing.tenant_id} — grace anchor released`,
+  );
 }
 
 async function handleInvoicePaymentFailed(supabase: any, invoice: any) {

@@ -131,6 +131,8 @@ interface InvoiceRow {
   status: string;
   amount_due: number | null;
   amount_paid: number | null;
+  /** Needed so the write-off prompt states the invoice's real currency. */
+  currency: string | null;
   period_end: string | null;
   created_at: string;
   /** >0 means Stripe attempted the charge and was declined — the only way to
@@ -277,6 +279,8 @@ export default function RentalCompaniesPage() {
   const [oldestUnpaidInvoice, setOldestUnpaidInvoice] = useState<Map<string, InvoiceRow>>(new Map());
   /** Tenants with ANY paid $0.01-$1.00 invoice — evidence the card was captured. */
   const [cardVerifiedTenants, setCardVerifiedTenants] = useState<Set<string>>(new Set());
+  /** Tenants with at least one real (>$1) paid invoice — see MRR note below. */
+  const [paidInvoiceTenantIds, setPaidInvoiceTenantIds] = useState<Set<string>>(new Set());
   const [settlingInvoiceId, setSettlingInvoiceId] = useState<string | null>(null);
   /** Click a summary tile to narrow the table to that bucket. */
   const [subStatusFilter, setSubStatusFilter] = useState<SubStatus | null>(null);
@@ -326,7 +330,7 @@ export default function RentalCompaniesPage() {
           supabase
             .from('tenant_subscription_invoices')
             // `id` is required to settle an invoice via mark-invoice-paid.
-            .select('id, tenant_id, status, amount_due, amount_paid, period_end, created_at, attempt_count')
+            .select('id, tenant_id, status, amount_due, amount_paid, currency, period_end, created_at, attempt_count')
             .order('created_at', { ascending: false }),
         ]);
 
@@ -370,6 +374,19 @@ export default function RentalCompaniesPage() {
         }
         setCardVerifiedTenants(verified);
 
+        // Tenants who have paid us a REAL invoice at some point. Used to tell a
+        // genuine new-signup trial (never paid) from a subscription parked at
+        // 'trialing' by the late-payment cycle reset (has paid). Excludes the
+        // <=$1 card-verification charge, which every migrated tenant has and
+        // which is not revenue.
+        const everPaid = new Set<string>();
+        for (const inv of (invoicesRes.data as InvoiceRow[] | null) ?? []) {
+          if (inv.status === 'paid' && (inv.amount_due ?? 0) > 100) {
+            everPaid.add(inv.tenant_id);
+          }
+        }
+        setPaidInvoiceTenantIds(everPaid);
+
         setSubsLoaded(true);
       } catch (error) {
         console.error('Error loading subscription data:', error);
@@ -412,8 +429,12 @@ export default function RentalCompaniesPage() {
    * the hour while the tenant carried on being dunned.
    */
   const handleMarkPaid = async (invoice: InvoiceRow, company: string) => {
+    // Show the invoice's OWN currency. This prompt is the one place a human
+    // authorises writing off real money, and hardcoding 'usd' rendered a £300 or
+    // AED 300 invoice as "$300.00" — the admin then confirmed one amount while
+    // the audit log recorded another.
     const reason = window.prompt(
-      `Mark ${company}'s ${formatMinor(invoice.amount_due, 'usd')} invoice as paid?\n\n` +
+      `Mark ${company}'s ${formatMinor(invoice.amount_due, invoice.currency || 'usd')} invoice as paid?\n\n` +
         `This settles it in Stripe as paid out of band and is recorded against your account.\n` +
         `Give a reason (min 10 characters) — e.g. "paid by bank transfer ref 12345":`,
     );
@@ -436,7 +457,13 @@ export default function RentalCompaniesPage() {
       // Force a refetch of subscription data on next open.
       setSubsLoaded(false);
     } catch (e: any) {
-      alert(`Could not settle this invoice:\n\n${e?.message ?? e}`);
+      // supabase-js throws FunctionsHttpError with a generic message ("Edge
+      // Function returned a non-2xx status code") and puts the REAL reason in
+      // the response body. Without reading it, the function's carefully
+      // distinguished 403 / 404 / 409 already-paid / 409 void / 502 Stripe
+      // errors all surfaced to the admin as the same useless sentence.
+      const body = await e?.context?.json?.().catch(() => null);
+      alert(`Could not settle this invoice:\n\n${body?.error ?? e?.message ?? e}`);
     } finally {
       setSettlingInvoiceId(null);
     }
@@ -503,7 +530,21 @@ export default function RentalCompaniesPage() {
       const sub = selectSubscription(subsByTenant.get(t.id));
       const status = getSubStatus(sub, planTenantIds.has(t.id));
       tally[status] += 1;
-      if (status === 'active' && sub?.amount) mrrMinor += sub.amount;
+
+      // A tenant who has ALREADY PAID US is revenue, whatever Stripe's status
+      // string says. After a late payment the subscription-webhook defers the
+      // next charge with trial_end (the "fresh start" in requirement E7), which
+      // parks the subscription at status 'trialing' for a full interval. Counting
+      // only 'active' meant the headline figure DROPPED at the exact moment a
+      // delinquent tenant paid — the same failure this block's own note warns
+      // about for past_due, arrived at from the other direction.
+      //
+      // A paid invoice is the discriminator: a genuine new-signup trial has none.
+      const hasPaidBefore = (paidInvoiceTenantIds?.has(t.id) ?? false);
+      const isRevenueBearing =
+        status === 'active' || (status === 'trialing' && hasPaidBefore);
+      if (isRevenueBearing && sub?.amount) mrrMinor += sub.amount;
+
       // Past-due revenue is OWED, not lost. Excluding it entirely made a
       // collections problem look like churn: the moment a card failed, the
       // headline figure silently dropped by that tenant's full amount with
@@ -895,31 +936,37 @@ export default function RentalCompaniesPage() {
                         )}
                       </TableCell>
                       <TableCell className="tabular-nums whitespace-nowrap">
-                        {endedOn ? (
-                          // Expired rows have no "next" invoice — show when it ended.
-                          <span className="text-muted-foreground">
-                            Ended {formatDay(endedOn)}
-                          </span>
-                        ) : due.date ? (
-                          <div className="flex flex-col gap-0.5">
+                        {/* The settle-out-of-band escape hatch is gated on the
+                            EXISTENCE of an unpaid invoice, not on due.overdue.
+                            It used to sit inside the `due.date` branch behind
+                            `due.overdue &&`, so it disappeared for precisely the
+                            tenants who most need it: nextInvoiceDue returns no
+                            date once a subscription lapses to unpaid/canceled,
+                            and a tenant sitting behind the hard paywall then had
+                            no admin route back in at all. */}
+                        <div className="flex flex-col gap-0.5">
+                          {endedOn ? (
+                            // Expired rows have no "next" invoice — show when it ended.
+                            <span className="text-muted-foreground">
+                              Ended {formatDay(endedOn)}
+                            </span>
+                          ) : due.date ? (
                             <span className={due.overdue ? 'font-medium text-destructive' : 'text-muted-foreground'}>
                               {due.overdue ? `Overdue since ${formatDay(due.date)}` : formatDay(due.date)}
                             </span>
-                            {/* Settle-out-of-band escape hatch, only where there
-                                is genuinely an unpaid invoice to settle. */}
-                            {due.overdue && unpaid && (
-                              <button
-                                onClick={() => handleMarkPaid(unpaid, tenant.company_name)}
-                                disabled={settlingInvoiceId === unpaid.id}
-                                className="w-fit text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
-                              >
-                                {settlingInvoiceId === unpaid.id ? 'Settling…' : 'Mark as paid'}
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                          {unpaid && (
+                            <button
+                              onClick={() => handleMarkPaid(unpaid, tenant.company_name)}
+                              disabled={settlingInvoiceId === unpaid.id}
+                              className="w-fit text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
+                            >
+                              {settlingInvoiceId === unpaid.id ? 'Settling…' : 'Mark as paid'}
+                            </button>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         {inv ? (

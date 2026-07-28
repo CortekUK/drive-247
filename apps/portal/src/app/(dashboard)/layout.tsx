@@ -30,6 +30,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { TraxAIDialog } from "@/components/chat";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
+import { PaymentDueBanner } from "@/components/subscription/payment-due-banner";
 import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
 
 function LoadingSkeleton() {
@@ -288,6 +289,10 @@ export default function DashboardLayout({
             </div>
           </header>
           <MaintenanceBanner />
+          {/* Dunning strip. Self-gates on the grace window, so it renders
+              nothing for an up-to-date tenant. Sits here rather than in the
+              sidebar so a phone user actually sees it. */}
+          <PaymentDueBanner />
 
           <main className="flex flex-1 flex-col gap-4 p-4 pt-0">
             {children}

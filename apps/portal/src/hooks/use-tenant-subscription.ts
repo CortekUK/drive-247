@@ -107,6 +107,16 @@ export function useTenantSubscription() {
     enabled: authed,
     staleTime: 30_000,
     retry: false,
+    // The grace clock is anchored on the OLDEST OPEN INVOICE, so this query is
+    // not just display data — it decides whether the tenant is warned or blocked.
+    // There is no Realtime channel on tenant_subscription_invoices, and "Pay now"
+    // opens Stripe in a NEW TAB, so the dashboard tab stays mounted and
+    // unfocused while the payment happens (refetchOnWindowFocus is off
+    // globally). Without this the tenant pays, comes back, and still sees the
+    // dunning banner and an "open" invoice until a hard reload. Matches the
+    // subscription query's cadence so the two cannot disagree for long.
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 
   // Check for past subscriptions (expired trials / canceled)

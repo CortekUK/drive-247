@@ -1,5 +1,13 @@
 // Defense-in-depth subscription gate for tenant-facing edge functions.
 //
+// ⚠️ CURRENTLY UNUSED. As of 2026-07-28 nothing imports this module — a repo-wide
+// search for `requireActiveSubscription` finds only this file and the usage
+// example below. The subscription paywall is therefore enforced in the BROWSER
+// ONLY: a caller with a saved JWT can still drive every edge function directly,
+// whatever their subscription state. The logic here is correct and ready, but
+// wiring it into the sensitive functions is still outstanding work — do not read
+// this file's existence as evidence that server-side gating is in place.
+//
 // The Next.js middleware blocks tenant staff from reaching the portal UI when
 // they're unsubscribed, and the client-side modal is the visible signal — but
 // a determined caller could still hit edge functions directly with a saved
@@ -56,7 +64,51 @@ export async function requireActiveSubscription(
       .maybeSingle();
 
     if (subErr) throw subErr;
-    if (activeSub) return null;
+
+    if (activeSub) {
+      // past_due is allowed ONLY inside the 7-day grace window.
+      //
+      // Stripe leaves a subscription at past_due indefinitely once its retries
+      // are exhausted, so accepting the status alone meant the hard paywall was
+      // enforced in the BROWSER only: after day 7 the UI blocked the tenant, but
+      // a saved JWT could still drive every gated edge function forever. This is
+      // the defence-in-depth layer, so it has to know about the grace window too.
+      //
+      // Anchored on the oldest still-open invoice, matching
+      // apps/portal/src/hooks/use-tenant-subscription.ts. Keep the two in step —
+      // GRACE_DAYS is duplicated deliberately (separate build roots), so a change
+      // in one must be mirrored in the other.
+      if (activeSub.status !== "past_due") return null;
+
+      const { data: openInvoices, error: invErr } = await supabase
+        .from("tenant_subscription_invoices")
+        .select("created_at, period_end")
+        .eq("tenant_id", tenantId)
+        .in("status", ["open", "uncollectible"])
+        .order("created_at", { ascending: true })
+        .limit(1);
+
+      if (invErr) throw invErr;
+
+      const oldest = openInvoices?.[0];
+      // No open invoice → nothing is actually overdue; let them through rather
+      // than blocking on missing data.
+      if (!oldest) return null;
+
+      const GRACE_DAYS = 7;
+      const anchorMs = new Date(oldest.period_end || oldest.created_at).getTime();
+      if (Number.isNaN(anchorMs)) return null; // unparseable anchor → fail open
+      if (Date.now() < anchorMs + GRACE_DAYS * 86_400_000) return null;
+
+      return jsonResponse(
+        {
+          error:
+            "Your subscription has expired, and your access has been canceled. Please pay your pending invoice.",
+          code: "subscription_past_due_expired",
+        },
+        402,
+      );
+    }
 
     if (!options.strict) {
       const { count: planCount, error: planErr } = await supabase

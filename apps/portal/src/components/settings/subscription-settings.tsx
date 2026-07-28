@@ -67,7 +67,13 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function LocalInvoiceView({
+/**
+ * Exported so /subscription renders the SAME Stripe-style receipt as Settings.
+ * That page previously had a bespoke invoice table with no 3-row limit and no
+ * receipt viewer — and it is the page the paywall whitelists and the page
+ * checkout returns to, so it was the surface most tenants actually saw.
+ */
+export function LocalInvoiceView({
   invoice,
   tenantName,
   cardBrand,
@@ -293,6 +299,8 @@ export function SubscriptionSettings() {
     subscription,
     isSubscribed,
     isGraceExpired,
+    isTrialing,
+    trialDaysRemaining,
     outstandingInvoiceUrl,
     isLoading,
     invoices,
@@ -306,17 +314,60 @@ export function SubscriptionSettings() {
   const [viewingInvoice, setViewingInvoice] = useState<TenantSubscriptionInvoice | null>(null);
   const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
 
-  // Handle return from Stripe Checkout
+  /**
+   * Billing history + receipt viewer, shared by EVERY branch below.
+   *
+   * The past_due / grace-expired / unsubscribed branches all early-return before
+   * the main layout, which meant a tenant lost their entire invoice list and
+   * every download link at exactly the moment they most need a receipt — while
+   * chasing a failed payment, or after cancelling. Rendering it from one place
+   * keeps the history reachable in all states.
+   *
+   * Renders nothing when there are no invoices, so a brand-new tenant sees no
+   * empty scaffolding.
+   */
+  const billingHistory =
+    invoices.length > 0 ? (
+      <>
+        <UsageDashboard
+          invoices={invoices}
+          invoicesLoading={invoicesLoading}
+          onViewInvoice={setViewingInvoice}
+        />
+        <LocalInvoiceView
+          invoice={viewingInvoice}
+          tenantName={tenant?.company_name || "Tenant"}
+          cardBrand={subscription?.card_brand}
+          cardLast4={subscription?.card_last4}
+          open={!!viewingInvoice}
+          onClose={() => setViewingInvoice(null)}
+        />
+      </>
+    ) : null;
+
+  // Handle return from Stripe Checkout, and from the Billing Portal.
+  //
+  // Both land back here before their webhook has necessarily been delivered, so
+  // a single fetch races Stripe and can paint stale data. The portal return used
+  // to carry no marker at all, which is why an updated card could keep showing
+  // the OLD brand/last4 indefinitely: nothing re-fetched, and
+  // refetchOnWindowFocus is disabled globally.
   useEffect(() => {
-    if (searchParams.get("status") === "success") {
-      toast({ title: "Subscription activated successfully!" });
-      const interval = setInterval(() => refetch(), 2000);
-      const timeout = setTimeout(() => clearInterval(interval), 15000);
-      return () => {
-        clearInterval(interval);
-        clearTimeout(timeout);
-      };
-    }
+    const status = searchParams.get("status");
+    if (status !== "success" && status !== "payment-updated") return;
+
+    toast({
+      title:
+        status === "success"
+          ? "Subscription activated successfully!"
+          : "Payment method updated",
+    });
+    const interval = setInterval(() => refetch(), 2000);
+    const timeout = setTimeout(() => clearInterval(interval), 15000);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
   }, [searchParams]);
 
   const handleSubscribe = async (planId: string) => {
@@ -338,8 +389,12 @@ export function SubscriptionSettings() {
   };
 
   const handleManagePayment = async () => {
+    // Return with an explicit marker so the poll above runs. window.location.href
+    // carried no status param, so the card change raced the webhook and often
+    // never appeared.
+    const origin = window.location.origin;
     const result = await createPortalSession.mutateAsync({
-      returnUrl: window.location.href,
+      returnUrl: `${origin}/settings?tab=subscription&status=payment-updated`,
     });
 
     if (result?.url) {
@@ -405,6 +460,7 @@ export function SubscriptionSettings() {
             )}
           </CardContent>
         </Card>
+        {billingHistory}
       </div>
     );
   }
@@ -512,12 +568,28 @@ export function SubscriptionSettings() {
             <Crown className="h-6 w-6 text-primary" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-lg font-semibold capitalize">
-              {subscription?.plan_name || "Pro"} plan
-            </h3>
+            {/* No invented plan name or price. Pricing here is custom per tenant
+                (agreed on a sales call), so a "Pro" / $200.00 fallback is not a
+                harmless placeholder — it states a plan and a price this tenant
+                may never have agreed to, on the exact screen they check their
+                billing on. `??` rather than `||` because a comped $0
+                subscription is a real, valid amount that `||` would discard. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-lg font-semibold capitalize">
+                {subscription?.plan_name ? `${subscription.plan_name} plan` : "Subscription"}
+              </h3>
+              {subscription?.status && <StatusBadge status={subscription.status} />}
+            </div>
             <p className="text-sm text-muted-foreground">
-              {formatCurrency(subscription?.amount || 20000, subscription?.currency || "usd")}/{subscription?.interval || "month"}
+              {subscription?.amount != null
+                ? `${formatCurrency(subscription.amount, subscription.currency || "usd")}/${subscription.interval || "month"}`
+                : "Custom pricing"}
             </p>
+            {isTrialing && trialDaysRemaining > 0 && (
+              <p className="text-sm text-blue-600 dark:text-blue-400">
+                Trial — {trialDaysRemaining} day{trialDaysRemaining === 1 ? "" : "s"} remaining
+              </p>
+            )}
             {/* Never promise a renewal that is not going to happen. A tenant
                 who has cancelled is scheduled to TERMINATE on cancel_at — and
                 telling them they will "auto renew" on the very day their access
@@ -601,22 +673,8 @@ export function SubscriptionSettings() {
 
       <Separator />
 
-      {/* Usage Dashboard: current period summary, event log, chart, and invoices */}
-      <UsageDashboard
-        invoices={invoices}
-        invoicesLoading={invoicesLoading}
-        onViewInvoice={setViewingInvoice}
-      />
-
-      {/* Local Invoice Viewer */}
-      <LocalInvoiceView
-        invoice={viewingInvoice}
-        tenantName={tenant?.company_name || "Tenant"}
-        cardBrand={subscription?.card_brand}
-        cardLast4={subscription?.card_last4}
-        open={!!viewingInvoice}
-        onClose={() => setViewingInvoice(null)}
-      />
+      {/* Usage dashboard, billing history and receipt viewer — see `billingHistory`. */}
+      {billingHistory}
     </div>
   );
 }

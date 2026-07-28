@@ -331,12 +331,12 @@ One shared Stripe Product ("Drive247 Platform Subscription") with separate Strip
 - `src/app/(dashboard)/subscription/page.tsx` — shows grid of dynamic `PricingCard` components when unsubscribed; "Contact us" if no plans configured
 - `src/components/settings/subscription-settings.tsx` — same dynamic plan rendering embedded in Settings page (includes `LocalInvoiceView` dialog)
 - `src/components/subscription/pricing-card.tsx` — accepts `plan` prop (name, amount, currency, interval, features, trial_days from DB), `onSubscribe(planId)`. Shows "Start X-Day Free Trial" button when plan has trial.
-- `src/components/subscription/subscription-gate-dialog.tsx` — soft-gate modal for never-subscribed tenants, dismissible
-- `src/components/subscription/subscription-block-screen.tsx` — hard-block full-screen overlay for expired/canceled subscriptions, non-dismissible
+- `src/components/subscription/subscription-gate-dialog.tsx` — the ONLY gate component. One non-dismissible modal serving three `variant`s: `setup` (never subscribed), `expired` (trial/subscription ended), `past_due` (grace window exhausted — carries the verbatim "Your subscription has expired, and your access has been canceled. Please pay your pending invoice here." with `here` linking to the hosted invoice)
+- `src/components/subscription/payment-due-banner.tsx` — top-of-screen dunning strip shown for the whole 7-day grace window ("Your payment is due." + countdown + pay link). Rendered in the dashboard layout beside `MaintenanceBanner`, so it is visible on mobile where the sidebar is a closed Sheet
 
-**Sidebar** (`app-sidebar.tsx`): Shows "Trial Active" with Timer icon when trialing (plus days-remaining countdown), "Subscription" with Crown icon if subscribed, "Upgrade" with Sparkles icon if not.
+**Sidebar** (`app-sidebar.tsx`): Shows "Trial Active" with Timer icon when trialing (plus days-remaining countdown), "Subscription" with Crown icon if subscribed, "Upgrade" with Sparkles icon if not. The payment-due chip here is a SECONDARY indicator — `PaymentDueBanner` is the primary one.
 
-**Dashboard layout** (`(dashboard)/layout.tsx`): Two-tier gating — `SubscriptionBlockScreen` (hard) for `hasExpiredSubscription`, `SubscriptionGateDialog` (soft) for never-subscribed. `/subscription` and `/settings` routes bypass the hard block.
+**Dashboard layout** (`(dashboard)/layout.tsx`): Two-tier gating, both via `SubscriptionGateDialog` — `variant="past_due"|"expired"` (hard) for `hasExpiredSubscription`, `variant="setup"` (soft) for never-subscribed. `/subscription` and `/settings` routes bypass the hard block so a tenant can always reach a payment link. (There was formerly a separate `subscription-block-screen.tsx`; it had no importers and carried non-compliant copy, and was deleted.)
 
 ### Data Flow
 

@@ -14,6 +14,17 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+// Shared with Settings so both surfaces render the same billing history and the
+// same Stripe-style receipt, instead of drifting into two implementations.
+import { UsageDashboard } from "@/components/settings/usage-dashboard";
+import { LocalInvoiceView } from "@/components/settings/subscription-settings";
+import {
   CreditCard,
   Download,
   ExternalLink,
@@ -22,6 +33,7 @@ import {
   RefreshCw,
   Crown,
   Shield,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -63,6 +75,8 @@ export default function SubscriptionPage() {
   const {
     subscription,
     isSubscribed,
+    isGraceExpired,
+    outstandingInvoiceUrl,
     isLoading,
     invoices,
     invoicesLoading,
@@ -74,6 +88,34 @@ export default function SubscriptionPage() {
   const { tenant } = useTenant();
 
   const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
+  const [viewingInvoice, setViewingInvoice] = useState<TenantSubscriptionInvoice | null>(null);
+
+  /**
+   * Billing history + receipt viewer, shared by every branch of this page and
+   * identical to Settings. Replaces a bespoke table that mapped the FULL invoice
+   * list with no 3-row limit and no receipt view, so the "last three
+   * transactions, styled like Stripe" requirement was met on one surface only.
+   *
+   * Renders nothing when there are no invoices.
+   */
+  const billingHistory =
+    invoices.length > 0 ? (
+      <>
+        <UsageDashboard
+          invoices={invoices}
+          invoicesLoading={invoicesLoading}
+          onViewInvoice={setViewingInvoice}
+        />
+        <LocalInvoiceView
+          invoice={viewingInvoice}
+          tenantName={tenant?.company_name || "Tenant"}
+          cardBrand={subscription?.card_brand}
+          cardLast4={subscription?.card_last4}
+          open={!!viewingInvoice}
+          onClose={() => setViewingInvoice(null)}
+        />
+      </>
+    ) : null;
 
   // Handle return from Stripe Checkout
   useEffect(() => {
@@ -124,6 +166,62 @@ export default function SubscriptionPage() {
       <div className="p-6 space-y-6">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-[400px] w-full max-w-sm mx-auto rounded-2xl" />
+      </div>
+    );
+  }
+
+  // Payment required — MUST come before the !isSubscribed branch below.
+  //
+  // A grace-expired tenant has isSubscribed === false while their Stripe
+  // subscription is still past_due. Without this branch they fell through to
+  // "Choose your plan" — and create-subscription-checkout rejects them with 409
+  // "Tenant already has an active subscription", so every Subscribe click could
+  // only ever produce an error toast. This page is BOTH the route the hard
+  // paywall whitelists and the one its "pay" links point at, so that dead end
+  // was hit by exactly the tenants trying to give us money.
+  //
+  // Mirrors the same branch in subscription-settings.tsx.
+  if (isGraceExpired || subscription?.status === "past_due") {
+    return (
+      <div className="p-6 space-y-6">
+        <Card className="max-w-2xl mx-auto">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Payment required
+            </CardTitle>
+            <CardDescription>
+              Your last subscription payment did not go through.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {isGraceExpired
+                ? "Your subscription has expired, and your access has been canceled. Please pay your pending invoice to restore access."
+                : "Please settle your outstanding invoice to keep your subscription active."}
+            </p>
+            {outstandingInvoiceUrl ? (
+              <Button asChild>
+                <a href={outstandingInvoiceUrl} target="_blank" rel="noopener noreferrer">
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Pay your pending invoice
+                </a>
+              </Button>
+            ) : (
+              <p className="text-sm">
+                Please contact{" "}
+                <a
+                  href="mailto:support@drive-247.com"
+                  className="font-medium text-primary hover:underline"
+                >
+                  support@drive-247.com
+                </a>{" "}
+                to settle your invoice.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+        {billingHistory}
       </div>
     );
   }
@@ -251,14 +349,25 @@ export default function SubscriptionPage() {
                     {formatDate(subscription?.current_period_end ?? null)}
                   </span>
                 </div>
+                {/* Never present the day access ENDS as the day they will be
+                    charged again. A tenant who has cancelled is scheduled to
+                    terminate on cancel_at, and labelling that "Next Payment" is
+                    a support ticket (or a chargeback) waiting to happen.
+                    Mirrors subscription-settings.tsx. */}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">
-                    Next Payment
+                    {subscription?.cancel_at || subscription?.canceled_at
+                      ? "Access Ends"
+                      : "Next Payment"}
                   </span>
                   <div className="flex items-center gap-1.5">
                     <CalendarDays className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm">
-                      {formatDate(subscription?.current_period_end ?? null)}
+                      {formatDate(
+                        subscription?.cancel_at ??
+                          subscription?.current_period_end ??
+                          null,
+                      )}
                     </span>
                   </div>
                 </div>
@@ -334,95 +443,23 @@ export default function SubscriptionPage() {
         </TabsContent>
 
         <TabsContent value="invoices" className="mt-6">
-          <div className="rounded-lg border bg-card">
-            <div className="p-6 pb-4">
-              <h2 className="text-lg font-semibold">Billing History</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                View and download your past invoices
-              </p>
+          {/* Same component as Settings: last three transactions by default with
+              a "Show all" escape hatch, a per-row download, and the Stripe-style
+              receipt viewer. The bespoke table that used to live here mapped the
+              FULL invoice list and had no receipt view. */}
+          {invoicesLoading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
             </div>
-            {invoicesLoading ? (
-              <div className="px-6 pb-6 space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <Skeleton key={i} className="h-10 w-full" />
-                ))}
-              </div>
-            ) : invoices.length === 0 ? (
-              <div className="px-6 pb-6 text-center py-8">
-                <p className="text-sm text-muted-foreground">
-                  No invoices yet
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="text-left py-3 px-6 text-xs font-medium text-muted-foreground uppercase">
-                        Invoice
-                      </th>
-                      <th className="text-left py-3 pr-4 text-xs font-medium text-muted-foreground uppercase">
-                        Date
-                      </th>
-                      <th className="text-left py-3 pr-4 text-xs font-medium text-muted-foreground uppercase">
-                        Amount
-                      </th>
-                      <th className="text-left py-3 pr-4 text-xs font-medium text-muted-foreground uppercase">
-                        Status
-                      </th>
-                      <th className="text-left py-3 pr-4 text-xs font-medium text-muted-foreground uppercase">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="px-6">
-                    {invoices.map((invoice) => (
-                      <tr key={invoice.id} className="border-b last:border-0">
-                        <td className="py-3 px-6 text-sm">
-                          {invoice.invoice_number || "\u2014"}
-                        </td>
-                        <td className="py-3 pr-4 text-sm">
-                          {formatDate(invoice.created_at)}
-                        </td>
-                        <td className="py-3 pr-4 text-sm">
-                          {formatCurrency(invoice.amount_due, invoice.currency)}
-                        </td>
-                        <td className="py-3 pr-4">
-                          <StatusBadge status={invoice.status} />
-                        </td>
-                        <td className="py-3 pr-4 text-sm">
-                          <div className="flex items-center gap-2">
-                            {invoice.stripe_hosted_invoice_url && (
-                              <a
-                                href={invoice.stripe_hosted_invoice_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-primary hover:underline"
-                              >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                                View
-                              </a>
-                            )}
-                            {invoice.stripe_invoice_pdf && (
-                              <a
-                                href={invoice.stripe_invoice_pdf}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-primary hover:underline"
-                              >
-                                <Download className="h-3.5 w-3.5" />
-                                PDF
-                              </a>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          ) : invoices.length === 0 ? (
+            <div className="rounded-lg border bg-card px-6 py-8 text-center">
+              <p className="text-sm text-muted-foreground">No invoices yet</p>
+            </div>
+          ) : (
+            billingHistory
+          )}
         </TabsContent>
       </Tabs>
     </div>
