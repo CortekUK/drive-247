@@ -435,27 +435,50 @@ export function SubscriptionSettings() {
                 ? "Your subscription has expired, and your access has been canceled. Please pay your pending invoice to restore access."
                 : "Please settle your outstanding invoice to keep your subscription active."}
             </p>
-            {outstandingInvoiceUrl ? (
-              <Button asChild>
-                <a
-                  href={outstandingInvoiceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+            {/* BOTH actions are required, and paying alone is not enough.
+                Settling a hosted invoice clears that ONE invoice; it does not
+                change the subscription's default payment method. A tenant whose
+                card was declined would pay, then fail again next cycle, forever.
+                The 7-day grace window exists precisely so they can FIX THE CARD,
+                and this branch is the only screen they can reach while past_due —
+                every other "Update payment method" control lives in the
+                subscribed branch below, which this early-return skips. */}
+            <div className="flex flex-wrap gap-3">
+              {outstandingInvoiceUrl && (
+                <Button asChild>
+                  <a
+                    href={outstandingInvoiceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Pay your pending invoice
+                  </a>
+                </Button>
+              )}
+              <Button
+                variant={outstandingInvoiceUrl ? "outline" : "default"}
+                onClick={handleManagePayment}
+                disabled={createPortalSession.isPending}
+              >
+                {createPortalSession.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
                   <CreditCard className="mr-2 h-4 w-4" />
-                  Pay your pending invoice
-                </a>
+                )}
+                Update payment method
               </Button>
-            ) : (
+            </div>
+            {!outstandingInvoiceUrl && (
               <p className="text-sm">
-                Please contact{" "}
+                We could not load your invoice link. Please contact{" "}
                 <a
                   href="mailto:support@drive-247.com"
                   className="font-medium text-primary hover:underline"
                 >
                   support@drive-247.com
                 </a>{" "}
-                to settle your invoice.
+                to settle it.
               </p>
             )}
           </CardContent>
@@ -509,6 +532,10 @@ export function SubscriptionSettings() {
             )}
           </CardContent>
         </Card>
+        {/* A cancelled tenant is unsubscribed but still needs their receipts —
+            for their accountant, or to dispute a charge. Renders nothing when
+            there are no invoices, so a genuinely new tenant sees no scaffolding. */}
+        {billingHistory}
       </div>
     );
   }

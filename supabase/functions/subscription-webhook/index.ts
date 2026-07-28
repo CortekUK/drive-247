@@ -910,11 +910,22 @@ async function handleInvoiceClosed(supabase: any, invoice: any, eventType: strin
         ? "uncollectible"
         : "void";
 
-  const { data: existing } = await supabase
+  // Errors THROW rather than being logged and swallowed. The top-level handler
+  // turns a throw into an HTTP 500, which makes Stripe retry for up to 3 days.
+  // Swallowing here would permanently lose the close on a transient DB blip, and
+  // the consequence is not cosmetic: the row stays 'open', keeps anchoring the
+  // grace clock, and the tenant stays blocked over a settled invoice. This
+  // handler is idempotent (it only ever sets a terminal status), so retries are
+  // safe.
+  const { data: existing, error: readErr } = await supabase
     .from("tenant_subscription_invoices")
     .select("id, tenant_id, status")
     .eq("stripe_invoice_id", invoice.id)
     .maybeSingle();
+
+  if (readErr) {
+    throw new Error(`${eventType}: failed to read invoice ${invoice.id}: ${readErr.message ?? readErr}`);
+  }
 
   if (!existing) {
     console.log(`${eventType}: no local row for invoice ${invoice.id} — nothing to close`);
@@ -932,8 +943,7 @@ async function handleInvoiceClosed(supabase: any, invoice: any, eventType: strin
     .eq("id", existing.id);
 
   if (error) {
-    console.error(`${eventType}: failed to close invoice ${invoice.id}:`, error);
-    return;
+    throw new Error(`${eventType}: failed to close invoice ${invoice.id}: ${error.message ?? error}`);
   }
   // Only 'void' actually frees the tenant. The portal's grace anchor treats
   // open AND uncollectible as still-owed (use-tenant-subscription.ts), which is

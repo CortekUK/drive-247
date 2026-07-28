@@ -117,20 +117,29 @@ export default function SubscriptionPage() {
       </>
     ) : null;
 
-  // Handle return from Stripe Checkout
+  // Handle return from Stripe Checkout AND from the Billing Portal.
+  //
+  // Both return before their webhook has necessarily landed, so a single fetch
+  // races Stripe. The portal return previously carried no marker at all, so an
+  // updated card could keep showing the OLD brand/last4 indefinitely
+  // (refetchOnWindowFocus is disabled globally). Mirrors subscription-settings.tsx.
   useEffect(() => {
-    if (searchParams.get("status") === "success") {
-      toast.success("Subscription activated successfully!");
-      // Poll for webhook to process
-      const interval = setInterval(() => {
-        refetch();
-      }, 2000);
-      const timeout = setTimeout(() => clearInterval(interval), 15000);
-      return () => {
-        clearInterval(interval);
-        clearTimeout(timeout);
-      };
-    }
+    const status = searchParams.get("status");
+    if (status !== "success" && status !== "payment-updated") return;
+
+    toast.success(
+      status === "success"
+        ? "Subscription activated successfully!"
+        : "Payment method updated",
+    );
+    const interval = setInterval(() => {
+      refetch();
+    }, 2000);
+    const timeout = setTimeout(() => clearInterval(interval), 15000);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
   }, [searchParams]);
 
   const handleSubscribe = async (planId: string) => {
@@ -152,8 +161,11 @@ export default function SubscriptionPage() {
   };
 
   const handleManagePayment = async () => {
+    // Explicit marker so the poll above runs on return; window.location.href
+    // carried none, so the card change raced the webhook and often never showed.
+    const origin = window.location.origin;
     const result = await createPortalSession.mutateAsync({
-      returnUrl: window.location.href,
+      returnUrl: `${origin}/subscription?status=payment-updated`,
     });
 
     if (result?.url) {
@@ -200,23 +212,43 @@ export default function SubscriptionPage() {
                 ? "Your subscription has expired, and your access has been canceled. Please pay your pending invoice to restore access."
                 : "Please settle your outstanding invoice to keep your subscription active."}
             </p>
-            {outstandingInvoiceUrl ? (
+            {outstandingInvoiceUrl && (
               <Button asChild>
                 <a href={outstandingInvoiceUrl} target="_blank" rel="noopener noreferrer">
                   <CreditCard className="mr-2 h-4 w-4" />
                   Pay your pending invoice
                 </a>
               </Button>
-            ) : (
+            )}
+            {/* Paying is NOT enough on its own — settling a hosted invoice
+                clears that one invoice but leaves the same declined card as the
+                subscription's default, so the next cycle fails again. The 7-day
+                grace window exists so the operator can FIX THE CARD, and this
+                branch is the only screen reachable while past_due (every other
+                "Update payment method" control lives in the subscribed branch
+                that this early-return skips). Mirrors subscription-settings.tsx. */}
+            <Button
+              variant={outstandingInvoiceUrl ? "outline" : "default"}
+              onClick={handleManagePayment}
+              disabled={createPortalSession.isPending}
+            >
+              {createPortalSession.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <CreditCard className="mr-2 h-4 w-4" />
+              )}
+              Update payment method
+            </Button>
+            {!outstandingInvoiceUrl && (
               <p className="text-sm">
-                Please contact{" "}
+                We could not load your invoice link. Please contact{" "}
                 <a
                   href="mailto:support@drive-247.com"
                   className="font-medium text-primary hover:underline"
                 >
                   support@drive-247.com
                 </a>{" "}
-                to settle your invoice.
+                to settle it.
               </p>
             )}
           </CardContent>
@@ -288,6 +320,9 @@ export default function SubscriptionPage() {
             </a>
           </div>
         )}
+        {/* A cancelled tenant is unsubscribed but still needs their receipts.
+            Mirrors subscription-settings.tsx. */}
+        {billingHistory}
       </div>
     );
   }
@@ -320,24 +355,29 @@ export default function SubscriptionPage() {
             <div className="rounded-lg border bg-card p-6">
               <h2 className="text-lg font-semibold mb-4">Plan Details</h2>
               <div className="space-y-4">
+                {/* No invented plan, price or status. Pricing is custom per
+                    tenant (agreed on a sales call), so "Pro" / "$0.00" / a
+                    hardcoded "active" badge state facts this tenant may never
+                    have agreed to, on the screen they check their billing on.
+                    Mirrors subscription-settings.tsx. */}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Plan</span>
                   <span className="font-medium capitalize">
-                    {subscription?.plan_name || "Pro"}
+                    {subscription?.plan_name || "—"}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Status</span>
-                  <StatusBadge status={subscription?.status || "active"} />
-                </div>
+                {subscription?.status && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Status</span>
+                    <StatusBadge status={subscription.status} />
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Amount</span>
                   <span className="font-medium">
-                    {formatCurrency(
-                      subscription?.amount || 0,
-                      subscription?.currency || "usd"
-                    )}
-                    /{subscription?.interval || "month"}
+                    {subscription?.amount != null
+                      ? `${formatCurrency(subscription.amount, subscription.currency || "usd")}/${subscription.interval || "month"}`
+                      : "Custom pricing"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">

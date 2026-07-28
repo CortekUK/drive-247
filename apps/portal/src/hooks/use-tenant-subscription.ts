@@ -237,8 +237,22 @@ export function useTenantSubscription() {
 
   const graceStartedAt = (() => {
     if (!isPastDue) return null;
-    const anchor =
-      openInvoice?.period_end || openInvoice?.created_at || subscriptionQuery.data?.current_period_start;
+    // NO open invoice means nothing is actually overdue — do NOT fall back to
+    // current_period_start.
+    //
+    // That fallback silently defeated the whole point of closing an invoice out.
+    // When support voids a failed invoice as goodwill, the only open invoice
+    // disappears; the fallback then anchored the clock on a
+    // current_period_start already weeks in the past, so graceEndsAt was
+    // instantly expired and the tenant stayed hard-blocked — over an invoice
+    // Stripe considers settled, with a "pay your pending invoice" link they
+    // could not act on. It also mis-fired for any past_due tenant whose invoice
+    // rows had not synced.
+    //
+    // Returning null here means graceEndsAt is null, which isSubscribed already
+    // treats as fail-open ("past_due with no resolvable anchor must not lock
+    // anyone out"). Nothing overdue, no block.
+    const anchor = openInvoice?.period_end || openInvoice?.created_at;
     if (!anchor) return null;
     const t = new Date(anchor).getTime();
     return Number.isNaN(t) ? null : t;
