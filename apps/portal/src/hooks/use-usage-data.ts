@@ -23,6 +23,8 @@ function useESignCategoryData(): UsageCategoryData {
         unitCost: Number(e.unit_cost),
         currency: e.currency,
         createdAt: e.created_at,
+        // stripe_event_id is only set when Stripe's meter accepted the event.
+        reported: !!e.stripe_event_id,
       })),
     [currentEvents]
   );

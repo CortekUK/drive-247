@@ -352,6 +352,7 @@ export function SubscriptionSettings() {
     isGraceExpired,
     isTrialing,
     trialDaysRemaining,
+    openInvoice,
     outstandingInvoiceUrl,
     isLoading,
     invoices,
@@ -591,10 +592,15 @@ export function SubscriptionSettings() {
     );
   }
 
-  // Subscribed state
-  const unpaidInvoice = invoices.find(
-    (inv) => inv.status === "open" || inv.status === "uncollectible"
-  );
+  // Subscribed state.
+  //
+  // Uses the hook's `openInvoice`, which is scoped to the CURRENT subscription.
+  // This used to do its own `invoices.find(...)` over every invoice the tenant
+  // has ever had, so a debt belonging to a dead subscription — even one from a
+  // different Stripe mode — raised "Payment failed" on a perfectly healthy one.
+  // Settling the current subscription could not clear it, because the banner was
+  // anchored on an invoice that had nothing to do with it.
+  const unpaidInvoice = openInvoice;
 
   return (
     <div className="space-y-6">

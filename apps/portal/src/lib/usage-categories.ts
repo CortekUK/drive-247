@@ -27,6 +27,13 @@ export interface UsageEvent {
   unitCost: number;
   currency: string;
   createdAt: string;
+  /**
+   * Whether this event was accepted by Stripe's metered-billing endpoint, i.e.
+   * whether it can actually reach an invoice. Recording usage locally and
+   * reporting it for billing are two separate steps, and the second one can
+   * fail on its own — so the panel must never state "recorded" as "billed".
+   */
+  reported: boolean;
 }
 
 export interface MonthlyAggregate {

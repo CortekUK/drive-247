@@ -270,8 +270,41 @@ export function useTenantSubscription() {
       (i) => i.status === "open" || i.status === "uncollectible"
     );
     if (unpaid.length === 0) return null;
+
+    // SCOPE TO THE CURRENT SUBSCRIPTION.
+    //
+    // Invoices are stored per TENANT, so an unfiltered read picks up debts that
+    // belong to a subscription that is dead and gone. Observed in production: a
+    // tenant with a healthy trialing subscription was shown "Payment failed —
+    // your invoice of $1.00 is unpaid", where the invoice came from a DIFFERENT,
+    // abandoned checkout — and in a different Stripe mode. A tenant cannot pay
+    // their way out of that: settling the current subscription changes nothing,
+    // because the warning is anchored on someone else's invoice.
+    //
+    // This is not cosmetic. openInvoice also anchors the 7-day grace clock, so a
+    // stale invoice can expire the window instantly and hard-block a tenant who
+    // owes nothing.
+    //
+    // An unlinked invoice (subscription_id NULL — an orphan we could not
+    // attribute) is admitted ONLY if it is not older than the subscription
+    // itself: an invoice raised before this subscription existed cannot be its
+    // debt.
+    const current = subscriptionQuery.data;
+    const mine = current
+      ? unpaid.filter((i) =>
+          i.subscription_id
+            ? i.subscription_id === current.id
+            : new Date(i.created_at).getTime() >=
+              new Date(current.created_at).getTime(),
+        )
+      : // No live subscription: keep every unpaid invoice in play, so a tenant
+        // whose subscription Stripe already cancelled still gets a pay link
+        // rather than silently losing the debt.
+        unpaid;
+
+    if (mine.length === 0) return null;
     // Oldest unpaid — that is the one whose clock started first.
-    return unpaid.reduce((a, b) =>
+    return mine.reduce((a, b) =>
       new Date(a.created_at).getTime() <= new Date(b.created_at).getTime() ? a : b
     );
   })();

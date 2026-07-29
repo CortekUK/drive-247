@@ -4,9 +4,14 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { TenantSubscriptionInvoice } from "@/hooks/use-tenant-subscription";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useUsageData } from "@/hooks/use-usage-data";
+import { USAGE_CATEGORIES } from "@/lib/usage-categories";
 
 /** How many invoices to show before the tenant asks for more. */
 const RECENT_INVOICE_COUNT = 3;
+
+/** How many individual usage events to list before collapsing. */
+const RECENT_USAGE_EVENT_COUNT = 5;
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -219,6 +224,173 @@ function InvoiceHistoryTable({
   );
 }
 
+// ── Metered Usage ─────────────────────────────────────────────────────
+
+function formatMonth(month: string) {
+  // "2026-03" → "Mar 2026". Built from parts rather than new Date("2026-03"),
+  // which UTC-parses and can render as the previous month west of Greenwich.
+  const [y, m] = month.split("-");
+  const d = new Date(Number(y), Number(m) - 1, 1);
+  return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+/**
+ * Per-category metered usage — currently just e-sign at $1.00 per agreement.
+ *
+ * The data behind this (`esign_usage_log` via useUsageData) has existed since
+ * March but had NO consumer: the hook, the category registry and the types were
+ * all built and then never rendered, so a tenant had no way to see what drove a
+ * metered charge. This is that missing surface.
+ *
+ * WORDING IS DELIBERATE. Recording usage locally and reporting it to Stripe for
+ * billing are two separate steps and the second can fail on its own, so nothing
+ * here claims a charge was made — it states what was recorded and at what rate.
+ * The invoice table below remains the only thing that speaks for what was
+ * actually billed, because it reads back what Stripe put on the invoice.
+ */
+function UsageSummary() {
+  const usage = useUsageData();
+  const [expanded, setExpanded] = useState(false);
+
+  const categories = USAGE_CATEGORIES.map((config) => ({
+    config,
+    data: usage[config.key],
+  })).filter((c) => c.data);
+
+  const anyLoading = categories.some((c) => c.data.isLoading || c.data.isLoadingHistory);
+
+  // Render nothing at all for a tenant with no metered history — an empty
+  // "Usage: 0" block on every operator's billing page is noise, and metered
+  // billing is not something every tenant is on.
+  const hasAnyHistory = categories.some(
+    (c) => c.data.currentCount > 0 || c.data.monthlyAggregates.length > 0,
+  );
+
+  if (anyLoading) {
+    return (
+      <div className="space-y-4">
+        <h3 className="text-sm font-medium">Usage</h3>
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
+  }
+
+  if (!hasAnyHistory) return null;
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-sm font-medium">Usage</h3>
+
+      {categories.map(({ config, data }) => {
+        const Icon = config.icon;
+        const maxMonth = Math.max(1, ...data.monthlyAggregates.map((a) => a.count));
+        const history = [...data.monthlyAggregates].reverse();
+        const visibleEvents = expanded
+          ? data.events
+          : data.events.slice(0, RECENT_USAGE_EVENT_COUNT);
+
+        return (
+          <div key={config.key} className="rounded-lg border bg-card">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b p-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <span
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: `${config.color}1a`, color: config.color }}
+                >
+                  <Icon className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{config.label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatCurrency(data.unitCost)} per {config.unitLabel}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-semibold tabular-nums">
+                  {data.currentCount}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {data.currentCount === 1 ? config.unitLabel : config.unitLabelPlural}
+                  {" this period · "}
+                  <span className="tabular-nums">{formatCurrency(data.currentCost)}</span>
+                </p>
+              </div>
+            </div>
+
+            {history.length > 0 && (
+              <div className="space-y-2 border-b p-4">
+                {history.map((a) => (
+                  <div key={a.month} className="flex items-center gap-3 text-xs">
+                    <span className="w-20 shrink-0 text-muted-foreground">
+                      {formatMonth(a.month)}
+                    </span>
+                    <span className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                      <span
+                        className="block h-full rounded-full"
+                        style={{
+                          width: `${(a.count / maxMonth) * 100}%`,
+                          backgroundColor: config.color,
+                        }}
+                      />
+                    </span>
+                    <span className="w-8 shrink-0 text-right tabular-nums text-muted-foreground">
+                      {a.count}
+                    </span>
+                    <span className="w-16 shrink-0 text-right tabular-nums font-medium">
+                      {formatCurrency(a.totalCost)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {data.events.length > 0 ? (
+              <div className="p-4">
+                <ul className="space-y-2">
+                  {visibleEvents.map((e) => (
+                    <li
+                      key={e.id}
+                      className="flex items-center justify-between gap-3 text-xs"
+                    >
+                      <span className="min-w-0 truncate">
+                        <span className="font-medium">{e.ref || "—"}</span>
+                        {e.customerName && (
+                          <span className="text-muted-foreground"> · {e.customerName}</span>
+                        )}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-3 text-muted-foreground">
+                        <span>{formatDate(e.createdAt)}</span>
+                        <span className="tabular-nums">
+                          {formatCurrency(e.unitCost, e.currency)}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {data.events.length > RECENT_USAGE_EVENT_COUNT && (
+                  <button
+                    onClick={() => setExpanded((v) => !v)}
+                    className="mt-3 text-sm font-medium text-primary hover:underline"
+                  >
+                    {expanded
+                      ? "Show less"
+                      : `Show all ${data.events.length} ${config.unitLabelPlural}`}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="p-4 text-xs text-muted-foreground">
+                No {config.unitLabelPlural} recorded in the current billing period.
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Main Export ───────────────────────────────────────────────────────
 
 export function UsageDashboard({
@@ -231,20 +403,24 @@ export function UsageDashboard({
   onViewInvoice: (invoice: TenantSubscriptionInvoice) => void;
 }) {
   return (
-    <div className="space-y-4">
-      <h3 className="text-sm font-medium">Invoices</h3>
-      {invoicesLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-10 w-full" />
-          ))}
-        </div>
-      ) : (
-        <InvoiceHistoryTable
-          invoices={invoices}
-          onViewInvoice={onViewInvoice}
-        />
-      )}
+    <div className="space-y-8">
+      <UsageSummary />
+
+      <div className="space-y-4">
+        <h3 className="text-sm font-medium">Invoices</h3>
+        {invoicesLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : (
+          <InvoiceHistoryTable
+            invoices={invoices}
+            onViewInvoice={onViewInvoice}
+          />
+        )}
+      </div>
     </div>
   );
 }
