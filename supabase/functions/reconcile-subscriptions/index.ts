@@ -237,7 +237,21 @@ const INVOICE_LOOKBACK = 12;
  * the one thing this pass exists to surface — a status that disagrees with
  * Stripe. Those URLs are still FILLED when we have none (see below).
  */
-const INVOICE_COMPARED = ["status", "amount_due", "amount_paid"] as const;
+const INVOICE_COMPARED = [
+  "status",
+  "amount_due",
+  "amount_paid",
+  // attempt_count is NOT cosmetic — it is the ONLY thing separating a DECLINED
+  // invoice from one that is simply not due yet. Stripe leaves both at
+  // status='open', and the admin dashboard keys its red "Payment failed" vs
+  // amber "Unpaid" badge purely on this number
+  // (apps/admin/.../rentals/page.tsx). Only handleInvoicePaymentFailed used to
+  // write it, so any invoice first materialised HERE — i.e. exactly the
+  // self-heal path for a webhook that was missed — landed with NULL and a
+  // genuinely declined charge was rendered as "not due yet". That is precisely
+  // backwards for someone chasing broken subscriptions.
+  "attempt_count",
+] as const;
 
 /** Links we will fill if missing, but never rewrite. */
 const INVOICE_LINK_FIELDS = ["stripe_invoice_pdf", "stripe_hosted_invoice_url"] as const;
@@ -301,7 +315,9 @@ async function reconcileInvoicesForSubscription(
 
     const { data: existing, error: readErr } = await supabase
       .from("tenant_subscription_invoices")
-      .select("id, status, amount_due, amount_paid, stripe_invoice_pdf, stripe_hosted_invoice_url")
+      .select(
+        "id, status, amount_due, amount_paid, attempt_count, stripe_invoice_pdf, stripe_hosted_invoice_url",
+      )
       .eq("stripe_invoice_id", inv.id)
       .maybeSingle();
 
@@ -314,6 +330,7 @@ async function reconcileInvoicesForSubscription(
       status: inv.status,
       amount_due: inv.amount_due ?? 0,
       amount_paid: inv.amount_paid ?? 0,
+      attempt_count: inv.attempt_count ?? 0,
       stripe_invoice_pdf: inv.invoice_pdf ?? null,
       stripe_hosted_invoice_url: inv.hosted_invoice_url ?? null,
     };
@@ -377,6 +394,16 @@ async function reconcileInvoicesForSubscription(
         ? { paid_at: new Date(inv.status_transitions.paid_at * 1000).toISOString() }
         : {}),
       ...(inv.number ? { invoice_number: inv.number } : {}),
+      // The dunning trio. attempt_count decides whether the admin dashboard
+      // renders a red "Payment failed" or an amber "Unpaid — not due yet", so
+      // omitting it made every reconciler-created invoice look benign. Written
+      // unconditionally (defaulting to 0) rather than conditionally, because a
+      // genuine 0 is meaningful — it is what says "Stripe has not tried yet".
+      attempt_count: inv.attempt_count ?? 0,
+      ...(inv.next_payment_attempt
+        ? { next_payment_attempt: new Date(inv.next_payment_attempt * 1000).toISOString() }
+        : {}),
+      ...(inv.billing_reason ? { billing_reason: inv.billing_reason } : {}),
     };
 
     const { error } = await supabase
