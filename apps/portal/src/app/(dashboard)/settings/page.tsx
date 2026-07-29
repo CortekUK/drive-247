@@ -231,18 +231,32 @@ const Settings = () => {
   };
 
   // Gig Driver booking option toggle (shows "Are you a gig driver?" on the booking page)
-  const gigDriverEnabled = (tenant as { gig_driver_enabled?: boolean } | null)?.gig_driver_enabled !== false;
+  // Optimistic, for the same reason as the theme control below: without it the
+  // switch cannot move until an update AND a full tenant refetch have both
+  // returned, which reads as a dead toggle.
+  const [pendingGigDriver, setPendingGigDriver] = useState<boolean | null>(null);
+  const persistedGigDriver = (tenant as { gig_driver_enabled?: boolean } | null)?.gig_driver_enabled !== false;
+  const gigDriverEnabled = pendingGigDriver ?? persistedGigDriver;
   const [savingGigDriver, setSavingGigDriver] = useState(false);
   const handleToggleGigDriver = async (next: boolean) => {
     if (!tenant?.id) return;
+    const previous = gigDriverEnabled;
+    setPendingGigDriver(next);
     setSavingGigDriver(true);
     try {
-      const { error } = await supabase
+      // .select() so a zero-row write (blocked by RLS on `tenants`) cannot be
+      // reported as success — PostgREST returns error:null for it.
+      const { data, error } = await supabase
         .from("tenants")
         .update({ gig_driver_enabled: next })
-        .eq("id", tenant.id);
+        .eq("id", tenant.id)
+        .select("gig_driver_enabled");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("You do not have permission to change this setting.");
+      }
       await refetchTenant();
+      setPendingGigDriver(null);
       toast({
         title: next ? "Gig Driver option enabled" : "Gig Driver option disabled",
         description: next
@@ -250,6 +264,7 @@ const Settings = () => {
           : "The “Are you a gig driver?” option is now hidden on your booking page.",
       });
     } catch (error: unknown) {
+      setPendingGigDriver(previous === persistedGigDriver ? null : previous);
       const msg = error instanceof Error ? error.message : String(error);
       toast({ title: "Failed to update", description: msg, variant: "destructive" });
     } finally {
@@ -261,22 +276,44 @@ const Settings = () => {
   // Two friendly controls (allow-switch + default) compose into the single enum:
   //   allow=on  → 'light' | 'dark'         (default set, customer can toggle)
   //   allow=off → 'light_only' | 'dark_only' (forced, no toggle)
-  const themeMode = ((tenant as { customer_theme_mode?: string } | null)?.customer_theme_mode ?? 'dark') as
-    'dark' | 'light' | 'light_only' | 'dark_only';
+  type CustomerThemeMode = 'dark' | 'light' | 'light_only' | 'dark_only';
+
+  // OPTIMISTIC VALUE. Both controls used to render straight off `tenant`, which
+  // only changes after the write AND a full tenant refetch have both come back.
+  // Until then the switch sat visibly in its old position while disabled, so it
+  // read as broken — you click it, nothing moves for a second or more, then it
+  // jumps. Holding the intended value here lets the control move on click and
+  // still be corrected by the server's answer.
+  const [pendingThemeMode, setPendingThemeMode] = useState<CustomerThemeMode | null>(null);
+
+  const persistedThemeMode = ((tenant as { customer_theme_mode?: string } | null)?.customer_theme_mode ?? 'dark') as CustomerThemeMode;
+  const themeMode = pendingThemeMode ?? persistedThemeMode;
   const themeToggleAllowed = themeMode === 'dark' || themeMode === 'light';
   const themeDefault: 'light' | 'dark' = (themeMode === 'light' || themeMode === 'light_only') ? 'light' : 'dark';
   const [savingTheme, setSavingTheme] = useState(false);
   const saveCustomerThemeMode = async (allowToggle: boolean, def: 'light' | 'dark') => {
     if (!tenant?.id) return;
-    const value = (allowToggle ? def : `${def}_only`) as 'dark' | 'light' | 'light_only' | 'dark_only';
+    const value = (allowToggle ? def : `${def}_only`) as CustomerThemeMode;
+    const previous = themeMode;
+    setPendingThemeMode(value); // move the control NOW
     setSavingTheme(true);
     try {
-      const { error } = await supabase
+      // .select() so a write that matched NO ROWS is detectable. `tenants` has
+      // RLS enabled, and PostgREST reports a zero-row UPDATE as error:null —
+      // indistinguishable from success. Without this, a user whose role is not
+      // covered by an UPDATE policy saw "theme updated", changed nothing, and
+      // watched the control snap back with no explanation.
+      const { data, error } = await supabase
         .from("tenants")
         .update({ customer_theme_mode: value })
-        .eq("id", tenant.id);
+        .eq("id", tenant.id)
+        .select("customer_theme_mode");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("You do not have permission to change this setting.");
+      }
       await refetchTenant();
+      setPendingThemeMode(null); // hand control back to the refreshed tenant
       toast({
         title: "Booking site theme updated",
         description:
@@ -286,6 +323,7 @@ const Settings = () => {
           : "Your booking site now defaults to dark, with a theme switch.",
       });
     } catch (error: unknown) {
+      setPendingThemeMode(previous === persistedThemeMode ? null : previous); // put it back
       const msg = error instanceof Error ? error.message : String(error);
       toast({ title: "Failed to update theme", description: msg, variant: "destructive" });
     } finally {
