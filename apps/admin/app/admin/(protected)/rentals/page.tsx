@@ -142,6 +142,10 @@ interface InvoiceRow {
    *  tell a FAILED invoice from one that is simply not due yet, since Stripe
    *  leaves both at status 'open'. */
   attempt_count: number | null;
+  /** Stripe's own invoice date. created_at is our row-insert time. */
+  invoice_date: string | null;
+  amount_refunded: number | null;
+  dispute_status: string | null;
 }
 
 /**
@@ -301,7 +305,10 @@ function nextInvoiceDue(
   // who had owed $300 since 16 Jul — the single most misleading cell on the
   // page, on the one row he most needed to act on.
   if (sub.status === 'past_due') {
-    const owed = unpaid?.period_end || unpaid?.created_at || null;
+    // invoice_date before created_at: created_at is our INSERT time, which the
+    // reconciler stamps at backfill, so it could date an overdue invoice to the
+    // day we happened to import it.
+    const owed = unpaid?.period_end || unpaid?.invoice_date || unpaid?.created_at || null;
     return { date: owed ?? sub.current_period_end, overdue: true };
   }
 
@@ -429,7 +436,13 @@ export default function RentalCompaniesPage() {
           supabase
             .from('tenant_subscription_invoices')
             // `id` is required to settle an invoice via mark-invoice-paid.
-            .select('id, tenant_id, status, amount_due, amount_paid, currency, period_end, created_at, attempt_count')
+            .select('id, tenant_id, status, amount_due, amount_paid, currency, period_end, created_at, invoice_date, attempt_count, amount_refunded, dispute_status')
+            // Stripe's invoice date decides which invoice is "latest". created_at
+            // is our row-INSERT time, which the reconciler stamps at backfill —
+            // so a backfilled paid invoice sorted above a genuinely newer OPEN
+            // one, and the Latest-invoice column reported "Paid" for a tenant
+            // with money outstanding. NealCo read Paid while $350 was open.
+            .order('invoice_date', { ascending: false, nullsFirst: false })
             .order('created_at', { ascending: false }),
         ]);
 
@@ -737,11 +750,20 @@ export default function RentalCompaniesPage() {
       //
       // A paid invoice is the discriminator: a genuine new-signup trial has none.
       const hasPaidBefore = (paidInvoiceTenantIds?.has(t.id) ?? false);
-      // 'ending' is still being billed for the period they have paid for, so it
-      // is real revenue today — but it is leaving, which is why it gets its own
+      // 'ending' is still being billed for the period already paid for, so it is
+      // real revenue today — but it is leaving, which is why it gets its own
       // badge rather than being folded into 'Subscribed'.
+      //
+      // It must NOT skip the hasPaidBefore test. 'ending' now absorbs a
+      // *trialing* subscription that has been set to cancel, and an unconverted
+      // trial has never paid us anything. Counting it unconditionally made MRR
+      // GROW at the moment a free trial was cancelled — the figure moving the
+      // wrong way on the one event that can only ever reduce it.
+      const endingHasRevenue = sub?.status === 'active' || hasPaidBefore;
       const isRevenueBearing =
-        status === 'active' || status === 'ending' || (status === 'trialing' && hasPaidBefore);
+        status === 'active' ||
+        (status === 'ending' && endingHasRevenue) ||
+        (status === 'trialing' && hasPaidBefore);
 
       // Amounts are kept PER CURRENCY. The plan editor offers USD, GBP and EUR,
       // and these were previously summed into one integer and rendered with a
@@ -1372,7 +1394,7 @@ export default function RentalCompaniesPage() {
                               ? 'Written off'
                               : inv.status}
                             <span className="text-muted-foreground ml-1">
-                              {formatDay(inv.created_at)}
+                              {formatDay(inv.invoice_date || inv.created_at)}
                             </span>
                           </span>
                         ) : (

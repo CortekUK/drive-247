@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
       case "charge.dispute.created":
       case "charge.dispute.updated":
       case "charge.dispute.closed":
-        await handleChargeDispute(supabase, event.data.object, event.type);
+        await handleChargeDispute(supabase, event.data.object, event.type, stripe);
         break;
       default:
         console.log(`Unhandled subscription webhook event: ${event.type}`);
@@ -818,7 +818,11 @@ async function handleSubscriptionUpdated(
   }
 
   let activePlan = "basic";
-  if (["active", "trialing"].includes(subscription.status)) {
+  // patch.status, not subscription.status: the event payload is a snapshot from
+  // when the event was CREATED and Stripe retries for up to three days, so a
+  // late delivery would otherwise set the plan and run auto-go-live off state
+  // that is no longer true.
+  if (["active", "trialing"].includes(patch.status)) {
     const subPlanName = subscription.metadata?.plan_name;
     if (subPlanName) {
       activePlan = subPlanName;
@@ -840,10 +844,10 @@ async function handleSubscriptionUpdated(
   // customer changed) left "Manage billing" and every customer-id invoice
   // lookup aimed at a stale customer. Guarded on a LIVE status so a winding-down
   // or canceled subscription never drags the pointer backwards.
-  if (["active", "trialing", "past_due"].includes(subscription.status)) {
+  if (["active", "trialing", "past_due"].includes(patch.status)) {
     goLiveUpdate.stripe_subscription_customer_id = subscription.customer as string;
   }
-  if (subscription.status === "active") {
+  if (patch.status === "active") {
     const { data: currentTenant } = await supabase
       .from("tenants")
       .select(GO_LIVE_SELECT)
@@ -1429,19 +1433,36 @@ async function handleChargeRefunded(supabase: any, charge: any) {
  * A dispute takes the money back immediately. Without this the tenant kept full
  * access and appeared fully paid-up on every screen.
  */
-async function handleChargeDispute(supabase: any, dispute: any, eventType: string) {
+async function handleChargeDispute(
+  supabase: any,
+  dispute: any,
+  eventType: string,
+  stripe?: Stripe,
+) {
+  // A DISPUTE DOES NOT CARRY AN INVOICE. It references a charge, and only the
+  // CHARGE knows its invoice. The first cut of this handler looked for an
+  // invoice id on the dispute itself and gave up when it found none — which is
+  // always — so it silently did nothing on every dispute it received. Dead code
+  // that read as coverage.
+  //
+  // Retrieve the charge to get there. Stripe does not expand it for us on the
+  // webhook payload.
   const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
-  const invoiceId =
-    resolveChargeInvoiceId(dispute) || (dispute.payment_intent ? null : null);
 
-  let targetInvoiceId = invoiceId;
-  if (!targetInvoiceId && chargeId) {
-    // The dispute object does not carry the invoice; resolve it via the charge's
-    // own metadata when Stripe expanded it, else give up quietly.
-    targetInvoiceId = resolveChargeInvoiceId(dispute.charge);
+  let targetInvoiceId: string | null =
+    (typeof dispute.charge === "object" ? resolveChargeInvoiceId(dispute.charge) : null) || null;
+
+  if (!targetInvoiceId && chargeId && stripe) {
+    try {
+      const charge: any = await stripe.charges.retrieve(chargeId);
+      targetInvoiceId = resolveChargeInvoiceId(charge);
+    } catch (e) {
+      console.warn(`Could not retrieve charge ${chargeId} for dispute ${dispute.id}:`, (e as any)?.message ?? e);
+    }
   }
+
   if (!targetInvoiceId) {
-    console.log(`Dispute ${dispute.id} (${eventType}) could not be tied to an invoice — ignoring`);
+    console.log(`Dispute ${dispute.id} (${eventType}) could not be tied to an invoice — likely a booking charge, ignoring`);
     return;
   }
 
@@ -1525,11 +1546,29 @@ async function handleCreditPurchase(
     p_type: "purchase",
     p_description: `Purchased ${packageName} package (${credits} ${isTestPurchase ? "test " : ""}credits)`,
     p_package_id: packageId || null,
-    p_stripe_payment_id: session.payment_intent || null,
+    // Same reference the duplicate guard above looks for, so a retry can
+    // recognise its own earlier success. Previously this stored
+    // session.payment_intent while the guard checked `payment_intent || id`,
+    // so for a session with no payment intent the two never agreed.
+    p_stripe_payment_id: paymentRef || null,
     p_is_test_mode: isTestPurchase,
   });
 
   if (error) {
+    // RELEASE THE CLAIM. The claim exists to stop a SECOND grant, not to stop a
+    // FIRST one. Leaving it in place after a failed grant meant Stripe's retry
+    // hit `claimed === false`, returned early, and the credits were never
+    // granted at all — the customer has paid and silently received nothing,
+    // with the webhook reporting success. Deleting it lets the retry do the work.
+    const { error: releaseErr } = await supabase
+      .from("processed_stripe_events")
+      .delete()
+      .eq("event_id", eventId);
+    if (releaseErr) {
+      console.error(
+        `CRITICAL: credits not granted for event ${eventId} AND the claim could not be released (${releaseErr.message}). Grant them by hand.`,
+      );
+    }
     console.error("Error adding credits after purchase:", error);
     throw error;
   }

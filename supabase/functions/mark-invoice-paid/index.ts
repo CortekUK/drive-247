@@ -48,10 +48,13 @@ async function loadSuperAdmin(
 ): Promise<{ id: string } | null> {
   const { data } = await supabase
     .from("app_users")
-    .select("id, is_super_admin")
+    .select("id, is_super_admin, is_active")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
-  return data?.is_super_admin === true ? { id: data.id } : null;
+  // is_active too: deactivating a super admin must actually remove their
+  // powers. Without it a deactivated account kept the ability to mark platform
+  // invoices paid, rewrite plans, start migrations and delete tenants.
+  return data?.is_super_admin === true && data?.is_active !== false ? { id: data.id } : null;
 }
 
 Deno.serve(async (req) => {

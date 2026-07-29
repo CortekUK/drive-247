@@ -8,11 +8,22 @@ export async function getSubscriptionStripeMode(
   supabase: any,
   tenantId: string
 ): Promise<"test" | "live"> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("tenants")
     .select("subscription_stripe_mode")
     .eq("id", tenantId)
     .single();
+  // Do NOT silently fall back to 'test' on a READ FAILURE. The error used to be
+  // destructured away, so a transient blip made a LIVE tenant resolve to 'test'
+  // — every caller then built a test-mode Stripe client and looked their live
+  // subscription up on the wrong account, where it does not exist. That reads
+  // as "no such subscription", which callers treat as benign.
+  //
+  // A tenant row that genuinely has no value set is different, and still
+  // defaults to 'test'.
+  if (error) {
+    throw new Error(`Could not resolve subscription Stripe mode for tenant ${tenantId}: ${error.message}`);
+  }
   return data?.subscription_stripe_mode || "test";
 }
 

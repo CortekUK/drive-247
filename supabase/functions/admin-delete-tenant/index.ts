@@ -1,8 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import {
-  getSubscriptionStripeMode,
-  getSubscriptionStripeClientForAccount,
-} from '../_shared/subscription-stripe.ts'
+import { getSubscriptionStripeClientForAccount } from '../_shared/subscription-stripe.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -70,7 +67,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!currentUserData.is_super_admin) {
+    // is_active is already selected here but was never checked, so a
+    // deactivated super admin could still delete tenants.
+    if (!currentUserData.is_super_admin || currentUserData.is_active === false) {
       console.error('User is not a super admin');
       return new Response(
         JSON.stringify({ error: 'Only super admins can delete tenants' }),
@@ -117,34 +116,76 @@ Deno.serve(async (req) => {
       if (liveSubsError) throw new Error(`Could not read subscriptions: ${liveSubsError.message}`);
 
       if (liveSubs && liveSubs.length > 0) {
-        // Read the mode BEFORE the tenant row disappears.
-        const mode = await getSubscriptionStripeMode(supabaseAdmin, tenant_id);
-
         for (const sub of liveSubs) {
           if (!sub.stripe_subscription_id) continue;
-          // Cancel on whichever account actually bills it — a tenant can hold a
-          // legacy UK subscription and a UAE one at the same time.
+
+          // ACCOUNT IS PER-ROW, BUT MODE IS NOT RECORDED ANYWHERE.
+          //
+          // This originally read the mode once from tenants.subscription_stripe_mode
+          // and paired it with each row's account. Those are independent axes:
+          // a tenant flagged 'test' can still hold a LIVE legacy UK subscription
+          // (delta-force does today, with an open live invoice). Pairing uk+test
+          // built a client for a DIFFERENT Stripe account, the cancel came back
+          // 'resource_missing', that was classified "already absent" — and the
+          // tenant was deleted with the live subscription still renewing. The
+          // exact orphan this guard exists to prevent, produced by the guard.
+          //
+          // So try BOTH modes for the row's account, and only accept "not found"
+          // once every reachable cell has said so. reconcile-subscriptions
+          // already treats account x mode as a 2x2 grid; this now matches it.
           const account = sub.stripe_account === 'uae' ? 'uae' : 'uk';
-          const stripe = getSubscriptionStripeClientForAccount(account, mode);
-          try {
-            await stripe.subscriptions.cancel(sub.stripe_subscription_id);
-            console.log(`Canceled ${account}/${mode} subscription ${sub.stripe_subscription_id} before deleting tenant ${tenant_id}`);
-            cancellations.push({ subscription: sub.stripe_subscription_id, account, mode, result: 'canceled' });
-          } catch (cancelErr) {
-            const code = (cancelErr as any)?.code;
-            const msg = String((cancelErr as any)?.message ?? cancelErr);
-            // Already gone in Stripe cannot bill anyone, so it must not block
-            // the deletion forever. Anything else does block it.
-            if (code === 'resource_missing' || /no such subscription/i.test(msg)) {
-              console.warn(`Subscription ${sub.stripe_subscription_id} already absent on ${account}/${mode}`);
-              cancellations.push({ subscription: sub.stripe_subscription_id, account, mode, result: 'already-absent' });
+          const modes: Array<'live' | 'test'> = ['live', 'test'];
+
+          let canceled = false;
+          let sawHardError: string | null = null;
+          const missedIn: string[] = [];
+
+          for (const mode of modes) {
+            let stripe;
+            try {
+              stripe = getSubscriptionStripeClientForAccount(account, mode);
+            } catch (_keyErr) {
+              // No key configured for this cell — we cannot prove anything about
+              // it, so it must not count as "confirmed absent".
+              sawHardError = `no Stripe key configured for ${account}/${mode}`;
               continue;
             }
+            try {
+              await stripe.subscriptions.cancel(sub.stripe_subscription_id);
+              console.log(`Canceled ${account}/${mode} subscription ${sub.stripe_subscription_id} before deleting tenant ${tenant_id}`);
+              cancellations.push({ subscription: sub.stripe_subscription_id, account, mode, result: 'canceled' });
+              canceled = true;
+              break;
+            } catch (cancelErr) {
+              const code = (cancelErr as any)?.code;
+              const msg = String((cancelErr as any)?.message ?? cancelErr);
+              if (code === 'resource_missing' || /no such subscription/i.test(msg)) {
+                missedIn.push(`${account}/${mode}`);
+                continue; // genuinely not on this cell — try the other mode
+              }
+              // A real failure (network, auth, rate limit). Never delete on this.
+              sawHardError = `${account}/${mode}: ${msg}`;
+              break;
+            }
+          }
+
+          if (canceled) continue;
+
+          if (sawHardError) {
             throw new Error(
-              `Could not cancel Stripe subscription ${sub.stripe_subscription_id} on the ${account} account (${msg}). ` +
+              `Could not cancel Stripe subscription ${sub.stripe_subscription_id} (${sawHardError}). ` +
               `Tenant NOT deleted — cancel it in Stripe first, then retry.`
             );
           }
+
+          // Confirmed absent everywhere we could look. It cannot bill anyone.
+          console.warn(`Subscription ${sub.stripe_subscription_id} not found in ${missedIn.join(', ')} — treating as already cancelled`);
+          cancellations.push({
+            subscription: sub.stripe_subscription_id,
+            account,
+            checked: missedIn,
+            result: 'already-absent',
+          });
         }
       }
     } catch (billingErr) {

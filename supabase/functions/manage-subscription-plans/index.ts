@@ -29,11 +29,12 @@ async function getOrCreateProduct(stripe: Stripe): Promise<string> {
 async function verifySuperAdmin(supabase: any, userId: string): Promise<boolean> {
   const { data } = await supabase
     .from("app_users")
-    .select("is_super_admin")
+    .select("is_super_admin, is_active")
     .eq("auth_user_id", userId)
     .single();
 
-  return data?.is_super_admin === true;
+  // is_active too — see the note in mark-invoice-paid.
+  return data?.is_super_admin === true && data?.is_active !== false;
 }
 
 Deno.serve(async (req) => {

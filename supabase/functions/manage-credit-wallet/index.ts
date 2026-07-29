@@ -34,6 +34,54 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
+    // ── WHO MAY DO WHAT ──────────────────────────────────────────────────────
+    //
+    // Every branch below took `tenantId` from the request body behind nothing
+    // but "is this a valid Supabase user?". Drive247 runs ONE auth project for
+    // everybody, so that includes every member of the public who registered on
+    // a tenant's booking site to hire a car.
+    //
+    // What that allowed, with a normal session and a tenant UUID (readable
+    // before login):
+    //   gift / adjust  — mint platform credits into any tenant's wallet. These
+    //                    are sold at $0.20 each; a tenant admin could hand
+    //                    themselves unlimited free e-signatures and OCR.
+    //   refund         — move another tenant's balance.
+    //   auto_refill    — trigger an off-session, already-confirmed Stripe charge
+    //                    against another operator's SAVED CARD. A real,
+    //                    unauthorised charge, repeatable after each refill drops
+    //                    the balance back under the threshold.
+    //   update_auto_refill — raise that tenant's refill amount first.
+    //
+    // gift/refund/adjust are labelled "Super Admin" in the case comments; that
+    // was documentation, not a check.
+    const { data: appUser } = await supabaseAdmin
+      .from("app_users")
+      .select("id, tenant_id, is_super_admin, is_active")
+      .eq("auth_user_id", user.id)
+      .maybeSingle();
+
+    // A booking-site customer has no app_users row at all.
+    if (!appUser || appUser.is_active === false) {
+      return errorResponse("Forbidden", 403);
+    }
+
+    // Minting or moving credit, and refunding, are platform-operator powers.
+    const SUPER_ADMIN_ONLY = ["gift", "refund", "adjust"];
+    if (SUPER_ADMIN_ONLY.includes(action) && !appUser.is_super_admin) {
+      console.warn(`Rejected ${action} from non-super-admin app_user ${appUser.id}`);
+      return errorResponse("Forbidden: super admin only", 403);
+    }
+
+    // Everything else is tenant-scoped: you may only act on your own wallet.
+    const targetTenantId = body?.tenantId;
+    if (!appUser.is_super_admin && targetTenantId && appUser.tenant_id !== targetTenantId) {
+      console.warn(
+        `Cross-tenant credit-wallet attempt: app_user ${appUser.id} (tenant ${appUser.tenant_id}) -> ${targetTenantId} via ${action}`
+      );
+      return errorResponse("Forbidden", 403);
+    }
+
     switch (action) {
       // ─── Tenant: Update auto-refill settings ───
       case "update_auto_refill": {

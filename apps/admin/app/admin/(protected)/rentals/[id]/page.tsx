@@ -2576,6 +2576,19 @@ export default function TenantDetailsPage() {
             </div>
 
             {/* Invoices */}
+            {/* subscriptionError is checked here TOO, not only in the block
+                above. The error banner up there only renders when `subscription`
+                is falsy, so a tenant WITH a subscription whose invoice read
+                failed showed a healthy subscription panel and simply no invoice
+                table — the failure was completely invisible. */}
+            {subscriptionError && invoices.length === 0 && (
+              <>
+                <Separator />
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  Could not load invoices — {subscriptionError}
+                </div>
+              </>
+            )}
             {invoices.length > 0 && (
               <>
                 <Separator />

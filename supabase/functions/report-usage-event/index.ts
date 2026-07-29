@@ -10,6 +10,29 @@ Deno.serve(async (req) => {
   if (corsResponse) return corsResponse;
 
   try {
+    // ── AUTHENTICATION ───────────────────────────────────────────────────────
+    //
+    // This function had none at all — it went straight from Deno.serve to
+    // req.json(). It is not declared verify_jwt=false, but Supabase's gateway
+    // check is satisfied by the PUBLIC anon key that ships in every browser
+    // bundle, so a plain curl reached the handler and could post a billing
+    // meter event to Stripe against ANY tenant's subscription customer, plus
+    // write a usage-log row.
+    //
+    // It is only harmless today because e-sign metering is dormant (no meter
+    // price wired up) — a configuration accident, not a control. The moment
+    // metering is switched on, this becomes "bill an arbitrary operator for
+    // work they never did".
+    //
+    // Callers are server-side (the e-sign flow), so require the service role.
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearer = authHeader.replace("Bearer ", "").trim();
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    if (!bearer || bearer !== serviceKey) {
+      console.warn("report-usage-event: rejected a caller without the service role key");
+      return errorResponse("Unauthorized", 401);
+    }
+
     const {
       tenant_id,
       rental_id,

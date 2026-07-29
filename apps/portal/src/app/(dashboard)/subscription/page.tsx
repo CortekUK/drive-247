@@ -77,6 +77,7 @@ export default function SubscriptionPage() {
     subscription,
     isSubscribed,
     isGraceExpired,
+    owesOutstandingInvoice,
     outstandingInvoiceUrl,
     isLoading,
     invoices,
@@ -194,7 +195,13 @@ export default function SubscriptionPage() {
   // was hit by exactly the tenants trying to give us money.
   //
   // Mirrors the same branch in subscription-settings.tsx.
-  if (isGraceExpired || subscription?.status === "past_due") {
+  // Also fires when the subscription is already CANCELED but an invoice is still
+  // open. Stripe's default at the end of dunning is to cancel, which moves the
+  // row off past_due — so a debtor stopped matching either condition here and
+  // fell through to the pricing cards, free to buy a SECOND subscription while
+  // the original debt sat unpaid and unmentioned. This page is the one the hard
+  // paywall whitelists, so that is exactly where they land.
+  if (isGraceExpired || subscription?.status === "past_due" || owesOutstandingInvoice) {
     return (
       <div className="p-6 space-y-6">
         <Card className="max-w-2xl mx-auto">

@@ -199,7 +199,11 @@ export function LocalInvoiceView({
                 {invoice.paid_at ? "Payment date" : "Invoice date"}
               </span>
               <span className="min-w-0 text-right font-medium">
-                {formatDateLong(invoice.paid_at || invoice.created_at)}
+                {/* invoice_date before created_at: an unpaid or voided invoice has no
+                    paid_at, and created_at is our row-INSERT time — which the
+                    reconciler stamps at backfill, so the receipt printed the day
+                    we imported the row as the invoice date. */}
+                {formatDateLong(invoice.paid_at || invoice.invoice_date || invoice.created_at)}
               </span>
             </div>
             {/* Rendered off last4 alone: with the artwork carrying the brand, an
@@ -350,6 +354,7 @@ export function SubscriptionSettings() {
     subscription,
     isSubscribed,
     isGraceExpired,
+    owesOutstandingInvoice,
     isTrialing,
     trialDaysRemaining,
     openInvoice,
@@ -468,7 +473,13 @@ export function SubscriptionSettings() {
   // create-subscription-checkout rejects them with 409 "Tenant already has an
   // active subscription", so the Subscribe button can only ever produce an
   // error toast. What they need is the outstanding invoice.
-  if (isGraceExpired || subscription?.status === "past_due") {
+  // Also fires when the subscription is already CANCELED but an invoice is still
+  // open. Stripe's default at the end of dunning is to cancel, which moves the
+  // row off past_due — so a debtor stopped matching either condition here and
+  // fell through to the pricing cards, free to buy a SECOND subscription while
+  // the original debt sat unpaid and unmentioned. This page is the one the hard
+  // paywall whitelists, so that is exactly where they land.
+  if (isGraceExpired || subscription?.status === "past_due" || owesOutstandingInvoice) {
     return (
       <div className="space-y-6">
         <Card>
