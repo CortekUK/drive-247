@@ -369,6 +369,56 @@ export default function TenantDetailsPage() {
     }
   }, [params.id]);
 
+  // LIVE SUBSCRIPTION STATE — this page previously loaded once at mount and
+  // never refetched, so an operator sitting on a tenant while chasing a payment
+  // watched a frozen screen and had to reload to learn anything changed.
+  //
+  // Mirrors the list page: realtime push on tenant_subscriptions (already in the
+  // supabase_realtime publication), a poll as backstop because a socket can die
+  // silently, and a refresh when the tab regains focus. Invoice-only changes
+  // reach us too, because a DB trigger now touches the subscription row whenever
+  // an invoice's status or attempt_count changes.
+  //
+  // Only the subscription block is refreshed — deliberately not loadTenant(),
+  // which would clobber the edit form the operator may be typing into.
+  useEffect(() => {
+    const tenantId = params.id as string | undefined;
+    if (!tenantId) return;
+
+    const refresh = () => { void loadSubscription(tenantId); };
+
+    const channel = supabase
+      .channel(`admin-tenant-subscription-${tenantId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tenant_subscriptions',
+          filter: `tenant_id=eq.${tenantId}`,
+        },
+        refresh,
+      )
+      .subscribe();
+
+    const poll = setInterval(() => {
+      if (document.visibilityState === 'visible') refresh();
+    }, 20_000);
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(poll);
+      document.removeEventListener('visibilitychange', onVisible);
+      supabase.removeChannel(channel);
+    };
+    // loadSubscription is a stable module-scope closure over setState setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id]);
+
   const loadTenant = async (id: string) => {
     try {
       const { data, error } = await supabase
@@ -405,12 +455,27 @@ export default function TenantDetailsPage() {
   const loadSubscription = async (tenantId: string) => {
     setSubscriptionLoading(true);
     try {
-      const { data: subData } = await supabase
+      // Do NOT filter to live statuses here.
+      //
+      // This used to be .in('status', ['active','trialing','past_due']), which
+      // made a canceled / unpaid / paused / incomplete_expired subscription
+      // render as "No active subscription" — identical to a tenant who never
+      // subscribed at all. That is precisely the churned-and-declined cohort an
+      // operator drills into this page to investigate, and the only way to tell
+      // the two apart was to open Stripe.
+      //
+      // Prefer a live row when there is one, else fall back to the most recent,
+      // mirroring selectSubscription() on the list page so the two screens
+      // cannot disagree about which subscription a tenant "has".
+      const { data: subRows } = await supabase
         .from('tenant_subscriptions')
         .select('*')
         .eq('tenant_id', tenantId)
-        .in('status', ['active', 'trialing', 'past_due'])
-        .maybeSingle();
+        .order('updated_at', { ascending: false });
+
+      const rows = (subRows as any[] | null) ?? [];
+      const LIVE = ['active', 'trialing', 'past_due'];
+      const subData = rows.find((r) => LIVE.includes(r.status)) ?? rows[0] ?? null;
 
       setSubscription(subData);
 
@@ -1709,7 +1774,12 @@ export default function TenantDetailsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {subscription && (
+                  {/* Gated on a LIVE subscription, not merely on one existing.
+                      This page now also loads canceled / unpaid / paused rows so
+                      churned tenants are distinguishable from never-subscribed —
+                      but there is no "next invoice" to discount on a dead
+                      subscription, so the action must not be offered. */}
+                  {subscription && ['active', 'trialing', 'past_due'].includes(subscription.status) && (
                     <Button size="sm" variant="outline" onClick={() => setShowDiscountModal(true)}>
                       Discount next invoice
                     </Button>
