@@ -157,6 +157,8 @@ type SubStatus =
   | 'past-due'
   | 'expired'
   | 'not-converted'
+  | 'canceled'
+  | 'unpaid'
   | 'paywall-set'
   | 'paywall-not-set';
 
@@ -164,6 +166,17 @@ const SUB_STATUS_META: Record<SubStatus, { label: string; className: string }> =
   active: { label: 'Subscribed', className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
   trialing: { label: 'Trialing', className: 'bg-sky-500/15 text-sky-400 border-sky-500/30' },
   'past-due': { label: 'Past due', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  // CANCELED vs UNPAID vs EXPIRED are three different situations that used to
+  // share one red "Expired" badge, which is wrong on the screen used to decide
+  // who to chase:
+  //  - canceled: ended deliberately (by us or the tenant). Nothing is owed.
+  //    Do not chase — offer to win them back.
+  //  - unpaid:   Stripe exhausted its dunning retries and gave up. Money IS
+  //    owed. This is the one to chase hardest.
+  //  - expired:  anything else terminal (e.g. paused), kept as a catch-all so
+  //    a new Stripe status can never silently render as "Subscribed".
+  canceled: { label: 'Canceled', className: 'bg-slate-500/15 text-slate-400 border-slate-500/30' },
+  unpaid: { label: 'Unpaid · retries exhausted', className: 'bg-destructive/15 text-destructive border-destructive/30' },
   expired: { label: 'Expired', className: 'bg-destructive/15 text-destructive border-destructive/30' },
   // Stripe 'incomplete' / 'incomplete_expired' means a Checkout was started and
   // a card was attached, but the first payment never cleared (SCA challenge
@@ -197,7 +210,9 @@ function getSubStatus(sub: SubscriptionRow | null, hasActivePlan: boolean): SubS
     if (sub.status === 'trialing') return 'trialing';
     if (sub.status === 'past_due') return 'past-due';
     if (sub.status === 'incomplete' || sub.status === 'incomplete_expired') return 'not-converted';
-    return 'expired'; // canceled | unpaid | paused
+    if (sub.status === 'canceled') return 'canceled';
+    if (sub.status === 'unpaid') return 'unpaid';
+    return 'expired'; // paused, or any future Stripe status
   }
   return hasActivePlan ? 'paywall-set' : 'paywall-not-set';
 }
@@ -626,7 +641,8 @@ export default function RentalCompaniesPage() {
 
   const subscriptionSummary = (() => {
     const tally: Record<SubStatus, number> = {
-      active: 0, trialing: 0, 'past-due': 0, expired: 0, 'not-converted': 0,
+      active: 0, trialing: 0, 'past-due': 0, canceled: 0, unpaid: 0,
+      expired: 0, 'not-converted': 0,
       'paywall-set': 0, 'paywall-not-set': 0,
     };
     const mrrByCurrency: Record<string, number> = {};
@@ -914,6 +930,8 @@ export default function RentalCompaniesPage() {
                   ['active', 'Subscribed'],
                   ['trialing', 'Trialing'],
                   ['past-due', 'Past due'],
+                  ['unpaid', 'Unpaid'],
+                  ['canceled', 'Canceled'],
                   ['expired', 'Expired'],
                   ['not-converted', 'Not converted'],
                   ['paywall-set', 'Not subscribed'],
@@ -1084,7 +1102,13 @@ export default function RentalCompaniesPage() {
                   const inv = latestInvoice.get(tenant.id);
                   const unpaid = oldestUnpaidInvoice.get(tenant.id);
                   const due = nextInvoiceDue(sub, unpaid);
-                  const endedOn = subStatus === 'expired' ? subscriptionEndedOn(sub) : null;
+                  // All three terminal buckets get the "Ended <date>" treatment —
+                  // gating on 'expired' alone meant a canceled or unpaid tenant
+                  // showed a blank date cell after the split above.
+                  const endedOn =
+                    subStatus === 'expired' || subStatus === 'canceled' || subStatus === 'unpaid'
+                      ? subscriptionEndedOn(sub)
+                      : null;
 
                   // Until the fetch lands, render placeholders rather than
                   // "Paywall not set" — an absent Map would otherwise libel

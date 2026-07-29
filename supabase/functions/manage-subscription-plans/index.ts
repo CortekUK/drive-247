@@ -324,18 +324,43 @@ async function handleDelete(supabase: any, body: any) {
   const { planId } = body;
   if (!planId) return errorResponse("planId is required");
 
-  const { data: subs } = await supabase
+  // Block only on a LIVE billing relationship.
+  //
+  // This used to reject if ANY tenant_subscriptions row referenced the plan,
+  // regardless of status — so once a tenant cancelled, their plan became
+  // permanently undeletable with the unhelpful advice to "deactivate it
+  // instead". A canceled / incomplete_expired / unpaid subscription is history,
+  // not billing: nothing breaks by removing the plan it used to point at.
+  const LIVE = ["active", "trialing", "past_due"];
+
+  const { data: liveSubs, error: liveErr } = await supabase
     .from("tenant_subscriptions")
-    .select("id")
+    .select("id, status")
     .eq("plan_id", planId)
+    .in("status", LIVE)
     .limit(1);
 
-  if (subs && subs.length > 0) {
+  if (liveErr) throw liveErr;
+
+  if (liveSubs && liveSubs.length > 0) {
     return errorResponse(
-      "Cannot delete plan that has subscriptions. Deactivate it instead.",
-      409
+      `Cannot delete a plan with a live subscription on it (status: ${liveSubs[0].status}). Cancel or migrate that subscription first, or deactivate the plan to hide it from new signups.`,
+      409,
     );
   }
+
+  // Historical rows keep pointing at this plan, and the FK
+  // (tenant_subscriptions_plan_id_fkey) has no ON DELETE clause, so it defaults
+  // to NO ACTION and the delete below would fail at the database level. Release
+  // them first. Nothing is lost: plan_name, amount, currency and interval are
+  // denormalised onto tenant_subscriptions, so the invoice history still shows
+  // what the tenant was actually on.
+  const { error: releaseErr } = await supabase
+    .from("tenant_subscriptions")
+    .update({ plan_id: null })
+    .eq("plan_id", planId);
+
+  if (releaseErr) throw releaseErr;
 
   const { data: plan } = await supabase
     .from("subscription_plans")
