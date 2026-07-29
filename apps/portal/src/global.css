@@ -441,12 +441,26 @@ All colors MUST be HSL.
     background: #fff !important;
   }
 
-  /* 4. Keep the network artwork and the paid marker in colour — browsers strip
+  /* 4. The dialog's own close control is chrome, not part of the receipt, and
+        it is rendered inside the shared DialogContent where the call site
+        cannot reach it with a `print:hidden`. It is the only direct-child
+        <button> of the receipt shell. */
+  body:has([data-print-root]) [data-print-root] > button {
+    display: none !important;
+  }
+
+  /* 5. Keep the network artwork and the paid marker in colour — browsers strip
         backgrounds from print by default. */
   body:has([data-print-root]) [data-print-root] svg,
   body:has([data-print-root]) [data-print-root] [class*="bg-green"] {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+
+  /* 6. Plain white sheet, so the app's tinted page background does not print
+        as a grey slab under the receipt when "Background graphics" is on. */
+  body:has([data-print-root]) {
+    background: #fff !important;
   }
 
   @page {
