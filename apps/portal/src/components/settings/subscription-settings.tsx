@@ -24,6 +24,11 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { UsageDashboard } from "./usage-dashboard";
+import {
+  CardBrandIcon,
+  CardOnFile,
+  cardBrandLabel,
+} from "@/components/subscription/card-brand-icon";
 
 function formatCurrency(amount: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -91,27 +96,42 @@ export function LocalInvoiceView({
 }) {
   if (!invoice) return null;
 
-  // Only claim a payment method when we actually know it — a receipt that
-  // invents "•••• ••••" is worse than one that omits the row.
-  const paymentMethodLabel =
-    cardBrand && cardLast4
-      ? `${cardBrand.charAt(0).toUpperCase()}${cardBrand.slice(1)} •••• ${cardLast4}`
-      : null;
-
   const handlePrint = () => {
     window.print();
   };
 
   return (
     <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
-      <DialogContent className="sm:max-w-lg print:max-w-full print:shadow-none print:border-none">
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span>Invoice {invoice.invoice_number || ""}</span>
+      {/*
+        THREE-ROW SHELL: header / scrollable body / footer.
+        The receipt is taller than a laptop viewport once it carries a usage
+        line, and DialogContent is centred with translate(-50%,-50%) and had no
+        height cap — so the extra height overflowed EQUALLY off the top and the
+        bottom of the screen, taking the title and all three action buttons with
+        it, and nothing could scroll it back into view. Capping at the viewport
+        and scrolling only the middle row keeps "Download receipt" reachable at
+        every height; `minmax(0,1fr)` is what actually lets that row shrink
+        below its content.
+
+        `data-print-root` pairs with the @media print block in global.css so
+        "Download receipt" prints the receipt alone rather than the receipt on
+        top of the whole settings page.
+      */}
+      <DialogContent
+        data-print-root
+        className="grid max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:w-full print:max-w-full print:border-none print:shadow-none"
+      >
+        <DialogHeader className="border-b px-5 py-4 sm:px-6 print:hidden">
+          {/* pr-8 clears the absolutely-positioned close button. */}
+          <DialogTitle className="truncate pr-8 text-base">
+            Invoice {invoice.invoice_number || ""}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 print:text-black" id="invoice-content">
+        <div
+          className="space-y-6 overflow-y-auto px-5 py-5 sm:px-6 print:overflow-visible print:text-black"
+          id="invoice-content"
+        >
           {/* ── Stripe-style receipt header ──
               Mirrors Stripe's hosted receipt: a status-marked document glyph,
               the outcome as a sentence, then the amount as the largest element
@@ -137,7 +157,7 @@ export function LocalInvoiceView({
                   : `Invoice ${invoice.status}`}
             </p>
 
-            <p className="text-4xl font-semibold tracking-tight">
+            <p className="text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">
               {formatCurrency(
                 invoice.status === "paid" ? invoice.amount_paid : invoice.amount_due,
                 invoice.currency,
@@ -161,33 +181,55 @@ export function LocalInvoiceView({
 
           <Separator />
 
-          {/* Receipt facts, in Stripe's label/value rows */}
+          {/* Receipt facts, in Stripe's label/value rows.
+              Labels never shrink and values wrap toward the right, so a long
+              invoice number or company name reflows onto a second line instead
+              of squeezing its label into a vertical column of letters. */}
           <div className="space-y-2.5 text-sm">
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground print:text-gray-500">Invoice number</span>
-              <span className="font-medium tabular-nums">{invoice.invoice_number || "—"}</span>
+            <div className="flex items-start justify-between gap-3">
+              <span className="shrink-0 text-muted-foreground print:text-gray-500">
+                Invoice number
+              </span>
+              <span className="min-w-0 break-all text-right font-medium tabular-nums">
+                {invoice.invoice_number || "—"}
+              </span>
             </div>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground print:text-gray-500">
+            <div className="flex items-start justify-between gap-3">
+              <span className="shrink-0 text-muted-foreground print:text-gray-500">
                 {invoice.paid_at ? "Payment date" : "Invoice date"}
               </span>
-              <span className="font-medium">
+              <span className="min-w-0 text-right font-medium">
                 {formatDateLong(invoice.paid_at || invoice.created_at)}
               </span>
             </div>
-            {paymentMethodLabel && (
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-muted-foreground print:text-gray-500">Payment method</span>
-                <span className="font-medium">{paymentMethodLabel}</span>
+            {/* Rendered off last4 alone: with the artwork carrying the brand, an
+                unrecognised or missing brand degrades to the neutral card mark
+                and the row still states a true fact. It stays hidden entirely
+                when there is no card on file — a receipt that invents
+                "•••• ••••" is worse than one that omits the row. */}
+            {cardLast4 && (
+              <div className="flex items-start justify-between gap-3">
+                <span className="shrink-0 text-muted-foreground print:text-gray-500">
+                  Payment method
+                </span>
+                <span className="flex min-w-0 items-center justify-end gap-2 font-medium">
+                  <CardBrandIcon brand={cardBrand} className="h-5 w-[30px]" />
+                  <span className="tabular-nums">
+                    <span className="sr-only">
+                      {cardBrandLabel(cardBrand)} ending in {cardLast4}
+                    </span>
+                    <span aria-hidden="true">•••• {cardLast4}</span>
+                  </span>
+                </span>
               </div>
             )}
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground print:text-gray-500">Billed to</span>
-              <span className="font-medium">{tenantName}</span>
+            <div className="flex items-start justify-between gap-3">
+              <span className="shrink-0 text-muted-foreground print:text-gray-500">Billed to</span>
+              <span className="min-w-0 break-words text-right font-medium">{tenantName}</span>
             </div>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground print:text-gray-500">Period</span>
-              <span className="font-medium">
+            <div className="flex items-start justify-between gap-3">
+              <span className="shrink-0 text-muted-foreground print:text-gray-500">Period</span>
+              <span className="min-w-0 text-right font-medium">
                 {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)}
               </span>
             </div>
@@ -206,13 +248,13 @@ export function LocalInvoiceView({
               </thead>
               <tbody>
                 <tr className="border-b">
-                  <td className="py-3">
+                  <td className="py-3 pr-3">
                     <p className="font-medium">Monthly Subscription</p>
                     <p className="text-muted-foreground print:text-gray-500">
                       {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)}
                     </p>
                   </td>
-                  <td className="py-3 text-right font-medium">
+                  <td className="whitespace-nowrap py-3 text-right font-medium tabular-nums">
                     {invoice.base_amount != null
                       ? formatCurrency(invoice.base_amount, invoice.currency)
                       : formatCurrency(invoice.amount_due, invoice.currency)}
@@ -220,13 +262,13 @@ export function LocalInvoiceView({
                 </tr>
                 {invoice.usage_amount != null && invoice.usage_amount > 0 && (
                   <tr className="border-b">
-                    <td className="py-3">
+                    <td className="py-3 pr-3">
                       <p className="font-medium">E-Sign Usage</p>
                       <p className="text-muted-foreground print:text-gray-500">
                         {invoice.usage_quantity || 0} agreement{(invoice.usage_quantity || 0) !== 1 ? "s" : ""}
                       </p>
                     </td>
-                    <td className="py-3 text-right font-medium">
+                    <td className="whitespace-nowrap py-3 text-right font-medium tabular-nums">
                       {formatCurrency(invoice.usage_amount, invoice.currency)}
                     </td>
                   </tr>
@@ -234,17 +276,17 @@ export function LocalInvoiceView({
               </tbody>
               <tfoot>
                 <tr>
-                  <td className="py-3 text-right font-semibold">Total</td>
-                  <td className="py-3 text-right font-semibold">
+                  <td className="py-3 pr-3 text-right font-semibold">Total</td>
+                  <td className="whitespace-nowrap py-3 text-right font-semibold tabular-nums">
                     {formatCurrency(invoice.amount_due, invoice.currency)}
                   </td>
                 </tr>
                 {invoice.status === "paid" && (
                   <tr>
-                    <td className="py-1 text-right text-muted-foreground print:text-gray-500">
+                    <td className="py-1 pr-3 text-right text-muted-foreground print:text-gray-500">
                       Amount Paid
                     </td>
-                    <td className="py-1 text-right text-muted-foreground print:text-gray-500">
+                    <td className="whitespace-nowrap py-1 text-right tabular-nums text-muted-foreground print:text-gray-500">
                       {formatCurrency(invoice.amount_paid, invoice.currency)}
                     </td>
                   </tr>
@@ -265,13 +307,22 @@ export function LocalInvoiceView({
 
         {/* Stripe pairs "Download invoice" (outline) with "Download receipt"
             (solid). We map the first to Stripe's own PDF when we have it, and
-            keep local print as the fallback so the button is never dead. */}
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end print:hidden">
-          <Button variant="ghost" size="sm" onClick={onClose}>
+            keep local print as the fallback so the button is never dead.
+
+            Sits OUTSIDE the scroll region so the actions stay pinned to the
+            bottom of the dialog at any viewport height — this row was the first
+            thing to disappear off-screen before the shell was capped. */}
+        <div className="flex flex-col-reverse gap-2 border-t bg-background px-5 py-4 sm:flex-row sm:justify-end sm:px-6 print:hidden">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="w-full sm:w-auto"
+          >
             Close
           </Button>
           {invoice.stripe_invoice_pdf && (
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
               <a
                 href={invoice.stripe_invoice_pdf}
                 target="_blank"
@@ -282,7 +333,7 @@ export function LocalInvoiceView({
               </a>
             </Button>
           )}
-          <Button size="sm" onClick={handlePrint}>
+          <Button size="sm" onClick={handlePrint} className="w-full sm:w-auto">
             <Download className="mr-2 h-4 w-4" />
             Download receipt
           </Button>
@@ -648,35 +699,46 @@ export function SubscriptionSettings() {
 
       <Separator />
 
-      {/* Payment Section */}
+      {/* Payment Section
+          Boxed to match the plan card above it, and showing the ACTUAL network
+          artwork rather than a generic credit-card glyph — the brand is the one
+          thing that lets an operator with several cards tell at a glance which
+          one we will charge. Expiry rides along because a lapsed date is the
+          most common reason the next renewal fails, and the fix (Update) is
+          right beside it. */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">Payment</h3>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <CreditCard className="h-5 w-5 text-muted-foreground shrink-0" />
-            {subscription?.card_last4 ? (
-              <span className="text-sm">
-                <span className="capitalize">{subscription.card_brand || "Card"}</span>
-                {" "}
-                &bull;&bull;&bull;&bull; {subscription.card_last4}
+        <div className="flex flex-col gap-4 rounded-lg border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          {subscription?.card_last4 ? (
+            <CardOnFile
+              brand={subscription.card_brand}
+              last4={subscription.card_last4}
+              expMonth={subscription.card_exp_month}
+              expYear={subscription.card_exp_year}
+            />
+          ) : (
+            <div className="flex min-w-0 items-center gap-3">
+              <CardBrandIcon brand={null} className="text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">
+                No payment method on file
               </span>
-            ) : (
-              <span className="text-sm text-muted-foreground">No payment method on file</span>
-            )}
-          </div>
+            </div>
+          )}
           <Button
             variant="outline"
             onClick={handleManagePayment}
             disabled={createPortalSession.isPending}
-            className="w-full sm:w-auto shrink-0"
+            className="w-full shrink-0 sm:w-auto"
           >
             {createPortalSession.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Loading...
               </>
-            ) : (
+            ) : subscription?.card_last4 ? (
               "Update"
+            ) : (
+              "Add payment method"
             )}
           </Button>
         </div>

@@ -389,3 +389,67 @@ All colors MUST be HSL.
     animation: trax-ring 2.5s ease-in-out infinite;
   }
 }
+/* ─────────────────────────────────────────────────────────────────────────
+   Print isolation for the subscription receipt.
+
+   "Download receipt" is a window.print() call, and the receipt lives in a
+   Radix dialog portalled to <body>. Without these rules the browser printed
+   the ENTIRE settings page — sidebar, tab strip, invoice table — with the
+   receipt floating on top of it, which is not a document anyone can hand to
+   an accountant.
+
+   Scoped under body:has([data-print-root]) so a plain Ctrl+P anywhere else in
+   the portal keeps printing normally, and so a browser without :has() drops
+   the whole block and falls back to the previous behaviour rather than
+   printing a blank sheet.
+   ───────────────────────────────────────────────────────────────────────── */
+@media print {
+  /* 1. Drop every top-level branch that does not contain the receipt, plus the
+        dialog scrim sitting immediately before it inside the portal. A scrim
+        left in flow reserves a full blank first page. */
+  body:has([data-print-root]) > *:not(:has([data-print-root])),
+  body:has([data-print-root]) *:has(+ [data-print-root]) {
+    display: none !important;
+  }
+
+  /* 2. Belt-and-braces for anything still standing: visibility is inherited,
+        so the receipt can switch it back on even under a hidden ancestor. */
+  body:has([data-print-root]) * {
+    visibility: hidden !important;
+  }
+
+  body:has([data-print-root]) [data-print-root],
+  body:has([data-print-root]) [data-print-root] * {
+    visibility: visible !important;
+    /* On screen the dialog caps its height and scrolls; on paper it must flow
+       or everything below the fold is silently cut. */
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* 3. Static, not the centred fixed/translate dialog: an out-of-flow receipt
+        cannot paginate, so a long invoice would print one clipped page. */
+  body:has([data-print-root]) [data-print-root] {
+    position: static !important;
+    transform: none !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  /* 4. Keep the network artwork and the paid marker in colour — browsers strip
+        backgrounds from print by default. */
+  body:has([data-print-root]) [data-print-root] svg,
+  body:has([data-print-root]) [data-print-root] [class*="bg-green"] {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}

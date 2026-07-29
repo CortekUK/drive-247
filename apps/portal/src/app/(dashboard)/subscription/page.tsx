@@ -24,6 +24,7 @@ import {
 // same Stripe-style receipt, instead of drifting into two implementations.
 import { UsageDashboard } from "@/components/settings/usage-dashboard";
 import { LocalInvoiceView } from "@/components/settings/subscription-settings";
+import { CardBrandIcon, CardOnFile } from "@/components/subscription/card-brand-icon";
 import {
   CreditCard,
   Download,
@@ -419,19 +420,17 @@ export default function SubscriptionPage() {
               <h2 className="text-lg font-semibold mb-4">Payment Method</h2>
               {subscription?.card_last4 ? (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                    <CreditCard className="h-8 w-8 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium capitalize">
-                        {subscription.card_brand || "Card"} ****{" "}
-                        {subscription.card_last4}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Expires {subscription.card_exp_month}/
-                        {subscription.card_exp_year}
-                      </p>
-                    </div>
-                  </div>
+                  {/* Real network artwork, and the same CardOnFile block Settings
+                      renders, so the two billing surfaces cannot drift. The old
+                      markup also printed a bare "Expires undefined/undefined"
+                      whenever Stripe had not sent expiry back yet. */}
+                  <CardOnFile
+                    brand={subscription.card_brand}
+                    last4={subscription.card_last4}
+                    expMonth={subscription.card_exp_month}
+                    expYear={subscription.card_exp_year}
+                    className="rounded-lg bg-muted/50 p-3"
+                  />
                   <Button
                     variant="outline"
                     onClick={handleManagePayment}
