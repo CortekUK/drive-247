@@ -342,6 +342,23 @@ One shared Stripe Product ("Drive247 Platform Subscription") with separate Strip
 
 **Dashboard layout** (`(dashboard)/layout.tsx`): Two-tier gating, both via `SubscriptionGateDialog` — `variant="past_due"|"expired"` (hard) for `hasExpiredSubscription`, `variant="setup"` (soft) for never-subscribed. `/subscription` and `/settings` routes bypass the hard block so a tenant can always reach a payment link. (There was formerly a separate `subscription-block-screen.tsx`; it had no importers and carried non-compliant copy, and was deleted.)
 
+### Live sync — how billing state reaches the screens
+
+**`tenant_subscriptions` is in the `supabase_realtime` publication. `tenant_subscription_invoices` deliberately is NOT.** Publishing the invoice table would push amounts, invoice ids and the Stripe-tokenised hosted/PDF links (which act as bearer links to view and pay) to any holder of the public anon key — a channel filter like `tenant_id=eq.X` is a convenience filter, **not** an access boundary while RLS is off on that table.
+
+Instead there is a **DB trigger `trg_invoice_change_signals_subscription`** on `tenant_subscription_invoices` (function `notify_subscription_of_invoice_change`, applied via the Management API — this project does not keep migration files). It touches the owning subscription row so the already-published channel carries the signal. **No invoice data crosses the socket**; each client then re-reads invoices over normal authenticated PostgREST, which starts enforcing policies the moment RLS is re-enabled — so this needs no rework later.
+
+Two dampers, both load-bearing:
+- fires only on INSERT, a `status` transition, or an `attempt_count` change — so a reconciler pass that merely backfills PDF links emits nothing
+- touches **exactly one** row (`NEW.subscription_id`, else the live subscription, else the most recent). A blanket `WHERE tenant_id = …` would update every historical canceled row; 10 tenants carry 2–3 rows, so that meant up to 3 events per invoice change, and each admin event costs three full-table reads.
+
+Consumers:
+- **portal** — `use-tenant-subscription-realtime.ts` (filtered channel) invalidates all three billing query keys. Both billing queries also poll adaptively (**5s while anything is pending**, 30s idle) and set `refetchOnWindowFocus: true`, overriding the global `false` — without that, returning from the Stripe payment tab refetched nothing and the tenant kept seeing "payment is due".
+- **admin list** (`rentals/page.tsx`) — unfiltered channel (a super admin watches every tenant) + poll (10s until the socket confirms, then 30s) + focus refresh, with a visible `Live / Polling / Not updating` freshness chip and a **Sync now** button. The refetch is silent: it must not touch `subsLoaded`, which also drives the skeleton state.
+- **admin detail** (`rentals/[id]/page.tsx`) — per-tenant channel + 20s poll + focus refresh. Refreshes only the subscription block, never `loadTenant()`, which would clobber a half-typed edit form.
+
+Polling stays even with realtime working: a socket can die silently, and **grace expiry is a pure clock event** with no row change, so nothing can ever push it.
+
 ### Data Flow
 
 1. Super admin creates plan(s) for tenant in admin UI → `manage-subscription-plans` creates Stripe Price + DB row
