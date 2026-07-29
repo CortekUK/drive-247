@@ -6,6 +6,7 @@ import {
   getTenantSubscriptionAccount,
   getSubscriptionStripeClientForAccount,
 } from "../_shared/subscription-stripe.ts";
+import { authorizeTenantAccess } from "../_shared/tenant-auth.ts";
 
 const STRIPE_PRODUCT_NAME = "Drive247 Platform Subscription";
 
@@ -43,6 +44,11 @@ Deno.serve(async (req) => {
     if (!planId) return errorResponse("planId is required");
     if (!successUrl) return errorResponse("successUrl is required");
     if (!cancelUrl) return errorResponse("cancelUrl is required");
+
+    // Membership check — see _shared/tenant-auth.ts. Without it any signed-in
+    // user could start a subscription billed to another operator.
+    const access = await authorizeTenantAccess(supabase, user.id, tenantId);
+    if (!access.ok) return errorResponse(access.message, access.status);
 
     const { data: tenant, error: tenantError } = await supabase
       .from("tenants")
@@ -221,7 +227,32 @@ Deno.serve(async (req) => {
     // a clock — and the tenant-facing billing flow could not be fast-forwarded at
     // all. Point tenants.stripe_subscription_customer_id at a clock customer and
     // the ordinary portal checkout now lands on that clock.
-    const existingCustomerId = tenant.stripe_subscription_customer_id || null;
+    let existingCustomerId = tenant.stripe_subscription_customer_id || null;
+
+    // A customer id belongs to ONE Stripe account. tenants.stripe_subscription_customer_id
+    // survives a uk→uae migration untouched, so reusing it blindly hands a UK
+    // customer to the UAE account and Stripe answers "No such customer" — which
+    // the catch below turns into a 500 and the tenant sees as a generic toast.
+    // They can never subscribe, and the billing-portal fallback needs a live
+    // subscription row they do not have, so there is no way out.
+    //
+    // The plan's price gets exactly this treatment a few lines up; the customer
+    // was simply missed. Verify it the same way and drop it if it is foreign —
+    // checkout then mints a fresh customer on the correct account.
+    if (existingCustomerId) {
+      try {
+        const existing = await stripe.customers.retrieve(existingCustomerId);
+        if ((existing as any)?.deleted) {
+          console.log(`Customer ${existingCustomerId} is deleted on ${account}/${mode}; creating a new one`);
+          existingCustomerId = null;
+        }
+      } catch (_e) {
+        console.log(
+          `Customer ${existingCustomerId} is not on the ${account}/${mode} account (likely pre-migration); creating a new one`
+        );
+        existingCustomerId = null;
+      }
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",

@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       case "checkout.session.completed": {
         const sessionObj = event.data.object as any;
         if (sessionObj.metadata?.type === "credit_purchase") {
-          await handleCreditPurchase(supabase, sessionObj);
+          await handleCreditPurchase(supabase, sessionObj, event.id, account);
         } else {
           await handleCheckoutCompleted(stripe, supabase, sessionObj, account, mode);
         }
@@ -101,6 +101,20 @@ Deno.serve(async (req) => {
       case "invoice.marked_uncollectible":
       case "invoice.deleted":
         await handleInvoiceClosed(supabase, event.data.object, event.type);
+        break;
+      // Money can flow BACKWARDS, and nothing here used to notice. A refund
+      // issued from the Stripe dashboard leaves the invoice at status 'paid',
+      // and the reconciler compares only status/amounts due+paid — so billing
+      // history and the admin revenue roll-up both kept reporting money we had
+      // already given back. A dispute is worse: the funds are clawed back
+      // immediately while the tenant keeps full platform access, on no screen.
+      case "charge.refunded":
+        await handleChargeRefunded(supabase, event.data.object);
+        break;
+      case "charge.dispute.created":
+      case "charge.dispute.updated":
+      case "charge.dispute.closed":
+        await handleChargeDispute(supabase, event.data.object, event.type);
         break;
       default:
         console.log(`Unhandled subscription webhook event: ${event.type}`);
@@ -208,6 +222,67 @@ function resolveInvoiceTenantId(invoice: any): string | null {
     invoice?.metadata?.tenant_id ||
     null
   );
+}
+
+type ResolvedCard = { brand?: string; last4?: string; exp_month?: number; exp_year?: number };
+
+/**
+ * Find the card that will actually be charged for this subscription.
+ *
+ * We only ever read `subscription.default_payment_method`, which is null unless
+ * a payment method was explicitly pinned to the subscription. Stripe Checkout
+ * normally attaches the card to the CUSTOMER instead and bills through
+ * `invoice_settings.default_payment_method` — so the field we read is empty for
+ * most healthy subscriptions.
+ *
+ * Result: 19 of 26 live subscriptions stored no card at all, and the portal
+ * told tenants Stripe charges every month "No payment method on file". Worst
+ * for the past_due tenants, who were simultaneously being told to go and fix a
+ * card we claimed did not exist.
+ *
+ * Checked in the order Stripe itself resolves them, then a last resort of any
+ * card on the customer. Returns null when nothing is found, and callers must
+ * leave the stored card untouched in that case rather than blanking it.
+ */
+async function resolveSubscriptionCard(stripe: Stripe, sub: any): Promise<ResolvedCard | null> {
+  const fromPm = (pm: any): ResolvedCard | null =>
+    pm?.card ? { brand: pm.card.brand, last4: pm.card.last4, exp_month: pm.card.exp_month, exp_year: pm.card.exp_year } : null;
+
+  // 1. Pinned to the subscription (already expanded by the caller).
+  const direct = fromPm(sub?.default_payment_method);
+  if (direct) return direct;
+
+  const customerId = typeof sub?.customer === "string" ? sub.customer : sub?.customer?.id;
+  if (!customerId) return null;
+
+  try {
+    // 2. The customer's invoice default — where Checkout usually puts it.
+    const customer: any = await stripe.customers.retrieve(customerId, {
+      expand: ["invoice_settings.default_payment_method"],
+    });
+    if (customer?.deleted) return null;
+    const fromCustomer = fromPm(customer?.invoice_settings?.default_payment_method);
+    if (fromCustomer) return fromCustomer;
+
+    // 3. Whatever actually paid the most recent invoice.
+    const latestInvoiceId =
+      typeof sub?.latest_invoice === "string" ? sub.latest_invoice : sub?.latest_invoice?.id;
+    if (latestInvoiceId) {
+      const inv: any = await stripe.invoices.retrieve(latestInvoiceId, {
+        expand: ["payment_intent.payment_method"],
+      });
+      const fromInvoice = fromPm(inv?.payment_intent?.payment_method);
+      if (fromInvoice) return fromInvoice;
+    }
+
+    // 4. Any card on file — better than telling a paying tenant they have none.
+    const pms = await stripe.paymentMethods.list({ customer: customerId, type: "card", limit: 1 });
+    const fromList = fromPm(pms?.data?.[0]);
+    if (fromList) return fromList;
+  } catch (e) {
+    console.warn(`Could not resolve card for subscription ${sub?.id}:`, (e as any)?.message ?? e);
+  }
+  return null;
 }
 
 /** Columns the go-live readiness gate needs. */
@@ -370,8 +445,9 @@ async function handleCheckoutCompleted(
     expand: ["default_payment_method"],
   });
 
-  const paymentMethod = subscription.default_payment_method as Stripe.PaymentMethod | null;
-  const card = paymentMethod?.card;
+  // Checkout usually attaches the card to the customer, not the subscription —
+  // see resolveSubscriptionCard.
+  const card = await resolveSubscriptionCard(stripe, subscription);
 
   const { error: subError } = await supabase
     .from("tenant_subscriptions")
@@ -386,10 +462,16 @@ async function handleCheckoutCompleted(
       currency: subscription.currency,
       interval: subscription.items.data[0]?.price?.recurring?.interval || "month",
       ...periodPatch(resolveSubscriptionPeriod(subscription)),
-      card_brand: card?.brand || null,
-      card_last4: card?.last4 || null,
-      card_exp_month: card?.exp_month || null,
-      card_exp_year: card?.exp_year || null,
+      // Omit rather than null when unresolvable: this is an UPSERT, so writing
+      // nulls on a replay would wipe a card we had already recorded.
+      ...(card
+        ? {
+            card_brand: card.brand || null,
+            card_last4: card.last4 || null,
+            card_exp_month: card.exp_month || null,
+            card_exp_year: card.exp_year || null,
+          }
+        : {}),
       trial_end: subscription.trial_end
         ? new Date(subscription.trial_end * 1000).toISOString()
         : null,
@@ -413,10 +495,49 @@ async function handleCheckoutCompleted(
     migrationPaymentCaptured = true;
     console.log(`UAE migration complete for tenant ${tenantId} — subscription now bills on the UAE account`);
   } else if (subscription.status === "trialing") {
-    tenantUpdate.stripe_mode = "test";
-    tenantUpdate.bonzah_mode = "test";
-    tenantUpdate.setup_completed_at = null;
-    console.log(`Trial started for tenant ${tenantId} — forcing test mode for Stripe Connect & Bonzah`);
+    // Forcing test mode is a KINDNESS TO A NEW OPERATOR — it lets them wire up
+    // Connect and Bonzah during their trial without touching real money. Applied
+    // to an ESTABLISHED LIVE operator it is a catastrophe: _shared/stripe-client.ts
+    // reads tenants.stripe_mode to choose the Connect account for customer
+    // booking payments, so their real rentals start charging the TEST account.
+    // Customers see a successful payment; no money arrives. Insurance binds in
+    // Bonzah test.
+    //
+    // The old condition was only "the new subscription is trialing", which is
+    // true for every plan we sell — every one carries trial_days > 0 or
+    // billing_model 'upfront_monthly', and both set a trial on the Stripe
+    // subscription. So a live operator whose subscription lapsed and who then
+    // re-subscribed was silently knocked back to test.
+    //
+    // Worse, it is not symmetric: the way back is resolveGoLive, which requires
+    // Connect readiness columns to be populated. For a tenant billing through
+    // the managed account those columns are empty, so nothing ever writes
+    // stripe_mode back and the flip is PERMANENT.
+    //
+    // So: only ever demote a tenant who has not already gone live.
+    const { data: current } = await supabase
+      .from("tenants")
+      .select("stripe_mode, bonzah_mode, setup_completed_at, stripe_charges_enabled, own_stripe_account_id, stripe_onboarding_complete")
+      .eq("id", tenantId)
+      .maybeSingle();
+
+    const hasBeenLive =
+      current?.stripe_mode === "live" ||
+      current?.bonzah_mode === "live" ||
+      !!current?.setup_completed_at ||
+      current?.stripe_charges_enabled === true ||
+      (!!current?.own_stripe_account_id && current?.stripe_onboarding_complete === true);
+
+    if (hasBeenLive) {
+      console.log(
+        `Trial started for tenant ${tenantId} — NOT forcing test mode: this is an established live operator (stripe_mode=${current?.stripe_mode}, setup_completed_at=${current?.setup_completed_at})`
+      );
+    } else {
+      tenantUpdate.stripe_mode = "test";
+      tenantUpdate.bonzah_mode = "test";
+      tenantUpdate.setup_completed_at = null;
+      console.log(`Trial started for new tenant ${tenantId} — forcing test mode for Stripe Connect & Bonzah`);
+    }
   }
 
   const { error: tenantError } = await supabase
@@ -609,27 +730,72 @@ async function handleSubscriptionUpdated(
     expand: ["default_payment_method"],
   });
 
-  const paymentMethod = fullSub.default_payment_method as Stripe.PaymentMethod | null;
-  const card = paymentMethod?.card;
+  const card = await resolveSubscriptionCard(stripe, fullSub);
+
+  // READ FROM fullSub, NOT FROM THE EVENT.
+  //
+  // The event payload is a snapshot of the subscription when the event was
+  // CREATED, and Stripe retries a failed delivery with backoff for up to three
+  // days. fullSub was just fetched, so it is current by definition.
+  //
+  // The old code wrote the event's status while already using fullSub for the
+  // periods, which let a late retry overwrite newer truth. Cancel a
+  // subscription and Stripe emits both 'updated' (still active, cancel_at set)
+  // and 'deleted'. If the 'updated' delivery fails once and is retried after
+  // 'deleted' has been processed, it wrote status back to 'active' with
+  // canceled_at/ended_at nulled — resurrecting a canceled subscription, handing
+  // back full paid access, and re-running the auto-go-live path with it.
+  const authoritative = {
+    status: fullSub.status ?? subscription.status,
+    cancel_at: fullSub.cancel_at ?? subscription.cancel_at,
+    canceled_at: fullSub.canceled_at ?? subscription.canceled_at,
+    ended_at: fullSub.ended_at ?? subscription.ended_at,
+    trial_end: fullSub.trial_end ?? subscription.trial_end,
+  };
 
   const patch = {
-    status: subscription.status,
+    status: authoritative.status,
     // fullSub first: it comes from the SDK pinned to apiVersion 2023-10-16, so
     // it still carries top-level period fields even when the newer-versioned
     // webhook payload omits them.
     ...periodPatch(resolveSubscriptionPeriod(fullSub, subscription)),
-    cancel_at: subscription.cancel_at ? new Date(subscription.cancel_at * 1000).toISOString() : null,
-    canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
-    ended_at: subscription.ended_at ? new Date(subscription.ended_at * 1000).toISOString() : null,
-    trial_end: subscription.trial_end
-      ? new Date(subscription.trial_end * 1000).toISOString()
+    cancel_at: authoritative.cancel_at ? new Date(authoritative.cancel_at * 1000).toISOString() : null,
+    canceled_at: authoritative.canceled_at ? new Date(authoritative.canceled_at * 1000).toISOString() : null,
+    ended_at: authoritative.ended_at ? new Date(authoritative.ended_at * 1000).toISOString() : null,
+    trial_end: authoritative.trial_end
+      ? new Date(authoritative.trial_end * 1000).toISOString()
       : null,
-    card_brand: card?.brand || null,
-    card_last4: card?.last4 || null,
-    card_exp_month: card?.exp_month || null,
-    card_exp_year: card?.exp_year || null,
+    ...(card
+      ? {
+          card_brand: card.brand || null,
+          card_last4: card.last4 || null,
+          card_exp_month: card.exp_month || null,
+          card_exp_year: card.exp_year || null,
+        }
+      : {}),
     ...(account === "uae" ? { stripe_account: "uae" } : {}),
   };
+
+  // Belt and braces on top of reading fullSub: never move a row OUT of a
+  // terminal state. Nothing legitimately un-cancels a subscription — Stripe
+  // issues a new subscription id for that — so any event trying to is stale.
+  const { data: existingRow } = await supabase
+    .from("tenant_subscriptions")
+    .select("id, status")
+    .eq("stripe_subscription_id", subscription.id)
+    .maybeSingle();
+
+  const TERMINAL = ["canceled", "incomplete_expired"];
+  if (
+    existingRow &&
+    TERMINAL.includes(existingRow.status) &&
+    !TERMINAL.includes(patch.status)
+  ) {
+    console.warn(
+      `Refusing to move ${subscription.id} out of terminal state '${existingRow.status}' to '${patch.status}' — treating as a stale/out-of-order event`
+    );
+    return;
+  }
 
   // .select() so we learn how many rows this actually touched. Without it a
   // no-match UPDATE returns error:null — indistinguishable from success — and
@@ -799,6 +965,11 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
       due_date: invoice.due_date ? new Date(invoice.due_date * 1000).toISOString() : null,
       paid_at: new Date().toISOString(),
       invoice_number: invoice.number || null,
+      // Stripe's own date for the invoice. created_at is our INSERT time, which
+      // the reconciler stamps whenever it backfills — so ordering billing
+      // history by it produced fabricated dates in the wrong order and could
+      // push a tenant's currently-unpaid invoice out of view.
+      invoice_date: toIsoOrNull(invoice.created),
       base_amount: baseAmount || null,
       usage_amount: usageAmount || null,
       usage_quantity: usageQuantity || null,
@@ -1171,6 +1342,11 @@ async function handleInvoicePaymentFailed(supabase: any, invoice: any) {
       period_end: invoice.period_end ? new Date(invoice.period_end * 1000).toISOString() : null,
       due_date: invoice.due_date ? new Date(invoice.due_date * 1000).toISOString() : null,
       invoice_number: invoice.number || null,
+      // Stripe's own date for the invoice. created_at is our INSERT time, which
+      // the reconciler stamps whenever it backfills — so ordering billing
+      // history by it produced fabricated dates in the wrong order and could
+      // push a tenant's currently-unpaid invoice out of view.
+      invoice_date: toIsoOrNull(invoice.created),
       base_amount: baseAmount || null,
       usage_amount: usageAmount || null,
       usage_quantity: usageQuantity || null,
@@ -1179,7 +1355,122 @@ async function handleInvoicePaymentFailed(supabase: any, invoice: any) {
   console.log(`Invoice payment failed for tenant ${tenant.id} (${tenant.company_name})`);
 }
 
-async function handleCreditPurchase(supabase: any, session: any) {
+/**
+ * Claim a Stripe event id so a handler that cannot be made naturally idempotent
+ * runs at most once. Returns false when this delivery is a duplicate.
+ *
+ * Fails OPEN on an unexpected DB error: refusing to grant paid-for credits
+ * because a bookkeeping table was briefly unavailable is worse than the
+ * duplicate this guards against, and the payment-reference check downstream
+ * still catches the common case.
+ */
+async function claimStripeEvent(
+  supabase: any,
+  eventId: string,
+  eventType: string,
+  account: SubscriptionAccount
+): Promise<boolean> {
+  if (!eventId) return true;
+  const { error } = await supabase
+    .from("processed_stripe_events")
+    .insert({ event_id: eventId, event_type: eventType, stripe_account: account });
+  if (!error) return true;
+  if (error.code === "23505") return false;
+  console.error("processed_stripe_events claim failed (continuing):", error);
+  return true;
+}
+
+/** The invoice a charge belongs to, across old and new Stripe payload shapes. */
+function resolveChargeInvoiceId(charge: any): string | null {
+  const direct = charge?.invoice;
+  if (typeof direct === "string" && direct) return direct;
+  if (direct?.id) return direct.id;
+  return null;
+}
+
+/**
+ * Record a refund against the platform invoice it came from.
+ *
+ * Stripe leaves a refunded invoice at status 'paid' — refunds live on the
+ * CHARGE — so every read-side of ours counted the money as collected forever.
+ * Storing amount_refunded lets billing history show it and lets the admin
+ * revenue roll-up subtract it.
+ */
+async function handleChargeRefunded(supabase: any, charge: any) {
+  const invoiceId = resolveChargeInvoiceId(charge);
+  if (!invoiceId) {
+    console.log("Refunded charge has no invoice — not a subscription charge, ignoring");
+    return;
+  }
+
+  const refunded = charge.amount_refunded || 0;
+  const { data, error } = await supabase
+    .from("tenant_subscription_invoices")
+    .update({
+      amount_refunded: refunded,
+      refunded_at: refunded > 0 ? new Date().toISOString() : null,
+    })
+    .eq("stripe_invoice_id", invoiceId)
+    .select("id, tenant_id");
+
+  if (error) { console.error("Error recording refund:", error); throw error; }
+  if (!data || data.length === 0) {
+    // Not one of ours (a booking/Connect charge shares this event type on some
+    // accounts). Nothing to do, and nothing is lost by ignoring it.
+    console.log(`Refund for invoice ${invoiceId} matched no platform invoice row`);
+    return;
+  }
+  console.log(`Recorded refund of ${refunded} on invoice ${invoiceId} (tenant ${data[0].tenant_id})`);
+}
+
+/**
+ * Track a disputed subscription charge.
+ *
+ * A dispute takes the money back immediately. Without this the tenant kept full
+ * access and appeared fully paid-up on every screen.
+ */
+async function handleChargeDispute(supabase: any, dispute: any, eventType: string) {
+  const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
+  const invoiceId =
+    resolveChargeInvoiceId(dispute) || (dispute.payment_intent ? null : null);
+
+  let targetInvoiceId = invoiceId;
+  if (!targetInvoiceId && chargeId) {
+    // The dispute object does not carry the invoice; resolve it via the charge's
+    // own metadata when Stripe expanded it, else give up quietly.
+    targetInvoiceId = resolveChargeInvoiceId(dispute.charge);
+  }
+  if (!targetInvoiceId) {
+    console.log(`Dispute ${dispute.id} (${eventType}) could not be tied to an invoice — ignoring`);
+    return;
+  }
+
+  const closed = eventType === "charge.dispute.closed";
+  const { data, error } = await supabase
+    .from("tenant_subscription_invoices")
+    .update({
+      dispute_status: dispute.status || (closed ? "closed" : "needs_response"),
+      disputed_at: new Date().toISOString(),
+    })
+    .eq("stripe_invoice_id", targetInvoiceId)
+    .select("id, tenant_id");
+
+  if (error) { console.error("Error recording dispute:", error); throw error; }
+  if (!data || data.length === 0) {
+    console.log(`Dispute for invoice ${targetInvoiceId} matched no platform invoice row`);
+    return;
+  }
+  console.warn(
+    `DISPUTE ${dispute.status} on platform invoice ${targetInvoiceId} (tenant ${data[0].tenant_id}) — review access and collections`
+  );
+}
+
+async function handleCreditPurchase(
+  supabase: any,
+  session: any,
+  eventId: string,
+  account: SubscriptionAccount
+) {
   const tenantId = session.metadata?.tenant_id;
   const packageId = session.metadata?.package_id;
   const credits = parseInt(session.metadata?.credits || "0", 10);
@@ -1192,6 +1483,40 @@ async function handleCreditPurchase(supabase: any, session: any) {
 
   // Determine if this was a test or live purchase based on Stripe's livemode
   const isTestPurchase = !session.livemode;
+
+  // EXACTLY ONCE. Everything else in this file is idempotent by construction —
+  // upserts keyed on a Stripe id, re-flips that no-op. add_credits ADDS, so a
+  // redelivery of the same event grants the credits a second time.
+  //
+  // This is not hypothetical. globalmotiontransport received 400 live credits
+  // for one 200-credit payment on 2026-07-17, the two grants 33 seconds apart —
+  // the signature of Stripe's first retry. The handler awaits a BoldSign retry
+  // sweep at the end, which can push the response past Stripe's webhook timeout
+  // and cause exactly that retry.
+  //
+  // Claim the event id before granting anything. The insert is the lock: two
+  // concurrent deliveries race on the primary key and precisely one wins.
+  const claimed = await claimStripeEvent(supabase, eventId, "checkout.session.completed", account);
+  if (!claimed) {
+    console.log(`Credit purchase for event ${eventId} already processed — skipping duplicate grant`);
+    return;
+  }
+
+  // Second guard, for a duplicate that somehow arrives under a different event
+  // id (e.g. a purchase replayed by hand).
+  const paymentRef = session.payment_intent || session.id;
+  if (paymentRef) {
+    const { data: already } = await supabase
+      .from("credit_transactions")
+      .select("id")
+      .eq("stripe_payment_id", paymentRef)
+      .eq("type", "purchase")
+      .maybeSingle();
+    if (already) {
+      console.log(`Credits for payment ${paymentRef} already granted (txn ${already.id}) — skipping`);
+      return;
+    }
+  }
 
   // Add credits to wallet (test credits go to test_balance, live to balance)
   const { data, error } = await supabase.rpc("add_credits", {

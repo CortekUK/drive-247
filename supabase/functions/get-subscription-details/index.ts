@@ -5,6 +5,7 @@ import {
   getTenantSubscriptionAccount,
   getSubscriptionStripeClientForAccount,
 } from "../_shared/subscription-stripe.ts";
+import { authorizeTenantAccess } from "../_shared/tenant-auth.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -25,6 +26,11 @@ Deno.serve(async (req) => {
 
     const { tenantId } = await req.json();
     if (!tenantId) return errorResponse("tenantId is required");
+
+    // Membership check — a valid JWT is not authorisation to read this tenant's
+    // billing. See _shared/tenant-auth.ts.
+    const access = await authorizeTenantAccess(supabase, user.id, tenantId);
+    if (!access.ok) return errorResponse(access.message, access.status);
 
     const { data: subscription, error: subError } = await supabase
       .from("tenant_subscriptions")

@@ -5,6 +5,7 @@ import {
   getTenantSubscriptionAccount,
   getSubscriptionStripeClientForAccount,
 } from "../_shared/subscription-stripe.ts";
+import { authorizeTenantAccess } from "../_shared/tenant-auth.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -27,38 +28,82 @@ Deno.serve(async (req) => {
     if (!tenantId) return errorResponse("tenantId is required");
     if (!returnUrl) return errorResponse("returnUrl is required");
 
+    // The caller must belong to this tenant. Authenticating the JWT alone is not
+    // enough — see _shared/tenant-auth.ts.
+    const access = await authorizeTenantAccess(supabase, user.id, tenantId);
+    if (!access.ok) return errorResponse(access.message, access.status);
+
     const { data: tenant, error: tenantError } = await supabase
       .from("tenants")
       .select("stripe_subscription_customer_id")
       .eq("id", tenantId)
       .single();
 
-    if (tenantError || !tenant?.stripe_subscription_customer_id) {
-      return errorResponse("No subscription customer found for this tenant", 404);
+    if (tenantError) {
+      return errorResponse("Could not load tenant", 500);
     }
 
     const mode = await getSubscriptionStripeMode(supabase, tenantId);
     const account = await getTenantSubscriptionAccount(supabase, tenantId);
     const stripe = getSubscriptionStripeClientForAccount(account, mode);
 
-    // The stored customer id may belong to the other platform account (e.g.
-    // right after a uk→uae migration). Verify it, and fall back to the active
-    // subscription row's customer id if the stored one isn't on this account.
-    let customerId = tenant.stripe_subscription_customer_id;
+    // WHICH CUSTOMER OWES US? The live subscription row is authoritative, and
+    // the tenants column is only a hint.
+    //
+    // This used to read the tenants column and fall back to the subscription
+    // ONLY when stripe.customers.retrieve THREW. That fallback cannot fire for
+    // the case that actually occurs: a stale id that is a perfectly valid
+    // customer on the same account, just not the one holding the subscription.
+    // Six tenants are in exactly that state, one of them past_due — so
+    // "Update Payment Method" opened a billing portal for a customer with no
+    // subscription. The tenant saved a good card, was told it worked, and the
+    // next dunning retry still failed on the old card. Silent, and it ends in a
+    // hard paywall over a card they believe they fixed.
+    const { data: liveSub } = await supabase
+      .from("tenant_subscriptions")
+      .select("stripe_customer_id")
+      .eq("tenant_id", tenantId)
+      .in("status", ["active", "trialing", "past_due"])
+      .maybeSingle();
+
+    let customerId: string | null = liveSub?.stripe_customer_id || null;
+    let source = "subscription";
+
+    if (!customerId) {
+      customerId = tenant?.stripe_subscription_customer_id || null;
+      source = "tenant";
+    }
+    if (!customerId) {
+      return errorResponse("No subscription customer found for this tenant", 404);
+    }
+
+    // Still verify it exists on THIS account — a pre-migration id would 404 at
+    // Stripe and surface as an opaque 500.
     try {
-      await stripe.customers.retrieve(customerId);
+      const c = await stripe.customers.retrieve(customerId);
+      if ((c as any)?.deleted) throw new Error("customer deleted");
     } catch (_e) {
-      const { data: activeSub } = await supabase
-        .from("tenant_subscriptions")
-        .select("stripe_customer_id")
-        .eq("tenant_id", tenantId)
-        .in("status", ["active", "trialing", "past_due"])
-        .maybeSingle();
-      if (activeSub?.stripe_customer_id && activeSub.stripe_customer_id !== customerId) {
-        customerId = activeSub.stripe_customer_id;
-      } else {
+      const alternate =
+        source === "subscription" ? tenant?.stripe_subscription_customer_id : liveSub?.stripe_customer_id;
+      if (!alternate || alternate === customerId) {
         return errorResponse("No subscription customer found on the billing account", 404);
       }
+      try {
+        await stripe.customers.retrieve(alternate);
+        customerId = alternate;
+        source = source === "subscription" ? "tenant" : "subscription";
+      } catch (_e2) {
+        return errorResponse("No subscription customer found on the billing account", 404);
+      }
+    }
+
+    // Self-heal the hint so every other customer-id lookup agrees from now on.
+    if (source === "subscription" && tenant?.stripe_subscription_customer_id !== customerId) {
+      await supabase
+        .from("tenants")
+        .update({ stripe_subscription_customer_id: customerId })
+        .eq("id", tenantId);
+      console.log(`Repaired tenants.stripe_subscription_customer_id for ${tenantId} -> ${customerId}`);
     }
 
     // Create a portal configuration that only allows payment method updates

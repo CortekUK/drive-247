@@ -251,6 +251,16 @@ const INVOICE_COMPARED = [
   // genuinely declined charge was rendered as "not due yet". That is precisely
   // backwards for someone chasing broken subscriptions.
   "attempt_count",
+  // Our created_at is the row INSERT time — stamped by this reconciler at
+  // backfill. invoice_date is Stripe's own date, and is what billing history
+  // must sort and display.
+  //
+  // Deliberately NOT compared here: amount_refunded. Stripe reports refunds on
+  // the CHARGE, not the invoice, so sourcing it would mean an extra charge
+  // retrieve per invoice — 300+ API calls an hour — and comparing a field we
+  // cannot read would report permanent phantom drift. The charge.refunded
+  // webhook is its source of truth.
+  "invoice_date",
 ] as const;
 
 /** Links we will fill if missing, but never rewrite. */
@@ -331,6 +341,7 @@ async function reconcileInvoicesForSubscription(
       amount_due: inv.amount_due ?? 0,
       amount_paid: inv.amount_paid ?? 0,
       attempt_count: inv.attempt_count ?? 0,
+      invoice_date: inv.created ? new Date(inv.created * 1000).toISOString() : null,
       stripe_invoice_pdf: inv.invoice_pdf ?? null,
       stripe_hosted_invoice_url: inv.hosted_invoice_url ?? null,
     };
@@ -421,6 +432,44 @@ async function reconcileInvoicesForSubscription(
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
+
+  // ── WHO MAY RUN THIS ─────────────────────────────────────────────────────
+  //
+  // This function had no authorisation check at all. Supabase's default
+  // verify_jwt accepts the PUBLIC anon key — which ships in every browser
+  // bundle — as a valid JWT, so anyone could invoke it. The response body is a
+  // cross-tenant dump (every tenant's subscription, customer ids, amounts, and
+  // the orphan list), and a non-dry-run call writes.
+  //
+  // Two legitimate callers: the hourly pg_cron job, which presents the service
+  // role key, and a super admin pressing "Sync now".
+  const authHeader = req.headers.get("Authorization") || "";
+  const bearer = authHeader.replace("Bearer ", "").trim();
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+
+  if (!bearer) {
+    return errorResponse("Missing authorization header", 401);
+  }
+
+  if (bearer !== serviceKey) {
+    const authClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      serviceKey,
+    );
+    const { data: { user }, error: userErr } = await authClient.auth.getUser(bearer);
+    if (userErr || !user) return errorResponse("Unauthorized", 401);
+
+    const { data: appUser } = await authClient
+      .from("app_users")
+      .select("is_super_admin, is_active")
+      .eq("auth_user_id", user.id)
+      .maybeSingle();
+
+    if (!appUser?.is_super_admin || appUser.is_active === false) {
+      console.warn(`Rejected reconcile-subscriptions call from non-super-admin user ${user.id}`);
+      return errorResponse("Forbidden: super admin only", 403);
+    }
+  }
 
   let dryRun = true;
   let onlyTenantId: string | null = null;
@@ -546,6 +595,44 @@ Deno.serve(async (req) => {
           .eq("stripe_subscription_id", snap.stripe_subscription_id)
           .maybeSingle();
 
+        // ADOPT THE SUBSCRIPTION BEFORE ITS INVOICES.
+        //
+        // Invoices are linked by tenant_subscriptions.id, so reconciling them
+        // while `row` is still null wrote every invoice with subscription_id
+        // NULL — and nothing ever backfilled it. The portal scopes the open
+        // invoice to the CURRENT subscription, so an unlinked invoice is
+        // discarded: a past_due tenant was then neither warned nor blocked, and
+        // got no pay link. Exactly the tenants this reconciler exists to rescue.
+        let subRowId: string | null = (row as any)?.id ?? null;
+        if (!row && !dryRun) {
+          const { data: created, error: createErr } = await supabase
+            .from("tenant_subscriptions")
+            .upsert(
+              {
+                tenant_id: tenantId,
+                stripe_subscription_id: snap.stripe_subscription_id,
+                stripe_customer_id: snap.stripe_customer_id,
+                status: snap.status,
+                amount: snap.amount,
+                currency: snap.currency,
+                interval: snap.interval,
+                stripe_account: account,
+                last_synced_at: new Date().toISOString(),
+                last_sync_source: "reconcile",
+              },
+              { onConflict: "stripe_subscription_id" },
+            )
+            .select("id")
+            .maybeSingle();
+          if (createErr) {
+            // A unique-index conflict here means the tenant already has another
+            // live subscription — a real conflict the full upsert below reports.
+            console.warn(`Could not pre-create subscription row for ${snap.stripe_subscription_id}: ${createErr.message}`);
+          } else {
+            subRowId = created?.id ?? null;
+          }
+        }
+
         // Invoices are reconciled HERE, before the "subscription already in
         // sync -> continue" short-circuit below. A subscription row can be
         // perfectly in sync while one of its invoices is stale, and that stale
@@ -557,7 +644,7 @@ Deno.serve(async (req) => {
           supabase,
           snap.stripe_subscription_id,
           tenantId,
-          (row as any)?.id ?? null,
+          subRowId,
           dryRun,
         );
         invoicesSeen += invRes.seen;

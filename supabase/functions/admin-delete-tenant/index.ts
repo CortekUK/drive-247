@@ -1,4 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
+import {
+  getSubscriptionStripeMode,
+  getSubscriptionStripeClientForAccount,
+} from '../_shared/subscription-stripe.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -84,6 +88,73 @@ Deno.serve(async (req) => {
     }
 
     console.log('Deleting tenant:', tenant_id);
+
+    // ── STOP THE BILLING FIRST ───────────────────────────────────────────────
+    //
+    // Every subscription table cascades on tenants(id), so deleting the tenant
+    // erases tenant_subscriptions, tenant_subscription_invoices and
+    // subscription_plans — while the Stripe subscription keeps renewing. The
+    // charge lands on a card we no longer hold a record of, for a tenant that no
+    // longer exists, with no invoice history and no screen that will ever show
+    // it. It is money taken from someone who has stopped being a customer.
+    //
+    // This has already happened: an audit found nine orphaned Stripe
+    // subscriptions whose tenant ids return no rows, four of them ACTIVE in
+    // live mode and one trialing. One tenant was orphaned on both platform
+    // accounts and so was being billed twice.
+    //
+    // Cancel before deleting, and REFUSE to delete if we cannot confirm the
+    // cancellation. Leaving a tenant undeleted is trivially recoverable; a
+    // subscription billing into the void is not.
+    const cancellations: Array<Record<string, unknown>> = [];
+    try {
+      const { data: liveSubs, error: liveSubsError } = await supabaseAdmin
+        .from('tenant_subscriptions')
+        .select('id, stripe_subscription_id, stripe_account, status')
+        .eq('tenant_id', tenant_id)
+        .in('status', ['active', 'trialing', 'past_due', 'unpaid', 'paused', 'incomplete']);
+
+      if (liveSubsError) throw new Error(`Could not read subscriptions: ${liveSubsError.message}`);
+
+      if (liveSubs && liveSubs.length > 0) {
+        // Read the mode BEFORE the tenant row disappears.
+        const mode = await getSubscriptionStripeMode(supabaseAdmin, tenant_id);
+
+        for (const sub of liveSubs) {
+          if (!sub.stripe_subscription_id) continue;
+          // Cancel on whichever account actually bills it — a tenant can hold a
+          // legacy UK subscription and a UAE one at the same time.
+          const account = sub.stripe_account === 'uae' ? 'uae' : 'uk';
+          const stripe = getSubscriptionStripeClientForAccount(account, mode);
+          try {
+            await stripe.subscriptions.cancel(sub.stripe_subscription_id);
+            console.log(`Canceled ${account}/${mode} subscription ${sub.stripe_subscription_id} before deleting tenant ${tenant_id}`);
+            cancellations.push({ subscription: sub.stripe_subscription_id, account, mode, result: 'canceled' });
+          } catch (cancelErr) {
+            const code = (cancelErr as any)?.code;
+            const msg = String((cancelErr as any)?.message ?? cancelErr);
+            // Already gone in Stripe cannot bill anyone, so it must not block
+            // the deletion forever. Anything else does block it.
+            if (code === 'resource_missing' || /no such subscription/i.test(msg)) {
+              console.warn(`Subscription ${sub.stripe_subscription_id} already absent on ${account}/${mode}`);
+              cancellations.push({ subscription: sub.stripe_subscription_id, account, mode, result: 'already-absent' });
+              continue;
+            }
+            throw new Error(
+              `Could not cancel Stripe subscription ${sub.stripe_subscription_id} on the ${account} account (${msg}). ` +
+              `Tenant NOT deleted — cancel it in Stripe first, then retry.`
+            );
+          }
+        }
+      }
+    } catch (billingErr) {
+      const message = String((billingErr as any)?.message ?? billingErr);
+      console.error('Refusing to delete tenant with live billing:', message);
+      return new Response(
+        JSON.stringify({ error: message, stage: 'stripe-cancellation', cancellations }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Get all app_users for this tenant to delete their auth accounts
     const { data: appUsers, error: appUsersError } = await supabaseAdmin
@@ -205,6 +276,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         message: 'Tenant and all associated data deleted successfully',
+        cancellations,
         deletionResults,
         deletedAuthUsers,
         failedAuthUsers
