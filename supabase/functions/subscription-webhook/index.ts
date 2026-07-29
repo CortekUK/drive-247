@@ -697,10 +697,27 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
     const paidAtMs =
       (invoice.status_transitions?.paid_at ? invoice.status_transitions.paid_at * 1000 : 0) ||
       Date.now();
-    const dueMs =
-      (invoice.due_date ? invoice.due_date * 1000 : 0) ||
-      (invoice.period_end ? invoice.period_end * 1000 : 0);
-    const wasLate = (invoice.attempt_count || 0) > 1 || (dueMs > 0 && paidAtMs > dueMs);
+
+    // LATE means a payment attempt FAILED first. Nothing else.
+    //
+    // attempt_count is 1 for an invoice that succeeded on its first charge, and
+    // >1 only once Stripe has had a decline and retried — which is precisely the
+    // situation the "fresh start" exists for.
+    //
+    // It must NOT be inferred from the clock. The previous version also treated
+    // `paid_at > (due_date || period_end)` as late, and that fires on EVERY
+    // ordinary renewal: a charge_automatically subscription has no due_date at
+    // all, and Stripe raises the renewal invoice AT period_end then auto-
+    // finalizes it roughly an hour later, so paid_at is always after period_end.
+    //
+    // Caught on a test clock with a real renewal:
+    //   billing_reason subscription_cycle | attempt_count 1 | due_date null
+    //   period_end 2026-08-29 11:02       | paid_at    2026-08-29 12:02
+    // A healthy customer who paid first time was therefore treated as late,
+    // granted a cycle reset, and parked at status 'trialing' — which drops them
+    // out of the MRR figure, may suppress metered billing for the window, and
+    // walks their billing date forward every single month.
+    const wasLate = (invoice.attempt_count || 0) > 1;
 
     // "active" is included so a racing customer.subscription.updated cannot
     // make this whole block a no-op. Re-running it for an already-active
