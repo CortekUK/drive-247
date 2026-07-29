@@ -71,6 +71,12 @@ Deno.serve(async (req) => {
         }
         break;
       }
+      // 'created' routes to the same handler purely for its self-heal insert. A
+      // subscription that reaches Stripe but never reaches us — checkout webhook
+      // lost to an outage, or one an operator built by hand in the Dashboard —
+      // used to be invisible forever: every later update was an UPDATE matching
+      // zero rows, and the reconciler only walks rows we already have.
+      case "customer.subscription.created":
       case "customer.subscription.updated":
         await handleSubscriptionUpdated(stripe, supabase, event.data.object, account);
         break;
@@ -182,6 +188,26 @@ function resolveInvoiceSubscriptionId(invoice: any): string | null {
   if (typeof nested === "string" && nested) return nested;
   if (nested?.id) return nested.id;
   return null;
+}
+
+/**
+ * Tenant id carried on the invoice itself, via the subscription metadata Stripe
+ * copies onto it.
+ *
+ * Last-resort resolver for the invoice handlers, which otherwise only ask local
+ * state ("which tenant owns this customer / this subscription row?"). That is
+ * circular for a tenant we have no rows for yet: Stripe does not guarantee
+ * delivery order, so invoice.payment_failed can arrive before the
+ * subscription.created that would have adopted the subscription — and the
+ * invoice was then dropped with a 200, permanently.
+ */
+function resolveInvoiceTenantId(invoice: any): string | null {
+  return (
+    invoice?.parent?.subscription_details?.metadata?.tenant_id ||
+    invoice?.subscription_details?.metadata?.tenant_id ||
+    invoice?.metadata?.tenant_id ||
+    null
+  );
 }
 
 /** Columns the go-live readiness gate needs. */
@@ -474,6 +500,86 @@ async function handleCheckoutCompleted(
   console.log(`Subscription ${subscription.id} activated for tenant ${tenantId}, plan: ${resolvedPlanName}`);
 }
 
+/**
+ * Adopt a subscription that exists in Stripe but has no local row.
+ *
+ * Reachable whenever `checkout.session.completed` never landed — a webhook
+ * outage (we had one), a hand-built Dashboard subscription for a sales-led
+ * deal, or an endpoint misconfigured at the moment of signup. Before this, the
+ * tenant was billed by Stripe while the portal showed them as never-subscribed,
+ * and no later event could repair it: every `subscription.updated` was an
+ * UPDATE matching zero rows, and reconcile-subscriptions iterates DB rows so it
+ * cannot discover a subscription it has never recorded.
+ *
+ * Returns false (without throwing) only on a unique-index conflict — see below.
+ */
+async function insertMissingSubscription(
+  supabase: any,
+  subscription: any,
+  fullSub: any,
+  card: any,
+  tenantId: string,
+  account: SubscriptionAccount
+): Promise<boolean> {
+  const planId = subscription.metadata?.plan_id || null;
+  let planName = subscription.metadata?.plan_name || null;
+  if (!planName && planId) {
+    const { data: plan } = await supabase
+      .from("subscription_plans").select("name").eq("id", planId).maybeSingle();
+    planName = plan?.name || null;
+  }
+
+  const item = fullSub.items?.data?.[0];
+
+  const { error } = await supabase.from("tenant_subscriptions").insert({
+    tenant_id: tenantId,
+    stripe_subscription_id: subscription.id,
+    stripe_customer_id: subscription.customer as string,
+    plan_id: planId,
+    plan_name: planName || "pro",
+    amount: item?.price?.unit_amount || 0,
+    currency: fullSub.currency || "usd",
+    interval: item?.price?.recurring?.interval || "month",
+    status: subscription.status,
+    ...periodPatch(resolveSubscriptionPeriod(fullSub, subscription)),
+    cancel_at: subscription.cancel_at ? new Date(subscription.cancel_at * 1000).toISOString() : null,
+    canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
+    ended_at: subscription.ended_at ? new Date(subscription.ended_at * 1000).toISOString() : null,
+    trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+    card_brand: card?.brand || null,
+    card_last4: card?.last4 || null,
+    card_exp_month: card?.exp_month || null,
+    card_exp_year: card?.exp_year || null,
+    ...(account === "uae" ? { stripe_account: "uae" } : {}),
+  });
+
+  if (!error) {
+    console.log(
+      `Adopted unseen subscription ${subscription.id} for tenant ${tenantId} (status ${subscription.status}) — no local row existed`
+    );
+    return true;
+  }
+
+  // 23505 = the partial unique index allowing ONE active/trialing/past_due row
+  // per tenant. That means this tenant already has a different live
+  // subscription: a genuine data conflict (two billable subscriptions in
+  // Stripe), not a transient fault. Retrying for three days cannot resolve it,
+  // and guessing which one wins could retire a subscription Stripe is still
+  // charging — so log loudly and let the event settle. It is also the benign
+  // ordering during a UAE migration, where subscription.created can arrive
+  // before checkout.session.completed retires the legacy row; that handler
+  // performs the swap correctly moments later.
+  if (error.code === "23505") {
+    console.error(
+      `CONFLICT adopting ${subscription.id} for tenant ${tenantId}: another active/trialing/past_due subscription already exists. Not retrying — resolve in Stripe.`
+    );
+    return false;
+  }
+
+  console.error("Error inserting unseen subscription:", error);
+  throw error;
+}
+
 async function handleSubscriptionUpdated(
   stripe: Stripe,
   supabase: any,
@@ -506,29 +612,44 @@ async function handleSubscriptionUpdated(
   const paymentMethod = fullSub.default_payment_method as Stripe.PaymentMethod | null;
   const card = paymentMethod?.card;
 
-  const { error } = await supabase
+  const patch = {
+    status: subscription.status,
+    // fullSub first: it comes from the SDK pinned to apiVersion 2023-10-16, so
+    // it still carries top-level period fields even when the newer-versioned
+    // webhook payload omits them.
+    ...periodPatch(resolveSubscriptionPeriod(fullSub, subscription)),
+    cancel_at: subscription.cancel_at ? new Date(subscription.cancel_at * 1000).toISOString() : null,
+    canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
+    ended_at: subscription.ended_at ? new Date(subscription.ended_at * 1000).toISOString() : null,
+    trial_end: subscription.trial_end
+      ? new Date(subscription.trial_end * 1000).toISOString()
+      : null,
+    card_brand: card?.brand || null,
+    card_last4: card?.last4 || null,
+    card_exp_month: card?.exp_month || null,
+    card_exp_year: card?.exp_year || null,
+    ...(account === "uae" ? { stripe_account: "uae" } : {}),
+  };
+
+  // .select() so we learn how many rows this actually touched. Without it a
+  // no-match UPDATE returns error:null — indistinguishable from success — and
+  // the event was acknowledged 200 while nothing was written.
+  const { data: updated, error } = await supabase
     .from("tenant_subscriptions")
-    .update({
-      status: subscription.status,
-      // fullSub first: it comes from the SDK pinned to apiVersion 2023-10-16, so
-      // it still carries top-level period fields even when the newer-versioned
-      // webhook payload omits them.
-      ...periodPatch(resolveSubscriptionPeriod(fullSub, subscription)),
-      cancel_at: subscription.cancel_at ? new Date(subscription.cancel_at * 1000).toISOString() : null,
-      canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
-      ended_at: subscription.ended_at ? new Date(subscription.ended_at * 1000).toISOString() : null,
-      trial_end: subscription.trial_end
-        ? new Date(subscription.trial_end * 1000).toISOString()
-        : null,
-      card_brand: card?.brand || null,
-      card_last4: card?.last4 || null,
-      card_exp_month: card?.exp_month || null,
-      card_exp_year: card?.exp_year || null,
-      ...(account === "uae" ? { stripe_account: "uae" } : {}),
-    })
-    .eq("stripe_subscription_id", subscription.id);
+    .update(patch)
+    .eq("stripe_subscription_id", subscription.id)
+    .select("id");
 
   if (error) { console.error("Error updating subscription:", error); throw error; }
+
+  if (!updated || updated.length === 0) {
+    // We have never seen this subscription. Stripe is the source of truth, so
+    // adopt it rather than dropping the event.
+    const inserted = await insertMissingSubscription(
+      supabase, subscription, fullSub, card, tenantId, account
+    );
+    if (!inserted) return; // conflict already logged; tenant row must not move
+  }
 
   let activePlan = "basic";
   if (["active", "trialing"].includes(subscription.status)) {
@@ -547,6 +668,15 @@ async function handleSubscriptionUpdated(
   // Auto go-live: when the subscription becomes active, switch the capabilities
   // the tenant has actually configured to live mode. See resolveGoLive().
   const goLiveUpdate: Record<string, any> = { subscription_plan: activePlan };
+
+  // Keep the billing-portal pointer on the customer who actually owes us. Only
+  // checkout used to write this, so an adopted subscription (or one whose
+  // customer changed) left "Manage billing" and every customer-id invoice
+  // lookup aimed at a stale customer. Guarded on a LIVE status so a winding-down
+  // or canceled subscription never drags the pointer backwards.
+  if (["active", "trialing", "past_due"].includes(subscription.status)) {
+    goLiveUpdate.stripe_subscription_customer_id = subscription.customer as string;
+  }
   if (subscription.status === "active") {
     const { data: currentTenant } = await supabase
       .from("tenants")
@@ -637,6 +767,13 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
       const { data: subById } = await supabase
         .from("tenant_subscriptions").select("tenant_id").eq("stripe_subscription_id", subscriptionId).maybeSingle();
       if (subById) tenant = { id: subById.tenant_id };
+    }
+  }
+  if (!tenant) {
+    const metaTenantId = resolveInvoiceTenantId(invoice);
+    if (metaTenantId) {
+      const { data: t } = await supabase.from("tenants").select("id").eq("id", metaTenantId).maybeSingle();
+      if (t) tenant = t;
     }
   }
   if (!tenant) { console.log("No tenant found for customer:", customerId, "sub:", subscriptionId); return; }
@@ -992,6 +1129,14 @@ async function handleInvoicePaymentFailed(supabase: any, invoice: any) {
       const { data: t } = await supabase
         .from("tenants").select("id, company_name, contact_email").eq("id", viaSub.tenant_id).maybeSingle();
       tenant = t;
+    }
+  }
+  if (!tenant) {
+    const metaTenantId = resolveInvoiceTenantId(invoice);
+    if (metaTenantId) {
+      const { data: t } = await supabase
+        .from("tenants").select("id, company_name, contact_email").eq("id", metaTenantId).maybeSingle();
+      if (t) tenant = t;
     }
   }
   if (!tenant) { console.log("No tenant found for customer:", customerId, "sub:", subscriptionId); return; }
