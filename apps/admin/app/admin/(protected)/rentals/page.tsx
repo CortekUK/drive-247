@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
@@ -288,6 +288,11 @@ export default function RentalCompaniesPage() {
   /** Click a summary tile to narrow the table to that bucket. */
   const [subStatusFilter, setSubStatusFilter] = useState<SubStatus | null>(null);
   const [subsLoaded, setSubsLoaded] = useState(false);
+  /** Live-sync bookkeeping — see the LIVE SYNC block below. */
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [realtimeUp, setRealtimeUp] = useState(false);
+  /** Re-renders the freshness label once a second without refetching. */
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(() => {
@@ -309,10 +314,15 @@ export default function RentalCompaniesPage() {
   // that reruns on every type/status filter change, and these three tables do
   // not depend on those filters. Reads are global (no tenant filter) — the
   // super-admin dashboard already does the same, so RLS permits it.
-  useEffect(() => {
-    if (viewMode !== 'subscription' || subsLoaded) return;
-
-    (async () => {
+  // Extracted so live sync can re-run it WITHOUT touching subsLoaded.
+  //
+  // subsLoaded does double duty: "has data" and "never fetch again". The table
+  // renders skeletons while it is false, so reusing setSubsLoaded(false) as the
+  // refresh trigger would blank the whole screen on every realtime event and
+  // every poll tick. A silent re-fetch keeps the rendered rows in place and
+  // simply swaps the data underneath.
+  const loadSubscriptionData = useCallback(async () => {
+    {
       try {
         const [subsRes, plansRes, invoicesRes] = await Promise.all([
           supabase
@@ -409,12 +419,85 @@ export default function RentalCompaniesPage() {
         setPaidInvoiceTenantIds(everPaid);
 
         setSubsLoaded(true);
+        setLastSyncedAt(Date.now());
       } catch (error: any) {
         console.error('Error loading subscription data:', error);
         setSubsError(error?.message ?? 'Could not load subscription data.');
       }
-    })();
-  }, [viewMode, subsLoaded]);
+    }
+  }, []);
+
+  /** First open of the subscription view — this one may show skeletons. */
+  useEffect(() => {
+    if (viewMode !== 'subscription' || subsLoaded) return;
+    void loadSubscriptionData();
+  }, [viewMode, subsLoaded, loadSubscriptionData]);
+
+  // ── LIVE SYNC ────────────────────────────────────────────────────────────
+  //
+  // Without this the operator had to keep the Stripe dashboard open: this page
+  // fetched once and latched, so a tenant going past_due was invisible until a
+  // manual refresh.
+  //
+  // Two independent mechanisms, because either alone is untrustworthy:
+  //  - Realtime push, for instant updates. tenant_subscriptions IS in the
+  //    supabase_realtime publication (verified in production).
+  //    tenant_subscription_invoices is NOT, so invoice-only changes never push —
+  //    the poll below is what catches those, not a nicety.
+  //  - A poll, because a Realtime socket can die SILENTLY. We poll faster while
+  //    the socket is not confirmed connected, and back off once it is.
+  //
+  // A super admin watches ALL tenants, so the channel is deliberately
+  // unfiltered — unlike the tenant portal, which filters by tenant_id.
+  useEffect(() => {
+    if (viewMode !== 'subscription') return;
+
+    const channel = supabase
+      .channel('admin-subscription-monitor')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tenant_subscriptions' },
+        () => { void loadSubscriptionData(); },
+      )
+      .subscribe((status) => {
+        // Reading this callback is the only way to know the socket is alive.
+        // Treating .subscribe() as fire-and-forget is how a dashboard ends up
+        // confidently showing hours-old data.
+        setRealtimeUp(status === 'SUBSCRIBED');
+      });
+
+    return () => {
+      setRealtimeUp(false);
+      supabase.removeChannel(channel);
+    };
+  }, [viewMode, loadSubscriptionData]);
+
+  useEffect(() => {
+    if (viewMode !== 'subscription') return;
+    // 10s while the push channel is unconfirmed, 30s once it is carrying events.
+    const everyMs = realtimeUp ? 30_000 : 10_000;
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') void loadSubscriptionData();
+    }, everyMs);
+    return () => clearInterval(id);
+  }, [viewMode, realtimeUp, loadSubscriptionData]);
+
+  /** Refresh the moment the operator returns to the tab. */
+  useEffect(() => {
+    if (viewMode !== 'subscription') return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void loadSubscriptionData();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [viewMode, loadSubscriptionData]);
+
+  /** Ticks once a second so the "updated Ns ago" label counts up on its own. */
+  useEffect(() => {
+    if (viewMode !== 'subscription') return;
+    const id = setInterval(() => setNowTick(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, [viewMode]);
 
   const loadTenants = async () => {
     try {
@@ -780,6 +863,51 @@ export default function RentalCompaniesPage() {
       {isSubscriptionView && subsLoaded && (
         <Card>
           <CardContent className="py-4">
+            {/* FRESHNESS. This screen replaces the Stripe dashboard for
+                monitoring, so it must never present stale data as current. The
+                age counts up on its own (nowTick) — a frozen "just now" is
+                exactly the lie we are guarding against. Amber past 2 minutes
+                means both the push channel and the poll have stopped. */}
+            {(() => {
+              const ageMs = lastSyncedAt ? nowTick - lastSyncedAt : null;
+              const stale = ageMs != null && ageMs > 120_000;
+              const ageLabel =
+                ageMs == null
+                  ? 'not yet synced'
+                  : ageMs < 10_000
+                    ? 'just now'
+                    : ageMs < 60_000
+                      ? `${Math.floor(ageMs / 1000)}s ago`
+                      : `${Math.floor(ageMs / 60_000)}m ago`;
+              return (
+                <div className="flex items-center gap-2 mb-3 text-xs">
+                  <span
+                    className={cn(
+                      'inline-flex h-2 w-2 rounded-full',
+                      stale
+                        ? 'bg-amber-500'
+                        : realtimeUp
+                          ? 'bg-emerald-500 animate-pulse'
+                          : 'bg-sky-500',
+                    )}
+                  />
+                  <span className={stale ? 'text-amber-500' : 'text-muted-foreground'}>
+                    {stale
+                      ? `Not updating — last synced ${ageLabel}`
+                      : realtimeUp
+                        ? `Live · updated ${ageLabel}`
+                        : `Polling · updated ${ageLabel}`}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void loadSubscriptionData()}
+                    className="ml-1 font-medium text-primary hover:underline"
+                  >
+                    Sync now
+                  </button>
+                </div>
+              );
+            })()}
             <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
               {(
                 [

@@ -81,15 +81,39 @@ export function useTenantSubscription() {
       return data as TenantSubscription | null;
     },
     enabled: authed,
-    staleTime: 30_000,
+    // Short enough that a poll is never serving a stale cached answer.
+    staleTime: 2_000,
     retry: false,
-    // Grace expiry is a pure CLOCK event — no row changes when the window
-    // closes, so Realtime never fires and nothing would re-render. Without a
-    // poll, a tab left open across the boundary keeps showing a stale day count
-    // AND keeps full dashboard access indefinitely. One minute is well inside
-    // the smallest meaningful unit here (a day).
-    refetchInterval: 60_000,
+    // ADAPTIVE POLL — fast when something is actually pending, slow when idle.
+    //
+    // Grace expiry is a pure CLOCK event: no row changes when the window closes,
+    // so Realtime never fires and nothing re-renders. A tab left open across the
+    // boundary would keep showing a stale day count AND keep full dashboard
+    // access. So a poll is required regardless of Realtime.
+    //
+    // HOT (5s) whenever the tenant is in a state they are actively waiting on —
+    // past_due, or an incomplete checkout. That is exactly when someone is
+    // sitting on the screen after paying, and a minute of "still blocked" reads
+    // as broken. IDLE (30s) otherwise, because a healthy subscription changing
+    // state arrives instantly over Realtime
+    // (use-tenant-subscription-realtime.ts subscribes to this table), so a fast
+    // poll on a healthy tenant would be pure load for no benefit.
+    refetchInterval: (query) => {
+      const status = (query.state.data as TenantSubscription | null)?.status;
+      return status === "past_due" || status === "incomplete" ? 5_000 : 30_000;
+    },
     refetchIntervalInBackground: false,
+    // OVERRIDES the global refetchOnWindowFocus:false in providers.tsx, and it
+    // is the single most important line here for the "I paid, why am I still
+    // blocked" complaint.
+    //
+    // "Pay now" opens Stripe in a NEW TAB. React Query treats a hidden tab as
+    // unfocused, and refetchIntervalInBackground:false makes every poll tick a
+    // no-op while the tenant is away paying. With the global setting left in
+    // place, coming BACK also refetched nothing — so the first fresh data
+    // arrived on the next interval tick, not on return. Refetching on focus
+    // makes the dashboard correct the instant they switch back.
+    refetchOnWindowFocus: true,
   });
 
   const invoicesQuery = useQuery({
@@ -105,18 +129,35 @@ export function useTenantSubscription() {
       return (data || []) as TenantSubscriptionInvoice[];
     },
     enabled: authed,
-    staleTime: 30_000,
+    staleTime: 2_000,
     retry: false,
+    // ADAPTIVE POLL — this is the money-critical one.
+    //
     // The grace clock is anchored on the OLDEST OPEN INVOICE, so this query is
-    // not just display data — it decides whether the tenant is warned or blocked.
-    // There is no Realtime channel on tenant_subscription_invoices, and "Pay now"
-    // opens Stripe in a NEW TAB, so the dashboard tab stays mounted and
-    // unfocused while the payment happens (refetchOnWindowFocus is off
-    // globally). Without this the tenant pays, comes back, and still sees the
-    // dunning banner and an "open" invoice until a hard reload. Matches the
-    // subscription query's cadence so the two cannot disagree for long.
-    refetchInterval: 60_000,
+    // not display data: it decides whether the tenant is warned or blocked.
+    // tenant_subscription_invoices is NOT in the supabase_realtime publication
+    // (verified in production), so nothing pushes invoice changes — this poll is
+    // the only mechanism. "Pay now" also opens Stripe in a NEW TAB, leaving this
+    // tab mounted and unfocused while the payment happens, and
+    // refetchOnWindowFocus is disabled globally.
+    //
+    // HOT (5s) while ANY invoice is outstanding — that is the tenant who just
+    // paid and is staring at a "payment is due" banner waiting for it to clear.
+    // A minute of that reads as broken. IDLE (30s) once nothing is owed, since
+    // a NEW failure flips the subscription row too and arrives instantly over
+    // Realtime.
+    refetchInterval: (query) => {
+      const rows = (query.state.data as TenantSubscriptionInvoice[] | null) ?? [];
+      const outstanding = rows.some(
+        (i) => i.status === "open" || i.status === "uncollectible",
+      );
+      return outstanding ? 5_000 : 30_000;
+    },
     refetchIntervalInBackground: false,
+    // See the matching note on the subscription query: without this, returning
+    // from the Stripe tab refetched nothing and the tenant kept seeing "payment
+    // is due" until the next tick.
+    refetchOnWindowFocus: true,
   });
 
   // Check for past subscriptions (expired trials / canceled)
