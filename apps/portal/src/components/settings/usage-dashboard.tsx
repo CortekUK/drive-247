@@ -56,8 +56,11 @@ function InvoiceHistoryTable({
   const hiddenCount = invoices.length - visibleInvoices.length;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full">
+    // `w-full` alone let the six columns crush into each other instead of
+    // scrolling — the wrapper could never overflow because the table always
+    // shrank to fit it. A min-width gives the scroller something to scroll.
+    <div className="-mx-1 overflow-x-auto px-1">
+      <table className="w-full min-w-[36rem]">
         <thead>
           <tr className="border-b bg-primary/5">
             <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">
@@ -92,20 +95,20 @@ function InvoiceHistoryTable({
               inv.stripe_invoice_pdf || inv.stripe_hosted_invoice_url || null;
             return (
               <tr key={inv.id} className="border-b last:border-0">
-                <td className="py-2.5 px-3 text-sm text-muted-foreground">
+                <td className="whitespace-nowrap py-2.5 px-3 text-sm text-muted-foreground">
                   {formatDate(inv.period_start)} – {formatDate(inv.period_end)}
                 </td>
-                <td className="py-2.5 px-3 text-sm text-right text-muted-foreground">
+                <td className="whitespace-nowrap py-2.5 px-3 text-sm text-right tabular-nums text-muted-foreground">
                   {hasUsageBreakdown
                     ? formatCurrencyFromCents(inv.base_amount!, inv.currency)
                     : "—"}
                 </td>
-                <td className="py-2.5 px-3 text-sm text-right text-muted-foreground">
+                <td className="whitespace-nowrap py-2.5 px-3 text-sm text-right tabular-nums text-muted-foreground">
                   {hasUsageBreakdown && inv.usage_amount
                     ? `${formatCurrencyFromCents(inv.usage_amount, inv.currency)} (${inv.usage_quantity || 0})`
                     : "—"}
                 </td>
-                <td className="py-2.5 px-3 text-sm text-right font-medium">
+                <td className="whitespace-nowrap py-2.5 px-3 text-sm text-right font-medium tabular-nums">
                   {formatCurrencyFromCents(inv.amount_due, inv.currency)}
                 </td>
                 <td className="py-2.5 px-3 text-sm">

@@ -47,6 +47,7 @@ import {
 } from '@/components/ui/chart';
 import { Area, AreaChart, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { DatePicker } from '@/components/ui/date-picker';
+import { CardBrandIcon } from '@/components/ui/card-brand-icon';
 import { BarChart3 } from 'lucide-react';
 import { TenantCreditsTab } from '@/components/admin/tenant-credits-tab';
 import { TenantPaymentsTab } from '@/components/admin/tenant-payments-tab';
@@ -1854,8 +1855,14 @@ export default function TenantDetailsPage() {
                   {subscription.current_period_end && (
                     <span>Period ends <span className="text-foreground font-medium">{formatDate(subscription.current_period_end)}</span></span>
                   )}
-                  {subscription.card_brand && subscription.card_last4 && (
-                    <span>Payment <span className="text-foreground font-medium capitalize">{subscription.card_brand} ····{subscription.card_last4}</span></span>
+                  {subscription.card_last4 && (
+                    <span className="inline-flex items-center gap-1.5">
+                      Payment
+                      <CardBrandIcon brand={subscription.card_brand} className="h-4 w-6" />
+                      <span className="text-foreground font-medium tabular-nums">
+                        ····{subscription.card_last4}
+                      </span>
+                    </span>
                   )}
                   {subscription.card_exp_month && subscription.card_exp_year && (
                     <span>Expires <span className="text-foreground font-medium">{String(subscription.card_exp_month).padStart(2, '0')}/{subscription.card_exp_year}</span></span>
@@ -2492,7 +2499,12 @@ export default function TenantDetailsPage() {
                     { label: 'Plan', value: <span className="capitalize">{subscription.plan_name}</span> },
                     { label: 'Amount', value: `${formatCurrency(subscription.amount, subscription.currency)}/${subscription.interval}` },
                     { label: 'Period', value: `${formatDate(subscription.current_period_start)} \u2013 ${formatDate(subscription.current_period_end)}` },
-                    ...(subscription.card_last4 ? [{ label: 'Card', value: <span className="capitalize">{subscription.card_brand} **** {subscription.card_last4}</span> }] : []),
+                    ...(subscription.card_last4 ? [{ label: 'Card', value: (
+                      <span className="inline-flex items-center gap-2">
+                        <CardBrandIcon brand={subscription.card_brand} className="h-5 w-[1.875rem]" />
+                        <span className="tabular-nums">•••• {subscription.card_last4}</span>
+                      </span>
+                    ) }] : []),
                     { label: 'Created', value: formatDate(subscription.created_at) },
                   ].map((item) => (
                     <div key={item.label} className="space-y-1">

@@ -331,14 +331,14 @@ export default function SubscriptionPage() {
   // Subscribed state
   return (
     <div className="container mx-auto p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Subscription</h1>
-          <p className="mt-1 text-muted-foreground">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Subscription</h1>
+          <p className="mt-1 truncate text-muted-foreground">
             Manage your {subscription?.plan_name || "subscription"}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={refetch}>
+        <Button variant="outline" size="sm" onClick={refetch} className="shrink-0">
           <RefreshCw className="mr-2 h-4 w-4" />
           Refresh
         </Button>
@@ -381,11 +381,14 @@ export default function SubscriptionPage() {
                       : "Custom pricing"}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="shrink-0 text-sm text-muted-foreground">
                     Current Period
                   </span>
-                  <span className="text-sm">
+                  {/* A full date range is the longest value in this card and was
+                      the first thing to collide with its own label once the
+                      grid dropped to one column. */}
+                  <span className="min-w-0 text-right text-sm">
                     {formatDate(subscription?.current_period_start ?? null)} –{" "}
                     {formatDate(subscription?.current_period_end ?? null)}
                   </span>
@@ -448,8 +451,12 @@ export default function SubscriptionPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="text-center py-4">
-                  <p className="text-sm text-muted-foreground mb-3">
+                <div className="py-4 text-center">
+                  <CardBrandIcon
+                    brand={null}
+                    className="mx-auto mb-3 h-10 w-[3.75rem] text-muted-foreground"
+                  />
+                  <p className="mb-3 text-sm text-muted-foreground">
                     No payment method on file
                   </p>
                   <Button
