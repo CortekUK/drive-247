@@ -2,9 +2,12 @@ import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
+import { useTenant } from "@/contexts/TenantContext";
+import { isForcedThemeMode } from "@/lib/theme-mode";
 
 export const ThemeToggle = () => {
   const { theme, setTheme } = useTheme();
+  const { tenant } = useTenant();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -12,6 +15,11 @@ export const ThemeToggle = () => {
   }, []);
 
   if (!mounted) {
+    return null;
+  }
+
+  // Tenant forces a single theme (light_only / dark_only) → no toggle to show.
+  if (isForcedThemeMode(tenant?.customer_theme_mode)) {
     return null;
   }
 

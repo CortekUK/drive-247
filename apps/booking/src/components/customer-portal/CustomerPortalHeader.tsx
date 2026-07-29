@@ -30,6 +30,8 @@ import { useRouter } from 'next/navigation';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
 import { useTheme } from 'next-themes';
+import { useTenant } from '@/contexts/TenantContext';
+import { isDarkForMode } from '@/lib/theme-mode';
 import { Separator } from '@/components/ui/separator';
 
 function CustomerNotificationBell({
@@ -178,6 +180,7 @@ export function CustomerPortalHeader() {
   const { state } = useSidebar();
   const { settings } = useSiteSettings();
   const { resolvedTheme } = useTheme();
+  const { tenant } = useTenant();
   const router = useRouter();
   const { notifications, unreadCount, markAsRead } = useCustomerNotifications();
   const { customerUser, signOut } = useCustomerAuthStore();
@@ -204,7 +207,7 @@ export function CustomerPortalHeader() {
         <Link href="/" className="flex items-center">
           {settings.logo_url ? (
             <img
-              src={resolvedTheme === 'dark' && settings.dark_logo_url ? settings.dark_logo_url : settings.logo_url}
+              src={isDarkForMode(tenant?.customer_theme_mode, resolvedTheme) && settings.dark_logo_url ? settings.dark_logo_url : settings.logo_url}
               alt={settings.logo_alt || 'Logo'}
               className="h-6 w-auto"
             />

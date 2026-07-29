@@ -179,6 +179,10 @@ export interface Tenant {
 
   // Gig driver booking option (hide the "Are you a gig driver?" checkbox when false)
   gig_driver_enabled: boolean | null;
+
+  // Per-tenant customer-site theme: light_only/dark_only force a single theme and
+  // hide the toggle; light/dark set the default while keeping the toggle.
+  customer_theme_mode: 'dark' | 'light' | 'light_only' | 'dark_only' | null;
 }
 
 interface TenantContextType {
@@ -462,7 +466,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           enquiries_enabled,
           payg_upfront_required,
           gig_driver_enabled,
-          ga_measurement_id
+          ga_measurement_id,
+          customer_theme_mode
         `)
         .eq('slug', slug)
         // Load active AND suspended tenants so a suspended tenant resolves and

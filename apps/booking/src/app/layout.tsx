@@ -9,6 +9,7 @@ import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClientProvider } from '@/components/QueryClientProvider';
 import { ThemeProvider } from 'next-themes';
+import type { CustomerThemeMode } from '@/lib/theme-mode';
 import { ThemeInitializer } from '@/components/ThemeInitializer';
 import GDPRConsent from '@/components/GDPRConsent';
 import ScrollToTopOnNavigate from '@/components/ScrollToTopOnNavigate';
@@ -90,11 +91,47 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-export default function RootLayout({
+// Resolve the tenant's customer-site theme mode server-side (same x-tenant-slug
+// path as generateMetadata) so the correct theme is baked into the pre-hydration
+// inline script — no dark flash. Falls back to 'dark' (today's behavior) on any
+// miss or error.
+async function getTenantThemeMode(): Promise<CustomerThemeMode> {
+  try {
+    const headersList = await headers();
+    const tenantSlug = headersList.get('x-tenant-slug');
+    if (!tenantSlug || !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      return 'dark';
+    }
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
+    const { data } = await supabase
+      .from('tenants')
+      .select('customer_theme_mode')
+      .eq('slug', tenantSlug)
+      .single();
+    return (data?.customer_theme_mode as CustomerThemeMode) ?? 'dark';
+  } catch {
+    return 'dark';
+  }
+}
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const themeMode = await getTenantThemeMode();
+  // Map the tenant mode → next-themes props. `forcedTheme` (for the "-only"
+  // modes) ignores localStorage/system entirely, so even a returning customer
+  // with a stored 'dark' preference gets the forced theme on first paint.
+  const themeProps =
+    themeMode === 'light_only' ? { forcedTheme: 'light' } :
+    themeMode === 'dark_only' ? { forcedTheme: 'dark' } :
+    themeMode === 'light' ? { defaultTheme: 'light', enableSystem: false } :
+    { defaultTheme: 'dark', enableSystem: true };
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} overflow-x-hidden`} suppressHydrationWarning>
@@ -109,10 +146,9 @@ export default function RootLayout({
               <BookingPersistenceGuard>
               <ThemeProvider
               attribute="class"
-              defaultTheme="dark"
-              enableSystem={true}
               storageKey="vite-ui-theme"
               disableTransitionOnChange
+              {...themeProps}
             >
               <ThemeInitializer>
                 <TooltipProvider>

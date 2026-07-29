@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
 import { useTheme } from 'next-themes';
+import { useTenant } from '@/contexts/TenantContext';
+import { isDarkForMode } from '@/lib/theme-mode';
 import { useCustomerUnreadCount } from '@/hooks/use-customer-unread';
 import { useCustomerOnboarding } from '@/hooks/use-customer-onboarding';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
@@ -83,6 +85,7 @@ export function CustomerPortalSidebar() {
   const pathname = usePathname();
   const { settings } = useSiteSettings();
   const { resolvedTheme } = useTheme();
+  const { tenant } = useTenant();
   const { state } = useSidebar();
   const { unreadCount } = useCustomerUnreadCount();
   const { data: onboarding } = useCustomerOnboarding();
@@ -106,7 +109,7 @@ export function CustomerPortalSidebar() {
           <Link href="/" className="flex items-center gap-2 px-4">
             {settings.logo_url ? (
               <img
-                src={resolvedTheme === 'dark' && settings.dark_logo_url ? settings.dark_logo_url : settings.logo_url}
+                src={isDarkForMode(tenant?.customer_theme_mode, resolvedTheme) && settings.dark_logo_url ? settings.dark_logo_url : settings.logo_url}
                 alt={settings.logo_alt || 'Logo'}
                 className="h-8 w-auto"
               />

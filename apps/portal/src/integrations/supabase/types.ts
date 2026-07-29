@@ -13961,6 +13961,7 @@ export type Database = {
           friday_enabled: boolean | null
           friday_open: string | null
           gig_driver_enabled: boolean
+          customer_theme_mode: string
           global_deposit_amount: number | null
           google_maps_url: string | null
           hero_background_url: string | null
@@ -14196,6 +14197,7 @@ export type Database = {
           friday_enabled?: boolean | null
           friday_open?: string | null
           gig_driver_enabled?: boolean
+          customer_theme_mode?: string
           global_deposit_amount?: number | null
           google_maps_url?: string | null
           hero_background_url?: string | null
@@ -14431,6 +14433,7 @@ export type Database = {
           friday_enabled?: boolean | null
           friday_open?: string | null
           gig_driver_enabled?: boolean
+          customer_theme_mode?: string
           global_deposit_amount?: number | null
           google_maps_url?: string | null
           hero_background_url?: string | null

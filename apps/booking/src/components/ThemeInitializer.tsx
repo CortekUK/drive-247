@@ -65,7 +65,7 @@ export function ThemeInitializer({ children }: ThemeInitializerProps) {
   // Show loading state while tenant/branding is loading for every other route.
   if (!isCrawlerVisiblePath(pathname) && !isReady) {
     return (
-      <div className="fixed inset-0 bg-[#1a1a1a] flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-white dark:bg-[#1a1a1a] flex items-center justify-center z-50">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-2 border-[#E9B63E] border-t-transparent rounded-full animate-spin" />
         </div>

@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import { useBrandingSettings } from './useBrandingSettings';
+import { useTenant } from '@/contexts/TenantContext';
+import { isDarkForMode } from '@/lib/theme-mode';
 
 // Default theme colors for Drive247 Client - matches index.css
 const DEFAULT_COLORS = {
@@ -116,9 +118,12 @@ function generateColorVariants(hex: string) {
 export function useDynamicTheme() {
   const { branding } = useBrandingSettings();
   const { theme, resolvedTheme } = useTheme();
+  const { tenant } = useTenant();
 
-  // Use resolvedTheme which handles 'system' preference
-  const isDarkMode = resolvedTheme === 'dark';
+  // Honor the tenant's server-known theme mode over next-themes' resolvedTheme,
+  // which (in 0.3.0) does NOT fold in forcedTheme and can be a stale 'dark' from
+  // a prior visit — that would paint the dark palette onto a forced-light page.
+  const isDarkMode = isDarkForMode(tenant?.customer_theme_mode, resolvedTheme);
 
   // Apply theme colors - runs when branding OR isDarkMode changes
   useEffect(() => {
@@ -139,15 +144,6 @@ export function useDynamicTheme() {
     const accentColorHex = isDarkMode
       ? (branding.dark_accent_color || branding.accent_color)
       : (branding.light_accent_color || branding.accent_color);
-
-    // Debug logging
-    console.log('[DynamicTheme] Theme changed:', {
-      isDarkMode,
-      'branding.light_accent_color': branding.light_accent_color,
-      'branding.dark_accent_color': branding.dark_accent_color,
-      'branding.accent_color': branding.accent_color,
-      'resolved accentColorHex': accentColorHex,
-    });
 
     const backgroundColorHex = isDarkMode
       ? branding.dark_background_color

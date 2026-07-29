@@ -21,7 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Undo2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -254,6 +254,42 @@ const Settings = () => {
       toast({ title: "Failed to update", description: msg, variant: "destructive" });
     } finally {
       setSavingGigDriver(false);
+    }
+  };
+
+  // Booking-site theme control (tenants.customer_theme_mode) — CUSTOMER site only.
+  // Two friendly controls (allow-switch + default) compose into the single enum:
+  //   allow=on  → 'light' | 'dark'         (default set, customer can toggle)
+  //   allow=off → 'light_only' | 'dark_only' (forced, no toggle)
+  const themeMode = ((tenant as { customer_theme_mode?: string } | null)?.customer_theme_mode ?? 'dark') as
+    'dark' | 'light' | 'light_only' | 'dark_only';
+  const themeToggleAllowed = themeMode === 'dark' || themeMode === 'light';
+  const themeDefault: 'light' | 'dark' = (themeMode === 'light' || themeMode === 'light_only') ? 'light' : 'dark';
+  const [savingTheme, setSavingTheme] = useState(false);
+  const saveCustomerThemeMode = async (allowToggle: boolean, def: 'light' | 'dark') => {
+    if (!tenant?.id) return;
+    const value = (allowToggle ? def : `${def}_only`) as 'dark' | 'light' | 'light_only' | 'dark_only';
+    setSavingTheme(true);
+    try {
+      const { error } = await supabase
+        .from("tenants")
+        .update({ customer_theme_mode: value })
+        .eq("id", tenant.id);
+      if (error) throw error;
+      await refetchTenant();
+      toast({
+        title: "Booking site theme updated",
+        description:
+          value === 'light_only' ? "Customers now always see the light theme (no switch)."
+          : value === 'dark_only' ? "Customers now always see the dark theme (no switch)."
+          : value === 'light' ? "Your booking site now defaults to light, with a theme switch."
+          : "Your booking site now defaults to dark, with a theme switch.",
+      });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      toast({ title: "Failed to update theme", description: msg, variant: "destructive" });
+    } finally {
+      setSavingTheme(false);
     }
   };
 
@@ -1747,6 +1783,64 @@ const Settings = () => {
               </div>
             </AlertDescription>
           </Alert>
+
+          {/* Booking Site Theme — per-tenant light/dark for the CUSTOMER site (not this portal) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sun className="h-5 w-5 text-primary" />
+                Booking Site Theme
+              </CardTitle>
+              <CardDescription>
+                Controls light/dark on your customer-facing booking site. This does not change this portal.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <Label>Let customers switch theme</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Shows a light/dark toggle on your booking site. Turn off to lock customers to one theme.
+                  </p>
+                </div>
+                <Switch
+                  checked={themeToggleAllowed}
+                  disabled={savingTheme || !canEditSettings('branding')}
+                  onCheckedChange={(checked) => saveCustomerThemeMode(checked, themeDefault)}
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <Label>{themeToggleAllowed ? 'Default theme' : 'Theme shown to customers'}</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {themeToggleAllowed
+                      ? 'Which theme new visitors see first — they can still switch.'
+                      : 'The only theme your customers will see.'}
+                  </p>
+                </div>
+                <Select
+                  value={themeDefault}
+                  disabled={savingTheme || !canEditSettings('branding')}
+                  onValueChange={(v) => saveCustomerThemeMode(themeToggleAllowed, v as 'light' | 'dark')}
+                >
+                  <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">Light</SelectItem>
+                    <SelectItem value="dark">Dark</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <p className="text-xs text-muted-foreground rounded-md border bg-muted/30 p-2.5">
+                {themeMode === 'light_only' && 'Customers always see the light theme — no switch is shown.'}
+                {themeMode === 'dark_only' && 'Customers always see the dark theme — no switch is shown.'}
+                {themeMode === 'light' && 'New customers start on light and can switch to dark.'}
+                {themeMode === 'dark' && 'New customers start on dark and can switch to light.'}
+                {savingTheme && ' Saving…'}
+              </p>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
