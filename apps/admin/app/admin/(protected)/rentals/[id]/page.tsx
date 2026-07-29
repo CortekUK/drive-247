@@ -306,6 +306,8 @@ export default function TenantDetailsPage() {
   const [subscription, setSubscription] = useState<TenantSubscription | null>(null);
   const [invoices, setInvoices] = useState<TenantInvoice[]>([]);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+  /** Non-null when the subscription read FAILED — never render that as "none". */
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
 
   // Plans state
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
@@ -386,7 +388,8 @@ export default function TenantDetailsPage() {
     const tenantId = params.id as string | undefined;
     if (!tenantId) return;
 
-    const refresh = () => { void loadSubscription(tenantId); };
+    // silent: background refreshes must not re-trigger the loading skeleton.
+    const refresh = () => { void loadSubscription(tenantId, true); };
 
     const channel = supabase
       .channel(`admin-tenant-subscription-${tenantId}`)
@@ -453,8 +456,17 @@ export default function TenantDetailsPage() {
     }
   };
 
-  const loadSubscription = async (tenantId: string) => {
-    setSubscriptionLoading(true);
+  /**
+   * @param silent Background refresh (the 20s poll, Realtime, window focus).
+   *
+   * A silent pass must NOT touch subscriptionLoading. Flipping it on every tick
+   * re-mounted the Current Subscription block into its skeleton three times a
+   * minute, so the panel visibly flashed forever and any expanded detail
+   * collapsed under the operator. Same discipline as `subsLoaded` on the list
+   * page.
+   */
+  const loadSubscription = async (tenantId: string, silent = false) => {
+    if (!silent) setSubscriptionLoading(true);
     try {
       // Do NOT filter to live statuses here.
       //
@@ -468,11 +480,18 @@ export default function TenantDetailsPage() {
       // Prefer a live row when there is one, else fall back to the most recent,
       // mirroring selectSubscription() on the list page so the two screens
       // cannot disagree about which subscription a tenant "has".
-      const { data: subRows } = await supabase
+      const { data: subRows, error: subErr } = await supabase
         .from('tenant_subscriptions')
         .select('*')
         .eq('tenant_id', tenantId)
         .order('updated_at', { ascending: false });
+
+      // A failed read is NOT "no subscription". Discarding the error rendered a
+      // permissions problem or a network blip as the confident, and completely
+      // wrong, answer "No active subscription" — the same thing shown for a
+      // tenant who genuinely never subscribed. An operator would then act on it.
+      if (subErr) throw subErr;
+      setSubscriptionError(null);
 
       const rows = (subRows as any[] | null) ?? [];
       const LIVE = ['active', 'trialing', 'past_due'];
@@ -494,18 +513,26 @@ export default function TenantDetailsPage() {
         setCurrentDiscount(null);
       }
 
-      const { data: invoiceData } = await supabase
+      const { data: invoiceData, error: invErr } = await supabase
         .from('tenant_subscription_invoices')
         .select('*')
         .eq('tenant_id', tenantId)
+        // Stripe's invoice date, not our row-insert time — created_at is stamped
+        // whenever the reconciler backfills, which reordered history and gave
+        // invoices dates that never happened.
+        .order('invoice_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
         .limit(20);
 
+      if (invErr) throw invErr;
       setInvoices(invoiceData || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading subscription:', error);
+      // Surface it. Silence here is what turned a failed read into "no
+      // subscription" — see the note above.
+      setSubscriptionError(error?.message || 'Could not load subscription data');
     } finally {
-      setSubscriptionLoading(false);
+      if (!silent) setSubscriptionLoading(false);
     }
   };
 
@@ -889,7 +916,16 @@ export default function TenantDetailsPage() {
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
         if (data?.pricingChanged && editingPlan.active_subscriptions > 0) {
-          toast.success('Plan updated! Note: existing subscribers will continue at their current rate until they renew.');
+          // "until they renew" was not true. manage-subscription-plans mints a
+          // new Stripe Price and stores it on the PLAN; it never calls
+          // subscriptions.update, and a renewal charges the price pinned to the
+          // subscription. So an existing subscriber stays on the old amount
+          // forever, while this toast told the operator the change would land
+          // at the next renewal — a promise the system never keeps.
+          toast.warning(
+            `New price saved for new signups only. ${editingPlan.active_subscriptions} existing subscriber${editingPlan.active_subscriptions > 1 ? 's' : ''} will keep being billed the old amount — move them in Stripe to change it.`,
+            { duration: 9000 },
+          );
         } else {
           toast.success(`"${planForm.name}" plan updated successfully`);
         }
@@ -2520,6 +2556,20 @@ export default function TenantDetailsPage() {
                     </div>
                   ))}
                 </div>
+              ) : subscriptionError ? (
+                /* A failed read must never masquerade as "no subscription" —
+                   that is a confident wrong answer an operator will act on. */
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  <p className="font-medium">Could not load subscription</p>
+                  <p className="mt-0.5 text-red-600">{subscriptionError}</p>
+                  <button
+                    type="button"
+                    onClick={() => loadSubscription(params.id as string)}
+                    className="mt-1.5 underline underline-offset-2"
+                  >
+                    Try again
+                  </button>
+                </div>
               ) : (
                 <p className="text-muted-foreground text-sm">No active subscription. Plan: <span className="capitalize">{tenant.subscription_plan || 'basic'}</span></p>
               )}
@@ -2546,10 +2596,50 @@ export default function TenantDetailsPage() {
                         {invoices.map((invoice) => (
                           <TableRow key={invoice.id}>
                             <TableCell className="text-sm">{invoice.invoice_number || '\u2014'}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{formatDate(invoice.created_at)}</TableCell>
-                            <TableCell className="text-sm">{formatCurrency(invoice.amount_due, invoice.currency)}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{formatDate((invoice as any).invoice_date || invoice.created_at)}</TableCell>
+                            <TableCell className="text-sm">
+                              {formatCurrency(invoice.amount_due, invoice.currency)}
+                              {((invoice as any).amount_refunded ?? 0) > 0 && (
+                                <span className="ml-1.5 text-xs text-orange-600">
+                                  &minus;{formatCurrency((invoice as any).amount_refunded, invoice.currency)} refunded
+                                </span>
+                              )}
+                            </TableCell>
                             <TableCell>
-                              <Badge variant={invoice.status === 'paid' ? 'success' : invoice.status === 'open' ? 'warning' : 'secondary'} className="capitalize">{invoice.status}</Badge>
+                              {/* Stripe leaves a DECLINED invoice at status 'open' \u2014
+                                  identical to one nobody has attempted yet. Rendering
+                                  the raw status made a failed payment indistinguishable
+                                  from money simply not due, which is backwards for the
+                                  operator drilling in to chase it. attempt_count is the
+                                  discriminator; the list page already keys off it. */}
+                              {(() => {
+                                const attempts = (invoice as any).attempt_count ?? 0;
+                                const refunded = ((invoice as any).amount_refunded ?? 0) > 0;
+                                const disputed = !!(invoice as any).dispute_status;
+                                if (disputed) {
+                                  return <Badge variant="destructive">Disputed</Badge>;
+                                }
+                                if (invoice.status === 'paid') {
+                                  return refunded
+                                    ? <Badge variant="warning">Refunded</Badge>
+                                    : <Badge variant="success">Paid</Badge>;
+                                }
+                                if (invoice.status === 'open') {
+                                  return attempts > 0
+                                    ? <Badge variant="destructive">Payment failed</Badge>
+                                    : <Badge variant="warning">Not yet due</Badge>;
+                                }
+                                if (invoice.status === 'uncollectible') {
+                                  return <Badge variant="destructive">Written off</Badge>;
+                                }
+                                if (invoice.status === 'void') {
+                                  return <Badge variant="secondary">Voided</Badge>;
+                                }
+                                if (invoice.status === 'draft') {
+                                  return <Badge variant="secondary">Draft</Badge>;
+                                }
+                                return <Badge variant="secondary" className="capitalize">{invoice.status}</Badge>;
+                              })()}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">

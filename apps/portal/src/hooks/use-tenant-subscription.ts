@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -47,8 +48,32 @@ export interface TenantSubscriptionInvoice {
   base_amount: number | null;
   usage_amount: number | null;
   usage_quantity: number | null;
+  attempt_count: number | null;
+  /**
+   * Stripe's date for the invoice.
+   *
+   * NOT the same as created_at, which is when OUR row was inserted — a value the
+   * reconciler stamps whenever it backfills. Ordering history by created_at
+   * therefore showed a backfilled batch as the most recent activity, with dates
+   * that never happened, and could push the tenant's currently-unpaid invoice
+   * off the visible list.
+   */
+  invoice_date: string | null;
+  /** Cents refunded. Stripe leaves a refunded invoice at status 'paid'. */
+  amount_refunded: number | null;
+  refunded_at: string | null;
+  dispute_status: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Stripe's invoice date, falling back to our insert time for un-backfilled rows. */
+export function invoiceDateOf(i: {
+  invoice_date?: string | null;
+  period_end?: string | null;
+  created_at: string;
+}): string {
+  return i.invoice_date || i.period_end || i.created_at;
 }
 
 export function useTenantSubscription() {
@@ -123,6 +148,13 @@ export function useTenantSubscription() {
         .from("tenant_subscription_invoices")
         .select("*")
         .eq("tenant_id", tenant!.id)
+        // Stripe's invoice date, NOT our created_at. created_at is the row
+        // INSERT time, which the reconciler stamps at backfill — so a backfilled
+        // batch sorted to the top as "recent transactions" with dates that never
+        // happened, and the tenant's actual unpaid invoice could be pushed out
+        // of view. Nulls last so any row predating the backfill still sorts
+        // sensibly.
+        .order("invoice_date", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -264,6 +296,28 @@ export function useTenantSubscription() {
   const GRACE_DAYS = 7;
   const isPastDue = subscriptionQuery.data?.status === "past_due";
 
+  // A TICK, BECAUSE THE DEADLINE PASSES WITH NO DATA CHANGE.
+  //
+  // Everything below is derived from Date.now() at render time, so it is only
+  // correct if something re-renders. Polling cannot supply that: React Query's
+  // structural sharing hands back the SAME object when a refetch returns
+  // identical rows, so no state changes and no render happens. Nothing in the
+  // database changes when a grace window closes either, so Realtime is silent
+  // too.
+  //
+  // Result without this: a tab left open across the boundary kept showing a
+  // stale day count AND kept full dashboard access, indefinitely. The hard
+  // paywall only ever fired on a manual refresh.
+  //
+  // Only runs while the tenant is actually in dunning, so a healthy portal
+  // re-renders no more than it did before.
+  const [, setGraceTick] = useState(0);
+  useEffect(() => {
+    if (!isPastDue) return;
+    const id = setInterval(() => setGraceTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, [isPastDue]);
+
   const openInvoice = (() => {
     const rows = invoicesQuery.data || [];
     const unpaid = rows.filter(
@@ -294,7 +348,7 @@ export function useTenantSubscription() {
       ? unpaid.filter((i) =>
           i.subscription_id
             ? i.subscription_id === current.id
-            : new Date(i.created_at).getTime() >=
+            : new Date(invoiceDateOf(i)).getTime() >=
               new Date(current.created_at).getTime(),
         )
       : // No live subscription: keep every unpaid invoice in play, so a tenant
@@ -303,9 +357,11 @@ export function useTenantSubscription() {
         unpaid;
 
     if (mine.length === 0) return null;
-    // Oldest unpaid — that is the one whose clock started first.
+    // Oldest unpaid — that is the one whose clock started first. Compared on
+    // Stripe's date, not our insert time, so a reconciler backfill cannot
+    // reorder which invoice anchors the grace window.
     return mine.reduce((a, b) =>
-      new Date(a.created_at).getTime() <= new Date(b.created_at).getTime() ? a : b
+      new Date(invoiceDateOf(a)).getTime() <= new Date(invoiceDateOf(b)).getTime() ? a : b
     );
   })();
 
@@ -326,7 +382,7 @@ export function useTenantSubscription() {
     // Returning null here means graceEndsAt is null, which isSubscribed already
     // treats as fail-open ("past_due with no resolvable anchor must not lock
     // anyone out"). Nothing overdue, no block.
-    const anchor = openInvoice?.period_end || openInvoice?.created_at;
+    const anchor = openInvoice?.period_end || (openInvoice ? invoiceDateOf(openInvoice) : null);
     if (!anchor) return null;
     const t = new Date(anchor).getTime();
     return Number.isNaN(t) ? null : t;
@@ -375,6 +431,20 @@ export function useTenantSubscription() {
   // or blew through the grace window on an unpaid invoice.
   const hasExpiredSubscription =
     (!isSubscribed && !!pastSubscriptionQuery.data) || isGraceExpired;
+
+  /**
+   * Blocked AND still owing money — show the pay-the-invoice gate, not the
+   * "pick a plan" one.
+   *
+   * Stripe's default at the end of dunning is to CANCEL the subscription. That
+   * moves the row off past_due, so isGraceExpired goes false and the tenant fell
+   * through to the "expired" gate: a grid of pricing cards inviting them to
+   * subscribe afresh, with no mention of the invoice they still owe and no link
+   * to pay it. The debt is still outstanding and Stripe will not let a new
+   * subscription settle it, so the only recoverable path — the hosted invoice —
+   * was the one thing not on screen.
+   */
+  const owesOutstandingInvoice = !!outstandingInvoiceUrl;
 
   // A trial whose end date has already passed is NOT actively trialing — the
   // subscription has (or should have) converted to active. Guard against a
@@ -456,6 +526,7 @@ export function useTenantSubscription() {
     graceEndsAt,
     openInvoice,
     outstandingInvoiceUrl,
+    owesOutstandingInvoice,
     isLoading,
     isResolved,
     invoices: invoicesQuery.data || [],

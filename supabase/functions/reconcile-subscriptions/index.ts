@@ -117,10 +117,72 @@ function resolveInterval(sub: any): string {
   return best?.price?.recurring?.interval ?? "month";
 }
 
+/**
+ * The card Stripe will actually charge, looked up beyond the subscription.
+ *
+ * subscription.default_payment_method is null unless a card was pinned to the
+ * SUBSCRIPTION; Checkout normally attaches it to the CUSTOMER and bills through
+ * invoice_settings.default_payment_method. Reading only the former left 19 of 26
+ * live subscriptions with no card recorded, so the portal told tenants Stripe
+ * charges every month "No payment method on file" — including past_due tenants
+ * being told to go and fix a card we claimed did not exist.
+ *
+ * One extra customer retrieve per subscription with no pinned card, and only
+ * when a lookup is actually needed. Mirrors resolveSubscriptionCard in
+ * subscription-webhook; keep the two in step.
+ */
+async function resolveCardForSnapshot(
+  stripe: any,
+  sub: any,
+): Promise<{ brand: string | null; last4: string | null }> {
+  const pinned = typeof sub.default_payment_method === "object" ? sub.default_payment_method : null;
+  if (pinned?.card) return { brand: pinned.card.brand ?? null, last4: pinned.card.last4 ?? null };
+
+  const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
+  if (!customerId) return { brand: null, last4: null };
+
+  try {
+    const customer: any = await stripe.customers.retrieve(customerId, {
+      expand: ["invoice_settings.default_payment_method", "default_source"],
+    });
+    if (customer?.deleted) return { brand: null, last4: null };
+    const c = customer?.invoice_settings?.default_payment_method?.card;
+    if (c) return { brand: c.brand ?? null, last4: c.last4 ?? null };
+
+    const pms = await stripe.paymentMethods.list({ customer: customerId, type: "card", limit: 1 });
+    const first = pms?.data?.[0]?.card;
+    if (first) return { brand: first.brand ?? null, last4: first.last4 ?? null };
+
+    // LEGACY SOURCES. Subscriptions created through the older Sources/Card API
+    // bill a customer `default_source`, which is a Card object and is NOT
+    // returned by paymentMethods.list. Several of the longest-standing paying
+    // tenants are on that path, so without this they read as having no card
+    // while Stripe charges them successfully every month.
+    const src: any = (customer as any)?.default_source;
+    if (src && typeof src === "object" && (src.last4 || src.card?.last4)) {
+      const c2 = src.card ?? src;
+      return { brand: c2.brand ?? null, last4: c2.last4 ?? null };
+    }
+
+    // Last resort: whatever actually paid the most recent invoice.
+    const latestInvoiceId =
+      typeof sub.latest_invoice === "string" ? sub.latest_invoice : sub.latest_invoice?.id;
+    if (latestInvoiceId) {
+      const inv: any = await stripe.invoices.retrieve(latestInvoiceId, { expand: ["charge"] });
+      const cd = inv?.charge?.payment_method_details?.card;
+      if (cd) return { brand: cd.brand ?? null, last4: cd.last4 ?? null };
+    }
+  } catch (e) {
+    console.warn(`Card lookup failed for ${sub.id}: ${(e as any)?.message ?? e}`);
+  }
+  return { brand: null, last4: null };
+}
+
 function toSnapshot(
   sub: any,
   account: SubscriptionAccount,
   mode: Mode,
+  card?: { brand: string | null; last4: string | null },
 ): Snapshot {
   const period = resolvePeriod(sub);
   const pm = typeof sub.default_payment_method === "object"
@@ -143,8 +205,8 @@ function toSnapshot(
     canceled_at: toIso(sub.canceled_at),
     ended_at: toIso(sub.ended_at),
     trial_end: toIso(sub.trial_end),
-    card_brand: pm?.card?.brand ?? null,
-    card_last4: pm?.card?.last4 ?? null,
+    card_brand: card ? card.brand : (pm?.card?.brand ?? null),
+    card_last4: card ? card.last4 : (pm?.card?.last4 ?? null),
   };
 }
 
@@ -325,8 +387,14 @@ async function reconcileInvoicesForSubscription(
 
     const { data: existing, error: readErr } = await supabase
       .from("tenant_subscription_invoices")
+      // MUST list every field in INVOICE_COMPARED. A compared column missing
+      // from this select reads back as `undefined`, which never equals Stripe's
+      // value — so the row is reported as drifted on every single run, forever,
+      // even immediately after being written correctly. That is not just noise:
+      // 59 permanently "changed" invoices would bury the one real change this
+      // pass exists to surface.
       .select(
-        "id, status, amount_due, amount_paid, attempt_count, stripe_invoice_pdf, stripe_hosted_invoice_url",
+        "id, status, amount_due, amount_paid, attempt_count, invoice_date, stripe_invoice_pdf, stripe_hosted_invoice_url",
       )
       .eq("stripe_invoice_id", inv.id)
       .maybeSingle();
@@ -405,6 +473,11 @@ async function reconcileInvoicesForSubscription(
         ? { paid_at: new Date(inv.status_transitions.paid_at * 1000).toISOString() }
         : {}),
       ...(inv.number ? { invoice_number: inv.number } : {}),
+      // Stripe's own invoice date. It is in INVOICE_COMPARED, so leaving it out
+      // of the payload meant every run reported the same 59 rows as drifted and
+      // then wrote none of them — permanent phantom drift that would have hidden
+      // any real change underneath it.
+      ...(inv.created ? { invoice_date: new Date(inv.created * 1000).toISOString() } : {}),
       // The dunning trio. attempt_count decides whether the admin dashboard
       // renders a red "Payment failed" or an amber "Unpaid — not due yet", so
       // omitting it made every reconciler-created invoice look benign. Written
@@ -487,6 +560,8 @@ Deno.serve(async (req) => {
   );
 
   const started = new Date().toISOString();
+  /** How often the card lookup beyond default_payment_method actually helps. */
+  const cardLookup = { found: 0, none: 0, recovered: 0 };
   const changes: any[] = [];
   const orphans: any[] = [];
   const skipped: any[] = [];
@@ -524,7 +599,16 @@ Deno.serve(async (req) => {
         expand: ["data.default_payment_method"],
       })) {
         stripeCount++;
-        const snap = toSnapshot(sub, account, mode);
+        // Look the card up beyond default_payment_method — see
+        // resolveCardForSnapshot. Only costs an extra call when nothing is
+        // pinned to the subscription, which is exactly the case that was
+        // recording no card at all.
+        const resolvedCard = await resolveCardForSnapshot(stripe, sub);
+        if (resolvedCard.last4) cardLookup.found++; else cardLookup.none++;
+        if (!(typeof sub.default_payment_method === "object" && sub.default_payment_method?.card) && resolvedCard.last4) {
+          cardLookup.recovered++;
+        }
+        const snap = toSnapshot(sub, account, mode, resolvedCard);
         const { tenantId, via } = await resolveTenantId(supabase, sub, snap);
 
         if (!tenantId) {
@@ -746,6 +830,7 @@ Deno.serve(async (req) => {
     orphans,
     retiredUkIgnored: retiredUk,
     skippedCells: skipped,
+    cardLookup,
     errors,
   });
 });

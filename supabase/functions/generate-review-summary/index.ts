@@ -1,6 +1,8 @@
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { chatCompletion } from "../_shared/openai.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { authorizeTenantAccess } from "../_shared/tenant-auth.ts";
+import { requireActiveSubscription } from "../_shared/subscription-gate.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -29,6 +31,18 @@ Deno.serve(async (req) => {
     const { customerId, tenantId } = await req.json();
     if (!customerId) return errorResponse("customerId is required", 400);
     if (!tenantId) return errorResponse("tenantId is required", 400);
+
+    // This endpoint takes tenantId from the body, so it needs the same
+    // membership check as the billing functions.
+    const access = await authorizeTenantAccess(supabase, user.id, tenantId);
+    if (!access.ok) return errorResponse(access.message, access.status);
+
+    // Server-side paywall. The hard block was enforced in the BROWSER only, so a
+    // grace-expired tenant could keep driving billable endpoints with a saved
+    // JWT. This one spends OpenAI credit per call and is entirely staff-initiated,
+    // so refusing it costs a lapsed tenant nothing their customers can see.
+    const gate = await requireActiveSubscription(supabase, tenantId);
+    if (gate) return gate;
 
     // Fetch all non-skipped reviews for this customer in this tenant
     const { data: reviews, error: reviewsError } = await supabase

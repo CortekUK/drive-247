@@ -153,8 +153,23 @@ interface InvoiceRow {
  * The level-1 split is the point: it separates "chase the client" from
  * "we haven't done our own setup yet".
  */
+/**
+ * Live, but with a cancellation already booked.
+ *
+ * Stripe keeps such a subscription at status 'active' until the paid period
+ * lapses, so it was indistinguishable from a renewing customer — same green
+ * "Subscribed" badge, same next-invoice date, right up to the day it ended.
+ * Scheduled churn is exactly what a super admin needs to see EARLY.
+ */
+function isEndingSoon(sub: SubscriptionRow | null): boolean {
+  if (!sub) return false;
+  if (sub.status !== 'active' && sub.status !== 'trialing') return false;
+  return !!sub.cancel_at && new Date(sub.cancel_at).getTime() > Date.now();
+}
+
 type SubStatus =
   | 'active'
+  | 'ending'
   | 'trialing'
   | 'past-due'
   | 'expired'
@@ -166,6 +181,7 @@ type SubStatus =
 
 const SUB_STATUS_META: Record<SubStatus, { label: string; className: string }> = {
   active: { label: 'Subscribed', className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+  ending: { label: 'Ending', className: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
   trialing: { label: 'Trialing', className: 'bg-sky-500/15 text-sky-400 border-sky-500/30' },
   'past-due': { label: 'Past due', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
   // CANCELED vs UNPAID vs EXPIRED are three different situations that used to
@@ -212,6 +228,9 @@ function getSubStatus(
   owesMoney = false,
 ): SubStatus {
   if (sub) {
+    // Before 'active': a booked cancellation keeps Stripe's status at 'active'
+    // until the period lapses, so checking status alone hid scheduled churn.
+    if (isEndingSoon(sub)) return 'ending';
     if (sub.status === 'active') return 'active';
     if (sub.status === 'trialing') return 'trialing';
     if (sub.status === 'past_due') return 'past-due';
@@ -264,8 +283,17 @@ function formatDay(value: string | null): string {
 function nextInvoiceDue(
   sub: SubscriptionRow | null,
   unpaid?: InvoiceRow | null
-): { date: string | null; overdue: boolean } {
+): { date: string | null; overdue: boolean; ending?: boolean } {
   if (!sub || !LIVE_STATUSES.has(sub.status)) return { date: null, overdue: false };
+
+  // SCHEDULED TO CANCEL: there is no next invoice. cancel_at is set when a
+  // tenant cancels but keeps the period they have paid for, and the subscription
+  // stays 'active' until it lapses — so this cell confidently printed a date on
+  // which nothing would ever be charged, and the row read as a healthy renewing
+  // customer right up to the day they vanished. Report the ending instead.
+  if (isEndingSoon(sub)) {
+    return { date: sub.cancel_at, overdue: false, ending: true };
+  }
 
   // PAST DUE: report the date the money was actually owed, not the next cycle.
   // When a charge fails Stripe still advances current_period_end by a full
@@ -311,6 +339,18 @@ function isVerificationCharge(inv: InvoiceRow | null | undefined): boolean {
   // nets to nothing) is NOT a card verification, and treating it as one would
   // claim a tenant had entered a card when they had not.
   return amt > 0 && amt <= 100;
+}
+
+/**
+ * A verification hold only proves a card when it actually SUCCEEDED.
+ *
+ * Amount alone was the whole test, so a $1 authorisation that Stripe DECLINED
+ * still announced "Card verified" — directly contradicting the same row's own
+ * "No card entered", and telling an operator a tenant was ready to bill when the
+ * card had just been refused.
+ */
+function verificationChargeSucceeded(inv: InvoiceRow | null | undefined): boolean {
+  return isVerificationCharge(inv) && inv?.status === 'paid';
 }
 
 export default function RentalCompaniesPage() {
@@ -675,7 +715,7 @@ export default function RentalCompaniesPage() {
 
   const subscriptionSummary = (() => {
     const tally: Record<SubStatus, number> = {
-      active: 0, trialing: 0, 'past-due': 0, canceled: 0, unpaid: 0,
+      active: 0, ending: 0, trialing: 0, 'past-due': 0, canceled: 0, unpaid: 0,
       expired: 0, 'not-converted': 0,
       'paywall-set': 0, 'paywall-not-set': 0,
     };
@@ -697,8 +737,11 @@ export default function RentalCompaniesPage() {
       //
       // A paid invoice is the discriminator: a genuine new-signup trial has none.
       const hasPaidBefore = (paidInvoiceTenantIds?.has(t.id) ?? false);
+      // 'ending' is still being billed for the period they have paid for, so it
+      // is real revenue today — but it is leaving, which is why it gets its own
+      // badge rather than being folded into 'Subscribed'.
       const isRevenueBearing =
-        status === 'active' || (status === 'trialing' && hasPaidBefore);
+        status === 'active' || status === 'ending' || (status === 'trialing' && hasPaidBefore);
 
       // Amounts are kept PER CURRENCY. The plan editor offers USD, GBP and EUR,
       // and these were previously summed into one integer and rendered with a
@@ -976,6 +1019,7 @@ export default function RentalCompaniesPage() {
               {(
                 [
                   ['active', 'Subscribed'],
+                  ['ending', 'Ending'],
                   ['trialing', 'Trialing'],
                   ['past-due', 'Past due'],
                   ['unpaid', 'Unpaid'],
@@ -1041,9 +1085,13 @@ export default function RentalCompaniesPage() {
           <CardContent className="py-4 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
             <div className="text-sm">
+              {/* Say what is actually true. The old copy claimed the figures
+                  "are not shown", but the stat cards and every table row kept
+                  rendering underneath it — so the banner reassured the operator
+                  that nothing misleading was on screen while the misleading
+                  numbers sat directly below it. */}
               <p className="font-medium text-destructive">
-                Could not load subscription data — the figures below are not shown because they
-                would be wrong.
+                Could not refresh subscription data — anything below may be out of date.
               </p>
               <p className="text-muted-foreground mt-1">{subsError}</p>
               <button
@@ -1253,6 +1301,13 @@ export default function RentalCompaniesPage() {
                             <span className="text-muted-foreground">
                               Ended {formatDay(endedOn)}
                             </span>
+                          ) : due.ending && due.date ? (
+                            // No invoice will be issued — the subscription is
+                            // already booked to cancel. Printing the period end
+                            // as a due date promised a charge that never comes.
+                            <span className="font-medium text-orange-400">
+                              Ends {formatDay(due.date)} · no renewal
+                            </span>
                           ) : due.date ? (
                             <span className={due.overdue ? 'font-medium text-destructive' : 'text-muted-foreground'}>
                               {due.overdue ? `Overdue since ${formatDay(due.date)}` : formatDay(due.date)}
@@ -1283,8 +1338,10 @@ export default function RentalCompaniesPage() {
                           <span
                             className={cn(
                               'text-[11px] font-medium',
-                              isVerificationCharge(inv)
+                              verificationChargeSucceeded(inv)
                                 ? 'text-muted-foreground'
+                                : isVerificationCharge(inv) && inv.status === 'open'
+                                ? 'text-destructive'
                                 : inv.status === 'paid'
                                 ? 'text-emerald-400'
                                 : inv.status === 'open'
@@ -1294,8 +1351,12 @@ export default function RentalCompaniesPage() {
                                 : 'text-muted-foreground'
                             )}
                           >
-                            {isVerificationCharge(inv)
+                            {verificationChargeSucceeded(inv)
                               ? 'Card verified'
+                              : isVerificationCharge(inv) && inv.status === 'open'
+                              // The $1 hold was attempted and refused — the
+                              // opposite of verified.
+                              ? ((inv.attempt_count ?? 0) > 0 ? 'Card declined' : 'Card check pending')
                               : inv.status === 'paid'
                               ? 'Paid'
                               : inv.status === 'open'

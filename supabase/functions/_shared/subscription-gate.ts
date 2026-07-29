@@ -1,12 +1,20 @@
 // Defense-in-depth subscription gate for tenant-facing edge functions.
 //
-// ⚠️ CURRENTLY UNUSED. As of 2026-07-28 nothing imports this module — a repo-wide
-// search for `requireActiveSubscription` finds only this file and the usage
-// example below. The subscription paywall is therefore enforced in the BROWSER
-// ONLY: a caller with a saved JWT can still drive every edge function directly,
-// whatever their subscription state. The logic here is correct and ready, but
-// wiring it into the sensitive functions is still outstanding work — do not read
-// this file's existence as evidence that server-side gating is in place.
+// COVERAGE (as of 2026-07-29). Wired into generate-review-summary. It sat
+// entirely unimported before that, which meant the paywall was enforced in the
+// BROWSER ONLY — a caller with a saved JWT could drive every edge function
+// whatever their subscription state.
+//
+// Coverage is still PARTIAL and deliberately so. Gating is applied where
+// refusing costs the platform money and costs a lapsed tenant's own customers
+// nothing: staff-initiated work that spends OpenAI/verification credit. It is
+// NOT applied to customer-facing paths (the booking-site chatbot, notification
+// sending), because blocking those punishes the tenant's customers for the
+// tenant's unpaid bill — that is a product call, not a code one.
+//
+// So: do not read an import of this module as "the platform is fully gated
+// server-side". Check the import list before assuming any given function is
+// protected.
 //
 // The Next.js middleware blocks tenant staff from reaching the portal UI when
 // they're unsubscribed, and the client-side modal is the visible signal — but

@@ -78,6 +78,7 @@ export default function DashboardLayout({
     isSubscribed,
     hasExpiredSubscription,
     isGraceExpired,
+    owesOutstandingInvoice,
     isResolved: subscriptionResolved,
   } = useTenantSubscription();
   const { isManager, canAccessRoute, isLoading: permissionsLoading } = useManagerPermissions();
@@ -304,7 +305,18 @@ export default function DashboardLayout({
         <SubscriptionGateDialog
           open={showGate}
           variant={
-            isGraceExpired ? "past_due" : hasExpiredSubscription ? "expired" : "setup"
+            // Money still owed wins over "your subscription ended", whichever
+            // way the subscription got here. Stripe's default at the end of
+            // dunning is to CANCEL, which moves the row off past_due — so a
+            // debtor stopped matching isGraceExpired and was shown the
+            // "expired" gate: pricing cards inviting them to subscribe again,
+            // with no mention of the invoice they still owe and no way to pay
+            // it. The past_due variant is the one carrying the pay link.
+            isGraceExpired || (hasExpiredSubscription && owesOutstandingInvoice)
+              ? "past_due"
+              : hasExpiredSubscription
+                ? "expired"
+                : "setup"
           }
         />
 
