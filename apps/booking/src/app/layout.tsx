@@ -18,6 +18,7 @@ import { BookingPersistenceGuard } from '@/components/BookingPersistenceGuard';
 import DevJumpPanel from '@/components/DevJumpPanel';
 import { MaintenanceBanner } from '@/components/MaintenanceBanner';
 import { SuspendedGate } from '@/components/SuspendedGate';
+import { GoogleAnalytics } from '@/components/GoogleAnalytics';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -100,6 +101,10 @@ export default function RootLayout({
         <NextTopLoader color="hsl(var(--primary))" height={2} showSpinner={false} />
         <QueryClientProvider>
           <TenantProvider>
+            {/* Loads the tenant's own Google tag (gtag.js) when configured —
+                reads ga_measurement_id from TenantContext, so it must sit inside
+                TenantProvider. Renders nothing when unset. */}
+            <GoogleAnalytics />
             <CustomerAuthProvider>
               <BookingPersistenceGuard>
               <ThemeProvider

@@ -28,6 +28,8 @@ export interface TenantBranding {
   meta_title: string | null;
   meta_description: string | null;
   og_image_url: string | null;
+  // Google tag / GA4 measurement ID (e.g. G-XXXXXXXXXX) for the booking site
+  ga_measurement_id: string | null;
   // Contact info
   phone: string | null;
   address: string | null;
@@ -73,6 +75,7 @@ const DEFAULT_BRANDING: TenantBranding = {
   meta_title: null,
   meta_description: null,
   og_image_url: null,
+  ga_measurement_id: null,
   phone: null,
   address: null,
   business_hours: null,
@@ -132,6 +135,7 @@ export const useTenantBranding = () => {
     meta_title: tenantAny?.meta_title ?? null,
     meta_description: tenantAny?.meta_description ?? null,
     og_image_url: tenantAny?.og_image_url ?? null,
+    ga_measurement_id: tenantAny?.ga_measurement_id ?? null,
     phone: tenantAny?.phone ?? null,
     address: tenantAny?.address ?? null,
     business_hours: tenantAny?.business_hours ?? null,
@@ -183,6 +187,7 @@ export const useTenantBranding = () => {
           meta_title,
           meta_description,
           og_image_url,
+          ga_measurement_id,
           phone,
           address,
           business_hours,
@@ -329,6 +334,7 @@ export const useTenantBranding = () => {
           meta_title,
           meta_description,
           og_image_url,
+          ga_measurement_id,
           phone,
           address,
           business_hours,

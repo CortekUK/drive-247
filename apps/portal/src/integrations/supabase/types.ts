@@ -13951,6 +13951,7 @@ export type Database = {
           enquiries_enabled: boolean
           facebook_url: string | null
           favicon_url: string | null
+          ga_measurement_id: string | null
           fixed_address_enabled: boolean | null
           fixed_pickup_address: string | null
           fixed_return_address: string | null
@@ -14185,6 +14186,7 @@ export type Database = {
           enquiries_enabled?: boolean
           facebook_url?: string | null
           favicon_url?: string | null
+          ga_measurement_id?: string | null
           fixed_address_enabled?: boolean | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
@@ -14419,6 +14421,7 @@ export type Database = {
           enquiries_enabled?: boolean
           facebook_url?: string | null
           favicon_url?: string | null
+          ga_measurement_id?: string | null
           fixed_address_enabled?: boolean | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null

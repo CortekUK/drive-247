@@ -518,6 +518,7 @@ const Settings = () => {
     meta_title: '',
     meta_description: '',
     og_image_url: '',
+    ga_measurement_id: '',
     favicon_url: '',
   });
   const [isSavingBranding, setIsSavingBranding] = useState(false);
@@ -551,6 +552,7 @@ const Settings = () => {
       meta_title: b.meta_title || '',
       meta_description: b.meta_description || '',
       og_image_url: b.og_image_url || '',
+      ga_measurement_id: b.ga_measurement_id || '',
       favicon_url: b.favicon_url || '',
     });
   }, [tenantBranding, defaultAppName]);
@@ -578,6 +580,7 @@ const Settings = () => {
       meta_title: b.meta_title || '',
       meta_description: b.meta_description || '',
       og_image_url: b.og_image_url || '',
+      ga_measurement_id: b.ga_measurement_id || '',
       favicon_url: b.favicon_url || '',
     });
   };
@@ -621,6 +624,7 @@ const Settings = () => {
       brandingForm.meta_title !== (b.meta_title || '') ||
       brandingForm.meta_description !== (b.meta_description || '') ||
       brandingForm.og_image_url !== (b.og_image_url || '') ||
+      brandingForm.ga_measurement_id !== (b.ga_measurement_id || '') ||
       brandingForm.favicon_url !== (b.favicon_url || '')
     );
   }, [brandingForm, tenantBranding, defaultAppName]);
@@ -817,6 +821,7 @@ const Settings = () => {
               meta_title: form.meta_title,
               meta_description: form.meta_description,
               og_image_url: form.og_image_url,
+              ga_measurement_id: form.ga_measurement_id.trim().toUpperCase() || null,
               favicon_url: form.favicon_url || null,
               // logo_url deliberately NOT sent. The logo persists the instant it
               // is uploaded (see the LogoUploadWithResize onLogoChange handler),
@@ -1314,6 +1319,7 @@ const Settings = () => {
         meta_title: form.meta_title,
         meta_description: form.meta_description,
         og_image_url: form.og_image_url,
+        ga_measurement_id: form.ga_measurement_id.trim().toUpperCase() || null,
         favicon_url: form.favicon_url || null,
         // logo_url deliberately NOT sent — see the matching note on the
         // unsaved-changes save above. The logo saves itself on upload; echoing
@@ -2251,6 +2257,36 @@ const Settings = () => {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="ga_measurement_id">Google Tag / Analytics ID</Label>
+                <Input
+                  id="ga_measurement_id"
+                  value={brandingForm.ga_measurement_id}
+                  onChange={(e) => setBrandingForm(prev => ({ ...prev, ga_measurement_id: e.target.value }))}
+                  placeholder="G-XXXXXXXXXX"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                {(() => {
+                  const v = brandingForm.ga_measurement_id.trim().toUpperCase();
+                  if (!v) {
+                    return (
+                      <p className="text-xs text-muted-foreground">
+                        Paste your Google tag ID (e.g. G-BQ0W52VG1R) to add analytics to your booking site. Leave blank to turn it off.
+                      </p>
+                    );
+                  }
+                  const valid = /^(G|GT|AW|UA|GTM|DC)-[A-Z0-9]+(-[A-Z0-9]+)?$/.test(v);
+                  return (
+                    <p className={`text-xs ${valid ? 'text-green-600' : 'text-destructive'}`}>
+                      {valid
+                        ? "Looks good — your Google tag will load on the booking site once you save."
+                        : "That doesn't look like a Google tag ID. It should look like G-XXXXXXXXXX."}
+                    </p>
+                  );
+                })()}
+              </div>
+
+              <div className="space-y-2">
                 <Label>Social Share Image (OG Image)</Label>
                 <OGImageUpload
                   currentImageUrl={brandingForm.og_image_url || undefined}
@@ -2317,6 +2353,7 @@ const Settings = () => {
                             meta_title: `${resetAppName} - Portal`,
                             meta_description: 'Fleet management portal',
                             og_image_url: '',
+                            ga_measurement_id: null,
                             favicon_url: null,
                           };
                           // Update tenant branding (for useDynamicTheme)

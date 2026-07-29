@@ -168,6 +168,9 @@ export interface Tenant {
   // Buffer time between rentals (minutes)
   buffer_time_minutes: number | null;
 
+  // Google tag / GA4 measurement ID for the public booking site (null = off)
+  ga_measurement_id: string | null;
+
   // Lead capture
   enquiries_enabled: boolean | null;
 
@@ -458,7 +461,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           buffer_time_minutes,
           enquiries_enabled,
           payg_upfront_required,
-          gig_driver_enabled
+          gig_driver_enabled,
+          ga_measurement_id
         `)
         .eq('slug', slug)
         // Load active AND suspended tenants so a suspended tenant resolves and

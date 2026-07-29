@@ -324,61 +324,85 @@ async function handleDelete(supabase: any, body: any) {
   const { planId } = body;
   if (!planId) return errorResponse("planId is required");
 
-  // Block only on a LIVE billing relationship.
-  //
-  // This used to reject if ANY tenant_subscriptions row referenced the plan,
-  // regardless of status — so once a tenant cancelled, their plan became
-  // permanently undeletable with the unhelpful advice to "deactivate it
-  // instead". A canceled / incomplete_expired / unpaid subscription is history,
-  // not billing: nothing breaks by removing the plan it used to point at.
-  const LIVE = ["active", "trialing", "past_due"];
+  // Fetch FIRST, mutate LAST. A bad planId must short-circuit before anything
+  // is touched, and the sibling handlers already 404 this way.
+  const { data: plan, error: planErr } = await supabase
+    .from("subscription_plans")
+    .select("stripe_price_id, tenant_id, stripe_account")
+    .eq("id", planId)
+    .maybeSingle();
 
-  const { data: liveSubs, error: liveErr } = await supabase
+  if (planErr) throw planErr;
+  if (!plan) return errorResponse("Plan not found", 404);
+
+  // Block on anything that is NOT terminal.
+  //
+  // Originally this rejected if ANY tenant_subscriptions row referenced the
+  // plan, whatever its status — so the moment a tenant cancelled, their plan
+  // became permanently undeletable with the unhelpful advice to "deactivate it
+  // instead".
+  //
+  // The predicate is inverted deliberately: allow only the two states Stripe
+  // can never resume from, rather than listing the ones to block. 'incomplete'
+  // resumes when an SCA challenge clears and 'unpaid' resumes when the invoice
+  // is paid — both come back LIVE, and nothing ever restores plan_id — so an
+  // allow-list would quietly detach a subscription that later reactivates. This
+  // way an unrecognised future Stripe status blocks loudly instead of being
+  // silently treated as history.
+  const TERMINAL = ["canceled", "incomplete_expired"];
+
+  const { data: blocking, error: blockErr } = await supabase
     .from("tenant_subscriptions")
     .select("id, status")
     .eq("plan_id", planId)
-    .in("status", LIVE)
+    .not("status", "in", `(${TERMINAL.join(",")})`)
     .limit(1);
 
-  if (liveErr) throw liveErr;
+  if (blockErr) throw blockErr;
 
-  if (liveSubs && liveSubs.length > 0) {
+  if (blocking && blocking.length > 0) {
     return errorResponse(
-      `Cannot delete a plan with a live subscription on it (status: ${liveSubs[0].status}). Cancel or migrate that subscription first, or deactivate the plan to hide it from new signups.`,
+      `Cannot delete a plan while a subscription is still on it (status: ${blocking[0].status}). Cancel that subscription first, or deactivate the plan to hide it from new signups.`,
       409,
     );
   }
 
-  // Historical rows keep pointing at this plan, and the FK
-  // (tenant_subscriptions_plan_id_fkey) has no ON DELETE clause, so it defaults
-  // to NO ACTION and the delete below would fail at the database level. Release
-  // them first. Nothing is lost: plan_name, amount, currency and interval are
-  // denormalised onto tenant_subscriptions, so the invoice history still shows
-  // what the tenant was actually on.
-  const { error: releaseErr } = await supabase
-    .from("tenant_subscriptions")
-    .update({ plan_id: null })
-    .eq("plan_id", planId);
-
-  if (releaseErr) throw releaseErr;
-
-  const { data: plan } = await supabase
-    .from("subscription_plans")
-    .select("stripe_price_id, tenant_id, stripe_account")
-    .eq("id", planId)
-    .single();
-
-  if (plan?.stripe_price_id) {
-    const stripe = await getStripeForPlan(supabase, plan.tenant_id, plan.stripe_account);
-    await archivePriceIfPresent(stripe, plan.stripe_price_id);
-  }
-
+  // Delete FIRST, archive the Stripe price after.
+  //
+  // Historical rows are released by the database: tenant_subscriptions_plan_id_fkey
+  // is now ON DELETE SET NULL, so the release and the delete are one atomic
+  // statement. The previous version nulled plan_id itself, BEFORE the delete —
+  // so any failure in between left history detached AND the plan still present,
+  // a state nothing repaired. That destructive step no longer exists here.
+  //
+  // Archiving after the commit also avoids the reverse hazard: a price archived
+  // ahead of a delete that then fails leaves a plan still advertised in the
+  // portal that checkout can no longer use.
   const { error } = await supabase
     .from("subscription_plans")
     .delete()
     .eq("id", planId);
 
   if (error) throw error;
+
+  if (plan.stripe_price_id) {
+    try {
+      const stripe = await getStripeForPlan(supabase, plan.tenant_id, plan.stripe_account);
+      await archivePriceIfPresent(stripe, plan.stripe_price_id);
+    } catch (archiveErr) {
+      // The plan is already gone from our side and cannot be checked out, so a
+      // stranded active Price in Stripe is untidy rather than dangerous. Report
+      // it instead of failing a delete that has already succeeded.
+      console.error(
+        `[manage-subscription-plans] plan ${planId} deleted, but archiving price ${plan.stripe_price_id} failed:`,
+        (archiveErr as any)?.message ?? archiveErr,
+      );
+      return jsonResponse({
+        success: true,
+        warning: "Plan deleted, but its Stripe price could not be archived. Archive it manually in Stripe.",
+      });
+    }
+  }
 
   return jsonResponse({ success: true });
 }

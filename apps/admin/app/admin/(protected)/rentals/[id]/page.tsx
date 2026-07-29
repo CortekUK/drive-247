@@ -969,10 +969,17 @@ export default function TenantDetailsPage() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success(`"${plan.name}" has been deleted`);
+      // The function can succeed but fail to archive the Stripe price.
+      if (data?.warning) toast.warning(data.warning);
+      else toast.success(`"${plan.name}" has been deleted`);
       loadPlans(tenant.id);
     } catch (error: any) {
-      toast.error(`Something went wrong while deleting the plan. Please try again.`);
+      // Show the REAL reason. supabase-js throws a generic FunctionsHttpError and
+      // puts the message in the response body, so this used to render
+      // "Something went wrong... Please try again" for a deliberate 409 — advice
+      // that is not just unhelpful but wrong, since retrying cannot work.
+      // Matches the discount handlers, which already do this.
+      toast.error(await fnErrorMessage(error, `Failed to delete "${plan.name}"`));
     }
   };
 

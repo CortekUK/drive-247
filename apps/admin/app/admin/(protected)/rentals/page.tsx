@@ -122,6 +122,8 @@ interface SubscriptionRow {
   trial_end: string | null;
   cancel_at: string | null;
   canceled_at: string | null;
+  /** Set by the webhook when a subscription actually ends — see subscriptionEndedOn. */
+  ended_at: string | null;
   created_at: string;
 }
 
@@ -266,7 +268,17 @@ function nextInvoiceDue(
  */
 function subscriptionEndedOn(sub: SubscriptionRow | null): string | null {
   if (!sub) return null;
-  return sub.canceled_at || sub.cancel_at || null;
+  // ended_at first: the webhook populates it, but it was never selected, so this
+  // fell back to canceled_at/cancel_at — both of which Stripe leaves NULL for a
+  // subscription that reached 'unpaid' or 'paused' rather than being cancelled.
+  // Those rows therefore rendered a blank date.
+  if (sub.ended_at) return sub.ended_at;
+  if (sub.canceled_at) return sub.canceled_at;
+  // cancel_at is a SCHEDULED cancellation and is routinely in the FUTURE, so it
+  // must never be printed as "Ended <date>" for a subscription that has not
+  // ended yet.
+  if (sub.cancel_at && new Date(sub.cancel_at).getTime() <= Date.now()) return sub.cancel_at;
+  return null;
 }
 
 /**
@@ -342,7 +354,7 @@ export default function RentalCompaniesPage() {
         const [subsRes, plansRes, invoicesRes] = await Promise.all([
           supabase
             .from('tenant_subscriptions')
-            .select('tenant_id, status, amount, currency, interval, plan_name, current_period_end, trial_end, cancel_at, canceled_at, created_at'),
+            .select('tenant_id, status, amount, currency, interval, plan_name, current_period_end, trial_end, cancel_at, canceled_at, ended_at, created_at'),
           // A plan is only a usable paywall if it can actually be checked out.
           // create-subscription-checkout rejects a plan with no stripe_price_id
           // ("Plan has no Stripe price configured"), and
@@ -685,7 +697,21 @@ export default function RentalCompaniesPage() {
       // collections problem look like churn: the moment a card failed, the
       // headline figure silently dropped by that tenant's full amount with
       // nothing on screen saying why. Surface it separately instead.
-      if (status === 'past-due' && monthly) {
+      //
+      // 'unpaid' means Stripe exhausted its retries and gave up — strictly MORE
+      // owed than past_due, yet it counted toward neither figure, so a tenant
+      // who stopped paying $300/mo showed a red badge and $0 everywhere.
+      //
+      // And because Stripe's default end-of-dunning is to CANCEL, the commonest
+      // debtor lands at 'canceled' with an invoice still open. Keyed on the open
+      // invoice rather than the status word, so involuntary churn is counted and
+      // a genuine voluntary cancellation (nothing outstanding) is not.
+      const owesMoney = !!oldestUnpaidInvoice.get(t.id);
+      const atRisk =
+        status === 'past-due' ||
+        status === 'unpaid' ||
+        ((status === 'canceled' || status === 'expired') && owesMoney);
+      if (atRisk && monthly) {
         atRiskByCurrency[cur] = (atRiskByCurrency[cur] ?? 0) + monthly;
       }
     }
@@ -962,7 +988,7 @@ export default function RentalCompaniesPage() {
                   <span className="text-xl font-semibold tabular-nums text-amber-400">
                     {formatByCurrency(subscriptionSummary.atRiskByCurrency)}
                   </span>
-                  <span className="text-xs text-muted-foreground">At risk (past due)</span>
+                  <span className="text-xs text-muted-foreground">At risk (owed)</span>
                 </div>
               )}
               <div
@@ -1098,17 +1124,35 @@ export default function RentalCompaniesPage() {
                 {isSubscriptionView && (() => {
                   const sub = selectSubscription(subsByTenant.get(tenant.id));
                   const subStatus = getSubStatus(sub, planTenantIds.has(tenant.id));
-                  const meta = SUB_STATUS_META[subStatus];
                   const inv = latestInvoice.get(tenant.id);
                   const unpaid = oldestUnpaidInvoice.get(tenant.id);
                   const due = nextInvoiceDue(sub, unpaid);
-                  // All three terminal buckets get the "Ended <date>" treatment —
-                  // gating on 'expired' alone meant a canceled or unpaid tenant
-                  // showed a blank date cell after the split above.
-                  const endedOn =
-                    subStatus === 'expired' || subStatus === 'canceled' || subStatus === 'unpaid'
-                      ? subscriptionEndedOn(sub)
-                      : null;
+
+                  // A terminal status does NOT mean nothing is owed.
+                  //
+                  // Stripe's DEFAULT end-of-dunning behaviour is to CANCEL the
+                  // subscription, so the most common way a debtor ends up
+                  // terminal is status='canceled' with an invoice still open.
+                  // Badging that plain grey "Canceled" would hide involuntary
+                  // churn behind a label that reads "ended deliberately, nothing
+                  // owed" — the opposite of the truth, on the screen used to
+                  // decide who to chase. Money owed always outranks the status
+                  // word.
+                  const owesMoney = !!unpaid;
+                  const meta =
+                    owesMoney && (subStatus === 'canceled' || subStatus === 'expired')
+                      ? {
+                          label: `${SUB_STATUS_META[subStatus].label} · balance owed`,
+                          className: 'bg-destructive/15 text-destructive border-destructive/30',
+                        }
+                      : SUB_STATUS_META[subStatus];
+
+                  // Derived from LIVE_STATUSES rather than a hand-listed set, so
+                  // a future SubStatus cannot silently fall through to a blank
+                  // date cell — the same silent-omission failure as the bug this
+                  // commit set out to fix.
+                  const isTerminal = !!sub && !LIVE_STATUSES.has(sub.status);
+                  const endedOn = isTerminal ? subscriptionEndedOn(sub) : null;
 
                   // Until the fetch lands, render placeholders rather than
                   // "Paywall not set" — an absent Map would otherwise libel
