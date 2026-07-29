@@ -298,7 +298,15 @@ export function WorkingHoursCard() {
     try {
       const updateData: Record<string, any> = {
         working_hours_always_open: form.working_hours_always_open,
-        working_hours_enabled: true,
+        // NOTE: working_hours_enabled is deliberately NOT written here.
+        // This card exposes no control for it, yet it used to hardcode `true` on
+        // every Save — silently asserting a booking-side gate the operator never
+        // touched. The booking site reads `working_hours_enabled` as a master
+        // kill-switch (`isAlwaysOpen || !working_hours_enabled` => open all day),
+        // so re-asserting it here could flip a tenant who was intentionally
+        // unrestricted into a restricted one. The column defaults to true, so
+        // omitting it leaves every real tenant exactly as-is; the portal now
+        // writes only the fields it actually controls (always_open + per-day).
         timezone: form.timezone,
         // Per-day schedule
         monday_enabled: form.schedule.monday.enabled,
@@ -539,7 +547,8 @@ export function WorkingHoursCard() {
                       try {
                         const updateData: Record<string, any> = {
                           working_hours_always_open: true,
-                          working_hours_enabled: true,
+                          // Not written — see the note in handleSave. always_open:true
+                          // already means "open all day" regardless of this flag.
                           timezone: form.timezone,
                           monday_enabled: DEFAULT_SCHEDULE.monday.enabled,
                           monday_open: DEFAULT_SCHEDULE.monday.open,

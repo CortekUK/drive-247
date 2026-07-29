@@ -246,8 +246,14 @@ export function useWorkingHours(forDate?: Date): WorkingHoursStatus {
     const openMinutes = openHour * 60 + openMin;
     const closeMinutes = closeHour * 60 + closeMin;
 
-    // Check if currently within working hours
-    const isOpen = currentMinutes >= openMinutes && currentMinutes < closeMinutes;
+    // Check if currently within working hours. A close earlier than open marks
+    // a window that spans midnight (e.g. 8 PM – 2 AM, or a "closes at midnight"
+    // 9 AM – 12 AM that parses as close 0); the within-day comparison would call
+    // such a business permanently closed. Close stays exclusive in both branches.
+    const isOpen =
+      closeMinutes < openMinutes
+        ? currentMinutes >= openMinutes || currentMinutes < closeMinutes
+        : currentMinutes >= openMinutes && currentMinutes < closeMinutes;
 
     // Calculate next open time (for display)
     let nextOpenTime: Date | null = null;
@@ -387,6 +393,24 @@ export function isTimeWithinWorkingHours(
   const [closeHour, closeMin] = daySchedule.close.split(':').map(Number);
   const openMinutes = openHour * 60 + openMin;
   const closeMinutes = closeHour * 60 + closeMin;
+
+  // A close earlier than open marks a window spanning midnight (e.g. 8 PM – 2 AM,
+  // or a "closes at midnight" 9 AM – 12 AM parsing as close 0). The valid set is
+  // then [open, 24:00) ∪ [00:00, close]; the two straight-line checks below would
+  // reject every time. The within-day branch is unchanged, so normal hours (the
+  // only kind any current tenant has) behave exactly as before.
+  if (closeMinutes < openMinutes) {
+    const withinOvernight =
+      requestedMinutes >= openMinutes || requestedMinutes <= closeMinutes;
+    if (!withinOvernight) {
+      return {
+        isValid: false,
+        reason: `Selected time is outside opening hours (${formatTime12Hour(daySchedule.open)} – ${formatTime12Hour(daySchedule.close)})`,
+        schedule: daySchedule,
+      };
+    }
+    return { isValid: true, schedule: daySchedule };
+  }
 
   if (requestedMinutes < openMinutes) {
     return {

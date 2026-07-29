@@ -35,6 +35,15 @@ function isTimeWithinBusinessHours(time: string, openTime: string, closeTime: st
   const timeMinutes = timeToMinutes(time)
   const openMinutes = timeToMinutes(openTime)
   const closeMinutes = timeToMinutes(closeTime)
+  // A window whose close is EARLIER than its open spans midnight — e.g. a
+  // genuine night window (8:00 PM – 2:00 AM) or "we close at midnight"
+  // (9:00 AM – 12:00 AM, which parses as open 540, close 0). Without this the
+  // check `t >= open && t <= close` is unsatisfiable and the picker rejected
+  // EVERY time. The within-day branch (close > open) is unchanged, so no tenant
+  // with normal hours is affected.
+  if (closeMinutes < openMinutes) {
+    return timeMinutes >= openMinutes || timeMinutes <= closeMinutes
+  }
   return timeMinutes >= openMinutes && timeMinutes <= closeMinutes
 }
 
@@ -283,7 +292,14 @@ export function TimePicker({
     const closeMinutes = timeToMinutes(displayBusinessHours.close)
 
     let correctedMinutes: number
-    if (currentMinutes < openMinutes) {
+    if (closeMinutes < openMinutes) {
+      // Window spans midnight (see isTimeWithinBusinessHours). Valid set is
+      // [open, 24:00) ∪ [00:00, close]; "invalid" means the closed gap between
+      // close and open. Snap such a pick up to the opening time — the start of
+      // the evening window is the intuitive nearest valid slot.
+      if (currentMinutes >= openMinutes || currentMinutes <= closeMinutes) return
+      correctedMinutes = openMinutes
+    } else if (currentMinutes < openMinutes) {
       // Before opening - set to opening time
       correctedMinutes = openMinutes
     } else if (currentMinutes > closeMinutes) {
