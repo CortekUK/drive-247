@@ -13,13 +13,20 @@ import { useTenant } from "@/contexts/TenantContext";
  * configured ID this renders nothing and those event calls stay inert (they are
  * already guarded by `if (window.gtag)`), so analytics is strictly opt-in.
  *
- * SECURITY: the ID is operator-controlled data rendered into a <script>, so it
- * is validated against a strict allow-list of Google tag formats (GA4 `G-`,
- * Google tag `GT-`, Ads `AW-`, GTM `GTM-`, legacy UA `UA-…-…`, DoubleClick
- * `DC-`). Anything that does not match is dropped — nothing arbitrary can reach
- * the script body, so a stray value cannot inject markup.
+ * Deliberately GA4-only. This loader is gtag.js, which serves GA4 measurement
+ * ids (`G-…`) and the unified Google tag (`GT-…`). It does NOT bootstrap a Google
+ * Tag Manager container (`GTM-…` needs gtm.js), and Universal Analytics (`UA-…`)
+ * was shut down in 2023 — accepting those would inject a script that loads and
+ * defines window.gtag but forwards ZERO data, which reads to the operator as
+ * "it's set up" while nothing is tracked. So we accept only what this pipeline
+ * actually reports through.
+ *
+ * SECURITY: the ID is operator-controlled data interpolated into a <script>, so
+ * it is validated against this strict allow-list (after trim + toUpperCase).
+ * Anything that does not match is dropped — every accepted value is [A-Z0-9-]
+ * plus a fixed prefix, so nothing arbitrary can reach the script body.
  */
-const VALID_MEASUREMENT_ID = /^(G|GT|AW|UA|GTM|DC)-[A-Z0-9]+(-[A-Z0-9]+)?$/;
+const VALID_MEASUREMENT_ID = /^(G|GT)-[A-Z0-9]+$/;
 
 export function GoogleAnalytics() {
   const { tenant } = useTenant();
@@ -38,6 +45,17 @@ export function GoogleAnalytics() {
         id="ga-lib"
         src={`https://www.googletagmanager.com/gtag/js?id=${id}`}
         strategy="afterInteractive"
+        onError={() => {
+          // Almost always a client-side ad/tracking blocker, not a
+          // misconfiguration — window.gtag is still defined by ga-init, so
+          // events "fire" but never reach Google. Logging it lets support tell
+          // "blocked by the visitor" apart from "wrong ID / not configured".
+          // Validate a live tag in a clean browser via GA4 Realtime, not by
+          // checking typeof window.gtag.
+          console.warn(
+            `[GoogleAnalytics] gtag.js for ${id} failed to load — likely blocked by a browser extension or privacy setting.`
+          );
+        }}
       />
       <Script id="ga-init" strategy="afterInteractive">
         {`window.dataLayer = window.dataLayer || [];

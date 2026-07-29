@@ -2271,16 +2271,26 @@ const Settings = () => {
                   if (!v) {
                     return (
                       <p className="text-xs text-muted-foreground">
-                        Paste your Google tag ID (e.g. G-BQ0W52VG1R) to add analytics to your booking site. Leave blank to turn it off.
+                        Paste your GA4 Measurement ID (e.g. G-BQ0W52VG1R) to add analytics to your booking site. Leave blank to turn it off.
                       </p>
                     );
                   }
-                  const valid = /^(G|GT|AW|UA|GTM|DC)-[A-Z0-9]+(-[A-Z0-9]+)?$/.test(v);
+                  // Must match the booking site's accepted formats EXACTLY, or the
+                  // green hint would promise something that never loads. gtag.js
+                  // serves GA4 (G-) and Google tag (GT-) only.
+                  const valid = /^(G|GT)-[A-Z0-9]+$/.test(v);
+                  // Steer the common wrong-ID-type mistakes to the right value
+                  // instead of a generic "invalid".
+                  const message = valid
+                    ? "Looks good — your Google tag will load on the booking site once you save."
+                    : v.startsWith('GTM-')
+                      ? "That's a Google Tag Manager container. Enter your GA4 Measurement ID (G-XXXXXXXXXX) instead."
+                      : v.startsWith('UA-')
+                        ? "Universal Analytics has shut down. Enter your GA4 Measurement ID (G-XXXXXXXXXX)."
+                        : "That doesn't look like a GA4 Measurement ID. It should look like G-XXXXXXXXXX.";
                   return (
                     <p className={`text-xs ${valid ? 'text-green-600' : 'text-destructive'}`}>
-                      {valid
-                        ? "Looks good — your Google tag will load on the booking site once you save."
-                        : "That doesn't look like a Google tag ID. It should look like G-XXXXXXXXXX."}
+                      {message}
                     </p>
                   );
                 })()}
