@@ -204,11 +204,32 @@ Deno.serve(async (req) => {
       });
     }
 
+    // REUSE an existing Stripe customer when we already have one; only fall back
+    // to customer_email for a tenant we have never billed.
+    //
+    // customer_email lets Stripe mint a NEW customer at checkout, which keeps the
+    // email field editable (the reason the original note below warns against
+    // `customer:`). That is right the FIRST time — a tenant may want billing to
+    // go to a finance inbox rather than their login. It is wrong every time
+    // after: each retry or resubscribe spawned another customer for the same
+    // tenant, scattering their payment methods and billing history across
+    // several. One tenant accumulated three in a single morning.
+    //
+    // It also makes the flow testable. A Stripe test clock can only ever hold a
+    // customer that was CREATED on it, so while checkout always minted its own
+    // customer, a subscription made through the portal could never be attached to
+    // a clock — and the tenant-facing billing flow could not be fast-forwarded at
+    // all. Point tenants.stripe_subscription_customer_id at a clock customer and
+    // the ordinary portal checkout now lands on that clock.
+    const existingCustomerId = tenant.stripe_subscription_customer_id || null;
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
-      // Prefilled but EDITABLE email (see note above). Do not switch this back
-      // to `customer:` — that locks the email field in Stripe Checkout.
-      customer_email: tenant.contact_email,
+      // Prefilled but EDITABLE email — do NOT switch this back to `customer:`
+      // for a first-time tenant, as that locks the email field in Stripe Checkout.
+      ...(existingCustomerId
+        ? { customer: existingCustomerId }
+        : { customer_email: tenant.contact_email }),
       line_items: lineItems,
       success_url: successUrl,
       cancel_url: cancelUrl,
