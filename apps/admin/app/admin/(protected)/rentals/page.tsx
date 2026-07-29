@@ -206,12 +206,31 @@ function selectSubscription(rows: SubscriptionRow[] | undefined): SubscriptionRo
   return pool.reduce((a, b) => (a.created_at >= b.created_at ? a : b));
 }
 
-function getSubStatus(sub: SubscriptionRow | null, hasActivePlan: boolean): SubStatus {
+function getSubStatus(
+  sub: SubscriptionRow | null,
+  hasActivePlan: boolean,
+  owesMoney = false,
+): SubStatus {
   if (sub) {
     if (sub.status === 'active') return 'active';
     if (sub.status === 'trialing') return 'trialing';
     if (sub.status === 'past_due') return 'past-due';
     if (sub.status === 'incomplete' || sub.status === 'incomplete_expired') return 'not-converted';
+
+    // TERMINAL from here down. A dead subscription is history; what matters is
+    // whether the tenant can be sold to TODAY.
+    //
+    // If their last plan has been deleted or deactivated there is nothing left
+    // to buy, so reporting "Canceled" describes the past while hiding the
+    // present: the row silently stopped appearing in "Paywall not set", which is
+    // the bucket that says "this tenant needs a plan before anything else can
+    // happen". Falling through to the plan-based answer keeps the two questions
+    // — did they churn, and can they subscribe — from being answered by one word.
+    //
+    // Never when money is outstanding: a debtor must not disappear into a
+    // configuration bucket just because their plan was tidied away.
+    if (!hasActivePlan && !owesMoney) return 'paywall-not-set';
+
     if (sub.status === 'canceled') return 'canceled';
     if (sub.status === 'unpaid') return 'unpaid';
     return 'expired'; // paused, or any future Stripe status
@@ -647,7 +666,10 @@ export default function RentalCompaniesPage() {
     subStatusFilter && isSubscriptionView && subsLoaded
       ? filteredTenants.filter((t) => {
           const sub = selectSubscription(subsByTenant.get(t.id));
-          return getSubStatus(sub, planTenantIds.has(t.id)) === subStatusFilter;
+          return (
+            getSubStatus(sub, planTenantIds.has(t.id), !!oldestUnpaidInvoice.get(t.id)) ===
+            subStatusFilter
+          );
         })
       : filteredTenants;
 
@@ -661,7 +683,8 @@ export default function RentalCompaniesPage() {
     const atRiskByCurrency: Record<string, number> = {};
     for (const t of filteredTenants) {
       const sub = selectSubscription(subsByTenant.get(t.id));
-      const status = getSubStatus(sub, planTenantIds.has(t.id));
+      const owesMoney = !!oldestUnpaidInvoice.get(t.id);
+      const status = getSubStatus(sub, planTenantIds.has(t.id), owesMoney);
       tally[status] += 1;
 
       // A tenant who has ALREADY PAID US is revenue, whatever Stripe's status
@@ -706,7 +729,6 @@ export default function RentalCompaniesPage() {
       // debtor lands at 'canceled' with an invoice still open. Keyed on the open
       // invoice rather than the status word, so involuntary churn is counted and
       // a genuine voluntary cancellation (nothing outstanding) is not.
-      const owesMoney = !!oldestUnpaidInvoice.get(t.id);
       const atRisk =
         status === 'past-due' ||
         status === 'unpaid' ||
@@ -1123,10 +1145,17 @@ export default function RentalCompaniesPage() {
                 })()}
                 {isSubscriptionView && (() => {
                   const sub = selectSubscription(subsByTenant.get(tenant.id));
-                  const subStatus = getSubStatus(sub, planTenantIds.has(tenant.id));
                   const inv = latestInvoice.get(tenant.id);
                   const unpaid = oldestUnpaidInvoice.get(tenant.id);
                   const due = nextInvoiceDue(sub, unpaid);
+                  // Resolved BEFORE the status call — a terminal subscription
+                  // with a debt must not fall through to the plan-based bucket.
+                  const owesMoney = !!unpaid;
+                  const subStatus = getSubStatus(
+                    sub,
+                    planTenantIds.has(tenant.id),
+                    owesMoney,
+                  );
 
                   // A terminal status does NOT mean nothing is owed.
                   //
@@ -1137,8 +1166,7 @@ export default function RentalCompaniesPage() {
                   // churn behind a label that reads "ended deliberately, nothing
                   // owed" — the opposite of the truth, on the screen used to
                   // decide who to chase. Money owed always outranks the status
-                  // word.
-                  const owesMoney = !!unpaid;
+                  // word. (owesMoney is resolved above, before getSubStatus.)
                   const meta =
                     owesMoney && (subStatus === 'canceled' || subStatus === 'expired')
                       ? {
@@ -1243,6 +1271,13 @@ export default function RentalCompaniesPage() {
                           )}
                         </div>
                       </TableCell>
+                      {/* Every Stripe invoice status is named explicitly below.
+                          The old `: 'Failed'` catch-all meant a DRAFT or VOID
+                          invoice — neither of which failed, and neither of which
+                          anyone owes — was announced in red as a failed payment.
+                          Stripe raises a $0.00 draft as a matter of course when a
+                          subscription ends, so this fired on ordinary
+                          cancellations. */}
                       <TableCell className="whitespace-nowrap">
                         {inv ? (
                           <span
@@ -1254,7 +1289,9 @@ export default function RentalCompaniesPage() {
                                 ? 'text-emerald-400'
                                 : inv.status === 'open'
                                 ? ((inv.attempt_count ?? 0) > 0 ? 'text-destructive' : 'text-amber-400')
-                                : 'text-destructive'
+                                : inv.status === 'uncollectible'
+                                ? 'text-destructive'
+                                : 'text-muted-foreground'
                             )}
                           >
                             {isVerificationCharge(inv)
@@ -1266,7 +1303,13 @@ export default function RentalCompaniesPage() {
                               // attempt_count tells us it was actually tried and
                               // refused, versus simply not due yet.
                               ? ((inv.attempt_count ?? 0) > 0 ? 'Payment failed' : 'Unpaid')
-                              : 'Failed'}
+                              : inv.status === 'draft'
+                              ? 'Draft'
+                              : inv.status === 'void'
+                              ? 'Voided'
+                              : inv.status === 'uncollectible'
+                              ? 'Written off'
+                              : inv.status}
                             <span className="text-muted-foreground ml-1">
                               {formatDay(inv.created_at)}
                             </span>

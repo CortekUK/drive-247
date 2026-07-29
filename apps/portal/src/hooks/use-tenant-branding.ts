@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
@@ -112,7 +113,18 @@ export const useTenantBranding = () => {
 
   // Build immediate branding from tenant while the query runs.
   // This prevents a flash of platform-default branding.
-  const immediateFromTenant: TenantBranding = tenant ? {
+  //
+  // MEMOIZED, and that is load-bearing, not an optimisation. This object is
+  // passed as `placeholderData` below, and React Query serves it as `data`
+  // whenever the query has no real result (still loading, OR errored). A fresh
+  // object literal each render meant that in the error case the consumer saw a
+  // NEW branding reference on every render — and the settings page's form-sync
+  // effect (keyed on that object) then reset the whole branding form on every
+  // render, making every input impossible to type into. Pinning the reference to
+  // `tenant` stops that: the form syncs once and stays put even if the query
+  // fails. (Seen for real when a newly-added select column did not yet exist in
+  // the DB and the branding fetch 400'd.)
+  const immediateFromTenant: TenantBranding = useMemo(() => tenant ? {
     app_name: resolveAppName(tenantAny?.app_name),
     primary_color: tenantAny?.primary_color || DEFAULT_BRANDING.primary_color,
     secondary_color: tenantAny?.secondary_color || DEFAULT_BRANDING.secondary_color,
@@ -144,7 +156,7 @@ export const useTenantBranding = () => {
     instagram_url: tenantAny?.instagram_url ?? null,
     twitter_url: tenantAny?.twitter_url ?? null,
     linkedin_url: tenantAny?.linkedin_url ?? null,
-  } : DEFAULT_BRANDING;
+  } : DEFAULT_BRANDING, [tenant]);
 
   // Fetch branding from tenants table
   const {
