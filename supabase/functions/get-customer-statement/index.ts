@@ -55,7 +55,14 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey);
 
-    // The one customer row this auth user may read, scoped to the tenant.
+    // Resolve the caller. Two modes, both scoped so no one reads across the boundary:
+    //  • CUSTOMER — a customer_users row for (auth_user_id, tenant): only their OWN
+    //    statement; any client-supplied customerId is ignored.
+    //  • OPERATOR — an app_user of this tenant (or a super admin): may request any
+    //    customerId, but ONLY one that belongs to this tenant.
+    const requestedCustomerId: string | undefined = body?.customerId;
+    let customerId: string;
+
     const { data: cu, error: cuErr } = await admin
       .from('customer_users')
       .select('customer_id')
@@ -63,8 +70,34 @@ Deno.serve(async (req) => {
       .eq('tenant_id', tenantId)
       .maybeSingle();
     if (cuErr) throw cuErr;
-    if (!cu?.customer_id) return errorResponse('No customer profile for this account', 404);
-    const customerId: string = cu.customer_id;
+
+    if (cu?.customer_id) {
+      // CUSTOMER mode — never trust a client-supplied id.
+      customerId = cu.customer_id;
+    } else {
+      // OPERATOR mode.
+      const { data: appUser, error: auErr } = await admin
+        .from('app_users')
+        .select('tenant_id, is_super_admin')
+        .eq('auth_user_id', user.id)
+        .maybeSingle();
+      if (auErr) throw auErr;
+      if (!appUser) return errorResponse('No profile for this account', 403);
+      if (appUser.tenant_id !== tenantId && !appUser.is_super_admin) {
+        return errorResponse('Not authorized for this tenant', 403);
+      }
+      if (!requestedCustomerId) return errorResponse('customerId is required', 400);
+      // The requested customer MUST belong to this tenant — blocks cross-tenant reads.
+      const { data: cust, error: custErr } = await admin
+        .from('customers')
+        .select('id')
+        .eq('id', requestedCustomerId)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+      if (custErr) throw custErr;
+      if (!cust) return errorResponse('Customer not found in this tenant', 404);
+      customerId = requestedCustomerId;
+    }
 
     // All ledger activity for THIS customer across every rental.
     const { data: rows, error: rowsErr } = await admin
@@ -86,6 +119,7 @@ Deno.serve(async (req) => {
         .from('customers')
         .select('name, email, phone')
         .eq('id', customerId)
+        .eq('tenant_id', tenantId)
         .maybeSingle();
       if (c) customer = { name: c.name ?? '', email: c.email ?? '', phone: c.phone ?? '' };
     }

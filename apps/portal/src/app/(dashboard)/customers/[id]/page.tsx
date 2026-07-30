@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CustomerStatementDialog } from "@/components/customers/customer-statement-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -124,6 +125,7 @@ const CustomerDetail = () => {
   const [rentalsPage, setRentalsPage] = useState(1);
   const [paymentsPage, setPaymentsPage] = useState(1);
   const [finesPage, setFinesPage] = useState(1);
+  const [statementOpen, setStatementOpen] = useState(false);
   const PAGE_SIZE = 10;
 
   const { tenant } = useTenant();
@@ -474,6 +476,10 @@ const CustomerDetail = () => {
             <Button size="sm" variant="outline" onClick={() => setEditCustomerOpen(true)}>
               <Edit className="h-4 w-4 mr-1" />
               Edit
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setStatementOpen(true)}>
+              <FileText className="h-4 w-4 mr-1" />
+              Download statement
             </Button>
             {!customer.is_blocked && (
               <Button
@@ -1682,6 +1688,12 @@ const CustomerDetail = () => {
         open={fineDialogOpen}
         onOpenChange={setFineDialogOpen}
         preselectedCustomerId={id}
+      />
+
+      <CustomerStatementDialog
+        open={statementOpen}
+        onOpenChange={setStatementOpen}
+        customerId={id}
       />
 
       <CustomerFormModal
