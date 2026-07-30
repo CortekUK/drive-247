@@ -67,6 +67,7 @@ import {
   Eye,
   ChevronRight,
 } from 'lucide-react';
+import { AccountStatementDialog } from '@/components/customer-portal/AccountStatementDialog';
 import { cn } from '@/lib/utils';
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
@@ -1104,6 +1105,7 @@ export default function PaymentsPage() {
 
   // Demo installments state
   const [showDemoInstallments, setShowDemoInstallments] = useState(false);
+  const [statementOpen, setStatementOpen] = useState(false);
   const [selectedDemoPlan, setSelectedDemoPlan] = useState<MockInstallmentPlan | null>(null);
   const [demoTimelineOpen, setDemoTimelineOpen] = useState(false);
 
@@ -1208,17 +1210,29 @@ export default function PaymentsPage() {
             Manage your installment plans and view payment history
           </p>
         </div>
-        {activePlans.length > 0 && (
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
-            onClick={() => setUpdateCardDialog({ open: true })}
+            onClick={() => setStatementOpen(true)}
             className="w-full sm:w-auto"
           >
-            <CreditCard className="h-4 w-4 mr-2" />
-            Update Card
+            <FileText className="h-4 w-4 mr-2" />
+            Download statement
           </Button>
-        )}
+          {activePlans.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setUpdateCardDialog({ open: true })}
+              className="w-full sm:w-auto"
+            >
+              <CreditCard className="h-4 w-4 mr-2" />
+              Update Card
+            </Button>
+          )}
+        </div>
       </div>
+
+      <AccountStatementDialog open={statementOpen} onOpenChange={setStatementOpen} />
 
       {/* Stats */}
       {isLoading ? (
