@@ -1133,9 +1133,14 @@ Deno.serve(async (req) => {
     // live Bonzah both require per-tenant onboarding that has not happened yet,
     // so flipping them here would break checkout on day one. The tenant turns
     // them on from Portal → Settings once onboarding completes.
+    // subscription_account MUST be 'uae' — every new client bills SaaS on the
+    // UAE platform account (their booking-payments side already defaults to the
+    // 'own' payment_model). This used to hardcode 'uk', which silently landed
+    // brand-new tenants' subscriptions on the legacy account despite the
+    // tenants.subscription_account DEFAULT being 'uae'.
     const modeCols = isProduction
-      ? { boldsign_mode: "live", subscription_stripe_mode: "live", subscription_account: "uk" }
-      : { boldsign_mode: "test", subscription_stripe_mode: "test", subscription_account: "uk" };
+      ? { boldsign_mode: "live", subscription_stripe_mode: "live", subscription_account: "uae" }
+      : { boldsign_mode: "test", subscription_stripe_mode: "test", subscription_account: "uae" };
 
     // favicon included: without it the client's browser tab keeps the platform icon.
     const logoCols = logoUrl
