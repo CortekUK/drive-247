@@ -35,6 +35,7 @@ interface Vehicle {
   reg: string;
   make: string;
   model: string;
+  year?: number;
   colour: string;
   fuel_type?: string;
   purchase_price?: number;
@@ -117,6 +118,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
       vin: vehicle.vin || '',
       make: vehicle.make,
       model: vehicle.model,
+      year: vehicle.year ?? undefined,
       colour: vehicle.colour || '',
       fuel_type: (vehicle.fuel_type as 'Petrol' | 'Diesel' | 'Hybrid' | 'Electric') || 'Petrol',
       purchase_price: vehicle.purchase_price,
@@ -177,6 +179,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
         vin: data.vin || null,
         make: data.make,
         model: data.model,
+        year: data.year,
         colour: data.colour,
         fuel_type: data.fuel_type,
         acquisition_type: data.acquisition_type || null,
@@ -465,7 +468,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <FormField
                 control={form.control}
                 name="make"
@@ -487,6 +490,33 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                     <FormLabel>Model</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. Transit" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="year"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Year</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        placeholder="e.g. 2020"
+                        {...field}
+                        value={field.value ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          field.onChange(value === "" ? undefined : parseInt(value));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === '.' || e.key === ',') {
+                            e.preventDefault();
+                          }
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -4336,7 +4336,10 @@ const MultiStepBookingWidget = () => {
                                       ) : (
                                         <span className="text-3xl font-bold text-primary">{formatCurrency(priceDisplay.price, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                                       )}
-                                      <span className="text-sm text-muted-foreground">{priceDisplay.label}</span>
+                                      {/* Show the "/ month" tier label only on the per-period RATE.
+                                          When a discount is applied the number is the trip TOTAL, so the
+                                          period label would misread as "$2700 / month" — drop it there. */}
+                                      <span className="text-sm text-muted-foreground">{!hasDiscount ? `${priceDisplay.label} *` : '*'}</span>
                                     </div>
                                     {promoErrorMsg && <p className="text-xs text-destructive">{promoErrorMsg}</p>}
                                     {priceDisplay.secondaryPrices.length > 0 && (
@@ -4344,6 +4347,7 @@ const MultiStepBookingWidget = () => {
                                         {priceDisplay.secondaryPrices.join(' • ')}
                                       </p>
                                     )}
+                                    <p className="text-[11px] text-muted-foreground">* + taxes and fees</p>
                                   </div>
 
 
@@ -4544,7 +4548,7 @@ const MultiStepBookingWidget = () => {
                                       {formatCurrency(priceDisplay.price, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                                     </span>
                                   )}
-                                  <span className="text-sm text-muted-foreground">{priceDisplay.label}</span>
+                                  <span className="text-sm text-muted-foreground">{!hasDiscount ? `${priceDisplay.label} *` : '*'}</span>
                                 </div>
                                 {promoErrorMsg && <p className="text-xs text-destructive text-right">{promoErrorMsg}</p>}
                                 {priceDisplay.secondaryPrices.length > 0 && (
@@ -4552,6 +4556,7 @@ const MultiStepBookingWidget = () => {
                                     {priceDisplay.secondaryPrices.join(' • ')}
                                   </p>
                                 )}
+                                <p className="text-[11px] text-muted-foreground">* + taxes and fees</p>
                               </div>
                             );
                           })()}
