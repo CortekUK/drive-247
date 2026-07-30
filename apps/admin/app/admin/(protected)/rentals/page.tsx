@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,7 +27,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Plus,
-  ArrowRight,
   Search,
   Star,
   Building2,
@@ -361,6 +360,7 @@ function verificationChargeSucceeded(inv: InvoiceRow | null | undefined): boolea
 }
 
 export default function RentalCompaniesPage() {
+  const router = useRouter();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -1138,6 +1138,7 @@ export default function RentalCompaniesPage() {
             <TableRow className="bg-primary/5 hover:bg-primary/5">
               <TableHead className="w-10"></TableHead>
               <TableHead>Company</TableHead>
+              <TableHead>Owner</TableHead>
               {/* Subscription view drops Type/Status/Created: when you are
                   chasing billing, "production / active / created 3 months ago"
                   is noise. The middle belongs entirely to subscription data. */}
@@ -1154,15 +1155,18 @@ export default function RentalCompaniesPage() {
                 </>
               )}
               {!isSubscriptionView && <TableHead>Created</TableHead>}
-              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {visibleTenants.map((tenant) => (
-              <TableRow key={tenant.id}>
+              <TableRow
+                key={tenant.id}
+                onClick={() => router.push(`/admin/rentals/${tenant.id}`)}
+                className="cursor-pointer"
+              >
                 <TableCell className="pr-0">
                   <button
-                    onClick={() => toggleFavorite(tenant.id)}
+                    onClick={(e) => { e.stopPropagation(); toggleFavorite(tenant.id); }}
                     className="p-1 rounded hover:bg-accent transition-colors"
                     title={favorites.has(tenant.id) ? 'Remove from favorites' : 'Add to favorites'}
                   >
@@ -1177,6 +1181,9 @@ export default function RentalCompaniesPage() {
                   </button>
                 </TableCell>
                 <TableCell className="font-medium">{tenant.company_name}</TableCell>
+                <TableCell className="text-muted-foreground whitespace-nowrap">
+                  {tenant.admin_name || '—'}
+                </TableCell>
                 {!isSubscriptionView && (
                   <TableCell>
                     {tenant.tenant_type ? (
@@ -1339,7 +1346,7 @@ export default function RentalCompaniesPage() {
                           )}
                           {unpaid && (
                             <button
-                              onClick={() => handleMarkPaid(unpaid, tenant.company_name)}
+                              onClick={(e) => { e.stopPropagation(); handleMarkPaid(unpaid, tenant.company_name); }}
                               disabled={settlingInvoiceId === unpaid.id}
                               className="w-fit text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
                             >
@@ -1409,14 +1416,6 @@ export default function RentalCompaniesPage() {
                     {new Date(tenant.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </TableCell>
                 )}
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link href={`/admin/rentals/${tenant.id}`}>
-                      View Details
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                </TableCell>
               </TableRow>
             ))}
           </TableBody>
