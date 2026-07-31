@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChevronLeft, Car, FileText, DollarSign, Wrench, Calendar, TrendingUp, TrendingDown, Plus, Shield, Clock, Trash2, Receipt, Users, Eye, EyeOff, Pencil, Ban, Upload, Lock, RefreshCw, Check, Gauge, X } from "lucide-react";
+import { ChevronLeft, Car, FileText, DollarSign, Wrench, Calendar, TrendingUp, TrendingDown, Plus, Shield, Clock, Trash2, Receipt, Users, Eye, EyeOff, Pencil, Ban, Upload, Lock, RefreshCw, Check, Gauge, X, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { getContractTotal } from "@/lib/vehicle-utils";
@@ -342,6 +342,11 @@ export default function VehicleDetail() {
     },
     enabled: !!id,
   });
+
+  // Active rentals holding this vehicle "Rented" — powers the recovery banner so
+  // an operator can find & close a forgotten rental that's silently locking the car.
+  const activeRentals = (rentals ?? []).filter((r: any) => r.status === 'Active');
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   // Fetch fines
   const { data: fines } = useQuery({
@@ -811,6 +816,43 @@ export default function VehicleDetail() {
                 <CardDescription>Basic vehicle information and specifications</CardDescription>
               </CardHeader>
               <CardContent>
+                {/* Recovery lever: a vehicle only shows "Rented" because of an OPEN rental.
+                    Surface it (and flag overdue ones) so the operator can close it and free
+                    the car — instead of hunting for why the site says it's unavailable. */}
+                {vehicle.status === 'Rented' && activeRentals.length > 0 && (
+                  <div className="mb-5 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-500/10">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                      <div className="text-sm">
+                        <p className="font-medium text-amber-800 dark:text-amber-300">
+                          This vehicle shows as <strong>Rented</strong> because of the open rental{activeRentals.length > 1 ? 's' : ''} below.
+                          Close {activeRentals.length > 1 ? 'them' : 'it'} (on the rental page) to make the car available for booking again.
+                        </p>
+                        <ul className="mt-2 space-y-1">
+                          {activeRentals.map((r: any) => {
+                            const overdue = r.end_date && r.end_date < todayStr;
+                            return (
+                              <li key={r.id} className="flex flex-wrap items-center gap-2 text-amber-800 dark:text-amber-200">
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`/rentals/${r.id}`)}
+                                  className="font-medium underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100"
+                                >
+                                  {r.customers?.name || 'Rental'} · {r.start_date} → {r.end_date}
+                                </button>
+                                {overdue && (
+                                  <span className="rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-semibold text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                                    Overdue — likely returned, needs closing
+                                  </span>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-6">
             {/* Basic Information */}
             <div>
