@@ -1163,6 +1163,9 @@ const BookingCheckoutContent = () => {
                         <span className="font-medium">{formatCurrency(totals.vehiclePrice)}</span>
                       </div>
                       {(() => {
+                        // #2 hide_checkout_price_breakdown: hide the per-day weekday/weekend/holiday
+                        // (and flat-rate) breakdown, keeping just the Vehicle Cost total above.
+                        if (tenant?.hide_checkout_price_breakdown) return null;
                         const days = calculateRentalDays();
                         const dailyRent = vehicleDetails.daily_rent || 0;
                         const weeklyRent = vehicleDetails.weekly_rent || 0;

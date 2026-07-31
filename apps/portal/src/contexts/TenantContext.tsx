@@ -48,6 +48,8 @@ interface Tenant {
   subscription_billing_anchor: string | null;
   setup_completed_at: string | null;
   customer_theme_mode: 'dark' | 'light' | 'light_only' | 'dark_only' | null;
+  show_effective_daily_rate: boolean | null;
+  hide_checkout_price_breakdown: boolean | null;
   gig_driver_enabled: boolean | null;
 }
 
@@ -186,7 +188,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // Query the tenants table by slug
       const { data, error: queryError } = await supabase
         .from('tenants')
-        .select('id, slug, company_name, status, contact_email, phone, admin_name, integration_veriff, integration_bonzah, bonzah_brochure_url, bonzah_username, bonzah_mode, boldsign_mode, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number, integration_twilio_whatsapp, twilio_whatsapp_number, twilio_whatsapp_lockbox_template_sid, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, integration_tesla_fleet, security_deposit_enabled, global_deposit_amount, deposit_mode, lead_management_enabled, automations_enabled, vehicle_owners_enabled, lead_stale_threshold_hours, lead_auto_lost_threshold_hours, communication_tone, subscription_gate_disabled, subscription_billing_anchor, setup_completed_at, customer_theme_mode, gig_driver_enabled')
+        .select('id, slug, company_name, status, contact_email, phone, admin_name, integration_veriff, integration_bonzah, bonzah_brochure_url, bonzah_username, bonzah_mode, boldsign_mode, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number, integration_twilio_whatsapp, twilio_whatsapp_number, twilio_whatsapp_lockbox_template_sid, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, integration_tesla_fleet, security_deposit_enabled, global_deposit_amount, deposit_mode, lead_management_enabled, automations_enabled, vehicle_owners_enabled, lead_stale_threshold_hours, lead_auto_lost_threshold_hours, communication_tone, subscription_gate_disabled, subscription_billing_anchor, setup_completed_at, customer_theme_mode, gig_driver_enabled, show_effective_daily_rate, hide_checkout_price_breakdown')
         .eq('slug', slug)
         // Load both active AND suspended tenants: a suspended tenant must
         // still resolve so the dashboard can show the "account suspended"

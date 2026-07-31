@@ -183,6 +183,12 @@ export interface Tenant {
   // Per-tenant customer-site theme: light_only/dark_only force a single theme and
   // hide the toggle; light/dark set the default while keeping the toggle.
   customer_theme_mode: 'dark' | 'light' | 'light_only' | 'dark_only' | null;
+
+  // Pricing-display preferences (per-tenant):
+  //  - show_effective_daily_rate: show the effective avg $/day on vehicle cards
+  //  - hide_checkout_price_breakdown: hide the weekday/weekend/holiday breakdown at checkout
+  show_effective_daily_rate: boolean | null;
+  hide_checkout_price_breakdown: boolean | null;
 }
 
 interface TenantContextType {
@@ -467,7 +473,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           payg_upfront_required,
           gig_driver_enabled,
           ga_measurement_id,
-          customer_theme_mode
+          customer_theme_mode,
+          show_effective_daily_rate,
+          hide_checkout_price_breakdown
         `)
         .eq('slug', slug)
         // Load active AND suspended tenants so a suspended tenant resolves and

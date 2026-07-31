@@ -396,6 +396,9 @@ export default function BookingCheckoutStep({
   };
 
   const rentalBreakdown = buildRentalBreakdown();
+  // #2 (per-tenant hide_checkout_price_breakdown): hide the weekday/weekend/holiday
+  // per-day breakdown on checkout, leaving just the Rental total + tax + grand total.
+  const hideBreakdown = !!tenant?.hide_checkout_price_breakdown;
 
   // Function to get booking payment mode
   const getBookingMode = async (): Promise<'manual' | 'auto'> => {
@@ -1929,13 +1932,13 @@ export default function BookingCheckoutStep({
                           </span>
                         </div>
                         {/* Flat rate breakdown (monthly/weekly/daily without surcharges) */}
-                        {unitRate > 0 && !hasDynamicPricing && (
+                        {unitRate > 0 && !hasDynamicPricing && !hideBreakdown && (
                           <div className="text-xs text-muted-foreground/70 pl-1">
                             {fmt(unitRate)}{unitLabel} × {quantityLabel}
                           </div>
                         )}
                         {/* Dynamic pricing per-day breakdown */}
-                        {dailyGroups && dailyGroups.map((group, i) => (
+                        {!hideBreakdown && dailyGroups && dailyGroups.map((group, i) => (
                           <div key={i} className="flex justify-between text-xs text-muted-foreground/70 pl-1">
                             <span>
                               {group.label} — {fmt(group.rate)}/day × {group.count} day{group.count !== 1 ? 's' : ''}
@@ -2239,7 +2242,7 @@ export default function BookingCheckoutStep({
             return { name: extra?.name || 'Extra', quantity: qty, price: extra?.price || 0, billing_type: (extra?.billing_type || 'per_trip') as 'per_trip' | 'per_day' };
           }).filter(e => e.quantity > 0)}
           rentalDays={rentalDuration?.days || 1}
-          rentalBreakdown={rentalBreakdown}
+          rentalBreakdown={hideBreakdown ? [] : rentalBreakdown}
         />
       )}
 

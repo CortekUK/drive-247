@@ -4131,6 +4131,13 @@ const MultiStepBookingWidget = () => {
                     const isRollsRoyce = (vehicle.make || '').toLowerCase().includes("rolls") || (vehicle.model || '').toLowerCase().includes("phantom");
                     const isSelected = formData.vehicleId === vehicle.id;
                     const estimation = calculateEstimatedTotal(vehicle);
+                    // #1 (per-tenant show_effective_daily_rate): show the effective AVERAGE $/day
+                    // (trip rental total ÷ days) instead of the base tier rate, which misleads once
+                    // weekend/length pricing applies. Only when dates are chosen (estimation present).
+                    const avgDailyRate = estimation && estimation.days > 0 && estimation.vehicleTotal > 0
+                      ? estimation.vehicleTotal / estimation.days
+                      : 0;
+                    const avgDailyOn = !!tenant?.show_effective_daily_rate && avgDailyRate > 0;
                     // Promo Logic for Display
                     let displayPrice = estimation?.total || 0;
                     let originalPrice = displayPrice;
@@ -4334,12 +4341,12 @@ const MultiStepBookingWidget = () => {
                                           <span className="text-3xl font-bold text-green-600">{formatCurrency(Number(displayPrice), currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                                         </>
                                       ) : (
-                                        <span className="text-3xl font-bold text-primary">{formatCurrency(priceDisplay.price, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                                        <span className="text-3xl font-bold text-primary">{formatCurrency(avgDailyOn ? avgDailyRate : priceDisplay.price, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                                       )}
                                       {/* Show the "/ month" tier label only on the per-period RATE.
                                           When a discount is applied the number is the trip TOTAL, so the
                                           period label would misread as "$2700 / month" — drop it there. */}
-                                      <span className="text-sm text-muted-foreground">{!hasDiscount ? `${priceDisplay.label} *` : '*'}</span>
+                                      <span className="text-sm text-muted-foreground">{!hasDiscount ? `${avgDailyOn ? '/ day' : priceDisplay.label} *` : '*'}</span>
                                     </div>
                                     {promoErrorMsg && <p className="text-xs text-destructive">{promoErrorMsg}</p>}
                                     {priceDisplay.secondaryPrices.length > 0 && (
@@ -4545,10 +4552,10 @@ const MultiStepBookingWidget = () => {
                                     </div>
                                   ) : (
                                     <span className="text-2xl font-bold text-primary">
-                                      {formatCurrency(priceDisplay.price, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                      {formatCurrency(avgDailyOn ? avgDailyRate : priceDisplay.price, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                                     </span>
                                   )}
-                                  <span className="text-sm text-muted-foreground">{!hasDiscount ? `${priceDisplay.label} *` : '*'}</span>
+                                  <span className="text-sm text-muted-foreground">{!hasDiscount ? `${avgDailyOn ? '/ day' : priceDisplay.label} *` : '*'}</span>
                                 </div>
                                 {promoErrorMsg && <p className="text-xs text-destructive text-right">{promoErrorMsg}</p>}
                                 {priceDisplay.secondaryPrices.length > 0 && (

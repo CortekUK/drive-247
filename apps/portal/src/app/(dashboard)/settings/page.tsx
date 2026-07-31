@@ -272,6 +272,53 @@ const Settings = () => {
     }
   };
 
+  // Pricing-display preferences (customer booking site), per-tenant, optimistic —
+  // #1 show effective avg $/day on vehicle cards; #2 hide the weekday/weekend
+  // breakdown at checkout. Same optimistic + zero-row-guard pattern as above.
+  const [pendingAvgDaily, setPendingAvgDaily] = useState<boolean | null>(null);
+  const persistedAvgDaily = (tenant as { show_effective_daily_rate?: boolean } | null)?.show_effective_daily_rate === true;
+  const avgDailyEnabled = pendingAvgDaily ?? persistedAvgDaily;
+  const [savingAvgDaily, setSavingAvgDaily] = useState(false);
+
+  const [pendingHideBreakdown, setPendingHideBreakdown] = useState<boolean | null>(null);
+  const persistedHideBreakdown = (tenant as { hide_checkout_price_breakdown?: boolean } | null)?.hide_checkout_price_breakdown === true;
+  const hideBreakdownEnabled = pendingHideBreakdown ?? persistedHideBreakdown;
+  const [savingHideBreakdown, setSavingHideBreakdown] = useState(false);
+
+  const savePricingFlag = async (
+    column: 'show_effective_daily_rate' | 'hide_checkout_price_breakdown',
+    next: boolean,
+    prev: boolean,
+    prevPersisted: boolean,
+    setPending: (v: boolean | null) => void,
+    setSaving: (v: boolean) => void,
+    okTitle: string,
+  ) => {
+    if (!tenant?.id) return;
+    setPending(next);
+    setSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from("tenants")
+        .update({ [column]: next })
+        .eq("id", tenant.id)
+        .select(column);
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("You do not have permission to change this setting.");
+      }
+      await refetchTenant();
+      setPending(null);
+      toast({ title: okTitle });
+    } catch (error: unknown) {
+      setPending(prev === prevPersisted ? null : prev);
+      const msg = error instanceof Error ? error.message : String(error);
+      toast({ title: "Failed to update", description: msg, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Booking-site theme control (tenants.customer_theme_mode) — CUSTOMER site only.
   // Two friendly controls (allow-switch + default) compose into the single enum:
   //   allow=on  → 'light' | 'dark'         (default set, customer can toggle)
@@ -1792,6 +1839,41 @@ const Settings = () => {
                   disabled={savingGigDriver}
                   className="flex-shrink-0"
                   aria-label="Toggle Gig Driver booking option"
+                />
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <h4 className="font-medium">Show effective daily price</h4>
+                  <p className="text-sm text-muted-foreground">
+                    On the vehicle-selection screen, show the effective average price per day for the
+                    chosen dates (total ÷ days) instead of the base rate — more accurate once weekend
+                    and length pricing apply.
+                  </p>
+                </div>
+                <Switch
+                  checked={avgDailyEnabled}
+                  onCheckedChange={(next) => savePricingFlag('show_effective_daily_rate', next, avgDailyEnabled, persistedAvgDaily, setPendingAvgDaily, setSavingAvgDaily, next ? 'Showing effective average daily price' : 'Showing base rate on vehicle cards')}
+                  disabled={savingAvgDaily}
+                  className="flex-shrink-0"
+                  aria-label="Toggle effective daily price on vehicle cards"
+                />
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <h4 className="font-medium">Hide checkout price breakdown</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Hide the per-day weekday / weekend / holiday breakdown on the checkout summary,
+                    leaving just the rental total, tax, and grand total.
+                  </p>
+                </div>
+                <Switch
+                  checked={hideBreakdownEnabled}
+                  onCheckedChange={(next) => savePricingFlag('hide_checkout_price_breakdown', next, hideBreakdownEnabled, persistedHideBreakdown, setPendingHideBreakdown, setSavingHideBreakdown, next ? 'Checkout price breakdown hidden' : 'Checkout price breakdown shown')}
+                  disabled={savingHideBreakdown}
+                  className="flex-shrink-0"
+                  aria-label="Toggle checkout price breakdown"
                 />
               </div>
             </CardContent>
