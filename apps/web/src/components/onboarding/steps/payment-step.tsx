@@ -343,6 +343,30 @@ function PaymentForm({
   const [awaitingBank, setAwaitingBank] = React.useState(false);
   const [elementReady, setElementReady] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
+  /** Set by `onLoadError`, or by the readiness deadline below. */
+  const [elementError, setElementError] = React.useState<string | null>(null);
+
+  /**
+   * Deadline for `<PaymentElement>` becoming interactive.
+   *
+   * `STRIPE_JS_TIMEOUT_MS` guards only `loadStripe`; by the time this component
+   * renders, Stripe.js has ALREADY loaded successfully. Everything after that —
+   * `stripe.elements()`, the element's own iframe, and its authenticated lookup
+   * of the PaymentIntent — had no deadline at all, which is the gap that let a
+   * bad publishable key present as a permanent skeleton rather than an error.
+   *
+   * Stripe does emit `onLoadError` for most of those failures, but not all of
+   * them (a throw inside `stripe.elements()` surfaces as an unhandled rejection
+   * and never reaches this component), so the timer is the backstop that
+   * guarantees the user always ends up with something actionable.
+   */
+  React.useEffect(() => {
+    if (elementReady || elementError) return;
+    const timer = window.setTimeout(() => {
+      setElementError(SIGNUP_ERROR_COPY.STRIPE_UNAVAILABLE);
+    }, 15_000);
+    return () => window.clearTimeout(timer);
+  }, [elementReady, elementError]);
   const [notice, setNotice] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -442,13 +466,43 @@ function PaymentForm({
       <PaymentElement
         options={{ layout: "tabs" }}
         onReady={() => setElementReady(true)}
+        /**
+         * The one event that names why the card form did not appear.
+         *
+         * It was previously not wired at all, and that is how a corrupted
+         * `STRIPE_UAE_LIVE_PUBLISHABLE_KEY` cost a day: Stripe.js loaded fine,
+         * <Elements> mounted fine, and then the element could not authenticate
+         * to resolve the PaymentIntent. `onReady` simply never fired, the two
+         * placeholder bars below rendered forever, and the only trace was an
+         * error in the browser console that nobody was looking at.
+         */
+        onLoadError={({ error: loadError }) => {
+          console.error("[signup] PaymentElement failed to load:", loadError);
+          setElementError(
+            loadError?.message ?? SIGNUP_ERROR_COPY.STRIPE_UNAVAILABLE,
+          );
+        }}
         onChange={() => {
           // Any edit invalidates the previous decline message.
           if (message) setMessage(null);
         }}
       />
 
-      {!elementReady && (
+      {/*
+        A card form that never becomes ready must not read as "still loading"
+        indefinitely. Whichever arrives first — an explicit load error or the
+        readiness deadline — replaces the placeholder with something the user
+        can act on.
+      */}
+      {!elementReady && elementError && (
+        <Alert variant="destructive" className="mt-3">
+          <TriangleAlert />
+          <AlertTitle>We couldn&apos;t load the card form</AlertTitle>
+          <AlertDescription>{elementError}</AlertDescription>
+        </Alert>
+      )}
+
+      {!elementReady && !elementError && (
         <div className="mt-3 space-y-2" aria-hidden="true">
           <div className="h-10 animate-pulse rounded-md bg-muted" />
           <div className="h-10 animate-pulse rounded-md bg-muted" />

@@ -107,6 +107,7 @@ const ALLOWED_TRANSITIONS: Record<SignupStep, readonly SignupStep[]> = {
 
 type Action =
   | { type: "goto"; step: SignupStep }
+  | { type: "resumeTo"; step: SignupStep }
   | { type: "busy"; busy: boolean }
   | { type: "error"; error: OnboardingError | null }
   | { type: "setPlan"; planId: SignupPlanId }
@@ -164,6 +165,21 @@ function reducer(state: OnboardingState, action: Action): OnboardingState {
       // Entering a step always clears the step-level banner and any stale busy
       // flag. Handlers that carry an error ACROSS a transition (e.g. going back
       // to payment with PAYMENT_EXPIRED) dispatch the error after the goto.
+      return { ...state, step: action.step, error: null, busy: false };
+    }
+    /**
+     * Server-authoritative jump, exempt from ALLOWED_TRANSITIONS.
+     *
+     * That table governs USER navigation — it is what stops someone reaching
+     * the business form without paying. Resume is not navigation: the server has
+     * just told us, having re-verified the money against Stripe, which step this
+     * account is actually on. Routing it through `goto` meant a tenant who had
+     * already paid and come back was refused `account -> business` and left
+     * staring at "Create account" with no way forward, because `resolveResume`
+     * pre-emptively parks the machine on `account` before it knows the answer.
+     */
+    case "resumeTo": {
+      if (state.step === action.step) return state;
       return { ...state, step: action.step, error: null, busy: false };
     }
     case "busy":
@@ -582,6 +598,11 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         dispatch({ type: "error", error: err("PLAN_UNKNOWN") });
         return;
       }
+      // Safe to return silently: the in-flight call owns `busy` and always
+      // clears it in its own `finally`, so a hand-off from `submitAccount`
+      // (which deliberately leaves `busy` set) is still resolved by the runner
+      // that is already going. There is no reachable state where this ref is
+      // true with nothing running.
       if (paymentIntentInFlightRef.current) return;
       paymentIntentInFlightRef.current = true;
       dispatch({ type: "busy", busy: true });
@@ -813,26 +834,31 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       }
       dispatch({ type: "resumed", resumed: true });
 
+      // `resumeTo`, not `goto` — the server has re-verified this against Stripe
+      // and is authoritative. `goto` is policed by ALLOWED_TRANSITIONS, which
+      // does not permit account -> business/provisioning/done, so every one of
+      // these except "payment" was silently refused and left a returning tenant
+      // on the create-account form.
       switch (dto.resumeStep) {
         case "payment":
-          dispatch({ type: "goto", step: "payment" });
+          dispatch({ type: "resumeTo", step: "payment" });
           void startPaymentInternal(planId);
           break;
         case "business":
-          dispatch({ type: "goto", step: "business" });
+          dispatch({ type: "resumeTo", step: "business" });
           break;
         case "provisioning":
           // The server believes a provision is under way. Watch, do not write.
-          dispatch({ type: "goto", step: "provisioning" });
+          dispatch({ type: "resumeTo", step: "provisioning" });
           void runProvision(null);
           break;
         case "done":
-          dispatch({ type: "goto", step: "done" });
+          dispatch({ type: "resumeTo", step: "done" });
           dispatch({ type: "provisioning", patch: { phase: "succeeded" } });
           break;
         case "account":
         default:
-          dispatch({ type: "goto", step: "account" });
+          dispatch({ type: "resumeTo", step: "account" });
           break;
       }
     },

@@ -32,9 +32,27 @@
  * connection slot.
  */
 
-/** Stripe.js is only ever served from this origin, and it is not versioned. */
 const STRIPE_JS_ORIGIN = "https://js.stripe.com";
-const STRIPE_JS_SRC = `${STRIPE_JS_ORIGIN}/v3`;
+
+/**
+ * The EXACT url `@stripe/stripe-js` injects. It is NOT `/v3`.
+ *
+ * The SDK builds its script src from an internal release train:
+ *   node_modules/@stripe/stripe-js/dist/index.mjs
+ *     var RELEASE_TRAIN = 'clover';
+ *     var STRIPE_JS_URL = ORIGIN + "/" + RELEASE_TRAIN + "/stripe.js";
+ *
+ * A preload whose URL does not byte-match the eventual <script src> is worse
+ * than no preload at all: the browser fetches ~200KB that nothing consumes,
+ * then fetches the real file anyway, and logs "was preloaded using link preload
+ * but not used". The first version of this file preloaded `/v3` and did exactly
+ * that.
+ *
+ * IF YOU UPGRADE @stripe/stripe-js, re-check RELEASE_TRAIN. If it no longer
+ * matches, delete the preload rather than guessing — `preconnect` below is
+ * train-agnostic and carries most of the benefit on a cold connection.
+ */
+const STRIPE_JS_SRC = `${STRIPE_JS_ORIGIN}/clover/stripe.js`;
 
 /** Idempotent across every dialog open in a page session. */
 let prewarmed = false;
@@ -50,10 +68,11 @@ function appendOnce(rel: string, href: string, as?: string): void {
   link.rel = rel;
   link.href = href;
   if (as) link.as = as;
-  // Stripe.js is served cross-origin and is not a credentialed request; without
-  // this the preload is fetched in a different mode than the later <script> and
-  // the browser discards it, warning "preloaded but not used".
-  link.crossOrigin = "anonymous";
+  // crossOrigin is set ONLY on preconnect. The <script> the SDK injects is a
+  // plain, un-credentialed tag, and a preload whose CORS mode differs from the
+  // eventual request is discarded by the browser — the same "preloaded but not
+  // used" waste the wrong URL used to cause.
+  if (rel === "preconnect") link.crossOrigin = "anonymous";
   document.head.appendChild(link);
 }
 

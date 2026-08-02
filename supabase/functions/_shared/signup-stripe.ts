@@ -66,8 +66,38 @@ export function getSignupPublishableKey(mode: "test" | "live"): string {
   const env = mode === "live"
     ? "STRIPE_UAE_LIVE_PUBLISHABLE_KEY"
     : "STRIPE_UAE_TEST_PUBLISHABLE_KEY";
-  const key = Deno.env.get(env);
-  if (!key) throw new SignupConfigError(env);
+  const raw = Deno.env.get(env);
+  if (!raw) throw new SignupConfigError(env);
+
+  // Trim first. A trailing newline is the classic artefact of setting a secret
+  // from a file or a wrapped paste, and it is invisible in every dashboard.
+  const key = raw.trim();
+
+  /**
+   * SHAPE-CHECK THE KEY BEFORE HANDING IT TO A BROWSER.
+   *
+   * This exists because a corrupted `STRIPE_UAE_LIVE_PUBLISHABLE_KEY` — one
+   * character too long, carrying a stray "-" that Stripe keys never contain —
+   * shipped to production and broke every single payment. Nothing caught it:
+   * the key is only ever used by Stripe.js, inside an iframe, where the 401 it
+   * produced surfaced as a card form that simply never appeared.
+   *
+   * Stripe publishable keys are `pk_(test|live)_` followed by base62 only. A
+   * key failing this has been mangled in transit, and failing loudly here turns
+   * a silent, unexplainable dead end into a named configuration error that
+   * points at the exact environment variable to fix.
+   */
+  const expectedPrefix = mode === "live" ? "pk_live_" : "pk_test_";
+  const wellFormed = new RegExp(`^${expectedPrefix}[A-Za-z0-9]+$`).test(key);
+  if (!wellFormed) {
+    console.error(
+      `[signup-stripe] ${env} is malformed: length=${key.length}, ` +
+        `prefix_ok=${key.startsWith(expectedPrefix)}, ` +
+        `illegal_chars=${JSON.stringify([...new Set(key.slice(8).replace(/[A-Za-z0-9]/g, ""))])}. ` +
+        `Re-copy it from the Stripe dashboard for the UAE account.`,
+    );
+    throw new SignupConfigError(env);
+  }
   return key;
 }
 
@@ -117,21 +147,26 @@ export async function getOrCreateSignupProduct(stripe: Stripe): Promise<string> 
  */
 const priceCache = new Map<string, { priceId: string; productId: string }>();
 
-/** Stripe clients are per-account/mode; the key must not collapse them. */
-function priceCacheKey(stripe: Stripe, plan: SignupPlanServer): string {
-  // The secret key's prefix distinguishes live from test without logging or
-  // storing the key itself.
-  const mode = (stripe as unknown as { _api?: { key?: string } })._api?.key?.startsWith("sk_live")
-    ? "live"
-    : "test";
-  return `${mode}:${plan.lookupKey}`;
-}
-
+/**
+ * `mode` is a REQUIRED parameter, not sniffed from the client.
+ *
+ * The first version of this cache derived the mode from
+ * `(stripe as any)._api.key.startsWith("sk_live")` — an undocumented internal
+ * of the esm.sh Stripe build. If that field is ever absent or renamed, the
+ * expression silently evaluates to "test" for BOTH modes, the two collapse onto
+ * one cache key, and a warm isolate can hand a LIVE subscription a TEST price.
+ * That fails as a confusing 502 at best and mis-bills at worst.
+ *
+ * Every caller already knows its mode (it is read from the signup blob, which
+ * locks it at account creation), so there is nothing to infer. Passing it makes
+ * the wrong-mode price unrepresentable rather than merely unlikely.
+ */
 export async function getOrCreateSignupPrice(
   stripe: Stripe,
   plan: SignupPlanServer,
+  mode: "test" | "live",
 ): Promise<{ priceId: string; productId: string }> {
-  const cacheKey = priceCacheKey(stripe, plan);
+  const cacheKey = `${mode}:${plan.lookupKey}`;
   const cached = priceCache.get(cacheKey);
   if (cached) return cached;
 

@@ -870,7 +870,7 @@ Deno.serve(async (req) => {
     // tenants.subscription_account.
     // =====================================================================
     try {
-      const { priceId, productId } = await getOrCreateSignupPrice(stripe, plan);
+      const { priceId, productId } = await getOrCreateSignupPrice(stripe, plan, mode);
 
       const { data: planRow, error: planError } = await supabase
         .from("subscription_plans")

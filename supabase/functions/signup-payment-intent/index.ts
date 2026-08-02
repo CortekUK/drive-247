@@ -233,18 +233,30 @@ Deno.serve(async (req) => {
             }
           }
 
-          // We are about to create a REPLACEMENT subscription, and that needs a
-          // new idempotency key — reusing the old one makes Stripe replay the
-          // dead subscription verbatim and hand back a client secret that can
-          // never be confirmed. Incremented unconditionally here because every
-          // path that reaches this line has already declined to reuse
-          // `existing` (expired, cancelled, plan changed, or no client secret).
-          paymentAttempts += 1;
           if (DEAD_STATUSES.has(existing.status)) {
             console.log(`${LOG} previous subscription ${existing.id} is ${existing.status} — starting a fresh attempt`);
           }
           customerId = (existing.customer as string) ?? customerId;
         }
+
+        // We are about to create a REPLACEMENT subscription, and that needs a
+        // new idempotency key — reusing the old one makes Stripe replay the
+        // dead subscription verbatim and hand back a client secret that can
+        // never be confirmed.
+        //
+        // THIS MUST SIT OUTSIDE `if (existing)`. It used to be inside it, with a
+        // comment claiming it ran "unconditionally" — but the retrieve above can
+        // fail (subscription on another account, deleted, or a transient Stripe
+        // error), leaving `existing` null and falling straight through to the
+        // create with the counter UNCHANGED. Stripe keeps idempotency records for
+        // 24h and an `incomplete` subscription expires at ~23h, so inside that
+        // overlap the replay returns the original subscription and its long-dead
+        // PaymentIntent — a client secret Stripe.js will never mount, which is
+        // indistinguishable to the user from the payment form being broken.
+        //
+        // Every early return above (already paid, reusable incomplete) has
+        // already left the function, so reaching here always means "replace".
+        paymentAttempts += 1;
         subscriptionId = null;
       }
 
@@ -288,7 +300,7 @@ Deno.serve(async (req) => {
       // ---------------------------------------------------------------------
       // 3. Price — one shared Price per plan, resolved by lookup_key.
       // ---------------------------------------------------------------------
-      const { priceId } = await getOrCreateSignupPrice(stripe, plan);
+      const { priceId } = await getOrCreateSignupPrice(stripe, plan, mode);
 
       // ---------------------------------------------------------------------
       // 4. Subscription, incomplete until the card confirms.
