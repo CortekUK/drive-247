@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Loader2, CalendarPlus, Calendar, AlertCircle, AlertTriangle, CreditCard, ArrowLeft, Shield, ShieldCheck, Upload, Gauge, ExternalLink, Tag, ChevronsUpDown, Check, XCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
+import { isBonzahSellable } from '@/lib/bonzah';
 import { useToast } from '@/hooks/use-toast';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { useExtensionConflicts } from '@/hooks/use-extension-conflicts';
@@ -101,8 +102,13 @@ export function AdminExtendRentalDialog({
     }
   }
   prevOpenRef.current = open;
+  // Bonzah can't issue real cover in test mode. Force the "own insurance" path so
+  // no premium reaches the extension payment link — otherwise the link is created
+  // WITH the premium before the quote runs, and the customer pays for a policy the
+  // server then refuses to issue.
+  const bonzahSellable = isBonzahSellable(tenant);
   const [extensionInsuranceType, setExtensionInsuranceType] = useState<'bonzah' | 'own'>(
-    rental.bonzah_policy_id ? 'bonzah' : 'own'
+    rental.bonzah_policy_id && bonzahSellable ? 'bonzah' : 'own'
   );
   const [extensionCoverage, setExtensionCoverage] = useState<CoverageOptions>({ cdw: false, rcli: false, sli: false, pai: false });
   const [bonzahPremiumAmount, setBonzahPremiumAmount] = useState(0);
@@ -243,7 +249,7 @@ export function AdminExtendRentalDialog({
     rentalPeriodType: rental.rental_period_type,
   });
 
-  const hasBonzahCoverage = extensionInsuranceType === 'bonzah' && (extensionCoverage.cdw || extensionCoverage.rcli || extensionCoverage.sli || extensionCoverage.pai);
+  const hasBonzahCoverage = extensionInsuranceType === 'bonzah' && bonzahSellable && (extensionCoverage.cdw || extensionCoverage.rcli || extensionCoverage.sli || extensionCoverage.pai);
   // Insurance is quoted for the window Bonzah will actually SELL: policies can
   // only start tomorrow (Pacific) or later — bonzah-create-quote clamps the trip
   // start and rejects the request when nothing insurable remains. So the quote
@@ -258,7 +264,7 @@ export function AdminExtendRentalDialog({
   // Does the extension window contain any night Bonzah can insure? Ranges are
   // end-exclusive (matching the backend), so a same-day +1 extension has none.
   const extensionBonzahInsurable = !!newEndDate && newEndDate.split('T')[0] > extensionStartForInsurance;
-  const insurancePremium = extensionInsuranceType === 'bonzah' && extensionBonzahInsurable ? bonzahPremiumAmount : 0;
+  const insurancePremium = extensionInsuranceType === 'bonzah' && extensionBonzahInsurable && bonzahSellable ? bonzahPremiumAmount : 0;
 
   // Resolve the pickup state + renter details for the Bonzah extension quote.
   // Prefer the original policy (it carries the exact snapshot used at booking),

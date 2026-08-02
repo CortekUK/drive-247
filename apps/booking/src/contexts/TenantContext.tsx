@@ -79,6 +79,11 @@ export interface Tenant {
   integration_bonzah: boolean | null;
   integration_twilio_sms: boolean | null;
   bonzah_brochure_url: string | null;
+  // Test mode issues sandbox policies that are not real cover, so the Bonzah
+  // purchase option is hidden from customers unless a super admin has set the
+  // sandbox override. See isBonzahSellable().
+  bonzah_mode: 'test' | 'live' | null;
+  bonzah_sandbox_override: boolean | null;
 
   // Tax settings
   tax_enabled: boolean | null;
@@ -410,6 +415,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           integration_bonzah,
           integration_twilio_sms,
           bonzah_brochure_url,
+          bonzah_mode,
+          bonzah_sandbox_override,
           tax_enabled,
           tax_percentage,
           service_fee_enabled,

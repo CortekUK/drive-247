@@ -16,6 +16,37 @@ export const isInsuranceExemptTenant = (tenantId: string | undefined | null): bo
 };
 
 /**
+ * Whether a customer may be OFFERED a Bonzah policy.
+ *
+ * Bonzah test mode talks to the sandbox on shared platform credentials, so the
+ * policy it issues is not real cover — yet `stripe_mode` is independent, so the
+ * customer can still be charged real money for it. The purchase option is
+ * therefore hidden in test mode unless a super admin sets the sandbox override
+ * (internal/demo tenants only).
+ *
+ * Mirrors the server-side gate in `_shared/bonzah-client.ts` (getBonzahSellability);
+ * the server is authoritative — this only decides what the customer is shown.
+ *
+ * NOTE: this gates SELLING only. Viewing/downloading an existing certificate is
+ * unaffected, so customers keep access to policies bought earlier.
+ */
+export interface BonzahSellableTenant {
+  id?: string | null;
+  integration_bonzah?: boolean | null;
+  bonzah_mode?: 'test' | 'live' | null;
+  bonzah_sandbox_override?: boolean | null;
+}
+
+export const isBonzahSellable = (tenant: BonzahSellableTenant | null | undefined): boolean => {
+  if (!tenant) return false;
+  // Exemption wins over everything — those tenants never offer insurance at all.
+  if (isInsuranceExemptTenant(tenant.id)) return false;
+  if (tenant.integration_bonzah !== true) return false;
+  if (tenant.bonzah_mode === 'live') return true;
+  return tenant.bonzah_sandbox_override === true;
+};
+
+/**
  * Check if a tenant uses enquiry-based booking
  * For these tenants:
  * - Only security deposit is charged upfront (if any)

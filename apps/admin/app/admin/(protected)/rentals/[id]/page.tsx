@@ -97,6 +97,7 @@ interface Tenant {
   subscription_stripe_mode: 'test' | 'live';
   stripe_mode: 'test' | 'live';
   bonzah_mode: string | null;
+  bonzah_sandbox_override: boolean | null;
   stripe_account_id: string | null;
   stripe_onboarding_complete: boolean | null;
   stripe_account_status: string | null;
@@ -1167,6 +1168,38 @@ export default function TenantDetailsPage() {
     }
   };
 
+  /**
+   * Super-admin escape hatch: let a tenant sell Bonzah while still in test mode.
+   * Sandbox policies are NOT real cover, so this is for internal/demo tenants
+   * only — never for a tenant taking real customers.
+   */
+  const handleToggleSandboxOverride = async (enabled: boolean) => {
+    if (!tenant) return;
+
+    if (enabled) {
+      const ok = window.confirm(
+        `Allow ${tenant.company_name} to sell Bonzah insurance while in TEST mode?\n\n` +
+        `Policies issued will be SANDBOX policies — not real cover — even though the ` +
+        `customer can still be charged. Only do this for internal or demo tenants.`
+      );
+      if (!ok) return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('tenants')
+        .update({ bonzah_sandbox_override: enabled })
+        .eq('id', tenant.id);
+
+      if (error) throw error;
+
+      setTenant({ ...tenant, bonzah_sandbox_override: enabled });
+      toast.success(enabled ? 'Sandbox selling allowed for this tenant' : 'Sandbox override disabled');
+    } catch (error: any) {
+      toast.error(`Error updating sandbox override: ${error.message}`);
+    }
+  };
+
   const handleSaveEdit = async () => {
     if (!tenant) return;
     setSaving(true);
@@ -2077,6 +2110,39 @@ export default function TenantDetailsPage() {
                       <ArrowRightLeft className="h-3 w-3" />
                       Switch
                     </Button>
+                  </div>
+                </div>
+                {/* Selling is blocked in test mode: a sandbox policy is not real
+                    cover, yet the customer can still be charged real money for it.
+                    The override exists only for internal/demo tenants. */}
+                <div className="space-y-1.5 sm:col-span-2">
+                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                    Selling new policies
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {tenant.integration_bonzah &&
+                    ((tenant.bonzah_mode || 'test') === 'live' || tenant.bonzah_sandbox_override) ? (
+                      <Badge variant="success">Allowed</Badge>
+                    ) : (
+                      <Badge variant="warning">Blocked</Badge>
+                    )}
+                    {(tenant.bonzah_mode || 'test') === 'test' && (
+                      <>
+                        <span className="text-xs text-muted-foreground">
+                          {tenant.bonzah_sandbox_override
+                            ? 'Sandbox override ON — this tenant can sell sandbox policies. Internal/demo use only.'
+                            : 'Test mode issues sandbox policies, so selling is blocked.'}
+                        </span>
+                        <Button
+                          variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                          disabled={modeUpdating}
+                          onClick={() => handleToggleSandboxOverride(!tenant.bonzah_sandbox_override)}
+                        >
+                          <ArrowRightLeft className="h-3 w-3" />
+                          {tenant.bonzah_sandbox_override ? 'Disable override' : 'Allow sandbox selling'}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import {
   bonzahFetchWithCredentials,
   getTenantBonzahCredentials,
+  getBonzahSellability,
   formatDateForBonzah,
   normalizeZipForBonzah,
   type CoverageTypes,
@@ -275,6 +276,18 @@ serve(async (req) => {
     // Validate required fields
     if (!body.rental_id || !body.customer_id || !body.tenant_id) {
       return errorResponse('Missing required IDs: rental_id, customer_id, tenant_id')
+    }
+
+    // Refuse to sell before doing any Bonzah work. In test mode the policy would
+    // be issued in Bonzah's sandbox and is not real cover, while the customer can
+    // still be charged real money — so this is blocked at the server, not just
+    // hidden in the UI. Servicing existing policies is deliberately unaffected.
+    const sellability = await getBonzahSellability(supabase, body.tenant_id)
+    if (!sellability.sellable) {
+      console.warn(
+        `[Bonzah Quote] BLOCKED for tenant ${body.tenant_id} (mode=${sellability.mode}): ${sellability.reason}`
+      )
+      return errorResponse(sellability.reason || 'Bonzah insurance is unavailable for this account.', 403)
     }
 
     if (!body.trip_dates?.start || !body.trip_dates?.end) {

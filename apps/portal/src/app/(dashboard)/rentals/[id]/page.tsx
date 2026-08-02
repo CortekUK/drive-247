@@ -25,6 +25,7 @@ import { ChargeDepositDialog } from "@/components/shared/dialogs/charge-deposit-
 import { AddHoldDialog } from "@/components/shared/dialogs/add-hold-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { isBonzahSellable, bonzahBlockedReason } from "@/lib/bonzah";
 // integration_bonzah controls Bonzah-specific features only; insurance document upload is always available
 import { useRentalTotals, useRentalCharges } from "@/hooks/use-rental-ledger-data";
 import { useRentalInvoice, useRentalPaymentBreakdown, useRentalRefundBreakdown } from "@/hooks/use-rental-invoice";
@@ -278,6 +279,13 @@ const RentalDetail = () => {
   const { canEdit } = useManagerPermissions();
   const { settings: rentalSettings } = useRentalSettings();
   const { balanceNumber: bonzahCdBalance, isBonzahConnected, portalUrl: bonzahPortalUrl } = useBonzahBalance();
+  // Buying a NEW policy also requires that Bonzah can issue real cover — test
+  // mode would produce a sandbox policy. Viewing/downloading existing policies
+  // below is deliberately left alone.
+  const bonzahCanSell = isBonzahConnected && isBonzahSellable(tenant);
+  const bonzahSellBlockedReason = !isBonzahConnected
+    ? 'Connect Bonzah in Settings → Integrations first'
+    : bonzahBlockedReason(tenant);
   const { data: rentalAgreements = [], isLoading: loadingAgreements } = useRentalAgreements(id);
   const { data: insurancePolicies = [], isLoading: isLoadingInsurancePolicies } = useRentalInsurancePolicies(id);
   // Phase 5: authoritative per-extension totals from the rental_extension_totals view.
@@ -4789,6 +4797,7 @@ const RentalDetail = () => {
           canEdit={canEdit('rentals')}
           tenantId={tenant?.id}
           isBonzahConnected={isBonzahConnected}
+          canSellBonzah={bonzahCanSell}
           bonzahCdBalance={bonzahCdBalance}
           onBuyInsurance={() => { setBuyInsuranceMode('original'); setShowBuyInsurance(true); }}
           extensions={extensionTotals}
@@ -4819,8 +4828,8 @@ const RentalDetail = () => {
           {/* Bonzah Insurance CTA - Show when no Bonzah policy exists */}
           {canEdit('rentals') && !bonzahPolicy && (
             <div
-              className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${isBonzahConnected && isBonzahEligible && bonzahHasInsurableDays ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
-              onClick={() => { if (isBonzahConnected && isBonzahEligible && bonzahHasInsurableDays) { setBuyInsuranceMode('original'); setShowBuyInsurance(true); } }}
+              className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${bonzahCanSell && isBonzahEligible && bonzahHasInsurableDays ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
+              onClick={() => { if (bonzahCanSell && isBonzahEligible && bonzahHasInsurableDays) { setBuyInsuranceMode('original'); setShowBuyInsurance(true); } }}
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -4847,7 +4856,7 @@ const RentalDetail = () => {
                     </p>
                   </div>
                 </div>
-                {isBonzahConnected ? (
+                {bonzahCanSell ? (
                   <Button
                     size="sm"
                     className={(!isBonzahEligible || !bonzahHasInsurableDays) ? "flex-shrink-0 opacity-50" : "bg-[#CC004A] hover:bg-[#A80040] text-white hover:text-white flex-shrink-0 group-hover:shadow-md transition-shadow"}
@@ -4868,8 +4877,8 @@ const RentalDetail = () => {
                     size="sm"
                     variant="outline"
                     disabled
-                    className="flex-shrink-0 pointer-events-none"
-                    title="Connect Bonzah in Settings → Integrations first"
+                    className="flex-shrink-0"
+                    title={bonzahSellBlockedReason ?? undefined}
                   >
                     <ShieldCheck className="h-4 w-4 mr-1.5" />
                     Get Insurance
@@ -5393,7 +5402,7 @@ const RentalDetail = () => {
                     </a>
                   </Button>
                 )}
-                {isBonzahConnected && (
+                {bonzahCanSell && (
                   isBonzahEligible ? (
                     <Button
                       size="sm"

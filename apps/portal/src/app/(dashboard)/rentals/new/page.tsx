@@ -28,6 +28,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
+import { isBonzahSellable } from "@/lib/bonzah";
 import BonzahInsuranceSelector from "@/components/rentals/bonzah-insurance-selector";
 import type { CoverageOptions } from "@/hooks/use-bonzah-premium";
 import { useBonzahVehicleEligibility } from "@/hooks/use-bonzah-vehicle-eligibility";
@@ -120,7 +121,10 @@ const CreateRental = () => {
   const { tenant } = useTenant();
   const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');
   const { balanceNumber: bonzahCdBalance, isBonzahConnected, portalUrl: bonzahPortalUrl, bonzahMode } = useBonzahBalance();
-  const skipInsurance = !isBonzahConnected;
+  // Also skip when Bonzah can't issue real cover (test mode). Selling a sandbox
+  // policy would charge the customer for insurance that does not exist, so the
+  // whole coverage block is hidden rather than merely disabled.
+  const skipInsurance = !isBonzahConnected || !isBonzahSellable(tenant);
   const queryClient = useQueryClient();
   const { isManager, canEdit } = useManagerPermissions();
   const { logAction } = useAuditLog();
@@ -1604,7 +1608,9 @@ const CreateRental = () => {
 
       // Create Bonzah insurance quote if coverage was selected
       const hasBonzahCoverage = bonzahCoverage.cdw || bonzahCoverage.rcli || bonzahCoverage.sli || bonzahCoverage.pai;
-      if (hasBonzahCoverage && bonzahPremium > 0 && tenant?.id) {
+      // `!skipInsurance` re-checked here: the selector is hidden when Bonzah can't
+      // sell, so stale coverage state must never reach the quote/charge path.
+      if (!skipInsurance && hasBonzahCoverage && bonzahPremium > 0 && tenant?.id) {
         try {
           // Get customer details for the quote
           const customer = customerDetails;

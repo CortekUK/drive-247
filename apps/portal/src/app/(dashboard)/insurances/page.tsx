@@ -23,6 +23,7 @@ import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog
 import { DollarSign, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VerificationsTab } from "@/components/insurance/verifications-tab";
+import { bonzahBlockedReason } from "@/lib/bonzah";
 
 interface InsuranceDoc {
   id: string;
@@ -55,6 +56,10 @@ export default function InsurancesList() {
   const [pageSize] = useState(25);
   const [bonzahFilter, setBonzahFilter] = useState(false);
   const { tenant } = useTenant();
+  // Non-null while new Bonzah policies cannot be sold (test mode / integration off).
+  // Stays null until the tenant has actually loaded — otherwise every operator
+  // (including live ones) flashes a "turned off" banner during TenantContext load.
+  const bonzahBlocked = tenant ? bonzahBlockedReason(tenant) : null;
   const queryClient = useQueryClient();
   const router = useRouter();
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
@@ -502,12 +507,35 @@ export default function InsurancesList() {
             )}
             Export PDFs
           </Button>
-          <Button onClick={() => setGenerateOpen(true)} className="bg-gradient-primary">
-            <Plus className="h-4 w-4 mr-2" />
-            Generate Insurance
-          </Button>
+          {/* Selling is blocked in Bonzah test mode — a sandbox policy is not real
+              cover. Existing policies below stay fully viewable/downloadable. */}
+          <span title={bonzahBlocked ?? undefined} className={bonzahBlocked ? 'cursor-not-allowed' : undefined}>
+            <Button
+              onClick={() => setGenerateOpen(true)}
+              disabled={!!bonzahBlocked}
+              className="bg-gradient-primary"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Generate Insurance
+            </Button>
+          </span>
         </div>
       </div>
+
+      {bonzahBlocked && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-start gap-3">
+          <ShieldCheck className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="text-sm">
+            <p className="font-medium text-amber-700 dark:text-amber-400">
+              New insurance policies are turned off
+            </p>
+            <p className="text-muted-foreground mt-0.5">{bonzahBlocked}</p>
+            <p className="text-muted-foreground mt-1">
+              Existing policies below are unaffected — you can still view and download them.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

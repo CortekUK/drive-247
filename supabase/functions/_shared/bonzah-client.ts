@@ -80,6 +80,86 @@ export async function getTenantBonzahCredentials(
 }
 
 /**
+ * Whether this tenant may SELL a new Bonzah policy right now.
+ *
+ * Test mode talks to Bonzah's sandbox (bonzah.sb.insillion.com) on shared
+ * platform credentials, so any policy it issues is NOT real cover — while
+ * `stripe_mode` is independent, so the customer can still be charged real
+ * money. That combination has already shipped sandbox policies to real
+ * renters, which is why selling is blocked outright in test mode.
+ *
+ * `bonzah_sandbox_override` is the super-admin escape hatch for internal/demo
+ * tenants that must exercise the sandbox end-to-end.
+ *
+ * SCOPE: this gates *selling* only. Servicing an existing policy — confirming a
+ * payment Stripe already took, downloading a certificate, viewing a policy,
+ * reading the balance, cancelling — must keep working in every mode, otherwise
+ * a customer who already paid is left with no policy and no document.
+ */
+export interface BonzahSellability {
+  sellable: boolean;
+  mode: 'test' | 'live';
+  reason: string | null;
+}
+
+export async function getBonzahSellability(
+  supabaseClient: SupabaseClient,
+  tenantId: string
+): Promise<BonzahSellability> {
+  const { data, error } = await supabaseClient
+    .from('tenants')
+    .select('integration_bonzah, bonzah_mode, bonzah_sandbox_override')
+    .eq('id', tenantId)
+    .single();
+
+  // Fail CLOSED: a safety gate that cannot read its own configuration must not
+  // wave the sale through. Costs at most a retry; the alternative is a fake policy.
+  if (error) {
+    return {
+      sellable: false,
+      mode: 'test',
+      reason: `Could not verify Bonzah configuration: ${error.message}`,
+    };
+  }
+
+  const mode = (data?.bonzah_mode || 'test') as 'test' | 'live';
+
+  if (data?.integration_bonzah !== true) {
+    return { sellable: false, mode, reason: 'Bonzah insurance is not enabled for this account.' };
+  }
+
+  if (mode === 'live') return { sellable: true, mode, reason: null };
+
+  if (data?.bonzah_sandbox_override === true) {
+    console.log('[Bonzah] Sandbox override active — allowing test-mode sale for tenant:', tenantId);
+    return { sellable: true, mode, reason: null };
+  }
+
+  return {
+    sellable: false,
+    mode: 'test',
+    reason:
+      'Bonzah is in test mode for this account, so no real policy can be issued. ' +
+      'Complete Bonzah onboarding and switch to live mode before selling insurance.',
+  };
+}
+
+/** Throws BONZAH_NOT_SELLABLE when this tenant may not sell a new policy. */
+export async function assertBonzahSellable(
+  supabaseClient: SupabaseClient,
+  tenantId: string
+): Promise<void> {
+  const verdict = await getBonzahSellability(supabaseClient, tenantId);
+  if (!verdict.sellable) {
+    const err = new Error(verdict.reason || 'Bonzah insurance is unavailable for this account.') as Error & {
+      code: string;
+    };
+    err.code = 'BONZAH_NOT_SELLABLE';
+    throw err;
+  }
+}
+
+/**
  * Get Bonzah authentication token for specific credentials (cached per-username)
  */
 export async function getBonzahTokenForCredentials(

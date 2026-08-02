@@ -37,7 +37,7 @@ import AIVerificationQR from "./AIVerificationQR";
 import { stripePromise } from "@/config/stripe";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { useWorkingHours, getWorkingHoursForDate } from "@/hooks/useWorkingHours";
-import { isInsuranceExemptTenant } from "@/config/tenant-config";
+import { isInsuranceExemptTenant, isBonzahSellable } from "@/config/tenant-config";
 import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
 import { createVeriffFrame, MESSAGES } from "@veriff/incontext-sdk";
@@ -144,6 +144,10 @@ const MultiStepBookingWidget = () => {
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const workingHours = useWorkingHours();
   const skipInsurance = isInsuranceExemptTenant(tenant?.id);
+  // In Bonzah test mode the policy would be issued in the sandbox and is not real
+  // cover, so the purchase option is hidden from customers. The "I have my own
+  // insurance" upload path stays available either way.
+  const bonzahSellable = isBonzahSellable(tenant);
   const {
     updateContext: updateBookingContext,
     formData, setFormData,
@@ -3354,6 +3358,20 @@ const MultiStepBookingWidget = () => {
     setBonzahPolicyId(null);
   };
 
+  // Same reasoning for the tenant-level block: if Bonzah stops being sellable
+  // (test mode), the selector unmounts and any coverage picked beforehand must
+  // be cleared, or a stale premium rides into checkout and the customer is
+  // charged for a policy the server will refuse to issue.
+  useEffect(() => {
+    if (bonzahSellable) return;
+    const hasSelection =
+      bonzahPremium > 0 || bonzahCoverage.cdw || bonzahCoverage.rcli || bonzahCoverage.sli || bonzahCoverage.pai;
+    if (hasSelection) {
+      handleBonzahSkipInsurance();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bonzahSellable, bonzahPremium, bonzahCoverage]);
+
   // If the dates change to a window Bonzah can't insure (zero nights after the
   // LA clamp), the selector unmounts — clear any previously selected coverage
   // too, or a stale premium rides into checkout for a purchase that is
@@ -4948,6 +4966,36 @@ const MultiStepBookingWidget = () => {
                     </Card>
 
                     {/* NO Option */}
+                    {!bonzahSellable ? (
+                      /* Bonzah cannot issue real cover for this tenant (test mode),
+                         so no purchase is offered — the customer simply continues. */
+                      <Card
+                        className="group relative overflow-hidden border-2 border-border hover:border-accent hover:shadow-lg transition-all bg-gradient-to-br from-accent/5 to-transparent h-full cursor-pointer"
+                        onClick={() => setHasInsurance(false)}
+                      >
+                        <div className="p-8 text-center flex flex-col h-full">
+                          <div className="space-y-4 flex-1 flex flex-col">
+                            <div className="flex justify-center items-center h-16">
+                              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-accent/10">
+                                <Shield className="w-8 h-8 text-accent" />
+                              </div>
+                            </div>
+                            <div>
+                              <h5 className="text-lg font-semibold mb-2">No, I Don't Have Insurance</h5>
+                              <p className="text-sm text-muted-foreground">
+                                Continue with your booking and our team will go through your
+                                coverage options with you before pickup.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="space-y-4 pt-4 mt-auto">
+                            <Button className="w-full bg-accent hover:bg-accent/90" size="lg">
+                              Continue Without Insurance
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    ) : (
                     <Card
                       className={cn(
                         "group relative overflow-hidden border-2 transition-all bg-gradient-to-br from-accent/5 to-transparent h-full",
@@ -5028,6 +5076,7 @@ const MultiStepBookingWidget = () => {
                         </div>
                       </div>
                     </Card>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -5160,7 +5209,35 @@ const MultiStepBookingWidget = () => {
           )}
 
           {/* NO Path - Bonzah Details Form then Coverage Selector */}
-          {hasInsurance === false && !bonzahDetailsCompleted && (
+          {/* Bonzah not sellable: no purchase flow at all — just acknowledge and move on. */}
+          {hasInsurance === false && !bonzahSellable && (
+            <div className="max-w-3xl mx-auto space-y-6">
+              <Card className="overflow-hidden border-2 border-border/50">
+                <div className="p-8 md:p-10 text-center space-y-4">
+                  <div className="flex justify-center">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-accent/10">
+                      <Shield className="w-8 h-8 text-accent" />
+                    </div>
+                  </div>
+                  <h4 className="text-xl font-semibold">Continuing without insurance</h4>
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                    No problem — you can carry on with your booking. Our team will go through
+                    your coverage options with you before you collect the vehicle.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+                    <Button variant="outline" size="lg" onClick={() => setHasInsurance(null)}>
+                      <ChevronLeft className="mr-2 w-5 h-5" /> Back
+                    </Button>
+                    <Button size="lg" onClick={handleStep3Continue}>
+                      Continue to Details <ChevronRight className="ml-2 w-5 h-5" />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {hasInsurance === false && bonzahSellable && !bonzahDetailsCompleted && (
             <BonzahDetailsForm
               initialValues={{
                 addressStreet: formData.addressStreet,
@@ -5177,7 +5254,7 @@ const MultiStepBookingWidget = () => {
             />
           )}
 
-          {hasInsurance === false && bonzahDetailsCompleted && (
+          {hasInsurance === false && bonzahSellable && bonzahDetailsCompleted && (
             <div className="max-w-4xl mx-auto space-y-6">
               {/* Edit Details link */}
               <div className="flex justify-end">

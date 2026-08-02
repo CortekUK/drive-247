@@ -37,6 +37,14 @@ interface InsuranceTimelineProps {
   canEdit: boolean;
   tenantId: string | undefined;
   isBonzahConnected: boolean;
+  /**
+   * Whether a NEW policy may be sold right now (false in Bonzah test mode).
+   * Deliberately separate from `isBonzahConnected`: retrying/refreshing/
+   * downloading an EXISTING policy must stay available even when selling is
+   * blocked, otherwise already-paid policies stuck in quoted/insufficient_balance
+   * could never be completed.
+   */
+  canSellBonzah: boolean;
   bonzahCdBalance: number | null;
   onBuyInsurance: () => void;
   // Per-individual-extension actions (Phase 5 polish)
@@ -92,6 +100,7 @@ function InsuranceTimelineItem({
   policy,
   isLast,
   canEdit,
+  canSellBonzah,
   tenantId,
   rentalId,
   bonzahMode,
@@ -100,6 +109,13 @@ function InsuranceTimelineItem({
   policy: InsurancePolicy;
   isLast: boolean;
   canEdit: boolean;
+  /**
+   * A `quoted` policy has never actually been bought — "Complete" would issue a
+   * brand-new policy, so it is a SALE and must respect the test-mode block.
+   * (`failed`/`insufficient_balance` rows are re-attempts of a sale too.)
+   * Viewing/downloading/refreshing an issued policy stays available regardless.
+   */
+  canSellBonzah: boolean;
   tenantId: string | undefined;
   rentalId: string;
   bonzahMode: string;
@@ -267,7 +283,7 @@ function InsuranceTimelineItem({
             </Button>
           )}
 
-          {canEdit && isRetryable && (
+          {canEdit && isRetryable && canSellBonzah && (
             <Button
               size="sm"
               disabled={issuingPolicy}
@@ -320,6 +336,7 @@ export function InsuranceTimeline({
   canEdit,
   tenantId,
   isBonzahConnected,
+  canSellBonzah,
   bonzahCdBalance,
   onBuyInsurance,
   extensions,
@@ -356,7 +373,7 @@ export function InsuranceTimeline({
               </Badge>
             </div>
           </CardTitle>
-          {canEdit && !hasOriginal && isBonzahConnected && (
+          {canEdit && !hasOriginal && canSellBonzah && (
             <Button variant="outline" size="sm" onClick={onBuyInsurance}>
               <ShieldCheck className="h-4 w-4 mr-2" />
               Buy Insurance
@@ -452,6 +469,7 @@ export function InsuranceTimeline({
                       policy={policy}
                       isLast={false}
                       canEdit={canEdit}
+                      canSellBonzah={canSellBonzah}
                       tenantId={tenantId}
                       rentalId={rentalId}
                       bonzahMode={bonzahMode}
@@ -521,6 +539,7 @@ export function InsuranceTimeline({
                               policy={policy}
                               isLast={false}
                               canEdit={canEdit}
+                              canSellBonzah={canSellBonzah}
                               tenantId={tenantId}
                               rentalId={rentalId}
                               bonzahMode={bonzahMode}
@@ -552,7 +571,7 @@ export function InsuranceTimeline({
                       {/* Buy / Upload buttons — hide once this extension has any coverage */}
                       {canEdit && !hasCoverage && (
                         <div className={`flex items-center gap-2 ${extPolicies.length > 0 || extDocs.length > 0 ? 'mt-3 pt-3 border-t border-amber-200 dark:border-amber-800/50' : ''}`}>
-                          {isBonzahConnected && onBuyExtensionInsuranceFor && (
+                          {canSellBonzah && onBuyExtensionInsuranceFor && (
                             <Button
                               variant="outline"
                               size="sm"

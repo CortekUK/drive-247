@@ -17,6 +17,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Loader2, CalendarPlus, Check, X, AlertCircle, AlertTriangle, Calendar, CreditCard, Shield, ShieldCheck, Upload, Gauge, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
+import { isBonzahSellable } from '@/lib/bonzah';
 import { useToast } from '@/hooks/use-toast';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { useExtensionConflicts } from '@/hooks/use-extension-conflicts';
@@ -64,8 +65,11 @@ export function ExtensionRequestDialog({
 
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  // Bonzah can't issue real cover in test mode — default to the "own insurance"
+  // path so no premium is quoted or charged for a policy that cannot be issued.
+  const bonzahSellable = isBonzahSellable(tenant);
   const [extensionInsuranceType, setExtensionInsuranceType] = useState<'bonzah' | 'own'>(
-    rental.bonzah_policy_id ? 'bonzah' : 'own'
+    rental.bonzah_policy_id && bonzahSellable ? 'bonzah' : 'own'
   );
   const [extensionCoverage, setExtensionCoverage] = useState<CoverageOptions>({ cdw: false, rcli: false, sli: false, pai: false });
   const [bonzahPremiumAmount, setBonzahPremiumAmount] = useState(0);
@@ -110,7 +114,7 @@ export function ExtensionRequestDialog({
     enabled: !!customerId,
   });
 
-  const hasBonzahCoverage = extensionInsuranceType === 'bonzah' && (extensionCoverage.cdw || extensionCoverage.rcli || extensionCoverage.sli || extensionCoverage.pai);
+  const hasBonzahCoverage = extensionInsuranceType === 'bonzah' && bonzahSellable && (extensionCoverage.cdw || extensionCoverage.rcli || extensionCoverage.sli || extensionCoverage.pai);
 
   // Snapshot dates when dialog opens so they don't flip mid-approval when React Query refetches
   const [snapshotEndDate, setSnapshotEndDate] = useState(rental.end_date);
@@ -140,7 +144,7 @@ export function ExtensionRequestDialog({
   const requestBonzahInsurable =
     !!snapshotRequestedDate && snapshotRequestedDate.split('T')[0] > extensionStartForInsurance;
   const insurancePremium =
-    extensionInsuranceType === 'bonzah' && requestBonzahInsurable ? bonzahPremiumAmount : 0;
+    extensionInsuranceType === 'bonzah' && requestBonzahInsurable && bonzahSellable ? bonzahPremiumAmount : 0;
 
   const { extensionCost, extensionDays, dailyRate, dayBreakdown, hasSurcharges, isLoading: loadingRate } = useExtensionPricing({
     vehicleId: rental.vehicle_id || rental.vehicles?.id,

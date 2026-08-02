@@ -297,6 +297,15 @@ export function BonzahSettings() {
                 <p className="text-sm text-muted-foreground mt-1 dark:text-gray-300">
                   Live mode is enabled by Drive247
                 </p>
+                {/* Sandbox policies are not real cover, so selling is blocked
+                    until this account is switched to live. */}
+                {isTestMode && !tenantContext?.bonzah_sandbox_override && (
+                  <p className="text-sm mt-2 text-amber-700 dark:text-amber-400">
+                    While in test mode, insurance is not offered to your customers and new
+                    policies can&apos;t be issued — a test policy would not be real cover.
+                    Existing policies are unaffected.
+                  </p>
+                )}
               </div>
               {currentMode === 'live' ? (
                 <Badge className="bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 shrink-0">LIVE</Badge>

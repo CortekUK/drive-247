@@ -13916,6 +13916,7 @@ export type Database = {
           boldsign_test_brand_id: string | null
           bonzah_brochure_url: string | null
           bonzah_mode: string
+          bonzah_sandbox_override: boolean
           bonzah_password: string | null
           bonzah_username: string | null
           booking_lead_time_hours: number | null
@@ -14154,6 +14155,7 @@ export type Database = {
           boldsign_test_brand_id?: string | null
           bonzah_brochure_url?: string | null
           bonzah_mode?: string
+          bonzah_sandbox_override?: boolean
           bonzah_password?: string | null
           bonzah_username?: string | null
           booking_lead_time_hours?: number | null
@@ -14392,6 +14394,7 @@ export type Database = {
           boldsign_test_brand_id?: string | null
           bonzah_brochure_url?: string | null
           bonzah_mode?: string
+          bonzah_sandbox_override?: boolean
           bonzah_password?: string | null
           bonzah_username?: string | null
           booking_lead_time_hours?: number | null
@@ -16288,6 +16291,7 @@ export type Database = {
           boldsign_ready: boolean | null
           bonzah_enabled: boolean | null
           bonzah_mode: string | null
+          bonzah_sandbox_override: boolean | null
           bonzah_ready: boolean | null
           company_name: string | null
           issue_count: number | null
