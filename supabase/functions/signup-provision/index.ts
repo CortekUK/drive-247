@@ -58,6 +58,7 @@ import {
   cleanOrNull,
   deriveTimezone,
   isHttpUrl,
+  deriveSlugFromName,
   isReservedSlug,
   isUniqueViolation,
   MAX,
@@ -68,9 +69,29 @@ import {
   suggestSlugs,
   type HourCols,
 } from "../_shared/tenant-provisioning.ts";
+import { sendResendEmail } from "../_shared/resend-service.ts";
 import { buildCmsContent, seedTenantCmsContent } from "../_shared/tenant-cms-content.ts";
 
 const LOG = "[signup-provision]";
+
+
+/**
+ * Escape user-supplied text before it goes into the welcome email's HTML.
+ *
+ * `companyName` is free text the operator typed on a public form. Interpolating
+ * it raw would let a business name containing markup rewrite the email body —
+ * and an email is a place where a forged "click here to verify" block is
+ * unusually convincing.
+ */
+function escapeHtml(value: string): string {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const HOUR_MS = 60 * 60 * 1000;
 
 /** Stripe statuses that mean this signup has been paid for. */
@@ -439,24 +460,49 @@ Deno.serve(async (req) => {
       });
     }
 
-    const slug = normalizeSlug(clean(body.slug, 100));
-    if (
-      !/^[a-z][a-z0-9-]*$/.test(slug) ||
-      slug.length < 3 ||
-      slug.length > 50 ||
-      slug.replace(/[^a-z0-9]/g, "").length < 3
-    ) {
-      return await fail("SLUG_INVALID", "That web address is not valid", 400, {
-        field: "slug",
-        slug,
-      });
-    }
-    if (isReservedSlug(slug)) {
-      return await fail("SLUG_RESERVED", "That web address is reserved", 409, {
-        field: "slug",
-        slug,
-        suggestions: await suggestSlugs(supabase, companyName || slug),
-      });
+    // The business form no longer asks for a subdomain — the operator gives us a
+    // name and we derive the address. `body.slug` is still honoured when present
+    // so an older client (or a future admin-side caller) keeps working, and so
+    // that a deploy in which the browser bundle lags this function does not 400
+    // every signup.
+    let slug: string;
+    const requestedSlug = normalizeSlug(clean(body.slug, 100));
+
+    if (requestedSlug) {
+      slug = requestedSlug;
+      if (
+        !/^[a-z][a-z0-9-]*$/.test(slug) ||
+        slug.length < 3 ||
+        slug.length > 50 ||
+        slug.replace(/[^a-z0-9]/g, "").length < 3
+      ) {
+        return await fail("SLUG_INVALID", "That web address is not valid", 400, {
+          field: "slug",
+          slug,
+        });
+      }
+      if (isReservedSlug(slug)) {
+        return await fail("SLUG_RESERVED", "That web address is reserved", 409, {
+          field: "slug",
+          slug,
+          suggestions: await suggestSlugs(supabase, companyName || slug),
+        });
+      }
+    } else {
+      const derived = await deriveSlugFromName(supabase, companyName);
+      if (!derived) {
+        // Every candidate was illegal or taken. The only thing the operator can
+        // act on is their business name, so the error has to point there rather
+        // than at a field the form no longer shows.
+        return await fail(
+          "SLUG_INVALID",
+          "We couldn't create a web address from that business name. Try a slightly different name.",
+          400,
+          { field: "companyName" },
+        );
+      }
+      slug = derived;
+      console.log(`${LOG} derived slug "${slug}" from company name "${companyName}"`);
     }
 
     const location = cleanOrNull(body.location, MAX.location);
@@ -551,6 +597,28 @@ Deno.serve(async (req) => {
     // =====================================================================
     const plan = getSignupPlan(meta.planId);
     if (!plan) return await fail("PLAN_UNKNOWN", "Unknown plan", 400);
+
+    // Fleet size against the plan's allowance.
+    //
+    // The browser checks this too, purely so it can name the plan that WOULD
+    // fit. This is the check that enforces it: the form is a public surface and
+    // the number arrives in the request body, so a client-side rule alone would
+    // let anyone provision a 500-vehicle operation on the $99 tier.
+    //
+    // Only enforced when a parseable count is supplied. `fleetSize` used to be a
+    // free-text band ("11–25 vehicles") and older in-flight signups may still
+    // carry one; rejecting those would strand a customer who has already paid.
+    if (fleetSize) {
+      const vehicles = Number.parseInt(String(fleetSize).replace(/[^0-9]/g, ""), 10);
+      if (Number.isFinite(vehicles) && vehicles > 0 && vehicles > plan.maxVehicles) {
+        return await fail(
+          "VALIDATION_FAILED",
+          `${plan.name} covers up to ${plan.maxVehicles} vehicles. You entered ${vehicles}.`,
+          400,
+          { field: "fleetSize", maxVehicles: plan.maxVehicles, entered: vehicles },
+        );
+      }
+    }
 
     const mode = meta.mode ?? getSignupStripeMode();
     let stripe;
@@ -1183,6 +1251,51 @@ Deno.serve(async (req) => {
     console.log(
       `${LOG} provisioned tenant ${tenantId} (${slug}) for ${meta.email} on ${plan.id}/${mode}`,
     );
+
+    /**
+     * Welcome email carrying the addresses we just minted.
+     *
+     * This became REQUIRED, not a nicety, the moment the business form stopped
+     * asking the operator to choose their own subdomain: they now learn their
+     * web address for the first time on the success screen, and a closed tab or
+     * a dead laptop battery would otherwise leave a paying customer with no way
+     * to find the portal they just bought.
+     *
+     * Fire-and-forget and wrapped: the tenant is fully provisioned by this
+     * point, and a Resend outage must not turn a completed signup into an error
+     * the client will retry. A failure is logged for support to pick up.
+     */
+    try {
+      const emailHtml = `
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#0f172a">
+  <h1 style="font-size:22px;font-weight:600;margin:0 0 8px">Your Drive247 portal is ready</h1>
+  <p style="font-size:14px;line-height:1.6;color:#475569;margin:0 0 24px">
+    ${escapeHtml(companyName)} is set up on the ${escapeHtml(plan.name)} plan. Here is everything you need.
+  </p>
+  <table style="width:100%;border-collapse:collapse;font-size:14px">
+    <tr><td style="padding:10px 0;color:#64748b;width:130px">Your portal</td>
+        <td style="padding:10px 0"><a href="${portalUrl}" style="color:#4f46e5;font-weight:600">${portalUrl}</a></td></tr>
+    <tr><td style="padding:10px 0;color:#64748b">Booking site</td>
+        <td style="padding:10px 0"><a href="${bookingUrl}" style="color:#4f46e5;font-weight:600">${bookingUrl}</a></td></tr>
+    <tr><td style="padding:10px 0;color:#64748b">Sign in as</td>
+        <td style="padding:10px 0"><strong>${escapeHtml(meta.email)}</strong></td></tr>
+  </table>
+  <p style="font-size:13px;line-height:1.6;color:#64748b;margin:24px 0 0">
+    Sign in with the password you chose during signup. Your web address is fixed
+    and cannot be changed later, so keep this email.
+  </p>
+</div>`;
+      const sent = await sendResendEmail({
+        to: meta.email,
+        subject: `Your Drive247 portal is ready — ${companyName}`,
+        html: emailHtml,
+      });
+      if (!sent?.success) {
+        console.error(`${LOG} welcome email failed for ${meta.email}:`, sent?.error);
+      }
+    } catch (e) {
+      console.error(`${LOG} welcome email threw for ${meta.email} (non-fatal):`, e);
+    }
 
     return jsonResponse({
       success: true,

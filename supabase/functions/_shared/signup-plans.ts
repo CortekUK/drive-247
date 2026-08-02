@@ -22,6 +22,12 @@ export interface SignupPlanServer {
   features: string[];
   /** Stable Stripe Price lookup_key. Bump the suffix if a price ever changes. */
   lookupKey: string;
+  /**
+   * Hard upper bound on fleet size at signup. MUST match `maxVehicles` in
+   * apps/web/src/lib/plans.ts — the client checks it for a good error message,
+   * this side is what actually enforces it.
+   */
+  maxVehicles: number;
 }
 
 export const SIGNUP_PLANS: Record<SignupPlanId, SignupPlanServer> = {
@@ -39,6 +45,7 @@ export const SIGNUP_PLANS: Record<SignupPlanId, SignupPlanServer> = {
       "The full platform — nothing is held back",
     ],
     lookupKey: "d247_signup_starter_usd_9900_v1",
+    maxVehicles: 4,
   },
   growth: {
     id: "growth",
@@ -54,6 +61,7 @@ export const SIGNUP_PLANS: Record<SignupPlanId, SignupPlanServer> = {
       "The full platform — nothing is held back",
     ],
     lookupKey: "d247_signup_growth_usd_19900_v1",
+    maxVehicles: 15,
   },
   scale: {
     id: "scale",
@@ -69,6 +77,7 @@ export const SIGNUP_PLANS: Record<SignupPlanId, SignupPlanServer> = {
       "The full platform — nothing is held back",
     ],
     lookupKey: "d247_signup_scale_usd_29900_v1",
+    maxVehicles: 40,
   },
 };
 

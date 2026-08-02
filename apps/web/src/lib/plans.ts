@@ -25,6 +25,16 @@ export interface SignupPlan {
   interval: "month";
   /** e.g. "1–4 vehicles" (en dash, matching the existing lead-form bands). */
   fleetBand: string;
+  /**
+   * Hard upper bound on the fleet size this plan accepts at signup.
+   *
+   * Previously the bands were sizing guidance only, and the business form asked
+   * for a band from a dropdown whose values (1-4 / 5-10 / 11-25 / 25+) did not
+   * line up with the plan bands (1-4 / 5-15 / 16-40) — "5-10" matched no plan
+   * boundary and "11-25" straddled two, so no coherent check was possible.
+   * A single number per plan makes the rule checkable on both sides.
+   */
+  maxVehicles: number;
   /** One-line positioning sentence under the plan name. */
   tagline: string;
   /** Card bullets. Entry 0 is the fleet-scoped line and is the only one that differs. */
@@ -42,6 +52,7 @@ export const SIGNUP_PLANS: readonly SignupPlan[] = [
     currency: "usd",
     interval: "month",
     fleetBand: "1–4 vehicles",
+    maxVehicles: 4,
     tagline: "Get off the marketplace and take your first direct bookings.",
     bullets: [
       "Sized for fleets of 1–4 vehicles",
@@ -59,6 +70,7 @@ export const SIGNUP_PLANS: readonly SignupPlan[] = [
     currency: "usd",
     interval: "month",
     fleetBand: "5–15 vehicles",
+    maxVehicles: 15,
     tagline: "For operators running a real book of business every week.",
     bullets: [
       "Sized for fleets of 5–15 vehicles",
@@ -76,6 +88,7 @@ export const SIGNUP_PLANS: readonly SignupPlan[] = [
     currency: "usd",
     interval: "month",
     fleetBand: "16–40 vehicles",
+    maxVehicles: 40,
     tagline: "For multi-location fleets with a team behind the counter.",
     bullets: [
       "Sized for fleets of 16–40 vehicles",
@@ -150,3 +163,16 @@ if (process.env.NODE_ENV !== "production") {
     );
   }
 }
+
+/**
+ * The smallest plan that can carry `count` vehicles, or null when the fleet is
+ * bigger than anything self-serve covers (those operators need a call).
+ */
+export function smallestPlanFor(count: number): SignupPlan | null {
+  return SIGNUP_PLANS.find((p) => count <= p.maxVehicles) ?? null;
+}
+
+/** The largest fleet any self-serve plan accepts. */
+export const MAX_SELF_SERVE_VEHICLES = Math.max(
+  ...SIGNUP_PLANS.map((p) => p.maxVehicles),
+);

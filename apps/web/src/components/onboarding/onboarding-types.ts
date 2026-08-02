@@ -212,12 +212,33 @@ export interface OperatingScheduleDraft {
 
 export interface BusinessDraft {
   companyName: string;
+  /**
+   * DERIVED, never typed by the operator.
+   *
+   * The business step no longer asks for a web address — the subdomain is
+   * derived from the business name and communicated after provisioning. The
+   * field stays on the draft because `onboarding-provider.tsx` still posts it
+   * as `ProvisionRequest.slug` and guards on its shape before it will hand the
+   * dialog over to the boot screen; an empty string there would kill every
+   * signup. The step keeps it in sync with `companyName`, and the server
+   * derives its own copy authoritatively.
+   */
   slug: string;
-  /** True once the user hand-edits the slug; stops auto-derivation from companyName. */
-  slugTouched: boolean;
+  /**
+   * Vestigial. It used to mean "the user hand-edited the slug, stop
+   * auto-deriving it" — there is no slug field to hand-edit any more, so
+   * nothing reads it. Optional (rather than deleted) purely so the resume path
+   * in `onboarding-provider.tsx` can keep setting it without a type error.
+   */
+  slugTouched?: boolean;
   location: string;
   businessPhone: string;
-  /** One of FLEET_SIZE_OPTIONS. */
+  /**
+   * How many vehicles the operator runs, as a plain integer in text form
+   * ("8"). Empty string means "not answered yet" — it is kept as a string so
+   * the input stays controlled and an in-progress entry is never coerced to 0.
+   * Validated against the selected plan's `maxVehicles`.
+   */
   fleetSize: string;
   /** One of VEHICLE_TYPE_OPTIONS. */
   vehicleType: string;
@@ -230,7 +251,6 @@ export interface BusinessDraft {
 export const EMPTY_BUSINESS_DRAFT: BusinessDraft = {
   companyName: "",
   slug: "",
-  slugTouched: false,
   location: "",
   businessPhone: "",
   fleetSize: "",
@@ -246,13 +266,13 @@ export const EMPTY_BUSINESS_DRAFT: BusinessDraft = {
   acceptedTerms: false,
 };
 
-/** Matches the bands already used by consultation-form and strategy-call. */
-export const FLEET_SIZE_OPTIONS: readonly string[] = [
-  "1–4 vehicles",
-  "5–10 vehicles",
-  "11–25 vehicles",
-  "25+ vehicles",
-] as const;
+// FLEET_SIZE_OPTIONS used to live here. It is gone because its bands
+// (1–4 / 5–10 / 11–25 / 25+) did not line up with the plan bands
+// (1–4 / 5–15 / 16–40), so "5–10" matched no plan boundary and "11–25"
+// straddled two — the fleet answer could not be checked against the plan the
+// operator had just paid for. The step now asks for a number. The lead forms
+// (consultation-form, strategy-call) keep their own local band lists; they feed
+// a CRM, not a plan check.
 
 export const VEHICLE_TYPE_OPTIONS: readonly string[] = [
   "Economy",
@@ -395,7 +415,14 @@ export interface BusinessStepProps {
   busy: boolean;
   error: OnboardingError | null;
   onChange(patch: Partial<BusinessDraft>): void;
-  onCheckSlug(slug: string): Promise<SlugCheckResult>;
+  /**
+   * OPTIONAL and unused by the step. The web-address field is gone, so nothing
+   * checks slug availability while typing any more. The prop is kept so
+   * `onboarding-dialog.tsx` can keep passing the provider's `checkSlug`
+   * harmlessly, and so the live `signup-slug-check` endpoint keeps a caller
+   * shape to come back to.
+   */
+  onCheckSlug?(slug: string): Promise<SlugCheckResult>;
   onSubmit(): void;
 }
 

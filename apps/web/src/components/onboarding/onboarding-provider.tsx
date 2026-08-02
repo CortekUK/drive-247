@@ -372,7 +372,14 @@ function buildProvisionRequest(d: BusinessDraft): ProvisionRequest {
   };
   return {
     companyName: d.companyName.trim(),
-    slug: d.slug.trim().toLowerCase(),
+    // `slug` is deliberately NOT sent. The business form no longer asks for a
+    // web address, so anything we put here would be a value the operator never
+    // saw and cannot correct. `signup-provision` derives it from the company
+    // name instead, and — unlike a supplied slug, which it must reject as
+    // SLUG_TAKEN — the derived path auto-suffixes on collision. Two operators
+    // both called "Elite Motors" therefore both succeed, as elite-motors and
+    // elite-motors-2, rather than the second hitting a dead end with no field
+    // to fix it.
     location: trimmedOrUndefined(d.location),
     businessPhone: trimmedOrUndefined(d.businessPhone),
     fleetSize: trimmedOrUndefined(d.fleetSize),
@@ -389,7 +396,6 @@ function buildProvisionRequest(d: BusinessDraft): ProvisionRequest {
   };
 }
 
-const SLUG_SHAPE = /^[a-z][a-z0-9-]*$/;
 
 /**
  * A last line of defence before we tear the dialog down and mount the boot
@@ -402,10 +408,9 @@ function validateBusinessLocally(d: BusinessDraft): OnboardingError | null {
   if (d.companyName.trim().length < 2) {
     return err("VALIDATION_FAILED", { field: "companyName" });
   }
-  const slug = d.slug.trim().toLowerCase();
-  if (slug.length < 3 || slug.length > 50 || !SLUG_SHAPE.test(slug)) {
-    return err("SLUG_INVALID", { field: "slug" });
-  }
+  // No slug guard: the field is gone and the server derives the address. The
+  // business step still validates that the NAME can produce a usable web
+  // address, which is the thing the operator can actually act on.
   if (!d.schedule.alwaysOpen && d.schedule.days.length === 0) {
     return err("VALIDATION_FAILED", { field: "operatingSchedule" });
   }

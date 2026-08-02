@@ -29,6 +29,11 @@ import {
   type BusinessDraft,
   type OperatingScheduleDraft,
 } from "@/components/onboarding/onboarding-types";
+import {
+  MAX_SELF_SERVE_VEHICLES,
+  smallestPlanFor,
+  type SignupPlan,
+} from "@/lib/plans";
 
 // ---------------------------------------------------------------------------
 // Shared shapes (LOCAL to the client — the wire contracts all live in
@@ -40,9 +45,13 @@ export type FieldErrors<K extends string> = Partial<Record<K, string>>;
 
 export type AccountField = "fullName" | "email" | "password";
 
+/**
+ * `slug` is deliberately absent: the operator no longer picks a web address, so
+ * there is no field to hang a slug message on. A slug problem is now always a
+ * problem with the BUSINESS NAME it was derived from, and is reported there.
+ */
 export type BusinessField =
   | "companyName"
-  | "slug"
   | "location"
   | "businessPhone"
   | "fleetSize"
@@ -321,14 +330,18 @@ export function passwordStrength(password: string): PasswordStrength {
 // ---------------------------------------------------------------------------
 
 /**
+ * Nobody types a slug any more — the business step dropped the web-address
+ * field, and the subdomain is derived from the business name (here, and
+ * authoritatively again on the server). What survives in this section is
+ * exactly what that derivation needs: normalise, shape-check, reserved-check.
+ * The keystroke-safe `sanitizeSlugInput` went with the input it existed for.
+ */
+
+/**
  * Canonical subdomain form. Byte-identical to `normalizeSlug` in
  * create-sales-onboarding/index.ts:120 — lowercase, `[a-z0-9-]` only, no
  * repeated hyphens, no leading or trailing hyphen. Anything else is an illegal
  * DNS label and produces a hostname that never resolves.
- *
- * Applied on blur and before every availability check, NOT on every keystroke
- * — stripping the trailing hyphen as you type makes "acme-cars" impossible to
- * enter. `sanitizeSlugInput` is the keystroke-safe version.
  */
 export function normalizeSlugClient(raw: string): string {
   return raw
@@ -338,22 +351,7 @@ export function normalizeSlugClient(raw: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-/**
- * Keystroke-safe partial normalisation: lowercases and maps illegal characters
- * to a hyphen so the field always shows something that *could* become a valid
- * slug, but leaves a trailing hyphen alone so the user can keep typing. The
- * full `normalizeSlugClient` runs on blur.
- */
-export function sanitizeSlugInput(raw: string): string {
-  return raw
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, "-")
-    .replace(/-{2,}/g, "-")
-    .replace(/^-+/, "")
-    .slice(0, FIELD_MAX.slug);
-}
-
-/** Auto-suggestion for the slug field, derived from the business name. */
+/** The subdomain a business name produces. Mirrors the server's derivation. */
 export function deriveSlugFromCompanyName(companyName: string): string {
   return normalizeSlugClient(companyName.trim()).slice(0, FIELD_MAX.slug);
 }
@@ -537,7 +535,58 @@ export function isScheduleUsable(schedule: OperatingScheduleDraft): boolean {
   return schedule.days.length > 0;
 }
 
-export function validateBusiness(draft: BusinessDraft): FieldErrors<BusinessField> {
+/**
+ * The number the operator typed, or null when the box does not hold a positive
+ * whole number.
+ *
+ * The input already strips non-digits, so this mostly guards paste, autofill
+ * and a resumed draft that still carries one of the old band strings
+ * ("5–10 vehicles") from before the field became numeric.
+ */
+export function parseFleetSize(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const n = Number(trimmed);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
+/** True when no self-serve plan covers this fleet, so the answer is "call us". */
+export function fleetNeedsSalesCall(raw: string): boolean {
+  const n = parseFleetSize(raw);
+  return n !== null && n > MAX_SELF_SERVE_VEHICLES;
+}
+
+/**
+ * The check the user actually asked for. It can only be written now that a plan
+ * carries a single `maxVehicles` number — the old band dropdown had no boundary
+ * in common with the plan bands, so there was nothing to compare.
+ *
+ * Every failure names a way forward: the plan that does fit, or the strategy
+ * call for a fleet no plan covers. This step runs AFTER the card is charged, so
+ * a message that only says "no" is a dead end.
+ */
+export function validateFleetSize(
+  raw: string,
+  plan: SignupPlan,
+): string | undefined {
+  const count = parseFleetSize(raw);
+  if (count === null) return "Enter how many vehicles you run.";
+  if (count <= plan.maxVehicles) return undefined;
+
+  const fits = smallestPlanFor(count);
+  if (!fits) {
+    // The link is rendered by the step — see `fleetNeedsSalesCall`. The
+    // sentence stays complete on its own so it still reads correctly to a
+    // screen reader that announces the text before reaching the link.
+    return `Fleets over ${MAX_SELF_SERVE_VEHICLES} vehicles are set up with our team.`;
+  }
+  return `${plan.name} covers up to ${plan.maxVehicles} vehicles. For ${count} you'll need ${fits.name}.`;
+}
+
+export function validateBusiness(
+  draft: BusinessDraft,
+  plan: SignupPlan,
+): FieldErrors<BusinessField> {
   const errors: FieldErrors<BusinessField> = {};
 
   const companyName = draft.companyName.trim();
@@ -545,12 +594,25 @@ export function validateBusiness(draft: BusinessDraft): FieldErrors<BusinessFiel
     errors.companyName = "Please enter your business name.";
   } else if (companyName.length > FIELD_MAX.companyName) {
     errors.companyName = `Please keep your business name to ${FIELD_MAX.companyName} characters or fewer.`;
+  } else {
+    // The web address is derived from this name now, so a name that cannot
+    // produce a legal DNS label is a problem with the NAME — and it has to be
+    // caught here. `onboarding-provider.tsx` re-checks the derived slug before
+    // it will start provisioning and refuses with SLUG_INVALID, which no longer
+    // has a field of its own to land on.
+    const derived = checkSlugShape(deriveSlugFromCompanyName(companyName));
+    if (!derived.ok) {
+      errors.companyName =
+        derived.problem === "reserved"
+          ? "That name maps to a web address we keep for ourselves. Please add a word to it."
+          : "We couldn't build a web address from that name. Please use at least three letters or numbers.";
+    }
   }
 
-  const slug = checkSlugShape(draft.slug);
-  if (!slug.ok && slug.message) {
-    errors.slug = slug.message;
-  }
+  // Assigned only when it fails: callers count `Object.keys(errors)`, so
+  // writing `undefined` would leave a key behind and block submit forever.
+  const fleetError = validateFleetSize(draft.fleetSize, plan);
+  if (fleetError) errors.fleetSize = fleetError;
 
   if (draft.location.trim().length > FIELD_MAX.location) {
     errors.location = `Please keep this to ${FIELD_MAX.location} characters or fewer.`;
@@ -591,7 +653,6 @@ export function validateBusiness(draft: BusinessDraft): FieldErrors<BusinessFiel
 /** The order fields appear in, so "focus the first error" focuses the top one. */
 export const BUSINESS_FIELD_ORDER: readonly BusinessField[] = [
   "companyName",
-  "slug",
   "location",
   "businessPhone",
   "fleetSize",

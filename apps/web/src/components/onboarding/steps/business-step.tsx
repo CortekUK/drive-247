@@ -4,40 +4,39 @@
  * Step 3 of the self-serve signup dialog — the answers that actually configure
  * the tenant.
  *
- * Every field here maps onto something `signup-provision` writes: the slug
- * becomes two live hostnames, the location derives the timezone that drives
- * every pickup time and overdue cron, the schedule becomes the per-day
- * opening-hours columns the booking site reads, and the colour description is
- * fed to the brand-palette builder.
+ * Every field here maps onto something `signup-provision` writes: the location
+ * derives the timezone that drives every pickup time and overdue cron, the
+ * schedule becomes the per-day opening-hours columns the booking site reads,
+ * and the colour description is fed to the brand-palette builder.
  *
  * Two things dominate the design:
  *
  * 1. **The card is already charged when this renders.** There is no "back", and
  *    a validation failure here must never be a dead end — so every rule is
  *    checked client-side against the SAME logic the server enforces
- *    (`lib/signup-validation.ts`), and the one field that can genuinely fail
- *    server-side, the slug, is checked live against the database while typing.
- * 2. **The slug can never be changed afterwards.** Nothing in the platform
- *    renames a tenant slug, so the field says so out loud rather than letting
- *    someone discover it later.
+ *    (`lib/signup-validation.ts`), and every message names a way forward.
+ * 2. **The operator no longer picks a web address.** The subdomain is derived
+ *    from the business name and told to them afterwards, so there is no field
+ *    to type it into and no availability check while typing. The draft still
+ *    carries a derived `slug` because the provider posts one; see
+ *    `BusinessDraft.slug`. The server can still refuse the derived address,
+ *    which is why SLUG_* codes get their own banner at the top of this form —
+ *    the dialog shell lists them in INLINE_ONLY_CODES and will not paint them.
  */
 
 import * as React from "react";
 import {
   Building2,
   Car,
-  Check,
   Clock,
-  Globe,
   ImageIcon,
-  Loader2,
   MapPin,
   Palette,
   Phone,
-  X,
+  TriangleAlert,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -51,52 +50,43 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import type {
-  BusinessStepProps,
-  SlugCheckResult,
-} from "@/components/onboarding/onboarding-types";
+import type { BusinessStepProps } from "@/components/onboarding/onboarding-types";
 import {
   DAY_OPTIONS,
-  FLEET_SIZE_OPTIONS,
   SIGNUP_ERROR_COPY,
   TIME_OPTIONS,
   VEHICLE_TYPE_OPTIONS,
 } from "@/components/onboarding/onboarding-types";
 import {
   BUSINESS_FIELD_ORDER,
-  checkSlugShape,
   deriveSlugFromCompanyName,
   FIELD_MAX,
   firstErrorField,
-  normalizeSlugClient,
-  sanitizeSlugInput,
+  fleetNeedsSalesCall,
   validateBusiness,
   type BusinessField,
   type FieldErrors,
 } from "@/lib/signup-validation";
 
-/**
- * Long enough that a normal typist finishes a word before we ask the server,
- * short enough that the answer feels immediate. Also the value the spec pins,
- * so the server-side rate limit (60 slug checks per user per hour) is sized for
- * it.
- */
-const SLUG_DEBOUNCE_MS = 450;
-
-type SlugStatus =
-  | { kind: "idle" }
-  | { kind: "checking" }
-  | { kind: "invalid"; message: string }
-  | { kind: "available"; slug: string }
-  | { kind: "unavailable"; slug: string; message: string; suggestions: string[] }
-  | { kind: "error" };
-
 /** Server codes that belong under a specific input rather than in the banner. */
 const SERVER_FIELD_ERRORS: Partial<Record<string, BusinessField>> = {
-  SLUG_INVALID: "slug",
-  SLUG_RESERVED: "slug",
-  SLUG_TAKEN: "slug",
   TERMS_NOT_ACCEPTED: "acceptedTerms",
+};
+
+/**
+ * Slug verdicts have nowhere to land now that the field is gone, and the dialog
+ * shell deliberately suppresses them (INLINE_ONLY_CODES) on the assumption that
+ * this step renders them. It does — here, in the step's own banner — rewritten
+ * to talk about the business name, which is the only thing the operator can
+ * actually change to fix them.
+ */
+const SLUG_BANNER_COPY: Partial<Record<string, string>> = {
+  SLUG_INVALID:
+    "We couldn't create a web address from that business name. Try a slightly different name.",
+  SLUG_RESERVED:
+    "The web address that business name produces is one we keep for ourselves. Try a slightly different name.",
+  SLUG_TAKEN:
+    "The web address that business name produces is already in use. Try a slightly different name.",
 };
 
 export function BusinessStep({
@@ -105,80 +95,19 @@ export function BusinessStep({
   busy,
   error,
   onChange,
-  onCheckSlug,
   onSubmit,
 }: BusinessStepProps) {
   const [errors, setErrors] = React.useState<FieldErrors<BusinessField>>({});
-  const [slugStatus, setSlugStatus] = React.useState<SlugStatus>({
-    kind: "idle",
-  });
 
   const companyNameRef = React.useRef<HTMLInputElement>(null);
-  const slugRef = React.useRef<HTMLInputElement>(null);
   const locationRef = React.useRef<HTMLInputElement>(null);
   const phoneRef = React.useRef<HTMLInputElement>(null);
   const coloursRef = React.useRef<HTMLInputElement>(null);
   const logoRef = React.useRef<HTMLInputElement>(null);
   const scheduleRef = React.useRef<HTMLDivElement>(null);
   const termsRef = React.useRef<HTMLButtonElement>(null);
-  const fleetRef = React.useRef<HTMLButtonElement>(null);
+  const fleetRef = React.useRef<HTMLInputElement>(null);
   const vehicleRef = React.useRef<HTMLButtonElement>(null);
-
-  /**
-   * `onCheckSlug` is recreated by the provider on most renders. Holding it in a
-   * ref keeps it out of the debounce effect's dependency array — otherwise the
-   * timer would be torn down and restarted on every parent render and the
-   * request would never actually fire.
-   */
-  const checkSlugRef = React.useRef(onCheckSlug);
-  React.useEffect(() => {
-    checkSlugRef.current = onCheckSlug;
-  }, [onCheckSlug]);
-
-  /** Monotonic id so a slow earlier response can never overwrite a newer one. */
-  const requestIdRef = React.useRef(0);
-
-  const rawSlug = value.slug;
-
-  React.useEffect(() => {
-    const shape = checkSlugShape(rawSlug);
-
-    // Nothing typed yet: stay quiet rather than showing a red field before the
-    // user has had a chance to fill anything in.
-    if (shape.problem === "empty") {
-      requestIdRef.current += 1;
-      setSlugStatus({ kind: "idle" });
-      return;
-    }
-
-    // Shape and reserved-list problems are decidable locally — no round trip.
-    if (!shape.ok) {
-      requestIdRef.current += 1;
-      setSlugStatus({ kind: "invalid", message: shape.message ?? "" });
-      return;
-    }
-
-    const requestId = ++requestIdRef.current;
-    setSlugStatus({ kind: "checking" });
-
-    const timer = window.setTimeout(() => {
-      checkSlugRef
-        .current(shape.slug)
-        .then((result: SlugCheckResult) => {
-          if (requestId !== requestIdRef.current) return;
-          setSlugStatus(toSlugStatus(result));
-        })
-        .catch(() => {
-          if (requestId !== requestIdRef.current) return;
-          // Availability is a convenience. If the check itself fails we do NOT
-          // block the form — the server re-checks on provision and returns a
-          // recoverable SLUG_TAKEN, which routes back here with suggestions.
-          setSlugStatus({ kind: "error" });
-        });
-    }, SLUG_DEBOUNCE_MS);
-
-    return () => window.clearTimeout(timer);
-  }, [rawSlug]);
 
   // A server error describes the values that produced it; the moment anything
   // is edited it stops being shown under a field.
@@ -200,12 +129,6 @@ export function BusinessStep({
   const serverFieldError = (field: BusinessField): string | undefined => {
     if (!serverError) return undefined;
     if (SERVER_FIELD_ERRORS[serverError.code] === field) {
-      // Row 20: a slug lost in the race between the availability check and the
-      // insert needs its own sentence — "already taken" reads like the user
-      // ignored a warning they were never given.
-      if (serverError.code === "SLUG_TAKEN") {
-        return "That web address was taken while you were filling this in. Try one of these:";
-      }
       return SIGNUP_ERROR_COPY[serverError.code] ?? serverError.message;
     }
     if (
@@ -220,14 +143,10 @@ export function BusinessStep({
   const fieldError = (field: BusinessField): string | undefined =>
     errors[field] ?? serverFieldError(field);
 
-  /** Suggestions can arrive from the live check or from a failed provision. */
-  const suggestions: string[] = React.useMemo(() => {
-    const fromServer = serverError?.detail?.suggestions;
-    if (Array.isArray(fromServer)) {
-      return fromServer.filter((s): s is string => typeof s === "string");
-    }
-    return slugStatus.kind === "unavailable" ? slugStatus.suggestions : [];
-  }, [serverError, slugStatus]);
+  /** A slug verdict the server sent back, phrased as a business-name problem. */
+  const slugBannerMessage = serverError
+    ? SLUG_BANNER_COPY[serverError.code]
+    : undefined;
 
   // -------------------------------------------------------------------------
   // Submit
@@ -237,18 +156,7 @@ export function BusinessStep({
     event.preventDefault();
     if (busy) return;
 
-    const nextErrors = validateBusiness(value);
-
-    // The live check knows things `validateBusiness` cannot — availability and
-    // the server's own view of the reserved list. Fold it in so we never post a
-    // slug we already know will be rejected.
-    if (!nextErrors.slug) {
-      if (slugStatus.kind === "invalid") {
-        nextErrors.slug = slugStatus.message;
-      } else if (slugStatus.kind === "unavailable") {
-        nextErrors.slug = slugStatus.message;
-      }
-    }
+    const nextErrors = validateBusiness(value, plan);
 
     setErrors(nextErrors);
 
@@ -264,25 +172,23 @@ export function BusinessStep({
     const target: HTMLElement | null =
       field === "companyName"
         ? companyNameRef.current
-        : field === "slug"
-          ? slugRef.current
-          : field === "location"
-            ? locationRef.current
-            : field === "businessPhone"
-              ? phoneRef.current
-              : field === "fleetSize"
-                ? fleetRef.current
-                : field === "vehicleType"
-                  ? vehicleRef.current
-                  : field === "businessColours"
-                    ? coloursRef.current
-                    : field === "logoUrl"
-                      ? logoRef.current
-                      : field === "schedule"
-                        ? scheduleRef.current
-                        : field === "acceptedTerms"
-                          ? termsRef.current
-                          : null;
+        : field === "location"
+          ? locationRef.current
+          : field === "businessPhone"
+            ? phoneRef.current
+            : field === "fleetSize"
+              ? fleetRef.current
+              : field === "vehicleType"
+                ? vehicleRef.current
+                : field === "businessColours"
+                  ? coloursRef.current
+                  : field === "logoUrl"
+                    ? logoRef.current
+                    : field === "schedule"
+                      ? scheduleRef.current
+                      : field === "acceptedTerms"
+                        ? termsRef.current
+                        : null;
     target?.scrollIntoView({ block: "center", behavior: "smooth" });
     target?.focus({ preventScroll: true });
   };
@@ -301,8 +207,6 @@ export function BusinessStep({
     patch({ schedule: { ...schedule, days: next } });
   };
 
-  const previewHost = `${checkSlugShape(value.slug).slug || "yourcompany"}.drive-247.com`;
-
   return (
     <form
       id="signup-business-form"
@@ -310,9 +214,21 @@ export function BusinessStep({
       noValidate
       className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
     >
+      {/* Alert carries role="alert", so a slug verdict that arrives after a
+          failed provision is announced without us wiring a second live region. */}
+      {slugBannerMessage ? (
+        <Alert variant="destructive" className="mb-4">
+          <TriangleAlert />
+          <AlertTitle>We couldn&apos;t continue</AlertTitle>
+          <AlertDescription className="text-red-600 dark:text-red-400">
+            {slugBannerMessage}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <p className="text-sm leading-relaxed text-muted-foreground">
-        These answers set up your booking site and your portal. Everything here
-        can be changed later from your portal &mdash; except your web address.
+        These answers set up your booking site and your portal. You can change
+        all of it later from your portal.
       </p>
 
       {/* ---------------------------------------------------------------- */}
@@ -343,137 +259,36 @@ export function BusinessStep({
             aria-describedby={
               fieldError("companyName")
                 ? "signup-company-name-error"
-                : undefined
+                : "signup-company-name-help"
             }
             onChange={(e) => {
               const companyName = e.target.value;
               clearError("companyName");
-              // The slug tracks the business name until the user takes it over.
-              // Once they have edited it by hand we never overwrite it again —
-              // silently rewriting a hostname someone has chosen is unforgivable.
-              patch(
-                value.slugTouched
-                  ? { companyName }
-                  : {
-                      companyName,
-                      slug: deriveSlugFromCompanyName(companyName),
-                    },
-              );
+              // The web address is no longer asked for, but the draft still has
+              // to carry one: `onboarding-provider.tsx` posts `slug` and refuses
+              // to start provisioning when it is malformed. Deriving it here —
+              // with the same rule the server uses — keeps that guard satisfied
+              // without putting a field in front of the operator.
+              patch({
+                companyName,
+                slug: deriveSlugFromCompanyName(companyName),
+              });
             }}
             className="mt-1.5 h-10"
           />
-          <FieldError id="signup-company-name-error">
-            {fieldError("companyName")}
-          </FieldError>
-        </div>
-
-        {/* Web address ---------------------------------------------------- */}
-        <div>
-          <Label htmlFor="signup-slug">
-            Web address
-            <span className="text-indigo-600 dark:text-indigo-400">*</span>
-          </Label>
-          <div
-            className={cn(
-              "mt-1.5 flex items-stretch overflow-hidden rounded-md border",
-              "focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]",
-              fieldError("slug") && "border-destructive",
-              busy && "opacity-50",
-            )}
-          >
-            <span
-              aria-hidden="true"
-              className="flex shrink-0 items-center bg-muted px-2.5 text-sm text-muted-foreground sm:px-3"
+          {fieldError("companyName") ? (
+            <FieldError id="signup-company-name-error">
+              {fieldError("companyName")}
+            </FieldError>
+          ) : (
+            <p
+              id="signup-company-name-help"
+              className="mt-1.5 text-xs leading-relaxed text-muted-foreground"
             >
-              https://
-            </span>
-            <Input
-              ref={slugRef}
-              id="signup-slug"
-              name="slug"
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              placeholder="elite-motors"
-              value={value.slug}
-              disabled={busy}
-              aria-invalid={Boolean(fieldError("slug"))}
-              aria-describedby="signup-slug-status signup-slug-help"
-              onChange={(e) => {
-                clearError("slug");
-                // Lenient sanitising while typing: lowercase and map illegal
-                // characters, but keep a trailing hyphen so "acme-" can become
-                // "acme-cars". Full normalisation happens on blur.
-                patch({
-                  slug: sanitizeSlugInput(e.target.value),
-                  slugTouched: true,
-                });
-              }}
-              onBlur={() => {
-                const normalized = normalizeSlugClient(value.slug);
-                if (normalized !== value.slug) patch({ slug: normalized });
-              }}
-              className="h-10 min-w-0 rounded-none border-0 shadow-none focus-visible:ring-0"
-            />
-            <span
-              aria-hidden="true"
-              className="flex shrink-0 items-center bg-muted px-2.5 text-sm text-muted-foreground sm:px-3"
-            >
-              .drive-247.com
-            </span>
-          </div>
-
-          {/* Live status. One polite live region so the availability answer is
-              announced without stealing focus from the field.
-
-              The local `errors.slug` is folded in as an override because it is
-              the ONLY place a locally-decided slug problem can be read: the
-              field itself only turns red. That matters for the one verdict the
-              live check cannot produce — a slug that normalises to empty (a
-              business named entirely in non-Latin script, or a cleared field),
-              where `checkSlugShape` reports "empty" and the status line
-              deliberately stays silent. Without this the user would be focused
-              onto a red input carrying no explanation, on the last step of a
-              flow they have already paid for. The server verdict still wins:
-              it is newer than anything decided here. */}
-          <div id="signup-slug-status" aria-live="polite" className="mt-1.5">
-            <SlugStatusLine
-              status={slugStatus}
-              overrideMessage={serverFieldError("slug") ?? errors.slug}
-            />
-          </div>
-
-          {suggestions.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {suggestions.map((s) => (
-                <Badge key={s} asChild variant="outline">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      clearError("slug");
-                      patch({ slug: s, slugTouched: true });
-                      slugRef.current?.focus();
-                    }}
-                    className="cursor-pointer transition-colors hover:border-indigo-600/40 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:text-indigo-400"
-                  >
-                    {s}
-                  </button>
-                </Badge>
-              ))}
-            </div>
+              We build your booking site and portal addresses from this name and
+              send them to you once your portal is ready.
+            </p>
           )}
-
-          <p
-            id="signup-slug-help"
-            className="mt-1.5 text-xs leading-relaxed text-muted-foreground"
-          >
-            This becomes your booking site and your portal address. You
-            can&apos;t change it later.
-            <span className="mt-1 block break-all font-medium text-foreground">
-              {previewHost}
-            </span>
-          </p>
         </div>
 
         <div>
@@ -567,43 +382,69 @@ export function BusinessStep({
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
-          <Label htmlFor="signup-fleet-size">Fleet size</Label>
-          {/* Radix Select renders a button, not a <select> — it posts nothing.
-              The paired hidden input is the existing app pattern (see
-              strategy-call/page.tsx) and keeps the DOM honest. */}
-          <input type="hidden" name="fleetSize" value={value.fleetSize} />
-          {/* `value` is passed through as-is, empty string included: Radix
-              treats `undefined` as "uncontrolled", so falling back to it while
-              the draft field is empty would make the Select flip from
-              uncontrolled to controlled on the first pick (and warn). Its
-              `shouldShowPlaceholder` already treats "" exactly like undefined,
-              so the placeholder still renders. */}
-          <Select
+          <Label htmlFor="signup-fleet-size">
+            Vehicles you run
+            <span className="text-indigo-600 dark:text-indigo-400">*</span>
+          </Label>
+          {/* A number, not a band. The old dropdown's bands did not share a
+              single boundary with the plan bands, so "does this fleet fit the
+              plan they just paid for" was unanswerable; one integer makes it a
+              comparison. Kept as text with `inputMode="numeric"` rather than
+              type="number": a number input brings spinners, a scroll-wheel that
+              silently changes the value, and locale-dependent empty-string
+              behaviour we would have to undo anyway. */}
+          <Input
+            ref={fleetRef}
+            id="signup-fleet-size"
+            name="fleetSize"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="8"
             value={value.fleetSize}
             disabled={busy}
-            onValueChange={(v) => {
+            maxLength={5}
+            aria-invalid={Boolean(fieldError("fleetSize"))}
+            aria-describedby={
+              fieldError("fleetSize")
+                ? "signup-fleet-size-error signup-fleet-size-help"
+                : "signup-fleet-size-help"
+            }
+            onChange={(e) => {
               clearError("fleetSize");
-              patch({ fleetSize: v });
+              // Digits only. Stripping on the way in means the draft never
+              // holds "12 cars" or "1,2" for the validator to unpick.
+              patch({ fleetSize: e.target.value.replace(/\D/g, "") });
             }}
+            className="mt-1.5 h-10"
+          />
+          <p
+            id="signup-fleet-size-help"
+            className="mt-1.5 text-xs leading-relaxed text-muted-foreground"
           >
-            <SelectTrigger
-              ref={fleetRef}
-              id="signup-fleet-size"
-              className="mt-1.5"
-            >
-              <SelectValue placeholder="Select fleet size" />
-            </SelectTrigger>
-            <SelectContent>
-              {FLEET_SIZE_OPTIONS.map((o) => (
-                <SelectItem key={o} value={o}>
-                  {o}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            You picked {plan.name}, sized for {plan.fleetBand}.
+            {plan.name} covers up to {plan.maxVehicles} vehicles.
           </p>
+          <FieldError id="signup-fleet-size-error">
+            {fieldError("fleetSize") ? (
+              <>
+                {fieldError("fleetSize")}
+                {/* Only the "no plan is big enough" verdict gets a link — it is
+                    the one failure the operator cannot fix inside this form. */}
+                {fleetNeedsSalesCall(value.fleetSize) ? (
+                  <>
+                    {" "}
+                    <a
+                      href="/strategy-call"
+                      className="font-medium underline underline-offset-4"
+                    >
+                      Book a strategy call
+                    </a>
+                    .
+                  </>
+                ) : null}
+              </>
+            ) : null}
+          </FieldError>
         </div>
 
         <div>
@@ -931,88 +772,4 @@ function FieldError({
       {children}
     </p>
   );
-}
-
-/**
- * The line under the web-address field. `overrideMessage` wins because a server
- * verdict (a slug lost in the insert race) is newer and more authoritative than
- * whatever the last debounced check said.
- */
-function SlugStatusLine({
-  status,
-  overrideMessage,
-}: {
-  status: SlugStatus;
-  overrideMessage?: string;
-}) {
-  if (overrideMessage) {
-    return (
-      <p className="flex items-start gap-1.5 text-sm text-red-600 dark:text-red-400">
-        <X className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        {overrideMessage}
-      </p>
-    );
-  }
-
-  switch (status.kind) {
-    case "checking":
-      return (
-        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-          Checking availability…
-        </p>
-      );
-    case "available":
-      return (
-        <p className="flex items-start gap-1.5 text-sm text-green-600 dark:text-green-500">
-          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span className="break-all">
-            {status.slug}.drive-247.com is available
-          </span>
-        </p>
-      );
-    case "invalid":
-      return (
-        <p className="flex items-start gap-1.5 text-sm text-red-600 dark:text-red-400">
-          <X className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          {status.message}
-        </p>
-      );
-    case "unavailable":
-      return (
-        <p className="flex items-start gap-1.5 text-sm text-red-600 dark:text-red-400">
-          <X className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          {status.message}
-        </p>
-      );
-    case "error":
-      return (
-        <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
-          <Globe className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          We couldn&apos;t check that address just now. You can still continue
-          &mdash; we&apos;ll confirm it when you finish.
-        </p>
-      );
-    case "idle":
-    default:
-      return null;
-  }
-}
-
-function toSlugStatus(result: SlugCheckResult): SlugStatus {
-  if (result.available) return { kind: "available", slug: result.slug };
-
-  const message =
-    result.reason === "reserved"
-      ? SIGNUP_ERROR_COPY.SLUG_RESERVED
-      : result.reason === "invalid"
-        ? SIGNUP_ERROR_COPY.SLUG_INVALID
-        : SIGNUP_ERROR_COPY.SLUG_TAKEN;
-
-  return {
-    kind: "unavailable",
-    slug: result.slug,
-    message,
-    suggestions: result.suggestions ?? [],
-  };
 }

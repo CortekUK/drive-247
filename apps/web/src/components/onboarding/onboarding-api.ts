@@ -30,7 +30,14 @@ export interface PaymentIntentRequest {
 }
 export interface ProvisionRequest {
   companyName: string;
-  slug: string;
+  /**
+   * Optional, and normally OMITTED. The business form no longer asks for a web
+   * address; `signup-provision` derives one from `companyName` and auto-suffixes
+   * on collision. The field survives in the contract because the endpoint still
+   * honours a supplied slug — which keeps an older cached browser bundle, and
+   * any future admin-side caller, working against the same function.
+   */
+  slug?: string;
   location?: string;
   businessPhone?: string;
   fleetSize?: string;

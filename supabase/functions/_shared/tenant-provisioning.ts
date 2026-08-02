@@ -562,3 +562,64 @@ export async function suggestSlugs(
     return [];
   }
 }
+
+/**
+ * Derive a free, legal subdomain from a business name.
+ *
+ * The self-serve signup form no longer asks the operator to choose one — the
+ * name is the only thing they give us, and the address is communicated back
+ * afterwards. So this has to succeed for essentially any input, and must never
+ * hand back something that would collide or resolve to the wrong deployment.
+ *
+ * Order of attempts:
+ *   1. the normalised name                    ("JDM Motor"  -> "jdm-motor")
+ *   2. `<name>-rentals` when the bare form is too short or reserved
+ *   3. `<name>-2`, `-3`, … for ordinary collisions
+ *   4. `<name>-<4 random base36>` as the last resort, so a pathological name
+ *      (or a very busy race) still terminates instead of looping
+ *
+ * Availability is checked in ONE query per batch rather than per candidate.
+ * This is still only a pre-check: the caller must keep its 23505 unique-violation
+ * path, because two signups can pass this check simultaneously.
+ */
+export async function deriveSlugFromName(
+  supabase: any,
+  companyName: string,
+): Promise<string | null> {
+  const root = normalizeSlug(companyName).slice(0, 40).replace(/-+$/g, "");
+  const legal = (s: string) =>
+    /^[a-z][a-z0-9-]*$/.test(s) &&
+    s.length >= 3 &&
+    s.length <= 50 &&
+    s.replace(/[^a-z0-9]/g, "").length >= 3 &&
+    !isReservedSlug(s);
+
+  const candidates: string[] = [];
+  const add = (s: string) => {
+    const n = normalizeSlug(s);
+    if (legal(n) && !candidates.includes(n)) candidates.push(n);
+  };
+
+  add(root);
+  // A name that normalises to something too short ("A1", "Go") or to a reserved
+  // word ("admin", "portal") still deserves a working address.
+  add(`${root}-rentals`);
+  add(`${root}-cars`);
+  for (let n = 2; n <= 30; n++) add(`${root}-${n}`);
+  for (let i = 0; i < 5; i++) {
+    add(`${root}-${Math.floor(Math.random() * 46656).toString(36).padStart(4, "0")}`);
+  }
+
+  if (!candidates.length) return null;
+
+  const { data, error } = await supabase
+    .from("tenants")
+    .select("slug")
+    .in("slug", candidates);
+  // Unlike suggestions, this failure is NOT survivable: handing back a slug we
+  // could not confirm is free risks minting a tenant on someone else's hostname.
+  if (error) throw new Error(`slug availability lookup failed: ${error.message}`);
+
+  const taken = new Set((data || []).map((t: { slug: string }) => t.slug));
+  return candidates.find((c) => !taken.has(c)) ?? null;
+}
