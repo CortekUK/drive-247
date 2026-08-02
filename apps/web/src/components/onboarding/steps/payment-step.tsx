@@ -47,8 +47,36 @@ import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
  */
 const stripeJsCache = new Map<string, Promise<Stripe | null>>();
 
-function getStripeJs(publishableKey: string): Promise<Stripe | null> {
-  const cached = stripeJsCache.get(publishableKey);
+/**
+ * How long to wait for Stripe.js before declaring it unavailable.
+ *
+ * THIS IS THE DIFFERENCE BETWEEN A FAILURE MESSAGE AND AN ETERNAL SKELETON.
+ * `loadStripe` injects a <script> and settles on its `onload` / `onerror`. A
+ * content blocker, corporate proxy or captive portal frequently STALLS that
+ * request instead of failing it — no error event ever fires, so the promise
+ * never settles, `stripeJs` stays "loading", and the card area renders its
+ * placeholder forever with nothing on screen explaining why.
+ *
+ * 12s is comfortably past a slow-but-working 3G fetch of the ~200KB script
+ * (which the dialog-open prewarm has usually already cached anyway), while
+ * being short enough that a blocked user gets an actionable message instead of
+ * assuming the site is broken.
+ */
+const STRIPE_JS_TIMEOUT_MS = 12_000;
+
+/**
+ * `attempt` is part of the cache key, not a decoration.
+ *
+ * A failed load must be genuinely re-attemptable, and the publishable key is
+ * identical across attempts — so keying on the key alone meant every retry
+ * handed back the SAME promise, including the one that had hung forever behind
+ * a content blocker. Bumping the attempt yields a fresh key, hence a fresh
+ * `loadStripe`, and leaves the dead promise behind rather than awaiting it
+ * again.
+ */
+function getStripeJs(publishableKey: string, attempt: number): Promise<Stripe | null> {
+  const cacheKey = `${attempt}::${publishableKey}`;
+  const cached = stripeJsCache.get(cacheKey);
   if (cached) return cached;
   // loadStripe can throw synchronously on a malformed key; normalise that into
   // the same rejected-promise path as a network failure.
@@ -58,7 +86,7 @@ function getStripeJs(publishableKey: string): Promise<Stripe | null> {
   } catch (e) {
     promise = Promise.reject(e);
   }
-  stripeJsCache.set(publishableKey, promise);
+  stripeJsCache.set(cacheKey, promise);
   return promise;
 }
 
@@ -78,35 +106,77 @@ export function PaymentStep({
   const { resolvedTheme } = useTheme();
   const [stripeJs, setStripeJs] = React.useState<StripeJsState>("idle");
 
+  /**
+   * Bumped by the failure panel's "Try again". It is a dependency of the memo
+   * below purely so a retry produces a genuinely NEW promise: the publishable
+   * key does not change between attempts, so without this the memo would hand
+   * back the same hung or rejected promise and "Try again" would do nothing
+   * visible.
+   */
+  const [loadAttempt, setLoadAttempt] = React.useState(0);
+
   const stripePromise = React.useMemo(
-    () => (publishableKey ? getStripeJs(publishableKey) : null),
-    [publishableKey],
+    () => (publishableKey ? getStripeJs(publishableKey, loadAttempt) : null),
+    [publishableKey, loadAttempt],
   );
+
+  const retryStripeJs = React.useCallback(() => {
+    setLoadAttempt((n) => n + 1);
+  }, []);
 
   /**
    * Resolve the Stripe.js promise ourselves before mounting `<Elements>`.
-   * `loadStripe` resolves to `null` when the script is blocked (ad blockers,
-   * corporate proxies, offline) — and `<Elements stripe={null}>` renders a
-   * silent, permanently empty box rather than failing. Detecting it here is the
-   * only way to show row 14's message instead of a blank card area.
+   *
+   * Two distinct failures are handled here, and only one of them is obvious:
+   *
+   * 1. `loadStripe` RESOLVES TO NULL when the script is blocked outright —
+   *    `<Elements stripe={null}>` renders a silent, permanently empty box
+   *    rather than failing, so we have to detect it before mounting.
+   * 2. `loadStripe` NEVER SETTLES when the request is stalled rather than
+   *    refused, which is what most content blockers and filtering proxies
+   *    actually do — no `onerror` fires, so there is nothing to catch. Without
+   *    the timeout the component sits in "loading" indefinitely and the user
+   *    stares at a skeleton with no error, no retry and no explanation.
+   *
+   * Both land on "failed", which renders the panel that names ad blockers as
+   * the likely cause and offers a retry.
    */
   React.useEffect(() => {
     if (!stripePromise) {
       setStripeJs("idle");
       return;
     }
-    let cancelled = false;
+    let settled = false;
     setStripeJs("loading");
+
+    // No cache eviction here: the dead entry is keyed by the CURRENT attempt,
+    // and `retryStripeJs` moves to a new attempt — so a retry mints a fresh key
+    // and never reaches this promise again.
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      setStripeJs("failed");
+    }, STRIPE_JS_TIMEOUT_MS);
+
     stripePromise
       .then((stripe) => {
-        if (cancelled) return;
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         setStripeJs(stripe ? "ready" : "failed");
       })
       .catch(() => {
-        if (!cancelled) setStripeJs("failed");
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        setStripeJs("failed");
       });
+
     return () => {
-      cancelled = true;
+      // `settled` doubles as the unmount guard: nothing above may call setState
+      // after this effect is torn down.
+      settled = true;
+      clearTimeout(timer);
     };
   }, [stripePromise]);
 
@@ -210,7 +280,11 @@ export function PaymentStep({
       {isConfigError || isUnexplainedGap ? (
         <ConfigurationErrorPanel />
       ) : stripeJs === "failed" ? (
-        <StripeJsFailurePanel busy={busy} onRetryIntent={onRetryIntent} />
+        <StripeJsFailurePanel
+          busy={busy}
+          onRetryIntent={onRetryIntent}
+          onRetryStripeJs={retryStripeJs}
+        />
       ) : !clientSecret || !publishableKey || stripeJs !== "ready" ? (
         <PaymentSkeleton hasError={Boolean(error)} onRetryIntent={onRetryIntent} busy={busy} />
       ) : (
@@ -564,15 +638,21 @@ function PaymentSkeleton({
 function StripeJsFailurePanel({
   busy,
   onRetryIntent,
+  onRetryStripeJs,
 }: {
   busy: boolean;
   onRetryIntent(): void;
+  onRetryStripeJs(): void;
 }) {
-  // Force a genuine retry: drop the cached (failed) Stripe.js promise so the
-  // next mount re-downloads the script instead of replaying the same rejection.
+  // Clearing the cache alone was not enough to retry. `stripePromise` is
+  // memoised on the publishable key, and the key is identical between attempts,
+  // so the memo never re-ran and the component kept awaiting the promise it
+  // already had. `onRetryStripeJs` bumps an attempt counter that the memo also
+  // depends on, which is what actually forces a fresh `loadStripe`.
   const retry = () => {
     if (busy) return;
     stripeJsCache.clear();
+    onRetryStripeJs();
     onRetryIntent();
   };
 
