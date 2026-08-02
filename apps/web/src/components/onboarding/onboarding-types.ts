@@ -52,6 +52,14 @@ export type SignupErrorCode =
   | "PAYMENT_EXPIRED"
   | "CARD_DECLINED"
   | "CARD_AUTH_FAILED"
+  // --- password recovery (400/500)
+  // `signup-password-reset` deliberately collapses "no such account", "wrong
+  // code", "expired code", "already used" and "not an account we may reset"
+  // into RESET_CODE_INVALID. Distinguishing them would hand an unauthenticated
+  // caller an existence oracle, which the request step is careful to close.
+  | "RESET_CODE_INVALID"
+  | "RESET_PASSWORD_WEAK"
+  | "RESET_FAILED"
   // --- infrastructure
   | "STRIPE_UNAVAILABLE"
   | "STRIPE_JS_UNAVAILABLE"
@@ -110,6 +118,15 @@ export const SIGNUP_ERROR_COPY: Record<SignupErrorCode, string> = {
     "Your card was declined. Try a different card, or check with your bank and try again.",
   CARD_AUTH_FAILED:
     "Your bank didn't approve that verification. Please try again, or use a different card.",
+  // Never says whether the address exists — see the union comment.
+  RESET_CODE_INVALID: "That code isn't right or has expired. Request a new one.",
+  // Must state the SAME rule the client checklist and `signup-begin` enforce
+  // (10+, a letter, a number). It previously said 8, which contradicted the
+  // checklist rendered directly above it in the same panel.
+  RESET_PASSWORD_WEAK:
+    "Use at least 10 characters, including a letter and a number.",
+  RESET_FAILED:
+    "We couldn't set your new password. Request a new code and try again.",
   STRIPE_UNAVAILABLE:
     "We couldn't reach our payment provider. No charge was made. Please try again in a moment.",
   STRIPE_JS_UNAVAILABLE:

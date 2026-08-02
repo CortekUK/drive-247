@@ -50,6 +50,10 @@ import {
   type AccountField,
   type FieldErrors,
 } from "@/lib/signup-validation";
+import {
+  PasswordResetPanel,
+  PasswordResetSuccessNote,
+} from "@/components/onboarding/steps/password-reset-panel";
 
 /**
  * Server error codes that belong under a specific input rather than in the
@@ -86,6 +90,12 @@ export function AccountStep({
   // separate from `password` so switching panels never leaks one into the other.
   const [signInPassword, setSignInPassword] = React.useState("");
   const [signInError, setSignInError] = React.useState<string | null>(null);
+
+  // Password-recovery detour. Local to this step on purpose — a reset is not a
+  // signup step, and adding it to the provider's reducer would put a state in
+  // `ALLOWED_TRANSITIONS` that the purchase funnel has no meaning for.
+  const [resetOpen, setResetOpen] = React.useState(false);
+  const [resetDone, setResetDone] = React.useState(false);
 
   const honeypotRef = React.useRef<HTMLInputElement>(null);
   const fullNameRef = React.useRef<HTMLInputElement>(null);
@@ -265,6 +275,26 @@ export function AccountStep({
   // Branch: sign in to continue (§5 rows 3, 4, 5 and 57).
   // -------------------------------------------------------------------------
   if (signInPrompt) {
+    // The reset detour replaces the sign-in form entirely rather than rendering
+    // beneath it: leaving a live password field behind a reset panel invites the
+    // browser's autofill to repopulate the credential the user is here to change.
+    if (resetOpen) {
+      return (
+        <PasswordResetPanel
+          email={normalizeEmail(signInPrompt.email)}
+          onCancel={() => setResetOpen(false)}
+          onDone={() => {
+            setResetOpen(false);
+            setResetDone(true);
+            // Clear any password typed before the reset — it is now wrong, and
+            // submitting it would spend a sign-in attempt to be told so.
+            setSignInPassword("");
+            setSignInError(null);
+          }}
+        />
+      );
+    }
+
     const { title, body } = signInPanelCopy(signInPrompt.reason);
     const inlineSignInError =
       signInError ??
@@ -286,6 +316,8 @@ export function AccountStep({
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {body}
         </p>
+
+        {resetDone && <PasswordResetSuccessNote />}
 
         <div className="mt-5 space-y-4">
           <div>
@@ -365,6 +397,15 @@ export function AccountStep({
             className="text-indigo-600 dark:text-indigo-400"
           >
             Use a different email
+          </Button>
+          <Button
+            type="button"
+            variant="link"
+            disabled={busy}
+            onClick={() => setResetOpen(true)}
+            className="text-muted-foreground"
+          >
+            Forgot password?
           </Button>
         </div>
       </form>

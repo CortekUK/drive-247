@@ -397,6 +397,65 @@ export function signupPaymentIntent(b: PaymentIntentRequest): Promise<PaymentInt
 }
 
 /**
+ * Password recovery, step 1: ask for a code.
+ *
+ * ALWAYS resolves to `{ ok: true }` — the server returns the same envelope
+ * whether the address is unknown, ineligible or fine, so the UI has nothing to
+ * branch on and cannot become an existence oracle. Anon-authed by definition:
+ * the whole premise is that the caller cannot sign in.
+ *
+ * Not retried. A retry on a timeout could mint a second code and invalidate the
+ * one already in the user's inbox, which reads as "the code you were sent is
+ * wrong". The user resends explicitly instead.
+ */
+export function signupResetRequest(email: string): Promise<{ ok: true }> {
+  return callFunction<{ ok: true }>(
+    "signup-password-reset",
+    { action: "request", email: email.trim().toLowerCase() },
+    {
+      auth: "anon",
+      timeoutMs: 25_000,
+      dedupeKey: `signup-reset-request:${email.trim().toLowerCase()}`,
+    },
+  );
+}
+
+/**
+ * Password recovery, step 2: verify the code AND set the new password in ONE
+ * server call. There is deliberately no "verify only" endpoint — a client-side
+ * gate followed by a separate password write is exactly the shape of the
+ * platform's existing `reset-password-with-otp` hole.
+ *
+ * Never retried: it consumes the code, so a transparent second attempt would
+ * always fail with RESET_CODE_INVALID and look like the user mistyped.
+ *
+ * NOT DEDUPED. `callFunction` returns the FIRST in-flight promise for a
+ * matching key without inspecting the new body, so a bare constant key here
+ * was a silent wrong-outcome bug: submit code+password A, close the dialog
+ * while it hangs, reopen, submit the same code with password B — the second
+ * call never leaves the browser, resolves with the first call's `{ok:true}`,
+ * and the user is told "Password updated" for a password that was never set.
+ * The server consumes the code, so a genuine duplicate fails safely on its own
+ * and needs no client-side guard.
+ */
+export function signupResetComplete(b: {
+  email: string;
+  code: string;
+  newPassword: string;
+}): Promise<{ ok: true }> {
+  return callFunction<{ ok: true }>(
+    "signup-password-reset",
+    {
+      action: "complete",
+      email: b.email.trim().toLowerCase(),
+      code: b.code,
+      newPassword: b.newPassword,
+    },
+    { auth: "anon", timeoutMs: 25_000 },
+  );
+}
+
+/**
  * The long one. 3 minutes because it inserts a tenant, calls OpenAI, seeds ~10
  * CMS pages and makes several Stripe round trips; a shorter timeout would abort
  * a request that is still succeeding server-side. Even if this DOES time out the

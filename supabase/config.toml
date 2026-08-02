@@ -208,3 +208,13 @@ verify_jwt = true
 # project JWT was presented and the anon key qualifies.
 [functions.signup-begin]
 verify_jwt = false
+
+# Password recovery for the signup dialog. Public by necessity — the whole point
+# is that the caller has lost the credential, so there is no session to present.
+# It carries its own controls in code: default-deny account eligibility (only a
+# self-serve signup identity is resettable, never staff, super admins or
+# renters), hashed single-use codes from the CSPRNG, a per-email attempt cap, an
+# IP + email throttle, and a constant response with a timing floor so the
+# endpoint is not an existence oracle.
+[functions.signup-password-reset]
+verify_jwt = false
