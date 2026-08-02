@@ -11,7 +11,12 @@ import {
   useState,
 } from "react";
 
-import { getSignupPlan, type SignupPlan, type SignupPlanId } from "@/lib/plans";
+import {
+  getSignupPlan,
+  SIGNUP_PLANS,
+  type SignupPlan,
+  type SignupPlanId,
+} from "@/lib/plans";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 
 import {
@@ -911,6 +916,46 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     },
     [resolveResume, startPaymentInternal],
   );
+
+  /**
+   * The other end of the `return_url` the payment step hands Stripe
+   * (`/?signup=resume`).
+   *
+   * That redirect is not expected to happen — the subscription is created
+   * card-only and confirmed with `redirect: "if_required"`, so 3-D Secure runs
+   * inside Stripe's iframe. But `confirmParams.return_url` is mandatory, and if
+   * Stripe ever does use it the user comes back to a marketing page with a paid
+   * subscription, a live session and no dialog on screen. Without this they would
+   * have to guess that pressing Subscribe again is what resumes them.
+   *
+   * Runs after the passive detection above has had a chance to populate
+   * `resumeHintRef`, which is what supplies the plan. The parameter is stripped
+   * with `replaceState` so a refresh does not re-open the dialog, and nothing
+   * happens at all when there is no resumable signup.
+   */
+  useEffect(() => {
+    if (!hasResumableSignup) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("signup") !== "resume") return;
+
+    params.delete("signup");
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+    );
+
+    const hinted = resumeHintRef.current?.planId;
+    // `signup-resume` is authoritative about the plan; this only decides which
+    // card the user is treated as having pressed, so an unrecognised id falls
+    // back to the highlighted tier rather than blocking the recovery.
+    const planId =
+      hinted && getSignupPlan(hinted)
+        ? (hinted as SignupPlanId)
+        : (SIGNUP_PLANS.find((p) => p.highlighted)?.id ?? SIGNUP_PLANS[0].id);
+    open(planId);
+  }, [hasResumableSignup, open]);
 
   const closeNow = useCallback(() => {
     setCloseConfirmOpen(false);

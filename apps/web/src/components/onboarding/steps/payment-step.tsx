@@ -473,6 +473,45 @@ function handleStripeError(
 // Non-Elements states
 // ---------------------------------------------------------------------------
 
+/**
+ * EVERY branch of this step renders `<form id="signup-payment-form">`, including
+ * the ones that have no card field in them.
+ *
+ * The dialog footer holds the step's primary button and reaches this form by id
+ * (`<Button type="submit" form="signup-payment-form">`). It disables that button
+ * only while `state.payment.clientSecret` is null — which it cannot improve on,
+ * because whether Stripe.js finished loading is known only here. So in the
+ * window where a client secret HAS arrived but Elements is not mounted (Stripe.js
+ * still downloading, or blocked outright), the footer shows an enabled
+ * "Pay $199 and continue" button. If the fallback branches rendered a bare
+ * `<div>`, that button would point at nothing and clicking it would do nothing
+ * at all — a dead primary CTA on the one screen that takes money.
+ *
+ * Giving each fallback the same form id with a submit handler that performs that
+ * branch's own recovery means the footer button is always live and always does
+ * the most sensible thing available.
+ */
+function FallbackForm({
+  onSubmit,
+  children,
+}: {
+  onSubmit?(): void;
+  children: React.ReactNode;
+}) {
+  return (
+    <form
+      id="signup-payment-form"
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit?.();
+      }}
+    >
+      {children}
+    </form>
+  );
+}
+
 function PaymentSkeleton({
   hasError,
   busy,
@@ -486,7 +525,7 @@ function PaymentSkeleton({
   // all this needs to add is the way to try again.
   if (hasError && !busy) {
     return (
-      <div>
+      <FallbackForm onSubmit={onRetryIntent}>
         <p className="text-sm text-muted-foreground">
           We couldn&apos;t load the payment form.
         </p>
@@ -499,20 +538,25 @@ function PaymentSkeleton({
           <CreditCard className="h-4 w-4" />
           Try again
         </Button>
-      </div>
+      </FallbackForm>
     );
   }
 
   return (
-    <div
-      className="space-y-2"
-      role="status"
-      aria-label="Loading the secure payment form"
-    >
-      <div className="h-10 animate-pulse rounded-md bg-muted" />
-      <div className="h-10 animate-pulse rounded-md bg-muted" />
-      <div className="h-10 animate-pulse rounded-md bg-muted" />
-    </div>
+    // No submit handler: the intent (or Stripe.js) is still on its way, and the
+    // right response to an early press is to swallow it, not to restart a
+    // request that is already in flight.
+    <FallbackForm>
+      <div
+        className="space-y-2"
+        role="status"
+        aria-label="Loading the secure payment form"
+      >
+        <div className="h-10 animate-pulse rounded-md bg-muted" />
+        <div className="h-10 animate-pulse rounded-md bg-muted" />
+        <div className="h-10 animate-pulse rounded-md bg-muted" />
+      </div>
+    </FallbackForm>
   );
 }
 
@@ -524,8 +568,16 @@ function StripeJsFailurePanel({
   busy: boolean;
   onRetryIntent(): void;
 }) {
+  // Force a genuine retry: drop the cached (failed) Stripe.js promise so the
+  // next mount re-downloads the script instead of replaying the same rejection.
+  const retry = () => {
+    if (busy) return;
+    stripeJsCache.clear();
+    onRetryIntent();
+  };
+
   return (
-    <div>
+    <FallbackForm onSubmit={retry}>
       <Alert variant="destructive">
         <TriangleAlert />
         <AlertTitle>We couldn&apos;t load the payment form</AlertTitle>
@@ -537,13 +589,7 @@ function StripeJsFailurePanel({
         type="button"
         variant="outline"
         disabled={busy}
-        onClick={() => {
-          // Force a genuine retry: drop the cached (failed) Stripe.js promise
-          // so the next mount re-downloads the script instead of replaying the
-          // same rejection.
-          stripeJsCache.clear();
-          onRetryIntent();
-        }}
+        onClick={retry}
         className="mt-3"
       >
         {busy ? (
@@ -553,14 +599,18 @@ function StripeJsFailurePanel({
         )}
         Try again
       </Button>
-    </div>
+    </FallbackForm>
   );
 }
 
 /** §5 row 36 — a Stripe key is missing server-side. Retrying cannot fix it. */
 function ConfigurationErrorPanel() {
   return (
-    <div>
+    // Deliberately inert. The dialog hides its primary button for a
+    // CONFIG_MISSING error, but this panel also covers `isUnexplainedGap`, where
+    // there is no error code for the dialog to react to — so the form still has
+    // to exist, and submitting it must not pretend a retry will help.
+    <FallbackForm>
       <Alert variant="destructive">
         <TriangleAlert />
         <AlertTitle>Signup is temporarily unavailable</AlertTitle>
@@ -572,6 +622,6 @@ function ConfigurationErrorPanel() {
       >
         <a href="/strategy-call">Book a strategy call</a>
       </Button>
-    </div>
+    </FallbackForm>
   );
 }
