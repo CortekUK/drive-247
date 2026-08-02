@@ -25,6 +25,7 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
 import { useOnboarding, useOnboardingShell } from "./onboarding-provider";
+import { prewarmStripeJs } from "./stripe-prewarm";
 import {
   SIGNUP_ERROR_COPY,
   type SignupErrorCode,
@@ -139,6 +140,22 @@ export function OnboardingDialog() {
   // The provisioning and done steps are owned by the full-screen boot overlay,
   // so the dialog closes itself the moment the flow reaches them.
   const dialogOpen = isOpen && dialogStep !== null && plan !== null;
+
+  /**
+   * Start pulling Stripe.js the moment the dialog opens, not when the payment
+   * step asks for it.
+   *
+   * `loadStripe` cannot run until `signup-payment-intent` returns the
+   * publishable key, and that call creates a Stripe Customer and Subscription
+   * first — so the ~200KB script download used to begin only AFTER several
+   * sequential Stripe round trips, and the user watched a skeleton for the sum
+   * of both. Opening the dialog happens a good half-minute before anyone
+   * finishes the account form, which is ample time for the fetch to land in the
+   * HTTP cache and make the later `loadStripe` resolve immediately.
+   */
+  useEffect(() => {
+    if (dialogOpen) prewarmStripeJs();
+  }, [dialogOpen]);
 
   /**
    * Dismissible only on step 1, and only when nothing is in flight. After the

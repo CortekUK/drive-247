@@ -100,10 +100,41 @@ export async function getOrCreateSignupProduct(stripe: Stripe): Promise<string> 
  * loudly rather than silently minting a second Price at the same amount. On
  * that race we simply re-read and use the winner's Price.
  */
+/**
+ * Resolved prices, memoised for the life of the isolate.
+ *
+ * The lookup is a full Stripe round trip (~300-500ms from the edge) sitting on
+ * the critical path of EVERY payment-intent request, between creating the
+ * customer and creating the subscription — and it re-derives a value that is
+ * immutable by construction. Stripe Prices cannot be edited: changing an amount
+ * means a new Price, and this module's contract (see signup-plans.ts) is that a
+ * changed price gets a NEW `lookupKey`. So a stale cache entry is not reachable
+ * — a new price is a new cache key.
+ *
+ * Keyed by lookup_key AND the Stripe account the client is bound to: the same
+ * plan resolves to different Price ids on the test and live accounts, and an
+ * isolate must never hand a live subscription a test price.
+ */
+const priceCache = new Map<string, { priceId: string; productId: string }>();
+
+/** Stripe clients are per-account/mode; the key must not collapse them. */
+function priceCacheKey(stripe: Stripe, plan: SignupPlanServer): string {
+  // The secret key's prefix distinguishes live from test without logging or
+  // storing the key itself.
+  const mode = (stripe as unknown as { _api?: { key?: string } })._api?.key?.startsWith("sk_live")
+    ? "live"
+    : "test";
+  return `${mode}:${plan.lookupKey}`;
+}
+
 export async function getOrCreateSignupPrice(
   stripe: Stripe,
   plan: SignupPlanServer,
 ): Promise<{ priceId: string; productId: string }> {
+  const cacheKey = priceCacheKey(stripe, plan);
+  const cached = priceCache.get(cacheKey);
+  if (cached) return cached;
+
   const found = await stripe.prices.list({
     lookup_keys: [plan.lookupKey],
     active: true,
@@ -115,7 +146,9 @@ export async function getOrCreateSignupPrice(
     const productId = typeof existing.product === "string"
       ? existing.product
       : (existing.product as { id: string }).id;
-    return { priceId: existing.id, productId };
+    const resolved = { priceId: existing.id, productId };
+    priceCache.set(cacheKey, resolved);
+    return resolved;
   }
 
   const productId = await getOrCreateSignupProduct(stripe);
@@ -133,7 +166,9 @@ export async function getOrCreateSignupPrice(
       },
       { idempotencyKey: `d247-signup-price-${plan.lookupKey}` },
     );
-    return { priceId: price.id, productId };
+    const resolved = { priceId: price.id, productId };
+    priceCache.set(cacheKey, resolved);
+    return resolved;
   } catch (e) {
     // `lookup_key` is unique per account: a racer created it between our list
     // and our create. Re-read rather than transferring the key (which would
@@ -148,7 +183,9 @@ export async function getOrCreateSignupPrice(
       const winnerProduct = typeof winner.product === "string"
         ? winner.product
         : (winner.product as { id: string }).id;
-      return { priceId: winner.id, productId: winnerProduct };
+      const resolved = { priceId: winner.id, productId: winnerProduct };
+      priceCache.set(cacheKey, resolved);
+      return resolved;
     }
     throw e;
   }
