@@ -5,6 +5,7 @@ import { OperationsDashboard } from "@/components/sections/operations-dashboard"
 import { ProductShowcase } from "@/components/sections/product-showcase";
 import { SocialProof } from "@/components/sections/social-proof";
 import { Timeline } from "@/components/sections/timeline";
+import { PricingSection } from "@/components/sections/pricing";
 import { FAQSection } from "@/components/sections/faq-section";
 import { CTABand } from "@/components/sections/cta-band";
 
@@ -18,6 +19,7 @@ export default function Home() {
       <ProblemSection />
       <ProductShowcase />
       <Timeline />
+      <PricingSection />
       <FAQSection />
       <CTABand />
     </>

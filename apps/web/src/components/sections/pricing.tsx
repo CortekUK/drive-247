@@ -1,53 +1,105 @@
 "use client";
 
-import { useFadeIn } from "@/hooks/use-fade-in";
-import { ArrowRight } from "lucide-react";
+import { Check } from "lucide-react";
 
+import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
+import { PlanCard } from "@/components/pricing/plan-card";
+import { useFadeIn } from "@/hooks/use-fade-in";
+import {
+  PLATFORM_INCLUDED,
+  PRICING_FOOTNOTE,
+  SIGNUP_PLANS,
+} from "@/lib/plans";
+
+/**
+ * The public pricing grid and the entry point to self-serve signup.
+ *
+ * `id="pricing"` is load-bearing twice over: it is the target of the `#pricing`
+ * links in the header, the footer and NAV_LINKS, and `use-active-section.ts`
+ * observes that exact element id for the scroll-spy.
+ *
+ * <OnboardingProvider> wraps the cards (not the page) because it owns all signup
+ * state and network, and it also mounts the onboarding dialog and the
+ * provisioning overlay. Scoping it here keeps the rest of the marketing page a
+ * server component and means a visitor who never scrolls to pricing pays nothing
+ * for the flow.
+ */
 export function PricingSection() {
   const { ref, visible } = useFadeIn();
 
   return (
-    <section id="pricing" className="py-20 sm:py-24">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        {/* Section heading */}
-        <div className="flex items-center justify-center gap-4">
-          <div className="h-px w-12 bg-border" />
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            Pricing
-          </p>
-          <div className="h-px w-12 bg-border" />
-        </div>
+    <OnboardingProvider>
+      <section
+        id="pricing"
+        aria-labelledby="pricing-heading"
+        className="bg-muted/50 py-20 sm:py-24"
+      >
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          {/* Section heading */}
+          <div className="flex items-center justify-center gap-4">
+            <div className="h-px w-12 bg-border" />
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+              Pricing
+            </p>
+            <div className="h-px w-12 bg-border" />
+          </div>
 
-        <h2 className="mt-5 text-center text-3xl font-bold tracking-tighter sm:text-4xl lg:text-[44px] lg:leading-tight">
-          Tailored to{" "}
-          <span className="text-indigo-600 dark:text-indigo-400">
-            your fleet
-          </span>
-        </h2>
-
-        <p className="mx-auto mt-3 max-w-xl text-center leading-relaxed text-muted-foreground">
-          We size pricing to your fleet and revenue. Most operators see ROI
-          within the first 60 days.
-        </p>
-
-        <div
-          ref={ref}
-          className="mt-10 flex justify-center"
-          style={{
-            opacity: visible ? 1 : 0,
-            transform: visible ? "translateY(0)" : "translateY(16px)",
-            transition: "opacity 600ms ease-out, transform 600ms ease-out",
-          }}
-        >
-          <a
-            href="/strategy-call"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-600/25 transition-colors hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+          <h2
+            id="pricing-heading"
+            className="mt-5 text-center text-3xl font-bold tracking-tighter sm:text-4xl lg:text-[44px] lg:leading-tight"
           >
-            Get your custom quote on a strategy call
-            <ArrowRight className="h-3.5 w-3.5" />
-          </a>
+            Simple pricing,{" "}
+            <span className="text-indigo-600 dark:text-indigo-400">
+              sized to your fleet
+            </span>
+          </h2>
+
+          <p className="mx-auto mt-3 max-w-xl text-center leading-relaxed text-muted-foreground">
+            Pick the plan that fits your fleet today. Every plan includes the
+            whole platform — you can be taking direct bookings the same day.
+          </p>
+
+          {/* Cards. useFadeIn is applied once, on the wrapper, exactly as the
+              other sections do — the observer is one-shot, so it must sit on a
+              node that is present from first paint. */}
+          <div
+            ref={ref}
+            className={`mt-12 grid gap-6 md:grid-cols-3 md:items-start ${
+              visible ? "fade-in-visible" : "fade-in-hidden"
+            }`}
+          >
+            {SIGNUP_PLANS.map((plan) => (
+              <PlanCard key={plan.id} plan={plan} />
+            ))}
+          </div>
+
+          {/* Nothing in PLATFORM_INCLUDED is plan-gated, which is exactly why it
+              is listed once here instead of being repeated on all three cards. */}
+          <div className="mt-12 rounded-2xl border bg-card p-6 shadow-sm sm:p-8">
+            <h3 className="text-center text-lg font-semibold tracking-tight">
+              Every plan includes the full platform
+            </h3>
+            <ul className="mt-6 grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+              {PLATFORM_INCLUDED.map((feature) => (
+                <li
+                  key={feature}
+                  className="flex items-start gap-2.5 text-sm text-muted-foreground"
+                >
+                  <Check
+                    className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400"
+                    aria-hidden="true"
+                  />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            {PRICING_FOOTNOTE}
+          </p>
         </div>
-      </div>
-    </section>
+      </section>
+    </OnboardingProvider>
   );
 }

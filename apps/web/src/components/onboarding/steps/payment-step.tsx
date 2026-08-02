@@ -1,0 +1,553 @@
+"use client";
+
+/**
+ * Step 2 of the self-serve signup dialog — take the first subscription payment
+ * INLINE, without ever leaving the dialog.
+ *
+ * How that is possible: `signup-payment-intent` creates the subscription with
+ * `payment_behavior: "default_incomplete"` and
+ * `payment_method_types: ["card"]`, then hands us the first invoice's
+ * PaymentIntent client secret. Card-only is load-bearing — it means a 3-D
+ * Secure challenge renders in Stripe's own iframe instead of a full-page
+ * redirect, so `redirect: "if_required"` genuinely never redirects. The
+ * `return_url` we pass is a legally-required fallback that is not expected to
+ * fire.
+ *
+ * The second thing shaping this file: **a successful confirm charges a real
+ * card and there is no client-side refund.** So every failure mode below is
+ * handled explicitly and the step never guesses. In particular it never renders
+ * an empty Elements box: if the publishable key or the client secret is
+ * missing, that is a configuration failure and it says so, with a way out.
+ */
+
+import * as React from "react";
+import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import type { Stripe, StripeElementsOptions } from "@stripe/stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
+import { CreditCard, Loader2, Lock, ShieldCheck, TriangleAlert } from "lucide-react";
+import { useTheme } from "next-themes";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import type {
+  OnboardingError,
+  PaymentStepProps,
+} from "@/components/onboarding/onboarding-types";
+import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
+
+/**
+ * `loadStripe` memoised per publishable key.
+ *
+ * Calling it during render creates a NEW Stripe instance every time, which
+ * remounts the Elements iframe and throws away whatever the user had typed into
+ * the card field. Module scope (not a ref) because the dialog can be closed and
+ * reopened, and re-downloading Stripe.js on every reopen is a visible stall.
+ */
+const stripeJsCache = new Map<string, Promise<Stripe | null>>();
+
+function getStripeJs(publishableKey: string): Promise<Stripe | null> {
+  const cached = stripeJsCache.get(publishableKey);
+  if (cached) return cached;
+  // loadStripe can throw synchronously on a malformed key; normalise that into
+  // the same rejected-promise path as a network failure.
+  let promise: Promise<Stripe | null>;
+  try {
+    promise = loadStripe(publishableKey);
+  } catch (e) {
+    promise = Promise.reject(e);
+  }
+  stripeJsCache.set(publishableKey, promise);
+  return promise;
+}
+
+type StripeJsState = "idle" | "loading" | "ready" | "failed";
+
+export function PaymentStep({
+  plan,
+  clientSecret,
+  publishableKey,
+  mode,
+  busy,
+  error,
+  onRetryIntent,
+  onPaid,
+  onError,
+}: PaymentStepProps) {
+  const { resolvedTheme } = useTheme();
+  const [stripeJs, setStripeJs] = React.useState<StripeJsState>("idle");
+
+  const stripePromise = React.useMemo(
+    () => (publishableKey ? getStripeJs(publishableKey) : null),
+    [publishableKey],
+  );
+
+  /**
+   * Resolve the Stripe.js promise ourselves before mounting `<Elements>`.
+   * `loadStripe` resolves to `null` when the script is blocked (ad blockers,
+   * corporate proxies, offline) — and `<Elements stripe={null}>` renders a
+   * silent, permanently empty box rather than failing. Detecting it here is the
+   * only way to show row 14's message instead of a blank card area.
+   */
+  React.useEffect(() => {
+    if (!stripePromise) {
+      setStripeJs("idle");
+      return;
+    }
+    let cancelled = false;
+    setStripeJs("loading");
+    stripePromise
+      .then((stripe) => {
+        if (cancelled) return;
+        setStripeJs(stripe ? "ready" : "failed");
+      })
+      .catch(() => {
+        if (!cancelled) setStripeJs("failed");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [stripePromise]);
+
+  /**
+   * Appearance must track the site theme, including a mid-flow toggle.
+   * Memoised on `resolvedTheme` ALONE: a fresh object identity on every render
+   * makes react-stripe-js re-issue `elements.update()` continuously, which
+   * visibly flickers the card field.
+   */
+  const appearance = React.useMemo<StripeElementsOptions["appearance"]>(
+    () => ({
+      theme: resolvedTheme === "dark" ? "night" : "stripe",
+      variables: {
+        colorPrimary: "#6366f1",
+        borderRadius: "8px",
+        fontFamily: "inherit",
+      },
+    }),
+    [resolvedTheme],
+  );
+
+  const elementsOptions = React.useMemo<StripeElementsOptions | null>(
+    () => (clientSecret ? { clientSecret, appearance } : null),
+    [clientSecret, appearance],
+  );
+
+  // A CONFIG_MISSING from the server means an env var is absent in Supabase —
+  // no amount of retrying fixes it, so we offer the human path instead.
+  const isConfigError = error?.code === "CONFIG_MISSING";
+
+  // Nothing in flight, no secret, no key and no error to explain it: something
+  // is misconfigured upstream. Treat it as a config failure rather than leaving
+  // a spinner that never resolves.
+  const isUnexplainedGap =
+    !busy && !isConfigError && (!clientSecret || !publishableKey) && !error;
+
+  return (
+    <div className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+      {/* Order summary — the last place the price is shown before it is taken. */}
+      <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+            {plan.name}
+            {mode === "test" && (
+              <Badge variant="outline" className="text-[10px] tracking-wide">
+                TEST MODE
+              </Badge>
+            )}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {plan.fleetBand}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-2xl font-bold tracking-tighter">
+            ${plan.priceUsd}
+          </p>
+          <p className="text-xs text-muted-foreground">/month</p>
+        </div>
+      </div>
+
+      {mode === "test" && (
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <ShieldCheck className="h-3.5 w-3.5" />
+          No real payment will be taken.
+        </p>
+      )}
+
+      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+        You&apos;re starting a monthly subscription. Today&apos;s payment covers
+        your first month; it renews on the same date each month and you can
+        manage it from your portal.
+      </p>
+
+      <Separator className="my-4" />
+
+      {isConfigError || isUnexplainedGap ? (
+        <ConfigurationErrorPanel />
+      ) : stripeJs === "failed" ? (
+        <StripeJsFailurePanel busy={busy} onRetryIntent={onRetryIntent} />
+      ) : !clientSecret || !publishableKey || stripeJs !== "ready" ? (
+        <PaymentSkeleton hasError={Boolean(error)} onRetryIntent={onRetryIntent} busy={busy} />
+      ) : (
+        // Keyed on the client secret: it is immutable once Elements is mounted,
+        // so a brand-new PaymentIntent (after an expiry, or a plan change) must
+        // get a brand-new Elements tree. The theme deliberately does NOT key
+        // this — appearance updates in place so a theme toggle never wipes the
+        // card the user is halfway through typing.
+        <Elements
+          key={clientSecret}
+          stripe={stripePromise}
+          options={elementsOptions ?? { clientSecret }}
+        >
+          <PaymentForm busy={busy} onPaid={onPaid} onError={onError} />
+        </Elements>
+      )}
+
+      <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+        <Lock className="h-3 w-3" />
+        Payments are processed by Stripe. We never see your card details.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The card form. Must live inside <Elements> — useStripe/useElements read it
+// from context.
+// ---------------------------------------------------------------------------
+
+/**
+ * How long a `confirmPayment` call has to be in flight before we assume the
+ * user is looking at a 3-D Secure challenge.
+ *
+ * Stripe.js exposes no callback for "the challenge iframe opened", and a plain
+ * confirm on a card that needs no authentication resolves well inside this
+ * window. So: past this point the promise is almost certainly blocked on the
+ * user's bank, and saying "waiting for your bank" is more honest than a generic
+ * spinner that looks stuck. It changes wording only — nothing branches on it.
+ */
+const BANK_CHALLENGE_HINT_MS = 2500;
+
+function PaymentForm({
+  busy,
+  onPaid,
+  onError,
+}: {
+  busy: boolean;
+  onPaid(): void;
+  onError(err: OnboardingError): void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+
+  const [submitting, setSubmitting] = React.useState(false);
+  const [awaitingBank, setAwaitingBank] = React.useState(false);
+  const [elementReady, setElementReady] = React.useState(false);
+  const [message, setMessage] = React.useState<string | null>(null);
+  const [notice, setNotice] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!submitting) {
+      setAwaitingBank(false);
+      return;
+    }
+    const timer = window.setTimeout(
+      () => setAwaitingBank(true),
+      BANK_CHALLENGE_HINT_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [submitting]);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    // Three independent guards, because this is the one submit in the flow
+    // that moves money: local in-flight flag, the shell's busy flag, and
+    // Stripe.js actually being ready.
+    if (submitting || busy || !stripe || !elements) return;
+
+    setSubmitting(true);
+    setMessage(null);
+    setNotice(null);
+
+    try {
+      const { error: stripeError, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        redirect: "if_required",
+        confirmParams: {
+          // Never expected to be used: card-only payments complete in the
+          // iframe. Stripe requires it to be present regardless.
+          return_url: `${window.location.origin}/?signup=resume`,
+        },
+      });
+
+      if (stripeError) {
+        handleStripeError(stripeError, { setMessage, onError });
+        return;
+      }
+
+      switch (paymentIntent?.status) {
+        case "succeeded":
+          onPaid();
+          return;
+
+        case "processing":
+          // Asynchronous payment method. Stripe has accepted it and it will
+          // settle; both `signup-resume` and `signup-provision` re-verify the
+          // subscription against Stripe before anything is written, so it is
+          // safe to move on.
+          setNotice(
+            "Your payment is going through. You can carry on setting up.",
+          );
+          onPaid();
+          return;
+
+        case "requires_payment_method":
+          setMessage(SIGNUP_ERROR_COPY.CARD_DECLINED);
+          return;
+
+        case "requires_action":
+        case "requires_confirmation":
+          // With `redirect: "if_required"` Stripe resolves these itself, so
+          // landing here means authentication was started and abandoned.
+          setMessage(SIGNUP_ERROR_COPY.CARD_AUTH_FAILED);
+          return;
+
+        case "canceled":
+          onError({
+            code: "PAYMENT_EXPIRED",
+            message: SIGNUP_ERROR_COPY.PAYMENT_EXPIRED,
+          });
+          return;
+
+        default:
+          setMessage(SIGNUP_ERROR_COPY.INTERNAL);
+          return;
+      }
+    } catch {
+      // confirmPayment rejecting (rather than resolving with an error) is a
+      // transport failure. No charge was taken.
+      setMessage(SIGNUP_ERROR_COPY.STRIPE_UNAVAILABLE);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form id="signup-payment-form" onSubmit={handleSubmit} noValidate>
+      {/*
+        `layout: "tabs"` matches the rest of the platform's Stripe surfaces.
+        The element renders its own labels and inline field validation, and it
+        is keyboard-accessible inside its iframe — we must not wrap it in our
+        own <Label>, which would point at nothing.
+      */}
+      <PaymentElement
+        options={{ layout: "tabs" }}
+        onReady={() => setElementReady(true)}
+        onChange={() => {
+          // Any edit invalidates the previous decline message.
+          if (message) setMessage(null);
+        }}
+      />
+
+      {!elementReady && (
+        <div className="mt-3 space-y-2" aria-hidden="true">
+          <div className="h-10 animate-pulse rounded-md bg-muted" />
+          <div className="h-10 animate-pulse rounded-md bg-muted" />
+        </div>
+      )}
+
+      {/*
+        One polite live region for every asynchronous state this step can be in,
+        so a screen-reader user is told what is happening without having to go
+        looking for it.
+      */}
+      <div aria-live="polite" className="mt-3 space-y-2">
+        {submitting && (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            {awaitingBank
+              ? "Waiting for your bank…"
+              : "Confirming your payment…"}
+          </p>
+        )}
+        {notice && !message && (
+          <p className="text-sm text-muted-foreground">{notice}</p>
+        )}
+        {message && <p className="text-sm text-red-600">{message}</p>}
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Maps a Stripe.js error onto either an inline message (the user can fix it
+ * right here) or an `OnboardingError` for the shell (the step itself cannot
+ * recover — the PaymentIntent needs recreating).
+ *
+ * Nothing is reported through BOTH channels: the shell renders its own banner
+ * from `state.error`, so surfacing a decline that way as well would print the
+ * same sentence twice.
+ */
+function handleStripeError(
+  stripeError: { type?: string; code?: string; message?: string },
+  {
+    setMessage,
+    onError,
+  }: {
+    setMessage(msg: string): void;
+    onError(err: OnboardingError): void;
+  },
+): void {
+  const code = stripeError.code ?? "";
+
+  // The PaymentIntent is gone or in a state that cannot be confirmed — usually
+  // an `incomplete_expired` subscription (~23 h). Nothing was charged; the
+  // shell mints a fresh one.
+  if (
+    code === "payment_intent_unexpected_state" ||
+    code === "resource_missing" ||
+    code === "payment_intent_incompatible_payment_method"
+  ) {
+    onError({
+      code: "PAYMENT_EXPIRED",
+      message: stripeError.message ?? SIGNUP_ERROR_COPY.PAYMENT_EXPIRED,
+    });
+    return;
+  }
+
+  if (code === "payment_intent_authentication_failure") {
+    setMessage(SIGNUP_ERROR_COPY.CARD_AUTH_FAILED);
+    return;
+  }
+
+  if (stripeError.type === "card_error") {
+    // Stripe's own message names the actual reason ("Your card has
+    // insufficient funds.") and is far more actionable than our generic copy.
+    setMessage(stripeError.message ?? SIGNUP_ERROR_COPY.CARD_DECLINED);
+    return;
+  }
+
+  if (stripeError.type === "validation_error") {
+    setMessage(stripeError.message ?? "Please check your card details.");
+    return;
+  }
+
+  if (
+    stripeError.type === "api_connection_error" ||
+    stripeError.type === "api_error" ||
+    stripeError.type === "rate_limit_error"
+  ) {
+    setMessage(SIGNUP_ERROR_COPY.STRIPE_UNAVAILABLE);
+    return;
+  }
+
+  setMessage(stripeError.message ?? SIGNUP_ERROR_COPY.INTERNAL);
+}
+
+// ---------------------------------------------------------------------------
+// Non-Elements states
+// ---------------------------------------------------------------------------
+
+function PaymentSkeleton({
+  hasError,
+  busy,
+  onRetryIntent,
+}: {
+  hasError: boolean;
+  busy: boolean;
+  onRetryIntent(): void;
+}) {
+  // When the shell is carrying an error it has already rendered the banner —
+  // all this needs to add is the way to try again.
+  if (hasError && !busy) {
+    return (
+      <div>
+        <p className="text-sm text-muted-foreground">
+          We couldn&apos;t load the payment form.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onRetryIntent}
+          className="mt-3"
+        >
+          <CreditCard className="h-4 w-4" />
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="space-y-2"
+      role="status"
+      aria-label="Loading the secure payment form"
+    >
+      <div className="h-10 animate-pulse rounded-md bg-muted" />
+      <div className="h-10 animate-pulse rounded-md bg-muted" />
+      <div className="h-10 animate-pulse rounded-md bg-muted" />
+    </div>
+  );
+}
+
+/** §5 row 14 — Stripe.js itself never loaded. */
+function StripeJsFailurePanel({
+  busy,
+  onRetryIntent,
+}: {
+  busy: boolean;
+  onRetryIntent(): void;
+}) {
+  return (
+    <div>
+      <Alert variant="destructive">
+        <TriangleAlert />
+        <AlertTitle>We couldn&apos;t load the payment form</AlertTitle>
+        <AlertDescription>
+          {SIGNUP_ERROR_COPY.STRIPE_JS_UNAVAILABLE}
+        </AlertDescription>
+      </Alert>
+      <Button
+        type="button"
+        variant="outline"
+        disabled={busy}
+        onClick={() => {
+          // Force a genuine retry: drop the cached (failed) Stripe.js promise
+          // so the next mount re-downloads the script instead of replaying the
+          // same rejection.
+          stripeJsCache.clear();
+          onRetryIntent();
+        }}
+        className="mt-3"
+      >
+        {busy ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <CreditCard className="h-4 w-4" />
+        )}
+        Try again
+      </Button>
+    </div>
+  );
+}
+
+/** §5 row 36 — a Stripe key is missing server-side. Retrying cannot fix it. */
+function ConfigurationErrorPanel() {
+  return (
+    <div>
+      <Alert variant="destructive">
+        <TriangleAlert />
+        <AlertTitle>Signup is temporarily unavailable</AlertTitle>
+        <AlertDescription>{SIGNUP_ERROR_COPY.CONFIG_MISSING}</AlertDescription>
+      </Alert>
+      <Button
+        asChild
+        className="mt-4 bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+      >
+        <a href="/strategy-call">Book a strategy call</a>
+      </Button>
+    </div>
+  );
+}
