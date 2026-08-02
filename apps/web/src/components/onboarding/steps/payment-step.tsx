@@ -137,11 +137,35 @@ export function PaymentStep({
   // no amount of retrying fixes it, so we offer the human path instead.
   const isConfigError = error?.code === "CONFIG_MISSING";
 
+  /**
+   * Grace window before we are willing to call an empty step "broken".
+   *
+   * The provider fires `signup-payment-intent` on entering this step, and there
+   * is at least one render where nothing has arrived yet and `busy` has not
+   * been flipped. Declaring a configuration failure in that frame would flash a
+   * red panel at every single user. Waiting a few seconds costs nothing — the
+   * skeleton is showing meanwhile — and the panel then only appears when the
+   * step really is stuck with nothing to render.
+   */
+  const [graceElapsed, setGraceElapsed] = React.useState(false);
+  React.useEffect(() => {
+    if (clientSecret) {
+      setGraceElapsed(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setGraceElapsed(true), 4000);
+    return () => window.clearTimeout(timer);
+  }, [clientSecret]);
+
   // Nothing in flight, no secret, no key and no error to explain it: something
   // is misconfigured upstream. Treat it as a config failure rather than leaving
   // a spinner that never resolves.
   const isUnexplainedGap =
-    !busy && !isConfigError && (!clientSecret || !publishableKey) && !error;
+    graceElapsed &&
+    !busy &&
+    !isConfigError &&
+    (!clientSecret || !publishableKey) &&
+    !error;
 
   return (
     <div className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">

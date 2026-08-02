@@ -195,6 +195,11 @@ function parseOpenDays(text: string): number[] {
 }
 
 // src: create-sales-onboarding/index.ts:229
+// WIDENED while copying: the original is `Record<string, string | boolean>`,
+// but scheduleToHourCols legitimately writes `business_hours: null` when no
+// display text was given. The original compiles only because that function has
+// `ignoreBuildErrors`-style latitude inside a single file; `null` is added here
+// so the type tells the truth. No runtime behaviour differs.
 export type HourCols = Record<string, string | boolean | null>;
 
 /**
@@ -407,8 +412,11 @@ export function deriveTimezone(location: string | null): string | null {
   //
   // WHICH abbreviation wins matters: "LA, CA" contains both Louisiana and
   // California, and taking the FIRST hit put a Los Angeles operator on Central
-  // time. In the "City, ST" form the state comes LAST and directly after a
-  // comma, so an anchored abbreviation beats a bare one; otherwise last wins.
+  // time (two hours out, with no way to work out why). In the "City, ST" form
+  // the state comes LAST and directly after a comma, so:
+  //   1. an abbreviation sitting in the comma-anchored state slot beats a bare
+  //      one anywhere else ("LA, CA" -> CA; "Kansas City, KS near MO" -> KS),
+  //   2. otherwise the last hit wins ("Dallas TX").
   let abbrevTz: string | null = null;
   let abbrevAnchored = false;
   for (const m of text.matchAll(/\b[A-Z]{2}\b/g)) {

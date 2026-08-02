@@ -412,10 +412,10 @@ export async function checkThrottle(supabase: any, rules: ThrottleRule[]): Promi
         if (error) throw error;
         count = c ?? 0;
       } catch (e) {
-        if (resolvedLedger !== "none") {
-          console.warn("[signup-state] no usable throttle ledger — failing OPEN:", e);
-          resolvedLedger = "none";
-        }
+        // Both ledgers are unreachable. Warn once (the block guard above skips
+        // this branch for the rest of the isolate's life) and fail OPEN.
+        console.warn("[signup-state] no usable throttle ledger — failing OPEN:", e);
+        resolvedLedger = "none";
         return true;
       }
     }
@@ -489,9 +489,9 @@ export async function recordAttempt(supabase: any, row: Record<string, unknown>)
     });
     if (error) throw error;
   } catch (e) {
-    if (resolvedLedger !== "none") {
-      console.warn("[signup-state] could not write login_attempts counter — throttle is OPEN:", e);
-      resolvedLedger = "none";
-    }
+    // Warned once: the `resolvedLedger === "none"` early return above skips
+    // this path on every later call in the same isolate.
+    console.warn("[signup-state] could not write login_attempts counter — throttle is OPEN:", e);
+    resolvedLedger = "none";
   }
 }

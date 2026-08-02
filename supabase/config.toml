@@ -198,3 +198,13 @@ verify_jwt = true
 
 [functions.automation-publish]
 verify_jwt = true
+
+# Self-serve signup — step 1 creates the account, so the caller has no user JWT
+# yet by definition. The function does its own abuse control in code: honeypot,
+# minimum form dwell time, and an IP + email throttle. Every LATER signup step
+# (signup-resume, signup-slug-check, signup-payment-intent, signup-provision)
+# runs with the user's own session and keeps verify_jwt on — and each of those
+# still calls auth.getUser() itself, because verify_jwt only proves that SOME
+# project JWT was presented and the anon key qualifies.
+[functions.signup-begin]
+verify_jwt = false

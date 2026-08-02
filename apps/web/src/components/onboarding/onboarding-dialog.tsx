@@ -370,6 +370,14 @@ export function OnboardingDialog() {
             <DialogFooter className="sm:justify-between">
               {closeConfirmOpen ? (
                 <>
+                  {/*
+                    Outline first, primary last: DialogFooter is
+                    `flex-col-reverse` below `sm`, so the last child is the one
+                    that lands on top on a phone — which must be "Keep going".
+                  */}
+                  <Button type="button" variant="outline" onClick={confirmClose}>
+                    Leave
+                  </Button>
                   <Button
                     ref={keepGoingRef}
                     type="button"
@@ -377,9 +385,6 @@ export function OnboardingDialog() {
                     className="bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
                   >
                     Keep going
-                  </Button>
-                  <Button type="button" variant="outline" onClick={confirmClose}>
-                    Leave
                   </Button>
                 </>
               ) : (

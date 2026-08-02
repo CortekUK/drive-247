@@ -180,14 +180,15 @@ Deno.serve(async (req) => {
             await writeSignupMeta(supabase, user.id, {
               status: "paid",
               paidAt: meta.paidAt ?? new Date().toISOString(),
-              stripeCustomerId: customerId ?? (existing.customer as string),
+              // Stripe's own answer wins over whatever metadata remembered.
+              stripeCustomerId: (existing.customer as string) ?? customerId ?? undefined,
               stripeSubscriptionId: existing.id,
             });
             return jsonResponse({
               success: true,
               clientSecret: null,
               publishableKey,
-              stripeCustomerId: (customerId ?? existing.customer) as string,
+              stripeCustomerId: (existing.customer ?? customerId) as string,
               stripeSubscriptionId: existing.id,
               amountCents: plan.amountCents,
               currency: plan.currency,
@@ -261,7 +262,14 @@ Deno.serve(async (req) => {
         }
       }
 
-      if (!customerId) {
+      // Narrowed to a plain `string` from here on: either we verified an
+      // existing customer above, or we create one now. The idempotency key is
+      // the auth user id, so a retried request reuses the same Customer rather
+      // than littering the account with one per attempt.
+      let stripeCustomerId: string;
+      if (customerId) {
+        stripeCustomerId = customerId;
+      } else {
         const customer = await stripe.customers.create(
           {
             email: meta.email,
@@ -274,7 +282,7 @@ Deno.serve(async (req) => {
           },
           { idempotencyKey: `signup-cus-${user.id}` },
         );
-        customerId = customer.id;
+        stripeCustomerId = customer.id as string;
       }
 
       // ---------------------------------------------------------------------
@@ -292,7 +300,7 @@ Deno.serve(async (req) => {
       // ---------------------------------------------------------------------
       const subscription = await stripe.subscriptions.create(
         {
-          customer: customerId,
+          customer: stripeCustomerId,
           items: [{ price: priceId }],
           payment_behavior: "default_incomplete",
           payment_settings: {
@@ -327,7 +335,7 @@ Deno.serve(async (req) => {
       await writeSignupMeta(supabase, user.id, {
         status: "payment_pending",
         planId: plan.id,
-        stripeCustomerId: customerId,
+        stripeCustomerId,
         stripeSubscriptionId: subscription.id,
         paymentAttempts,
       });
@@ -338,7 +346,7 @@ Deno.serve(async (req) => {
         auth_user_id: user.id,
         plan_id: plan.id,
         outcome: "ok",
-        stripe_customer_id: customerId,
+        stripe_customer_id: stripeCustomerId,
         stripe_subscription_id: subscription.id,
         metadata: { mode, amountCents: plan.amountCents, attempt: paymentAttempts },
       });
@@ -351,7 +359,7 @@ Deno.serve(async (req) => {
         success: true,
         clientSecret,
         publishableKey,
-        stripeCustomerId: customerId,
+        stripeCustomerId,
         stripeSubscriptionId: subscription.id,
         amountCents: plan.amountCents,
         currency: plan.currency,

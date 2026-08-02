@@ -7,8 +7,11 @@ import { DASHBOARD_SLIDES } from "@/lib/constants";
 import { useFadeIn } from "@/hooks/use-fade-in";
 
 export function OperationsDashboard() {
-  const videoRow = useFadeIn();
-  const tabsRow = useFadeIn();
+  // Destructured rather than kept as objects: the react-hooks/refs lint rule
+  // flags `videoRow.ref` as a ref read during render. Destructuring at the call
+  // site is the same idiom every other section uses (see timeline.tsx).
+  const { ref: videoRowRef, visible: videoRowVisible } = useFadeIn();
+  const { ref: tabsRowRef, visible: tabsRowVisible } = useFadeIn();
 
   return (
     <section id="features" className="bg-muted/50 py-20 sm:py-24">
@@ -37,8 +40,8 @@ export function OperationsDashboard() {
 
         {/* Video row */}
         <div
-          ref={videoRow.ref}
-          className={`mt-16 grid items-center gap-6 lg:grid-cols-5 ${videoRow.visible ? "fade-in-visible" : "fade-in-hidden"}`}
+          ref={videoRowRef}
+          className={`mt-16 grid items-center gap-6 lg:grid-cols-5 ${videoRowVisible ? "fade-in-visible" : "fade-in-hidden"}`}
         >
           {/* Desktop mockup — takes 3 of 5 columns */}
           <div className="lg:col-span-3">
@@ -80,8 +83,8 @@ export function OperationsDashboard() {
 
         {/* Tab carousel */}
         <div
-          ref={tabsRow.ref}
-          className={tabsRow.visible ? "fade-in-visible" : "fade-in-hidden"}
+          ref={tabsRowRef}
+          className={tabsRowVisible ? "fade-in-visible" : "fade-in-hidden"}
         >
           <Tabs defaultValue="operations" className="mt-6 sm:mt-12">
             <TabsList
