@@ -96,7 +96,10 @@ const STALL_MESSAGE = "This is taking longer than it should.";
 const ALLOWED_TRANSITIONS: Record<SignupStep, readonly SignupStep[]> = {
   plan: ["plan", "account", "payment", "business", "provisioning", "done"],
   account: ["account", "payment", "plan"],
-  payment: ["payment", "business", "account", "plan"],
+  // `payment -> done` is the second-tab recovery: signup-payment-intent answers
+  // ALREADY_PROVISIONED when another tab has already finished the whole signup,
+  // and the only coherent destination from there is the success panel.
+  payment: ["payment", "business", "account", "done", "plan"],
   business: ["business", "provisioning", "account", "plan"],
   provisioning: ["provisioning", "done", "business", "payment", "account", "plan"],
   done: ["done", "plan"],
@@ -418,6 +421,14 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   /** The passive hint read from app_metadata on mount. A hint — never proof of payment. */
   const resumeHintRef = useRef<ClientSignupMeta | null>(null);
 
+  /**
+   * The passive mount read itself, so `open()` can wait for it instead of
+   * racing it. A returning user who presses Subscribe in the first few hundred
+   * milliseconds would otherwise be treated as brand new.
+   */
+  const resumeProbeRef = useRef<Promise<void> | null>(null);
+  const resumeProbeSettledRef = useRef(false);
+
   const pollTimerRef = useRef<number | null>(null);
   const pollBusyRef = useRef(false);
   const provisionSettledRef = useRef(false);
@@ -553,7 +564,20 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   // -------------------------------------------------------------------------
 
   const startPaymentInternal = useCallback(
-    async (planId: SignupPlanId | null) => {
+    /**
+     * `carryError` is the banner the user must still be able to read once the
+     * new intent has landed.
+     *
+     * Minting an intent normally clears the step's error, and it has to: the
+     * previous attempt's decline is not about the card form we are about to
+     * render. But two callers arrive here BECAUSE something went wrong with the
+     * money — an expired PaymentIntent, or a provision refused for
+     * PAYMENT_REQUIRED — and both need the explanation to survive. Dispatching
+     * the error before calling this does not work: the clear below runs in the
+     * same React batch and wins, so the user is silently dropped onto a fresh
+     * card form having been told nothing.
+     */
+    async (planId: SignupPlanId | null, carryError: OnboardingError | null = null) => {
       if (!planId) {
         dispatch({ type: "error", error: err("PLAN_UNKNOWN") });
         return;
@@ -561,7 +585,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       if (paymentIntentInFlightRef.current) return;
       paymentIntentInFlightRef.current = true;
       dispatch({ type: "busy", busy: true });
-      dispatch({ type: "error", error: null });
+      dispatch({ type: "error", error: carryError });
       // Drop any stale secret first: Elements must never be mounted against an
       // intent we are about to replace.
       dispatch({ type: "payment", patch: { clientSecret: null } });
@@ -599,6 +623,20 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         const error = toOnboardingError(e);
         if (isSessionLoss(error)) {
           handleSessionLoss(error);
+        } else if (error.code === "ALREADY_PROVISIONED") {
+          // Another tab — or an earlier session on another device — finished the
+          // whole signup while this one was sitting on the card form. There is
+          // nothing left to pay for, and the banner alone would strand the user
+          // on a payment step with no forward action, so read the finished
+          // result out of app_metadata and show the success panel instead.
+          const finished = resultFromMeta(await fetchSignupMeta());
+          if (finished) {
+            settleSuccess(finished);
+          } else {
+            // Metadata says provisioned but is missing the URLs we would need to
+            // hand them over. The banner is then the honest answer.
+            dispatch({ type: "error", error });
+          }
         } else {
           dispatch({ type: "error", error });
         }
@@ -607,7 +645,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         dispatch({ type: "busy", busy: false });
       }
     },
-    [handleSessionLoss],
+    [handleSessionLoss, settleSuccess],
   );
 
   // -------------------------------------------------------------------------
@@ -647,7 +685,13 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
           dispatch({ type: "goto", step: "payment" });
           dispatch({ type: "error", error });
           setIsOpen(true);
-          void startPaymentInternal(stateRef.current.planId);
+          // The banner ALSO travels with the request. Dispatching it here is not
+          // enough on its own: `startPaymentInternal` clears the step error
+          // before its first await, in this same React batch, so the user would
+          // be dropped onto a fresh card form having been told nothing about
+          // why. (The dispatch above still matters for the one path that never
+          // reaches that clear — a request already in flight.)
+          void startPaymentInternal(stateRef.current.planId, error);
           return;
         }
         case "UNAUTHENTICATED":
@@ -836,7 +880,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
    */
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
+    const probe = (async () => {
       try {
         const meta = await fetchSignupMeta();
         if (cancelled || !meta) return;
@@ -863,8 +907,14 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         // pricing section is static and must still render — only pressing
         // Subscribe is allowed to fail, and it fails with a banner.
         console.warn("[onboarding] resume detection unavailable", e);
+      } finally {
+        // Settled either way — a failed probe is an answer ("we could not
+        // find a signup"), and `open()` must not wait on it forever.
+        resumeProbeSettledRef.current = true;
       }
     })();
+    resumeProbeRef.current = probe;
+    void probe;
     return () => {
       cancelled = true;
     };
@@ -908,11 +958,42 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
       dispatch({ type: "setPlan", planId });
 
-      if (resumeHintRef.current) {
-        void resolveResume(planId);
+      /**
+       * Resume, or start fresh?
+       *
+       * The mount hint alone is the wrong test. It is null in two cases that
+       * both MUST resume: someone who created their account earlier in this
+       * same page session (the hint is only ever written at mount and by a
+       * manual sign-in), and a returning user who pressed Subscribe before the
+       * mount read resolved. Both were being dropped onto "Create account" —
+       * which, for the first, means a customer whose card is already charged is
+       * asked to sign up again, burns one of their three `signup-begin`
+       * attempts per hour and gets a 409 for their trouble.
+       *
+       * So: any local evidence that a signup exists routes through
+       * `signup-resume`, which is the only authority on which step they belong
+       * on and will put them back on the account form itself if it disagrees.
+       */
+      const decide = () => {
+        const s = stateRef.current;
+        if (resumeHintRef.current || s.account || s.payment.stripeSubscriptionId) {
+          void resolveResume(planId);
+          return;
+        }
+        dispatch({ type: "goto", step: "account" });
+      };
+
+      if (!resumeProbeSettledRef.current && resumeProbeRef.current) {
+        // Show the dialog's "Checking your setup" state rather than guessing.
+        setResolving(true);
+        dispatch({ type: "goto", step: "account" });
+        void resumeProbeRef.current.finally(() => {
+          setResolving(false);
+          decide();
+        });
         return;
       }
-      dispatch({ type: "goto", step: "account" });
+      decide();
     },
     [resolveResume, startPaymentInternal],
   );
@@ -1043,6 +1124,10 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
           account: { fullName: values.fullName.trim(), email: values.email.trim().toLowerCase() },
         });
         dispatch({ type: "signInPrompt", prompt: null });
+        // From here there is something to come back to, in this page session or
+        // a later one — which is what makes the `?signup=resume` return path and
+        // the reopen-after-close path work for a first-time visitor.
+        setHasResumableSignup(true);
         dispatch({ type: "goto", step: "payment" });
         handedOff = true;
         void startPaymentInternal(planId);
@@ -1251,9 +1336,33 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     setIsOpen(true);
   }, [stopPoller]);
 
-  const setError = useCallback((e: OnboardingError | null) => {
-    dispatch({ type: "error", error: e });
-  }, []);
+  /**
+   * The step components' only channel back into the shell.
+   *
+   * PAYMENT_EXPIRED is intercepted rather than merely displayed. The payment
+   * step raises it when Stripe refuses to confirm the PaymentIntent at all —
+   * the subscription went `incomplete_expired` (~23 h), or the intent was
+   * cancelled, or it is otherwise unconfirmable. Nothing was charged, but the
+   * secret in state is dead: painting a banner and leaving it in place would
+   * keep `<Elements>` mounted on the dead intent, keep the footer's
+   * "Pay $199 and continue" enabled, and re-produce the identical error on
+   * every press — with the banner promising a fresh attempt that never came.
+   * So the shell does what the copy says and mints a new intent, keeping the
+   * explanation on screen across the swap.
+   */
+  const setError = useCallback(
+    (e: OnboardingError | null) => {
+      if (e?.code === "PAYMENT_EXPIRED" && stateRef.current.step === "payment") {
+        dispatch({ type: "error", error: e });
+        // Server-side idempotent: it reuses or replaces the incomplete
+        // subscription and never charges twice.
+        void startPaymentInternal(stateRef.current.planId, e);
+        return;
+      }
+      dispatch({ type: "error", error: e });
+    },
+    [startPaymentInternal],
+  );
 
   // -------------------------------------------------------------------------
   // Leave-while-writing guard

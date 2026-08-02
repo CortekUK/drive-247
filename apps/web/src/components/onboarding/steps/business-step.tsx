@@ -424,11 +424,22 @@ export function BusinessStep({
           </div>
 
           {/* Live status. One polite live region so the availability answer is
-              announced without stealing focus from the field. */}
+              announced without stealing focus from the field.
+
+              The local `errors.slug` is folded in as an override because it is
+              the ONLY place a locally-decided slug problem can be read: the
+              field itself only turns red. That matters for the one verdict the
+              live check cannot produce — a slug that normalises to empty (a
+              business named entirely in non-Latin script, or a cleared field),
+              where `checkSlugShape` reports "empty" and the status line
+              deliberately stays silent. Without this the user would be focused
+              onto a red input carrying no explanation, on the last step of a
+              flow they have already paid for. The server verdict still wins:
+              it is newer than anything decided here. */}
           <div id="signup-slug-status" aria-live="polite" className="mt-1.5">
             <SlugStatusLine
               status={slugStatus}
-              overrideMessage={serverFieldError("slug")}
+              overrideMessage={serverFieldError("slug") ?? errors.slug}
             />
           </div>
 
@@ -561,8 +572,14 @@ export function BusinessStep({
               The paired hidden input is the existing app pattern (see
               strategy-call/page.tsx) and keeps the DOM honest. */}
           <input type="hidden" name="fleetSize" value={value.fleetSize} />
+          {/* `value` is passed through as-is, empty string included: Radix
+              treats `undefined` as "uncontrolled", so falling back to it while
+              the draft field is empty would make the Select flip from
+              uncontrolled to controlled on the first pick (and warn). Its
+              `shouldShowPlaceholder` already treats "" exactly like undefined,
+              so the placeholder still renders. */}
           <Select
-            value={value.fleetSize || undefined}
+            value={value.fleetSize}
             disabled={busy}
             onValueChange={(v) => {
               clearError("fleetSize");
@@ -593,7 +610,7 @@ export function BusinessStep({
           <Label htmlFor="signup-vehicle-type">Vehicle type</Label>
           <input type="hidden" name="vehicleType" value={value.vehicleType} />
           <Select
-            value={value.vehicleType || undefined}
+            value={value.vehicleType}
             disabled={busy}
             onValueChange={(v) => {
               clearError("vehicleType");
@@ -910,7 +927,7 @@ function FieldError({
 }) {
   if (!children) return null;
   return (
-    <p id={id} role="alert" className="mt-1.5 text-sm text-red-600">
+    <p id={id} role="alert" className="mt-1.5 text-sm text-red-600 dark:text-red-400">
       {children}
     </p>
   );
@@ -930,7 +947,7 @@ function SlugStatusLine({
 }) {
   if (overrideMessage) {
     return (
-      <p className="flex items-start gap-1.5 text-sm text-red-600">
+      <p className="flex items-start gap-1.5 text-sm text-red-600 dark:text-red-400">
         <X className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         {overrideMessage}
       </p>
@@ -956,14 +973,14 @@ function SlugStatusLine({
       );
     case "invalid":
       return (
-        <p className="flex items-start gap-1.5 text-sm text-red-600">
+        <p className="flex items-start gap-1.5 text-sm text-red-600 dark:text-red-400">
           <X className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {status.message}
         </p>
       );
     case "unavailable":
       return (
-        <p className="flex items-start gap-1.5 text-sm text-red-600">
+        <p className="flex items-start gap-1.5 text-sm text-red-600 dark:text-red-400">
           <X className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {status.message}
         </p>

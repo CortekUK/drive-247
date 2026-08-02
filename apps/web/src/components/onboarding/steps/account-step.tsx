@@ -334,7 +334,7 @@ export function AccountStep({
               <p
                 id="signup-signin-password-error"
                 role="alert"
-                className="mt-1.5 text-sm text-red-600"
+                className="mt-1.5 text-sm text-red-600 dark:text-red-400"
               >
                 {inlineSignInError}
               </p>
@@ -442,7 +442,7 @@ export function AccountStep({
             <p
               id="signup-full-name-error"
               role="alert"
-              className="mt-1.5 text-sm text-red-600"
+              className="mt-1.5 text-sm text-red-600 dark:text-red-400"
             >
               {nameError}
             </p>
@@ -489,7 +489,7 @@ export function AccountStep({
             <p
               id="signup-email-error"
               role="alert"
-              className="mt-1.5 text-sm text-red-600"
+              className="mt-1.5 text-sm text-red-600 dark:text-red-400"
             >
               {emailError}
             </p>
@@ -603,7 +603,7 @@ export function AccountStep({
           </div>
 
           {passwordError && (
-            <p role="alert" className="mt-1.5 text-sm text-red-600">
+            <p role="alert" className="mt-1.5 text-sm text-red-600 dark:text-red-400">
               {passwordError}
             </p>
           )}

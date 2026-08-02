@@ -275,6 +275,119 @@ Deno.serve(async (req) => {
       return signupError("PROVISION_IN_PROGRESS", "Your portal is already being built", 409);
     }
 
+    // ---- Recovery: a tenant row from a run that never reported back --------
+    //
+    // `pendingTenantId` is written the instant the tenant is inserted, so it is
+    // the only trace left when an isolate is killed mid-run (wall-clock limit,
+    // redeploy, OOM). Without this branch that retry restarts from scratch,
+    // hits its OWN tenant in the slug pre-check and returns SLUG_TAKEN — to a
+    // customer whose card is already charged, for ever.
+    //
+    // Which way it goes is decided by ONE question: does a `tenant_subscriptions`
+    // row point at that tenant? That row is step 7a, the documented point of no
+    // return.
+    //
+    //   yes → the run got past the point of no return and died before recording
+    //         it. The tenant is usable (owner account, plan and subscription all
+    //         exist); everything after 7a is non-fatal. Promote and hand it over.
+    //   no  → nothing references it and nothing in Stripe points at it. Discard
+    //         it completely so the retry is genuinely fresh — including the
+    //         owner's app_user, whose UNIQUE(auth_user_id) would otherwise make
+    //         every future attempt fail at step 5.
+    if (!meta.tenantId && meta.pendingTenantId) {
+      const pendingId = meta.pendingTenantId;
+      const { data: pendingTenant } = await supabase
+        .from("tenants")
+        .select("id, slug, company_name")
+        .eq("id", pendingId)
+        .maybeSingle();
+
+      if (!pendingTenant) {
+        console.warn(`${LOG} pendingTenantId ${pendingId} has no tenant row — clearing`);
+        meta = await writeSignupMeta(supabase, authUserId, { pendingTenantId: null });
+      } else {
+        const { data: linkedSub } = await supabase
+          .from("tenant_subscriptions")
+          .select("id")
+          .eq("tenant_id", pendingId)
+          .limit(1)
+          .maybeSingle();
+
+        if (linkedSub) {
+          console.warn(
+            `${LOG} recovering tenant ${pendingId} — it is past the point of no return but was never recorded`,
+          );
+          const portalUrl = meta.portalUrl ?? `https://${pendingTenant.slug}.portal.drive-247.com`;
+          const bookingUrl = meta.bookingUrl ?? `https://${pendingTenant.slug}.drive-247.com`;
+          meta = await writeSignupMeta(supabase, authUserId, {
+            status: "provisioned",
+            tenantId: pendingId,
+            pendingTenantId: null,
+            slug: pendingTenant.slug,
+            portalUrl,
+            bookingUrl,
+            provisionLockAt: null,
+            lastError: null,
+          });
+          return jsonResponse({
+            success: true,
+            tenantId: pendingId,
+            slug: pendingTenant.slug,
+            companyName: pendingTenant.company_name ?? meta.business?.companyName ?? "",
+            portalUrl,
+            bookingUrl,
+            portalSignInUrl: meta.portalSignInUrl ?? null,
+            // We cannot know whether step 8 ran, and claiming it did would hide
+            // a booking site still showing platform copy. The success panel's
+            // "some pages still show our default copy" note is the honest answer.
+            contentSeeded: false,
+            milestones: PROVISION_MILESTONES,
+          });
+        }
+
+        console.warn(`${LOG} discarding half-built tenant ${pendingId} before retrying`);
+        const discardErrors: string[] = [];
+        for (
+          const step of [
+            () => supabase.from("subscription_plans").delete().eq("tenant_id", pendingId),
+            () => supabase.from("app_users").delete().eq("auth_user_id", authUserId),
+            () => supabase.from("tenants").delete().eq("id", pendingId),
+          ]
+        ) {
+          const { error } = await step();
+          if (error) discardErrors.push(error.message ?? String(error));
+        }
+
+        if (discardErrors.length) {
+          // Leaving `pendingTenantId` set is deliberate: it is the only pointer
+          // support has to the row, and a "fresh" run from here would fail at
+          // the slug pre-check or on app_users' unique auth_user_id anyway.
+          console.error(`${LOG} could not discard tenant ${pendingId}:`, discardErrors);
+          // A tenant we could not remove must never be loggable-into or
+          // billable — the same guard `deleteTenant` applies on a failed
+          // rollback.
+          const { error: suspendError } = await supabase
+            .from("tenants")
+            .update({ status: "suspended" })
+            .eq("id", pendingId);
+          if (suspendError) {
+            console.error(`${LOG} could not suspend tenant ${pendingId}:`, suspendError);
+          }
+          return signupError(
+            "INTERNAL",
+            "We couldn't finish setting up your portal. Please talk to us and we'll finish it for you.",
+            500,
+            { tenantId: pendingId },
+          );
+        }
+
+        meta = await writeSignupMeta(supabase, authUserId, {
+          pendingTenantId: null,
+          milestones: [],
+        });
+      }
+    }
+
     /**
      * Terminal failure. Releases the lock, records the reason so a resume can
      * show it, and returns the machine-readable code the UI branches on.
@@ -563,6 +676,16 @@ Deno.serve(async (req) => {
       await deletePlanRow();
       await deleteAppUser();
       await deleteTenant();
+      // Drop the pointer too, so the next attempt is genuinely fresh rather
+      // than running step 0's recovery against a row that is already gone. It
+      // matters most when `deleteTenant` could only SUSPEND the row: leaving
+      // the pointer would make the retry adopt a suspended tenant, whereas
+      // clearing it produces an honest SLUG_TAKEN with alternatives.
+      try {
+        await writeSignupMeta(supabase, authUserId, { pendingTenantId: null });
+      } catch (e) {
+        console.error(`${LOG} rollback: could not clear pendingTenantId (non-fatal):`, e);
+      }
     };
 
     // =====================================================================
@@ -658,6 +781,39 @@ Deno.serve(async (req) => {
       return await fail("INTERNAL", "We couldn't create your workspace", 500);
     }
     tenantId = tenant.id as string;
+
+    /*
+     * Record the row's existence IMMEDIATELY — before the credits RPC, before
+     * the owner account, before anything.
+     *
+     * Everything from here to step 9 is network-heavy (two Stripe calls with a
+     * retry, ~10 CMS writes, an optional magic link) and an edge function can
+     * be killed at any point in it. Until this write lands, a killed isolate
+     * leaves a tenant NOTHING points at: the retry starts from scratch, the
+     * slug pre-check finds the row the user themselves just created, and they
+     * get "that web address is already taken" for their own address — for ever,
+     * with the card already charged.
+     *
+     * It goes into `pendingTenantId`, not `tenantId`: at this instant the
+     * tenant has no owner account and no subscription row, so it is NOT safe to
+     * hand over. Step 0 decides what to do with it on the next attempt.
+     *
+     * A failure here is fatal on purpose. Continuing would recreate exactly the
+     * unrecoverable state this write exists to prevent, and rolling back now is
+     * clean: nothing references the tenant yet.
+     */
+    try {
+      meta = await writeSignupMeta(supabase, authUserId, {
+        pendingTenantId: tenantId,
+        slug,
+        portalUrl,
+        bookingUrl,
+      });
+    } catch (e) {
+      console.error(`${LOG} could not record tenant ${tenantId} in app_metadata:`, e);
+      await rollback();
+      return await fail("INTERNAL", `We couldn't create your workspace${rollbackNote()}`, 500);
+    }
 
     // 100 live welcome credits. Non-fatal: a tenant without credits works, a
     // rollback over a gift does not.
@@ -818,6 +974,28 @@ Deno.serve(async (req) => {
     // reconcile-subscriptions, and deleting a tenant that a live subscription
     // points at would be far worse than any of them failing.
     // ======================================================================
+
+    /*
+     * Promote `pendingTenantId` to `tenantId` HERE, not at step 9.
+     *
+     * This is the exact moment the tenant becomes safe to hand over: owner
+     * account, plan row and subscription row all exist, and every step that
+     * follows is documented non-fatal. Everything after this point is also the
+     * slowest, most network-heavy stretch of the function, so it is where a
+     * killed isolate is most likely to land.
+     *
+     * If this write itself throws, the outer catch 500s and the retry's step-0
+     * recovery finds `pendingTenantId` WITH a linked subscription row and
+     * promotes it there instead — so the failure mode is self-healing rather
+     * than terminal.
+     */
+    meta = await writeSignupMeta(supabase, authUserId, {
+      tenantId,
+      pendingTenantId: null,
+      slug,
+      portalUrl,
+      bookingUrl,
+    });
 
     // ---- 7b. Customer id on the tenant. Non-fatal. -----------------------
     // This is resolver step 1 for invoice.paid / invoice.payment_failed, and it

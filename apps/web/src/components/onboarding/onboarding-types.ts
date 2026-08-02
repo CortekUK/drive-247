@@ -29,6 +29,13 @@ export type SignupErrorCode =
   // --- identity / conflict (409)
   | "SLUG_RESERVED"
   | "SLUG_TAKEN"
+  // `signup-begin` no longer emits these two: telling an unauthenticated caller
+  // whether an arbitrary address belongs to Drive247 staff or to a renter on
+  // some tenant's booking site is a disclosure the UI never needed — all three
+  // "already taken" cases now come back as EMAIL_EXISTS_SIGN_IN, whose next
+  // action ("sign in instead") is identical. Kept in the union, and handled by
+  // the account step, because the code list is a server-owned contract and an
+  // older deployment may still send them.
   | "EMAIL_IS_STAFF"
   | "EMAIL_IS_CUSTOMER"
   | "EMAIL_IN_SIGNUP"

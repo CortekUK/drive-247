@@ -64,7 +64,11 @@ export function PricingSection() {
               node that is present from first paint. */}
           <div
             ref={ref}
-            className={`mt-12 grid gap-6 md:grid-cols-3 md:items-start ${
+            // `items-stretch` (not `items-start`) is what makes the three cards
+            // one height: each PlanCard is `h-full`, so it only fills the row if
+            // the row stretches it. With `items-start` every card shrink-wrapped
+            // its own content and the tiers ended up visibly different sizes.
+            className={`mt-12 grid gap-6 md:grid-cols-3 md:items-stretch ${
               visible ? "fade-in-visible" : "fade-in-hidden"
             }`}
           >

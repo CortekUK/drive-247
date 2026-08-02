@@ -36,10 +36,11 @@ export function PlanCard({ plan }: PlanCardProps) {
         "relative flex h-full flex-col overflow-hidden rounded-2xl border bg-card p-6 shadow-sm transition-all",
         "hover:-translate-y-0.5 hover:shadow-md",
         plan.highlighted
-          ? // The lift is `md:`-prefixed so the recommended card does not float out
-            // of alignment on a phone, where the grid is a single column — there it
-            // reads as recommended from the indigo border and the badge alone.
-            "border-indigo-600/40 shadow-lg shadow-indigo-600/10 dark:border-indigo-400/30 md:-mt-4 md:pb-10"
+          ? // The recommended tier is distinguished by colour and the badge only —
+            // never by size or vertical offset. An earlier version lifted this card
+            // with `md:-mt-4 md:pb-10`, which made the three cards visibly different
+            // heights and knocked their prices off a shared baseline.
+            "border-indigo-600/40 shadow-lg shadow-indigo-600/10 ring-1 ring-indigo-600/15 dark:border-indigo-400/30 dark:ring-indigo-400/15"
           : "border-border"
       )}
     >
@@ -69,8 +70,10 @@ export function PlanCard({ plan }: PlanCardProps) {
         </span>
         <span className="text-sm text-muted-foreground">/month</span>
       </div>
-      {/* min-h keeps the three CTAs on one baseline when taglines wrap differently. */}
-      <p className="mt-2 min-h-[2.5rem] text-sm leading-relaxed text-muted-foreground">
+      {/* Reserves two rendered lines (14px text at leading-relaxed ≈ 22.75px/line),
+          so a tier whose tagline happens to fit on one line does not pull its
+          Subscribe button above the other two. 2.5rem was under one line short. */}
+      <p className="mt-2 min-h-[2.875rem] text-sm leading-relaxed text-muted-foreground">
         {plan.tagline}
       </p>
 
@@ -81,11 +84,16 @@ export function PlanCard({ plan }: PlanCardProps) {
         // reader lists them out of context, so the accessible name carries the
         // tier and the price.
         aria-label={`Subscribe to ${plan.name} — ${formatPlanPriceUsd(plan)} per month`}
-        variant={plan.highlighted ? "default" : "outline"}
+        // Every tier gets the same solid indigo CTA. Giving the non-recommended
+        // tiers an `outline` button read as "these are the lesser options" and
+        // suppressed clicks on Starter and Scale, which are real plans we want
+        // people to buy. The recommended tier is signalled by the card's border,
+        // ring and badge — not by being the only one with a live-looking button.
+        variant="default"
         className={cn(
-          "mt-6 w-full",
-          plan.highlighted &&
-            "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+          "mt-6 w-full bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all",
+          "hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30",
+          "dark:bg-indigo-500 dark:hover:bg-indigo-600"
         )}
       >
         Subscribe <ArrowRight className="h-4 w-4" aria-hidden="true" />

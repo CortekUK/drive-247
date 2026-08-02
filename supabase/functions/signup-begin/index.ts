@@ -205,8 +205,11 @@ Deno.serve(async (req) => {
       plan_id: plan.id,
       outcome: allowed ? "allowed" : "blocked",
       metadata: { fullNameLength: fullName.length },
-      throttleScope: ip ? "signup_begin_ip" : "signup_begin_email",
-      throttleKey: ip ?? email,
+      // EVERY rule, not just one. On the `login_attempts` fallback ledger each
+      // rule is counted under its own `signup:<scope>:<key>` username, so
+      // recording only the IP rule left the per-email rule counting zero for
+      // ever — no limit at all for an attacker rotating IPs.
+      throttleRules: rules.map((r) => ({ scope: r.scope, key: r.key })),
     });
 
     if (!allowed) {
@@ -214,10 +217,31 @@ Deno.serve(async (req) => {
     }
 
     // -----------------------------------------------------------------------
-    // Identity probes, in cost order. Each maps to a DISTINCT 409 code because
-    // the right next action differs completely: sign in at your portal / use a
-    // different address / enter your password and resume.
+    // Identity probes, in cost order.
+    //
+    // They all answer the SAME 409 — `EMAIL_EXISTS_SIGN_IN` — and the reason is
+    // privacy, not laziness. This endpoint is unauthenticated, so a distinct
+    // code per relationship would let anyone POST an arbitrary address and read
+    // back whether that person is Drive247 portal staff, a car renter on some
+    // tenant's booking site, or neither. The renter answer in particular is
+    // third-party personal information that this flow never needs, and the
+    // "neither" answer is worse still: it comes with a freshly created auth
+    // user, permanently squatting the address.
+    //
+    // The user-facing next action is identical for all three ("sign in
+    // instead"), so nothing is lost in the UI. The distinction is logged for
+    // support instead.
+    //
+    // EMAIL_IN_SIGNUP stays separate: it drives the resume panel, and it says
+    // nothing about the address beyond "an unfinished signup of ours exists",
+    // which is exactly what the caller is claiming to own.
     // -----------------------------------------------------------------------
+    const emailTaken = (relationship: string): Response => {
+      console.log(`${LOG} refused ${email}: ${relationship} (reported as EMAIL_EXISTS_SIGN_IN)`);
+      return signupError("EMAIL_EXISTS_SIGN_IN", "An account already exists for this email", 409, {
+        resumable: true,
+      });
+    };
 
     // 1. Portal staff. `ilike` narrows in Postgres; JS re-checks exactly so a
     //    legal underscore in the address cannot wildcard-match someone else.
@@ -231,11 +255,7 @@ Deno.serve(async (req) => {
         (u: { email: string | null }) => (u.email || "").toLowerCase() === email,
       )
     ) {
-      return signupError(
-        "EMAIL_IS_STAFF",
-        "This email already has a Drive247 portal account",
-        409,
-      );
+      return emailTaken("already a portal staff account");
     }
 
     // 2/3/4. Any existing auth user for this address.
@@ -252,12 +272,7 @@ Deno.serve(async (req) => {
       if (renter) {
         // NEVER reset their password to let them "resume" — that would silently
         // break a real renter's login on a tenant's booking site.
-        return signupError(
-          "EMAIL_IS_CUSTOMER",
-          "This email is already registered as a renter",
-          409,
-          { field: "email" },
-        );
+        return emailTaken("already a booking-site renter");
       }
 
       const priorSignup = existingAuthUser.app_metadata?.[SIGNUP_META_KEY];
@@ -270,9 +285,7 @@ Deno.serve(async (req) => {
 
       // A stray auth user with no profile of any kind. They still hold the
       // address, and we cannot mint a second account for it.
-      return signupError("EMAIL_EXISTS_SIGN_IN", "An account already exists for this email", 409, {
-        resumable: true,
-      });
+      return emailTaken("auth user with no profile");
     }
 
     // -----------------------------------------------------------------------

@@ -398,7 +398,7 @@ function PaymentForm({
         {notice && !message && (
           <p className="text-sm text-muted-foreground">{notice}</p>
         )}
-        {message && <p className="text-sm text-red-600">{message}</p>}
+        {message && <p className="text-sm text-red-600 dark:text-red-400">{message}</p>}
       </div>
     </form>
   );

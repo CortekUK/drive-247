@@ -94,6 +94,23 @@ export interface SignupMetadata {
   paymentAttempts?: number;
   paidAt?: string;
   business?: SignupBusinessSnapshot;
+  /**
+   * Set the moment `signup-provision` inserts the tenant row, and cleared when
+   * it is promoted to `tenantId` (or rolled back).
+   *
+   * It exists because the tenant row is created LONG before the run finishes,
+   * and an isolate that is killed in between (wall-clock limit, redeploy, OOM)
+   * would otherwise leave a tenant nothing points at: the retry would restart
+   * from scratch, find its own slug taken and hand a customer who has already
+   * been charged a permanent "that web address is taken".
+   *
+   * It is deliberately NOT `tenantId`. `tenantId` means "provisioned, and safe
+   * to hand the operator" — the idempotency short-circuit returns a success
+   * response for it. A tenant that only got as far as this key may have no
+   * owner account and no subscription row yet, so the retry inspects it and
+   * either promotes it or discards it.
+   */
+  pendingTenantId?: string | null;
   tenantId?: string;
   slug?: string;
   portalUrl?: string;
@@ -355,9 +372,16 @@ export function ledgerScope(scope: string): string {
  *      matches on the exact email. STOPGAP ONLY: that table has
  *      `RLS USING (true)` and `GRANT ALL TO anon`, so an anon-key holder can
  *      delete rows and walk straight past this.
- *   3. Neither reachable → warn once and FAIL OPEN. A signup form that
- *      hard-fails because a rate-limit ledger is missing is worse than one that
- *      is briefly unthrottled.
+ *   3. Neither reachable → FAIL CLOSED. `signup-begin` runs with
+ *      `verify_jwt = false` and mass-creates confirmed `auth.users` rows with
+ *      the service role, which bypasses GoTrue's own signup limits — so this is
+ *      the ONLY thing standing between a script and permanently squatting
+ *      arbitrary email addresses. An unmeasurable ledger is not evidence that
+ *      a caller is under the limit, and `login_attempts` lives in the same
+ *      database the rest of the request needs anyway: if it cannot be read, the
+ *      signup was not going to succeed regardless. The refusal is deliberately
+ *      NOT sticky — the next call re-reads, so one transient blip does not
+ *      close the door for the life of the isolate.
  *
  * Only GATE rows (`outcome` 'allowed' / 'blocked') are counted, so the richer
  * `'ok'` / `'error'` audit rows written later in the same request never eat
@@ -402,7 +426,15 @@ export async function checkThrottle(supabase: any, rules: ThrottleRule[]): Promi
       }
     }
 
-    if (count === null && resolvedLedger !== "none") {
+    if (count === null) {
+      if (resolvedLedger === "none") {
+        // A previous call in this isolate could not WRITE the counter, so no
+        // count read here can mean anything. Refuse rather than wave it through.
+        console.error(
+          `[signup-state] throttle counter is unwritable — failing CLOSED for ${rule.scope}`,
+        );
+        return false;
+      }
       try {
         const { count: c, error } = await supabase
           .from("login_attempts")
@@ -412,11 +444,11 @@ export async function checkThrottle(supabase: any, rules: ThrottleRule[]): Promi
         if (error) throw error;
         count = c ?? 0;
       } catch (e) {
-        // Both ledgers are unreachable. Warn once (the block guard above skips
-        // this branch for the rest of the isolate's life) and fail OPEN.
-        console.warn("[signup-state] no usable throttle ledger — failing OPEN:", e);
-        resolvedLedger = "none";
-        return true;
+        // Both ledgers are unreachable. Fail CLOSED — see the doc comment. The
+        // ledger choice is deliberately left alone so the next call re-probes
+        // instead of this isolate refusing every signup from here on.
+        console.error("[signup-state] no usable throttle ledger — failing CLOSED:", e);
+        return false;
       }
     }
 
@@ -474,24 +506,47 @@ export async function recordAttempt(supabase: any, row: Record<string, unknown>)
 
   if (!isGate || resolvedLedger === "none") return;
 
-  // Fallback counter. `throttleScope`/`throttleKey` are passed by the caller so
-  // the username matches exactly what checkThrottle counts.
-  const scope = String(row.throttleScope ?? row.scope ?? "signup");
-  const key = String(row.throttleKey ?? "");
-  if (!key) return;
+  /*
+   * Fallback counter — ONE ROW PER RULE, not one per request.
+   *
+   * `checkThrottle` counts `signup:<scope>:<key>` for each rule independently.
+   * Writing a single row keyed on whichever identifier the caller happened to
+   * pick therefore leaves every OTHER rule counting zero for ever: with one row
+   * keyed on the IP, `signup_begin_email` always found 0 attempts and always
+   * allowed, so an attacker rotating IPs faced no per-address limit at all.
+   *
+   * `throttleRules` is the supported shape. `throttleScope`/`throttleKey` are
+   * kept for the single-rule callers, which are the majority.
+   */
+  const rules: { scope: string; key: string }[] = Array.isArray(row.throttleRules)
+    ? (row.throttleRules as { scope?: unknown; key?: unknown }[]).map((r) => ({
+      scope: String(r?.scope ?? row.scope ?? "signup"),
+      key: String(r?.key ?? ""),
+    }))
+    : [{
+      scope: String(row.throttleScope ?? row.scope ?? "signup"),
+      key: String(row.throttleKey ?? ""),
+    }];
 
+  const usable = rules.filter((r) => r.key);
+  if (!usable.length) return;
+
+  const attemptedAt = new Date().toISOString();
   try {
-    const { error } = await supabase.from("login_attempts").insert({
-      username: `signup:${scope}:${key}`,
-      ip_address: (row.ip_address as string) ?? null,
-      success: outcome === "allowed",
-      attempted_at: new Date().toISOString(),
-    });
+    const { error } = await supabase.from("login_attempts").insert(
+      usable.map((r) => ({
+        username: `signup:${r.scope}:${r.key}`,
+        ip_address: (row.ip_address as string) ?? null,
+        success: outcome === "allowed",
+        attempted_at: attemptedAt,
+      })),
+    );
     if (error) throw error;
   } catch (e) {
-    // Warned once: the `resolvedLedger === "none"` early return above skips
-    // this path on every later call in the same isolate.
-    console.warn("[signup-state] could not write login_attempts counter — throttle is OPEN:", e);
+    // The counter cannot be incremented, so nothing downstream can be measured.
+    // Recording that makes `checkThrottle` refuse rather than wave callers
+    // through on a count it knows is meaningless.
+    console.error("[signup-state] could not write login_attempts counter:", e);
     resolvedLedger = "none";
   }
 }
