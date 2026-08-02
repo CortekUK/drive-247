@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import {
@@ -96,6 +96,8 @@ export function ProvisioningScreen() {
    */
   useEffect(() => lockBodyScroll(), []);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const completedSet = new Set(completed);
   const activeIndex = PROVISION_MILESTONES.findIndex((m) => !completedSet.has(m));
   const total = PROVISION_MILESTONES.length;
@@ -147,9 +149,18 @@ export function ProvisioningScreen() {
     >
       <DialogPrimitive.Portal>
         <DialogPrimitive.Content
+          ref={containerRef}
           // This screen has no description element; without the override Radix
           // points aria-describedby at an id that is never rendered.
           aria-describedby={undefined}
+          // Focus the takeover itself, not its first tabbable child. On the
+          // running state there IS no child to focus, and on the terminal
+          // states the first one is the small "Close" icon — landing there
+          // announces "Close button" instead of the dialog and its heading.
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            containerRef.current?.focus();
+          }}
           onEscapeKeyDown={(e) => {
             // While work is in flight there is deliberately no way out at all.
             if (running) e.preventDefault();
