@@ -181,7 +181,17 @@ async function findAuthUser(_admin: any, email: string): Promise<any | null> {
 type Eligibility =
   | { kind: "eligible"; user: any }
   | { kind: "refer_portal"; user: any; portalUrl: string | null }
-  | { kind: "refuse" };
+  /**
+   * `reason` never reaches the caller — the HTTP response is identical for all
+   * of these. It only decides which email (if any) is dispatched:
+   *   "ineligible"  — a real account we may not reset here. Gets a notice, so a
+   *                   legitimate owner is not left staring at a screen that
+   *                   promised a code, and so a real attempt is visible to them.
+   *   "probe_error" — we could not classify. Sends NOTHING: telling someone
+   *                   "your account cannot be reset here" on the strength of a
+   *                   transient database blip is worse than staying quiet.
+   */
+  | { kind: "refuse"; reason: "ineligible" | "probe_error" };
 
 /**
  * WHO MAY BE RESET FROM A PUBLIC MARKETING-SITE ENDPOINT.
@@ -212,10 +222,10 @@ async function classify(admin: any, user: any): Promise<Eligibility> {
   // transient DB blip into a staff-account reset.
   if (appErr) {
     console.error(`${LOG} app_users probe failed:`, appErr.message);
-    return { kind: "refuse" };
+    return { kind: "refuse", reason: "probe_error" };
   }
   if ((appUsers ?? []).some((r: any) => r.is_super_admin || r.tenant_id === null)) {
-    return { kind: "refuse" };
+    return { kind: "refuse", reason: "ineligible" };
   }
 
   const { data: customerUsers, error: custErr } = await admin
@@ -225,12 +235,12 @@ async function classify(admin: any, user: any): Promise<Eligibility> {
     .limit(1);
   if (custErr) {
     console.error(`${LOG} customer_users probe failed:`, custErr.message);
-    return { kind: "refuse" };
+    return { kind: "refuse", reason: "probe_error" };
   }
-  if ((customerUsers ?? []).length > 0) return { kind: "refuse" };
+  if ((customerUsers ?? []).length > 0) return { kind: "refuse", reason: "ineligible" };
 
   const meta = readSignupMeta(user);
-  if (!meta) return { kind: "refuse" };
+  if (!meta) return { kind: "refuse", reason: "ineligible" };
 
   // Already provisioned, or carries a staff row: they have a portal. Point them
   // at it rather than minting a credential for a dialog they are done with.
@@ -278,6 +288,36 @@ function referEmailHtml(portalUrl: string | null): string {
   <p style="font-size:13px;line-height:1.6;color:#64748b;margin-top:24px">
     If this wasn't you, no action is needed — nothing has changed. If you cannot get
     into your account, reply to this email and we'll help.
+  </p>
+</div>`;
+}
+
+/**
+ * Sent when the address belongs to a REAL account this endpoint may not reset —
+ * tenant staff, a super admin, or a booking-site renter.
+ *
+ * Without it those users get total silence: the panel says a code is on its way
+ * "if this address can be reset from here", no mail ever arrives, and they have
+ * no idea whether the system is broken or they are simply not eligible. That is
+ * the single most likely support ticket this feature can generate.
+ *
+ * It leaks nothing. An attacker probing an address never sees the inbox, so the
+ * mail only ever reaches the legitimate owner — for whom it doubles as a
+ * tripwire that someone tried.
+ */
+function refusedEmailHtml(): string {
+  return `
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#0f172a">
+  <h1 style="font-size:20px;font-weight:600;margin:0 0 8px">About your Drive247 account</h1>
+  <p style="font-size:14px;line-height:1.6;color:#475569">
+    Someone asked to reset the password for this address from the signup window on
+    drive-247.com. This address already belongs to an existing Drive247 account,
+    and those passwords are not reset from the public signup window.
+  </p>
+  <p style="font-size:14px;line-height:1.6;color:#475569">
+    If that was you, reply to this email and we'll get you back in. If it wasn't,
+    you can ignore this — <strong>nothing has changed</strong> and your password
+    still works.
   </p>
 </div>`;
 }
@@ -386,7 +426,7 @@ Deno.serve(async (req) => {
 
     try {
       const user = await findAuthUser(admin, email);
-      let verdict: Eligibility = { kind: "refuse" };
+      let verdict: Eligibility = { kind: "refuse", reason: "probe_error" };
       if (user) verdict = await classify(admin, user);
 
       if (verdict.kind === "eligible") {
@@ -441,8 +481,27 @@ Deno.serve(async (req) => {
           });
           dispatchEmail(email, "About your Drive247 account", referEmailHtml(verdict.portalUrl));
         }
+      } else if (user && verdict.reason === "ineligible") {
+        // A REAL account we are not allowed to reset from here — tenant staff, a
+        // super admin, or a renter. Cooldown-gated like the others so it cannot
+        // be turned into a mail cannon aimed at a known operator.
+        //
+        // `user` is checked as well as the reason because a non-existent address
+        // must stay completely silent: there is no inbox to reassure, and
+        // sending to it would only burn Resend quota on typos and probes.
+        const prior = readResetMeta(user);
+        const last = prior.lastRequestAt ? Date.parse(prior.lastRequestAt) : 0;
+        const cooling = Number.isFinite(last) && Date.now() - last < REQUEST_COOLDOWN_MS;
+        if (!cooling) {
+          await writeResetMeta(admin, user, {
+            ...prior,
+            lastRequestAt: new Date().toISOString(),
+          });
+          dispatchEmail(email, "About your Drive247 account", refusedEmailHtml());
+        }
       }
-      // verdict.kind === "refuse" and "no such user" both send nothing at all.
+      // Everything else — no such user, or a probe we could not complete —
+      // sends nothing at all.
 
       // Audit row, NOT a gate row — `outcome` is deliberately outside the
       // ("allowed","blocked") set `checkThrottle` counts, so it cannot double
