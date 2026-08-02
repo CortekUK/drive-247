@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Building2,
   CircleCheck,
@@ -30,7 +30,7 @@ import {
   type SignupErrorCode,
   type SignupStep,
 } from "./onboarding-types";
-import { AccountStep } from "./steps/account-step";
+import { AccountStep, type ResetShellState } from "./steps/account-step";
 import { BusinessStep } from "./steps/business-step";
 import { PaymentStep } from "./steps/payment-step";
 
@@ -102,6 +102,30 @@ export function OnboardingDialog() {
 
   const keepGoingRef = useRef<HTMLButtonElement>(null);
 
+  /**
+   * The account step's password-reset detour, mirrored up here because the two
+   * things it affects are both owned by the shell.
+   *
+   * `open`: the footer primary submits a form by id, and the reset panel is not
+   * that form — an enabled indigo "Continue" sitting next to the panel's own
+   * primary did nothing at all when pressed.
+   *
+   * `busy`: `dismissible` and the footer Cancel read the PROVIDER's busy flag,
+   * which the detour never sets. Closing the dialog over a password write does
+   * not abort it, so the password changed server-side while the user was told
+   * nothing — and their next sign-in used the old one.
+   *
+   * Reset to false by the step's own unmount effect, so this cannot go stale.
+   */
+  const [accountReset, setAccountReset] = useState<ResetShellState>({
+    open: false,
+    busy: false,
+  });
+
+  // Memoised so the step receives a stable identity — the same reason
+  // `setAccountReset` is passed raw rather than wrapped.
+  const clearStepError = useCallback(() => setError(null), [setError]);
+
   // The confirmation panel replaces the visible body, so focus has to follow it
   // — otherwise the keyboard user is left on a button that is now off-screen.
   useEffect(() => {
@@ -121,7 +145,12 @@ export function OnboardingDialog() {
    * account exists, closing goes through the confirmation panel; while a
    * payment or a provisioning request is running it is refused outright.
    */
-  const dismissible = step === "account" && !state.busy && !closeConfirmOpen && !resolving;
+  const dismissible =
+    step === "account" &&
+    !state.busy &&
+    !accountReset.busy &&
+    !closeConfirmOpen &&
+    !resolving;
 
   const bannerError =
     state.error && !INLINE_ONLY_CODES.has(state.error.code)
@@ -180,6 +209,10 @@ export function OnboardingDialog() {
   // would be an invitation to re-run the thing that just failed.
   const primaryHidden =
     (dialogStep === "account" && state.error?.code === "EMAIL_IS_STAFF") ||
+    // The reset panel is not `signup-account-form`, so this button had nothing
+    // to submit while it was open — an enabled primary that did nothing, beside
+    // the panel's own.
+    (dialogStep === "account" && accountReset.open) ||
     (dialogStep === "payment" && state.error?.code === "CONFIG_MISSING");
 
   const primaryDisabled =
@@ -332,6 +365,8 @@ export function OnboardingDialog() {
                       onSubmit={(values) => void submitAccount(values)}
                       onSignIn={(values) => void signInExisting(values)}
                       onUseDifferentEmail={useDifferentEmail}
+                      onResetStateChange={setAccountReset}
+                      onClearError={clearStepError}
                     />
                   ) : null}
 
@@ -393,7 +428,7 @@ export function OnboardingDialog() {
                     type="button"
                     variant="ghost"
                     onClick={requestClose}
-                    disabled={state.busy || resolving}
+                    disabled={state.busy || resolving || accountReset.busy}
                   >
                     {dialogStep === "account" ? "Cancel" : "Finish later"}
                   </Button>

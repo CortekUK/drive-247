@@ -17,20 +17,18 @@
  *   them into one "email taken" message is how you tell a paying customer to
  *   go away.
  *
- * There is deliberately no "confirm password" field — see the show/hide toggle
- * below.
+ * There is deliberately no "confirm password" field on THIS form. Confirm fields
+ * exist to compensate for masked input; the show/hide toggle removes the masking
+ * instead, so the user can simply read what they typed, which deletes the
+ * mismatch failure mode rather than adding a second field to catch it. The reset
+ * panel next door does carry one, and that is not an inconsistency: a reset is a
+ * blind change to a credential the user cannot currently sign in with, so a typo
+ * there locks them out of a portal they are already paying for, with no wrong
+ * password on file to fall back to.
  */
 
 import * as React from "react";
-import {
-  Check,
-  Circle,
-  Eye,
-  EyeOff,
-  Loader2,
-  UserRound,
-  Zap,
-} from "lucide-react";
+import { Check, Circle, Loader2, UserRound, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +36,10 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type { AccountStepProps } from "@/components/onboarding/onboarding-types";
 import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
+import {
+  PasswordToggle,
+  STRENGTH_BAR_CLASS,
+} from "@/components/onboarding/password-toggle";
 import {
   ACCOUNT_FIELD_ORDER,
   FIELD_MAX,
@@ -53,6 +55,7 @@ import {
 import {
   PasswordResetPanel,
   PasswordResetSuccessNote,
+  type PasswordResetView,
 } from "@/components/onboarding/steps/password-reset-panel";
 
 /**
@@ -67,6 +70,39 @@ const SERVER_FIELD_ERRORS: Partial<Record<string, AccountField>> = {
   WEAK_PASSWORD: "password",
 };
 
+/** What the shell needs to know about the password-reset detour. */
+export interface ResetShellState {
+  /** True while the reset panel has replaced the sign-in form. */
+  open: boolean;
+  /** True while the panel has a request in flight. */
+  busy: boolean;
+}
+
+/**
+ * `AccountStepProps` is the cross-builder contract in onboarding-types.ts and
+ * stays byte-identical — for the same reason `OnboardingShellValue` was never
+ * folded into `OnboardingContextValue`. The reset detour needs two channels back
+ * to the shell that no other step has, so they are added here as OPTIONAL
+ * extras: this component still satisfies the shared contract, and a caller that
+ * knows nothing about the detour keeps working (it simply gets the old, broken
+ * footer behaviour, which is why the shell does pass them).
+ */
+export interface AccountStepShellProps extends AccountStepProps {
+  /**
+   * Lets the shell hide its footer primary (which would otherwise target a form
+   * id that is not in the DOM) and refuse to close the dialog over a password
+   * write it cannot see.
+   */
+  onResetStateChange?(next: ResetShellState): void;
+  /**
+   * Clears the PROVIDER's step error. The detour has its own error surface, and
+   * a stale "That password doesn't match" from the sign-in attempt that sent the
+   * user here would otherwise still be on screen next to the green "Password
+   * updated" note when they come back.
+   */
+  onClearError?(): void;
+}
+
 export function AccountStep({
   plan,
   initialValues,
@@ -76,7 +112,9 @@ export function AccountStep({
   onSubmit,
   onSignIn,
   onUseDifferentEmail,
-}: AccountStepProps) {
+  onResetStateChange,
+  onClearError,
+}: AccountStepShellProps) {
   const [fullName, setFullName] = React.useState(initialValues.fullName);
   const [email, setEmail] = React.useState(initialValues.email);
   const [password, setPassword] = React.useState("");
@@ -95,7 +133,66 @@ export function AccountStep({
   // signup step, and adding it to the provider's reducer would put a state in
   // `ALLOWED_TRANSITIONS` that the purchase funnel has no meaning for.
   const [resetOpen, setResetOpen] = React.useState(false);
-  const [resetDone, setResetDone] = React.useState(false);
+  const [resetBusy, setResetBusy] = React.useState(false);
+  /**
+   * The panel's view and resend deadline live HERE, one level above the panel,
+   * because the panel unmounts on every "Back to sign in". Held inside it, both
+   * reset on the way back: the user could re-request immediately, the server's
+   * own 60 s cooldown would silently send NOTHING while still answering `ok`,
+   * and the panel would report that a code was on its way. A deadline rather
+   * than a countdown so it keeps running while the panel is closed.
+   */
+  const [resetView, setResetView] = React.useState<PasswordResetView>("request");
+  const [resetCooldownUntil, setResetCooldownUntil] = React.useState(0);
+  /**
+   * The address a completed reset applies to — not a bare boolean. "Use a
+   * different email" swaps the account under this panel, and a boolean left the
+   * green "Password updated" note sitting under an address that was never
+   * touched.
+   */
+  const [resetDoneFor, setResetDoneFor] = React.useState<string | null>(null);
+
+  /**
+   * The shell owns the footer button and the close affordances, so it has to be
+   * told about the detour: it hides its primary (which targets a form id this
+   * panel does not render) and refuses to close the dialog mid-write.
+   *
+   * Reported from whether the panel is actually ON SCREEN, not from `resetOpen`
+   * alone. The provider can clear `signInPrompt` from under us, and a stale
+   * "open" would then hide the footer primary above a create-account form that
+   * has nothing else to submit it.
+   */
+  const resetPanelOpen = resetOpen && Boolean(signInPrompt);
+  React.useEffect(() => {
+    onResetStateChange?.({ open: resetPanelOpen, busy: resetBusy });
+  }, [resetPanelOpen, resetBusy, onResetStateChange]);
+  // Unconditional on unmount: whatever tears this step down — a step change, a
+  // close — the shell must not be left believing a reset is still running.
+  React.useEffect(
+    () => () => onResetStateChange?.({ open: false, busy: false }),
+    [onResetStateChange],
+  );
+
+  /**
+   * Enter and leave the detour. Both ends clear the provider's error: on the way
+   * IN because a SIGN_IN_FAILED banner is about a form that is no longer on
+   * screen, and on the way OUT because that same banner would otherwise be
+   * rendered next to the success note, telling the user in one breath that their
+   * password was updated and that it does not work.
+   */
+  const openReset = () => {
+    onClearError?.();
+    setSignInError(null);
+    setResetDoneFor(null);
+    setResetOpen(true);
+  };
+
+  const leaveReset = () => {
+    setResetOpen(false);
+    setResetBusy(false);
+    setSignInError(null);
+    onClearError?.();
+  };
 
   const honeypotRef = React.useRef<HTMLInputElement>(null);
   const fullNameRef = React.useRef<HTMLInputElement>(null);
@@ -275,21 +372,29 @@ export function AccountStep({
   // Branch: sign in to continue (§5 rows 3, 4, 5 and 57).
   // -------------------------------------------------------------------------
   if (signInPrompt) {
+    const promptEmail = normalizeEmail(signInPrompt.email);
+
     // The reset detour replaces the sign-in form entirely rather than rendering
     // beneath it: leaving a live password field behind a reset panel invites the
     // browser's autofill to repopulate the credential the user is here to change.
-    if (resetOpen) {
+    if (resetPanelOpen) {
       return (
         <PasswordResetPanel
-          email={normalizeEmail(signInPrompt.email)}
-          onCancel={() => setResetOpen(false)}
+          email={promptEmail}
+          view={resetView}
+          onViewChange={setResetView}
+          cooldownUntil={resetCooldownUntil}
+          onCooldownUntilChange={setResetCooldownUntil}
+          onBusyChange={setResetBusy}
+          onCancel={leaveReset}
           onDone={() => {
-            setResetOpen(false);
-            setResetDone(true);
+            leaveReset();
+            // Keyed to the address it applies to, so switching accounts cannot
+            // inherit someone else's success note.
+            setResetDoneFor(promptEmail);
             // Clear any password typed before the reset — it is now wrong, and
             // submitting it would spend a sign-in attempt to be told so.
             setSignInPassword("");
-            setSignInError(null);
           }}
         />
       );
@@ -317,7 +422,7 @@ export function AccountStep({
           {body}
         </p>
 
-        {resetDone && <PasswordResetSuccessNote />}
+        {resetDoneFor === promptEmail && <PasswordResetSuccessNote />}
 
         <div className="mt-5 space-y-4">
           <div>
@@ -402,7 +507,7 @@ export function AccountStep({
             type="button"
             variant="link"
             disabled={busy}
-            onClick={() => setResetOpen(true)}
+            onClick={openReset}
             className="text-muted-foreground"
           >
             Forgot password?
@@ -666,51 +771,11 @@ export function AccountStep({
 // ---------------------------------------------------------------------------
 
 /**
- * There is no "confirm password" field anywhere in this flow, and that is a
- * decision rather than an omission. Confirm fields exist to compensate for
- * masked input; a show/hide toggle removes the masking instead, so the user can
- * simply read what they typed. That deletes the entire mismatch failure mode
- * rather than adding a second field to catch it.
- */
-function PasswordToggle({
-  shown,
-  onToggle,
-}: {
-  shown: boolean;
-  onToggle(): void;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-sm"
-      onClick={onToggle}
-      aria-pressed={shown}
-      aria-label={shown ? "Hide password" : "Show password"}
-      className="absolute right-1 top-1 text-muted-foreground hover:text-foreground"
-    >
-      {shown ? (
-        <EyeOff className="h-4 w-4" />
-      ) : (
-        <Eye className="h-4 w-4" />
-      )}
-    </Button>
-  );
-}
-
-const STRENGTH_BAR_CLASS: Record<number, string> = {
-  0: "bg-red-500",
-  1: "bg-red-500",
-  2: "bg-amber-500",
-  3: "bg-indigo-500",
-  4: "bg-indigo-600 dark:bg-indigo-400",
-};
-
-/**
  * Four different situations put the user on the sign-in panel, and the honest
- * copy for each is different. Notably NONE of them offers a password-reset
- * link: `custom-auth-email` skips recovery mail, so a "reset it" link would
- * promise an email this platform does not send.
+ * copy for each is different. All four offer the same "Forgot password?" link:
+ * recovery is handled out-of-band by the `signup-password-reset` edge function,
+ * which mints and emails its own 6-digit code, so the link promises nothing that
+ * depends on `custom-auth-email` (which does skip GoTrue's recovery mail).
  */
 function signInPanelCopy(reason: string): { title: string; body: string } {
   switch (reason) {
