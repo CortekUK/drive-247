@@ -68,10 +68,17 @@ const REQUEST_COOLDOWN_MS = 60_000;
  * different amounts of work — an eligible address does a GoTrue lookup, two
  * profile probes, a delete, an insert and (in the background) a Resend call,
  * while an unknown address does one lookup — and that difference is a timing
- * oracle for "does this address have an account". Chosen above the p99 of the
- * slowest branch, with the email dispatched AFTER the response is sized.
+ * oracle for "does this address have an account".
+ *
+ * MUST sit above the p99 of the SLOWEST branch or the pad never engages and is
+ * pure decoration. Measured against the deployed function 2026-08-02: real
+ * requests landed at 2.0-2.9s wall clock (including RTT from the client), which
+ * the original 1200ms never came close to clamping. 2500ms is the smallest
+ * value that actually bounds the observed spread. It is deliberately a floor
+ * and not a fixed duration, so a genuinely slow upstream still returns rather
+ * than being held artificially — that residual tail is the known limit here.
  */
-const RESPONSE_FLOOR_MS = 1200;
+const RESPONSE_FLOOR_MS = 2500;
 
 /** app_metadata key holding reset attempt state. Service-role writable only. */
 const RESET_META_KEY = "d247_pwreset";
@@ -148,17 +155,27 @@ function generateCode(): string {
  * "bob@x.com" also returns "rob@x.com.attacker.net". Every caller in this repo
  * re-checks in JS; so do we.
  */
-async function findAuthUser(admin: any, email: string): Promise<any | null> {
-  const { data, error } = await admin.auth.admin.listUsers({
-    page: 1,
-    perPage: 200,
-    filter: email,
+async function findAuthUser(_admin: any, email: string): Promise<any | null> {
+  // A RAW fetch, not `auth.admin.listUsers()` — copied deliberately from
+  // signup-begin's `findAuthUserByEmail`. The SDK method does not forward a
+  // `filter`, so it pages through EVERY user on the project (tens of thousands
+  // of booking customers) and then matches client-side. `?filter=` is
+  // server-side and returns in one round trip.
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const url = `${supabaseUrl}/auth/v1/admin/users?filter=${encodeURIComponent(email)}&per_page=20`;
+  const res = await fetch(url, {
+    headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
   });
-  if (error) throw new Error(`listUsers failed: ${error.message}`);
-  const match = (data?.users ?? []).find(
-    (u: any) => (u.email ?? "").toLowerCase() === email,
-  );
-  return match ?? null;
+  if (!res.ok) {
+    // Throw rather than return null: a failed probe that reads as "no such
+    // account" would let an outage look like a wrong code, and on the request
+    // branch would silently stop sending mail to real users.
+    throw new Error(`GoTrue admin lookup failed (${res.status})`);
+  }
+  const body = await res.json().catch(() => null);
+  const users: any[] = Array.isArray(body?.users) ? body.users : [];
+  return users.find((u) => String(u?.email ?? "").toLowerCase() === email) ?? null;
 }
 
 type Eligibility =
