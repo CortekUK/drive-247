@@ -549,17 +549,23 @@ export function SignupPlanCard({
               </p>
             </div>
 
-            <div className="min-w-0 space-y-1.5">
+            {/*
+              Full width, and tall enough for a maximum-length tagline at the
+              narrowest column this card is ever laid out in. A `rows={2}` box
+              grew its own internal scrollbar as soon as the copy got long, which
+              on this page reads as yet another scrollbar.
+            */}
+            <div className="min-w-0 space-y-1.5 sm:col-span-2">
               <Label htmlFor={`tagline-${plan.id}`}>Tagline</Label>
               <Textarea
                 id={`tagline-${plan.id}`}
                 value={draft.tagline}
                 maxLength={TAGLINE_MAX}
-                rows={2}
+                rows={3}
                 disabled={busy}
                 aria-invalid={Boolean(errors.tagline)}
                 aria-describedby={`tagline-help-${plan.id}`}
-                className="min-h-[64px] min-w-0 resize-none"
+                className="min-h-[84px] min-w-0 resize-y"
                 onChange={(event) => onDraftChange({ tagline: event.target.value })}
               />
               <p id={`tagline-help-${plan.id}`} className="text-xs">

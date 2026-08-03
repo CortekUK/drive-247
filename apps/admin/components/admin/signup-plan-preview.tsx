@@ -24,25 +24,30 @@ const PIN_GAP = 24;
  * ResizeObserver cannot oscillate.
  */
 export function usePreviewPinning<T extends HTMLElement>() {
-  const railRef = useRef<T | null>(null);
+  /*
+    A callback ref, not `useRef`. The rail only mounts once the plans have
+    loaded, which is several renders after this hook first runs — an effect keyed
+    on `[]` would read a null ref, bail out, and never measure anything again.
+    Holding the node in state re-runs the effect at the moment it appears.
+  */
+  const [rail, setRail] = useState<T | null>(null);
   const [pinned, setPinned] = useState(true);
 
   useEffect(() => {
-    const el = railRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
+    if (!rail || typeof ResizeObserver === 'undefined') return;
 
     const measure = () => {
       // The layout's <main> is the only scrollport on the page; window height is
       // a safe fallback if this component is ever mounted outside it.
-      const port = el.closest('main');
+      const port = rail.closest('main');
       const available = (port?.clientHeight ?? window.innerHeight) - PIN_GAP * 2;
-      setPinned(el.offsetHeight <= available);
+      setPinned(rail.offsetHeight <= available);
     };
 
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    const port = el.closest('main');
+    observer.observe(rail);
+    const port = rail.closest('main');
     if (port) observer.observe(port);
     window.addEventListener('resize', measure);
 
@@ -50,9 +55,9 @@ export function usePreviewPinning<T extends HTMLElement>() {
       observer.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, []);
+  }, [rail]);
 
-  return { railRef, pinned };
+  return { railRef: setRail, pinned };
 }
 
 /* -------------------------------------------------------------------------- */
