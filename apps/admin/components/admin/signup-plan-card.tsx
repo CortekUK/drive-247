@@ -343,6 +343,13 @@ interface SignupPlanCardProps {
   onRequestPriceChange: () => void;
   onToggleVisibility: (next: boolean) => void;
   onHighlight: () => void;
+  /**
+   * The rendered public-card preview for THIS plan, placed in normal flow at
+   * the end of the card. Passed in rather than rendered here so the page keeps
+   * ownership of how a draft becomes a preview, and so this component stays a
+   * pure form.
+   */
+  preview?: React.ReactNode;
 }
 
 export function SignupPlanCard({
@@ -359,6 +366,7 @@ export function SignupPlanCard({
   onRequestPriceChange,
   onToggleVisibility,
   onHighlight,
+  preview,
 }: SignupPlanCardProps) {
   const errors = validateContent(draft);
   const invalid = hasContentErrors(errors);
@@ -737,6 +745,28 @@ export function SignupPlanCard({
         </section>
 
         <Separator />
+
+        {preview && (
+          <>
+            <Separator />
+            <section aria-labelledby={`preview-heading-${plan.id}`}>
+              <div className="mb-3 flex items-baseline justify-between gap-2">
+                <h3
+                  id={`preview-heading-${plan.id}`}
+                  className="text-base font-semibold"
+                >
+                  Live preview
+                </h3>
+                <span className="text-xs text-muted-foreground">
+                  Reflects what you have typed, including unsaved edits.
+                </span>
+              </div>
+              {/* Capped so the preview reads as a card, not a full-width banner
+                  — the public grid renders it in a ~360px column. */}
+              <div className="max-w-sm">{preview}</div>
+            </section>
+          </>
+        )}
 
         {/* -------------------------------- Save ------------------------------ */}
         <div className="flex flex-wrap items-center gap-3">

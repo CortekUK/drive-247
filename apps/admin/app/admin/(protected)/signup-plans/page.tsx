@@ -558,24 +558,25 @@ export default function SignupPlansPage() {
         </div>
       )}
 
-      {/* Loading */}
+      {/*
+        Loading. Mirrors the real single-column layout, including the inline
+        preview block, so nothing jumps when the data lands.
+      */}
       {loading && (
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="space-y-4">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <Card key={index}>
-                <CardHeader className="pb-4">
-                  <Skeleton className="h-6 w-40" />
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Skeleton className="h-10 w-56" />
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-16 w-full" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <Skeleton className="hidden h-[380px] w-full rounded-2xl xl:block" />
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Card key={index}>
+              <CardHeader className="pb-4">
+                <Skeleton className="h-6 w-40" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Skeleton className="h-10 w-56" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-[300px] w-full max-w-sm rounded-2xl" />
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
@@ -595,41 +596,29 @@ export default function SignupPlansPage() {
       )}
 
       {/*
-        --------------------------- Plans + preview ---------------------------
-        The preview used to live in the right-hand column of a grid INSIDE each
-        plan card, which broke twice over:
+        --------------------------- Plans -----------------------------------
+        SINGLE COLUMN, PREVIEW INLINE INSIDE EACH CARD.
 
-        1. Dead space. That grid row is auto-sized, so it took the height of the
-           editor column (measured 950–1150px). The preview is only ~450–560px,
-           so every card carried a 500–800px empty tail in its 320px column.
+        This was a two-column grid with a sticky preview rail, and it failed
+        three separate ways:
+
+        1. Dead space. The 320px preview column shared an auto-sized grid row
+           with a ~1000px editor, so every card carried a 500-800px empty tail.
 
         2. It could never stay pinned. A sticky box is clamped to its containing
-           block, which for a grid item is its GRID AREA — here, one card. So the
-           preview unpinned and scrolled away the moment its own card left the
-           viewport, no matter which sticky recipe was used.
+           block — for a grid item that is its GRID AREA, i.e. one card — so the
+           preview left with its own card no matter which sticky recipe was used.
 
-        Both go away by hoisting the preview to a single page-level rail: the
-        grid is now the page, the containing block is the full plans column
-        (~3700px), and the cards are plain single-column forms with nothing to
-        leave empty.
+        3. The `max-h` + `overflow-y-auto` guard added to fix (2) created a
+           SECOND scrollbar nested inside a page that already scrolls, so the
+           wheel captured in the rail and the page appeared stuck.
+
+        The app already had the right answer: `settings/page.tsx` renders its
+        preview in normal flow directly under the controls it previews. Doing the
+        same here removes all three failure modes at once and makes this page
+        behave like the rest of the admin app.
       */}
       {!loading && plans.length > 0 && activePlan && (
-        {/*
-          SINGLE COLUMN, PREVIEW INLINE.
-
-          This was a two-column grid with a sticky preview rail, and it went
-          wrong three separate ways: a short 320px column beside a ~1000px
-          editor left a large empty tail; a sticky box clamped to its grid area
-          could not stay pinned; and the `overflow-y-auto` guard added to fix
-          THAT produced a second scrollbar nested inside a page that already
-          scrolls.
-
-          The app already had the right answer. `settings/page.tsx` renders its
-          preview in normal flow directly under the controls it previews — no
-          second column, no sticky, nothing to leave empty. Doing the same here
-          removes every one of those failure modes at once, and makes this page
-          behave like the rest of the admin app, which is what was asked for.
-        */}
         <div
           role="radiogroup"
           aria-label="Most popular plan"
