@@ -662,64 +662,70 @@ export default function SignupPlansPage() {
             `p-6`, and the scrollport is the layout's `<main class="overflow-y-auto">`,
             whose top edge already sits below the 3.5rem header.
 
-            The `max-h` guard only binds on short viewports (a rail with eight
-            bullets is ~640px); without it the bottom of the preview would be
-            unreachable on a 768px laptop once the rail is pinned.
+            There is deliberately NO `max-h` + `overflow-y-auto` on the rail.
+
+            It was added as a guard for short laptops, but it created a second
+            scrollbar inside an already-scrolling page — the wheel would capture
+            in the rail and stop moving the page, which reads as the UI being
+            stuck. It also clipped the preview's highlight ring, which is why the
+            card below draws its highlighted state as a border.
+
+            The guard was solving a problem that barely exists: the rail is
+            ~450-640px even with eight bullets, so on any viewport taller than
+            about 740px it never bound at all. On a genuinely short screen the
+            bottom of the preview is now reached by scrolling the PAGE, which is
+            the behaviour every other admin page has.
           */}
           {activeDraft && (
             <aside
               aria-labelledby="preview-heading"
               className="xl:sticky xl:top-6 xl:self-start"
             >
-              <div className="xl:max-h-[calc(100vh-6.5rem)] xl:overflow-y-auto">
-                <div className="mb-3 flex items-baseline justify-between gap-2">
-                  <h2 id="preview-heading" className="text-sm font-semibold">
-                    Live preview
-                  </h2>
-                  {!activePlan.is_visible && (
-                    <span className="text-xs text-muted-foreground">
-                      Hidden from customers
-                    </span>
-                  )}
-                </div>
-
-                {plans.length > 1 && (
-                  <div className="mb-3 flex flex-wrap gap-1.5">
-                    {plans.map((plan) => (
-                      <button
-                        key={plan.id}
-                        type="button"
-                        aria-pressed={plan.id === activePlan.id}
-                        onClick={() => setActivePlanId(plan.id)}
-                        className={cn(
-                          'rounded-md border px-2 py-1 text-xs transition-colors',
-                          // ring-inset: this button lives inside the rail's
-                          // overflow box, which would clip an outset focus ring.
-                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                          plan.id === activePlan.id
-                            ? 'border-primary/40 bg-primary/10 text-foreground'
-                            : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
-                        )}
-                      >
-                        {plan.name || plan.plan_key}
-                      </button>
-                    ))}
-                  </div>
+              <div className="mb-3 flex items-baseline justify-between gap-2">
+                <h2 id="preview-heading" className="text-sm font-semibold">
+                  Live preview
+                </h2>
+                {!activePlan.is_visible && (
+                  <span className="text-xs text-muted-foreground">
+                    Hidden from customers
+                  </span>
                 )}
-
-                <SignupPlanPreview
-                  draft={activeDraft}
-                  currency={activePlan.currency}
-                  interval={activePlan.interval}
-                  highlighted={activePlan.is_highlighted}
-                  visible={activePlan.is_visible}
-                  priceCents={activePrice?.ok ? activePrice.cents : null}
-                />
-
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Reflects what you have typed, including unsaved edits.
-                </p>
               </div>
+
+              {plans.length > 1 && (
+                <div className="mb-3 flex flex-wrap gap-1.5">
+                  {plans.map((plan) => (
+                    <button
+                      key={plan.id}
+                      type="button"
+                      aria-pressed={plan.id === activePlan.id}
+                      onClick={() => setActivePlanId(plan.id)}
+                      className={cn(
+                        'rounded-md border px-2 py-1 text-xs transition-colors',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        plan.id === activePlan.id
+                          ? 'border-primary/40 bg-primary/10 text-foreground'
+                          : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
+                      )}
+                    >
+                      {plan.name || plan.plan_key}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <SignupPlanPreview
+                draft={activeDraft}
+                currency={activePlan.currency}
+                interval={activePlan.interval}
+                highlighted={activePlan.is_highlighted}
+                visible={activePlan.is_visible}
+                priceCents={activePrice?.ok ? activePrice.cents : null}
+              />
+
+              <p className="mt-2 text-xs text-muted-foreground">
+                Reflects what you have typed, including unsaved edits.
+              </p>
             </aside>
           )}
         </div>

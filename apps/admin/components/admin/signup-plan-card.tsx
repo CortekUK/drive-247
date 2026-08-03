@@ -232,10 +232,14 @@ export function isContentDirty(plan: SignupPlan, draft: PlanDraft): boolean {
  * inputs it mirrors, so the whole subtree is hidden from assistive tech to
  * avoid reading the same plan twice.
  *
- * The highlighted state is drawn with a BORDER, never a `ring`. This component
- * renders inside the preview rail, which is a `max-h` + `overflow-y-auto` box on
- * short viewports — and `overflow` clips anything painted outside the border box,
- * so a ring would be sliced off along the rail's edges.
+ * The highlighted state is drawn with a BORDER, not a `ring`.
+ *
+ * That started as a workaround: the rail used to be a `max-h` +
+ * `overflow-y-auto` box, and `overflow` clips anything painted outside the
+ * border box, so a ring was sliced along the rail's edges. That box is gone —
+ * it produced a second scrollbar inside an already-scrolling page — so a ring
+ * would render correctly now. The border stays because it reads identically at
+ * this size and needs no clipping assumption to hold.
  */
 export function SignupPlanPreview({
   draft,
