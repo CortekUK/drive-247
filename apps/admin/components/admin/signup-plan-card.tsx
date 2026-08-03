@@ -316,12 +316,11 @@ export function SignupPlanCard({
             <Badge variant="outline" className="font-mono lowercase">
               {plan.plan_key}
             </Badge>
-            {plan.is_highlighted && (
-              <Badge variant="default" className="gap-1">
-                <Sparkles className="h-3 w-3" />
-                Most popular
-              </Badge>
-            )}
+            {/*
+              No "Most popular" badge here on purpose — the toggle directly below
+              already carries that state, and showing both put the same words
+              twice in the same corner of the card.
+            */}
             {!plan.is_visible && <Badge variant="secondary">Hidden</Badge>}
           </div>
 
@@ -353,7 +352,7 @@ export function SignupPlanCard({
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                   'disabled:cursor-not-allowed disabled:opacity-50',
                   plan.is_highlighted
-                    ? 'border-primary/40 bg-primary/10 text-foreground'
+                    ? 'border-primary/50 bg-primary/15 font-medium text-foreground glow-purple-sm'
                     : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
                 )}
               >
