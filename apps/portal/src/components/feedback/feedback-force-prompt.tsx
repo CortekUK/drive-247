@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useFeedbackStore } from "@/stores/feedback-store";
 import { useFeedbackSettings } from "@/hooks/use-feedback-settings";
 import { useFeedbackPromptState } from "@/hooks/use-tenant-feedback";
+import { shouldForcePrompt } from "@/lib/feedback-throttle";
 
 interface FeedbackForcePromptProps {
   /**
@@ -21,6 +22,8 @@ interface FeedbackForcePromptProps {
  *
  * Deliberately NOT a gate: it opens a dismissible dialog over a fully usable
  * dashboard. Nothing here blocks rendering.
+ *
+ * The decision itself lives in `lib/feedback-throttle` and is unit-tested.
  */
 export function FeedbackForcePrompt({ suppressed = false }: FeedbackForcePromptProps) {
   const open = useFeedbackStore((s) => s.open);
@@ -34,19 +37,16 @@ export function FeedbackForcePrompt({ suppressed = false }: FeedbackForcePromptP
 
   useEffect(() => {
     if (firedRef.current) return;
-    if (suppressed) return;
-    // Never act on defaults — wait until both the settings and the user's own
-    // last-prompted stamp have actually loaded, or the first paint would prompt
-    // everyone every time.
-    if (!isResolved || !promptResolved) return;
-    if (!formEnabled || !forceLoginTriggeredAt) return;
 
-    const lastPrompted = promptState?.lastPromptedAt;
-    const dueForPrompt =
-      !lastPrompted ||
-      new Date(lastPrompted).getTime() < new Date(forceLoginTriggeredAt).getTime();
+    const due = shouldForcePrompt({
+      formEnabled,
+      isResolved: isResolved && promptResolved,
+      forceLoginTriggeredAt,
+      lastPromptedAt: promptState?.lastPromptedAt,
+      suppressed,
+    });
 
-    if (!dueForPrompt) return;
+    if (!due) return;
 
     firedRef.current = true;
     // The dialog stamps `feedback_last_prompted_at` on open, so dismissing
