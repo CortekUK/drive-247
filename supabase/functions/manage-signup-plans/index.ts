@@ -337,14 +337,45 @@ Deno.serve(async (req) => {
       }
 
       // ---------------------------------------------------------------------
-      // "Most popular" is single-select. A partial unique index
-      // (signup_plans_one_highlighted) enforces it in the DATABASE, so the
-      // clear MUST happen before the set or the second statement violates it.
+      // "Most popular" — at most one, and CLEARABLE.
+      //
+      // This used to hardcode `is_highlighted: true`, so the badge could be
+      // moved between plans but never removed: once any plan was marked, the
+      // pricing page was stuck with a "Most popular" badge forever. Zero
+      // highlighted plans is a legitimate state — the partial unique index
+      // (signup_plans_one_highlighted) constrains it to AT MOST one, not
+      // exactly one.
+      //
+      // `is_highlighted` is optional so an older client that omits it keeps its
+      // old set-only behaviour rather than silently toggling something off.
       // ---------------------------------------------------------------------
       case "set-highlighted": {
         const loaded = await loadForWrite(supabase, body.id, body.updated_at);
         if (loaded.err) return loaded.err;
+        const row: any = loaded.row;
 
+        const next =
+          typeof body.is_highlighted === "boolean"
+            ? body.is_highlighted
+            : true;
+
+        if (!next) {
+          const { error } = await supabase
+            .from("signup_plans")
+            .update({ is_highlighted: false, updated_by: auth.userId })
+            .eq("id", body.id);
+          if (error) throw new Error(`clear highlight failed: ${error.message}`);
+          return jsonResponse({ plans: await listPlans(supabase) });
+        }
+
+        if (row.is_highlighted) {
+          // Already the highlighted plan — nothing to do, and re-running the
+          // clear/set pair below would briefly leave zero highlighted rows.
+          return jsonResponse({ plans: await listPlans(supabase) });
+        }
+
+        // The clear MUST precede the set: the partial unique index rejects a
+        // second highlighted row, so setting first would violate it (23505).
         const { error: clearErr } = await supabase
           .from("signup_plans")
           .update({ is_highlighted: false, updated_by: auth.userId })

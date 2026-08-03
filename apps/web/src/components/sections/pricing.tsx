@@ -90,9 +90,21 @@ export function PricingSection({ plans = SIGNUP_PLANS }: PricingSectionProps) {
             // one height: each PlanCard is `h-full`, so it only fills the row if
             // the row stretches it. With `items-start` every card shrink-wrapped
             // its own content and the tiers ended up visibly different sizes.
-            className={`mt-12 grid gap-6 md:grid-cols-3 md:items-stretch ${
-              visible ? "fade-in-visible" : "fade-in-hidden"
-            }`}
+            /*
+              Columns follow the number of VISIBLE plans, and the grid narrows to
+              match. `md:grid-cols-3` was hardcoded, so hiding a plan in the admin
+              dashboard left the remaining cards clinging to the left with a
+              third of the row empty — the layout silently assumed three plans
+              forever. One plan centres at card width, two at two-thirds, three
+              at full width, so the section stays balanced whatever is published.
+            */
+            className={`mx-auto mt-12 grid gap-6 md:items-stretch ${
+              catalogue.length === 1
+                ? "max-w-sm md:grid-cols-1"
+                : catalogue.length === 2
+                  ? "max-w-3xl md:grid-cols-2"
+                  : "md:grid-cols-3"
+            } ${visible ? "fade-in-visible" : "fade-in-hidden"}`}
           >
             {catalogue.map((plan) => (
               <PlanCard key={plan.id} plan={plan} />
