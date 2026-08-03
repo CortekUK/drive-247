@@ -33,7 +33,7 @@ import {
  * re-serve this cached body, and a shorter fetch window would be invisible
  * because nothing would re-render.
  */
-export const PLANS_REVALIDATE_SECONDS = 60;
+export const PLANS_REVALIDATE_SECONDS = 10;
 
 /**
  * A hung Supabase must not hold `next build` open indefinitely. Generous enough

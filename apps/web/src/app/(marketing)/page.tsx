@@ -24,8 +24,18 @@ import { fetchSignupPlans } from "@/lib/plans-server";
  * imported constant ("Invalid segment configuration export detected"), so this
  * cannot be `PLANS_REVALIDATE_SECONDS` however much it would like to be — keep
  * the two in step by hand if either changes.
+ *
+ * 10s, not 60s. At 60 an admin would toggle a plan's visibility, reload the
+ * public page, still see the old grid, and reasonably conclude the toggle was
+ * broken — which is exactly what happened the first time this shipped. The cost
+ * is one PostgREST read per 10s of traffic on a marketing page, which is
+ * nothing; the benefit is that the admin's change is believable.
+ *
+ * ISR is still a WINDOW, not a push: the first request after the window expires
+ * serves the stale page and triggers the regeneration behind it, so a change can
+ * take two loads to appear. The admin UI says so rather than implying instant.
  */
-export const revalidate = 60;
+export const revalidate = 10;
 
 export default async function Home() {
   // Never throws and never returns empty: a Supabase outage yields the

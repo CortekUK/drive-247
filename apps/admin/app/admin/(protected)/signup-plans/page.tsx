@@ -785,9 +785,18 @@ export default function SignupPlansPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Signup Plans</h1>
+            {/*
+              This used to read "Changes go live immediately", which is not true and
+              cost real debugging time: the public page is ISR-cached, so an admin
+              toggled a plan, reloaded drive-247.com, still saw the old grid, and
+              concluded the toggle was broken when the database had in fact updated
+              correctly. Say what actually happens instead.
+            */}
             <p className="text-sm text-muted-foreground">
-              The three self-serve plans on the public pricing page. Changes go live
-              immediately.
+              The three self-serve plans on the public pricing page. Saved changes
+              reach drive-247.com within about 10 seconds — you may need to reload
+              twice, as the first visit after that window is what triggers the
+              refresh.
             </p>
           </div>
         </div>
@@ -1312,8 +1321,24 @@ export default function SignupPlansPage() {
                       </div>
                     </div>
 
-                    {/* ----------------------------- Preview ----------------------------- */}
-                    <div className="lg:sticky lg:top-4 lg:self-start">
+                    {/*
+                      ----------------------------- Preview -----------------------------
+                      `top-0` rather than `top-4`: the scroll container is the layout's
+                      `<main class="overflow-y-auto">`, so the offset is measured from
+                      the top of that scrollport, which already sits below the header —
+                      an extra inset only wasted vertical space.
+
+                      `self-start` is load-bearing. A grid item defaults to
+                      `align-self: stretch`, which makes this cell exactly as tall as
+                      the (much taller) editor column beside it. A sticky box cannot
+                      move within a box it already fills, so the preview scrolled away
+                      with the page instead of pinning.
+
+                      `max-h` + `overflow-y-auto` keep a plan with eight bullets from
+                      growing taller than the viewport, which would reintroduce the same
+                      problem for a different reason.
+                    */}
+                    <div className="lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pb-4">
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <h3 className="text-sm font-semibold">Live preview</h3>
                         {!plan.is_visible && (
