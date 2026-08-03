@@ -1328,36 +1328,52 @@ export default function SignupPlansPage() {
                       the top of that scrollport, which already sits below the header —
                       an extra inset only wasted vertical space.
 
-                      `self-start` is load-bearing. A grid item defaults to
-                      `align-self: stretch`, which makes this cell exactly as tall as
-                      the (much taller) editor column beside it. A sticky box cannot
-                      move within a box it already fills, so the preview scrolled away
-                      with the page instead of pinning.
+                      TWO elements, not one, and that is the whole fix.
 
-                      `max-h` + `overflow-y-auto` keep a plan with eight bullets from
-                      growing taller than the viewport, which would reintroduce the same
-                      problem for a different reason.
+                      Putting `sticky` directly on the grid item did not work. A grid
+                      item's sticky travel is bounded by its own box, so it needs a
+                      box TALLER than itself to move inside — but `self-start` shrinks
+                      the item to its content, leaving zero travel, while the default
+                      `stretch` makes the item fill the row so there is again nothing
+                      to move within. Either way it scrolls away with the page.
+
+                      So: the OUTER div stretches to the full row height (no
+                      `self-start`, so it inherits `align-self: stretch` and matches
+                      the much taller editor column beside it), and the INNER div is
+                      the sticky one, travelling inside that tall box. This is the
+                      canonical sidebar-sticky pattern and does not depend on how the
+                      grid sizes the row.
+
+                      `top-0` because the scrollport is the layout's
+                      `<main class="overflow-y-auto">`, whose top edge already sits
+                      below the header — any inset would just waste space.
+
+                      `max-h` + `overflow-y-auto` on the inner box keep a plan with
+                      eight bullets from growing taller than the viewport, which would
+                      reintroduce the same "no room to travel" problem.
                     */}
-                    <div className="lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pb-4">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <h3 className="text-sm font-semibold">Live preview</h3>
-                        {!plan.is_visible && (
-                          <span className="text-xs text-muted-foreground">
-                            Hidden from customers
-                          </span>
-                        )}
+                    <div className="lg:h-full">
+                      <div className="lg:sticky lg:top-0 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pb-4">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <h3 className="text-sm font-semibold">Live preview</h3>
+                          {!plan.is_visible && (
+                            <span className="text-xs text-muted-foreground">
+                              Hidden from customers
+                            </span>
+                          )}
+                        </div>
+                        <PlanPreview
+                          draft={draft}
+                          currency={plan.currency}
+                          interval={plan.interval}
+                          highlighted={plan.is_highlighted}
+                          visible={plan.is_visible}
+                          priceCents={priceCents}
+                        />
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Reflects what you have typed, including unsaved edits.
+                        </p>
                       </div>
-                      <PlanPreview
-                        draft={draft}
-                        currency={plan.currency}
-                        interval={plan.interval}
-                        highlighted={plan.is_highlighted}
-                        visible={plan.is_visible}
-                        priceCents={priceCents}
-                      />
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Reflects what you have typed, including unsaved edits.
-                      </p>
                     </div>
                   </div>
                 </CardContent>
