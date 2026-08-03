@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, ShieldX, Bolt, Search, X, Inbox, Wallet, AlertTriangle } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Inbox, Wallet, AlertTriangle } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -40,6 +40,8 @@ import { useSetupStatus } from "@/hooks/use-setup-status";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { ROUTE_TO_TAB } from "@/lib/permissions";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useFeedbackStore } from "@/stores/feedback-store";
+import { useFeedbackSettings } from "@/hooks/use-feedback-settings";
 
 const AnimatedBlocks = wrapAnimatedIcon(BlocksIcon);
 const AnimatedFileText = wrapAnimatedIcon(FileTextIcon);
@@ -180,8 +182,33 @@ export function AppSidebar() {
   const { isLive } = useSetupStatus();
   const { isManager, canView, canViewSettings } = useManagerPermissions();
 
+  // Feedback entry point. Available to every role — a `viewer` hits the same
+  // bugs as a head admin, so gating this on permissions would silence exactly
+  // the people who use the software most. It opens a dialog rather than
+  // navigating, so it has no route and never highlights as "current page".
+  const openFeedback = useFeedbackStore((s) => s.open);
+  const { formEnabled: feedbackEnabled } = useFeedbackSettings();
+
   const showPendingBookings = settings?.payment_mode === 'manual';
   const collapsed = state === "collapsed";
+
+  // Shared by both sidebar modes (settings + main) so the control can never
+  // drift between them.
+  const renderFeedbackButton = () =>
+    feedbackEnabled ? (
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          onClick={() => openFeedback({ source: "sidebar" })}
+          tooltip={collapsed ? "Send feedback" : undefined}
+          className="h-8 transition-all duration-200 ease-in-out"
+        >
+          <MessageSquarePlus className="h-4 w-4 shrink-0" />
+          <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
+            Send Feedback
+          </span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    ) : null;
 
   // Settings mode: when on /settings path, show settings sidebar
   const isSettingsPage = pathname?.startsWith("/settings") || false;
@@ -547,6 +574,7 @@ export function AppSidebar() {
                 )}
               </SidebarMenuItem>
             )}
+            {renderFeedbackButton()}
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
@@ -728,6 +756,7 @@ export function AppSidebar() {
               )}
             </SidebarMenuItem>
           )}
+          {renderFeedbackButton()}
           {(!isManager || canView('settings')) && (
             <SidebarMenuItem>
               <SidebarMenuButton

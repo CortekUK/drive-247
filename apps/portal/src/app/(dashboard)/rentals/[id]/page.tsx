@@ -64,6 +64,7 @@ import { LocationMap } from "@/components/ui/location-map";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { ReviewDisplayCard } from "@/components/reviews/review-display-card";
 import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
+import { useFeedbackAfterReview } from "@/hooks/use-feedback-after-review";
 import { ApprovalReviewSummary } from "@/components/reviews/approval-review-summary";
 import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-summary-card";
 import { useRentalAgreements } from "@/hooks/use-rental-agreements";
@@ -346,6 +347,11 @@ const RentalDetail = () => {
 
   // Review dialog state
   const [showReviewDialog, setShowReviewDialog] = useState(false);
+  // Set when the review dialog was opened by CLOSING a rental (not by the
+  // "Leave a review" / "Edit" buttons). Only that path earns the software
+  // feedback follow-up — prompting after a manual edit would be ambush.
+  const [promptFeedbackAfterReview, setPromptFeedbackAfterReview] = useState(false);
+  const maybePromptFeedback = useFeedbackAfterReview();
 
   // Buy Insurance dialog state
   const [showBuyInsurance, setShowBuyInsurance] = useState(false);
@@ -6605,6 +6611,7 @@ const RentalDetail = () => {
                       title: "Leave a Review?",
                       description: "Rate this customer's rental experience.",
                     });
+                    setPromptFeedbackAfterReview(true);
                     setShowReviewDialog(true);
                   }, 1500);
 
@@ -6707,7 +6714,16 @@ const RentalDetail = () => {
       {rental?.customers?.id && (
         <RentalReviewDialog
           open={showReviewDialog}
-          onOpenChange={setShowReviewDialog}
+          onOpenChange={(next) => {
+            setShowReviewDialog(next);
+            // Sequenced, never stacked: the software-feedback dialog only opens
+            // once the customer review is off screen, and only when this review
+            // came from closing a rental.
+            if (!next && promptFeedbackAfterReview) {
+              setPromptFeedbackAfterReview(false);
+              setTimeout(() => maybePromptFeedback(), 400);
+            }
+          }}
           rentalId={id}
           customerId={rental.customers.id}
           customerName={rental.customers.name}

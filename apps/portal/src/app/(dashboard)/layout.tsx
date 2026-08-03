@@ -31,6 +31,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TraxAIDialog } from "@/components/chat";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
 import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
+import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
+import { FeedbackForcePrompt } from "@/components/feedback/feedback-force-prompt";
 
 function LoadingSkeleton() {
   return (
@@ -332,6 +334,15 @@ export default function DashboardLayout({
             it sits above the dashboard; the subscription paywall above still
             renders on top when both happen to be up. */}
         <MigrationBlockerDialog />
+
+        {/* Staff feedback channel. The dialog is mounted once here and driven
+            from three places (sidebar button, rental-completion follow-up,
+            forced prompt) via `useFeedbackStore`. The force prompt is
+            suppressed while the paywall owns the screen — a dismissible
+            feedback modal stacked on a non-dismissible one leaves the operator
+            unable to act on either. */}
+        <FeedbackDialog />
+        <FeedbackForcePrompt suppressed={showGate} />
       </SidebarProvider>
     </DynamicThemeProvider>
   );

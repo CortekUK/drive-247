@@ -677,6 +677,7 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           email: string
+          feedback_last_prompted_at: string | null
           forwarding_number: string | null
           id: string
           is_active: boolean
@@ -695,6 +696,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           email: string
+          feedback_last_prompted_at?: string | null
           forwarding_number?: string | null
           id?: string
           is_active?: boolean
@@ -713,6 +715,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           email?: string
+          feedback_last_prompted_at?: string | null
           forwarding_number?: string | null
           id?: string
           is_active?: boolean
@@ -9971,6 +9974,27 @@ export type Database = {
           },
         ]
       }
+      processed_stripe_events: {
+        Row: {
+          event_id: string
+          event_type: string
+          processed_at: string
+          stripe_account: string | null
+        }
+        Insert: {
+          event_id: string
+          event_type: string
+          processed_at?: string
+          stripe_account?: string | null
+        }
+        Update: {
+          event_id?: string
+          event_type?: string
+          processed_at?: string
+          stripe_account?: string | null
+        }
+        Relationships: []
+      }
       promocodes: {
         Row: {
           code: string
@@ -10987,6 +11011,9 @@ export type Database = {
           created_at: string | null
           document_id: string | null
           document_status: string | null
+          email_delivered_at: string | null
+          email_delivery_error: string | null
+          email_delivery_status: string | null
           envelope_completed_at: string | null
           envelope_created_at: string | null
           envelope_sent_at: string | null
@@ -11004,6 +11031,9 @@ export type Database = {
           created_at?: string | null
           document_id?: string | null
           document_status?: string | null
+          email_delivered_at?: string | null
+          email_delivery_error?: string | null
+          email_delivery_status?: string | null
           envelope_completed_at?: string | null
           envelope_created_at?: string | null
           envelope_sent_at?: string | null
@@ -11021,6 +11051,9 @@ export type Database = {
           created_at?: string | null
           document_id?: string | null
           document_status?: string | null
+          email_delivered_at?: string | null
+          email_delivery_error?: string | null
+          email_delivery_status?: string | null
           envelope_completed_at?: string | null
           envelope_created_at?: string | null
           envelope_sent_at?: string | null
@@ -13186,6 +13219,72 @@ export type Database = {
           },
         ]
       }
+      signup_plans: {
+        Row: {
+          amount_cents: number
+          bullets: Json
+          created_at: string
+          currency: string
+          fleet_band: string
+          id: string
+          interval: string
+          is_highlighted: boolean
+          is_visible: boolean
+          max_vehicles: number
+          name: string
+          plan_key: string
+          price_version: number
+          sort_order: number
+          stripe_lookup_key: string | null
+          stripe_price_id: string | null
+          tagline: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          amount_cents: number
+          bullets?: Json
+          created_at?: string
+          currency?: string
+          fleet_band?: string
+          id?: string
+          interval?: string
+          is_highlighted?: boolean
+          is_visible?: boolean
+          max_vehicles: number
+          name: string
+          plan_key: string
+          price_version?: number
+          sort_order?: number
+          stripe_lookup_key?: string | null
+          stripe_price_id?: string | null
+          tagline?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          bullets?: Json
+          created_at?: string
+          currency?: string
+          fleet_band?: string
+          id?: string
+          interval?: string
+          is_highlighted?: boolean
+          is_visible?: boolean
+          max_vehicles?: number
+          name?: string
+          plan_key?: string
+          price_version?: number
+          sort_order?: number
+          stripe_lookup_key?: string | null
+          stripe_price_id?: string | null
+          tagline?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       sms_message_log: {
         Row: {
           created_at: string | null
@@ -13563,6 +13662,182 @@ export type Database = {
           },
         ]
       }
+      tenant_feedback: {
+        Row: {
+          app_user_id: string | null
+          category: string
+          created_at: string
+          id: string
+          message: string
+          notified_at: string | null
+          page_path: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          screenshot_path: string | null
+          status: string
+          submitter_email: string | null
+          submitter_name: string | null
+          submitter_role: string | null
+          tenant_id: string
+          updated_at: string
+          user_agent: string | null
+        }
+        Insert: {
+          app_user_id?: string | null
+          category: string
+          created_at?: string
+          id?: string
+          message: string
+          notified_at?: string | null
+          page_path?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          screenshot_path?: string | null
+          status?: string
+          submitter_email?: string | null
+          submitter_name?: string | null
+          submitter_role?: string | null
+          tenant_id: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Update: {
+          app_user_id?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          message?: string
+          notified_at?: string | null
+          page_path?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          screenshot_path?: string | null
+          status?: string
+          submitter_email?: string | null
+          submitter_name?: string | null
+          submitter_role?: string | null
+          tenant_id?: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_feedback_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_feedback_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_feedback_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_feedback_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "tenant_feedback_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      tenant_feedback_insights: {
+        Row: {
+          feedback_count: number
+          generated_at: string
+          generated_by: string | null
+          id: string
+          model: string | null
+          summary: string
+          top_themes: Json
+        }
+        Insert: {
+          feedback_count?: number
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          model?: string | null
+          summary: string
+          top_themes?: Json
+        }
+        Update: {
+          feedback_count?: number
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          model?: string | null
+          summary?: string
+          top_themes?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_feedback_insights_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_feedback_recipients: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      tenant_feedback_settings: {
+        Row: {
+          force_login_triggered_at: string | null
+          form_enabled: boolean
+          id: string
+          singleton: boolean
+          updated_at: string
+        }
+        Insert: {
+          force_login_triggered_at?: string | null
+          form_enabled?: boolean
+          id?: string
+          singleton?: boolean
+          updated_at?: string
+        }
+        Update: {
+          force_login_triggered_at?: string | null
+          form_enabled?: boolean
+          id?: string
+          singleton?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tenant_holidays: {
         Row: {
           created_at: string | null
@@ -13689,15 +13964,23 @@ export type Database = {
         Row: {
           amount_due: number
           amount_paid: number
+          amount_refunded: number
+          attempt_count: number | null
           base_amount: number | null
+          billing_reason: string | null
           created_at: string
           currency: string
+          dispute_status: string | null
+          disputed_at: string | null
           due_date: string | null
           id: string
+          invoice_date: string | null
           invoice_number: string | null
+          next_payment_attempt: string | null
           paid_at: string | null
           period_end: string | null
           period_start: string | null
+          refunded_at: string | null
           status: string
           stripe_hosted_invoice_url: string | null
           stripe_invoice_id: string
@@ -13711,15 +13994,23 @@ export type Database = {
         Insert: {
           amount_due?: number
           amount_paid?: number
+          amount_refunded?: number
+          attempt_count?: number | null
           base_amount?: number | null
+          billing_reason?: string | null
           created_at?: string
           currency?: string
+          dispute_status?: string | null
+          disputed_at?: string | null
           due_date?: string | null
           id?: string
+          invoice_date?: string | null
           invoice_number?: string | null
+          next_payment_attempt?: string | null
           paid_at?: string | null
           period_end?: string | null
           period_start?: string | null
+          refunded_at?: string | null
           status?: string
           stripe_hosted_invoice_url?: string | null
           stripe_invoice_id: string
@@ -13733,15 +14024,23 @@ export type Database = {
         Update: {
           amount_due?: number
           amount_paid?: number
+          amount_refunded?: number
+          attempt_count?: number | null
           base_amount?: number | null
+          billing_reason?: string | null
           created_at?: string
           currency?: string
+          dispute_status?: string | null
+          disputed_at?: string | null
           due_date?: string | null
           id?: string
+          invoice_date?: string | null
           invoice_number?: string | null
+          next_payment_attempt?: string | null
           paid_at?: string | null
           period_end?: string | null
           period_start?: string | null
+          refunded_at?: string | null
           status?: string
           stripe_hosted_invoice_url?: string | null
           stripe_invoice_id?: string
@@ -13799,6 +14098,9 @@ export type Database = {
           ended_at: string | null
           id: string
           interval: string
+          last_stripe_event_at: string | null
+          last_sync_source: string | null
+          last_synced_at: string | null
           plan_id: string | null
           plan_name: string
           status: string
@@ -13824,6 +14126,9 @@ export type Database = {
           ended_at?: string | null
           id?: string
           interval?: string
+          last_stripe_event_at?: string | null
+          last_sync_source?: string | null
+          last_synced_at?: string | null
           plan_id?: string | null
           plan_name?: string
           status?: string
@@ -13849,6 +14154,9 @@ export type Database = {
           ended_at?: string | null
           id?: string
           interval?: string
+          last_stripe_event_at?: string | null
+          last_sync_source?: string | null
+          last_synced_at?: string | null
           plan_id?: string | null
           plan_name?: string
           status?: string
@@ -13916,8 +14224,8 @@ export type Database = {
           boldsign_test_brand_id: string | null
           bonzah_brochure_url: string | null
           bonzah_mode: string
-          bonzah_sandbox_override: boolean
           bonzah_password: string | null
+          bonzah_sandbox_override: boolean
           bonzah_username: string | null
           booking_lead_time_hours: number | null
           booking_lead_time_unit: string | null
@@ -13935,6 +14243,7 @@ export type Database = {
           currency_code: string | null
           custom_booking_domain: string | null
           custom_portal_domain: string | null
+          customer_theme_mode: string
           dark_accent_color: string | null
           dark_background_color: string | null
           dark_header_footer_color: string | null
@@ -13952,7 +14261,6 @@ export type Database = {
           enquiries_enabled: boolean
           facebook_url: string | null
           favicon_url: string | null
-          ga_measurement_id: string | null
           fixed_address_enabled: boolean | null
           fixed_pickup_address: string | null
           fixed_return_address: string | null
@@ -13961,13 +14269,12 @@ export type Database = {
           friday_close: string | null
           friday_enabled: boolean | null
           friday_open: string | null
+          ga_measurement_id: string | null
           gig_driver_enabled: boolean
-          customer_theme_mode: string
-          show_effective_daily_rate: boolean
-          hide_checkout_price_breakdown: boolean
           global_deposit_amount: number | null
           google_maps_url: string | null
           hero_background_url: string | null
+          hide_checkout_price_breakdown: boolean
           id: string
           instagram_url: string | null
           installment_config: Json | null
@@ -14064,6 +14371,7 @@ export type Database = {
           service_fee_type: string | null
           service_fee_value: number | null
           setup_completed_at: string | null
+          show_effective_daily_rate: boolean
           slug: string
           stack_surcharges: boolean
           status: string
@@ -14155,8 +14463,8 @@ export type Database = {
           boldsign_test_brand_id?: string | null
           bonzah_brochure_url?: string | null
           bonzah_mode?: string
-          bonzah_sandbox_override?: boolean
           bonzah_password?: string | null
+          bonzah_sandbox_override?: boolean
           bonzah_username?: string | null
           booking_lead_time_hours?: number | null
           booking_lead_time_unit?: string | null
@@ -14174,6 +14482,7 @@ export type Database = {
           currency_code?: string | null
           custom_booking_domain?: string | null
           custom_portal_domain?: string | null
+          customer_theme_mode?: string
           dark_accent_color?: string | null
           dark_background_color?: string | null
           dark_header_footer_color?: string | null
@@ -14191,7 +14500,6 @@ export type Database = {
           enquiries_enabled?: boolean
           facebook_url?: string | null
           favicon_url?: string | null
-          ga_measurement_id?: string | null
           fixed_address_enabled?: boolean | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
@@ -14200,13 +14508,12 @@ export type Database = {
           friday_close?: string | null
           friday_enabled?: boolean | null
           friday_open?: string | null
+          ga_measurement_id?: string | null
           gig_driver_enabled?: boolean
-          customer_theme_mode?: string
-          show_effective_daily_rate?: boolean
-          hide_checkout_price_breakdown?: boolean
           global_deposit_amount?: number | null
           google_maps_url?: string | null
           hero_background_url?: string | null
+          hide_checkout_price_breakdown?: boolean
           id?: string
           instagram_url?: string | null
           installment_config?: Json | null
@@ -14303,6 +14610,7 @@ export type Database = {
           service_fee_type?: string | null
           service_fee_value?: number | null
           setup_completed_at?: string | null
+          show_effective_daily_rate?: boolean
           slug: string
           stack_surcharges?: boolean
           status?: string
@@ -14394,8 +14702,8 @@ export type Database = {
           boldsign_test_brand_id?: string | null
           bonzah_brochure_url?: string | null
           bonzah_mode?: string
-          bonzah_sandbox_override?: boolean
           bonzah_password?: string | null
+          bonzah_sandbox_override?: boolean
           bonzah_username?: string | null
           booking_lead_time_hours?: number | null
           booking_lead_time_unit?: string | null
@@ -14413,6 +14721,7 @@ export type Database = {
           currency_code?: string | null
           custom_booking_domain?: string | null
           custom_portal_domain?: string | null
+          customer_theme_mode?: string
           dark_accent_color?: string | null
           dark_background_color?: string | null
           dark_header_footer_color?: string | null
@@ -14430,7 +14739,6 @@ export type Database = {
           enquiries_enabled?: boolean
           facebook_url?: string | null
           favicon_url?: string | null
-          ga_measurement_id?: string | null
           fixed_address_enabled?: boolean | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
@@ -14439,13 +14747,12 @@ export type Database = {
           friday_close?: string | null
           friday_enabled?: boolean | null
           friday_open?: string | null
+          ga_measurement_id?: string | null
           gig_driver_enabled?: boolean
-          customer_theme_mode?: string
-          show_effective_daily_rate?: boolean
-          hide_checkout_price_breakdown?: boolean
           global_deposit_amount?: number | null
           google_maps_url?: string | null
           hero_background_url?: string | null
+          hide_checkout_price_breakdown?: boolean
           id?: string
           instagram_url?: string | null
           installment_config?: Json | null
@@ -14542,6 +14849,7 @@ export type Database = {
           service_fee_type?: string | null
           service_fee_value?: number | null
           setup_completed_at?: string | null
+          show_effective_daily_rate?: boolean
           slug?: string
           stack_surcharges?: boolean
           status?: string
@@ -15924,6 +16232,93 @@ export type Database = {
           },
         ]
       }
+      zz_tenant_subscriptions_bak_20260727: {
+        Row: {
+          amount: number | null
+          cancel_at: string | null
+          canceled_at: string | null
+          card_brand: string | null
+          card_exp_month: number | null
+          card_exp_year: number | null
+          card_last4: string | null
+          created_at: string | null
+          currency: string | null
+          current_period_end: string | null
+          current_period_start: string | null
+          ended_at: string | null
+          id: string | null
+          interval: string | null
+          last_stripe_event_at: string | null
+          last_sync_source: string | null
+          last_synced_at: string | null
+          plan_id: string | null
+          plan_name: string | null
+          status: string | null
+          stripe_account: string | null
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          tenant_id: string | null
+          trial_end: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number | null
+          cancel_at?: string | null
+          canceled_at?: string | null
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last4?: string | null
+          created_at?: string | null
+          currency?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          ended_at?: string | null
+          id?: string | null
+          interval?: string | null
+          last_stripe_event_at?: string | null
+          last_sync_source?: string | null
+          last_synced_at?: string | null
+          plan_id?: string | null
+          plan_name?: string | null
+          status?: string | null
+          stripe_account?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          tenant_id?: string | null
+          trial_end?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number | null
+          cancel_at?: string | null
+          canceled_at?: string | null
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last4?: string | null
+          created_at?: string | null
+          currency?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          ended_at?: string | null
+          id?: string | null
+          interval?: string | null
+          last_stripe_event_at?: string | null
+          last_sync_source?: string | null
+          last_synced_at?: string | null
+          plan_id?: string | null
+          plan_name?: string | null
+          status?: string | null
+          stripe_account?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          tenant_id?: string | null
+          trial_end?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       accounting_connections_public: {
@@ -16291,7 +16686,6 @@ export type Database = {
           boldsign_ready: boolean | null
           bonzah_enabled: boolean | null
           bonzah_mode: string | null
-          bonzah_sandbox_override: boolean | null
           bonzah_ready: boolean | null
           company_name: string | null
           issue_count: number | null
@@ -16986,6 +17380,10 @@ export type Database = {
             }
             Returns: Json
           }
+      admin_revoke_user_sessions: {
+        Args: { p_user_ids: string[] }
+        Returns: number
+      }
       app_login: {
         Args: { p_password: string; p_username: string }
         Returns: {
@@ -17557,6 +17955,10 @@ export type Database = {
       seed_default_lead_templates: {
         Args: { p_tenant_id: string }
         Returns: undefined
+      }
+      session_is_active: {
+        Args: { p_session_id: string; p_user_id: string }
+        Returns: boolean
       }
       swap_rental_vehicle: {
         Args: {

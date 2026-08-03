@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { ForceLogoutAllControl } from '@/components/admin/ForceLogoutAllControl';
 import { X, AlertTriangle } from 'lucide-react';
 
 interface AdminSettings {
@@ -45,10 +46,6 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [newEmail, setNewEmail] = useState('');
-
-  const [showGlobalLogoutConfirm, setShowGlobalLogoutConfirm] = useState(false);
-  const [globalLogoutConfirmText, setGlobalLogoutConfirmText] = useState('');
-  const [globalLogoutLoading, setGlobalLogoutLoading] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -173,31 +170,6 @@ export default function SettingsPage() {
       ...settings,
       notification_emails: settings.notification_emails.filter(e => e !== emailToRemove),
     });
-  };
-
-  const handleGlobalForceLogout = async () => {
-    if (globalLogoutConfirmText !== 'LOGOUT ALL') return;
-    setGlobalLogoutLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('admin-force-logout', {
-        body: {}
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
-      toast.success(
-        `Successfully logged out ${data.successCount} user${data.successCount !== 1 ? 's' : ''} across all tenants`
-      );
-      if (data.failCount > 0) {
-        toast.error(`${data.failCount} user${data.failCount !== 1 ? 's' : ''} could not be logged out`);
-      }
-      setShowGlobalLogoutConfirm(false);
-      setGlobalLogoutConfirmText('');
-    } catch (error: any) {
-      toast.error(`Failed to force logout: ${error.message}`);
-    } finally {
-      setGlobalLogoutLoading(false);
-    }
   };
 
   if (loading) {
@@ -465,68 +437,14 @@ export default function SettingsPage() {
                   Super admins will not be affected.
                 </p>
               </div>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setShowGlobalLogoutConfirm(true)}
-                className="ml-4 whitespace-nowrap"
-              >
-                Force Logout All
-              </Button>
+              {/* Shared with the Feedbacks settings panel — one implementation,
+                  two render sites, so the confirmation ceremony can never drift
+                  between them. */}
+              <ForceLogoutAllControl className="ml-4 whitespace-nowrap" />
             </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Global Force Logout Confirmation Dialog */}
-      <Dialog open={showGlobalLogoutConfirm} onOpenChange={(open) => {
-        if (!open) {
-          setShowGlobalLogoutConfirm(false);
-          setGlobalLogoutConfirmText('');
-        }
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Force Logout ALL Users</DialogTitle>
-            <DialogDescription>
-              This will immediately sign out every portal staff member and every booking customer across all tenants on the platform. Super admins will not be affected.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="rounded-md bg-destructive/10 border border-destructive/30 p-4">
-            <p className="text-sm text-destructive">
-              This action cannot be undone. All users will need to sign in again.
-            </p>
-          </div>
-
-          <div>
-            <Label className="mb-2 block">
-              Type <strong>LOGOUT ALL</strong> to confirm:
-            </Label>
-            <Input
-              value={globalLogoutConfirmText}
-              onChange={(e) => setGlobalLogoutConfirmText(e.target.value)}
-              placeholder="LOGOUT ALL"
-            />
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => { setShowGlobalLogoutConfirm(false); setGlobalLogoutConfirmText(''); }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleGlobalForceLogout}
-              disabled={globalLogoutLoading || globalLogoutConfirmText !== 'LOGOUT ALL'}
-            >
-              {globalLogoutLoading ? 'Logging out...' : 'Force Logout Everyone'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
