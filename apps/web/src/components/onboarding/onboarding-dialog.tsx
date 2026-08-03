@@ -92,6 +92,7 @@ export function OnboardingDialog() {
     submitAccount,
     signInExisting,
     useDifferentEmail,
+    signInInstead,
     startPayment,
     markPaid,
     updateBusiness,
@@ -382,6 +383,7 @@ export function OnboardingDialog() {
                       onSubmit={(values) => void submitAccount(values)}
                       onSignIn={(values) => void signInExisting(values)}
                       onUseDifferentEmail={useDifferentEmail}
+                      onSignInInstead={signInInstead}
                       onResetStateChange={setAccountReset}
                       onClearError={clearStepError}
                     />

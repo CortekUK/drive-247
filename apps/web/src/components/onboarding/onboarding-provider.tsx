@@ -1225,6 +1225,30 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     dispatch({ type: "error", error: null });
   }, []);
 
+  /**
+   * Deliberate "I already started — let me sign in" entry point.
+   *
+   * Until now the sign-in panel was only reachable by ACCIDENT: you had to fill
+   * in the create-account form, submit it, and have `signup-begin` come back
+   * with EMAIL_EXISTS_SIGN_IN. A returning operator whose session had expired
+   * was shown a create-account form with their own details pre-filled and no
+   * visible way to say "that's me, I have a password" — and submitting it burns
+   * a throttle slot to be told something they already knew.
+   *
+   * `EMAIL_IN_SIGNUP` is the reason code because that is exactly the situation:
+   * a signup that exists and is part-finished. It drives copy about picking up
+   * where they left off rather than a generic "account exists" message.
+   */
+  const signInInstead = useCallback((email: string) => {
+    const normalised = email.trim().toLowerCase();
+    if (!normalised) return;
+    dispatch({ type: "error", error: null });
+    dispatch({
+      type: "signInPrompt",
+      prompt: { email: normalised, reason: "EMAIL_IN_SIGNUP" },
+    });
+  }, []);
+
   const startPayment = useCallback(async () => {
     await startPaymentInternal(stateRef.current.planId);
   }, [startPaymentInternal]);
@@ -1432,6 +1456,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       submitAccount,
       signInExisting,
       useDifferentEmail,
+      signInInstead,
       startPayment,
       markPaid,
       updateBusiness,
@@ -1454,6 +1479,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       submitAccount,
       signInExisting,
       useDifferentEmail,
+      signInInstead,
       startPayment,
       markPaid,
       updateBusiness,

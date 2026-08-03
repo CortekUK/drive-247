@@ -392,6 +392,11 @@ export interface AccountStepProps {
   onSignIn(values: { email: string; password: string }): void;
   /** Clears signInPrompt and returns to the create-account form. */
   onUseDifferentEmail(): void;
+  /**
+   * "I already started — sign me in instead." Takes the email currently in the
+   * form so the panel opens against the right account.
+   */
+  onSignInInstead(email: string): void;
 }
 
 export interface PaymentStepProps {
@@ -445,6 +450,8 @@ export interface OnboardingContextValue {
   submitAccount(values: AccountFormValues): Promise<void>;
   signInExisting(values: { email: string; password: string }): Promise<void>;
   useDifferentEmail(): void;
+  /** Switch to the sign-in panel for an email the user has already typed. */
+  signInInstead(email: string): void;
 
   startPayment(): Promise<void>;
   markPaid(): Promise<void>;

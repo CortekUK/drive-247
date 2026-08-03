@@ -112,6 +112,7 @@ export function AccountStep({
   onSubmit,
   onSignIn,
   onUseDifferentEmail,
+  onSignInInstead,
   onResetStateChange,
   onClearError,
 }: AccountStepShellProps) {
@@ -761,6 +762,45 @@ export function AccountStep({
             You&apos;ll use this to sign in to your portal.
           </p>
         </div>
+      </div>
+
+      {/*
+        A deliberate way back in for someone who has already started.
+
+        Without this the sign-in panel was reachable only by ACCIDENT: fill in
+        the whole form, submit, and have the server answer "that email already
+        exists". A returning operator whose session had expired was shown this
+        create-account form with their own name and email pre-filled and no way
+        to say "that's me, I have a password" — so the honest-looking action was
+        the wrong one, and taking it burned a throttle slot to be told something
+        they already knew.
+      */}
+      <div className="mt-6 border-t pt-4 text-center">
+        <p className="text-sm text-muted-foreground">
+          Already started?{" "}
+          <Button
+            type="button"
+            variant="link"
+            disabled={busy}
+            onClick={() => {
+              const typed = normalizeEmail(email);
+              if (!typed) {
+                // Nothing to sign in AS. Point at the field rather than opening
+                // a panel with an empty, read-only address.
+                setErrors((prev) => ({
+                  ...prev,
+                  email: "Enter your email address to sign in.",
+                }));
+                emailRef.current?.focus();
+                return;
+              }
+              onSignInInstead(typed);
+            }}
+            className="h-auto p-0 text-sm text-indigo-600 dark:text-indigo-400"
+          >
+            Sign in to continue where you left off
+          </Button>
+        </p>
       </div>
     </form>
   );
