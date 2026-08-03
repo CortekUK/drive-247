@@ -24,16 +24,20 @@ import {
 } from 'lucide-react';
 import {
   SignupPlanCard,
-  SignupPlanPreview,
   buildPatch,
   draftFromPlan,
   formatMoney,
   hasContentErrors,
+  isDirty,
   parsePriceToCents,
   validateContent,
   type PlanDraft,
   type SignupPlan,
 } from '@/components/admin/signup-plan-card';
+import {
+  SignupPlanPreviewPanel,
+  usePreviewPinning,
+} from '@/components/admin/signup-plan-preview';
 
 /* -------------------------------------------------------------------------- */
 /*  Types local to the page                                                    */
@@ -202,7 +206,7 @@ export default function SignupPlansPage() {
   const [staleWrite, setStaleWrite] = useState<string | null>(null);
   const [status, setStatus] = useState('');
 
-  /** Which plan the sticky preview rail mirrors. Never stored as a fallback — see `activePlan`. */
+  /** Which plan the preview rail mirrors. Never stored as a fallback — see `activePlan`. */
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
 
   /** `${planId}:${action}` while a mutation is in flight. Blocks every mutating control. */
@@ -211,6 +215,9 @@ export default function SignupPlansPage() {
 
   const [pricePlanId, setPricePlanId] = useState<string | null>(null);
   const cancelPriceRef = useRef<HTMLButtonElement>(null);
+
+  /** Pins the rail while it fits the scrollport; never introduces a scroll region. */
+  const { railRef, pinned } = usePreviewPinning<HTMLElement>();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -452,15 +459,32 @@ export default function SignupPlansPage() {
     setPending(null);
   };
 
-  const handleHighlight = async (plan: SignupPlan) => {
-    if (busy || plan.is_highlighted) return;
+  /**
+   * A toggle in both directions. `set-highlighted` takes an optional
+   * `is_highlighted`; sending `false` clears the badge, and zero highlighted plans
+   * is a legitimate state. Without this the control could only ever select — which
+   * is exactly the "selects but will not deselect" the admins hit.
+   */
+  const handleToggleHighlight = async (plan: SignupPlan, nextHighlighted: boolean) => {
+    if (busy) return;
 
     setPending(`${plan.id}:highlight`);
-    setStatus(`Marking ${plan.name} as most popular…`);
+    setStatus(
+      nextHighlighted
+        ? `Marking ${plan.name} as most popular…`
+        : `Removing the most popular badge from ${plan.name}…`,
+    );
 
     const { data, failure } = await callPlansFn(
-      { action: 'set-highlighted', id: plan.id, updated_at: plan.updated_at },
-      `Could not mark "${plan.name}" as most popular.`,
+      {
+        action: 'set-highlighted',
+        id: plan.id,
+        updated_at: plan.updated_at,
+        is_highlighted: nextHighlighted,
+      },
+      nextHighlighted
+        ? `Could not mark "${plan.name}" as most popular.`
+        : `Could not clear the most popular badge on "${plan.name}".`,
     );
 
     if (failure) {
@@ -469,11 +493,21 @@ export default function SignupPlansPage() {
       return;
     }
 
+    // This action rewrites more than one row — the badge moves off whichever plan
+    // held it — so the server returns the whole list, not a single plan.
     const next = parsePlanList(isRecord(data) ? data.plans : null);
     if (next.length > 0) setPlans(next);
 
-    setStatus(`${plan.name} is now the most popular plan.`);
-    toast.success(`"${plan.name}" is now the Most popular plan — the badge moved to it.`);
+    setStatus(
+      nextHighlighted
+        ? `${plan.name} is now the most popular plan.`
+        : `No plan is marked most popular.`,
+    );
+    toast.success(
+      nextHighlighted
+        ? `"${plan.name}" is now the Most popular plan — the badge moved to it.`
+        : `Badge removed — no plan is marked Most popular now.`,
+    );
     setPending(null);
   };
 
@@ -486,14 +520,23 @@ export default function SignupPlansPage() {
   const activePrice = activeDraft ? parsePriceToCents(activeDraft.price) : null;
 
   return (
-    <div className="space-y-6">
+    /*
+      `relative` is load-bearing, not decoration.
+      Tailwind's `.sr-only` is `position: absolute`. With no positioned ancestor its
+      containing block is the INITIAL containing block, so it escapes <main>'s
+      overflow clip and stretches the document's own scroll height to the full
+      length of the page — which is what put a second, useless scrollbar on the
+      window next to <main>'s real one. Making the page root a containing block
+      keeps every absolutely positioned descendant inside the one scrollport.
+    */
+    <div className="relative space-y-6">
       {/* ------------------------------- Header ------------------------------ */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 glow-purple-sm">
             <BadgeDollarSign className="h-5 w-5 text-primary" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">Signup Plans</h1>
             {/*
               This used to read "Changes go live immediately", which is not true and
@@ -558,25 +601,31 @@ export default function SignupPlansPage() {
         </div>
       )}
 
-      {/*
-        Loading. Mirrors the real single-column layout, including the inline
-        preview block, so nothing jumps when the data lands.
-      */}
+      {/* Loading — mirrors the real two-column shape so nothing jumps when data lands */}
       {loading && (
-        <div className="space-y-4">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <Card key={index}>
-              <CardHeader className="pb-4">
-                <Skeleton className="h-6 w-40" />
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Skeleton className="h-10 w-56" />
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-[300px] w-full max-w-sm rounded-2xl" />
-              </CardContent>
-            </Card>
-          ))}
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0 space-y-4">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Card key={index}>
+                <CardHeader className="pb-4">
+                  <Skeleton className="h-6 w-40" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-10 w-56" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Card className="hidden xl:block">
+            <CardHeader className="pb-4">
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-[360px] w-full rounded-2xl" />
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -597,78 +646,70 @@ export default function SignupPlansPage() {
 
       {/*
         --------------------------- Plans -----------------------------------
-        SINGLE COLUMN, PREVIEW INLINE INSIDE EACH CARD.
+        ONE grid, ONE row: the editors on the left, a single preview rail on the
+        right. The rail is a direct grid item, so its containing block is a grid
+        area that spans the entire row — the full height of the editor column —
+        which is what lets `sticky` pin it for the whole page. The previous shape
+        put a preview inside every card, where the grid area was one card tall and
+        the rail could only ever stick within that card.
 
-        This was a two-column grid with a sticky preview rail, and it failed
-        three separate ways:
-
-        1. Dead space. The 320px preview column shared an auto-sized grid row
-           with a ~1000px editor, so every card carried a 500-800px empty tail.
-
-        2. It could never stay pinned. A sticky box is clamped to its containing
-           block — for a grid item that is its GRID AREA, i.e. one card — so the
-           preview left with its own card no matter which sticky recipe was used.
-
-        3. The `max-h` + `overflow-y-auto` guard added to fix (2) created a
-           SECOND scrollbar nested inside a page that already scrolls, so the
-           wheel captured in the rail and the page appeared stuck.
-
-        The app already had the right answer: `settings/page.tsx` renders its
-        preview in normal flow directly under the controls it previews. Doing the
-        same here removes all three failure modes at once and makes this page
-        behave like the rest of the admin app.
+        Nothing here sets `overflow`, `max-height` or a viewport-relative height,
+        so the layout's <main> stays the only scrollport on the screen.
       */}
-      {!loading && plans.length > 0 && activePlan && (
-        <div
-          role="radiogroup"
-          aria-label="Most popular plan"
-          aria-describedby="highlight-help"
-          className="space-y-4"
-        >
-          <p id="highlight-help" className="text-xs text-muted-foreground">
-            Only one plan can be marked most popular &mdash; picking another clears the
-            current one.
-          </p>
+      {!loading && plans.length > 0 && activePlan && activeDraft && (
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0 space-y-4">
+            <p id="highlight-help" className="text-xs text-muted-foreground">
+              One plan at a time can carry the Most popular badge. Picking another moves
+              it; clicking the plan that has it removes the badge altogether.
+            </p>
 
-          {plans.map((plan) => {
-            const draft = drafts[plan.id];
-            if (!draft) return null;
-            const price = parsePriceToCents(draft.price);
+            {plans.map((plan) => {
+              const draft = drafts[plan.id];
+              if (!draft) return null;
 
-            return (
-              <SignupPlanCard
-                key={plan.id}
-                plan={plan}
-                draft={draft}
-                active={plan.id === activePlan.id}
-                busy={busy}
-                pending={pending}
-                lastVisible={plan.is_visible && visibleCount <= 1}
-                onActivate={() => setActivePlanId(plan.id)}
-                onDraftChange={(patch) => updateDraft(plan.id, patch)}
-                onSaveContent={() => void handleSaveContent(plan)}
-                onDiscard={() =>
-                  setDrafts((current) => ({
-                    ...current,
-                    [plan.id]: draftFromPlan(plan),
-                  }))
-                }
-                onRequestPriceChange={() => setPricePlanId(plan.id)}
-                onToggleVisibility={(next) => void handleVisibility(plan, next)}
-                onHighlight={() => void handleHighlight(plan)}
-                preview={
-                  <SignupPlanPreview
-                    draft={draft}
-                    currency={plan.currency}
-                    interval={plan.interval}
-                    highlighted={plan.is_highlighted}
-                    visible={plan.is_visible}
-                    priceCents={price?.ok ? price.cents : null}
-                  />
-                }
-              />
-            );
-          })}
+              return (
+                <SignupPlanCard
+                  key={plan.id}
+                  plan={plan}
+                  draft={draft}
+                  active={plan.id === activePlan.id}
+                  busy={busy}
+                  pending={pending}
+                  lastVisible={plan.is_visible && visibleCount <= 1}
+                  onActivate={() => setActivePlanId(plan.id)}
+                  onDraftChange={(patch) => updateDraft(plan.id, patch)}
+                  onSaveContent={() => void handleSaveContent(plan)}
+                  onDiscard={() =>
+                    setDrafts((current) => ({
+                      ...current,
+                      [plan.id]: draftFromPlan(plan),
+                    }))
+                  }
+                  onRequestPriceChange={() => setPricePlanId(plan.id)}
+                  onToggleVisibility={(next) => void handleVisibility(plan, next)}
+                  onToggleHighlight={(next) => void handleToggleHighlight(plan, next)}
+                />
+              );
+            })}
+          </div>
+
+          <aside
+            ref={railRef}
+            aria-label="Live preview"
+            className={cn('min-w-0', pinned && 'xl:sticky xl:top-6')}
+          >
+            <SignupPlanPreviewPanel
+              planName={activePlan.name || activePlan.plan_key}
+              draft={activeDraft}
+              currency={activePlan.currency}
+              interval={activePlan.interval}
+              highlighted={activePlan.is_highlighted}
+              visible={activePlan.is_visible}
+              dirty={isDirty(activePlan, activeDraft)}
+              priceCents={activePrice?.ok ? activePrice.cents : null}
+            />
+          </aside>
         </div>
       )}
 

@@ -10,10 +10,13 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   ArrowDown,
-  ArrowRight,
   ArrowUp,
-  Check,
   Eye,
   EyeOff,
   Loader2,
@@ -223,102 +226,11 @@ export function isContentDirty(plan: SignupPlan, draft: PlanDraft): boolean {
   return Object.keys(buildPatch(plan, draft)).length > 0;
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Live preview — a faithful mini of apps/web's public PlanCard               */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Purely decorative: every value shown here is already announced by the form
- * inputs it mirrors, so the whole subtree is hidden from assistive tech to
- * avoid reading the same plan twice.
- *
- * The highlighted state is drawn with a BORDER, not a `ring`.
- *
- * That started as a workaround: the rail used to be a `max-h` +
- * `overflow-y-auto` box, and `overflow` clips anything painted outside the
- * border box, so a ring was sliced along the rail's edges. That box is gone —
- * it produced a second scrollbar inside an already-scrolling page — so a ring
- * would render correctly now. The border stays because it reads identically at
- * this size and needs no clipping assumption to hold.
- */
-export function SignupPlanPreview({
-  draft,
-  currency,
-  interval,
-  highlighted,
-  visible,
-  priceCents,
-}: {
-  draft: PlanDraft;
-  currency: string;
-  interval: string;
-  highlighted: boolean;
-  visible: boolean;
-  priceCents: number | null;
-}) {
-  const bullets = draft.bullets.map((bullet) => bullet.trim()).filter(Boolean);
-
-  return (
-    <div
-      aria-hidden="true"
-      className={cn(
-        'relative flex flex-col overflow-hidden rounded-2xl border bg-card p-5 transition-colors',
-        highlighted ? 'border-indigo-400/60' : 'border-border',
-        !visible && 'opacity-50 saturate-50',
-      )}
-    >
-      <div
-        className={cn(
-          'absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent to-transparent',
-          highlighted ? 'via-indigo-400/60' : 'via-indigo-400/20',
-        )}
-      />
-
-      {highlighted && (
-        <span className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-          <Sparkles className="h-3 w-3" /> Most popular
-        </span>
-      )}
-
-      <p className="pr-24 text-sm font-semibold tracking-tight text-foreground">
-        {draft.name.trim() || 'Plan name'}
-      </p>
-      <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-indigo-400">
-        {draft.fleet_band.trim() || 'Fleet band'}
-      </p>
-
-      <div className="mt-4 flex items-baseline gap-1">
-        <span className="text-3xl font-bold tracking-tighter text-foreground">
-          {priceCents === null ? '—' : formatMoney(priceCents, currency)}
-        </span>
-        <span className="text-xs text-muted-foreground">/{interval}</span>
-      </div>
-
-      <p className="mt-2 min-h-[2.5rem] text-xs leading-relaxed text-muted-foreground">
-        {draft.tagline.trim() || 'Tagline appears here.'}
-      </p>
-
-      <div className="mt-5 flex h-9 w-full items-center justify-center gap-2 rounded-md bg-indigo-500 text-sm font-medium text-white">
-        Subscribe <ArrowRight className="h-4 w-4" />
-      </div>
-
-      <ul className="mt-5 space-y-2 border-t border-border pt-5">
-        {bullets.length === 0 ? (
-          <li className="text-xs italic text-muted-foreground">No bullets yet.</li>
-        ) : (
-          bullets.map((bullet, index) => (
-            <li
-              key={`${index}-${bullet}`}
-              className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"
-            >
-              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-400" />
-              {bullet}
-            </li>
-          ))
-        )}
-      </ul>
-    </div>
-  );
+/** Content edits OR a typed-but-unsaved price. Drives the "Unsaved" badge on the preview. */
+export function isDirty(plan: SignupPlan, draft: PlanDraft): boolean {
+  if (isContentDirty(plan, draft)) return true;
+  const price = parsePriceToCents(draft.price);
+  return price.ok && price.cents !== plan.amount_cents;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -342,14 +254,12 @@ interface SignupPlanCardProps {
   onDiscard: () => void;
   onRequestPriceChange: () => void;
   onToggleVisibility: (next: boolean) => void;
-  onHighlight: () => void;
   /**
-   * The rendered public-card preview for THIS plan, placed in normal flow at
-   * the end of the card. Passed in rather than rendered here so the page keeps
-   * ownership of how a draft becomes a preview, and so this component stays a
-   * pure form.
+   * Toggle, not a one-way set. `next` is false when this plan is already the
+   * highlighted one, which clears the badge entirely — zero highlighted plans is
+   * a legitimate state and the server accepts `is_highlighted: false`.
    */
-  preview?: React.ReactNode;
+  onToggleHighlight: (next: boolean) => void;
 }
 
 export function SignupPlanCard({
@@ -365,8 +275,7 @@ export function SignupPlanCard({
   onDiscard,
   onRequestPriceChange,
   onToggleVisibility,
-  onHighlight,
-  preview,
+  onToggleHighlight,
 }: SignupPlanCardProps) {
   const errors = validateContent(draft);
   const invalid = hasContentErrors(errors);
@@ -398,79 +307,96 @@ export function SignupPlanCard({
       // mirrors, so the preview always tracks whatever is actually being edited.
       onFocus={onActivate}
       onPointerDown={onActivate}
-      className={cn(
-        'scroll-mt-6 transition-colors',
-        active ? 'border-primary/40' : 'hover:border-primary/20',
-      )}
+      className={cn('scroll-mt-6', active && 'border-primary/40')}
     >
       <CardHeader className="pb-4">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <CardTitle className="text-lg">{plan.name || plan.plan_key}</CardTitle>
             <Badge variant="outline" className="font-mono lowercase">
               {plan.plan_key}
             </Badge>
+            {plan.is_highlighted && (
+              <Badge variant="default" className="gap-1">
+                <Sparkles className="h-3 w-3" />
+                Most popular
+              </Badge>
+            )}
             {!plan.is_visible && <Badge variant="secondary">Hidden</Badge>}
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            {/* Most popular — radio semantics, single-select across all plans */}
-            <button
-              type="button"
-              role="radio"
-              aria-checked={plan.is_highlighted}
-              disabled={busy}
-              onClick={onHighlight}
-              className={cn(
-                'inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                'disabled:cursor-not-allowed disabled:opacity-50',
-                plan.is_highlighted
-                  ? 'border-primary/40 bg-primary/10 text-foreground'
-                  : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
-              )}
-            >
-              {savingHighlight ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
-                    plan.is_highlighted ? 'border-primary' : 'border-input',
-                  )}
-                >
-                  {plan.is_highlighted && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  )}
-                </span>
-              )}
-              Most popular
-            </button>
+          {active && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-primary">
+              <Eye className="h-3.5 w-3.5" />
+              Previewing
+            </span>
+          )}
+        </div>
 
-            {/* Visibility */}
-            <div className="flex items-center gap-2.5">
-              {savingVisibility ? (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              ) : plan.is_visible ? (
-                <Eye className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <EyeOff className="h-4 w-4 text-muted-foreground" />
-              )}
-              <Label
-                htmlFor={`visible-${plan.id}`}
-                className="text-xs text-muted-foreground"
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-1">
+          {/*
+            A toggle, not a radio. Radio semantics were wrong here: the group
+            wrapped the whole page body, had no roving tabindex, and — worse —
+            radios cannot be unselected, which is exactly the deselect the admin
+            needs. `aria-pressed` states it plainly.
+          */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-pressed={plan.is_highlighted}
+                aria-describedby="highlight-help"
+                disabled={busy}
+                onClick={() => onToggleHighlight(!plan.is_highlighted)}
+                className={cn(
+                  'inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                  plan.is_highlighted
+                    ? 'border-primary/40 bg-primary/10 text-foreground'
+                    : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
+                )}
               >
-                Show on pricing page
-              </Label>
-              <Switch
-                id={`visible-${plan.id}`}
-                checked={plan.is_visible}
-                disabled={busy || lastVisible}
-                aria-describedby={lastVisible ? visibleReasonId : undefined}
-                onCheckedChange={onToggleVisibility}
-              />
-            </div>
+                {savingHighlight ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles
+                    aria-hidden="true"
+                    className={cn(
+                      'h-3.5 w-3.5',
+                      plan.is_highlighted ? 'text-primary' : 'text-muted-foreground',
+                    )}
+                  />
+                )}
+                Most popular
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {plan.is_highlighted
+                ? 'Click to remove the badge — no plan will be marked most popular.'
+                : 'Mark this plan most popular. It moves the badge off any other plan.'}
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Visibility */}
+          <div className="flex items-center gap-2.5">
+            {savingVisibility ? (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            ) : plan.is_visible ? (
+              <Eye className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <EyeOff className="h-4 w-4 text-muted-foreground" />
+            )}
+            <Label htmlFor={`visible-${plan.id}`} className="text-xs text-muted-foreground">
+              Show on pricing page
+            </Label>
+            <Switch
+              id={`visible-${plan.id}`}
+              checked={plan.is_visible}
+              disabled={busy || lastVisible}
+              aria-describedby={lastVisible ? visibleReasonId : undefined}
+              onCheckedChange={onToggleVisibility}
+            />
           </div>
         </div>
 
@@ -482,6 +408,8 @@ export function SignupPlanCard({
       </CardHeader>
 
       <CardContent className="space-y-5">
+        <Separator />
+
         {/* ------------------------------- Price ------------------------------ */}
         <section className="space-y-2" aria-labelledby={`price-heading-${plan.id}`}>
           <h3 id={`price-heading-${plan.id}`} className="text-sm font-semibold">
@@ -489,10 +417,7 @@ export function SignupPlanCard({
           </h3>
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
-              <Label
-                htmlFor={`price-${plan.id}`}
-                className="text-sm text-muted-foreground"
-              >
+              <Label htmlFor={`price-${plan.id}`} className="text-sm text-muted-foreground">
                 $
               </Label>
               <Input
@@ -526,13 +451,12 @@ export function SignupPlanCard({
               </span>
             ) : (
               <span className="text-muted-foreground">
-                Currently {formatMoney(plan.amount_cents, plan.currency)} per{' '}
-                {plan.interval}
+                Currently {formatMoney(plan.amount_cents, plan.currency)} per {plan.interval}
                 {plan.price_version !== null && ` · price v${plan.price_version}`}
                 {plan.stripe_price_id && (
                   <>
                     {' · '}
-                    <span className="font-mono">{plan.stripe_price_id}</span>
+                    <span className="break-all font-mono">{plan.stripe_price_id}</span>
                   </>
                 )}
               </span>
@@ -548,8 +472,13 @@ export function SignupPlanCard({
             Card content
           </h3>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <div className="space-y-1.5">
+          {/*
+            Two columns, never three. The editor now shares the page with a 360px
+            preview rail, so a third column would squeeze these inputs below their
+            intrinsic minimum width and push the card into horizontal overflow.
+          */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="min-w-0 space-y-1.5">
               <Label htmlFor={`name-${plan.id}`}>Name</Label>
               <Input
                 id={`name-${plan.id}`}
@@ -558,6 +487,7 @@ export function SignupPlanCard({
                 disabled={busy}
                 aria-invalid={Boolean(errors.name)}
                 aria-describedby={`name-help-${plan.id}`}
+                className="min-w-0"
                 onChange={(event) => onDraftChange({ name: event.target.value })}
               />
               <p id={`name-help-${plan.id}`} className="text-xs">
@@ -571,7 +501,7 @@ export function SignupPlanCard({
               </p>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <Label htmlFor={`fleet-${plan.id}`}>Fleet band</Label>
               <Input
                 id={`fleet-${plan.id}`}
@@ -581,6 +511,7 @@ export function SignupPlanCard({
                 disabled={busy}
                 aria-invalid={Boolean(errors.fleet_band)}
                 aria-describedby={`fleet-help-${plan.id}`}
+                className="min-w-0"
                 onChange={(event) => onDraftChange({ fleet_band: event.target.value })}
               />
               <p id={`fleet-help-${plan.id}`} className="text-xs">
@@ -594,7 +525,7 @@ export function SignupPlanCard({
               </p>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <Label htmlFor={`max-${plan.id}`}>Max vehicles</Label>
               <Input
                 id={`max-${plan.id}`}
@@ -603,7 +534,7 @@ export function SignupPlanCard({
                 disabled={busy}
                 aria-invalid={Boolean(errors.max_vehicles)}
                 aria-describedby={`max-help-${plan.id}`}
-                className="tabular-nums"
+                className="min-w-0 tabular-nums"
                 onChange={(event) => onDraftChange({ max_vehicles: event.target.value })}
               />
               <p id={`max-help-${plan.id}`} className="text-xs">
@@ -617,30 +548,30 @@ export function SignupPlanCard({
                 )}
               </p>
             </div>
-          </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor={`tagline-${plan.id}`}>Tagline</Label>
-            <Textarea
-              id={`tagline-${plan.id}`}
-              value={draft.tagline}
-              maxLength={TAGLINE_MAX}
-              rows={2}
-              disabled={busy}
-              aria-invalid={Boolean(errors.tagline)}
-              aria-describedby={`tagline-help-${plan.id}`}
-              className="min-h-[64px]"
-              onChange={(event) => onDraftChange({ tagline: event.target.value })}
-            />
-            <p id={`tagline-help-${plan.id}`} className="text-xs">
-              {errors.tagline ? (
-                <span className="text-destructive">{errors.tagline}</span>
-              ) : (
-                <span className="text-muted-foreground">
-                  {draft.tagline.trim().length}/{TAGLINE_MAX} characters.
-                </span>
-              )}
-            </p>
+            <div className="min-w-0 space-y-1.5">
+              <Label htmlFor={`tagline-${plan.id}`}>Tagline</Label>
+              <Textarea
+                id={`tagline-${plan.id}`}
+                value={draft.tagline}
+                maxLength={TAGLINE_MAX}
+                rows={2}
+                disabled={busy}
+                aria-invalid={Boolean(errors.tagline)}
+                aria-describedby={`tagline-help-${plan.id}`}
+                className="min-h-[64px] min-w-0 resize-none"
+                onChange={(event) => onDraftChange({ tagline: event.target.value })}
+              />
+              <p id={`tagline-help-${plan.id}`} className="text-xs">
+                {errors.tagline ? (
+                  <span className="text-destructive">{errors.tagline}</span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {draft.tagline.trim().length}/{TAGLINE_MAX} characters.
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
         </section>
 
@@ -677,16 +608,24 @@ export function SignupPlanCard({
               return (
                 <li key={bulletId} className="space-y-1">
                   <div className="flex items-start gap-2">
-                    <Label htmlFor={bulletId} className="sr-only">
-                      Bullet {index + 1} of {plan.name}
-                    </Label>
+                    {/*
+                      Named with `aria-label` rather than a `.sr-only` <Label>.
+                      Tailwind's `.sr-only` is `position: absolute`, and with no
+                      positioned ancestor its containing block is the initial
+                      containing block — so it escapes <main>'s overflow clip and
+                      extends the DOCUMENT's scroll height. Twenty-four of those,
+                      one per bullet row, is what produced the phantom second
+                      scrollbar on this page.
+                    */}
                     <Input
                       id={bulletId}
+                      aria-label={`Bullet ${index + 1} of ${plan.name || plan.plan_key}`}
                       value={bullet}
                       maxLength={BULLET_MAX}
                       disabled={busy}
                       aria-invalid={Boolean(bulletError)}
                       aria-describedby={bulletError ? `${bulletId}-error` : undefined}
+                      className="min-w-0"
                       onChange={(event) => {
                         const next = [...draft.bullets];
                         next[index] = event.target.value;
@@ -723,9 +662,7 @@ export function SignupPlanCard({
                         className="h-10 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
                         disabled={busy || draft.bullets.length <= BULLETS_MIN}
                         aria-label={`Remove bullet ${index + 1}`}
-                        onClick={() =>
-                          setBullets(draft.bullets.filter((_, i) => i !== index))
-                        }
+                        onClick={() => setBullets(draft.bullets.filter((_, i) => i !== index))}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -746,38 +683,18 @@ export function SignupPlanCard({
 
         <Separator />
 
-        {preview && (
-          <>
-            <Separator />
-            <section aria-labelledby={`preview-heading-${plan.id}`}>
-              <div className="mb-3 flex items-baseline justify-between gap-2">
-                <h3
-                  id={`preview-heading-${plan.id}`}
-                  className="text-base font-semibold"
-                >
-                  Live preview
-                </h3>
-                <span className="text-xs text-muted-foreground">
-                  Reflects what you have typed, including unsaved edits.
-                </span>
-              </div>
-              {/* Capped so the preview reads as a card, not a full-width banner
-                  — the public grid renders it in a ~360px column. */}
-              <div className="max-w-sm">{preview}</div>
-            </section>
-          </>
-        )}
-
         {/* -------------------------------- Save ------------------------------ */}
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            disabled={busy || !contentDirty || invalid}
-            onClick={onSaveContent}
-          >
+          <Button size="sm" disabled={busy || !contentDirty || invalid} onClick={onSaveContent}>
             {savingContent && <Loader2 className="h-4 w-4 animate-spin" />}
             {savingContent ? 'Saving…' : 'Save card content'}
           </Button>
-          <Button variant="ghost" disabled={busy || !contentDirty} onClick={onDiscard}>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy || !contentDirty}
+            onClick={onDiscard}
+          >
             Discard changes
           </Button>
           {contentDirty && !savingContent && (
