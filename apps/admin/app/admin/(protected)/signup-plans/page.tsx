@@ -6,13 +6,7 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -23,93 +17,37 @@ import {
 } from '@/components/ui/dialog';
 import {
   AlertTriangle,
-  ArrowDown,
-  ArrowRight,
-  ArrowUp,
   BadgeDollarSign,
-  Check,
-  Eye,
-  EyeOff,
   Loader2,
-  Plus,
   RefreshCw,
   RotateCcw,
-  Sparkles,
-  Trash2,
 } from 'lucide-react';
+import {
+  SignupPlanCard,
+  SignupPlanPreview,
+  buildPatch,
+  draftFromPlan,
+  formatMoney,
+  hasContentErrors,
+  parsePriceToCents,
+  validateContent,
+  type PlanDraft,
+  type SignupPlan,
+} from '@/components/admin/signup-plan-card';
 
 /* -------------------------------------------------------------------------- */
-/*  Types                                                                      */
+/*  Types local to the page                                                    */
 /* -------------------------------------------------------------------------- */
-
-interface SignupPlan {
-  id: string;
-  plan_key: string;
-  name: string;
-  tagline: string | null;
-  fleet_band: string | null;
-  max_vehicles: number | null;
-  amount_cents: number;
-  currency: string;
-  interval: string;
-  bullets: string[];
-  is_highlighted: boolean;
-  is_visible: boolean;
-  sort_order: number;
-  stripe_price_id: string | null;
-  stripe_lookup_key: string | null;
-  price_version: number | null;
-  updated_at: string;
-}
-
-/** Local, editable mirror of one plan. All fields are strings so the inputs stay controlled. */
-interface Draft {
-  name: string;
-  tagline: string;
-  fleet_band: string;
-  max_vehicles: string;
-  bullets: string[];
-  price: string;
-}
-
-interface ContentErrors {
-  name?: string;
-  tagline?: string;
-  fleet_band?: string;
-  max_vehicles?: string;
-  bullets?: string;
-  bulletAt: Record<number, string>;
-}
-
-/** Only the fields the admin can edit through the `update` action. */
-interface PlanPatch {
-  name?: string;
-  tagline?: string | null;
-  fleet_band?: string | null;
-  max_vehicles?: number;
-  bullets?: string[];
-}
 
 interface FnFailure {
   message: string;
   code?: string;
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Validation limits (kept together so the copy and the checks can't drift)   */
-/* -------------------------------------------------------------------------- */
-
-const NAME_MIN = 2;
-const NAME_MAX = 40;
-const TAGLINE_MAX = 160;
-const FLEET_BAND_MAX = 40;
-const MAX_VEHICLES_MIN = 1;
-const MAX_VEHICLES_MAX = 10000;
-const BULLETS_MIN = 1;
-const BULLETS_MAX = 8;
-const BULLET_MAX = 120;
-const PRICE_MIN_CENTS = 50;
-const PRICE_MAX_CENTS = 99_999_900;
+interface FnResult {
+  data: unknown;
+  failure: FnFailure | null;
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Safe parsing — the edge response is `unknown`, never trusted as a shape     */
@@ -178,6 +116,12 @@ function parsePlan(raw: unknown): SignupPlan | null {
   };
 }
 
+function sortPlans(plans: SignupPlan[]): SignupPlan[] {
+  return [...plans].sort(
+    (a, b) => a.sort_order - b.sort_order || a.plan_key.localeCompare(b.plan_key),
+  );
+}
+
 function parsePlanList(raw: unknown): SignupPlan[] {
   if (!Array.isArray(raw)) return [];
   const plans: SignupPlan[] = [];
@@ -186,12 +130,6 @@ function parsePlanList(raw: unknown): SignupPlan[] {
     if (plan) plans.push(plan);
   }
   return sortPlans(plans);
-}
-
-function sortPlans(plans: SignupPlan[]): SignupPlan[] {
-  return [...plans].sort(
-    (a, b) => a.sort_order - b.sort_order || a.plan_key.localeCompare(b.plan_key),
-  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -225,11 +163,6 @@ async function readFnFailure(err: unknown, fallback: string): Promise<FnFailure>
   return { message: fallback };
 }
 
-interface FnResult {
-  data: unknown;
-  failure: FnFailure | null;
-}
-
 async function callPlansFn(
   body: Record<string, unknown>,
   fallback: string,
@@ -258,240 +191,19 @@ async function callPlansFn(
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Formatting & validation helpers                                            */
-/* -------------------------------------------------------------------------- */
-
-function formatMoney(cents: number, currency: string): string {
-  const code = (currency || 'usd').toUpperCase();
-  const whole = cents % 100 === 0;
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: code,
-      minimumFractionDigits: whole ? 0 : 2,
-      maximumFractionDigits: 2,
-    }).format(cents / 100);
-  } catch {
-    return `${code} ${(cents / 100).toFixed(whole ? 0 : 2)}`;
-  }
-}
-
-type PriceParse = { ok: true; cents: number } | { ok: false; error: string };
-
-function parsePriceToCents(input: string): PriceParse {
-  const trimmed = input.trim().replace(/^\$/, '').replace(/,/g, '');
-  if (!trimmed) return { ok: false, error: 'Enter a price.' };
-  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
-    return { ok: false, error: 'Use dollars with up to 2 decimals, e.g. 199 or 199.50.' };
-  }
-  const cents = Math.round(Number(trimmed) * 100);
-  if (cents < PRICE_MIN_CENTS) return { ok: false, error: 'Price must be at least $0.50.' };
-  if (cents > PRICE_MAX_CENTS) return { ok: false, error: 'Price cannot be more than $999,999.' };
-  return { ok: true, cents };
-}
-
-function draftFromPlan(plan: SignupPlan): Draft {
-  return {
-    name: plan.name,
-    tagline: plan.tagline ?? '',
-    fleet_band: plan.fleet_band ?? '',
-    max_vehicles: plan.max_vehicles === null ? '' : String(plan.max_vehicles),
-    bullets: plan.bullets.length > 0 ? [...plan.bullets] : [''],
-    price: (plan.amount_cents / 100).toFixed(plan.amount_cents % 100 === 0 ? 0 : 2),
-  };
-}
-
-function validateContent(draft: Draft): ContentErrors {
-  const errors: ContentErrors = { bulletAt: {} };
-
-  const name = draft.name.trim();
-  if (name.length < NAME_MIN || name.length > NAME_MAX) {
-    errors.name = `Name must be ${NAME_MIN}–${NAME_MAX} characters.`;
-  }
-
-  if (draft.tagline.trim().length > TAGLINE_MAX) {
-    errors.tagline = `Tagline must be ${TAGLINE_MAX} characters or fewer.`;
-  }
-
-  if (draft.fleet_band.trim().length > FLEET_BAND_MAX) {
-    errors.fleet_band = `Fleet band must be ${FLEET_BAND_MAX} characters or fewer.`;
-  }
-
-  const rawMax = draft.max_vehicles.trim();
-  if (!rawMax) {
-    errors.max_vehicles = 'Enter a maximum fleet size.';
-  } else if (!/^\d+$/.test(rawMax)) {
-    errors.max_vehicles = 'Use a whole number.';
-  } else {
-    const parsed = Number(rawMax);
-    if (parsed < MAX_VEHICLES_MIN || parsed > MAX_VEHICLES_MAX) {
-      errors.max_vehicles = `Must be between ${MAX_VEHICLES_MIN} and ${MAX_VEHICLES_MAX.toLocaleString('en-US')}.`;
-    }
-  }
-
-  if (draft.bullets.length < BULLETS_MIN) {
-    errors.bullets = `Add at least ${BULLETS_MIN} bullet.`;
-  } else if (draft.bullets.length > BULLETS_MAX) {
-    errors.bullets = `No more than ${BULLETS_MAX} bullets.`;
-  }
-
-  draft.bullets.forEach((bullet, index) => {
-    const value = bullet.trim();
-    if (value.length < 1) {
-      errors.bulletAt[index] = 'Bullet cannot be empty — write something or remove the row.';
-    } else if (value.length > BULLET_MAX) {
-      errors.bulletAt[index] = `Bullet must be ${BULLET_MAX} characters or fewer.`;
-    }
-  });
-
-  return errors;
-}
-
-function hasContentErrors(errors: ContentErrors): boolean {
-  return Boolean(
-    errors.name ||
-      errors.tagline ||
-      errors.fleet_band ||
-      errors.max_vehicles ||
-      errors.bullets ||
-      Object.keys(errors.bulletAt).length > 0,
-  );
-}
-
-function buildPatch(plan: SignupPlan, draft: Draft): PlanPatch {
-  const patch: PlanPatch = {};
-
-  const name = draft.name.trim();
-  if (name !== plan.name) patch.name = name;
-
-  const tagline = draft.tagline.trim();
-  const currentTagline = plan.tagline ?? '';
-  if (tagline !== currentTagline) patch.tagline = tagline || null;
-
-  const fleetBand = draft.fleet_band.trim();
-  const currentFleetBand = plan.fleet_band ?? '';
-  if (fleetBand !== currentFleetBand) patch.fleet_band = fleetBand || null;
-
-  const maxVehicles = Number(draft.max_vehicles.trim());
-  if (Number.isFinite(maxVehicles) && maxVehicles !== plan.max_vehicles) {
-    patch.max_vehicles = maxVehicles;
-  }
-
-  const bullets = draft.bullets.map((bullet) => bullet.trim());
-  const sameBullets =
-    bullets.length === plan.bullets.length &&
-    bullets.every((bullet, index) => bullet === plan.bullets[index]);
-  if (!sameBullets) patch.bullets = bullets;
-
-  return patch;
-}
-
-function isContentDirty(plan: SignupPlan, draft: Draft): boolean {
-  return Object.keys(buildPatch(plan, draft)).length > 0;
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Live preview — a faithful mini of apps/web's public PlanCard               */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Purely decorative: every value shown here is already announced by the form
- * inputs it mirrors, so the whole subtree is hidden from assistive tech to
- * avoid reading the same plan twice.
- */
-function PlanPreview({
-  draft,
-  currency,
-  interval,
-  highlighted,
-  visible,
-  priceCents,
-}: {
-  draft: Draft;
-  currency: string;
-  interval: string;
-  highlighted: boolean;
-  visible: boolean;
-  priceCents: number | null;
-}) {
-  const bullets = draft.bullets.map((bullet) => bullet.trim()).filter(Boolean);
-
-  return (
-    <div
-      aria-hidden="true"
-      className={cn(
-        'relative flex flex-col overflow-hidden rounded-2xl border bg-card p-5 transition-all',
-        highlighted
-          ? 'border-indigo-400/40 ring-1 ring-indigo-400/20'
-          : 'border-border',
-        !visible && 'opacity-50 saturate-50',
-      )}
-    >
-      <div
-        className={cn(
-          'absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent to-transparent',
-          highlighted ? 'via-indigo-400/50' : 'via-indigo-400/20',
-        )}
-      />
-
-      {highlighted && (
-        <span className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-          <Sparkles className="h-3 w-3" /> Most popular
-        </span>
-      )}
-
-      <p className="pr-24 text-sm font-semibold tracking-tight text-foreground">
-        {draft.name.trim() || 'Plan name'}
-      </p>
-      <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-indigo-400">
-        {draft.fleet_band.trim() || 'Fleet band'}
-      </p>
-
-      <div className="mt-4 flex items-baseline gap-1">
-        <span className="text-3xl font-bold tracking-tighter text-foreground">
-          {priceCents === null ? '—' : formatMoney(priceCents, currency)}
-        </span>
-        <span className="text-xs text-muted-foreground">/{interval}</span>
-      </div>
-
-      <p className="mt-2 min-h-[2.5rem] text-xs leading-relaxed text-muted-foreground">
-        {draft.tagline.trim() || 'Tagline appears here.'}
-      </p>
-
-      <div className="mt-5 flex h-9 w-full items-center justify-center gap-2 rounded-md bg-indigo-500 text-sm font-medium text-white">
-        Subscribe <ArrowRight className="h-4 w-4" />
-      </div>
-
-      <ul className="mt-5 space-y-2 border-t border-border pt-5">
-        {bullets.length === 0 ? (
-          <li className="text-xs italic text-muted-foreground">No bullets yet.</li>
-        ) : (
-          bullets.map((bullet, index) => (
-            <li
-              key={`${index}-${bullet}`}
-              className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"
-            >
-              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-400" />
-              {bullet}
-            </li>
-          ))
-        )}
-      </ul>
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
 /*  Page                                                                       */
 /* -------------------------------------------------------------------------- */
 
 export default function SignupPlansPage() {
   const [plans, setPlans] = useState<SignupPlan[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [drafts, setDrafts] = useState<Record<string, PlanDraft>>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [staleWrite, setStaleWrite] = useState<string | null>(null);
   const [status, setStatus] = useState('');
+
+  /** Which plan the sticky preview rail mirrors. Never stored as a fallback — see `activePlan`. */
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
 
   /** `${planId}:${action}` while a mutation is in flight. Blocks every mutating control. */
   const [pending, setPending] = useState<string | null>(null);
@@ -541,6 +253,15 @@ export default function SignupPlansPage() {
     [plans, pricePlanId],
   );
 
+  /**
+   * Resolved rather than stored, so a reload that renames or drops a plan can never
+   * leave the rail pointing at an id that no longer exists.
+   */
+  const activePlan = useMemo(
+    () => plans.find((plan) => plan.id === activePlanId) ?? plans[0] ?? null,
+    [plans, activePlanId],
+  );
+
   /** Replace one row in place, leaving every other plan's unsaved draft untouched. */
   const replacePlan = useCallback((next: SignupPlan) => {
     setPlans((current) =>
@@ -548,7 +269,7 @@ export default function SignupPlansPage() {
     );
   }, []);
 
-  const updateDraft = useCallback((planId: string, patch: Partial<Draft>) => {
+  const updateDraft = useCallback((planId: string, patch: Partial<PlanDraft>) => {
     setDrafts((current) => {
       const existing = current[planId];
       if (!existing) return current;
@@ -557,30 +278,33 @@ export default function SignupPlansPage() {
   }, []);
 
   /** STALE_WRITE must not silently reload — that would eat whatever the admin just typed. */
-  const handleFailure = useCallback((plan: SignupPlan, failure: FnFailure) => {
-    if (failure.code === 'STALE_WRITE') {
-      setStaleWrite(plan.name || plan.plan_key);
-      setStatus(
-        `Could not save ${plan.name}. Another admin changed this plan since you loaded it.`,
-      );
-      toast.error(`"${plan.name}" changed while you were editing it.`, {
-        description:
-          'Another admin saved this plan since you loaded the page. Reload to get their version — your unsaved edits here will be replaced.',
-        duration: 10000,
-      });
-      return;
-    }
+  const handleFailure = useCallback(
+    (plan: SignupPlan, failure: FnFailure) => {
+      if (failure.code === 'STALE_WRITE') {
+        setStaleWrite(plan.name || plan.plan_key);
+        setStatus(
+          `Could not save ${plan.name}. Another admin changed this plan since you loaded it.`,
+        );
+        toast.error(`"${plan.name}" changed while you were editing it.`, {
+          description:
+            'Another admin saved this plan since you loaded the page. Reload to get their version — your unsaved edits here will be replaced.',
+          duration: 10000,
+        });
+        return;
+      }
 
-    if (failure.code === 'LAST_VISIBLE') {
-      setStatus(`Could not hide ${plan.name}. ${failure.message}`);
-      toast.error(failure.message || 'At least one plan must stay visible.');
-      void load();
-      return;
-    }
+      if (failure.code === 'LAST_VISIBLE') {
+        setStatus(`Could not hide ${plan.name}. ${failure.message}`);
+        toast.error(failure.message || 'At least one plan must stay visible.');
+        void load();
+        return;
+      }
 
-    setStatus(`Could not update ${plan.name}. ${failure.message}`);
-    toast.error(failure.message);
-  }, [load]);
+      setStatus(`Could not update ${plan.name}. ${failure.message}`);
+      toast.error(failure.message);
+    },
+    [load],
+  );
 
   /* ---------------------------- mutations -------------------------------- */
 
@@ -753,34 +477,20 @@ export default function SignupPlansPage() {
     setPending(null);
   };
 
-  /* ------------------------------ bullets -------------------------------- */
-
-  const setBullets = (planId: string, bullets: string[]) => {
-    updateDraft(planId, { bullets });
-  };
-
-  const moveBullet = (planId: string, index: number, delta: number) => {
-    const draft = drafts[planId];
-    if (!draft) return;
-    const target = index + delta;
-    if (target < 0 || target >= draft.bullets.length) return;
-    const bullets = [...draft.bullets];
-    const [moved] = bullets.splice(index, 1);
-    bullets.splice(target, 0, moved);
-    setBullets(planId, bullets);
-  };
-
   /* ------------------------------- render -------------------------------- */
 
   const priceDraft = pricePlan ? drafts[pricePlan.id] : undefined;
   const priceParsed = priceDraft ? parsePriceToCents(priceDraft.price) : null;
 
+  const activeDraft = activePlan ? drafts[activePlan.id] : undefined;
+  const activePrice = activeDraft ? parsePriceToCents(activeDraft.price) : null;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* ------------------------------- Header ------------------------------ */}
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 glow-purple-sm">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 glow-purple-sm">
             <BadgeDollarSign className="h-5 w-5 text-primary" />
           </div>
           <div>
@@ -792,11 +502,10 @@ export default function SignupPlansPage() {
               concluded the toggle was broken when the database had in fact updated
               correctly. Say what actually happens instead.
             */}
-            <p className="text-sm text-muted-foreground">
-              The three self-serve plans on the public pricing page. Saved changes
-              reach drive-247.com within about 10 seconds — you may need to reload
-              twice, as the first visit after that window is what triggers the
-              refresh.
+            <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">
+              The self-serve plans on the public pricing page. Saved changes reach
+              drive-247.com in about 10 seconds — the first visit after that window is
+              what triggers the refresh, so you may need to reload twice.
             </p>
           </div>
         </div>
@@ -819,7 +528,7 @@ export default function SignupPlansPage() {
       {staleWrite && (
         <div className="flex flex-wrap items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">
               Another admin changed &ldquo;{staleWrite}&rdquo; while you were editing it
             </p>
@@ -838,8 +547,8 @@ export default function SignupPlansPage() {
       {/* Load failure */}
       {loadError && !loading && (
         <div className="flex flex-wrap items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
-          <div className="flex-1 min-w-0">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">Could not load signup plans</p>
             <p className="mt-0.5 text-sm text-muted-foreground">{loadError}</p>
           </div>
@@ -851,24 +560,22 @@ export default function SignupPlansPage() {
 
       {/* Loading */}
       {loading && (
-        <div className="space-y-4">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <Card key={index}>
-              <CardHeader>
-                <Skeleton className="h-6 w-40" />
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-                  <div className="space-y-3">
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-20 w-full" />
-                  </div>
-                  <Skeleton className="h-[340px] w-full rounded-2xl" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Card key={index}>
+                <CardHeader className="pb-4">
+                  <Skeleton className="h-6 w-40" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-10 w-56" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Skeleton className="hidden h-[380px] w-full rounded-2xl xl:block" />
         </div>
       )}
 
@@ -887,499 +594,134 @@ export default function SignupPlansPage() {
         </Card>
       )}
 
-      {/* Plans */}
-      {!loading && plans.length > 0 && (
-        <div
-          role="radiogroup"
-          aria-label="Most popular plan"
-          aria-describedby="highlight-help"
-          className="space-y-4"
-        >
-          <p id="highlight-help" className="text-sm text-muted-foreground">
-            Only one plan can be marked most popular &mdash; picking another clears the
-            current one.
-          </p>
+      {/*
+        --------------------------- Plans + preview ---------------------------
+        The preview used to live in the right-hand column of a grid INSIDE each
+        plan card, which broke twice over:
 
-          {plans.map((plan) => {
-            const draft = drafts[plan.id];
-            if (!draft) return null;
+        1. Dead space. That grid row is auto-sized, so it took the height of the
+           editor column (measured 950–1150px). The preview is only ~450–560px,
+           so every card carried a 500–800px empty tail in its 320px column.
 
-            const errors = validateContent(draft);
-            const invalid = hasContentErrors(errors);
-            const contentDirty = isContentDirty(plan, draft);
+        2. It could never stay pinned. A sticky box is clamped to its containing
+           block, which for a grid item is its GRID AREA — here, one card. So the
+           preview unpinned and scrolled away the moment its own card left the
+           viewport, no matter which sticky recipe was used.
 
-            const price = parsePriceToCents(draft.price);
-            const priceCents = price.ok ? price.cents : null;
-            const priceDirty = price.ok && price.cents !== plan.amount_cents;
+        Both go away by hoisting the preview to a single page-level rail: the
+        grid is now the page, the containing block is the full plans column
+        (~3700px), and the cards are plain single-column forms with nothing to
+        leave empty.
+      */}
+      {!loading && plans.length > 0 && activePlan && (
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div
+            role="radiogroup"
+            aria-label="Most popular plan"
+            aria-describedby="highlight-help"
+            className="space-y-4"
+          >
+            <p id="highlight-help" className="text-xs text-muted-foreground">
+              Only one plan can be marked most popular &mdash; picking another clears the
+              current one.
+            </p>
 
-            const lastVisible = plan.is_visible && visibleCount <= 1;
-            const savingContent = pending === `${plan.id}:content`;
-            const savingVisibility = pending === `${plan.id}:visibility`;
-            const savingHighlight = pending === `${plan.id}:highlight`;
+            {plans.map((plan) => {
+              const draft = drafts[plan.id];
+              if (!draft) return null;
 
-            const visibleReasonId = `visible-reason-${plan.id}`;
+              return (
+                <SignupPlanCard
+                  key={plan.id}
+                  plan={plan}
+                  draft={draft}
+                  active={plan.id === activePlan.id}
+                  busy={busy}
+                  pending={pending}
+                  lastVisible={plan.is_visible && visibleCount <= 1}
+                  onActivate={() => setActivePlanId(plan.id)}
+                  onDraftChange={(patch) => updateDraft(plan.id, patch)}
+                  onSaveContent={() => void handleSaveContent(plan)}
+                  onDiscard={() =>
+                    setDrafts((current) => ({
+                      ...current,
+                      [plan.id]: draftFromPlan(plan),
+                    }))
+                  }
+                  onRequestPriceChange={() => setPricePlanId(plan.id)}
+                  onToggleVisibility={(next) => void handleVisibility(plan, next)}
+                  onHighlight={() => void handleHighlight(plan)}
+                />
+              );
+            })}
+          </div>
 
-            return (
-              <Card key={plan.id}>
-                <CardHeader className="gap-4">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-semibold tracking-tight">{plan.name}</h2>
-                      <Badge variant="outline" className="font-mono lowercase">
-                        {plan.plan_key}
-                      </Badge>
-                      <Badge variant={plan.is_visible ? 'success' : 'secondary'}>
-                        {plan.is_visible ? 'Visible' : 'Hidden'}
-                      </Badge>
-                      {plan.is_highlighted && (
-                        <Badge variant="default" className="gap-1">
-                          <Sparkles className="h-3 w-3" /> Most popular
-                        </Badge>
-                      )}
-                    </div>
+          {/*
+            `self-start` collapses the rail to its own height so it has room to
+            travel inside the tall grid area; `top-6` matches the page's own
+            `p-6`, and the scrollport is the layout's `<main class="overflow-y-auto">`,
+            whose top edge already sits below the 3.5rem header.
 
-                    {/* Visibility */}
-                    <div className="flex flex-col items-start gap-1 sm:items-end">
-                      <div className="flex items-center gap-2.5">
-                        {savingVisibility ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                        ) : plan.is_visible ? (
-                          <Eye className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <EyeOff className="h-4 w-4 text-muted-foreground" />
-                        )}
-                        <Label
-                          htmlFor={`visible-${plan.id}`}
-                          className="text-sm text-muted-foreground"
-                        >
-                          Show on pricing page
-                        </Label>
-                        <Switch
-                          id={`visible-${plan.id}`}
-                          checked={plan.is_visible}
-                          disabled={busy || lastVisible}
-                          aria-describedby={lastVisible ? visibleReasonId : undefined}
-                          onCheckedChange={(next) => void handleVisibility(plan, next)}
-                        />
-                      </div>
-                      {lastVisible && (
-                        <p id={visibleReasonId} className="text-xs text-warning">
-                          At least one plan must stay visible
-                        </p>
-                      )}
-                    </div>
-                  </div>
+            The `max-h` guard only binds on short viewports (a rail with eight
+            bullets is ~640px); without it the bottom of the preview would be
+            unreachable on a 768px laptop once the rail is pinned.
+          */}
+          {activeDraft && (
+            <aside
+              aria-labelledby="preview-heading"
+              className="xl:sticky xl:top-6 xl:self-start"
+            >
+              <div className="xl:max-h-[calc(100vh-6.5rem)] xl:overflow-y-auto">
+                <div className="mb-3 flex items-baseline justify-between gap-2">
+                  <h2 id="preview-heading" className="text-sm font-semibold">
+                    Live preview
+                  </h2>
+                  {!activePlan.is_visible && (
+                    <span className="text-xs text-muted-foreground">
+                      Hidden from customers
+                    </span>
+                  )}
+                </div>
 
-                  {/* Most popular — radio semantics, single-select across all plans */}
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={plan.is_highlighted}
-                    disabled={busy}
-                    onClick={() => void handleHighlight(plan)}
-                    className={cn(
-                      'inline-flex w-fit items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                      'disabled:cursor-not-allowed disabled:opacity-50',
-                      plan.is_highlighted
-                        ? 'border-primary/40 bg-primary/10 text-foreground'
-                        : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
-                    )}
-                  >
-                    {savingHighlight ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <span
-                        aria-hidden="true"
+                {plans.length > 1 && (
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {plans.map((plan) => (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        aria-pressed={plan.id === activePlan.id}
+                        onClick={() => setActivePlanId(plan.id)}
                         className={cn(
-                          'flex h-4 w-4 items-center justify-center rounded-full border',
-                          plan.is_highlighted ? 'border-primary' : 'border-input',
+                          'rounded-md border px-2 py-1 text-xs transition-colors',
+                          // ring-inset: this button lives inside the rail's
+                          // overflow box, which would clip an outset focus ring.
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                          plan.id === activePlan.id
+                            ? 'border-primary/40 bg-primary/10 text-foreground'
+                            : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
                         )}
                       >
-                        {plan.is_highlighted && (
-                          <span className="h-2 w-2 rounded-full bg-primary" />
-                        )}
-                      </span>
-                    )}
-                    Most popular
-                  </button>
-                </CardHeader>
-
-                <CardContent>
-                  <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-                    {/* ------------------------------ Editor ------------------------------ */}
-                    <div className="space-y-6">
-                      {/* Price */}
-                      <section className="space-y-2" aria-labelledby={`price-heading-${plan.id}`}>
-                        <h3
-                          id={`price-heading-${plan.id}`}
-                          className="text-sm font-semibold"
-                        >
-                          Price
-                        </h3>
-                        <div className="flex flex-wrap items-end gap-3">
-                          <div className="space-y-1.5">
-                            <Label htmlFor={`price-${plan.id}`} className="text-xs text-muted-foreground">
-                              Amount in US dollars
-                            </Label>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-muted-foreground">$</span>
-                              <Input
-                                id={`price-${plan.id}`}
-                                inputMode="decimal"
-                                value={draft.price}
-                                disabled={busy}
-                                aria-invalid={!price.ok}
-                                aria-describedby={`price-help-${plan.id}`}
-                                onChange={(event) =>
-                                  updateDraft(plan.id, { price: event.target.value })
-                                }
-                                className="w-32 tabular-nums"
-                              />
-                              <span className="text-sm text-muted-foreground">
-                                /{plan.interval}
-                              </span>
-                            </div>
-                          </div>
-                          <Button
-                            variant="outline"
-                            disabled={busy || !priceDirty}
-                            onClick={() => setPricePlanId(plan.id)}
-                          >
-                            Change price&hellip;
-                          </Button>
-                        </div>
-                        <p id={`price-help-${plan.id}`} className="text-xs">
-                          {!price.ok ? (
-                            <span className="text-red-400">{price.error}</span>
-                          ) : priceDirty ? (
-                            <span className="text-warning">
-                              Unsaved. Changing the price mints a new Stripe Price and does
-                              not change what existing subscribers pay.
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">
-                              Currently {formatMoney(plan.amount_cents, plan.currency)} per{' '}
-                              {plan.interval}
-                              {plan.price_version !== null && ` · price v${plan.price_version}`}
-                              {plan.stripe_price_id && (
-                                <>
-                                  {' · '}
-                                  <span className="font-mono">{plan.stripe_price_id}</span>
-                                </>
-                              )}
-                            </span>
-                          )}
-                        </p>
-                      </section>
-
-                      <Separator />
-
-                      {/* Card content */}
-                      <section className="space-y-4" aria-labelledby={`content-heading-${plan.id}`}>
-                        <h3 id={`content-heading-${plan.id}`} className="text-sm font-semibold">
-                          Card content
-                        </h3>
-
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div className="space-y-1.5">
-                            <Label htmlFor={`name-${plan.id}`}>Name</Label>
-                            <Input
-                              id={`name-${plan.id}`}
-                              value={draft.name}
-                              maxLength={NAME_MAX}
-                              disabled={busy}
-                              aria-invalid={Boolean(errors.name)}
-                              aria-describedby={`name-help-${plan.id}`}
-                              onChange={(event) =>
-                                updateDraft(plan.id, { name: event.target.value })
-                              }
-                            />
-                            <p id={`name-help-${plan.id}`} className="text-xs">
-                              {errors.name ? (
-                                <span className="text-red-400">{errors.name}</span>
-                              ) : (
-                                <span className="text-muted-foreground">
-                                  {NAME_MIN}&ndash;{NAME_MAX} characters.
-                                </span>
-                              )}
-                            </p>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <Label htmlFor={`fleet-${plan.id}`}>Fleet band</Label>
-                            <Input
-                              id={`fleet-${plan.id}`}
-                              value={draft.fleet_band}
-                              maxLength={FLEET_BAND_MAX}
-                              placeholder="1–4 vehicles"
-                              disabled={busy}
-                              aria-invalid={Boolean(errors.fleet_band)}
-                              aria-describedby={`fleet-help-${plan.id}`}
-                              onChange={(event) =>
-                                updateDraft(plan.id, { fleet_band: event.target.value })
-                              }
-                            />
-                            <p id={`fleet-help-${plan.id}`} className="text-xs">
-                              {errors.fleet_band ? (
-                                <span className="text-red-400">{errors.fleet_band}</span>
-                              ) : (
-                                <span className="text-muted-foreground">
-                                  Shown above the price, in uppercase.
-                                </span>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label htmlFor={`tagline-${plan.id}`}>Tagline</Label>
-                          <Textarea
-                            id={`tagline-${plan.id}`}
-                            value={draft.tagline}
-                            maxLength={TAGLINE_MAX}
-                            rows={2}
-                            disabled={busy}
-                            aria-invalid={Boolean(errors.tagline)}
-                            aria-describedby={`tagline-help-${plan.id}`}
-                            className="min-h-[64px]"
-                            onChange={(event) =>
-                              updateDraft(plan.id, { tagline: event.target.value })
-                            }
-                          />
-                          <p id={`tagline-help-${plan.id}`} className="text-xs">
-                            {errors.tagline ? (
-                              <span className="text-red-400">{errors.tagline}</span>
-                            ) : (
-                              <span className="text-muted-foreground">
-                                {draft.tagline.trim().length}/{TAGLINE_MAX} characters.
-                              </span>
-                            )}
-                          </p>
-                        </div>
-
-                        <div className="space-y-1.5 sm:max-w-[220px]">
-                          <Label htmlFor={`max-${plan.id}`}>Max vehicles</Label>
-                          <Input
-                            id={`max-${plan.id}`}
-                            inputMode="numeric"
-                            value={draft.max_vehicles}
-                            disabled={busy}
-                            aria-invalid={Boolean(errors.max_vehicles)}
-                            aria-describedby={`max-help-${plan.id}`}
-                            className="tabular-nums"
-                            onChange={(event) =>
-                              updateDraft(plan.id, { max_vehicles: event.target.value })
-                            }
-                          />
-                          <p id={`max-help-${plan.id}`} className="text-xs">
-                            {errors.max_vehicles ? (
-                              <span className="text-red-400">{errors.max_vehicles}</span>
-                            ) : (
-                              <span className="text-muted-foreground">
-                                Enforced at signup. {MAX_VEHICLES_MIN}&ndash;
-                                {MAX_VEHICLES_MAX.toLocaleString('en-US')}.
-                              </span>
-                            )}
-                          </p>
-                        </div>
-                      </section>
-
-                      <Separator />
-
-                      {/* Bullets */}
-                      <section className="space-y-3" aria-labelledby={`bullets-heading-${plan.id}`}>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h3 id={`bullets-heading-${plan.id}`} className="text-sm font-semibold">
-                            Bullets
-                          </h3>
-                          <span className="text-xs text-muted-foreground">
-                            {draft.bullets.length}/{BULLETS_MAX}
-                          </span>
-                        </div>
-
-                        <ul className="space-y-2">
-                          {draft.bullets.map((bullet, index) => {
-                            const bulletError = errors.bulletAt[index];
-                            const bulletId = `bullet-${plan.id}-${index}`;
-                            return (
-                              <li key={bulletId} className="space-y-1">
-                                <div className="flex items-start gap-2">
-                                  <Label htmlFor={bulletId} className="sr-only">
-                                    Bullet {index + 1} of {plan.name}
-                                  </Label>
-                                  <Input
-                                    id={bulletId}
-                                    value={bullet}
-                                    maxLength={BULLET_MAX}
-                                    disabled={busy}
-                                    aria-invalid={Boolean(bulletError)}
-                                    aria-describedby={
-                                      bulletError ? `${bulletId}-error` : undefined
-                                    }
-                                    onChange={(event) => {
-                                      const next = [...draft.bullets];
-                                      next[index] = event.target.value;
-                                      setBullets(plan.id, next);
-                                    }}
-                                  />
-                                  <div className="flex shrink-0 items-center gap-0.5">
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-10 w-8"
-                                      disabled={busy || index === 0}
-                                      aria-label={`Move bullet ${index + 1} up`}
-                                      onClick={() => moveBullet(plan.id, index, -1)}
-                                    >
-                                      <ArrowUp className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-10 w-8"
-                                      disabled={busy || index === draft.bullets.length - 1}
-                                      aria-label={`Move bullet ${index + 1} down`}
-                                      onClick={() => moveBullet(plan.id, index, 1)}
-                                    >
-                                      <ArrowDown className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-10 w-8 text-red-400 hover:text-red-300"
-                                      disabled={busy || draft.bullets.length <= BULLETS_MIN}
-                                      aria-label={`Remove bullet ${index + 1}`}
-                                      onClick={() =>
-                                        setBullets(
-                                          plan.id,
-                                          draft.bullets.filter((_, i) => i !== index),
-                                        )
-                                      }
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </div>
-                                {bulletError && (
-                                  <p id={`${bulletId}-error`} className="text-xs text-red-400">
-                                    {bulletError}
-                                  </p>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-
-                        {errors.bullets && (
-                          <p className="text-xs text-red-400">{errors.bullets}</p>
-                        )}
-
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={busy || draft.bullets.length >= BULLETS_MAX}
-                          onClick={() => setBullets(plan.id, [...draft.bullets, ''])}
-                        >
-                          <Plus className="h-4 w-4" />
-                          Add bullet
-                        </Button>
-                        <p className="text-xs text-muted-foreground">
-                          {BULLETS_MIN}&ndash;{BULLETS_MAX} bullets, up to {BULLET_MAX}{' '}
-                          characters each.
-                        </p>
-                      </section>
-
-                      {/* Save */}
-                      <div className="flex flex-wrap items-center gap-3 pt-1">
-                        <Button
-                          disabled={busy || !contentDirty || invalid}
-                          onClick={() => void handleSaveContent(plan)}
-                        >
-                          {savingContent && <Loader2 className="h-4 w-4 animate-spin" />}
-                          {savingContent ? 'Saving…' : 'Save card content'}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          disabled={busy || !contentDirty}
-                          onClick={() =>
-                            setDrafts((current) => ({
-                              ...current,
-                              [plan.id]: draftFromPlan(plan),
-                            }))
-                          }
-                        >
-                          Discard changes
-                        </Button>
-                        {contentDirty && !savingContent && (
-                          <span className="text-xs text-warning">Unsaved changes</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/*
-                      ----------------------------- Preview -----------------------------
-                      `top-0` rather than `top-4`: the scroll container is the layout's
-                      `<main class="overflow-y-auto">`, so the offset is measured from
-                      the top of that scrollport, which already sits below the header —
-                      an extra inset only wasted vertical space.
-
-                      TWO elements, not one, and that is the whole fix.
-
-                      Putting `sticky` directly on the grid item did not work. A grid
-                      item's sticky travel is bounded by its own box, so it needs a
-                      box TALLER than itself to move inside — but `self-start` shrinks
-                      the item to its content, leaving zero travel, while the default
-                      `stretch` makes the item fill the row so there is again nothing
-                      to move within. Either way it scrolls away with the page.
-
-                      So: the OUTER div stretches to the full row height (no
-                      `self-start`, so it inherits `align-self: stretch` and matches
-                      the much taller editor column beside it), and the INNER div is
-                      the sticky one, travelling inside that tall box. This is the
-                      canonical sidebar-sticky pattern and does not depend on how the
-                      grid sizes the row.
-
-                      `top-0` because the scrollport is the layout's
-                      `<main class="overflow-y-auto">`, whose top edge already sits
-                      below the header — any inset would just waste space.
-
-                      `max-h` + `overflow-y-auto` on the inner box keep a plan with
-                      eight bullets from growing taller than the viewport, which would
-                      reintroduce the same "no room to travel" problem.
-                    */}
-                    <div className="lg:self-start lg:sticky lg:top-0">
-                      <div className="lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:pb-4">
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <h3 className="text-sm font-semibold">Live preview</h3>
-                          {!plan.is_visible && (
-                            <span className="text-xs text-muted-foreground">
-                              Hidden from customers
-                            </span>
-                          )}
-                        </div>
-                        <PlanPreview
-                          draft={draft}
-                          currency={plan.currency}
-                          interval={plan.interval}
-                          highlighted={plan.is_highlighted}
-                          visible={plan.is_visible}
-                          priceCents={priceCents}
-                        />
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          Reflects what you have typed, including unsaved edits.
-                        </p>
-                      </div>
-                    </div>
+                        {plan.name || plan.plan_key}
+                      </button>
+                    ))}
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                )}
+
+                <SignupPlanPreview
+                  draft={activeDraft}
+                  currency={activePlan.currency}
+                  interval={activePlan.interval}
+                  highlighted={activePlan.is_highlighted}
+                  visible={activePlan.is_visible}
+                  priceCents={activePrice?.ok ? activePrice.cents : null}
+                />
+
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Reflects what you have typed, including unsaved edits.
+                </p>
+              </div>
+            </aside>
+          )}
         </div>
       )}
 

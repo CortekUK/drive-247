@@ -30,7 +30,7 @@
 import { handleCors, errorResponse, jsonResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { extractBrandColorsFromText, buildTenantPalette } from "../_shared/brand-colors.ts";
-import { getSignupPlan } from "../_shared/signup-plans.ts";
+import { fetchSignupPlan } from "../_shared/signup-plans.ts";
 import {
   getOrCreateSignupPrice,
   getSignupStripeClient,
@@ -595,7 +595,10 @@ Deno.serve(async (req) => {
     // =====================================================================
     // 2. Verify the payment against STRIPE. Never against app_metadata.
     // =====================================================================
-    const plan = getSignupPlan(meta.planId);
+    // DB-backed: the fleet cap and the plan NAME in the error copy must be the
+    // ones the operator was actually shown, or a raised cap rejects a customer
+    // whose card has already been charged.
+    const plan = await fetchSignupPlan(supabase, meta.planId);
     if (!plan) return await fail("PLAN_UNKNOWN", "Unknown plan", 400);
 
     // Fleet size against the plan's allowance.

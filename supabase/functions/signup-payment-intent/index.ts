@@ -27,7 +27,7 @@
 
 import { handleCors, errorResponse, jsonResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import { getSignupPlan, type SignupPlanServer } from "../_shared/signup-plans.ts";
+import { fetchSignupPlan, type SignupPlanServer } from "../_shared/signup-plans.ts";
 import {
   getOrCreateSignupPrice,
   getSignupPublishableKey,
@@ -123,7 +123,14 @@ Deno.serve(async (req) => {
     // (not this endpoint) moves them. Before payment, switching plans is free.
     // -----------------------------------------------------------------------
     const alreadyCommitted = meta.status === "paid" || meta.status === "provisioning";
-    const requested = getSignupPlan(alreadyCommitted ? meta.planId : body?.planId ?? meta.planId);
+    // Read from `signup_plans`, not the hardcoded catalogue. That table is what
+    // the super admin edits and what the marketing card was rendered from, so
+    // charging off the constants would bill an amount the customer never saw.
+    // `fetchSignupPlan` falls back to the constants if the table is unreachable.
+    const requested = await fetchSignupPlan(
+      supabase,
+      alreadyCommitted ? meta.planId : body?.planId ?? meta.planId,
+    );
     if (!requested) return signupError("PLAN_UNKNOWN", "Unknown plan", 400);
     const plan: SignupPlanServer = requested;
 
@@ -300,7 +307,13 @@ Deno.serve(async (req) => {
       // ---------------------------------------------------------------------
       // 3. Price — one shared Price per plan, resolved by lookup_key.
       // ---------------------------------------------------------------------
-      const { priceId } = await getOrCreateSignupPrice(stripe, plan, mode);
+      // Prefer the exact Price the super admin's last edit produced. Resolving
+      // by lookup_key would still work, but only because `plan` now carries the
+      // DB's key — going straight to the id removes a Stripe round trip and any
+      // chance of racing a key rotation mid-request.
+      const priceId = plan.stripePriceId
+        ? plan.stripePriceId
+        : (await getOrCreateSignupPrice(stripe, plan, mode)).priceId;
 
       // ---------------------------------------------------------------------
       // 4. Subscription, incomplete until the card confirms.
