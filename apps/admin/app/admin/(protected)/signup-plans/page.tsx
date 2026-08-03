@@ -1352,8 +1352,8 @@ export default function SignupPlansPage() {
                       eight bullets from growing taller than the viewport, which would
                       reintroduce the same "no room to travel" problem.
                     */}
-                    <div className="lg:h-full">
-                      <div className="lg:sticky lg:top-0 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pb-4">
+                    <div className="lg:self-start lg:sticky lg:top-0">
+                      <div className="lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:pb-4">
                         <div className="mb-2 flex items-center justify-between gap-2">
                           <h3 className="text-sm font-semibold">Live preview</h3>
                           {!plan.is_visible && (
