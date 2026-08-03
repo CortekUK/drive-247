@@ -13,6 +13,7 @@ import {
 
 import {
   getSignupPlan,
+  isSignupPlanId,
   SIGNUP_PLANS,
   type SignupPlan,
   type SignupPlanId,
@@ -246,11 +247,23 @@ interface OnboardingShellValue {
   resolving: boolean;
   /** Set when the user clicked a plan we refused to switch them to (edge case 27). */
   planSwitchBlocked: SignupPlanId | null;
+  /**
+   * The catalogue the cards were rendered from — the live `signup_plans` rows
+   * when the page fetched them, the hardcoded three otherwise.
+   *
+   * Exposed because the business step's fleet check answers "which plan do you
+   * need instead?", and that answer has to come from the same list the operator
+   * was quoted from. It lives on the shell context rather than
+   * `OnboardingContextValue` for the reason above: that interface is the
+   * cross-builder contract and stays byte-identical.
+   */
+  plans: readonly SignupPlan[];
 }
 
 const OnboardingShellContext = createContext<OnboardingShellValue>({
   resolving: false,
   planSwitchBlocked: null,
+  plans: SIGNUP_PLANS,
 });
 
 export function useOnboarding(): OnboardingContextValue {
@@ -424,7 +437,24 @@ function validateBusinessLocally(d: BusinessDraft): OnboardingError | null {
 // Provider
 // ---------------------------------------------------------------------------
 
-export function OnboardingProvider({ children }: { children: React.ReactNode }) {
+interface OnboardingProviderProps {
+  children: React.ReactNode;
+  /**
+   * The live catalogue, handed down from the server-rendered pricing section.
+   *
+   * Defaulted to the hardcoded three so the provider still works anywhere it is
+   * mounted without one. When it IS supplied, every price, name and fleet band
+   * the dialog shows comes from here — the card the visitor clicked and the
+   * dialog they land in are then reading the same row, which is the whole point
+   * of passing it rather than letting the dialog resolve its own.
+   */
+  plans?: readonly SignupPlan[];
+}
+
+export function OnboardingProvider({
+  children,
+  plans = SIGNUP_PLANS,
+}: OnboardingProviderProps) {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
   const [isOpen, setIsOpen] = useState(false);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
@@ -1062,12 +1092,17 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     // `signup-resume` is authoritative about the plan; this only decides which
     // card the user is treated as having pressed, so an unrecognised id falls
     // back to the highlighted tier rather than blocking the recovery.
-    const planId =
-      hinted && getSignupPlan(hinted)
-        ? (hinted as SignupPlanId)
-        : (SIGNUP_PLANS.find((p) => p.highlighted)?.id ?? SIGNUP_PLANS[0].id);
+    //
+    // `isSignupPlanId` rather than a cast: the hint comes from app_metadata,
+    // which is server-written but still just JSON, and `open()` types its
+    // argument as the literal union.
+    const planId = isSignupPlanId(hinted)
+      ? hinted
+      : (plans.find((p) => p.highlighted)?.id ??
+        plans[0]?.id ??
+        SIGNUP_PLANS[0].id);
     open(planId);
-  }, [hasResumableSignup, open]);
+  }, [hasResumableSignup, open, plans]);
 
   const closeNow = useCallback(() => {
     setCloseConfirmOpen(false);
@@ -1437,9 +1472,13 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
   // -------------------------------------------------------------------------
 
+  // Resolved against the live catalogue first, then the hardcoded one. The
+  // second lookup inside `getSignupPlan` is what keeps someone moving whose plan
+  // an admin has hidden since they started — `signup_plans` only serves visible
+  // rows to anon, so their id is simply absent from `plans`.
   const plan: SignupPlan | null = useMemo(
-    () => (state.planId ? getSignupPlan(state.planId) ?? null : null),
-    [state.planId],
+    () => (state.planId ? getSignupPlan(state.planId, plans) ?? null : null),
+    [state.planId, plans],
   );
 
   const value = useMemo<OnboardingContextValue>(
@@ -1492,8 +1531,8 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   );
 
   const shellValue = useMemo<OnboardingShellValue>(
-    () => ({ resolving, planSwitchBlocked }),
-    [resolving, planSwitchBlocked],
+    () => ({ resolving, planSwitchBlocked, plans }),
+    [resolving, planSwitchBlocked, plans],
   );
 
   const overlayMounted = state.step === "provisioning" || state.step === "done";

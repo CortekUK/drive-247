@@ -8,6 +8,23 @@
 // Fleet bands are SIZING GUIDANCE, not an enforced cap: nothing in the platform
 // limits vehicle counts per plan today. Copy must therefore say "sized for",
 // never "limited to".
+//
+// `SIGNUP_PLANS` below is no longer the only source of what the page renders:
+// the live catalogue is read from `public.signup_plans` at request time by
+// `lib/plans-server.ts`, so a super admin can edit copy and pricing without a
+// deploy. This module keeps the hardcoded three for two jobs it will always
+// own:
+//
+//   1. **The fallback.** A DB outage, a missing env pair or a malformed row must
+//      never produce an empty pricing page, and must never break `next build`.
+//   2. **The type source.** `SignupPlan` and the `SignupPlanId` literal union are
+//      the contract every consumer is written against; fetched rows are mapped
+//      onto them, and a row whose `plan_key` is not in the union is dropped
+//      rather than widening the type across the whole signup dialog.
+//
+// Every helper here therefore takes an optional `catalogue` argument. Omitting
+// it keeps the old hardcoded behaviour, which is what makes the DB read a
+// drop-in.
 
 export type SignupPlanId = "starter" | "growth" | "scale";
 
@@ -100,8 +117,35 @@ export const SIGNUP_PLANS: readonly SignupPlan[] = [
   },
 ] as const;
 
-export function getSignupPlan(id: string): SignupPlan | undefined {
-  return SIGNUP_PLANS.find((p) => p.id === id);
+/** True for the three ids the dialog, the edge functions and Stripe all agree on. */
+export function isSignupPlanId(value: unknown): value is SignupPlanId {
+  return (
+    typeof value === "string" &&
+    (SIGNUP_PLAN_IDS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Resolve a plan by id, preferring the live catalogue and falling back to the
+ * hardcoded entry.
+ *
+ * The fallback is not defensive padding — it is the only thing that keeps a
+ * mid-signup operator moving when an admin hides their plan. `signup_plans` is
+ * read with the anon key, which RLS restricts to `is_visible = true`, so a plan
+ * that was hidden five minutes ago simply is not in `catalogue`. Without the
+ * second lookup `getSignupPlan` would return undefined, the provider's `plan`
+ * would be null, and `onboarding-dialog.tsx` (`if (!plan) return null`) would
+ * render nothing at all — stranding someone whose card is already charged.
+ *
+ * Showing them the last known copy for their plan is safe: this catalogue is
+ * display only, and `signup-payment-intent` / `signup-provision` resolve the
+ * real amount from `planId` server-side.
+ */
+export function getSignupPlan(
+  id: string,
+  catalogue: readonly SignupPlan[] = SIGNUP_PLANS,
+): SignupPlan | undefined {
+  return catalogue.find((p) => p.id === id) ?? SIGNUP_PLANS.find((p) => p.id === id);
 }
 
 /**
@@ -141,38 +185,111 @@ export function formatPlanPriceUsd(plan: SignupPlan): string {
   return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`;
 }
 
-// Development-only invariant. The catalogue carries the same amount twice (once
-// in cents for Stripe, once in dollars for the type contract) and there is no
-// build step that would catch them drifting apart, so we shout during dev rather
-// than ship a card that advertises a price the subscription does not charge.
-if (process.env.NODE_ENV !== "production") {
-  for (const plan of SIGNUP_PLANS) {
+/**
+ * The top of a fleet band ("5–15 vehicles" -> 15), or null when the string
+ * carries no number at all (a band like "Any size" is copy, not a bound, and is
+ * not something to complain about).
+ */
+function fleetBandTop(fleetBand: string): number | null {
+  const numbers = fleetBand.match(/\d+/g);
+  return numbers?.length ? Number(numbers[numbers.length - 1]) : null;
+}
+
+/**
+ * Shout about a catalogue that contradicts itself, instead of rendering it.
+ *
+ * This began as a development-only block over the hardcoded three, on the
+ * reasoning that a typo could only ever arrive through a commit. That reasoning
+ * no longer holds: the live catalogue is edited in the admin app and lands in
+ * production without a build, so the same three mistakes can now be made by
+ * someone who will never see a dev console. Rows fetched from `signup_plans`
+ * are therefore checked in every environment — the hardcoded pass stays
+ * dev-only, because for that one a deploy is the only way in.
+ *
+ * Deliberately non-fatal. Each of these makes a card *wrong*, not unrenderable,
+ * and blanking the highest-intent section of the marketing site over a bad
+ * `sort_order` would be a far worse outcome than a slightly odd-looking grid.
+ * Rows that genuinely cannot be rendered (unknown id, non-numeric price) are
+ * dropped earlier, in `plans-server.ts`.
+ */
+export function reportPlanCatalogueProblems(
+  plans: readonly SignupPlan[],
+  source: string,
+): void {
+  for (const plan of plans) {
+    // The catalogue carries the same amount twice (once in cents for Stripe,
+    // once in dollars for the type contract) and nothing at build time would
+    // catch them drifting apart, so we shout rather than ship a card that
+    // advertises a price the subscription does not charge.
     if (plan.priceUsd * 100 !== plan.amountCents) {
       console.error(
-        `[plans] Plan "${plan.id}" is inconsistent: priceUsd=${plan.priceUsd} ` +
+        `[plans] (${source}) Plan "${plan.id}" is inconsistent: priceUsd=${plan.priceUsd} ` +
           `implies ${plan.priceUsd * 100} cents but amountCents=${plan.amountCents}. ` +
           `amountCents is authoritative and must also match ` +
           `supabase/functions/_shared/signup-plans.ts.`
       );
     }
+    // The band is what the operator reads on the card; `maxVehicles` is what the
+    // business step enforces after their card is charged. A band promising 15
+    // against a cap of 10 sells someone a plan that then refuses their fleet.
+    const bandTop = fleetBandTop(plan.fleetBand);
+    if (bandTop !== null && plan.maxVehicles < bandTop) {
+      console.error(
+        `[plans] (${source}) Plan "${plan.id}" advertises "${plan.fleetBand}" but ` +
+          `maxVehicles=${plan.maxVehicles}. The signup form would reject a fleet ` +
+          `size the card promised to cover.`
+      );
+    }
   }
-  if (SIGNUP_PLANS.filter((p) => p.highlighted).length !== 1) {
+
+  const highlighted = plans.filter((p) => p.highlighted).length;
+  if (highlighted !== 1) {
     console.error(
-      "[plans] Exactly one plan must set `highlighted: true` — the pricing grid " +
-        "elevates a single recommended tier."
+      `[plans] (${source}) Exactly one plan must set \`highlighted: true\` — the ` +
+        `pricing grid elevates a single recommended tier, but ${highlighted} are marked.`
     );
   }
+}
+
+if (process.env.NODE_ENV !== "production") {
+  reportPlanCatalogueProblems(SIGNUP_PLANS, "hardcoded");
 }
 
 /**
  * The smallest plan that can carry `count` vehicles, or null when the fleet is
  * bigger than anything self-serve covers (those operators need a call).
+ *
+ * `catalogue` must be the SAME list the card quoted from. An admin who raises
+ * Scale's cap changes the answer to "which plan do you need instead?", and
+ * answering it from the hardcoded copy would send an operator to a strategy
+ * call for a fleet the live Scale plan now accepts.
  */
-export function smallestPlanFor(count: number): SignupPlan | null {
-  return SIGNUP_PLANS.find((p) => count <= p.maxVehicles) ?? null;
+export function smallestPlanFor(
+  count: number,
+  catalogue: readonly SignupPlan[] = SIGNUP_PLANS,
+): SignupPlan | null {
+  // Not assumed to arrive sorted: `sort_order` is display order, and an admin is
+  // free to make it disagree with price.
+  return (
+    [...catalogue]
+      .sort((a, b) => a.maxVehicles - b.maxVehicles)
+      .find((p) => count <= p.maxVehicles) ?? null
+  );
 }
 
-/** The largest fleet any self-serve plan accepts. */
+/** The largest fleet the hardcoded catalogue accepts. */
 export const MAX_SELF_SERVE_VEHICLES = Math.max(
   ...SIGNUP_PLANS.map((p) => p.maxVehicles),
 );
+
+/** The largest fleet any self-serve plan in `catalogue` accepts. */
+export function maxSelfServeVehicles(
+  catalogue: readonly SignupPlan[] = SIGNUP_PLANS,
+): number {
+  // `catalogue` is never empty in practice — every path falls back to
+  // SIGNUP_PLANS — but `Math.max()` of nothing is -Infinity, which would tell
+  // every operator their fleet is too big for the platform.
+  return catalogue.length
+    ? Math.max(...catalogue.map((p) => p.maxVehicles))
+    : MAX_SELF_SERVE_VEHICLES;
+}

@@ -218,3 +218,10 @@ verify_jwt = false
 # endpoint is not an existence oracle.
 [functions.signup-password-reset]
 verify_jwt = false
+
+# Super-admin management of the three PUBLIC signup plans. JWT-verified, and the
+# function additionally requires app_users.is_super_admin — verify_jwt alone
+# would be satisfied by the public anon key, which would make platform pricing
+# editable by anyone who opened the marketing site.
+[functions.manage-signup-plans]
+verify_jwt = true

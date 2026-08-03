@@ -30,7 +30,8 @@ import {
   type OperatingScheduleDraft,
 } from "@/components/onboarding/onboarding-types";
 import {
-  MAX_SELF_SERVE_VEHICLES,
+  maxSelfServeVehicles,
+  SIGNUP_PLANS,
   smallestPlanFor,
   type SignupPlan,
 } from "@/lib/plans";
@@ -550,10 +551,20 @@ export function parseFleetSize(raw: string): number | null {
   return Number.isSafeInteger(n) && n > 0 ? n : null;
 }
 
-/** True when no self-serve plan covers this fleet, so the answer is "call us". */
-export function fleetNeedsSalesCall(raw: string): boolean {
+/**
+ * True when no self-serve plan covers this fleet, so the answer is "call us".
+ *
+ * `catalogue` defaults to the hardcoded plans, but callers inside the signup
+ * dialog pass the live one: an admin who raises a plan's `max_vehicles` moves
+ * this boundary, and answering from a stale copy would send an operator to a
+ * strategy call for a fleet the platform now sells to self-serve.
+ */
+export function fleetNeedsSalesCall(
+  raw: string,
+  catalogue: readonly SignupPlan[] = SIGNUP_PLANS,
+): boolean {
   const n = parseFleetSize(raw);
-  return n !== null && n > MAX_SELF_SERVE_VEHICLES;
+  return n !== null && n > maxSelfServeVehicles(catalogue);
 }
 
 /**
@@ -568,17 +579,18 @@ export function fleetNeedsSalesCall(raw: string): boolean {
 export function validateFleetSize(
   raw: string,
   plan: SignupPlan,
+  catalogue: readonly SignupPlan[] = SIGNUP_PLANS,
 ): string | undefined {
   const count = parseFleetSize(raw);
   if (count === null) return "Enter how many vehicles you run.";
   if (count <= plan.maxVehicles) return undefined;
 
-  const fits = smallestPlanFor(count);
+  const fits = smallestPlanFor(count, catalogue);
   if (!fits) {
     // The link is rendered by the step — see `fleetNeedsSalesCall`. The
     // sentence stays complete on its own so it still reads correctly to a
     // screen reader that announces the text before reaching the link.
-    return `Fleets over ${MAX_SELF_SERVE_VEHICLES} vehicles are set up with our team.`;
+    return `Fleets over ${maxSelfServeVehicles(catalogue)} vehicles are set up with our team.`;
   }
   return `${plan.name} covers up to ${plan.maxVehicles} vehicles. For ${count} you'll need ${fits.name}.`;
 }
@@ -586,6 +598,7 @@ export function validateFleetSize(
 export function validateBusiness(
   draft: BusinessDraft,
   plan: SignupPlan,
+  catalogue: readonly SignupPlan[] = SIGNUP_PLANS,
 ): FieldErrors<BusinessField> {
   const errors: FieldErrors<BusinessField> = {};
 
@@ -611,7 +624,7 @@ export function validateBusiness(
 
   // Assigned only when it fails: callers count `Object.keys(errors)`, so
   // writing `undefined` would leave a key behind and block submit forever.
-  const fleetError = validateFleetSize(draft.fleetSize, plan);
+  const fleetError = validateFleetSize(draft.fleetSize, plan, catalogue);
   if (fleetError) errors.fleetSize = fleetError;
 
   if (draft.location.trim().length > FIELD_MAX.location) {

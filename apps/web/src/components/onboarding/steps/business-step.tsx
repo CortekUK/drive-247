@@ -30,10 +30,12 @@ import {
   Car,
   Clock,
   ImageIcon,
+  Loader2,
   MapPin,
   Palette,
   Phone,
   TriangleAlert,
+  Upload,
 } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -49,7 +51,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { getBrowserSupabase } from "@/lib/supabase/browser";
 import { cn } from "@/lib/utils";
+import { useOnboardingShell } from "@/components/onboarding/onboarding-provider";
 import type { BusinessStepProps } from "@/components/onboarding/onboarding-types";
 import {
   DAY_OPTIONS,
@@ -67,6 +71,15 @@ import {
   type BusinessField,
   type FieldErrors,
 } from "@/lib/signup-validation";
+
+/**
+ * Logo upload limits, deliberately identical to the admin Sales onboarding
+ * dialog (apps/admin/components/admin/SalesOnboardingDialog.tsx) so a tenant
+ * created either way lands in the same bucket under the same rules.
+ */
+const LOGO_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg"] as const;
+const MAX_LOGO_MB = 5;
+const MAX_LOGO_BYTES = MAX_LOGO_MB * 1024 * 1024;
 
 /** Server codes that belong under a specific input rather than in the banner. */
 const SERVER_FIELD_ERRORS: Partial<Record<string, BusinessField>> = {
@@ -99,11 +112,20 @@ export function BusinessStep({
 }: BusinessStepProps) {
   const [errors, setErrors] = React.useState<FieldErrors<BusinessField>>({});
 
+  // The catalogue the pricing cards were rendered from. Both fleet-size answers
+  // this step can give — "you'll need Scale" and "fleets over N need our team" —
+  // are only true relative to a specific set of `maxVehicles` values, so they
+  // have to be computed from the same list the operator was quoted from rather
+  // than from the hardcoded copy in lib/plans.ts.
+  const { plans } = useOnboardingShell();
+
   const companyNameRef = React.useRef<HTMLInputElement>(null);
   const locationRef = React.useRef<HTMLInputElement>(null);
   const phoneRef = React.useRef<HTMLInputElement>(null);
   const coloursRef = React.useRef<HTMLInputElement>(null);
-  const logoRef = React.useRef<HTMLInputElement>(null);
+  const logoInputRef = React.useRef<HTMLInputElement>(null);
+  const [logoUploading, setLogoUploading] = React.useState(false);
+
   const scheduleRef = React.useRef<HTMLDivElement>(null);
   const termsRef = React.useRef<HTMLButtonElement>(null);
   const fleetRef = React.useRef<HTMLInputElement>(null);
@@ -122,6 +144,69 @@ export function BusinessStep({
       onChange(next);
     },
     [onChange, staleServerError],
+  );
+
+  /**
+   * Upload straight to Supabase Storage and keep the PUBLIC URL in the draft.
+   *
+   * The draft field stays a URL string, so nothing downstream changes:
+   * `signup-provision` still receives `logoUrl` and still validates it as an
+   * http(s) URL. Only the way the operator produces that URL has changed.
+   *
+   * Errors are reported into the form's own field-error channel rather than a
+   * toast — this dialog has no toaster, and a failure the user cannot see would
+   * leave them believing a logo was attached when none was.
+   */
+  const handleLogoSelect = React.useCallback(
+    async (file: File | null) => {
+      if (!file) return;
+      const reset = () => {
+        if (logoInputRef.current) logoInputRef.current.value = "";
+      };
+
+      if (!LOGO_MIME_TYPES.includes(file.type as (typeof LOGO_MIME_TYPES)[number])) {
+        setErrors((prev) => ({ ...prev, logoUrl: "Logo must be a PNG or JPG image." }));
+        reset();
+        return;
+      }
+      if (file.size > MAX_LOGO_BYTES) {
+        setErrors((prev) => ({
+          ...prev,
+          logoUrl: `Logo must be ${MAX_LOGO_MB}MB or smaller.`,
+        }));
+        reset();
+        return;
+      }
+
+      setLogoUploading(true);
+      setErrors((prev) => ({ ...prev, logoUrl: undefined }));
+      try {
+        const ext = file.type === "image/png" ? "png" : "jpg";
+        // Random object name: two operators both uploading "logo.png" must not
+        // overwrite each other, and this bucket is shared across every tenant.
+        const path = `signup/${crypto.randomUUID()}.${ext}`;
+        const supabase = getBrowserSupabase();
+
+        const { error: uploadError } = await supabase.storage
+          .from("company-logos")
+          .upload(path, file, { contentType: file.type, upsert: false });
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage.from("company-logos").getPublicUrl(path);
+        patch({ logoUrl: data.publicUrl });
+      } catch (e) {
+        console.error("[signup] logo upload failed:", e);
+        setErrors((prev) => ({
+          ...prev,
+          logoUrl: "We couldn't upload that image. Please try again.",
+        }));
+      } finally {
+        setLogoUploading(false);
+        // Reset so re-picking the SAME file after a failure still fires onChange.
+        reset();
+      }
+    },
+    [patch],
   );
 
   const serverError = staleServerError ? null : error;
@@ -156,7 +241,7 @@ export function BusinessStep({
     event.preventDefault();
     if (busy) return;
 
-    const nextErrors = validateBusiness(value, plan);
+    const nextErrors = validateBusiness(value, plan, plans);
 
     setErrors(nextErrors);
 
@@ -183,7 +268,7 @@ export function BusinessStep({
                 : field === "businessColours"
                   ? coloursRef.current
                   : field === "logoUrl"
-                    ? logoRef.current
+                    ? logoInputRef.current
                     : field === "schedule"
                       ? scheduleRef.current
                       : field === "acceptedTerms"
@@ -430,7 +515,7 @@ export function BusinessStep({
                 {fieldError("fleetSize")}
                 {/* Only the "no plan is big enough" verdict gets a link — it is
                     the one failure the operator cannot fix inside this form. */}
-                {fleetNeedsSalesCall(value.fleetSize) ? (
+                {fleetNeedsSalesCall(value.fleetSize, plans) ? (
                   <>
                     {" "}
                     <a
@@ -631,31 +716,100 @@ export function BusinessStep({
           )}
         </div>
 
+        {/*
+          A real file upload, not a URL box.
+
+          Asking a marketing-site visitor to paste "a direct link to your logo
+          image" asks them to already be hosting it somewhere — most operators
+          have the file on their laptop, so the field was reliably left empty and
+          the tenant launched with no brand mark. This mirrors the admin Sales
+          onboarding dialog exactly (same `company-logos` bucket, same random
+          object name, same size/type gate), so both paths produce identical URLs.
+
+          The upload is possible here because by the Business step the user has a
+          session — the bucket's INSERT policy requires `authenticated`, which an
+          anonymous marketing visitor would not satisfy.
+        */}
         <div>
           <Label htmlFor="signup-logo">
             <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
-            Logo URL (optional)
+            Logo (optional)
           </Label>
-          <Input
-            ref={logoRef}
+
+          <input
+            ref={logoInputRef}
             id="signup-logo"
-            name="logoUrl"
-            type="url"
-            inputMode="url"
-            spellCheck={false}
-            placeholder="https://…"
-            value={value.logoUrl}
-            disabled={busy}
-            aria-invalid={Boolean(fieldError("logoUrl"))}
-            aria-describedby={
-              fieldError("logoUrl") ? "signup-logo-error" : "signup-logo-help"
-            }
-            onChange={(e) => {
-              clearError("logoUrl");
-              patch({ logoUrl: e.target.value });
-            }}
-            className="mt-1.5 h-10"
+            type="file"
+            accept={LOGO_MIME_TYPES.join(",")}
+            className="sr-only"
+            disabled={busy || logoUploading}
+            onChange={(e) => void handleLogoSelect(e.target.files?.[0] ?? null)}
           />
+
+          <div className="mt-1.5 flex items-center gap-3">
+            {value.logoUrl ? (
+              // A just-uploaded Supabase Storage URL is not a build-time known
+              // host, so next/image cannot optimise it without a remotePatterns
+              // entry per project. This is a 48px preview thumbnail, so the
+              // optimiser would buy nothing anyway.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={value.logoUrl}
+                alt="Your uploaded logo"
+                className="h-12 w-12 shrink-0 rounded-md border object-contain"
+              />
+            ) : (
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-dashed">
+                <ImageIcon
+                  className="h-5 w-5 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </div>
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || logoUploading}
+              onClick={() => logoInputRef.current?.click()}
+            >
+              {logoUploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Uploading…
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4" />
+                  {value.logoUrl ? "Replace logo" : "Upload logo"}
+                </>
+              )}
+            </Button>
+
+            {value.logoUrl && !logoUploading && (
+              <Button
+                type="button"
+                variant="link"
+                disabled={busy}
+                onClick={() => {
+                  clearError("logoUrl");
+                  patch({ logoUrl: "" });
+                }}
+                className="text-muted-foreground"
+              >
+                Remove
+              </Button>
+            )}
+          </div>
+
+          <p className="sr-only" role="status" aria-live="polite">
+            {logoUploading
+              ? "Uploading your logo."
+              : value.logoUrl
+                ? "Logo uploaded."
+                : ""}
+          </p>
+
           {fieldError("logoUrl") ? (
             <FieldError id="signup-logo-error">
               {fieldError("logoUrl")}
@@ -665,8 +819,8 @@ export function BusinessStep({
               id="signup-logo-help"
               className="mt-1.5 text-xs leading-relaxed text-muted-foreground"
             >
-              A direct link to your logo image. You can upload one from your
-              portal instead.
+              PNG or JPG, up to {MAX_LOGO_MB}MB. You can change it later in your
+              portal.
             </p>
           )}
         </div>

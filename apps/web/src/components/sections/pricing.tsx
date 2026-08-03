@@ -9,7 +9,19 @@ import {
   PLATFORM_INCLUDED,
   PRICING_FOOTNOTE,
   SIGNUP_PLANS,
+  type SignupPlan,
 } from "@/lib/plans";
+
+interface PricingSectionProps {
+  /**
+   * The live catalogue, read from `signup_plans` by the (server) marketing page.
+   *
+   * Optional, and defaulted to the hardcoded three, for one reason: this section
+   * must never render an empty grid. A caller that forgets the prop, or a fetch
+   * that came back with nothing, still gets three cards.
+   */
+  plans?: readonly SignupPlan[];
+}
 
 /**
  * The public pricing grid and the entry point to self-serve signup.
@@ -23,12 +35,22 @@ import {
  * provisioning overlay. Scoping it here keeps the rest of the marketing page a
  * server component and means a visitor who never scrolls to pricing pays nothing
  * for the flow.
+ *
+ * The same `plans` array goes to the cards AND to the provider. The dialog runs
+ * in the browser and would otherwise have to resolve its own copy from the
+ * hardcoded catalogue — so a visitor could read $199 on a card and then be shown
+ * a different figure in the dialog header and order summary. One array, one
+ * price.
  */
-export function PricingSection() {
+export function PricingSection({ plans = SIGNUP_PLANS }: PricingSectionProps) {
   const { ref, visible } = useFadeIn();
 
+  // Belt and braces against an empty array reaching the grid: `fetchSignupPlans`
+  // already falls back, but a default parameter only fires for `undefined`.
+  const catalogue = plans.length > 0 ? plans : SIGNUP_PLANS;
+
   return (
-    <OnboardingProvider>
+    <OnboardingProvider plans={catalogue}>
       <section
         id="pricing"
         aria-labelledby="pricing-heading"
@@ -72,7 +94,7 @@ export function PricingSection() {
               visible ? "fade-in-visible" : "fade-in-hidden"
             }`}
           >
-            {SIGNUP_PLANS.map((plan) => (
+            {catalogue.map((plan) => (
               <PlanCard key={plan.id} plan={plan} />
             ))}
           </div>
