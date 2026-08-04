@@ -11,12 +11,15 @@ export const FEEDBACK_MAX_MESSAGE = 5000;
 export const FEEDBACK_MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
 export const FEEDBACK_ACCEPTED_MIME = ["image/jpeg", "image/png", "image/webp"];
 
+/** Which entry point produced a submission. Mirrors the DB CHECK constraint. */
+export type FeedbackSource = "sidebar" | "rental_close" | "forced";
+
 export interface SubmitFeedbackPayload {
   category: FeedbackCategory;
   message: string;
   screenshot?: File | null;
   pagePath?: string | null;
-  source?: string | null;
+  source?: FeedbackSource | null;
 }
 
 /**
@@ -25,26 +28,40 @@ export interface SubmitFeedbackPayload {
  * reset the cooldown too, otherwise the dialog reappears on every single
  * rental close until the user gives in.
  *
- * Best-effort by design: this is throttle bookkeeping, and a failure here must
- * never surface as an error over a feedback dialog the user already dealt with.
+ * Goes through a SECURITY DEFINER RPC rather than a direct table UPDATE. The
+ * direct write only worked because `app_users` carries a self-UPDATE policy
+ * with no column list — the same policy that lets any portal user set their own
+ * `is_super_admin`. Writing through the RPC means that policy can be narrowed
+ * without silently killing this cooldown.
+ *
+ * Best-effort for the USER — a failure must never surface over a dialog they
+ * already dealt with — but never silent for us. Returns whether it landed.
  */
 export const useMarkFeedbackPrompted = () => {
   const { appUser } = useAuth();
   const queryClient = useQueryClient();
 
-  return useCallback(async () => {
-    if (!appUser?.id) return;
-    const now = new Date().toISOString();
+  return useCallback(async (): Promise<boolean> => {
+    if (!appUser?.id) return false;
     try {
-      await (supabase as any)
-        .from("app_users")
-        .update({ feedback_last_prompted_at: now })
-        .eq("id", appUser.id);
+      // supabase-js RESOLVES with `{ error }` on an RLS/permission denial
+      // rather than throwing, so a try/catch alone catches nothing and the
+      // failure is invisible: the stamp never advances and the forced prompt
+      // re-fires on every navigation with no way to stop it. Inspect `error`.
+      const { error } = await (supabase as any).rpc("touch_feedback_prompted_at");
+
+      if (error) {
+        console.error("Failed to stamp feedback_last_prompted_at:", error);
+        return false;
+      }
+
       // The trigger conditions read this value; without an invalidation the
       // cached row stays stale and the dialog re-fires on the next navigation.
       queryClient.invalidateQueries({ queryKey: ["feedback-prompt-state"] });
+      return true;
     } catch (err) {
       console.error("Failed to stamp feedback_last_prompted_at:", err);
+      return false;
     }
   }, [appUser?.id, queryClient]);
 };
@@ -137,6 +154,10 @@ export const useSubmitFeedback = () => {
           message,
           screenshot_path: screenshotPath,
           page_path: payload.pagePath ?? null,
+          // Its own column, NOT appended to page_path. Concatenating it there
+          // corrupted the only reproduction field we capture — any filter or
+          // GROUP BY on page_path missed every prompted submission.
+          source: payload.source ?? null,
           user_agent:
             typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 500) : null,
         })

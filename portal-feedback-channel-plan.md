@@ -1,5 +1,37 @@
 # Portal Feedback Channel — Build Plan
 
+> ## ⚠️ SUPERSEDED — DO NOT EXECUTE
+>
+> This feature **shipped** in `b9de167b` (code) + `f5c70304` (tests), and was hardened
+> in `20260804100000`. This file is kept as a record of intent, **not** as a runbook.
+>
+> **Schema of record:**
+> - `supabase/migrations/20260803120000_add_tenant_feedback.sql`
+> - `supabase/migrations/20260804100000_harden_tenant_feedback.sql`
+>
+> **Running §1 or §5 against the live database causes real damage:**
+> 1. **§1.6 turns the screenshot bucket PUBLIC.** Unlike the `CREATE TABLE IF NOT EXISTS`
+>    statements, its `ON CONFLICT (id) DO UPDATE SET public = true` does *not* no-op — it
+>    rewrites the shipped bucket from private to public, making every screenshot (customer
+>    names, addresses, licence images, card last4) a permanent unauthenticated URL. Nothing
+>    breaks visibly, because the admin reads via signed URLs either way. **Corrected below.**
+> 2. **§1.2–§1.4 use names that were renamed before shipping.** Re-running them creates three
+>    duplicate, empty config tables alongside the real ones, while `tenant_feedback` silently
+>    no-ops. The portal would then read `tenant_feedback_settings` while a rebuilt admin panel
+>    wrote `feedback_settings` — the kill switch and force-show campaign would do nothing.
+>
+> **As-built names** (differ from the text below):
+>
+> | Plan says | Actually shipped |
+> |---|---|
+> | `feedback_settings` | `tenant_feedback_settings` |
+> | `feedback_notification_recipients` | `tenant_feedback_recipients` |
+> | `feedback_insights` | `tenant_feedback_insights` |
+> | `screenshot_url` | `screenshot_path` |
+>
+> Shipped columns the plan never mentions: `submitter_name/email/role`, `user_agent`,
+> `notified_at`, `source`, `singleton`, `feedback_count`.
+
 ## 0. Scope
 
 Portal staff (tenant operators inside `apps/portal`) submit feedback about the Drive247 software itself — bug / improvement / feature request / note — from a permanent entry point in the portal. Drive247 super admin reviews everything from a new **Feedbacks** tab in `apps/admin`: email alerts on submission, AI-summarized themes, an ad-hoc chat over the feedback corpus, and open/resolved status tracking.
@@ -104,14 +136,19 @@ One column drives both client-side throttles: the rental-completion cooldown and
 
 ### 1.6 Storage bucket `feedback-screenshots`
 
+> **CORRECTED.** The original text here specified `public = true` with an
+> `ON CONFLICT ... DO UPDATE SET public = true`. That was wrong and actively dangerous —
+> see the banner at the top of this file. Below is what actually shipped.
+
 ```sql
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('feedback-screenshots', 'feedback-screenshots', true, 5242880, ARRAY['image/jpeg','image/png'])
-ON CONFLICT (id) DO UPDATE SET public = true, file_size_limit = 5242880, allowed_mime_types = ARRAY['image/jpeg','image/png'];
+VALUES ('feedback-screenshots', 'feedback-screenshots', false, 5242880, ARRAY['image/jpeg','image/png','image/webp'])
+ON CONFLICT (id) DO UPDATE SET public = false, file_size_limit = 5242880, allowed_mime_types = ARRAY['image/jpeg','image/png','image/webp'];
 ```
-- Public SELECT (read).
+- **PRIVATE bucket.** A screenshot of a portal screen routinely contains customer PII. Reads go through short-lived signed URLs (`createSignedUrl`), never public links.
 - **INSERT scoped to `authenticated` + tenant-folder prefix** (`storage.foldername(name)[1] = get_user_tenant_id()::text` or `is_super_admin()`). Path convention: `{tenant_id}/{file}`.
-- This is tighter than the `gig-driver-images` bucket it's modeled on — that one allows anon/public insert because it serves an unauthenticated guest flow. Feedback screenshots only ever come from logged-in portal staff, so don't copy that part of the pattern.
+- **SELECT scoped to the submitter of the owning row, or a super admin** (`20260804100000`). It must match `tenant_feedback`'s own-rows-only SELECT — an earlier tenant-wide grant let any colleague, including a `manager` denied `/payments`, list and sign every screenshot in their tenant. The upload preview needs no storage read: the dialog previews from an in-memory `URL.createObjectURL(File)` before uploading.
+- This is tighter than the `gig-driver-images` bucket it's modeled on **on both INSERT and READ** — that bucket is public by design because it serves an unauthenticated guest flow. Feedback screenshots only ever come from logged-in portal staff, so don't copy either half of that pattern.
 - No public/anon DELETE — `service_role` only.
 
 ### 1.7 Apply + typegen

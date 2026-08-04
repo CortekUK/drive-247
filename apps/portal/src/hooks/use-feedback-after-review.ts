@@ -31,7 +31,7 @@ export const useFeedbackAfterReview = () => {
 
     if (!shouldPrompt) return false;
 
-    open({ source: "rental-completed" });
+    open({ source: "rental_close" });
     return true;
   }, [formEnabled, isResolved, promptResolved, promptState?.lastPromptedAt, open]);
 };

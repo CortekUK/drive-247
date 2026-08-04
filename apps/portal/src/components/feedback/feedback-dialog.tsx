@@ -18,6 +18,7 @@ import { useFeedbackStore, type FeedbackCategory } from "@/stores/feedback-store
 import {
   useSubmitFeedback,
   useMarkFeedbackPrompted,
+  useMyFeedback,
   FEEDBACK_MAX_MESSAGE,
   FEEDBACK_MAX_SCREENSHOT_BYTES,
   FEEDBACK_ACCEPTED_MIME,
@@ -76,7 +77,11 @@ export function FeedbackDialog() {
   const { toast } = useToast();
   const submitFeedback = useSubmitFeedback();
   const markPrompted = useMarkFeedbackPrompted();
+  const { data: myFeedback } = useMyFeedback();
 
+  // "submit" is always the landing view — the list is opt-in, so a prompted
+  // user still lands on the thing we asked them to do.
+  const [view, setView] = useState<"submit" | "mine">("submit");
   const [category, setCategory] = useState<FeedbackCategory>("bug");
   const [message, setMessage] = useState("");
   const [screenshot, setScreenshot] = useState<File | null>(null);
@@ -96,7 +101,12 @@ export function FeedbackDialog() {
   }, [isOpen, markPrompted]);
 
   useEffect(() => {
-    if (isOpen) setCategory(prefillCategory ?? "bug");
+    if (isOpen) {
+      setCategory(prefillCategory ?? "bug");
+      // Always reopen on the submit view — a user who left it on their history
+      // last time would otherwise be prompted with a read-only list.
+      setView("submit");
+    }
   }, [isOpen, prefillCategory]);
 
   // Only clear the form after a SUCCESSFUL send. If the insert fails, the
@@ -166,7 +176,10 @@ export function FeedbackDialog() {
         category,
         message,
         screenshot,
-        pagePath: source ? `${pathname} (${source})` : pathname,
+        // page_path stays a clean path. `source` rides in its own column —
+        // appending it here made every prompted submission invisible to any
+        // filter or GROUP BY on the page.
+        pagePath: pathname,
         source,
       },
       {
@@ -192,14 +205,73 @@ export function FeedbackDialog() {
       <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-[#080812] dark:text-white">
-            Send feedback to Drive247
+            {view === "submit" ? "Send feedback to Drive247" : "Your feedback"}
           </DialogTitle>
           <DialogDescription className="text-[#737373]">
-            Tell us what's broken, what's clunky, or what you wish this did. It goes
-            straight to the team that builds the software.
+            {view === "submit"
+              ? "Tell us what's broken, what's clunky, or what you wish this did. It goes straight to the team that builds the software."
+              : "Everything you've sent us, and where it got to."}
           </DialogDescription>
         </DialogHeader>
 
+        {/* Closing the loop. Without a way to see that something was actually
+            looked at, people submit twice and then stop submitting at all. */}
+        {(myFeedback?.length ?? 0) > 0 && (
+          <button
+            type="button"
+            onClick={() => setView(view === "submit" ? "mine" : "submit")}
+            className="self-start text-[13px] font-medium text-[#6366f1] hover:underline"
+          >
+            {view === "submit"
+              ? `Your feedback (${myFeedback!.length})`
+              : "← Send new feedback"}
+          </button>
+        )}
+
+        {view === "mine" ? (
+          <div className="space-y-2 py-2">
+            {myFeedback!.map((f: any) => {
+              const meta =
+                CATEGORIES.find((c) => c.value === f.category) ?? CATEGORIES[3];
+              const Icon = meta.icon;
+              return (
+                <div
+                  key={f.id}
+                  className="rounded-md border border-[#f1f5f9] dark:border-border p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className="inline-flex items-center gap-1.5 text-[12px] font-medium"
+                      style={{ color: meta.color }}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {meta.label}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[12px] font-medium",
+                        f.status === "resolved"
+                          ? "text-green-600"
+                          : "text-[#d97706]"
+                      )}
+                    >
+                      {f.status === "resolved" ? "Resolved" : "Open"}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-[13px] text-[#404040] dark:text-gray-300 whitespace-pre-wrap">
+                    {f.message}
+                  </p>
+                  <p className="mt-1.5 text-[12px] text-[#737373]">
+                    Sent {new Date(f.created_at).toLocaleDateString()}
+                    {f.resolved_at
+                      ? ` · resolved ${new Date(f.resolved_at).toLocaleDateString()}`
+                      : ""}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label className="text-[13px] text-[#404040] dark:text-gray-300">
@@ -321,6 +393,7 @@ export function FeedbackDialog() {
             </p>
           </div>
         </div>
+        )}
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button
@@ -329,22 +402,24 @@ export function FeedbackDialog() {
             disabled={submitFeedback.isPending}
             className="text-[13px]"
           >
-            Cancel
+            {view === "mine" ? "Close" : "Cancel"}
           </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            className="bg-[#6366f1] text-[13px] text-white hover:bg-[#4f46e5]"
-          >
-            {submitFeedback.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending...
-              </>
-            ) : (
-              "Send feedback"
-            )}
-          </Button>
+          {view === "submit" && (
+            <Button
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              className="bg-[#6366f1] text-[13px] text-white hover:bg-[#4f46e5]"
+            >
+              {submitFeedback.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                "Send feedback"
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

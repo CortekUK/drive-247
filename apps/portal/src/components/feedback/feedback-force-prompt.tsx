@@ -51,7 +51,7 @@ export function FeedbackForcePrompt({ suppressed = false }: FeedbackForcePromptP
     firedRef.current = true;
     // The dialog stamps `feedback_last_prompted_at` on open, so dismissing
     // still satisfies this trigger and it never fires twice for one campaign.
-    open({ source: "forced-login" });
+    open({ source: "forced" });
   }, [
     suppressed,
     isResolved,

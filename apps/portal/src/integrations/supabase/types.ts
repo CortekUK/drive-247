@@ -13674,6 +13674,7 @@ export type Database = {
           resolved_at: string | null
           resolved_by: string | null
           screenshot_path: string | null
+          source: string | null
           status: string
           submitter_email: string | null
           submitter_name: string | null
@@ -13693,6 +13694,7 @@ export type Database = {
           resolved_at?: string | null
           resolved_by?: string | null
           screenshot_path?: string | null
+          source?: string | null
           status?: string
           submitter_email?: string | null
           submitter_name?: string | null
@@ -13712,6 +13714,7 @@ export type Database = {
           resolved_at?: string | null
           resolved_by?: string | null
           screenshot_path?: string | null
+          source?: string | null
           status?: string
           submitter_email?: string | null
           submitter_name?: string | null
@@ -17989,6 +17992,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      touch_feedback_prompted_at: { Args: never; Returns: undefined }
       trax_price_suggest: {
         Args: {
           p_make?: string
