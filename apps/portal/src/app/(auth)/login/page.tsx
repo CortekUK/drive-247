@@ -103,12 +103,20 @@ function LoginPageContent() {
 
   const from = searchParams.get("from") || getRedirectPath();
 
-  // If already authenticated, redirect to dashboard
+  // If already authenticated, redirect to dashboard.
+  //
+  // `appUser` is required here, not just `user`. The dashboard refuses to render
+  // without a profile, so redirecting on a session alone sent the user straight
+  // back here — an endless login<->dashboard bounce whenever the profile lookup
+  // had failed. Waiting for the profile means the loop cannot form.
+  // `appUser.is_active` is part of the guard: the dashboard bounces deactivated
+  // users back here, so redirecting them in without checking it produced its own
+  // endless loop.
   useEffect(() => {
-    if (user && !loading) {
+    if (user && appUser && appUser.is_active && !loading) {
       router.replace(from);
     }
-  }, [user, loading, router, from]);
+  }, [user, appUser, loading, router, from]);
 
   // Show loading screen while checking auth
   if (loading) {
@@ -145,6 +153,15 @@ function LoginPageContent() {
       );
 
       if (signInError) {
+        // The credentials were CORRECT — we just couldn't load the profile.
+        // Don't record a failed attempt, don't write a login_failed audit row,
+        // and don't blame the password.
+        // (the enclosing finally clears isSubmitting)
+        if ((signInError as { code?: string }).code === "profile_unavailable") {
+          setError(signInError.message);
+          return;
+        }
+
         // Record failed attempt
         await recordLoginAttempt(data.email, false);
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/stores/auth-store";
+import { Button } from "@/components/ui/button";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
@@ -74,7 +75,7 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, appUser, loading } = useAuth();
+  const { user, appUser, loading, profileUnavailable, refetchAppUser, signOut } = useAuth();
   const { tenant, loading: tenantLoading } = useTenant();
   const {
     isSubscribed,
@@ -227,8 +228,22 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (!loading) {
-      // Not authenticated - redirect to login
-      if (!user || !appUser) {
+      // Signed out — go to login.
+      if (!user) {
+        router.replace(`/login?from=${encodeURIComponent(pathname)}`);
+        return;
+      }
+
+      // Session is valid but the profile could not be LOADED (network/server
+      // blip). Do NOT redirect: the login page would see the valid session and
+      // send us straight back, producing an endless dashboard<->login bounce
+      // that no amount of retrying by the user escapes. Show a retry screen.
+      if (!appUser && profileUnavailable) {
+        return;
+      }
+
+      // Valid session, and the profile genuinely does not exist.
+      if (!appUser) {
         router.replace(`/login?from=${encodeURIComponent(pathname)}`);
         return;
       }
@@ -239,7 +254,18 @@ export default function DashboardLayout({
         return;
       }
     }
-  }, [user, appUser, loading, router, pathname]);
+  }, [user, appUser, profileUnavailable, loading, router, pathname]);
+
+  // Self-heal a stale profile. When the lookup fails but we still hold a
+  // profile, the dashboard keeps rendering with the pinned copy — deliberately,
+  // so a blip doesn't eject anyone — but the retry button lives on the
+  // no-profile screen and is unreachable from here. Re-check quietly until it
+  // succeeds, so role/active changes can't stay stale indefinitely.
+  useEffect(() => {
+    if (!profileUnavailable || !user) return;
+    const id = setInterval(() => { void refetchAppUser(); }, 60_000);
+    return () => clearInterval(id);
+  }, [profileUnavailable, user, refetchAppUser]);
 
   // Manager route protection
   useEffect(() => {
@@ -251,6 +277,28 @@ export default function DashboardLayout({
   // Show loading skeleton while checking auth
   if (loading) {
     return <LoadingSkeleton />;
+  }
+
+  // Signed in, but we could not load the profile. Offer a way out instead of
+  // silently bouncing to login (which used to loop forever).
+  if (user && !appUser && profileUnavailable) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-lg border border-border bg-card p-6 text-center space-y-4">
+          <h2 className="text-lg font-semibold">We couldn&apos;t load your account</h2>
+          <p className="text-sm text-muted-foreground">
+            You&apos;re signed in, but we couldn&apos;t reach the server to load your
+            profile. This is usually a temporary connection problem.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2 justify-center pt-1">
+            <Button onClick={() => refetchAppUser()}>Try again</Button>
+            <Button variant="outline" onClick={() => signOut()}>
+              Sign out
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Not authenticated - show nothing while redirecting
