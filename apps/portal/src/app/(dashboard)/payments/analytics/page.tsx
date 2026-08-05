@@ -15,6 +15,7 @@ import { ArrowLeft, Info } from "lucide-react";
 import { eachDayOfInterval, format, startOfMonth, endOfMonth } from "date-fns";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { isMoneyReceived, receivedAmount } from "@/lib/payment-status";
 
 const METHOD_COLORS: Record<string, string> = {
   Cash: "#6366f1",
@@ -53,10 +54,12 @@ export default function PaymentsAnalyticsPage() {
   const { data: chartPayments, isLoading } = useQuery({
     queryKey: ["payments-chart-data", tenant?.id],
     queryFn: async () => {
-      const firstOfMonth = startOfMonth(new Date()).toISOString().split('T')[0];
+      // format(), not toISOString() — the latter converts local midnight to UTC
+      // and can land on the previous month's last day for UTC+ viewers.
+      const firstOfMonth = format(startOfMonth(new Date()), 'yyyy-MM-dd');
       const { data } = await supabase
         .from("payments")
-        .select("amount, payment_date, method, payment_type, verification_status")
+        .select("amount, payment_date, method, payment_type, verification_status, status, capture_status, refund_amount")
         .eq("tenant_id", tenant!.id)
         .gte("payment_date", firstOfMonth);
       return data || [];
@@ -65,34 +68,43 @@ export default function PaymentsAnalyticsPage() {
     staleTime: 60000,
   });
 
+  // Money charts must only count payments actually received — voided/reversed
+  // rows keep their full `amount`, and pending links / uncaptured holds carry
+  // one too. The approval chart below deliberately keeps the unfiltered set,
+  // since it measures submissions rather than money.
+  const receivedPayments = useMemo(
+    () => (chartPayments || []).filter(isMoneyReceived),
+    [chartPayments]
+  );
+
   const dailyTrendData = useMemo(() => {
-    if (!chartPayments?.length) return [];
+    if (!receivedPayments.length) return [];
     const now = new Date();
     const days = eachDayOfInterval({ start: startOfMonth(now), end: endOfMonth(now) });
     const dayMap = new Map<string, number>();
-    chartPayments.forEach((p: any) => {
+    receivedPayments.forEach((p: any) => {
       const key = p.payment_date?.split('T')[0] || '';
-      dayMap.set(key, (dayMap.get(key) || 0) + (p.amount || 0));
+      dayMap.set(key, (dayMap.get(key) || 0) + receivedAmount(p));
     });
     return days.map(d => {
       const key = format(d, 'yyyy-MM-dd');
       return { date: format(d, 'MMM dd'), amount: dayMap.get(key) || 0 };
     });
-  }, [chartPayments]);
+  }, [receivedPayments]);
 
   const methodDonutData = useMemo(() => {
-    if (!chartPayments?.length) return [];
+    if (!receivedPayments.length) return [];
     const counts = new Map<string, number>();
-    chartPayments.forEach((p: any) => {
+    receivedPayments.forEach((p: any) => {
       const method = p.method || 'Other';
       counts.set(method, (counts.get(method) || 0) + 1);
     });
     return Array.from(counts, ([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [chartPayments]);
+  }, [receivedPayments]);
 
   const amountDistData = useMemo(() => {
-    if (!chartPayments?.length) return [];
+    if (!receivedPayments.length) return [];
     const buckets = [
       { label: "< 100", min: 0, max: 100 },
       { label: "100–500", min: 100, max: 500 },
@@ -102,14 +114,14 @@ export default function PaymentsAnalyticsPage() {
       { label: "5k+", min: 5000, max: Infinity },
     ];
     const counts = new Array(buckets.length).fill(0);
-    chartPayments.forEach((p: any) => {
+    receivedPayments.forEach((p: any) => {
       const amt = p.amount || 0;
       for (let i = 0; i < buckets.length; i++) {
         if (amt >= buckets[i].min && amt < buckets[i].max) { counts[i]++; break; }
       }
     });
     return buckets.map((b, i) => ({ name: b.label, count: counts[i] }));
-  }, [chartPayments]);
+  }, [receivedPayments]);
 
   const approvalRadialData = useMemo(() => {
     if (!chartPayments?.length) return { rate: 0, approved: 0, total: 0, pending: 0, rejected: 0 };
@@ -138,7 +150,7 @@ export default function PaymentsAnalyticsPage() {
         </div>
       </div>
 
-      {chartPayments && chartPayments.length > 0 ? (
+      {(receivedPayments.length > 0 || approvalRadialData.total > 0) ? (
         <TooltipProvider>
           <div className="space-y-4">
             {/* Daily Payment Collection */}
@@ -182,7 +194,7 @@ export default function PaymentsAnalyticsPage() {
                       const d = payload[0].payload;
                       return (<div className="rounded-lg border bg-background px-3 py-2 shadow-md"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: METHOD_COLORS[d.name] || METHOD_COLORS.Other }} /><span className="text-sm font-medium">{d.name}</span></div><p className="text-xs text-muted-foreground mt-0.5">{d.value} payment{d.value !== 1 ? 's' : ''}</p></div>);
                     }} />
-                    <text x="50%" y="46%" textAnchor="middle" className="fill-foreground text-xl font-bold">{chartPayments.length}</text>
+                    <text x="50%" y="46%" textAnchor="middle" className="fill-foreground text-xl font-bold">{receivedPayments.length}</text>
                     <text x="50%" y="58%" textAnchor="middle" className="fill-muted-foreground text-[11px]">Total</text>
                   </PieChart>
                 </ChartContainer>

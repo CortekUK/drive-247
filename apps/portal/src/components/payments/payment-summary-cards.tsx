@@ -3,6 +3,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
+import { formatInTimeZone } from "date-fns-tz";
+import {
+  RECEIVED_PAYMENT_COLUMNS,
+  isMoneyReceived,
+  sumReceived,
+} from "@/lib/payment-status";
+
+// Mirrors the helper in use-payments-data.ts so the cards and the table agree.
+const formatDateForDB = (date: Date): string =>
+  formatInTimeZone(date, "America/New_York", "yyyy-MM-dd");
 
 export const PaymentSummaryCards = () => {
   const { tenant } = useTenant();
@@ -13,13 +23,20 @@ export const PaymentSummaryCards = () => {
     queryFn: async () => {
       if (!tenant) throw new Error("No tenant context available");
 
-      const today = new Date().toISOString().split('T')[0];
-      const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+      // Use the same timezone the payments table itself queries in, or the cards
+      // and the list underneath them disagree about which day/month a payment is in.
+      const now = new Date();
+      const today = formatDateForDB(now);
+      // Derive the month from the NY calendar directly. Doing
+      // formatDateForDB(startOfMonth(now)) instead takes the BROWSER's local
+      // midnight and renders that instant in New York, which lands on the
+      // previous month's last day for UTC/UTC+ viewers and drags an extra day in.
+      const firstOfMonth = `${formatInTimeZone(now, "America/New_York", "yyyy-MM")}-01`;
 
       // Today's payments - filtered by tenant
       const { data: todayPayments, error: todayError } = await supabase
         .from("payments")
-        .select("amount")
+        .select(RECEIVED_PAYMENT_COLUMNS)
         .eq("tenant_id", tenant.id)
         .eq("payment_date", today);
 
@@ -28,15 +45,18 @@ export const PaymentSummaryCards = () => {
       // This month's payments - filtered by tenant
       const { data: monthPayments, error: monthError } = await supabase
         .from("payments")
-        .select("amount")
+        .select(RECEIVED_PAYMENT_COLUMNS)
         .eq("tenant_id", tenant.id)
         .gte("payment_date", firstOfMonth);
 
       if (monthError) throw monthError;
 
-      const todaysTotal = todayPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-      const monthsTotal = monthPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-      const paymentCount = monthPayments.length;
+      // Voided/reversed rows keep their full `amount`, and pending checkout links
+      // and uncaptured holds carry a real amount too — none of that is money
+      // received, so it must not reach these totals. See lib/payment-status.ts.
+      const todaysTotal = sumReceived(todayPayments as any[]);
+      const monthsTotal = sumReceived(monthPayments as any[]);
+      const paymentCount = ((monthPayments as any[]) || []).filter(isMoneyReceived).length;
 
       return {
         todaysTotal,

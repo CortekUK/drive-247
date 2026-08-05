@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useTenant } from "@/contexts/TenantContext";
 import { useDashboardKPIs } from "@/hooks/use-dashboard-kpis";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
+import { RECEIVED_PAYMENT_STATUSES, receivedAmount, sumReceived } from "@/lib/payment-status";
 import { TrendingUp, TrendingDown, DollarSign, Loader2, Info } from "lucide-react";
 
 // --- Types ---
@@ -84,10 +85,13 @@ export const ActionItems = () => {
       // Current month payments
       let paymentsQuery = supabase
         .from("payments")
-        .select("amount, payment_date, verification_status")
+        // verification_status is NOT a settlement signal: it defaults to
+        // 'auto_approved' and reverse-payment never clears it, so voided and
+        // unpaid rows passed the old filter. Gate on payment status instead.
+        .select("amount, payment_date, status, capture_status, refund_amount")
         .gte("payment_date", monthStartStr)
         .lte("payment_date", monthEndStr)
-        .or("verification_status.eq.approved,verification_status.eq.auto_approved,verification_status.is.null");
+        .in("status", RECEIVED_PAYMENT_STATUSES as unknown as string[]);
       if (tenant?.id) paymentsQuery = paymentsQuery.eq("tenant_id", tenant.id);
 
       // Current month vehicle expenses WITH category
@@ -109,10 +113,10 @@ export const ActionItems = () => {
       // Previous month for comparison
       let prevPaymentsQuery = supabase
         .from("payments")
-        .select("amount")
+        .select("amount, status, capture_status, refund_amount")
         .gte("payment_date", prevMonthStartStr)
         .lte("payment_date", prevMonthEndStr)
-        .or("verification_status.eq.approved,verification_status.eq.auto_approved,verification_status.is.null");
+        .in("status", RECEIVED_PAYMENT_STATUSES as unknown as string[]);
       if (tenant?.id) prevPaymentsQuery = prevPaymentsQuery.eq("tenant_id", tenant.id);
 
       let prevExpensesQuery = supabase
@@ -157,13 +161,15 @@ export const ActionItems = () => {
       const prevServices = prevServicesRes.data || [];
 
       // Totals
-      const totalRevenue = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+      // sumReceived also drops uncaptured pre-auth holds, which can carry
+      // status='Applied' while capture_status='requires_capture'.
+      const totalRevenue = sumReceived(payments as any[]);
       const vehicleExpenseTotal = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
       const serviceRecordTotal = services.reduce((sum, s) => sum + Number(s.cost || 0), 0);
       const totalExpenses = vehicleExpenseTotal + serviceRecordTotal;
       const netProfit = totalRevenue - totalExpenses;
 
-      const prevTotalRevenue = prevPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+      const prevTotalRevenue = sumReceived(prevPayments as any[]);
       const prevTotalExpenses =
         prevExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0) +
         prevServices.reduce((sum, s) => sum + Number(s.cost || 0), 0);
@@ -176,8 +182,10 @@ export const ActionItems = () => {
       // --- Daily revenue data (non-cumulative) ---
       const dailyRevenue: Record<string, number> = {};
       payments.forEach((p: any) => {
+        const net = receivedAmount(p);
+        if (net <= 0) return;
         const date = p.payment_date?.split("T")[0];
-        if (date) dailyRevenue[date] = (dailyRevenue[date] || 0) + Number(p.amount || 0);
+        if (date) dailyRevenue[date] = (dailyRevenue[date] || 0) + net;
       });
 
       const allDates = eachDayOfInterval({ start: monthStart, end: now > monthEnd ? monthEnd : now });

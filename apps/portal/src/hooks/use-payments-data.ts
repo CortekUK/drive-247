@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PaymentFilters } from "@/components/payments/payment-filters";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatInTimeZone } from "date-fns-tz";
+import { isMoneyReceived } from "@/lib/payment-status";
 
 // Helper to format date in America/New_York timezone for database queries
 const formatDateForDB = (date: Date): string => {
@@ -199,20 +200,20 @@ export const usePaymentsData = ({
 };
 
 // Export CSV function
-export const exportPaymentsCSV = async (filters: PaymentFilters, tenantId?: string) => {
+// tenantId is REQUIRED. It used to be optional and the single call site passed
+// nothing, so both `if (tenantId)` guards were skipped and the export returned
+// every tenant's payments — customer names, vehicle regs and amounts included.
+export const exportPaymentsCSV = async (filters: PaymentFilters, tenantId: string) => {
+  if (!tenantId) throw new Error("exportPaymentsCSV requires a tenant id");
+
   // If vehicle search is provided, first get matching vehicle IDs
   let vehicleIds: string[] | null = null;
   if (filters.vehicleSearch) {
     const searchTerm = filters.vehicleSearch.toLowerCase();
-    let vehicleSearchQuery = supabase
+    const { data: matchingVehicles } = await supabase
       .from("vehicles")
-      .select("id, reg, make, model");
-
-    if (tenantId) {
-      vehicleSearchQuery = vehicleSearchQuery.eq("tenant_id", tenantId);
-    }
-
-    const { data: matchingVehicles } = await vehicleSearchQuery;
+      .select("id, reg, make, model")
+      .eq("tenant_id", tenantId);
 
     if (matchingVehicles) {
       vehicleIds = matchingVehicles
@@ -236,13 +237,12 @@ export const exportPaymentsCSV = async (filters: PaymentFilters, tenantId?: stri
       method,
       amount,
       status,
+      capture_status,
       remaining_amount,
       vehicle_id
     `);
 
-  if (tenantId) {
-    query = query.eq("tenant_id", tenantId);
-  }
+  query = query.eq("tenant_id", tenantId);
 
   // Apply same filters as the main query
   if (filters.customerSearch) {
@@ -276,7 +276,10 @@ export const exportPaymentsCSV = async (filters: PaymentFilters, tenantId?: stri
   if (error) throw error;
 
   // Convert to CSV
-  const headers = ['Date', 'Customer', 'Vehicle', 'Rental Ref', 'Type', 'Method', 'Amount', 'Applied', 'Credit Remaining'];
+  // 'Status' and 'Counts As Received' are load-bearing: a voided/reversed payment
+  // keeps its full `amount`, so without them a void exports indistinguishable
+  // from a real payment and anyone totalling the Amount column overstates revenue.
+  const headers = ['Date', 'Customer', 'Vehicle', 'Rental Ref', 'Type', 'Method', 'Status', 'Counts As Received', 'Amount', 'Applied', 'Credit Remaining'];
 
   const getPaymentTypeDisplay = (paymentType: string): string => {
     switch (paymentType) {
@@ -296,6 +299,8 @@ export const exportPaymentsCSV = async (filters: PaymentFilters, tenantId?: stri
     payment.rentals?.rental_number || '',
     getPaymentTypeDisplay(payment.payment_type),
     payment.method || '',
+    payment.status || '',
+    isMoneyReceived(payment) ? 'Yes' : 'No',
     payment.amount.toFixed(2),
     (payment.amount - (payment.remaining_amount || 0)).toFixed(2),
     (payment.remaining_amount || 0).toFixed(2)

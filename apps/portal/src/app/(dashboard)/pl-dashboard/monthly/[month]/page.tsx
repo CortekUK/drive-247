@@ -61,8 +61,12 @@ const MonthlyPLDrilldown = () => {
 
   // Fetch vehicle P&L data for the specific month
   const { data: vehicleData, isLoading } = useQuery({
-    queryKey: ["monthlyVehiclePL", month],
+    queryKey: ["monthlyVehiclePL", tenant?.id, month],
     queryFn: async () => {
+      // This drill-down previously carried NO tenant predicate, so it showed
+      // every tenant's vehicles and P&L to whoever opened the month.
+      if (!tenant?.id) throw new Error("No tenant context available");
+
       const { data, error } = await supabase
         .from("pnl_entries")
         .select(`
@@ -72,8 +76,9 @@ const MonthlyPLDrilldown = () => {
           amount,
           vehicles!pnl_entries_vehicle_id_fkey(id, reg, make, model)
         `)
-        .gte("entry_date", monthStart.toISOString().split('T')[0])
-        .lte("entry_date", monthEnd.toISOString().split('T')[0]);
+        .eq("tenant_id", tenant.id)
+        .gte("entry_date", format(monthStart, 'yyyy-MM-dd'))
+        .lte("entry_date", format(monthEnd, 'yyyy-MM-dd'));
 
       if (error) throw error;
 
@@ -128,6 +133,7 @@ const MonthlyPLDrilldown = () => {
 
       return Object.values(groupedData);
     },
+    enabled: !!tenant?.id,
   });
 
   // Calculate monthly summary

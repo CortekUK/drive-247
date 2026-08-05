@@ -128,18 +128,17 @@ const PLDashboard: React.FC = () => {
       const fromDate = format(dateRange.from, 'yyyy-MM-dd');
       const toDate = format(dateRange.to, 'yyyy-MM-dd');
 
-      // Query pnl_entries directly with date filter
-      let query = supabase
+      // Tenant scoping is NOT optional. This used to be `if (tenant?.id)`, which
+      // silently dropped the filter on the first render (before TenantContext
+      // resolved) and returned every tenant's P&L.
+      if (!tenant?.id) throw new Error('No tenant context available');
+
+      const { data, error } = await supabase
         .from('pnl_entries')
         .select('amount, side, vehicle_id')
+        .eq('tenant_id', tenant.id)
         .gte('entry_date', fromDate)
         .lte('entry_date', toDate);
-
-      if (tenant?.id) {
-        query = query.eq('tenant_id', tenant.id);
-      }
-
-      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -166,6 +165,7 @@ const PLDashboard: React.FC = () => {
         vehicles_tracked: vehicleIds.size,
       };
     },
+    enabled: !!tenant?.id,
   });
 
   // Fetch vehicle P&L data with date filtering
@@ -175,31 +175,23 @@ const PLDashboard: React.FC = () => {
       const fromDate = format(dateRange.from, 'yyyy-MM-dd');
       const toDate = format(dateRange.to, 'yyyy-MM-dd');
 
-      // Query pnl_entries directly with date filter
-      let pnlQuery = supabase
+      // Tenant scoping is mandatory — see the note on the pl-summary query.
+      if (!tenant?.id) throw new Error('No tenant context available');
+
+      const { data: pnlData, error: pnlError } = await supabase
         .from('pnl_entries')
         .select('vehicle_id, amount, side, category')
+        .eq('tenant_id', tenant.id)
         .gte('entry_date', fromDate)
         .lte('entry_date', toDate);
-
-      if (tenant?.id) {
-        pnlQuery = pnlQuery.eq('tenant_id', tenant.id);
-      }
-
-      const { data: pnlData, error: pnlError } = await pnlQuery;
 
       if (pnlError) throw pnlError;
 
       // Fetch vehicle info
-      let vehiclesQuery = supabase
+      const { data: vehiclesData, error: vehiclesError } = await supabase
         .from('vehicles')
-        .select('id, reg, make, model, is_disposed, disposal_date');
-
-      if (tenant?.id) {
-        vehiclesQuery = vehiclesQuery.eq('tenant_id', tenant.id);
-      }
-
-      const { data: vehiclesData, error: vehiclesError } = await vehiclesQuery;
+        .select('id, reg, make, model, is_disposed, disposal_date')
+        .eq('tenant_id', tenant.id);
 
       if (vehiclesError) throw vehiclesError;
 
@@ -268,15 +260,21 @@ const PLDashboard: React.FC = () => {
 
       return result;
     },
+    enabled: !!tenant?.id,
   });
 
   // Fetch monthly P&L data when grouping by month
   const { data: monthlyPLData } = useQuery({
-    queryKey: ['monthly-pl', dateRange],
+    queryKey: ['monthly-pl', tenant?.id, dateRange],
     queryFn: async (): Promise<MonthlyPL[]> => {
+      // This query previously had NO tenant predicate at all — it aggregated
+      // every tenant's P&L into one operator's monthly chart.
+      if (!tenant?.id) throw new Error('No tenant context available');
+
       const { data, error } = await supabase
         .from('pnl_entries')
         .select('entry_date, amount, side, vehicle_id')
+        .eq('tenant_id', tenant.id)
         .gte('entry_date', format(dateRange.from, 'yyyy-MM-dd'))
         .lte('entry_date', format(dateRange.to, 'yyyy-MM-dd'))
         .order('entry_date', { ascending: false });
@@ -323,6 +321,7 @@ const PLDashboard: React.FC = () => {
 
       return result.sort((a, b) => a.month.localeCompare(b.month));
     },
+    enabled: !!tenant?.id,
   });
 
   const handleSort = (field: SortField) => {

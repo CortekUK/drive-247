@@ -178,7 +178,8 @@ const PaymentsList = () => {
 
   const handleExportCSV = async () => {
     try {
-      await exportPaymentsCSV(filters);
+      if (!tenant?.id) throw new Error("No tenant context available");
+      await exportPaymentsCSV(filters, tenant.id);
       toast({
         title: "Export Complete",
         description: "Payments data has been exported to CSV",
