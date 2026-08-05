@@ -77,6 +77,7 @@ import { AdditionalDriversCard } from "@/components/rentals/additional-drivers-c
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 import { InsuranceTimeline } from "@/components/rentals/InsuranceTimeline";
+import { InshurCoverageBlock } from "@/components/rentals/inshur-coverage-block";
 import { RentalInsuranceVerificationsCard } from "@/components/insurance/rental-insurance-verifications-card";
 import { AddReminderDialog } from "@/components/reminders/add-reminder-dialog";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
@@ -4816,6 +4817,10 @@ const RentalDetail = () => {
           onUploadExtensionInsuranceFor={(extId) => uploadInsuranceDoc({ extensionId: extId })}
         />
       )}
+
+      {/* INSHUR Period Z — per-rental liability cover. Renders nothing unless the
+          tenant has the integration on; it explains its own absence otherwise. */}
+      <InshurCoverageBlock rentalId={id} rental={rental} canEdit={canEdit('rentals')} />
 
       {/* AI-verified insurance documents attached to this rental */}
       <RentalInsuranceVerificationsCard rentalId={id} />

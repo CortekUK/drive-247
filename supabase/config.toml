@@ -198,3 +198,39 @@ verify_jwt = true
 
 [functions.automation-publish]
 verify_jwt = true
+
+# INSHUR / ABI "Period Z" per-rental insurance.
+#
+# The interactive functions are listed explicitly even though verify_jwt already
+# defaults to true. This integration binds legally binding cover on real
+# vehicles; "nobody wrote a block" is not a record of a decision about who may
+# call it.
+[functions.inshur-verify-credentials]
+verify_jwt = true
+
+[functions.inshur-check-eligibility]
+verify_jwt = true
+
+[functions.inshur-create-coverage]
+verify_jwt = true
+
+[functions.inshur-end-coverage]
+verify_jwt = true
+
+[functions.inshur-cancel-coverage]
+verify_jwt = true
+
+# Cron targets. pg_cron carries no user JWT, so the gateway check is off and
+# each function verifies the service-role bearer itself.
+#
+# Deliberately NOT an X-Cron-Secret header. The repo's cron template sends
+# `Authorization: Bearer <service_role_key>` and nothing else, so a function
+# demanding a bespoke secret would 401 on every tick — and because
+# net.http_post is asynchronous that 401 lands in net._http_response, never in
+# cron.job_run_details. The schedule would look perfectly healthy while no
+# coverage was ever reconciled.
+[functions.inshur-reconcile]
+verify_jwt = false
+
+[functions.inshur-sync-billing]
+verify_jwt = false
