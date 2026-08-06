@@ -295,7 +295,10 @@ export function usePlatformStatus(): PlatformStatus {
           // not by withholding the tick from an operator who has done their part.
           isComplete: inshurCredsComplete,
           actionLabel: inshurCredsComplete ? "Manage" : "Set up",
-          actionPath: "/settings?tab=insurance",
+          // tab=insurance is BONZAH's panel. The INSHUR panel is tab=inshur —
+          // the two live side by side in Settings and the names are one letter
+          // apart, so this is an easy and silent mis-route.
+          actionPath: "/settings?tab=inshur",
           priority: 7,
           integrationStatus: !inshurCredsComplete
             ? "not_configured"
@@ -334,7 +337,7 @@ export function usePlatformStatus(): PlatformStatus {
           description: "Per-rental liability cover for US fleets",
           isComplete: false,
           actionLabel: "Learn more",
-          actionPath: "/settings?tab=insurance",
+          actionPath: "/settings?tab=inshur",
           priority: 24,
           comingSoon: true,
           icon: "inshur",
