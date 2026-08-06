@@ -68,6 +68,8 @@ export function usePlatformStatus(): PlatformStatus {
   const {
     balanceNumber,
     testBalanceNumber,
+    brokerBalanceNumber,
+    needsAllocation,
     isBonzahConnected,
     hasOwnCredentials,
     bonzahMode,
@@ -246,7 +248,12 @@ export function usePlatformStatus(): PlatformStatus {
       label: "Bonzah Insurance",
       description: hasOwnCredentials
         ? bonzahMode === "live"
-          ? "Connected · Accepting live insurance policies"
+          // Don't claim we're accepting policies when nothing is allocated to
+          // pay for them — that reassurance held right up until a real
+          // customer's purchase failed for insufficient funds.
+          ? needsAllocation
+            ? "Connected · Funds not allocated — policies will fail"
+            : "Connected · Accepting live insurance policies"
           : "Connected · Set up your account to go live"
         : "Test mode · Set up your account to go live",
       isComplete: hasOwnCredentials,
@@ -259,14 +266,19 @@ export function usePlatformStatus(): PlatformStatus {
       mode: bonzahMode as "test" | "live",
       // Show balance for the current mode — always visible (test mode works for everyone)
       metric: {
-          label: bonzahMode === "live" ? "Live balance" : "Allocated balance",
+          // Always the ALLOCATED figure — the only money a policy can draw on.
+          label: bonzahMode === "live" ? "Available to issue policies" : "Allocated balance",
           value: balanceNumber != null
             ? `$${balanceNumber.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             : "$0.00",
-          warning: (balanceNumber == null || balanceNumber === 0)
-            ? "Top up your balance in Bonzah"
-            : undefined,
-          warningUrl: (balanceNumber == null || balanceNumber === 0)
+          warning: needsAllocation
+            // Tell them the money isn't missing, it's in the wrong place —
+            // otherwise "top up" reads as wrong to someone who just paid in.
+            ? `$${(brokerBalanceNumber ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} is in your Bonzah account but not allocated — allocate it to start issuing policies`
+            : (balanceNumber == null || balanceNumber === 0)
+              ? "Top up your balance in Bonzah"
+              : undefined,
+          warningUrl: (needsAllocation || balanceNumber == null || balanceNumber === 0)
             ? getBonzahPortalUrl(bonzahMode)
             : undefined,
         },

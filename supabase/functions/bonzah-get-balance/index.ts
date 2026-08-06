@@ -279,11 +279,31 @@ Deno.serve(async (req) => {
       return errorResponse(cdBalanceError || 'Failed to fetch balance', 400)
     }
 
-    // Prefer non-zero allocated (entity-level), then broker, then allocated even if zero
+    // SPENDABLE balance = the entity/sub-user allocation, because that is what a
+    // policy purchase actually draws from ("your allocated Bonzah balance is too
+    // low. Allocate more funds, then retry.").
+    //
+    // This used to read `allocated > 0 ? allocated : broker`, which meant an
+    // allocation of exactly ZERO silently fell back to the broker figure. A
+    // tenant with $500 sitting at broker level but $0 allocated was shown a
+    // reassuring "Live balance: $500.00 · Accepting live insurance policies"
+    // right up until a real customer's policy failed for insufficient funds.
+    //
+    // Only fall back to the broker number when we could not determine the
+    // allocation at all (the /deposit call failed) — never to paper over a
+    // genuine zero.
     const balance =
-      allocatedBalance !== null && Number(allocatedBalance) > 0
+      allocatedBalance !== null
         ? allocatedBalance
-        : brokerBalance ?? allocatedBalance ?? '0'
+        : brokerBalance ?? '0'
+
+    // True when the money exists at broker level but none of it has been
+    // allocated to the sub-account that issues policies. The operator must move
+    // funds inside the Bonzah portal; nothing on our side can do it for them.
+    const needsAllocation =
+      allocatedBalance !== null &&
+      Number(allocatedBalance) <= 0 &&
+      Number(brokerBalance ?? 0) > 0
 
     // Check threshold and create reminder/notifications if needed
     const balanceNum = Number(balance)
@@ -291,7 +311,14 @@ Deno.serve(async (req) => {
       await checkLowBalanceThreshold(supabase, body.tenant_id, balanceNum)
     }
 
-    return jsonResponse({ balance, allocatedBalance, mode: effectiveMode, rawData: brokerRawData })
+    return jsonResponse({
+      balance,
+      allocatedBalance,
+      brokerBalance,
+      needsAllocation,
+      mode: effectiveMode,
+      rawData: brokerRawData,
+    })
   } catch (error) {
     console.error('[Bonzah Balance] Error:', error)
     return errorResponse(

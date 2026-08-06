@@ -3,8 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 
 interface BonzahBalanceData {
+  /** Spendable balance — the sub-account allocation policies are paid from. */
   balance: string;
   allocatedBalance?: string | null;
+  /** Company-level funds. NOT spendable until allocated to the sub-account. */
+  brokerBalance?: string | null;
+  /** Broker funds exist but nothing is allocated — policies will fail. */
+  needsAllocation?: boolean;
   mode?: string;
   rawData?: any;
 }
@@ -75,20 +80,33 @@ export function useBonzahBalance() {
     refetchInterval: 60_000,
   });
 
-  const rawBalanceNumber = balanceData?.balance != null ? Number(balanceData.balance) : null;
   const allocatedBalanceNumber = balanceData?.allocatedBalance != null ? Number(balanceData.allocatedBalance) : null;
+  const brokerBalanceNumber = balanceData?.brokerBalance != null ? Number(balanceData.brokerBalance) : null;
   const testBalanceNumber = testBalanceData?.balance != null ? Number(testBalanceData.balance) : null;
   const portalUrl = getBonzahPortalUrl(bonzahMode);
 
-  // Prefer allocated balance (entity-level) over broker-level, but fall back if allocated is 0
-  const balanceNumber = allocatedBalanceNumber != null && allocatedBalanceNumber > 0
-    ? allocatedBalanceNumber
-    : rawBalanceNumber;
+  // `balance` from the edge function is already the SPENDABLE figure (the
+  // sub-account allocation policies are paid from), falling back to broker only
+  // when the allocation genuinely could not be read.
+  //
+  // Do NOT reintroduce a `allocated > 0 ? allocated : broker` fallback here.
+  // That is the bug this replaces: an allocation of exactly zero fell through to
+  // the broker number, so a tenant holding $500 at broker level with $0
+  // allocated saw "Live balance: $500.00 · Accepting live insurance policies"
+  // while every policy purchase would fail for insufficient funds.
+  const balanceNumber = balanceData?.balance != null ? Number(balanceData.balance) : null;
+
+  // Funds exist at broker level but none are allocated to the policy-issuing
+  // sub-account. Only the operator can move them, inside the Bonzah portal.
+  const needsAllocation = balanceData?.needsAllocation === true;
 
   return {
     balanceNumber,
     allocatedBalanceNumber,
-    rawBalanceNumber,
+    brokerBalanceNumber,
+    needsAllocation,
+    // kept for callers that still read it; same value as balanceNumber
+    rawBalanceNumber: balanceNumber,
     testBalanceNumber,
     isBonzahConnected,
     hasOwnCredentials,
