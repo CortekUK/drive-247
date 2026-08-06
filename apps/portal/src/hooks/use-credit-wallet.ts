@@ -129,7 +129,19 @@ export function useCreditWallet() {
 
   // Create checkout session to buy credits (custom amount)
   const buyCredits = useMutation({
-    mutationFn: async (credits: number) => {
+    // `termsAccepted` is optional so existing callers keep compiling, but the
+    // credits page always sends it. Buying credits is a real charge on a route
+    // explicitly whitelisted past the paywall
+    // (layout.tsx: pathname === "/credits"), so a tenant created via
+    // CreateTenantDialog — which provisions no subscription_plans row and
+    // therefore never triggers the paywall at all — could otherwise spend money
+    // having accepted nothing.
+    mutationFn: async (
+      arg: number | { credits: number; termsAccepted?: boolean },
+    ) => {
+      const credits = typeof arg === "number" ? arg : arg.credits;
+      const termsAccepted = typeof arg === "number" ? undefined : arg.termsAccepted;
+
       const { data: sessionData, error } = await supabase.functions.invoke(
         "create-credit-checkout",
         {
@@ -138,6 +150,7 @@ export function useCreditWallet() {
             tenantId: tenant!.id,
             successUrl: `${window.location.origin}/credits?status=success`,
             cancelUrl: `${window.location.origin}/credits?status=cancelled`,
+            ...(termsAccepted === true ? { acceptedTos: true } : {}),
           },
         }
       );

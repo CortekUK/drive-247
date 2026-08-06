@@ -427,7 +427,10 @@ export function SubscriptionSettings() {
     };
   }, [searchParams]);
 
-  const handleSubscribe = async (planId: string) => {
+  const handleSubscribe = async (
+    planId: string,
+    consent?: { termsAccepted: boolean },
+  ) => {
     setSubscribingPlanId(planId);
     try {
       const origin = window.location.origin;
@@ -435,6 +438,7 @@ export function SubscriptionSettings() {
         planId,
         successUrl: `${origin}/settings?tab=subscription&status=success`,
         cancelUrl: `${origin}/settings?tab=subscription&status=canceled`,
+        termsAccepted: consent?.termsAccepted === true,
       });
 
       if (result?.url) {

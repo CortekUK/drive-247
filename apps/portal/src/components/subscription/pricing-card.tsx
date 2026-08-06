@@ -1,7 +1,9 @@
 "use client";
 
+import { useId, useState } from "react";
 import { CalendarClock, Loader2, Sparkles, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { TermsConsent } from "@/components/legal/terms-consent";
 
 interface PricingCardProps {
   plan: {
@@ -15,7 +17,13 @@ interface PricingCardProps {
     trial_days?: number;
     billing_model?: string;
   };
-  onSubscribe: (planId: string) => void;
+  /**
+   * Fired only once the tenant has ticked the terms box — the button is
+   * disabled until then, so `consent.termsAccepted` is always true here. It is
+   * passed explicitly rather than implied so the call sites forward something
+   * meaningful to the edge function instead of a bare boolean literal.
+   */
+  onSubscribe: (planId: string, consent: { termsAccepted: boolean }) => void;
   isLoading?: boolean;
   isCurrentPlan?: boolean;
   /** Go-live date (tenants.subscription_billing_anchor) for upfront_monthly first-charge date. */
@@ -65,6 +73,21 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan, billi
   const isUpfront = plan.billing_model === "upfront_monthly";
   const hasTrial = !isUpfront && (plan.trial_days ?? 0) > 0;
   const firstCharge = firstChargeLabel(billingAnchor);
+
+  // Consent is per-card by design. PricingCard is rendered inside a .map() over
+  // the tenant's plans, so hoisting this to a single shared checkbox would let a
+  // tick against one plan authorise checkout on a different one. One plan is the
+  // overwhelmingly common case anyway (every host special-cases length === 1).
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const consentId = useId();
+  const consentGateId = `tos-${consentId}`;
+
+  // Guard the callback as well as the button. `disabled` is a DOM attribute a
+  // user can strip in devtools; this makes the component itself refuse.
+  const handleSubscribe = () => {
+    if (!termsAccepted || isLoading) return;
+    onSubscribe(plan.id, { termsAccepted: true });
+  };
 
   // Flat, modal-native rendering — a single bordered block matching the portal's
   // design system (1px border, no shadow, no gradient). Reuses the same shape
@@ -133,6 +156,17 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan, billi
           )}
         </div>
 
+        {/* Terms acceptance — must be ticked before the CTA unlocks. */}
+        {!isCurrentPlan && (
+          <TermsConsent
+            id={consentGateId}
+            checked={termsAccepted}
+            onChange={setTermsAccepted}
+            disabled={isLoading}
+            className="mt-4"
+          />
+        )}
+
         {/* CTA */}
         <div className="mt-5">
           {isCurrentPlan ? (
@@ -141,8 +175,8 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan, billi
             </Button>
           ) : (
             <Button
-              onClick={() => onSubscribe(plan.id)}
-              disabled={isLoading}
+              onClick={handleSubscribe}
+              disabled={isLoading || !termsAccepted}
               className="w-full"
             >
               {isLoading ? (
@@ -262,6 +296,17 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan, billi
             )}
           </div>
 
+          {/* Terms acceptance — must be ticked before the CTA unlocks. */}
+          {!isCurrentPlan && (
+            <TermsConsent
+              id={consentGateId}
+              checked={termsAccepted}
+              onChange={setTermsAccepted}
+              disabled={isLoading}
+              className="mb-4"
+            />
+          )}
+
           {/* CTA */}
           {isCurrentPlan ? (
             <Button disabled className="w-full" size="lg" variant="outline">
@@ -269,8 +314,8 @@ export function PricingCard({ plan, onSubscribe, isLoading, isCurrentPlan, billi
             </Button>
           ) : (
             <Button
-              onClick={() => onSubscribe(plan.id)}
-              disabled={isLoading}
+              onClick={handleSubscribe}
+              disabled={isLoading || !termsAccepted}
               className="w-full"
               size="lg"
             >

@@ -218,10 +218,19 @@ export function useTenantSubscription() {
       planId,
       successUrl,
       cancelUrl,
+      termsAccepted,
     }: {
       planId: string;
       successUrl: string;
       cancelUrl: string;
+      /**
+       * Set by PricingCard's acceptance checkbox. The edge function records the
+       * acceptance against the tenant, but derives the VERSION server-side — a
+       * version named by the client would attest to nothing, since anyone with a
+       * session can invoke the function directly. See
+       * supabase/functions/_shared/platform-tos.ts.
+       */
+      termsAccepted?: boolean;
     }) => {
       const { data, error } = await supabase.functions.invoke(
         "create-subscription-checkout",
@@ -231,6 +240,7 @@ export function useTenantSubscription() {
             planId,
             successUrl,
             cancelUrl,
+            acceptedTos: termsAccepted === true,
           },
         }
       );

@@ -547,6 +547,77 @@ async function handleCheckoutCompleted(
 
   if (tenantError) console.error("Error updating tenant plan:", tenantError);
 
+  // ── Platform Terms of Service acceptance (authoritative record) ────────────
+  //
+  // create-subscription-checkout also stamps this when the in-app checkbox was
+  // ticked, but THIS is the record that matters, for two reasons:
+  //   · it fires on a COMPLETED payment, not on a session that may be abandoned
+  //   · when Stripe's consent_collection is enabled, session.consent.terms_of_service
+  //     is Stripe's own attestation, collected on their hosted page. That cannot
+  //     be forged by a caller hitting our edge function directly, which is the
+  //     one thing a client-sent boolean can never rule out.
+  //
+  // Written as a SEPARATE update rather than folded into tenantUpdate above,
+  // because it needs write-once semantics (`.is(null)`) that must not apply to
+  // the plan/status fields — and because a failure here must not roll back the
+  // subscription sync.
+  //
+  // Deliberately silent for paths that carry no tos metadata (notably the
+  // super-admin-driven create-uae-subscription-capture migration): absence of
+  // consent data means nobody accepted anything, so nothing should be recorded.
+  {
+    const stripeConsent = session.consent?.terms_of_service === "accepted";
+    const inAppConsent = session.metadata?.tos_accepted_in_app === "true";
+    const tosVersion = session.metadata?.tos_version || null;
+    // Set by create-subscription-checkout. Absent on the UAE migration path and
+    // on any older session, which read as "operator" — correct, because those
+    // paths only ever reach here carrying Stripe's own consent.
+    const actorIsOperator = session.metadata?.tos_actor !== "super_admin";
+
+    // Stripe's consent is attested by whoever COMPLETED the payment (always the
+    // operator), so it counts regardless of who created the session. The in-app
+    // boolean is forgeable and belongs to the session's creator, so it counts
+    // only when that creator was the operator.
+    if (tosVersion && (stripeConsent || (inAppConsent && actorIsOperator))) {
+      const { error: tosError } = await supabase
+        .from("tenants")
+        .update({
+          platform_tos_accepted_at: new Date().toISOString(),
+          platform_tos_version: tosVersion,
+          platform_tos_accepted_by: session.metadata?.tos_accepted_by || null,
+          platform_tos_accepted_by_email:
+            session.metadata?.tos_accepted_by_email ||
+            session.customer_details?.email ||
+            null,
+          // Stripe does not expose the acceptor's IP on the session, and the
+          // one visible here would be Stripe's webhook egress, not the tenant's
+          // — so leave whatever create-subscription-checkout captured. This is
+          // why the filter below is on platform_tos_accepted_at rather than a
+          // blanket overwrite.
+        })
+        .eq("id", tenantId)
+        // Write-once: the FIRST acceptance is the legally meaningful one. If
+        // create-subscription-checkout already stamped it minutes ago, this is
+        // a no-op — which is correct, and also makes the handler safe under
+        // Stripe's at-least-once webhook redelivery.
+        .is("platform_tos_accepted_at", null);
+
+      if (tosError) {
+        console.error(`Error recording platform ToS acceptance for tenant ${tenantId}:`, tosError);
+      } else {
+        console.log(
+          `Platform ToS acceptance recorded for tenant ${tenantId} (version ${tosVersion}, stripe_consent=${stripeConsent}, in_app=${inAppConsent})`,
+        );
+      }
+    } else {
+      // Log both signals, not just the missing-version case: "nothing recorded"
+      // is otherwise indistinguishable from "the checkbox is not wired".
+      console.warn(
+        `No ToS acceptance recorded for tenant ${tenantId} on session ${session.id} (tos_version=${tosVersion ?? "none"}, stripe_consent=${stripeConsent}, in_app=${inAppConsent}, actor=${session.metadata?.tos_actor ?? "unknown"})`,
+      );
+    }
+  }
+
   // Auto-refund the $1 card-verification charge if present.
   // In `mode: "subscription"` Checkout, session.payment_intent is ALWAYS null —
   // the $1 setup-fee charge lives on the subscription's first invoice's

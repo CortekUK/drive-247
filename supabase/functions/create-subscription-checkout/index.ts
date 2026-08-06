@@ -7,8 +7,32 @@ import {
   getSubscriptionStripeClientForAccount,
 } from "../_shared/subscription-stripe.ts";
 import { authorizeTenantAccess } from "../_shared/tenant-auth.ts";
+import { PLATFORM_TOS_VERSION, PLATFORM_TOS_URL } from "../_shared/platform-tos.ts";
 
 const STRIPE_PRODUCT_NAME = "Drive247 Platform Subscription";
+
+/**
+ * Stripe's native terms-of-service consent on the hosted Checkout page.
+ *
+ * This is the only NON-BYPASSABLE consent gate in the flow: Stripe refuses to
+ * complete the session until the box is ticked, and records the result on
+ * `session.consent.terms_of_service`. The in-app checkbox in PricingCard is UX
+ * and an in-app record; it cannot be the enforcement point, because a client
+ * boolean only ever attests that the caller's own code sent `true`.
+ *
+ * IT IS OFF BY DEFAULT AND MUST STAY OFF UNTIL CONFIGURED. Stripe rejects
+ * `consent_collection.terms_of_service` with a 400 unless a Terms of Service URL
+ * is set on the account (Settings → Checkout and Payment Links → "Terms of
+ * service URL"). That has to be done on FOUR account/mode combinations —
+ * uk/test, uk/live, uae/test, uae/live — because this codebase routes tenants
+ * across two platform Stripe accounts in two modes. Enabling it before all four
+ * are set would 400 the checkout call, which surfaces to the tenant as a generic
+ * toast on an inescapable paywall with no way out.
+ *
+ * Turn on with: supabase secrets set STRIPE_TOS_CONSENT_ENABLED=true
+ */
+const STRIPE_TOS_CONSENT_ENABLED =
+  (Deno.env.get("STRIPE_TOS_CONSENT_ENABLED") ?? "").toLowerCase() === "true";
 
 async function getOrCreateProduct(stripe: Stripe): Promise<string> {
   const products = await stripe.products.search({
@@ -39,19 +63,54 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     if (userError || !user) return errorResponse("Unauthorized", 401);
 
-    const { tenantId, planId, successUrl, cancelUrl } = await req.json();
+    const { tenantId, planId, successUrl, cancelUrl, acceptedTos } = await req.json();
     if (!tenantId) return errorResponse("tenantId is required");
     if (!planId) return errorResponse("planId is required");
     if (!successUrl) return errorResponse("successUrl is required");
     if (!cancelUrl) return errorResponse("cancelUrl is required");
+
+    // `acceptedTos` is deliberately NOT a hard requirement, and that is a
+    // considered decision rather than an oversight.
+    //
+    // Rejecting the request when the flag is missing would buy nothing: an
+    // attacker simply sends `true`. A client boolean can only ever attest that
+    // the caller's own code sent it, so it has no evidentiary value and no
+    // security value. What a hard reject WOULD do is lock tenants out during any
+    // window where the deployed edge function is ahead of the deployed portal
+    // bundle — and the surface it locks is the non-dismissible paywall modal,
+    // whose only other exit is signing out. All cost, no benefit.
+    //
+    // Enforcement therefore lives where it cannot be forged: Stripe's
+    // consent_collection on the hosted page (see STRIPE_TOS_CONSENT_ENABLED),
+    // whose result the subscription-webhook reads back off the completed
+    // session. This flag records the in-app acceptance moment when it is
+    // genuinely present.
+    const tosAcceptedByClient = acceptedTos === true;
 
     // Membership check — see _shared/tenant-auth.ts. Without it any signed-in
     // user could start a subscription billed to another operator.
     const access = await authorizeTenantAccess(supabase, user.id, tenantId);
     if (!access.ok) return errorResponse(access.message, access.status);
 
+    // Only the OPERATOR can accept the operator's contract. authorizeTenantAccess
+    // deliberately lets super admins through for every tenant, so a super admin
+    // driving checkout on someone's behalf would otherwise mint a consent record
+    // the operator never gave. Computed here (not at the stamp site) because the
+    // session metadata below must be gated on it too — otherwise the webhook
+    // happily writes the record that this function refused to.
+    const actorIsOperator = access.appUser?.is_super_admin !== true;
+    const recordAcceptance = tosAcceptedByClient && actorIsOperator;
+
     const { data: tenant, error: tenantError } = await supabase
       .from("tenants")
+      // Deliberately does NOT select platform_tos_accepted_at. PostgREST fails
+      // the WHOLE query on an unknown column, and the guard below turns any
+      // tenant-select error into a 404 — so naming a column that does not exist
+      // yet would make every subscription checkout return "Tenant not found"
+      // in any window where this function is deployed ahead of the migration.
+      // The write-once guarantee does not need a pre-read: the UPDATE carries
+      // `.is("platform_tos_accepted_at", null)`, which is also race-safe in a
+      // way a read-then-write never is.
       .select("id, company_name, contact_email, stripe_subscription_customer_id, subscription_plan, subscription_billing_anchor")
       .eq("id", tenantId)
       .single();
@@ -267,7 +326,32 @@ Deno.serve(async (req) => {
       // setup_fee flags the webhook to auto-refund the $1 verification. Only set it
       // when the $1 was actually added (deferred-charge plans); a charge-now plan has
       // no $1 to refund and must keep its full first-period charge.
-      metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, source: "platform_subscription", ...(chargesDeferredToday ? { setup_fee: "true" } : {}), ...(meteredPriceId ? { esign_metered_price_id: meteredPriceId } : {}) },
+      // Stripe's own acceptance gate on the hosted page. Non-bypassable, and the
+      // outcome lands on session.consent.terms_of_service for the webhook to
+      // read back. Env-gated because it 400s unless a ToS URL is configured on
+      // this Stripe account — see STRIPE_TOS_CONSENT_ENABLED at the top.
+      ...(STRIPE_TOS_CONSENT_ENABLED
+        ? { consent_collection: { terms_of_service: "required" as const } }
+        : {}),
+      // tos_* rides the SAME channel already used for setup_fee and
+      // esign_metered_price_id, so the webhook can stamp acceptance against a
+      // COMPLETED payment rather than a session that may be abandoned. The
+      // version is the server constant — never anything the client named.
+      // The two consent signals have DIFFERENT trust properties, so they are
+      // gated differently rather than as one unit.
+      //
+      //  · tos_accepted_in_app is the forgeable client boolean, and it belongs
+      //    to whoever CREATED the session. A super admin's tick is not the
+      //    operator's, so those keys are withheld unless the actor is the
+      //    operator — otherwise the webhook would write the very record this
+      //    function deliberately refused to.
+      //  · Stripe's own consent_collection result is attested by whoever
+      //    COMPLETES the payment, which is always the operator, whatever the
+      //    support flow that produced the link. Withholding tos_version from a
+      //    super-admin-created session would therefore throw away the single
+      //    non-repudiable acceptance in the whole system. So tos_version always
+      //    rides along, and tos_actor tells the webhook which signals to trust.
+      metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, source: "platform_subscription", tos_version: PLATFORM_TOS_VERSION, tos_actor: actorIsOperator ? "operator" : "super_admin", ...(recordAcceptance ? { tos_accepted_in_app: "true", ...(access.appUser?.id ? { tos_accepted_by: access.appUser.id } : {}), ...(user.email ? { tos_accepted_by_email: user.email } : {}) } : {}), ...(chargesDeferredToday ? { setup_fee: "true" } : {}), ...(meteredPriceId ? { esign_metered_price_id: meteredPriceId } : {}) },
       subscription_data: {
         metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, billing_model: plan.billing_model || "trial" },
         // Exact anchored date for upfront_monthly; a positive rounded day count for a
@@ -285,6 +369,81 @@ Deno.serve(async (req) => {
     });
 
     console.log(`Created subscription checkout session ${session.id} for tenant ${tenantId} (account: ${account}, mode: ${mode})`);
+
+    // ── Record the in-app platform-ToS acceptance ────────────────────────────
+    //
+    // Placed HERE, after the Stripe call resolves, because every earlier point
+    // sits above a return path that aborts the flow (tenant 404, the 409
+    // active-subscription guard, the plan guards, and the Stripe calls
+    // themselves, which fall through to the catch). Stamping before those would
+    // record an acceptance for a checkout that never happened.
+    //
+    // This is the *in-app* record. The authoritative one is written by
+    // subscription-webhook on checkout.session.completed, which additionally
+    // correlates with a real payment and can read Stripe's own consent result.
+    // A tenant who clicks Subscribe and abandons Stripe Checkout is stamped
+    // here but never gets a subscription — which is the correct reading of
+    // "they accepted the terms", and matches Section 38 of the terms
+    // ("otherwise proceeding past a point where these Terms are presented").
+    //
+    // THREE GUARDS, each closing a specific hole:
+    //  1. tosAcceptedByClient — only stamp when the box was actually ticked.
+    //  2. !is_super_admin — authorizeTenantAccess lets a super admin through for
+    //     ANY tenant. A super admin driving checkout on an operator's behalf
+    //     must not mint a consent record the operator never gave.
+    //  3. write-once — the `.is("platform_tos_accepted_at", null)` filter on the
+    //     UPDATE itself, so a repeat call cannot slide the timestamp forward.
+    //     Enforced at the database rather than by a pre-read, which keeps the
+    //     tenant SELECT free of a column that may not exist yet (see the select
+    //     above) and is race-safe against a double-click. The 409 guard above
+    //     means this only runs for never-subscribed tenants, but a tenant can
+    //     retry checkout many times before completing one.
+    if (recordAcceptance) {
+      // First match wins; x-forwarded-for is a comma-separated chain where the
+      // left-most entry is the original client.
+      const forwardedFor = req.headers.get("x-forwarded-for") ?? "";
+      const clientIp = forwardedFor.split(",")[0]?.trim() || null;
+
+      const { error: tosError } = await supabase
+        .from("tenants")
+        .update({
+          platform_tos_accepted_at: new Date().toISOString(),
+          platform_tos_version: PLATFORM_TOS_VERSION,
+          platform_tos_accepted_by: access.appUser?.id ?? null,
+          platform_tos_accepted_by_email: user.email ?? null,
+          platform_tos_accepted_ip: clientIp,
+        })
+        .eq("id", tenantId)
+        // Belt and braces against a concurrent double-click: even if two
+        // requests both read NULL, only the first UPDATE matches.
+        .is("platform_tos_accepted_at", null);
+
+      if (tosError) {
+        // Never fail checkout over the audit write. The tenant is mid-payment on
+        // an inescapable paywall; losing the stamp is recoverable (the webhook
+        // writes it again on completion), losing the checkout is not.
+        console.error(
+          `Failed to record platform ToS acceptance for tenant ${tenantId}:`,
+          tosError,
+        );
+      } else {
+        console.log(
+          `Recorded platform ToS acceptance ${PLATFORM_TOS_VERSION} for tenant ${tenantId} by app_user ${access.appUser?.id}`,
+        );
+      }
+    } else if (!actorIsOperator) {
+      // Distinguish a deliberate suppression from a wiring bug — both are
+      // silence otherwise, and they demand opposite responses.
+      console.log(
+        `ToS acceptance suppressed for tenant ${tenantId}: session created by super admin ${access.appUser?.id}, not the operator`,
+      );
+    } else if (!tosAcceptedByClient) {
+      // Expected transiently during a deploy where the function is ahead of the
+      // portal bundle. If it persists, the checkbox is not wired on some path.
+      console.warn(
+        `Checkout for tenant ${tenantId} carried no in-app ToS acceptance (terms url: ${PLATFORM_TOS_URL})`,
+      );
+    }
 
     return jsonResponse({ sessionId: session.id, url: session.url });
   } catch (error) {

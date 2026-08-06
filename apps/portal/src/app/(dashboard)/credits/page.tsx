@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useCreditWallet, CreditTransaction } from "@/hooks/use-credit-wallet";
+import { TermsConsent } from "@/components/legal/terms-consent";
+import { usePlatformTos } from "@/hooks/use-platform-tos";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -128,6 +130,33 @@ export default function CreditsPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>("6m");
   const [integrationFilter, setIntegrationFilter] = useState<IntegrationFilter>("all");
 
+  // Platform-ToS gate on the credit purchase.
+  //
+  // /credits is explicitly whitelisted past the subscription paywall
+  // ((dashboard)/layout.tsx treats it like /subscription and /settings), and a
+  // tenant created through the admin CreateTenantDialog gets no
+  // subscription_plans row at all — so `showSetupGate` never fires and they
+  // reach a full dashboard without ever seeing the subscribe flow. Buying
+  // credits would then be a real charge against a tenant who has accepted
+  // nothing. Ask once, here, and never again after it is on record.
+  // Not gated on the query's loading state: the hook fails CLOSED, so while it
+  // is in flight `needsAcceptance` is already true and the gate renders. Gating
+  // on isLoading instead produced a disabled CTA with no checkbox and no
+  // explanation for the duration of the fetch.
+  const { needsAcceptance } = usePlatformTos();
+  const [creditTermsAccepted, setCreditTermsAccepted] = useState(false);
+  const creditConsentId = `tos-credits-${useId()}`;
+  const creditPurchaseBlocked = needsAcceptance && !creditTermsAccepted;
+
+  const handleBuyCredits = () => {
+    if (creditPurchaseBlocked || buyCredits.isPending) return;
+    buyCredits.mutate({
+      credits: liveBuyAmount,
+      // Only assert acceptance for the run that actually showed the box.
+      termsAccepted: needsAcceptance ? creditTermsAccepted : undefined,
+    });
+  };
+
   useEffect(() => {
     if (wallet) {
       setAutoRefillEnabled(wallet.auto_refill_enabled);
@@ -223,8 +252,8 @@ export default function CreditsPage() {
             <RefreshCw className="h-4 w-4" />
           </Button>
           <Button
-            onClick={() => buyCredits.mutate(liveBuyAmount)}
-            disabled={buyCredits.isPending}
+            onClick={handleBuyCredits}
+            disabled={buyCredits.isPending || creditPurchaseBlocked}
             className="bg-gradient-primary flex-1 sm:flex-none"
           >
             {buyCredits.isPending ? (
@@ -236,6 +265,17 @@ export default function CreditsPage() {
           </Button>
         </div>
       </div>
+
+      {/* Platform-ToS gate — shown only until acceptance is on record. The Buy
+          Credits button above stays disabled while this is unticked. */}
+      {needsAcceptance && (
+        <TermsConsent
+          id={creditConsentId}
+          checked={creditTermsAccepted}
+          onChange={setCreditTermsAccepted}
+          disabled={buyCredits.isPending}
+        />
+      )}
 
       {/* ── Balance Cards ── */}
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">

@@ -72,7 +72,10 @@ export function SubscriptionGateDialog({
     tenant as { subscription_billing_anchor?: string | null } | null
   )?.subscription_billing_anchor;
 
-  const handleSubscribe = async (planId: string) => {
+  const handleSubscribe = async (
+    planId: string,
+    consent?: { termsAccepted: boolean },
+  ) => {
     setSubscribingPlanId(planId);
     try {
       const origin = window.location.origin;
@@ -80,6 +83,7 @@ export function SubscriptionGateDialog({
         planId,
         successUrl: `${origin}/subscription?status=success`,
         cancelUrl: `${origin}/?setup=retry`,
+        termsAccepted: consent?.termsAccepted === true,
       });
       if (result?.url) {
         window.location.href = result.url;

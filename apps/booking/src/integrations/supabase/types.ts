@@ -14746,6 +14746,11 @@ export type Database = {
           pickup_fixed_enabled: boolean | null
           pickup_location_mode: string | null
           pickup_multiple_locations_enabled: boolean | null
+          platform_tos_accepted_at: string | null
+          platform_tos_accepted_by: string | null
+          platform_tos_accepted_by_email: string | null
+          platform_tos_accepted_ip: string | null
+          platform_tos_version: string | null
           policies_accepted_at: string | null
           primary_color: string | null
           privacy_policy_version: string | null
@@ -14996,6 +15001,11 @@ export type Database = {
           pickup_fixed_enabled?: boolean | null
           pickup_location_mode?: string | null
           pickup_multiple_locations_enabled?: boolean | null
+          platform_tos_accepted_at?: string | null
+          platform_tos_accepted_by?: string | null
+          platform_tos_accepted_by_email?: string | null
+          platform_tos_accepted_ip?: string | null
+          platform_tos_version?: string | null
           policies_accepted_at?: string | null
           primary_color?: string | null
           privacy_policy_version?: string | null
@@ -15246,6 +15256,11 @@ export type Database = {
           pickup_fixed_enabled?: boolean | null
           pickup_location_mode?: string | null
           pickup_multiple_locations_enabled?: boolean | null
+          platform_tos_accepted_at?: string | null
+          platform_tos_accepted_by?: string | null
+          platform_tos_accepted_by_email?: string | null
+          platform_tos_accepted_ip?: string | null
+          platform_tos_version?: string | null
           policies_accepted_at?: string | null
           primary_color?: string | null
           privacy_policy_version?: string | null
