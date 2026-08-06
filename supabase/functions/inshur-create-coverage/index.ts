@@ -463,6 +463,23 @@ Deno.serve(async (req) => {
 
     if (rentalError) {
       console.error(`${LOG} rental lookup failed:`, rentalError.message);
+      // 42703 is PostgREST's undefined-column code. The embed above names
+      // `vehicles.garaging_state`, which arrives with the INSHUR schema — if that
+      // has not been applied, EVERY rental fails this read and the generic
+      // message below sends an operator hunting through their own data for a
+      // problem that is entirely ours.
+      if (rentalError.code === '42703' || /column .* does not exist/i.test(rentalError.message || '')) {
+        return jsonResponse(
+          {
+            error:
+              'INSHUR cannot read rentals on this database yet: ' +
+              `${rentalError.message}. The INSHUR schema has not been fully applied. ` +
+              'No cover was started and nothing is wrong with this rental.',
+            error_code: 'INSHUR_SCHEMA_INCOMPLETE',
+          },
+          503
+        );
+      }
       return errorResponse('Could not load the rental.', 500);
     }
     if (!rental) return errorResponse('Rental not found.', 404);
@@ -604,7 +621,7 @@ Deno.serve(async (req) => {
       return await fail(
         'failed',
         'INSHUR_NO_TIMEZONE',
-        'Your business timezone is not set. Every INSHUR rental period carries a timezone — set yours in Settings → General before starting cover.',
+        'Your business timezone is not set. Every INSHUR rental period carries a timezone — set yours in Settings → INSHUR before starting cover.',
         422
       );
     }

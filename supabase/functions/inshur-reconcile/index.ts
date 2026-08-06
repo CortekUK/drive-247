@@ -418,7 +418,7 @@ async function reconcileTenant(
         message: `${message} Cover cannot be created or reconciled until this is fixed.`,
         severity: 'warning',
         context: { tenant_id: tenant.id },
-        link: '/settings?tab=integrations',
+        link: '/settings?tab=inshur',
         simulated: false,
       });
     }
@@ -450,7 +450,7 @@ async function reconcileTenant(
           'Re-authenticate in Settings, or ask INSHUR for a service login with two-factor disabled.',
         severity: 'critical',
         context: { tenant_id: tenant.id, mode: config.mode },
-        link: '/settings?tab=integrations',
+        link: '/settings?tab=inshur',
         simulated,
       });
     }
@@ -828,7 +828,7 @@ async function reconcileTenant(
           'created directly at portal.abiweb.com, or a rental was deleted after cover was bought.',
         severity: unattributed >= 3 ? 'critical' : 'warning',
         context: { tenant_id: tenant.id, unattributed, remote_count: summary.remoteCount, mode: config.mode },
-        link: '/settings?tab=integrations',
+        link: '/settings?tab=inshur',
         simulated,
       });
     }

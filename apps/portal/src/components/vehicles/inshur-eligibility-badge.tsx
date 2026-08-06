@@ -129,11 +129,12 @@ function normalizeStates(raw: unknown): string[] {
 }
 
 /**
- * The backend fails CLOSED on a transport error and still writes a row, so a
- * row that merely says `eligible: false` is indistinguishable from a genuine
- * "ABI says no". The reason is code-prefixed for exactly this case — without it
- * an ABI outage would be reported to the operator as "this vehicle isn't on
- * Period X", sending them to portal.abiweb.com to fix nothing.
+ * `inshur-check-eligibility` deliberately does NOT cache a verdict it could not
+ * obtain, so a transport failure normally leaves the previous row untouched and
+ * is surfaced through `lastCheckFailed` instead. This guards the other route in:
+ * a row written by some other path whose reason is code-prefixed. Without it an
+ * ABI outage recorded that way would read to the operator as "this vehicle isn't
+ * on Period X", sending them to portal.abiweb.com to fix nothing.
  */
 function rowIsCheckFailure(row: InshurEligibilityRow | null | undefined): boolean {
   return !!row?.reason && /^check_failed\b/i.test(row.reason.trim());

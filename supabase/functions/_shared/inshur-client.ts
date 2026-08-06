@@ -222,7 +222,7 @@ export async function getInshurConfig(
   if (missing.length) {
     throw new InshurNotConfiguredError(
       `INSHUR is set to ${mode} mode but is missing: ${missing.join(', ')}. ` +
-        'Add these in Settings → Integrations, or switch back to simulated mode.'
+        'Add these in Settings → INSHUR, or switch back to simulated mode.'
     );
   }
 

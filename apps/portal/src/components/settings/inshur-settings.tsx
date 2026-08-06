@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
+  Clock,
   ExternalLink,
   Loader2,
   MapPin,
@@ -55,9 +56,6 @@ import {
 // ---------------------------------------------------------------------------
 
 type InshurMode = 'mock' | 'test' | 'live';
-
-/** Only the modes that actually reach api.abiweb.com. */
-type LiveishMode = Exclude<InshurMode, 'mock'>;
 
 interface InshurStatusRow {
   integration_inshur: boolean | null;
@@ -94,9 +92,10 @@ interface VerifyOutcome {
   /** False when ABI answered but the states cache could not be written. */
   persisted: boolean;
   /**
-   * The INSHUR_ALLOW_LIVE fence on the edge runtime. Flipping a tenant to live
-   * in an environment where this is false makes every bind throw, so the
-   * go-live preflight blocks on it.
+   * Whether this deployment is permitted to write live cover at all. Open
+   * unless the deployment sets INSHUR_ALLOW_LIVE=false, which is how a staging
+   * copy is fenced off. The go-live preflight blocks on it because flipping a
+   * fenced tenant to live leaves every bind throwing.
    */
   runtimeAllowsLive: boolean;
   /** The credential values this outcome refers to. Editing any of them invalidates it. */
@@ -179,7 +178,7 @@ const ENDPOINT_FIELDS = [
     documented: '/verify-2factor/',
     alternate: '',
     help:
-      'ABI names this endpoint but has never published its path. Leave it blank unless INSHUR gives you the exact URL — paste it here and two-factor verification starts working with no code change.',
+      'ABI names this endpoint but has never published its path. Drive247 does not exchange two-factor codes automatically — the Two-factor token field below is what is actually sent today. Record the URL here if INSHUR gives it to you and it will be waiting when the exchange is built.',
   },
 ] as const;
 
@@ -196,6 +195,30 @@ function normalizeBillingParams(raw: unknown): string {
   if (v === 'lower' || v === 'LOWER' || v === 'startDate') return 'startDate';
   return 'auto';
 }
+
+/**
+ * `tenants.timezone` is a hard requirement of every Create Rental Period, and
+ * NOTHING else in the portal writes it: Settings → General's timezone field goes
+ * to `org_settings` through the `settings` edge function, which is a different
+ * row entirely and accepts only four European/US zones. A tenant whose
+ * `tenants.timezone` is null therefore had no way to start INSHUR cover and no
+ * way to clear the go-live preflight — which breaks the one promise this
+ * integration makes, that handover is four pasted values and nothing else.
+ *
+ * Period Z is US-only, so the list is the US zones. Whatever is already stored
+ * is appended if it is not among them, so opening this card can never quietly
+ * offer to move a tenant off a zone somebody set deliberately.
+ */
+const US_TIMEZONES = [
+  { value: 'America/New_York', label: 'Eastern — New York' },
+  { value: 'America/Detroit', label: 'Eastern — Detroit' },
+  { value: 'America/Chicago', label: 'Central — Chicago' },
+  { value: 'America/Denver', label: 'Mountain — Denver' },
+  { value: 'America/Phoenix', label: 'Mountain, no DST — Phoenix' },
+  { value: 'America/Los_Angeles', label: 'Pacific — Los Angeles' },
+  { value: 'America/Anchorage', label: 'Alaska — Anchorage' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii — Honolulu' },
+];
 
 const US_STATE_CODES = new Set([
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'DC', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA',
@@ -283,7 +306,7 @@ function credentialFingerprint(v: {
   password: string;
   customerNumber: string;
   policyNumber: string;
-  mode: LiveishMode;
+  mode: InshurMode;
 }): string {
   return [
     v.mode,
@@ -430,6 +453,9 @@ export function InshurSettings() {
   const [statesDraft, setStatesDraft] = useState('');
   const [isEditingStates, setIsEditingStates] = useState(false);
 
+  const [timezoneDraft, setTimezoneDraft] = useState('');
+  const [isSavingTimezone, setIsSavingTimezone] = useState(false);
+
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [endpointDraft, setEndpointDraft] = useState<Record<string, string>>({});
   const [billingParams, setBillingParams] = useState('auto');
@@ -479,6 +505,7 @@ export function InshurSettings() {
         setCustomerNumber(data?.inshur_customer_number || '');
         setPolicyNumber(data?.inshur_policy_number || '');
         setTwoFactorToken(data?.inshur_2fa_token || '');
+        setTimezoneDraft((data?.timezone || '').trim());
         const overrides = coerceOverrides(data?.inshur_endpoint_overrides);
         const draft: Record<string, string> = {};
         for (const field of ENDPOINT_FIELDS) {
@@ -507,6 +534,15 @@ export function InshurSettings() {
   const modeCopy = MODE_COPY[currentMode];
   const stripeIsLive = status?.stripe_mode === 'live';
 
+  const savedTimezone = (status?.timezone || '').trim();
+  const timezoneOptions = useMemo(
+    () =>
+      savedTimezone && !US_TIMEZONES.some((t) => t.value === savedTimezone)
+        ? [...US_TIMEZONES, { value: savedTimezone, label: `${savedTimezone} (currently set)` }]
+        : US_TIMEZONES,
+    [savedTimezone]
+  );
+
   const savedOverrides = useMemo(() => coerceOverrides(status?.inshur_endpoint_overrides), [status?.inshur_endpoint_overrides]);
   const statesAllowed = useMemo(() => coerceStringArray(status?.inshur_states_allowed), [status?.inshur_states_allowed]);
 
@@ -527,8 +563,20 @@ export function InshurSettings() {
   });
   const formIsValid = !Object.values(fieldErrors).some(Boolean);
 
-  /** The mode a connection test should run against. Mock never proves anything, so it tests as `test`. */
-  const modeToTest: LiveishMode = currentMode === 'live' ? 'live' : 'test';
+  /**
+   * A connection test runs in the tenant's ACTUAL mode.
+   *
+   * Substituting `test` for `mock` would send whatever is in the form — usually
+   * nothing, because mock is the default and stays the only mode until INSHUR
+   * issues credentials — to ABI, and answer the default mode's connection test
+   * with "some credentials are missing". That leaves the simulated path, the
+   * only path available today, permanently unreachable, and blocks Save
+   * credentials too, since Save verifies before it writes.
+   *
+   * A mock result still proves nothing: `connectionProven` below requires a
+   * NON-simulated pass, so the go-live preflight is unaffected.
+   */
+  const modeToTest: InshurMode = currentMode;
 
   const currentFingerprint = credentialFingerprint({
     username,
@@ -982,6 +1030,32 @@ export function InshurSettings() {
     }
   };
 
+  const handleSaveTimezone = async () => {
+    if (!tenant?.id) return;
+    const next = timezoneDraft.trim();
+    if (!next) return;
+
+    setIsSavingTimezone(true);
+    try {
+      const { error } = await supabaseUntyped.from('tenants').update({ timezone: next }).eq('id', tenant.id);
+      if (error) throw error;
+
+      await invalidate();
+      toast({
+        title: 'Business timezone saved',
+        description: `INSHUR rental periods will start and end on ${next} wall-clock time.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Could not save the timezone',
+        description: err?.message || 'Unknown error.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingTimezone(false);
+    }
+  };
+
   const handleSaveAdvanced = async () => {
     if (!tenant?.id) return;
     setIsSavingAdvanced(true);
@@ -1097,13 +1171,15 @@ export function InshurSettings() {
 
     rows.push({
       key: 'timezone',
-      label: 'Business timezone set',
-      ok: !!(status?.timezone || '').trim(),
+      label: savedTimezone ? `Business timezone set (${savedTimezone})` : 'Business timezone set',
+      ok: !!savedTimezone,
       blocking: true,
+      // No fixHref: the control is the Business timezone card on this very page,
+      // and the Settings → General timezone field writes a different row
+      // (org_settings) that INSHUR never reads. Sending an operator there would
+      // have them set a value that leaves this row red.
       detail:
-        'INSHUR needs a timezone for every rental period. Without one, cover would start and end at the wrong hour.',
-      fixLabel: 'Set business timezone',
-      fixHref: '/blocked-dates',
+        'INSHUR needs a timezone for every rental period. Without one, cover would start and end at the wrong hour, so no cover can be started at all. Close this dialog and set it on the Business timezone card above.',
     });
 
     // Deliberately NOT blocking. The covered-states endpoint is one of the paths
@@ -1169,7 +1245,7 @@ export function InshurSettings() {
     });
 
     return rows;
-  }, [savedCredsComplete, connectionProven, currentMode, verify, status?.timezone, status?.inshur_2fa_token, statesAllowed.length, fleet, stripeIsLive]);
+  }, [savedCredsComplete, connectionProven, currentMode, verify, savedTimezone, status?.inshur_2fa_token, statesAllowed.length, fleet, stripeIsLive]);
 
   const blockingFailures = preflight.filter((r) => r.blocking && !r.ok);
   const canGoLive = blockingFailures.length === 0 && goLiveConfirmText === 'LIVE';
@@ -1593,7 +1669,71 @@ export function InshurSettings() {
             </CardContent>
           </Card>
 
-          {/* Card 3: Covered states */}
+          {/* Card 3: Business timezone */}
+          <Card className={savedTimezone ? undefined : 'border-red-300 dark:border-red-800'}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                Business timezone
+                {savedTimezone ? (
+                  <Badge className="bg-green-600 hover:bg-green-700">{savedTimezone}</Badge>
+                ) : (
+                  <Badge variant="destructive">Required</Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                Every INSHUR rental period is sent as a wall-clock time plus this zone. Cover cannot be started without
+                it.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!savedTimezone && (
+                <div className="p-4 rounded-lg border bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800">
+                  <p className="text-sm font-medium text-red-800 dark:text-red-300">No business timezone is set</p>
+                  <p className="text-sm text-red-700 dark:text-red-400 mt-1">
+                    Every attempt to start INSHUR cover will fail until you choose one. This is the only place it can be
+                    set — the timezone under Settings → General is a separate value that INSHUR does not read.
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="inshur-timezone">Timezone your rental times are quoted in</Label>
+                <Select value={timezoneDraft} onValueChange={setTimezoneDraft}>
+                  <SelectTrigger id="inshur-timezone" className="w-full sm:w-96">
+                    <SelectValue placeholder="Choose a timezone" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[280px]">
+                    {timezoneOptions.map((tz) => (
+                      <SelectItem key={tz.value} value={tz.value}>
+                        {tz.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-[#737373]">
+                  Pickup and return times on your rentals are already stored in this zone. Changing it does not move
+                  cover that has already been written — ABI cannot amend a rental period once it exists.
+                </p>
+              </div>
+
+              <Button
+                onClick={handleSaveTimezone}
+                disabled={isSavingTimezone || !timezoneDraft.trim() || timezoneDraft.trim() === savedTimezone}
+              >
+                {isSavingTimezone ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save timezone'
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Card 4: Covered states */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -1710,7 +1850,7 @@ export function InshurSettings() {
             </CardContent>
           </Card>
 
-          {/* Card 4: Advanced */}
+          {/* Card 5: Advanced */}
           <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
             <Card>
               <CollapsibleTrigger asChild>

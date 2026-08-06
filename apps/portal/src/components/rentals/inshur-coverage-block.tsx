@@ -432,7 +432,21 @@ export function InshurCoverageBlock({ rentalId, rental, canEdit }: InshurCoverag
         .select('id, reg, make, model, vin, garaging_state')
         .eq('id', vehicleId)
         .maybeSingle();
-      if (error) return null;
+
+      // `garaging_state` arrives with the INSHUR schema. Before it lands, that
+      // select 400s and returning null here made the panel announce "this
+      // vehicle has no VIN on record" — a real-sounding accusation about the
+      // operator's data caused entirely by ours. Re-read without it so the panel
+      // says the true thing: the garaging state is not set.
+      if (error) {
+        const { data: fallback } = await supabaseUntyped
+          .from('vehicles')
+          .select('id, reg, make, model, vin')
+          .eq('id', vehicleId)
+          .maybeSingle();
+        return fallback ? { ...(fallback as Record<string, unknown>), garaging_state: null } as any : null;
+      }
+
       return data as {
         id: string;
         reg: string | null;

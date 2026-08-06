@@ -161,6 +161,7 @@ export interface CoverageMutationResult {
   /** Server's own verdict on whether real cover exists. Authoritative. */
   simulated: boolean | null;
   alreadyCovered: boolean;
+  /** Nothing to do — the row was already ended or cancelled before this call. */
   alreadyEnded: boolean;
   /** Cancel arrived after the period had started, so it was ended instead. */
   fellBackToEnd: boolean;
@@ -185,7 +186,11 @@ function parseCoverageResponse(
     mode,
     simulated: typeof res.simulated === 'boolean' ? res.simulated : null,
     alreadyCovered: res.already_covered === true,
-    alreadyEnded: res.already_ended === true,
+    // `inshur-end-coverage` says `already_ended`; `inshur-cancel-coverage` says
+    // `already_settled` because the row it finds may be either ended OR
+    // cancelled. Reading only the first spelling titled a no-op cancel as though
+    // it had just done something.
+    alreadyEnded: res.already_ended === true || res.already_settled === true,
     fellBackToEnd: res.fell_back_to_end === true,
     message: typeof res.message === 'string' && res.message.trim() ? res.message : null,
     warnings: Array.isArray(res.warnings) ? res.warnings.filter((w: unknown) => typeof w === 'string') : [],
@@ -381,7 +386,11 @@ export function useCancelInshurCoverage(defaultRentalId?: string) {
       // ABI refuses DELETE once the period has started, so a late cancel is
       // routed to `end` server-side and comes back saying so.
       toast({
-        title: result.fellBackToEnd ? 'Cover ended instead' : 'Cover cancelled',
+        title: result.alreadyEnded
+          ? 'Cover already stopped'
+          : result.fellBackToEnd
+            ? 'Cover ended instead'
+            : 'Cover cancelled',
         description: describe(
           result,
           result.mode === 'live'

@@ -307,7 +307,7 @@ async function raiseAlert(supabase: SupabaseClient, params: AlertParams): Promis
         type: 'inshur_billing_alert',
         title,
         message: params.message,
-        link: '/settings?tab=integrations',
+        link: '/settings?tab=inshur',
         metadata: { ...params.context, rule_code: params.ruleCode, simulated: params.simulated },
         dedupeKey: `${params.ruleCode}:${params.objectId}:${today}`,
       });

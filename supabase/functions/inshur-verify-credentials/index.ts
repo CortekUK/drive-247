@@ -247,9 +247,16 @@ Deno.serve(async (req) => {
 
   // Read once, up front: this is reported even on the failure paths, because
   // the go-live preflight blocks on it and must be able to see it whatever
-  // else went wrong. Without the fence a tenant can be flipped to live and
-  // then have every single bind throw.
-  const runtimeAllowsLive = Deno.env.get('INSHUR_ALLOW_LIVE') === 'true';
+  // else went wrong.
+  //
+  // Opt-OUT, deliberately, not opt-in. Handover is contractually "paste four
+  // values into Settings" — an unset secret that forbade live mode would make
+  // the go-live preflight unsatisfiable from the UI, and its own copy would be
+  // telling the operator to go live from the production portal they are
+  // already standing in. Set INSHUR_ALLOW_LIVE=false on a non-production
+  // deployment to fence that deployment off instead.
+  const runtimeAllowsLive =
+    (Deno.env.get('INSHUR_ALLOW_LIVE') ?? '').trim().toLowerCase() !== 'false';
 
   try {
     const authHeader = req.headers.get('Authorization');
@@ -330,7 +337,8 @@ Deno.serve(async (req) => {
       return envelope({
         code: 'live_not_permitted',
         error:
-          'This environment is not permitted to write live INSHUR cover. Live mode is enabled on production only.',
+          'This deployment has been fenced off from writing live INSHUR cover (INSHUR_ALLOW_LIVE=false). ' +
+          'Test the credentials in Test mode here, and go live from production.',
       });
     }
 

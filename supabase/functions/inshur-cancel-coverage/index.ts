@@ -258,7 +258,7 @@ Deno.serve(async (req) => {
         {
           error:
             `This cover was created in ${coverage.source_mode} mode but INSHUR is currently set to ${config.mode} mode. ` +
-            `Switch INSHUR back to ${coverage.source_mode} mode in Settings → Integrations to cancel it, or cancel it at portal.abiweb.com.`,
+            `Switch INSHUR back to ${coverage.source_mode} mode in Settings → INSHUR to cancel it, or cancel it at portal.abiweb.com.`,
           error_code: 'INSHUR_MODE_MISMATCH',
           coverage_id: coverage?.id ?? null,
           coverage,
