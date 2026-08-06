@@ -84,16 +84,17 @@ END $$;
 
 ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS garaging_state TEXT;
 
--- Best-effort backfill from the tenant's own state. Two-letter codes only;
--- anything else is left NULL so the badge surfaces it rather than sending ABI
--- a value it will reject.
-UPDATE vehicles v
-SET garaging_state = upper(t.address_state)
-FROM tenants t
-WHERE v.tenant_id = t.id
-  AND v.garaging_state IS NULL
-  AND t.address_state IS NOT NULL
-  AND t.address_state ~ '^[A-Za-z]{2}$';
+-- Deliberately NOT backfilled.
+--
+-- `tenants` carries only a free-text `address` — there is no structured state
+-- column to copy from, and parsing a two-letter code out of prose would be a
+-- guess. A wrong STATE here is not cosmetic: it is printed on the renter's
+-- insurance ID card and determines which filing the cover sits under, so a
+-- plausible-but-wrong value is worse than an empty one.
+--
+-- Left NULL on purpose. inshur-eligibility-badge already treats a missing
+-- garaging state as its own blocking condition, so operators are prompted per
+-- vehicle instead of silently inheriting a bad default.
 
 
 -- -----------------------------------------------------------------------------
@@ -318,10 +319,13 @@ SELECT 'tables' AS check,
        3 AS expected
 FROM information_schema.tables WHERE table_schema = 'public'
 UNION ALL
-SELECT 'tenant columns', count(*), 12
+-- Backslash, not brackets: Postgres LIKE escapes with \, and 'inshur[_]%'
+-- (SQL Server syntax) matches nothing here — it would report 0 and read as a
+-- failed apply.
+SELECT 'tenant columns', count(*), 11
 FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'tenants'
-  AND (column_name LIKE 'inshur[_]%' OR column_name = 'integration_inshur')
+  AND (column_name LIKE 'inshur\_%' OR column_name = 'integration_inshur')
 UNION ALL
 SELECT 'vehicles.garaging_state', count(*), 1
 FROM information_schema.columns

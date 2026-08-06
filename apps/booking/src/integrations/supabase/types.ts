@@ -6264,6 +6264,390 @@ export type Database = {
           },
         ]
       }
+      inshur_rental_coverage: {
+        Row: {
+          attempt_count: number
+          cancelled_at: string | null
+          created_at: string
+          customer_id: string | null
+          end_time_sent: string | null
+          ended_at: string | null
+          error_code: string | null
+          error_message: string | null
+          has_comp_coll: boolean | null
+          id: string
+          id_card_fetched_at: string | null
+          id_card_file_type: string | null
+          id_card_url: string | null
+          inshur_rental_id: string | null
+          inshur_renter_id: string | null
+          last_attempt_at: string | null
+          rental_id: string
+          source_mode: string
+          start_time_sent: string | null
+          state: string | null
+          status: string
+          tenant_id: string
+          timezone: string | null
+          updated_at: string
+          usage_type: string
+          vehicle_id: string | null
+          vin: string
+        }
+        Insert: {
+          attempt_count?: number
+          cancelled_at?: string | null
+          created_at?: string
+          customer_id?: string | null
+          end_time_sent?: string | null
+          ended_at?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          has_comp_coll?: boolean | null
+          id?: string
+          id_card_fetched_at?: string | null
+          id_card_file_type?: string | null
+          id_card_url?: string | null
+          inshur_rental_id?: string | null
+          inshur_renter_id?: string | null
+          last_attempt_at?: string | null
+          rental_id: string
+          source_mode?: string
+          start_time_sent?: string | null
+          state?: string | null
+          status?: string
+          tenant_id: string
+          timezone?: string | null
+          updated_at?: string
+          usage_type?: string
+          vehicle_id?: string | null
+          vin: string
+        }
+        Update: {
+          attempt_count?: number
+          cancelled_at?: string | null
+          created_at?: string
+          customer_id?: string | null
+          end_time_sent?: string | null
+          ended_at?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          has_comp_coll?: boolean | null
+          id?: string
+          id_card_fetched_at?: string | null
+          id_card_file_type?: string | null
+          id_card_url?: string | null
+          inshur_rental_id?: string | null
+          inshur_renter_id?: string | null
+          last_attempt_at?: string | null
+          rental_id?: string
+          source_mode?: string
+          start_time_sent?: string | null
+          state?: string | null
+          status?: string
+          tenant_id?: string
+          timezone?: string | null
+          updated_at?: string
+          usage_type?: string
+          vehicle_id?: string | null
+          vin?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inshur_rental_coverage_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      inshur_renters: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          inshur_renter_id: string
+          payload_hash: string | null
+          source_mode: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id?: string
+          inshur_renter_id: string
+          payload_hash?: string | null
+          source_mode?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          inshur_renter_id?: string
+          payload_hash?: string | null
+          source_mode?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inshur_renters_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_renters_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "inshur_renters_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "inshur_renters_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "inshur_renters_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_renters_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "inshur_renters_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      inshur_vehicle_eligibility: {
+        Row: {
+          checked_at: string
+          created_at: string
+          eligible: boolean
+          has_comp_coll: boolean
+          has_tracking_device: boolean
+          id: string
+          on_period_x: boolean
+          reason: string | null
+          source_mode: string
+          tenant_id: string
+          updated_at: string
+          vehicle_id: string
+          vin: string
+        }
+        Insert: {
+          checked_at?: string
+          created_at?: string
+          eligible?: boolean
+          has_comp_coll?: boolean
+          has_tracking_device?: boolean
+          id?: string
+          on_period_x?: boolean
+          reason?: string | null
+          source_mode?: string
+          tenant_id: string
+          updated_at?: string
+          vehicle_id: string
+          vin: string
+        }
+        Update: {
+          checked_at?: string
+          created_at?: string
+          eligible?: boolean
+          has_comp_coll?: boolean
+          has_tracking_device?: boolean
+          id?: string
+          on_period_x?: boolean
+          reason?: string | null
+          source_mode?: string
+          tenant_id?: string
+          updated_at?: string
+          vehicle_id?: string
+          vin?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
       installment_notifications: {
         Row: {
           amount: number | null
@@ -14279,11 +14663,22 @@ export type Database = {
           hero_background_url: string | null
           hide_checkout_price_breakdown: boolean
           id: string
+          inshur_2fa_token: string | null
+          inshur_billing_mode: string | null
+          inshur_customer_number: string | null
+          inshur_endpoint_overrides: Json | null
+          inshur_mode: string | null
+          inshur_password: string | null
+          inshur_policy_number: string | null
+          inshur_states_allowed: Json | null
+          inshur_states_synced_at: string | null
+          inshur_username: string | null
           instagram_url: string | null
           installment_config: Json | null
           installments_enabled: boolean | null
           integration_bonzah: boolean | null
           integration_canopy: boolean | null
+          integration_inshur: boolean | null
           integration_tesla_fleet: boolean | null
           integration_twilio_sms: boolean | null
           integration_twilio_whatsapp: boolean | null
@@ -14518,11 +14913,22 @@ export type Database = {
           hero_background_url?: string | null
           hide_checkout_price_breakdown?: boolean
           id?: string
+          inshur_2fa_token?: string | null
+          inshur_billing_mode?: string | null
+          inshur_customer_number?: string | null
+          inshur_endpoint_overrides?: Json | null
+          inshur_mode?: string | null
+          inshur_password?: string | null
+          inshur_policy_number?: string | null
+          inshur_states_allowed?: Json | null
+          inshur_states_synced_at?: string | null
+          inshur_username?: string | null
           instagram_url?: string | null
           installment_config?: Json | null
           installments_enabled?: boolean | null
           integration_bonzah?: boolean | null
           integration_canopy?: boolean | null
+          integration_inshur?: boolean | null
           integration_tesla_fleet?: boolean | null
           integration_twilio_sms?: boolean | null
           integration_twilio_whatsapp?: boolean | null
@@ -14757,11 +15163,22 @@ export type Database = {
           hero_background_url?: string | null
           hide_checkout_price_breakdown?: boolean
           id?: string
+          inshur_2fa_token?: string | null
+          inshur_billing_mode?: string | null
+          inshur_customer_number?: string | null
+          inshur_endpoint_overrides?: Json | null
+          inshur_mode?: string | null
+          inshur_password?: string | null
+          inshur_policy_number?: string | null
+          inshur_states_allowed?: Json | null
+          inshur_states_synced_at?: string | null
+          inshur_username?: string | null
           instagram_url?: string | null
           installment_config?: Json | null
           installments_enabled?: boolean | null
           integration_bonzah?: boolean | null
           integration_canopy?: boolean | null
+          integration_inshur?: boolean | null
           integration_tesla_fleet?: boolean | null
           integration_twilio_sms?: boolean | null
           integration_twilio_whatsapp?: boolean | null
@@ -15761,6 +16178,7 @@ export type Database = {
           finance_start_date: string | null
           flat_fee_period_override: string | null
           fuel_type: string | null
+          garaging_state: string | null
           has_logbook: boolean
           has_remote_immobiliser: boolean | null
           has_service_plan: boolean | null
@@ -15832,6 +16250,7 @@ export type Database = {
           finance_start_date?: string | null
           flat_fee_period_override?: string | null
           fuel_type?: string | null
+          garaging_state?: string | null
           has_logbook?: boolean
           has_remote_immobiliser?: boolean | null
           has_service_plan?: boolean | null
@@ -15903,6 +16322,7 @@ export type Database = {
           finance_start_date?: string | null
           flat_fee_period_override?: string | null
           fuel_type?: string | null
+          garaging_state?: string | null
           has_logbook?: boolean
           has_remote_immobiliser?: boolean | null
           has_service_plan?: boolean | null

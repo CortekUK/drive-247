@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       _orphaned_data_audit: {
@@ -652,11 +677,13 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           email: string
+          feedback_last_prompted_at: string | null
           forwarding_number: string | null
           id: string
           is_active: boolean
           is_bonzah_partner: boolean
           is_primary_super_admin: boolean | null
+          is_sales_agent: boolean
           is_super_admin: boolean | null
           must_change_password: boolean
           name: string | null
@@ -669,11 +696,13 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           email: string
+          feedback_last_prompted_at?: string | null
           forwarding_number?: string | null
           id?: string
           is_active?: boolean
           is_bonzah_partner?: boolean
           is_primary_super_admin?: boolean | null
+          is_sales_agent?: boolean
           is_super_admin?: boolean | null
           must_change_password?: boolean
           name?: string | null
@@ -686,11 +715,13 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           email?: string
+          feedback_last_prompted_at?: string | null
           forwarding_number?: string | null
           id?: string
           is_active?: boolean
           is_bonzah_partner?: boolean
           is_primary_super_admin?: boolean | null
+          is_sales_agent?: boolean
           is_super_admin?: boolean | null
           must_change_password?: boolean
           name?: string | null
@@ -4664,6 +4695,55 @@ export type Database = {
           },
         ]
       }
+      email_notification_prefs: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          is_enabled: boolean
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_notification_prefs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_notification_prefs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "email_notification_prefs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
       email_templates: {
         Row: {
           body: string | null
@@ -6181,6 +6261,390 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
             referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      inshur_rental_coverage: {
+        Row: {
+          attempt_count: number
+          cancelled_at: string | null
+          created_at: string
+          customer_id: string | null
+          end_time_sent: string | null
+          ended_at: string | null
+          error_code: string | null
+          error_message: string | null
+          has_comp_coll: boolean | null
+          id: string
+          id_card_fetched_at: string | null
+          id_card_file_type: string | null
+          id_card_url: string | null
+          inshur_rental_id: string | null
+          inshur_renter_id: string | null
+          last_attempt_at: string | null
+          rental_id: string
+          source_mode: string
+          start_time_sent: string | null
+          state: string | null
+          status: string
+          tenant_id: string
+          timezone: string | null
+          updated_at: string
+          usage_type: string
+          vehicle_id: string | null
+          vin: string
+        }
+        Insert: {
+          attempt_count?: number
+          cancelled_at?: string | null
+          created_at?: string
+          customer_id?: string | null
+          end_time_sent?: string | null
+          ended_at?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          has_comp_coll?: boolean | null
+          id?: string
+          id_card_fetched_at?: string | null
+          id_card_file_type?: string | null
+          id_card_url?: string | null
+          inshur_rental_id?: string | null
+          inshur_renter_id?: string | null
+          last_attempt_at?: string | null
+          rental_id: string
+          source_mode?: string
+          start_time_sent?: string | null
+          state?: string | null
+          status?: string
+          tenant_id: string
+          timezone?: string | null
+          updated_at?: string
+          usage_type?: string
+          vehicle_id?: string | null
+          vin: string
+        }
+        Update: {
+          attempt_count?: number
+          cancelled_at?: string | null
+          created_at?: string
+          customer_id?: string | null
+          end_time_sent?: string | null
+          ended_at?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          has_comp_coll?: boolean | null
+          id?: string
+          id_card_fetched_at?: string | null
+          id_card_file_type?: string | null
+          id_card_url?: string | null
+          inshur_rental_id?: string | null
+          inshur_renter_id?: string | null
+          last_attempt_at?: string | null
+          rental_id?: string
+          source_mode?: string
+          start_time_sent?: string | null
+          state?: string | null
+          status?: string
+          tenant_id?: string
+          timezone?: string | null
+          updated_at?: string
+          usage_type?: string
+          vehicle_id?: string | null
+          vin?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inshur_rental_coverage_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "inshur_rental_coverage_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      inshur_renters: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          inshur_renter_id: string
+          payload_hash: string | null
+          source_mode: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id?: string
+          inshur_renter_id: string
+          payload_hash?: string | null
+          source_mode?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          inshur_renter_id?: string
+          payload_hash?: string | null
+          source_mode?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inshur_renters_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_renters_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "inshur_renters_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "inshur_renters_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "inshur_renters_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_renters_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "inshur_renters_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      inshur_vehicle_eligibility: {
+        Row: {
+          checked_at: string
+          created_at: string
+          eligible: boolean
+          has_comp_coll: boolean
+          has_tracking_device: boolean
+          id: string
+          on_period_x: boolean
+          reason: string | null
+          source_mode: string
+          tenant_id: string
+          updated_at: string
+          vehicle_id: string
+          vin: string
+        }
+        Insert: {
+          checked_at?: string
+          created_at?: string
+          eligible?: boolean
+          has_comp_coll?: boolean
+          has_tracking_device?: boolean
+          id?: string
+          on_period_x?: boolean
+          reason?: string | null
+          source_mode?: string
+          tenant_id: string
+          updated_at?: string
+          vehicle_id: string
+          vin: string
+        }
+        Update: {
+          checked_at?: string
+          created_at?: string
+          eligible?: boolean
+          has_comp_coll?: boolean
+          has_tracking_device?: boolean
+          id?: string
+          on_period_x?: boolean
+          reason?: string | null
+          source_mode?: string
+          tenant_id?: string
+          updated_at?: string
+          vehicle_id?: string
+          vin?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "inshur_vehicle_eligibility_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
           },
         ]
       }
@@ -9894,6 +10358,27 @@ export type Database = {
           },
         ]
       }
+      processed_stripe_events: {
+        Row: {
+          event_id: string
+          event_type: string
+          processed_at: string
+          stripe_account: string | null
+        }
+        Insert: {
+          event_id: string
+          event_type: string
+          processed_at?: string
+          stripe_account?: string | null
+        }
+        Update: {
+          event_id?: string
+          event_type?: string
+          processed_at?: string
+          stripe_account?: string | null
+        }
+        Relationships: []
+      }
       promocodes: {
         Row: {
           code: string
@@ -10910,6 +11395,9 @@ export type Database = {
           created_at: string | null
           document_id: string | null
           document_status: string | null
+          email_delivered_at: string | null
+          email_delivery_error: string | null
+          email_delivery_status: string | null
           envelope_completed_at: string | null
           envelope_created_at: string | null
           envelope_sent_at: string | null
@@ -10927,6 +11415,9 @@ export type Database = {
           created_at?: string | null
           document_id?: string | null
           document_status?: string | null
+          email_delivered_at?: string | null
+          email_delivery_error?: string | null
+          email_delivery_status?: string | null
           envelope_completed_at?: string | null
           envelope_created_at?: string | null
           envelope_sent_at?: string | null
@@ -10944,6 +11435,9 @@ export type Database = {
           created_at?: string | null
           document_id?: string | null
           document_status?: string | null
+          email_delivered_at?: string | null
+          email_delivery_error?: string | null
+          email_delivery_status?: string | null
           envelope_completed_at?: string | null
           envelope_created_at?: string | null
           envelope_sent_at?: string | null
@@ -12606,6 +13100,128 @@ export type Database = {
           },
         ]
       }
+      sales_onboarding_submissions: {
+        Row: {
+          booking_url: string | null
+          business_colours: string | null
+          business_email: string | null
+          business_name: string | null
+          business_phone: string | null
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          extracted_colors: Json | null
+          first_name: string | null
+          fleet_size: string | null
+          generated_email: string | null
+          has_meta_ad_account: boolean | null
+          id: string
+          location: string | null
+          logo_url: string | null
+          meta_daily_budget: string | null
+          operating_hours: string | null
+          other_info: string | null
+          portal_url: string | null
+          slug: string | null
+          status: string
+          subscription_amount: number | null
+          subscription_currency: string | null
+          tenant_id: string | null
+          updated_at: string
+          vehicle_type: string | null
+          wants_marketing: boolean | null
+        }
+        Insert: {
+          booking_url?: string | null
+          business_colours?: string | null
+          business_email?: string | null
+          business_name?: string | null
+          business_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          extracted_colors?: Json | null
+          first_name?: string | null
+          fleet_size?: string | null
+          generated_email?: string | null
+          has_meta_ad_account?: boolean | null
+          id?: string
+          location?: string | null
+          logo_url?: string | null
+          meta_daily_budget?: string | null
+          operating_hours?: string | null
+          other_info?: string | null
+          portal_url?: string | null
+          slug?: string | null
+          status?: string
+          subscription_amount?: number | null
+          subscription_currency?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+          vehicle_type?: string | null
+          wants_marketing?: boolean | null
+        }
+        Update: {
+          booking_url?: string | null
+          business_colours?: string | null
+          business_email?: string | null
+          business_name?: string | null
+          business_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          extracted_colors?: Json | null
+          first_name?: string | null
+          fleet_size?: string | null
+          generated_email?: string | null
+          has_meta_ad_account?: boolean | null
+          id?: string
+          location?: string | null
+          logo_url?: string | null
+          meta_daily_budget?: string | null
+          operating_hours?: string | null
+          other_info?: string | null
+          portal_url?: string | null
+          slug?: string | null
+          status?: string
+          subscription_amount?: number | null
+          subscription_currency?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+          vehicle_type?: string | null
+          wants_marketing?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_onboarding_submissions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_onboarding_submissions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_onboarding_submissions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "sales_onboarding_submissions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
       scheduled_installments: {
         Row: {
           amount: number
@@ -12987,6 +13603,72 @@ export type Database = {
           },
         ]
       }
+      signup_plans: {
+        Row: {
+          amount_cents: number
+          bullets: Json
+          created_at: string
+          currency: string
+          fleet_band: string
+          id: string
+          interval: string
+          is_highlighted: boolean
+          is_visible: boolean
+          max_vehicles: number
+          name: string
+          plan_key: string
+          price_version: number
+          sort_order: number
+          stripe_lookup_key: string | null
+          stripe_price_id: string | null
+          tagline: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          amount_cents: number
+          bullets?: Json
+          created_at?: string
+          currency?: string
+          fleet_band?: string
+          id?: string
+          interval?: string
+          is_highlighted?: boolean
+          is_visible?: boolean
+          max_vehicles: number
+          name: string
+          plan_key: string
+          price_version?: number
+          sort_order?: number
+          stripe_lookup_key?: string | null
+          stripe_price_id?: string | null
+          tagline?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          bullets?: Json
+          created_at?: string
+          currency?: string
+          fleet_band?: string
+          id?: string
+          interval?: string
+          is_highlighted?: boolean
+          is_visible?: boolean
+          max_vehicles?: number
+          name?: string
+          plan_key?: string
+          price_version?: number
+          sort_order?: number
+          stripe_lookup_key?: string | null
+          stripe_price_id?: string | null
+          tagline?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       sms_message_log: {
         Row: {
           created_at: string | null
@@ -13364,6 +14046,185 @@ export type Database = {
           },
         ]
       }
+      tenant_feedback: {
+        Row: {
+          app_user_id: string | null
+          category: string
+          created_at: string
+          id: string
+          message: string
+          notified_at: string | null
+          page_path: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          screenshot_path: string | null
+          source: string | null
+          status: string
+          submitter_email: string | null
+          submitter_name: string | null
+          submitter_role: string | null
+          tenant_id: string
+          updated_at: string
+          user_agent: string | null
+        }
+        Insert: {
+          app_user_id?: string | null
+          category: string
+          created_at?: string
+          id?: string
+          message: string
+          notified_at?: string | null
+          page_path?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          screenshot_path?: string | null
+          source?: string | null
+          status?: string
+          submitter_email?: string | null
+          submitter_name?: string | null
+          submitter_role?: string | null
+          tenant_id: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Update: {
+          app_user_id?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          message?: string
+          notified_at?: string | null
+          page_path?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          screenshot_path?: string | null
+          source?: string | null
+          status?: string
+          submitter_email?: string | null
+          submitter_name?: string | null
+          submitter_role?: string | null
+          tenant_id?: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_feedback_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_feedback_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_feedback_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_feedback_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "tenant_feedback_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      tenant_feedback_insights: {
+        Row: {
+          feedback_count: number
+          generated_at: string
+          generated_by: string | null
+          id: string
+          model: string | null
+          summary: string
+          top_themes: Json
+        }
+        Insert: {
+          feedback_count?: number
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          model?: string | null
+          summary: string
+          top_themes?: Json
+        }
+        Update: {
+          feedback_count?: number
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          model?: string | null
+          summary?: string
+          top_themes?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_feedback_insights_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_feedback_recipients: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      tenant_feedback_settings: {
+        Row: {
+          force_login_triggered_at: string | null
+          form_enabled: boolean
+          id: string
+          singleton: boolean
+          updated_at: string
+        }
+        Insert: {
+          force_login_triggered_at?: string | null
+          form_enabled?: boolean
+          id?: string
+          singleton?: boolean
+          updated_at?: string
+        }
+        Update: {
+          force_login_triggered_at?: string | null
+          form_enabled?: boolean
+          id?: string
+          singleton?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tenant_holidays: {
         Row: {
           created_at: string | null
@@ -13490,15 +14351,23 @@ export type Database = {
         Row: {
           amount_due: number
           amount_paid: number
+          amount_refunded: number
+          attempt_count: number | null
           base_amount: number | null
+          billing_reason: string | null
           created_at: string
           currency: string
+          dispute_status: string | null
+          disputed_at: string | null
           due_date: string | null
           id: string
+          invoice_date: string | null
           invoice_number: string | null
+          next_payment_attempt: string | null
           paid_at: string | null
           period_end: string | null
           period_start: string | null
+          refunded_at: string | null
           status: string
           stripe_hosted_invoice_url: string | null
           stripe_invoice_id: string
@@ -13512,15 +14381,23 @@ export type Database = {
         Insert: {
           amount_due?: number
           amount_paid?: number
+          amount_refunded?: number
+          attempt_count?: number | null
           base_amount?: number | null
+          billing_reason?: string | null
           created_at?: string
           currency?: string
+          dispute_status?: string | null
+          disputed_at?: string | null
           due_date?: string | null
           id?: string
+          invoice_date?: string | null
           invoice_number?: string | null
+          next_payment_attempt?: string | null
           paid_at?: string | null
           period_end?: string | null
           period_start?: string | null
+          refunded_at?: string | null
           status?: string
           stripe_hosted_invoice_url?: string | null
           stripe_invoice_id: string
@@ -13534,15 +14411,23 @@ export type Database = {
         Update: {
           amount_due?: number
           amount_paid?: number
+          amount_refunded?: number
+          attempt_count?: number | null
           base_amount?: number | null
+          billing_reason?: string | null
           created_at?: string
           currency?: string
+          dispute_status?: string | null
+          disputed_at?: string | null
           due_date?: string | null
           id?: string
+          invoice_date?: string | null
           invoice_number?: string | null
+          next_payment_attempt?: string | null
           paid_at?: string | null
           period_end?: string | null
           period_start?: string | null
+          refunded_at?: string | null
           status?: string
           stripe_hosted_invoice_url?: string | null
           stripe_invoice_id?: string
@@ -13600,6 +14485,9 @@ export type Database = {
           ended_at: string | null
           id: string
           interval: string
+          last_stripe_event_at: string | null
+          last_sync_source: string | null
+          last_synced_at: string | null
           plan_id: string | null
           plan_name: string
           status: string
@@ -13625,6 +14513,9 @@ export type Database = {
           ended_at?: string | null
           id?: string
           interval?: string
+          last_stripe_event_at?: string | null
+          last_sync_source?: string | null
+          last_synced_at?: string | null
           plan_id?: string | null
           plan_name?: string
           status?: string
@@ -13650,6 +14541,9 @@ export type Database = {
           ended_at?: string | null
           id?: string
           interval?: string
+          last_stripe_event_at?: string | null
+          last_sync_source?: string | null
+          last_synced_at?: string | null
           plan_id?: string | null
           plan_name?: string
           status?: string
@@ -13718,6 +14612,7 @@ export type Database = {
           bonzah_brochure_url: string | null
           bonzah_mode: string
           bonzah_password: string | null
+          bonzah_sandbox_override: boolean
           bonzah_username: string | null
           booking_lead_time_hours: number | null
           booking_lead_time_unit: string | null
@@ -13735,6 +14630,7 @@ export type Database = {
           currency_code: string | null
           custom_booking_domain: string | null
           custom_portal_domain: string | null
+          customer_theme_mode: string
           dark_accent_color: string | null
           dark_background_color: string | null
           dark_header_footer_color: string | null
@@ -13748,6 +14644,7 @@ export type Database = {
           delivery_tiers_enabled: boolean
           deposit_mode: string | null
           distance_unit: string | null
+          email_notifications_enabled: boolean
           enquiries_enabled: boolean
           facebook_url: string | null
           favicon_url: string | null
@@ -13759,16 +14656,29 @@ export type Database = {
           friday_close: string | null
           friday_enabled: boolean | null
           friday_open: string | null
+          ga_measurement_id: string | null
           gig_driver_enabled: boolean
           global_deposit_amount: number | null
           google_maps_url: string | null
           hero_background_url: string | null
+          hide_checkout_price_breakdown: boolean
           id: string
+          inshur_2fa_token: string | null
+          inshur_billing_mode: string | null
+          inshur_customer_number: string | null
+          inshur_endpoint_overrides: Json | null
+          inshur_mode: string | null
+          inshur_password: string | null
+          inshur_policy_number: string | null
+          inshur_states_allowed: Json | null
+          inshur_states_synced_at: string | null
+          inshur_username: string | null
           instagram_url: string | null
           installment_config: Json | null
           installments_enabled: boolean | null
           integration_bonzah: boolean | null
           integration_canopy: boolean | null
+          integration_inshur: boolean | null
           integration_tesla_fleet: boolean | null
           integration_twilio_sms: boolean | null
           integration_twilio_whatsapp: boolean | null
@@ -13801,6 +14711,10 @@ export type Database = {
           meta_whatsapp_phone_number: string | null
           meta_whatsapp_phone_number_id: string | null
           meta_whatsapp_waba_id: string | null
+          migration_blocker: string
+          migration_blocker_dismiss_count: number
+          migration_blocker_dismissed_at: string | null
+          migration_reward_granted_at: string | null
           min_rental_days: number | null
           min_rental_hours: number
           minimum_rental_age: number | null
@@ -13809,6 +14723,7 @@ export type Database = {
           monday_open: string | null
           monthly_tier_days: number
           multiple_locations_enabled: boolean | null
+          notification_recipient_email: string | null
           og_image_url: string | null
           own_stripe_account_id: string | null
           own_stripe_connected_at: string | null
@@ -13854,12 +14769,19 @@ export type Database = {
           service_fee_type: string | null
           service_fee_value: number | null
           setup_completed_at: string | null
+          show_effective_daily_rate: boolean
           slug: string
+          stack_surcharges: boolean
           status: string
+          stripe_account_disabled_reason: string | null
           stripe_account_id: string | null
           stripe_account_status: string | null
+          stripe_charges_enabled: boolean | null
           stripe_mode: string
           stripe_onboarding_complete: boolean | null
+          stripe_payouts_enabled: boolean | null
+          stripe_requirements_due: Json | null
+          stripe_status_synced_at: string | null
           stripe_subscription_customer_id: string | null
           subscription_account: string
           subscription_billing_anchor: string | null
@@ -13898,6 +14820,7 @@ export type Database = {
           twilio_whatsapp_lockbox_template_sid: string | null
           twilio_whatsapp_number: string | null
           twitter_url: string | null
+          uae_customer_id: string | null
           updated_at: string | null
           vehicle_owners_enabled: boolean
           verification_document_type: string
@@ -13939,6 +14862,7 @@ export type Database = {
           bonzah_brochure_url?: string | null
           bonzah_mode?: string
           bonzah_password?: string | null
+          bonzah_sandbox_override?: boolean
           bonzah_username?: string | null
           booking_lead_time_hours?: number | null
           booking_lead_time_unit?: string | null
@@ -13956,6 +14880,7 @@ export type Database = {
           currency_code?: string | null
           custom_booking_domain?: string | null
           custom_portal_domain?: string | null
+          customer_theme_mode?: string
           dark_accent_color?: string | null
           dark_background_color?: string | null
           dark_header_footer_color?: string | null
@@ -13969,6 +14894,7 @@ export type Database = {
           delivery_tiers_enabled?: boolean
           deposit_mode?: string | null
           distance_unit?: string | null
+          email_notifications_enabled?: boolean
           enquiries_enabled?: boolean
           facebook_url?: string | null
           favicon_url?: string | null
@@ -13980,16 +14906,29 @@ export type Database = {
           friday_close?: string | null
           friday_enabled?: boolean | null
           friday_open?: string | null
+          ga_measurement_id?: string | null
           gig_driver_enabled?: boolean
           global_deposit_amount?: number | null
           google_maps_url?: string | null
           hero_background_url?: string | null
+          hide_checkout_price_breakdown?: boolean
           id?: string
+          inshur_2fa_token?: string | null
+          inshur_billing_mode?: string | null
+          inshur_customer_number?: string | null
+          inshur_endpoint_overrides?: Json | null
+          inshur_mode?: string | null
+          inshur_password?: string | null
+          inshur_policy_number?: string | null
+          inshur_states_allowed?: Json | null
+          inshur_states_synced_at?: string | null
+          inshur_username?: string | null
           instagram_url?: string | null
           installment_config?: Json | null
           installments_enabled?: boolean | null
           integration_bonzah?: boolean | null
           integration_canopy?: boolean | null
+          integration_inshur?: boolean | null
           integration_tesla_fleet?: boolean | null
           integration_twilio_sms?: boolean | null
           integration_twilio_whatsapp?: boolean | null
@@ -14022,6 +14961,10 @@ export type Database = {
           meta_whatsapp_phone_number?: string | null
           meta_whatsapp_phone_number_id?: string | null
           meta_whatsapp_waba_id?: string | null
+          migration_blocker?: string
+          migration_blocker_dismiss_count?: number
+          migration_blocker_dismissed_at?: string | null
+          migration_reward_granted_at?: string | null
           min_rental_days?: number | null
           min_rental_hours?: number
           minimum_rental_age?: number | null
@@ -14030,6 +14973,7 @@ export type Database = {
           monday_open?: string | null
           monthly_tier_days?: number
           multiple_locations_enabled?: boolean | null
+          notification_recipient_email?: string | null
           og_image_url?: string | null
           own_stripe_account_id?: string | null
           own_stripe_connected_at?: string | null
@@ -14075,12 +15019,19 @@ export type Database = {
           service_fee_type?: string | null
           service_fee_value?: number | null
           setup_completed_at?: string | null
+          show_effective_daily_rate?: boolean
           slug: string
+          stack_surcharges?: boolean
           status?: string
+          stripe_account_disabled_reason?: string | null
           stripe_account_id?: string | null
           stripe_account_status?: string | null
+          stripe_charges_enabled?: boolean | null
           stripe_mode?: string
           stripe_onboarding_complete?: boolean | null
+          stripe_payouts_enabled?: boolean | null
+          stripe_requirements_due?: Json | null
+          stripe_status_synced_at?: string | null
           stripe_subscription_customer_id?: string | null
           subscription_account?: string
           subscription_billing_anchor?: string | null
@@ -14119,6 +15070,7 @@ export type Database = {
           twilio_whatsapp_lockbox_template_sid?: string | null
           twilio_whatsapp_number?: string | null
           twitter_url?: string | null
+          uae_customer_id?: string | null
           updated_at?: string | null
           vehicle_owners_enabled?: boolean
           verification_document_type?: string
@@ -14160,6 +15112,7 @@ export type Database = {
           bonzah_brochure_url?: string | null
           bonzah_mode?: string
           bonzah_password?: string | null
+          bonzah_sandbox_override?: boolean
           bonzah_username?: string | null
           booking_lead_time_hours?: number | null
           booking_lead_time_unit?: string | null
@@ -14177,6 +15130,7 @@ export type Database = {
           currency_code?: string | null
           custom_booking_domain?: string | null
           custom_portal_domain?: string | null
+          customer_theme_mode?: string
           dark_accent_color?: string | null
           dark_background_color?: string | null
           dark_header_footer_color?: string | null
@@ -14190,6 +15144,7 @@ export type Database = {
           delivery_tiers_enabled?: boolean
           deposit_mode?: string | null
           distance_unit?: string | null
+          email_notifications_enabled?: boolean
           enquiries_enabled?: boolean
           facebook_url?: string | null
           favicon_url?: string | null
@@ -14201,16 +15156,29 @@ export type Database = {
           friday_close?: string | null
           friday_enabled?: boolean | null
           friday_open?: string | null
+          ga_measurement_id?: string | null
           gig_driver_enabled?: boolean
           global_deposit_amount?: number | null
           google_maps_url?: string | null
           hero_background_url?: string | null
+          hide_checkout_price_breakdown?: boolean
           id?: string
+          inshur_2fa_token?: string | null
+          inshur_billing_mode?: string | null
+          inshur_customer_number?: string | null
+          inshur_endpoint_overrides?: Json | null
+          inshur_mode?: string | null
+          inshur_password?: string | null
+          inshur_policy_number?: string | null
+          inshur_states_allowed?: Json | null
+          inshur_states_synced_at?: string | null
+          inshur_username?: string | null
           instagram_url?: string | null
           installment_config?: Json | null
           installments_enabled?: boolean | null
           integration_bonzah?: boolean | null
           integration_canopy?: boolean | null
+          integration_inshur?: boolean | null
           integration_tesla_fleet?: boolean | null
           integration_twilio_sms?: boolean | null
           integration_twilio_whatsapp?: boolean | null
@@ -14243,6 +15211,10 @@ export type Database = {
           meta_whatsapp_phone_number?: string | null
           meta_whatsapp_phone_number_id?: string | null
           meta_whatsapp_waba_id?: string | null
+          migration_blocker?: string
+          migration_blocker_dismiss_count?: number
+          migration_blocker_dismissed_at?: string | null
+          migration_reward_granted_at?: string | null
           min_rental_days?: number | null
           min_rental_hours?: number
           minimum_rental_age?: number | null
@@ -14251,6 +15223,7 @@ export type Database = {
           monday_open?: string | null
           monthly_tier_days?: number
           multiple_locations_enabled?: boolean | null
+          notification_recipient_email?: string | null
           og_image_url?: string | null
           own_stripe_account_id?: string | null
           own_stripe_connected_at?: string | null
@@ -14296,12 +15269,19 @@ export type Database = {
           service_fee_type?: string | null
           service_fee_value?: number | null
           setup_completed_at?: string | null
+          show_effective_daily_rate?: boolean
           slug?: string
+          stack_surcharges?: boolean
           status?: string
+          stripe_account_disabled_reason?: string | null
           stripe_account_id?: string | null
           stripe_account_status?: string | null
+          stripe_charges_enabled?: boolean | null
           stripe_mode?: string
           stripe_onboarding_complete?: boolean | null
+          stripe_payouts_enabled?: boolean | null
+          stripe_requirements_due?: Json | null
+          stripe_status_synced_at?: string | null
           stripe_subscription_customer_id?: string | null
           subscription_account?: string
           subscription_billing_anchor?: string | null
@@ -14340,6 +15320,7 @@ export type Database = {
           twilio_whatsapp_lockbox_template_sid?: string | null
           twilio_whatsapp_number?: string | null
           twitter_url?: string | null
+          uae_customer_id?: string | null
           updated_at?: string | null
           vehicle_owners_enabled?: boolean
           verification_document_type?: string
@@ -14558,6 +15539,69 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
             referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      vehicle_daily_prices: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          price: number
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          price: number
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          price?: number
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_daily_prices_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_daily_prices_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_daily_prices_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_daily_prices_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_daily_prices_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
           },
         ]
       }
@@ -15134,6 +16178,7 @@ export type Database = {
           finance_start_date: string | null
           flat_fee_period_override: string | null
           fuel_type: string | null
+          garaging_state: string | null
           has_logbook: boolean
           has_remote_immobiliser: boolean | null
           has_service_plan: boolean | null
@@ -15205,6 +16250,7 @@ export type Database = {
           finance_start_date?: string | null
           flat_fee_period_override?: string | null
           fuel_type?: string | null
+          garaging_state?: string | null
           has_logbook?: boolean
           has_remote_immobiliser?: boolean | null
           has_service_plan?: boolean | null
@@ -15276,6 +16322,7 @@ export type Database = {
           finance_start_date?: string | null
           flat_fee_period_override?: string | null
           fuel_type?: string | null
+          garaging_state?: string | null
           has_logbook?: boolean
           has_remote_immobiliser?: boolean | null
           has_service_plan?: boolean | null
@@ -15607,6 +16654,93 @@ export type Database = {
             referencedColumns: ["tenant_id"]
           },
         ]
+      }
+      zz_tenant_subscriptions_bak_20260727: {
+        Row: {
+          amount: number | null
+          cancel_at: string | null
+          canceled_at: string | null
+          card_brand: string | null
+          card_exp_month: number | null
+          card_exp_year: number | null
+          card_last4: string | null
+          created_at: string | null
+          currency: string | null
+          current_period_end: string | null
+          current_period_start: string | null
+          ended_at: string | null
+          id: string | null
+          interval: string | null
+          last_stripe_event_at: string | null
+          last_sync_source: string | null
+          last_synced_at: string | null
+          plan_id: string | null
+          plan_name: string | null
+          status: string | null
+          stripe_account: string | null
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          tenant_id: string | null
+          trial_end: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number | null
+          cancel_at?: string | null
+          canceled_at?: string | null
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last4?: string | null
+          created_at?: string | null
+          currency?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          ended_at?: string | null
+          id?: string | null
+          interval?: string | null
+          last_stripe_event_at?: string | null
+          last_sync_source?: string | null
+          last_synced_at?: string | null
+          plan_id?: string | null
+          plan_name?: string | null
+          status?: string | null
+          stripe_account?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          tenant_id?: string | null
+          trial_end?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number | null
+          cancel_at?: string | null
+          canceled_at?: string | null
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last4?: string | null
+          created_at?: string | null
+          currency?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          ended_at?: string | null
+          id?: string | null
+          interval?: string | null
+          last_stripe_event_at?: string | null
+          last_sync_source?: string | null
+          last_synced_at?: string | null
+          plan_id?: string | null
+          plan_name?: string | null
+          status?: string | null
+          stripe_account?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          tenant_id?: string | null
+          trial_end?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
     }
     Views: {
@@ -16669,6 +17803,10 @@ export type Database = {
             }
             Returns: Json
           }
+      admin_revoke_user_sessions: {
+        Args: { p_user_ids: string[] }
+        Returns: number
+      }
       app_login: {
         Args: { p_password: string; p_username: string }
         Returns: {
@@ -16827,6 +17965,10 @@ export type Database = {
         Returns: string
       }
       exec_sql: { Args: { query: string }; Returns: undefined }
+      finalize_credit_covered_extension: {
+        Args: { p_extension_id: string }
+        Returns: boolean
+      }
       finalize_rental_extension: {
         Args: { p_extension_id: string; p_payment_id: string }
         Returns: {
@@ -16836,6 +17978,17 @@ export type Database = {
           out_previous_end_date: string
           out_rental_id: string
           out_status: string
+        }[]
+      }
+      find_autoextend_reconcile_candidates: {
+        Args: { p_only_rental_id?: string }
+        Returns: {
+          charge_count: number
+          current_end_date: string
+          new_end_date: string
+          paying_payment_id: string
+          pending_ext_id: string
+          rental_id: string
         }[]
       }
       fine_void_charge: { Args: { f_id: string }; Returns: undefined }
@@ -17074,6 +18227,7 @@ export type Database = {
         }[]
       }
       is_primary_super_admin: { Args: never; Returns: boolean }
+      is_sales_agent: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
       mark_installment_failed: {
         Args: {
@@ -17210,6 +18364,10 @@ export type Database = {
         Args: { amt: number; due: string; r_id: string }
         Returns: string
       }
+      reverse_extension_credit: {
+        Args: { p_extension_id: string }
+        Returns: undefined
+      }
       seed_default_accounting_mappings: {
         Args: {
           p_provider: Database["public"]["Enums"]["accounting_provider"]
@@ -17220,6 +18378,10 @@ export type Database = {
       seed_default_lead_templates: {
         Args: { p_tenant_id: string }
         Returns: undefined
+      }
+      session_is_active: {
+        Args: { p_session_id: string; p_user_id: string }
+        Returns: boolean
       }
       swap_rental_vehicle: {
         Args: {
@@ -17250,6 +18412,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      touch_feedback_prompted_at: { Args: never; Returns: undefined }
       trax_price_suggest: {
         Args: {
           p_make?: string
@@ -17514,6 +18677,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       accounting_connection_status: ["active", "expired", "revoked", "error"],
