@@ -35,6 +35,7 @@ import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTheme } from "next-themes";
 
+import { PLATFORM_PRIVACY_URL, PLATFORM_TERMS_URL } from "@/lib/legal/urls";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxvlancmftwuo.supabase.co";
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2aXFvYW9reHZsYW5jbWZ0d3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNjM2NTcsImV4cCI6MjA3NzkzOTY1N30.jwpdtizfTxl3MeCNDu-mrLI7GNK4PYWYg5gsIZy0T_Q";
 
@@ -536,11 +537,11 @@ function LoginPageContent() {
                         <div className="space-y-1 leading-none">
                           <FormLabel className="text-sm font-normal cursor-pointer">
                             I accept the{" "}
-                            <a href="/privacy-policy" target="_blank" className="text-primary underline hover:text-primary/80">
+                            <a href={PLATFORM_PRIVACY_URL} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">
                               Privacy Policy
                             </a>{" "}
                             and{" "}
-                            <a href="/terms" target="_blank" className="text-primary underline hover:text-primary/80">
+                            <a href={PLATFORM_TERMS_URL} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">
                               Terms &amp; Conditions
                             </a>
                           </FormLabel>

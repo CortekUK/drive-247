@@ -4,15 +4,19 @@
  *
  * ── STATUS ────────────────────────────────────────────────────────────────────
  * This is Appendix A of the 6 August 2026 handoff: the rewritten ToS that is
- * with the solicitor for final sign-off. It is NOT live yet — the /terms page
- * still serves the previous document while PLATFORM_TOS_IS_DRAFT is true.
+ * with the solicitor for final sign-off. It is NOT live yet — the canonical
+ * /terms page still serves the previous document while PLATFORM_TOS_IS_DRAFT
+ * is true.
+ *
+ * It lives in apps/web because drive-247.com/terms is the CANONICAL public home
+ * of this contract. The portal's old second copy is retired and 307s here.
  *
  * TO SHIP IT (one change, after sign-off):
  *   1. flip PLATFORM_TOS_IS_DRAFT to false here
  *   2. set PLATFORM_TOS_VERSION in supabase/functions/_shared/platform-tos.ts
  *      to PLATFORM_TOS_PENDING_VERSION ("2026-08-01")
- * The version test in src/__tests__/lib/platform-tos.test.ts fails until
- * both are done, so the two can never drift.
+ * The version test in apps/portal/src/__tests__/lib/platform-tos.test.ts fails
+ * until both are done, so the two can never drift.
  *
  * ── BRACKETED PLACEHOLDERS — DO NOT FILL THESE IN ─────────────────────────────
  * Three placeholders are deliberately left exactly as the solicitor draft has
@@ -710,7 +714,7 @@ export const PLATFORM_TOS_CLOSING =
 
 /**
  * The placeholders that must survive until the solicitor supplies real values.
- * Asserted by src/__tests__/lib/platform-tos.test.ts.
+ * Asserted by apps/portal/src/__tests__/lib/platform-tos.test.ts.
  */
 export const PLATFORM_TOS_PENDING_PLACEHOLDERS = [
   "[Governing Law Jurisdiction]",

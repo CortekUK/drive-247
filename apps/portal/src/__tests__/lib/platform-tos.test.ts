@@ -1,14 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+// The canonical document lives in apps/web (drive-247.com/terms is its public
+// home), but only apps/portal has a test runner — so this suite reaches across
+// the workspace rather than leaving the legal copy untested.
 import {
   PLATFORM_TOS_SECTIONS,
   PLATFORM_TOS_PENDING_VERSION,
   PLATFORM_TOS_PENDING_PLACEHOLDERS,
   PLATFORM_TOS_IS_DRAFT,
   PLATFORM_TOS_EFFECTIVE_DATE,
-} from "@/lib/legal/platform-tos";
+} from "../../../../web/src/lib/legal/platform-tos";
 
 /**
  * The edge functions are Deno modules outside the portal's tsconfig, so they
@@ -62,7 +65,7 @@ describe("platform ToS — the draft flag is actually wired to the page", () => 
   // agree perfectly while /terms kept serving a completely different document.
   // That was the real state of this code until the page became a switch.
   const termsPage = readFileSync(
-    resolve(__dirname, "../../app/(auth)/terms/page.tsx"),
+    resolve(__dirname, "../../../../web/src/app/(marketing)/terms/page.tsx"),
     "utf8",
   );
 
@@ -72,13 +75,13 @@ describe("platform ToS — the draft flag is actually wired to the page", () => 
   });
 
   it("has /terms render both the legacy document and the Appendix A document", () => {
-    expect(termsPage).toContain("LegacyPlatformTerms");
+    expect(termsPage).toContain("LegacyMarketingTerms");
     expect(termsPage).toContain("PlatformTosDocument");
   });
 
   it("has the Appendix A renderer actually consume the section data", () => {
     const doc = readFileSync(
-      resolve(__dirname, "../../components/legal/platform-tos-document.tsx"),
+      resolve(__dirname, "../../../../web/src/components/legal/platform-tos-document.tsx"),
       "utf8",
     );
     expect(doc).toContain("PLATFORM_TOS_SECTIONS");
@@ -90,8 +93,102 @@ describe("platform ToS — the draft flag is actually wired to the page", () => 
       resolve(__dirname, "../../components/legal/terms-consent.tsx"),
       "utf8",
     );
-    expect(consent).toContain('href="/terms"');
-    expect(consent).toContain('href="/privacy-policy"');
+    // Absolute canonical URLs from the shared module: the portal runs on a
+    // different origin, so a root-relative href could never reach the
+    // marketing site.
+    expect(consent).toContain("PLATFORM_TERMS_URL");
+    expect(consent).toContain("PLATFORM_PRIVACY_URL");
+  });
+});
+
+describe("platform ToS — one canonical document, the portal copy retired", () => {
+  const repoRoot = resolve(__dirname, "../../../../..");
+
+  it("has no portal-local copy of the terms or privacy policy", () => {
+    // The whole point of the consolidation: two differently-worded documents
+    // both claiming to be the platform terms is a real problem once a tenant is
+    // charged against one of them. Re-adding a portal page would resurrect that
+    // without any other test noticing.
+    for (const p of [
+      "apps/portal/src/app/(auth)/terms/page.tsx",
+      "apps/portal/src/app/(auth)/privacy-policy/page.tsx",
+    ]) {
+      expect(existsSync(resolve(repoRoot, p)), `${p} must stay retired`).toBe(false);
+    }
+  });
+
+  it("redirects the retired portal routes instead of 404ing them", () => {
+    // Redirect, not delete — the login page's MANDATORY acceptance checkbox
+    // links these, and a 404 on the screen where a user attests to having read
+    // a document is worse than the duplication we removed.
+    const cfg = readFileSync(resolve(repoRoot, "apps/portal/next.config.js"), "utf8");
+    expect(cfg).toContain("async redirects()");
+    expect(cfg).toContain("'/terms'");
+    expect(cfg).toContain("'/privacy-policy'");
+    // 307 not 308, asserted on the legal entries specifically rather than by
+    // scanning the whole file — an unrelated permanent redirect added later
+    // should not fail a test whose message is about legal documents.
+    const legalBlock = cfg.slice(cfg.indexOf("async redirects()"));
+    for (const route of ["'/terms'", "'/privacy-policy'"]) {
+      const at = legalBlock.indexOf(route);
+      expect(at, `${route} redirect must exist`).toBeGreaterThan(-1);
+      // permanent lives within the same object literal as the source.
+      expect(legalBlock.slice(at, at + 220)).toContain("permanent: false");
+    }
+  });
+
+  it("routes every portal legal link through the shared URL module", () => {
+    // A root-relative /terms in the portal resolves against
+    // {tenant}.portal.drive-247.com and can never reach the marketing site.
+    // Going through lib/legal/urls.ts (rather than each file hardcoding the
+    // host) is what stops NEXT_PUBLIC_MARKETING_URL from being honoured on some
+    // consent surfaces and ignored on others — which previously left the two
+    // MANDATORY acceptance screens pointing at production while the rest
+    // followed a local override.
+    for (const p of [
+      "apps/portal/src/app/(auth)/login/page.tsx",
+      "apps/portal/src/components/policy/policy-acceptance-gate.tsx",
+      "apps/portal/src/components/legal/terms-consent.tsx",
+    ]) {
+      const src = readFileSync(resolve(repoRoot, p), "utf8");
+      expect(src, `${p} must not link root-relative legal paths`).not.toMatch(
+        /href="\/(terms|privacy|privacy-policy)"/,
+      );
+      expect(src, `${p} must not hardcode the marketing host`).not.toContain(
+        "https://drive-247.com",
+      );
+      expect(src, `${p} must use the shared URL module`).toMatch(
+        /PLATFORM_(TERMS|PRIVACY)_URL/,
+      );
+    }
+  });
+
+  it("keeps the portal's link origin, its redirect destination, and Stripe's ToS URL on one host", () => {
+    // Three places name the marketing origin and nothing links them: the shared
+    // URL module (consent links), next.config.js (the retired-route redirects),
+    // and _shared/platform-tos.ts (what Stripe shows when consent_collection is
+    // on). If they diverge, a tenant can tick a box against one document while
+    // a different one is recorded — the exact failure the version column exists
+    // to prevent.
+    const urls = readFileSync(
+      resolve(repoRoot, "apps/portal/src/lib/legal/urls.ts"),
+      "utf8",
+    );
+    const cfg = readFileSync(resolve(repoRoot, "apps/portal/next.config.js"), "utf8");
+    const fallback = urls.match(/NEXT_PUBLIC_MARKETING_URL \|\| "([^"]+)"/)?.[1];
+    const cfgFallback = cfg.match(/NEXT_PUBLIC_MARKETING_URL \|\| '([^']+)'/)?.[1];
+
+    expect(fallback).toBe("https://drive-247.com");
+    expect(cfgFallback, "next.config.js must default to the same origin").toBe(fallback);
+    expect(constFromSource("PLATFORM_TOS_URL")).toBe(`${fallback}/terms`);
+  });
+
+  it("keeps the server-side canonical URL pointing at the page that renders the versioned document", () => {
+    // If Stripe's account-level ToS URL is set from this constant (which is what
+    // enabling STRIPE_TOS_CONSENT_ENABLED requires), it must serve the same
+    // document PLATFORM_TOS_VERSION names — otherwise the consent record
+    // attests to something the operator never saw.
+    expect(constFromSource("PLATFORM_TOS_URL")).toBe("https://drive-247.com/terms");
   });
 });
 

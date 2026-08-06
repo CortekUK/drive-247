@@ -1,6 +1,7 @@
 "use client";
 
 import { Checkbox } from "@/components/ui/checkbox";
+import { PLATFORM_PRIVACY_URL, PLATFORM_TERMS_URL } from "@/lib/legal/urls";
 
 /**
  * Platform Terms of Service + Privacy Policy acceptance gate.
@@ -16,14 +17,20 @@ import { Checkbox } from "@/components/ui/checkbox";
  * gate copy-pasted per surface would drift and leave the most-used path
  * ungated. Keeping it here makes that drift impossible rather than unlikely.
  *
- * Both links resolve on the portal origin ({tenant}.portal.drive-247.com):
- * /terms is served by (auth)/terms/page.tsx and /privacy-policy by
- * (auth)/privacy-policy/page.tsx. Neither sits behind auth — (auth)/layout does
- * no auth check — which matters because they open in a new tab mid-checkout.
+ * Both links point at the CANONICAL documents on the marketing site. There is
+ * exactly one platform Terms of Service (drive-247.com/terms) and one Privacy
+ * Policy (drive-247.com/privacy). The portal used to serve a second,
+ * differently-worded copy of the terms at its own /terms; that is retired and
+ * 307s to the canonical URL (see apps/portal/next.config.js).
  *
- * Do NOT switch these to absolute drive-247.com URLs. The portal is deliberately
- * white-labelled per tenant, and a relative link from the portal can never reach
- * the marketing site anyway (different origin, no rewrites configured).
+ * The URLs are absolute by necessity — the portal runs on
+ * {tenant}.portal.drive-247.com, so a root-relative href resolves against that
+ * origin and can never reach the marketing site. Both open in a new tab so the
+ * tenant does not lose their place in checkout.
+ *
+ * NOT a tenant's own rental terms: apps/booking serves those per-tenant from the
+ * CMS at {tenant}.drive-247.com/terms. Different parties, different contract,
+ * and it is under A2P 10DLC carrier review. Never cross-link them.
  */
 export function TermsConsent({
   checked,
@@ -58,7 +65,7 @@ export function TermsConsent({
       >
         I have read and agree to the{" "}
         <a
-          href="/terms"
+          href={PLATFORM_TERMS_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="text-primary underline underline-offset-2 hover:text-primary/80"
@@ -70,7 +77,7 @@ export function TermsConsent({
         </a>{" "}
         and{" "}
         <a
-          href="/privacy-policy"
+          href={PLATFORM_PRIVACY_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="text-primary underline underline-offset-2 hover:text-primary/80"
