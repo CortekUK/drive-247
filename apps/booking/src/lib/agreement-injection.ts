@@ -127,22 +127,44 @@ function injectMileage(template: string): string {
  * the template has no recognisable signature marker at all.
  */
 function insertBeforeSignature(template: string, block: string): string {
-  // Prefer to land before an acknowledgement/signature marker.
+  // Every way a template signals "the renter signs here".
+  //
+  // "Renter Signature" / "Signed by Renter" are NOT redundant with "Customer
+  // Signature": the seeded installment template signs off with
+  //   Signed by Renter:   ______   {{customer_name}}
+  // and says "Customer" nowhere, so 8 production tenants matched nothing.
   const markers = [
     /<p>\s*<strong>\s*By signing below/i,
     /Customer Signature/i,
+    // "Renter Signature", "Renters/Renter's Signature" — apostrophe optional and
+    // in any encoding, since templates mix straight, curly and HTML-entity forms.
+    /Renter(?:'|’|&apos;|&#39;)?s? Signature/i,
+    /Signed by\s+(?:the\s+)?Renter/i,
     /\{\{@sig1\}\}/i,
   ];
+
+  // Take the EARLIEST match in the document, not the first pattern that happens
+  // to hit. Priority order is wrong here: one production template puts the real
+  // signature table (labelled "Renter's Signature", carrying {{@sig1}}) at
+  // offset 12498 and then says "Customer Signature" in a closing sentence at
+  // 12992. Matching by pattern order picked the later one and spliced the
+  // clause UNDERNEATH the signature. Whichever sign-off appears first is the
+  // one the renter reaches first, so that is the line to stay above.
+  let earliest = -1;
   for (const re of markers) {
     const m = template.match(re);
-    if (m && m.index != null) {
-      // Splice at the start of the enclosing BLOCK, never mid-paragraph. Some
-      // templates put the signature marker inside <p>...</p>; inserting an <h2>
-      // there produces invalid nesting that the PDF block parser renders as
-      // literal internal markers (BLOCK_18) with the headings dropped.
-      const safeIndex = blockStartBefore(template, m.index);
-      return template.slice(0, safeIndex) + block + "\n" + template.slice(safeIndex);
+    if (m && m.index != null && (earliest === -1 || m.index < earliest)) {
+      earliest = m.index;
     }
+  }
+
+  if (earliest !== -1) {
+    // Splice at the start of the enclosing BLOCK, never mid-paragraph. Some
+    // templates put the signature marker inside <p>...</p>; inserting an <h2>
+    // there produces invalid nesting that the PDF block parser renders as
+    // literal internal markers (BLOCK_18) with the headings dropped.
+    const safeIndex = blockStartBefore(template, earliest);
+    return template.slice(0, safeIndex) + block + "\n" + template.slice(safeIndex);
   }
   return template + block;
 }

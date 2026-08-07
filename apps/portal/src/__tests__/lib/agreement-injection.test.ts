@@ -120,6 +120,74 @@ describe('injectAgreementClauses — placement', () => {
     const out = injectAgreementClauses(template, { ...OFF, hasBonzahAddendum: true });
     expect(out.indexOf(ADDENDUM)).toBeLessThan(out.indexOf('Customer Signature'));
   });
+
+  // The seeded "Default Installment Plan Agreement" signs off with
+  // "Signed by Renter:" and never says "Customer". 8 production tenants use it;
+  // before these markers existed the clause landed BELOW the signature lines.
+  it('anchors on the installment template\'s "Signed by Renter" sign-off', () => {
+    const template = [
+      '<p>Renter confirms they have read the payment schedule.</p>',
+      '<p>Signed by Renter:    ______________________________</p>',
+      '<p>{{customer_name}}      Date: __________</p>',
+      '<p>Signed by Operator:  ______________________________</p>',
+    ].join('\n');
+
+    const out = injectAgreementClauses(template, { ...OFF, hasBonzahAddendum: true });
+
+    expect(countOccurrences(out, ADDENDUM)).toBe(1);
+    expect(out.indexOf(ADDENDUM)).toBeLessThan(out.indexOf('Signed by Renter'));
+    // and specifically NOT the old append-to-the-end behaviour
+    expect(out.trimEnd().endsWith(ADDENDUM)).toBe(false);
+  });
+
+  // Real shape of kedic-services/standard: the signature TABLE (labelled
+  // "Renter's Signature", carrying {{@sig1}}) comes first, and the words
+  // "Customer Signature" appear later in a closing sentence. Matching by
+  // pattern priority picked the later one and spliced below the signature.
+  it('uses the EARLIEST sign-off, not the highest-priority pattern', () => {
+    const template = [
+      '<p>Terms of the rental.</p>',
+      "<table><tr><td>{{customer_name}}</td><td>Renter's Signature {{@sig1}}</td></tr></table>",
+      '<p>Agreeing electronically has the same effect. Customer Signature: {{@sig1}}</p>',
+    ].join('\n');
+
+    const out = injectAgreementClauses(template, { ...OFF, hasBonzahAddendum: true });
+
+    expect(countOccurrences(out, ADDENDUM)).toBe(1);
+    // must sit above the signature TABLE, not merely above the later sentence
+    expect(out.indexOf(ADDENDUM)).toBeLessThan(out.indexOf('<table>'));
+    expect(out.indexOf(ADDENDUM)).toBeLessThan(out.indexOf('Customer Signature'));
+  });
+
+  it.each([
+    ["straight apostrophe", "Renter's Signature"],
+    ['curly apostrophe', 'Renter’s Signature'],
+    ['&apos; entity', 'Renter&apos;s Signature'],
+    ['&#39; entity', 'Renter&#39;s Signature'],
+    ['no apostrophe', 'Renters Signature'],
+  ])('anchors on a possessive sign-off written with a %s', (_label, sig) => {
+    const template = `<p>Content.</p>\n<p>${sig}: ____</p>`;
+    const out = injectAgreementClauses(template, { ...OFF, hasBonzahAddendum: true });
+    expect(countOccurrences(out, ADDENDUM)).toBe(1);
+    expect(out.indexOf(ADDENDUM)).toBeLessThan(out.indexOf(sig));
+  });
+
+  it('anchors on a "Renter Signature" label', () => {
+    const template = '<p>Content.</p>\n<p>Renter Signature: ____</p>';
+    const out = injectAgreementClauses(template, { ...OFF, hasBonzahAddendum: true });
+    expect(out.indexOf(ADDENDUM)).toBeLessThan(out.indexOf('Renter Signature'));
+  });
+
+  it('keeps terms above the addendum on a "Signed by Renter" template too', () => {
+    const template = '<p>Content.</p>\n<p>Signed by Renter: ____</p>';
+    const out = injectAgreementClauses(template, {
+      ...OFF,
+      hasTerms: true,
+      hasBonzahAddendum: true,
+    });
+    expect(out.indexOf(TERMS)).toBeLessThan(out.indexOf(ADDENDUM));
+    expect(out.indexOf(ADDENDUM)).toBeLessThan(out.indexOf('Signed by Renter'));
+  });
 });
 
 describe('BONZAH_INSURANCE_ADDENDUM — content fidelity', () => {
