@@ -47,6 +47,9 @@ import {
   Variable,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useTenant } from '@/contexts/TenantContext';
+import { injectAgreementClauses } from '@/lib/agreement-injection';
+import { BONZAH_INSURANCE_ADDENDUM_HTML } from '@/lib/bonzah-addendum';
 import {
   TEMPLATE_VARIABLES,
   getVariablesByCategory,
@@ -112,6 +115,7 @@ export const AgreementTemplateEditor: React.FC<AgreementTemplateEditorProps> = (
 
   const variablesByCategory = getVariablesByCategory();
   const sampleData = getSampleData();
+  const { tenant } = useTenant();
 
   // Get current selection or cursor position
   const getSelection = useCallback(() => {
@@ -195,7 +199,17 @@ export const AgreementTemplateEditor: React.FC<AgreementTemplateEditorProps> = (
     [insertText]
   );
 
-  const previewContent = replaceVariables(value, sampleData);
+  // Mirrors the full-page template editor: preview what will actually be sent,
+  // including the render-time Bonzah addendum. See the comment there.
+  const isBonzahTenant = tenant?.integration_bonzah === true;
+  const previewContent = replaceVariables(
+    injectAgreementClauses(value, {
+      hasMileage: false,
+      hasTerms: false,
+      hasBonzahAddendum: isBonzahTenant,
+    }),
+    { ...sampleData, bonzah_insurance_addendum: isBonzahTenant ? BONZAH_INSURANCE_ADDENDUM_HTML : '' },
+  );
 
   return (
     <div className={`space-y-3 ${className}`}>

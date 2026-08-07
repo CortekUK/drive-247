@@ -20,6 +20,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/formatters";
 import { buildTemplateData, replaceVariables } from "@/lib/template-variables";
+import { injectAgreementClauses } from "@/lib/agreement-injection";
+import { BONZAH_INSURANCE_ADDENDUM_HTML } from "@/lib/bonzah-addendum";
 import { type BonzahCustomerDetails } from "@/components/rentals/bonzah-insurance-selector";
 import type { CoverageOptions } from "@/hooks/use-bonzah-premium";
 import { cn } from "@/lib/utils";
@@ -145,7 +147,18 @@ export function OccurrenceConfigDialog({
         tenant ?? {},
         ctx.currencyCode,
       );
-      return replaceVariables(agreement.template_content, data);
+      // This preview claims to be "the actual agreement the customer will see",
+      // so it has to include the render-time Bonzah addendum the send path
+      // splices in — otherwise it under-reports the contract.
+      const isBonzahTenant = (tenant as any)?.integration_bonzah === true;
+      return replaceVariables(
+        injectAgreementClauses(agreement.template_content, {
+          hasMileage: false,
+          hasTerms: false,
+          hasBonzahAddendum: isBonzahTenant,
+        }),
+        { ...data, bonzah_insurance_addendum: isBonzahTenant ? BONZAH_INSURANCE_ADDENDUM_HTML : '' },
+      );
     } catch {
       return agreement.template_content;
     }
