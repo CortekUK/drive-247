@@ -74,8 +74,8 @@ describe("platform ToS — the draft flag is actually wired to the page", () => 
     expect(termsPage).toMatch(/from ["']@\/lib\/legal\/platform-tos["']/);
   });
 
-  it("has /terms render both the legacy document and the Appendix A document", () => {
-    expect(termsPage).toContain("LegacyMarketingTerms");
+  it("has /terms render both the interim document and the Appendix A document", () => {
+    expect(termsPage).toContain("InterimPlatformTerms");
     expect(termsPage).toContain("PlatformTosDocument");
   });
 
@@ -189,6 +189,60 @@ describe("platform ToS — one canonical document, the portal copy retired", () 
     // document PLATFORM_TOS_VERSION names — otherwise the consent record
     // attests to something the operator never saw.
     expect(constFromSource("PLATFORM_TOS_URL")).toBe("https://drive-247.com/terms");
+  });
+});
+
+describe("interim canonical documents — the sign-off window is still contractually covered", () => {
+  const repoRoot = resolve(__dirname, "../../../../..");
+  // Collapse whitespace: JSX wraps prose across lines, so a clause like "shall
+  // not\n  exceed the fees paid" is one sentence in the rendered document but
+  // never a substring of the source.
+  const terms = readFileSync(
+    resolve(repoRoot, "apps/web/src/components/legal/interim-platform-terms.tsx"),
+    "utf8",
+  ).replace(/\s+/g, " ");
+  const privacy = readFileSync(
+    resolve(repoRoot, "apps/web/src/app/(marketing)/privacy/page.tsx"),
+    "utf8",
+  );
+
+  it("serves an interim contract that still has payment, liability, warranty and governing-law clauses", () => {
+    // Consolidating onto the marketing URL briefly carried the marketing *text*
+    // with it — an 8-section summary with none of these. A tenant is charged
+    // against whatever is live during the Appendix A sign-off window, so the
+    // interim document has to be a real contract, not a summary.
+    expect(terms).toContain("does not collect, hold, or process client funds");
+    expect(terms).toContain("shall not exceed the fees paid by the Client");
+    expect(terms).toContain("without warranties of any kind");
+    expect(terms).toContain("governed by the laws of England and Wales");
+  });
+
+  it("keeps all 13 clauses of the interim contract", () => {
+    for (const [n, title] of [
+      [1, "Scope of the System"], [2, "Authorised Users"],
+      [3, "Client Operational Responsibility"], [4, "Third-Party Services"],
+      [5, "Payments"], [6, "Data Responsibility"], [7, "System Availability"],
+      [8, "Acceptable Use"], [9, "Limitation of Liability"], [10, "No Warranty"],
+      [11, "Changes to Terms"], [12, "Governing Law"], [13, "Acceptance"],
+    ] as [number, string][]) {
+      expect(terms, `clause ${n}. ${title}`).toContain(`${n}. ${title}`);
+    }
+  });
+
+  it("does not claim Drive247 is only a processor now that operators accept this policy too", () => {
+    // The page used to open with an unqualified "We act as a data processor on
+    // behalf of the independent rental operators (controllers)". True of RENTER
+    // data; false for the operator's own staff accounts, where Cortek decides
+    // the purposes and means. The portal's /privacy-policy now redirects here,
+    // so both audiences read this page and the blanket claim was backwards.
+    expect(privacy).not.toMatch(
+      /We act as a\{?"?\s*"?\}?\s*<strong>data processor<\/strong> on behalf of the independent rental\s*operators/,
+    );
+    // The controller relationship for portal accounts must be stated.
+    expect(privacy).toContain("Rental operators and their staff");
+    expect(privacy).toMatch(/portal account[\s\S]{0,400}<strong>controller<\/strong>/);
+    // ...and the processor relationship for renter data must survive.
+    expect(privacy).toMatch(/Renters[\s\S]{0,600}<strong>\s*processor\s*<\/strong>/);
   });
 });
 

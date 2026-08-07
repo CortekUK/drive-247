@@ -29,20 +29,32 @@
  * portal-local copy — two documents both claiming to be the platform terms is
  * precisely what this consolidation removed.
  *
- * RETIRED VERSIONS.
- * "2026-02-legacy" named the portal's own 13-section document, which this
- * consolidation removed. Nothing was ever stamped with it (the acceptance
- * columns were added in the same change and no row carries a timestamp), but if
- * a Stripe Checkout session created before the cutover completes afterwards its
- * frozen metadata can still carry that string. The text is recoverable from git:
- *   git show d54f96d7:apps/portal/src/components/legal/legacy-platform-terms.tsx
+ * WHAT THE CURRENT VERSION NAMES.
+ * "2026-02-platform-tou" is the 13-section DRIVE247 PLATFORM TERMS OF USE, now
+ * served at the canonical URL by apps/web/src/components/legal/interim-platform-terms.tsx.
+ * Same text that was previously published at the portal's own /terms — only its
+ * URL changed, so this is a rename of the identity, not a new document.
+ *
+ * RETIRED VERSION STRINGS. Nothing was ever stamped with either of these (the
+ * acceptance columns and every writer landed in the same change, and a live
+ * query confirmed zero rows carry a timestamp), so no stored record points at a
+ * name that no longer resolves:
+ *   · "2026-02-legacy" — same 13-section document, when it was portal-served.
+ *   · "2026-02-web"    — the 8-section marketing summary, briefly canonical
+ *      during this consolidation. Recoverable via
+ *      git show d54f96d7:apps/web/src/app/\(marketing\)/terms/page.tsx
+ *
+ * One residual edge: a Stripe Checkout session created before a deploy freezes
+ * the old string in its metadata and the webhook stamps it verbatim on
+ * completion. Harmless here (nothing to overwrite), but worth knowing after any
+ * future bump.
  *
  * WHEN TO BUMP.
  * Bump on any material change to the terms text. Do NOT bump for typo fixes or
  * styling: every bump means existing accepted records no longer match current,
  * which is what a future re-acceptance prompt would key off.
  */
-export const PLATFORM_TOS_VERSION = "2026-02-web";
+export const PLATFORM_TOS_VERSION = "2026-02-platform-tou";
 
 /**
  * Set to this once the solicitor signs off and apps/web/src/lib/legal/platform-tos.ts

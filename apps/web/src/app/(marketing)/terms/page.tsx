@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { LegacyMarketingTerms } from "@/components/legal/legacy-marketing-terms";
+import { InterimPlatformTerms } from "@/components/legal/interim-platform-terms";
 import { PlatformTosDocument } from "@/components/legal/platform-tos-document";
 import { PLATFORM_TOS_IS_DRAFT } from "@/lib/legal/platform-tos";
 
@@ -18,8 +18,14 @@ import { PLATFORM_TOS_IS_DRAFT } from "@/lib/legal/platform-tos";
  * tenants.platform_tos_version from supabase/functions/_shared/platform-tos.ts.
  * So the flag below must move together with that constant:
  *
- *   PLATFORM_TOS_IS_DRAFT === true   → the previous marketing terms (live today)
+ *   PLATFORM_TOS_IS_DRAFT === true   → the interim Platform Terms of Use
  *   PLATFORM_TOS_IS_DRAFT === false  → the Appendix A rewrite
+ *
+ * The interim document is the 13-section text the portal used to serve, NOT the
+ * 8-section marketing summary that previously sat on this URL. The summary had
+ * no payment terms, no governing law, no liability cap and no warranty
+ * disclaimer, which is not a contract to charge a tenant against — even for the
+ * few weeks of a sign-off window.
  *
  * apps/portal/src/__tests__/lib/platform-tos.test.ts holds the two in sync and
  * fails if only one is changed.
@@ -35,5 +41,5 @@ export const metadata: Metadata = {
 };
 
 export default function TermsPage() {
-  return PLATFORM_TOS_IS_DRAFT ? <LegacyMarketingTerms /> : <PlatformTosDocument />;
+  return PLATFORM_TOS_IS_DRAFT ? <InterimPlatformTerms /> : <PlatformTosDocument />;
 }
