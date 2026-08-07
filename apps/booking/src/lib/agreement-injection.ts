@@ -1,5 +1,6 @@
 /**
- * Render-time injection of mileage + T&C clauses into STORED agreement templates.
+ * Render-time injection of mileage, T&C and Bonzah insurance-addendum clauses
+ * into STORED agreement templates.
  *
  * THE PROBLEM
  * 22 of 37 tenants have their own row in `agreement_templates`, and none of
@@ -20,12 +21,27 @@
  *   - the mileage rows appear only when a real allowance resolves for this
  *     rental (configured on the vehicle, or overridden on the rental)
  *   - the terms block appears only when the tenant has a published terms page
+ *   - the Bonzah addendum appears only when the tenant has turned Bonzah on
  * A tenant with nothing configured sees no change. We are surfacing what they
  * already set and wrongly believed was in the contract — not inventing policy.
+ *
+ * THE BONZAH ADDENDUM IS A TENANT-LEVEL DISCLOSURE, NOT A PURCHASE RECEIPT
+ * Bonzah requires it on every agreement issued by a rental company that offers
+ * their products, because it discloses that Bonzah is available as an optional
+ * referral partner. It is therefore gated on `tenants.integration_bonzah` alone
+ * — never on whether this particular renter bought coverage or skipped it.
  *
  * RESPECTING INTENT
  * If a template already contains the placeholder, we do NOT inject: the operator
  * has chosen where the clause belongs and normal substitution handles it.
+ *
+ * Duplicated byte-for-byte to:
+ *   supabase/functions/_shared/agreement-injection.ts
+ *   apps/portal/src/lib/agreement-injection.ts
+ *   apps/booking/src/lib/agreement-injection.ts
+ * These are parallel copies, not a shared import — the portal PDF engine, the
+ * booking engine and the Deno edge function each resolve modules differently.
+ * Change one, change all three, and keep them identical (md5sum them).
  */
 
 /** Mileage rows, matching the built-in template's Vehicle Details markup. */
@@ -66,6 +82,12 @@ export interface InjectionOptions {
   hasMileage: boolean;
   /** Skip terms injection when the tenant has no published terms. */
   hasTerms: boolean;
+  /**
+   * Skip the Bonzah insurance addendum unless `tenants.integration_bonzah` is
+   * true. Tenant-level only — see the header note; do NOT pass a per-rental
+   * "did this renter buy coverage" value here.
+   */
+  hasBonzahAddendum: boolean;
 }
 
 function hasPlaceholder(template: string, name: string): boolean {
@@ -100,12 +122,11 @@ function injectMileage(template: string): string {
 }
 
 /**
- * Append the tenant's terms near the end, before any signature block if we can
- * find one — a customer should read the terms above the line they sign on.
+ * Splice `block` in just above the signature area — a customer should read a
+ * clause above the line they sign on. Falls back to appending at the end when
+ * the template has no recognisable signature marker at all.
  */
-function injectTerms(template: string): string {
-  const block = "\n{{terms_and_conditions}}\n";
-
+function insertBeforeSignature(template: string, block: string): string {
   // Prefer to land before an acknowledgement/signature marker.
   const markers = [
     /<p>\s*<strong>\s*By signing below/i,
@@ -127,15 +148,39 @@ function injectTerms(template: string): string {
 }
 
 /**
- * Ensure the rendered agreement states mileage and incorporates the tenant's
- * terms, without modifying the stored template.
+ * Append the tenant's terms near the end, before any signature block if we can
+ * find one — a customer should read the terms above the line they sign on.
+ */
+function injectTerms(template: string): string {
+  return insertBeforeSignature(template, "\n{{terms_and_conditions}}\n");
+}
+
+/**
+ * Place the Bonzah insurance addendum immediately above the signature block.
+ *
+ * Runs AFTER injectTerms so that, when both are injected into the same
+ * template, the order the renter reads is: operator's own terms, then the
+ * insurer's addendum, then the signature — the addendum sits closest to the
+ * signature because it is the disclosure being acknowledged by signing.
+ */
+function injectBonzahAddendum(template: string): string {
+  // Literal rather than an import from bonzah-addendum: this module is kept
+  // byte-identical across the portal, booking and Deno edge-function copies,
+  // and Deno needs a ".ts" suffix on relative imports that the bundlers do not.
+  // Must stay in step with BONZAH_ADDENDUM_PLACEHOLDER in bonzah-addendum.ts.
+  return insertBeforeSignature(template, "\n{{bonzah_insurance_addendum}}\n");
+}
+
+/**
+ * Ensure the rendered agreement states mileage, incorporates the tenant's terms
+ * and carries the Bonzah addendum, without modifying the stored template.
  *
  * Returns the template unchanged when the placeholders are already present or
  * the underlying data does not exist.
  */
 export function injectAgreementClauses(
   template: string,
-  { hasMileage, hasTerms }: InjectionOptions,
+  { hasMileage, hasTerms, hasBonzahAddendum }: InjectionOptions,
 ): string {
   if (!template) return template;
   let out = template;
@@ -151,6 +196,12 @@ export function injectAgreementClauses(
   }
   if (hasTerms && !hasPlaceholder(out, "terms_and_conditions")) {
     out = injectTerms(out);
+  }
+  // After terms, so the addendum ends up between the operator's terms and the
+  // signature. Skipped when the template already places the placeholder itself,
+  // which is also what makes re-rendering the same agreement idempotent.
+  if (hasBonzahAddendum && !hasPlaceholder(out, "bonzah_insurance_addendum")) {
+    out = injectBonzahAddendum(out);
   }
   return out;
 }

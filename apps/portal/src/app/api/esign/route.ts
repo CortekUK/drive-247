@@ -7,6 +7,7 @@ import { computePaygDailyRate } from '@/lib/payg-rate';
 import { resolveAgreementMileage } from '@/lib/agreement-mileage';
 import { fetchTenantTermsBlock, buildTermsPlainText } from '@/lib/agreement-terms';
 import { injectAgreementClauses } from '@/lib/agreement-injection';
+import { BONZAH_INSURANCE_ADDENDUM_HTML, BONZAH_INSURANCE_ADDENDUM_TEXT } from '@/lib/bonzah-addendum';
 
 // BoldSign configuration — resolved per-request based on tenant mode
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
@@ -175,6 +176,11 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
     });
 
     const variables: Record<string, string> = {
+        // Bonzah insurance addendum — insurer-mandated, gated on the tenant flag.
+        // Resolves to '' for non-Bonzah tenants so an operator who placed the
+        // placeholder by hand and later disconnects Bonzah is left with nothing
+        // rather than a stray literal.
+        bonzah_insurance_addendum: tenant?.integration_bonzah === true ? BONZAH_INSURANCE_ADDENDUM_HTML : '',
         // Customer — basic
         customer_name: customer?.name || '',
         customer_email: customer?.email || '',
@@ -1082,6 +1088,7 @@ TERMS:
 2. Customer will maintain the vehicle in good condition.
 3. Customer is responsible for any damage during rental.
 ${termsText ? `\n${'-'.repeat(70)}\nOPERATOR TERMS & CONDITIONS:\n\n${termsText}\n` : ''}
+${tenant?.integration_bonzah === true ? `\n${'-'.repeat(70)}\n${BONZAH_INSURANCE_ADDENDUM_TEXT}\n` : ''}
 
 ${'='.repeat(70)}
 
@@ -1180,11 +1187,18 @@ export async function POST(request: NextRequest) {
         if (body.tenantId) {
             const { data: tenantData } = await supabase
                 .from('tenants')
-                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days')
+                // integration_bonzah drives the Bonzah insurance addendum below.
+                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah')
                 .eq('id', body.tenantId)
                 .single();
             tenant = tenantData;
         }
+
+        // Bonzah requires their insurance addendum on every agreement issued by a
+        // rental company that offers their products. Tenant-level only: it is a
+        // disclosure that Bonzah is available, not a receipt for a purchase, so it
+        // appears whether or not this renter bought coverage. See bonzah-addendum.ts.
+        const isBonzahTenant = (tenant as any)?.integration_bonzah === true;
 
         // Fetch installment plan if rental has one
         let installment: InstallmentData | null = null;
@@ -1320,7 +1334,7 @@ export async function POST(request: NextRequest) {
                 console.log('Using admin template (structured HTML → PDF)');
                 hasCustomTemplate = true;
                 processedHtml = removeEmptyFields(
-                    processTemplate(injectAgreementClauses(templateData.template_content, { hasMileage: hasMileageConfigured, hasTerms: !!termsBlockHtml }), rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined, installment, termsBlockHtml)
+                    processTemplate(injectAgreementClauses(templateData.template_content, { hasMileage: hasMileageConfigured, hasTerms: !!termsBlockHtml, hasBonzahAddendum: isBonzahTenant }), rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined, installment, termsBlockHtml)
                 );
 
                 // Ensure a signature tag exists

@@ -6,6 +6,7 @@ import type { BoldSignMode } from '../_shared/boldsign-client.ts';
 import { resolveAgreementMileage } from '../_shared/agreement-mileage.ts';
 import { fetchTenantTermsBlock } from '../_shared/agreement-terms.ts';
 import { injectAgreementClauses } from '../_shared/agreement-injection.ts';
+import { BONZAH_INSURANCE_ADDENDUM_HTML, BONZAH_INSURANCE_ADDENDUM_TEXT } from '../_shared/bonzah-addendum.ts';
 
 interface CreateDocumentRequest {
   rentalId: string;
@@ -159,6 +160,11 @@ function processTemplate(
   const _termsBlockHtml = termsBlock;
 
   const variables: Record<string, string> = {
+    // Bonzah insurance addendum — insurer-mandated, gated on the tenant flag.
+    // Resolves to '' for non-Bonzah tenants so an operator who placed the
+    // placeholder by hand and later disconnects Bonzah is left with nothing
+    // rather than a stray literal.
+    bonzah_insurance_addendum: tenant?.integration_bonzah === true ? BONZAH_INSURANCE_ADDENDUM_HTML : '',
     // Customer — basic
     customer_name: (customer?.name as string) || 'Customer',
     customer_email: (customer?.email as string) || '',
@@ -448,7 +454,7 @@ Payment is due in accordance with the agreed schedule. Late payments, failed aut
 
 The vehicle is provided in safe, operable condition. The Customer agrees to return the vehicle on time, in substantially the same condition as received, reasonable wear and tear excepted.
 
-BY SIGNING BELOW, THE CUSTOMER ACKNOWLEDGES THAT THEY HAVE READ, UNDERSTOOD, AND AGREE TO THESE TERMS & CONDITIONS.
+${tenant?.integration_bonzah === true ? `${'─'.repeat(70)}\n${BONZAH_INSURANCE_ADDENDUM_TEXT}\n\n` : ''}BY SIGNING BELOW, THE CUSTOMER ACKNOWLEDGES THAT THEY HAVE READ, UNDERSTOOD, AND AGREE TO THESE TERMS & CONDITIONS.
 
 ${'='.repeat(70)}
                          SIGNATURES
@@ -545,7 +551,8 @@ async function generateDocument(
 ): Promise<string> {
   const { data: tenant } = await supabase
     .from('tenants')
-    .select('company_name, contact_email, contact_phone, monthly_tier_days')
+    // integration_bonzah drives the Bonzah insurance addendum below.
+    .select('company_name, contact_email, contact_phone, monthly_tier_days, integration_bonzah')
     .eq('id', tenantId)
     .single();
 
@@ -585,6 +592,8 @@ async function generateDocument(
       injectAgreementClauses(template, {
         hasMileage: !_mileageForInject.isUnspecified,
         hasTerms: !!termsBlockHtml,
+        // Tenant-level disclosure, not tied to this renter's purchase.
+        hasBonzahAddendum: tenant?.integration_bonzah === true,
       }),
       rentalWithExtras, customer, vehicle, tenant || {}, verification, installment, termsBlockHtml,
     );

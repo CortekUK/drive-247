@@ -133,83 +133,100 @@ export function useBonzahPremium({
 }
 
 /**
- * Coverage descriptions and info for UI display
+ * Coverage descriptions and info for UI display.
+ *
+ * COMPLIANCE DATA - DO NOT REWORD. Every description, limit, deductible and
+ * exclusion below is transcribed from Bonzah's "Embedded Insurance Compliance
+ * Requirements" document (Brandon Rockow, 5-6 Aug 2026), which specifies what
+ * must appear on a rental car company's website. Keep the insurer's own
+ * phrasing and punctuation - including "PIM" in the CDW/RCLI exclusions and
+ * "PIP" in SLI's, which is how the source document writes them.
+ *
+ * `name` says "Collision Damage Waiver" rather than the source document's
+ * product heading "Collision Damage Warranty": the same document's operative
+ * Insurance Disclosure paragraph calls it "Collision Damage Waiver (CDW/LDW)",
+ * and that is the wording the renter agrees to.
+ *
+ * Duplicated byte-for-byte in apps/portal/src/hooks/use-bonzah-premium.ts.
  */
 export const COVERAGE_INFO = {
   cdw: {
     name: 'Collision Damage Waiver',
     shortName: 'CDW',
-    description: 'Covers the cost of physical damage to the rental vehicle in the event of a collision with another vehicle.',
+    tagline: 'Affordable Rental Vehicle Damage Insurance',
+    description: 'Covers physical damages to the rental vehicle when there is an accident with another vehicle.',
     deductible: '$1,000',
+    deductibleLabel: '$1,000 Deductible',
     maxCoverage: '$35,000',
     features: [
-      'Up to $35,000 in rental car coverage',
-      '$1,000 deductible',
-      'Primary insurance for accidents between vehicles',
-      'Covers physical damage to the rental vehicle',
+      'Up to $35,000 Damage',
+      '$1,000 Deductible',
+      'Primary Insurance for accidents between vehicles',
     ],
     exclusions: [
       'Does not cover non-rental vehicle damage',
-      'Comprehensive coverage (theft, vandalism, single car accidents)',
-      'Mechanical issues caused by misuse',
-      'No commercial driving during the rental period',
+      'Excludes medical, PIM, UIM, UM and comprehensive coverage, such as mechanical issues caused by misuse, theft, vandalism, single car accident',
+      'Not for commercial use. Not compatible with cars for hire and delivery services such as Uber, Lyft, DoorDash.',
     ],
   },
   rcli: {
     name: "Renter's Contingent Liability Insurance",
     shortName: 'RCLI',
-    description: 'Provides coverage for liability claims in case of bodily injury or property damage caused to third parties during the rental period.',
+    tagline: 'Primary State Minimum Liability Insurance',
+    description: "Covers damage to 3rd parties' property and injury when renter is at fault in accident. Does not cover rental vehicle damage or occupants (where allowed by law).",
     deductible: 'None',
+    deductibleLabel: 'No Deductible',
     maxCoverage: 'State minimum limits',
     features: [
-      'Primary insurance for non-rental car damages when at fault',
-      'Covers legal state minimum liability requirements',
-      'Bodily injury claims up to state minimum per person',
-      'Property damage up to state minimum',
+      'Bodily Injury - Per Person - $25,000.00 (specific to your state)',
+      'Bodily Injury - Aggregate - $50,000.00 (specific to your state)',
+      'Property Damage - $25,000.00 (specific to your state)',
     ],
     exclusions: [
-      'Does not cover damage to the rental vehicle',
-      "Does not cover renter's injuries",
-      'Coverage limited to state minimum requirements',
-      'Coverage amount varies based on state',
+      'Does not cover rental vehicle damage',
+      'Excludes medical, PIM, UIM, and UM where allowed by law',
+      'Not for commercial use. Not compatible with cars for hire and delivery services such as Uber, Lyft, DoorDash.',
     ],
   },
   sli: {
     name: 'Supplemental Liability Insurance',
     shortName: 'SLI',
-    description: 'Supplements RCLI coverage to enhanced levels. Coverage is in excess of any primary liability coverage.',
+    tagline: 'Coverage is in Excess of Any Primary Liability Coverage',
+    description: 'Supplements RCLI coverage to enhanced levels of coverage. Not a standalone or primary policy, must be purchased with RCLI.',
     requiresRcli: true,
     deductible: 'None',
+    deductibleLabel: 'No Deductible',
     maxCoverage: '$500,000',
     features: [
-      'Bodily injury up to $100,000 per person',
-      'Bodily injury aggregate up to $500,000 total',
-      'Excess property damage up to $10,000',
-      'Coverage in excess of any primary liability',
+      'Bodily Injury - Per Person - Up to $100,000 in total',
+      'Bodily Injury - Aggregate - Up to $500,000 in total',
+      'Property Damage - $10,000 additional coverage',
     ],
     exclusions: [
-      'Does not cover damage to the rental vehicle',
-      'Not a standalone policy — requires RCLI',
-      'Does not replace primary coverage',
-      'Claims exceeding policy limits',
+      'Does not cover rental vehicle damage',
+      'Excludes medical, PIP, UIM, and UM where allowed by law',
+      'Not for commercial use. Not compatible with cars for hire and delivery services such as Uber, Lyft, DoorDash.',
     ],
   },
   pai: {
     name: 'Personal Accident / Personal Effects Insurance',
     shortName: 'PAI',
+    tagline: 'Accident, Medical & Personal Effects Insurance',
     description: 'Covers life, medical expenses, and lost or damaged items. Not rental vehicle coverage.',
-    deductible: 'None',
+    // PAI carries a real $25 deductible on personal effects. It previously read
+    // 'None', which rendered a green "No Deductible" badge while the card's own
+    // exclusion list said otherwise - understating a deductible to the renter.
+    deductible: '$25',
+    deductibleLabel: '$25 Personal Effects Deductible',
     maxCoverage: '$50,000',
     features: [
-      'Renter loss of life — $50,000',
-      'Passenger loss of life — $5,000',
-      'Accidental medical expense — $1,000',
-      'Personal effects coverage — $500',
+      'Renter Loss of Life - $50,000',
+      'Passenger Loss of Life - $5,000',
+      'Accidental Medical Expense - $1,000',
+      'Personal Effects Coverage - $500 with up to $25 deductible will be applied',
     ],
     exclusions: [
-      'Does not cover damages to the rental vehicle',
-      'Not auto rental insurance',
-      '$25 deductible on personal effects',
+      'Not rental vehicle coverage',
       'Does not cover non-accident related losses',
     ],
   },

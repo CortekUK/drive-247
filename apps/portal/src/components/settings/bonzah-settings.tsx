@@ -17,6 +17,7 @@ import { useBonzahBalance } from '@/hooks/use-bonzah-balance';
 import { useBonzahAlertConfig } from '@/hooks/use-bonzah-alert-config';
 import { useBonzahRetryAll } from '@/hooks/use-bonzah-retry-all';
 import { BonzahOnboardingForm } from './bonzah-onboarding';
+import { BONZAH_LINKS } from '@/lib/bonzah-compliance';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -687,21 +688,23 @@ export function BonzahSettings() {
             </>
           )}
 
-          {/* Legal — mirrors Bonzah's own footer links so operators are covered */}
+          {/* Legal — the operator is a Bonzah "business partner", so this points at
+              the Business Partner Terms, not the consumer ToS the renter sees at
+              checkout. Both were reissued 4 Aug 2026. */}
           <div className="pt-4 mt-2 border-t">
             <p className="text-xs text-[#737373]">
               By connecting, you agree to Bonzah's{' '}
               <a
-                href="https://www.bonzah.com/terms"
+                href={BONZAH_LINKS.businessPartnerTerms}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[#6366f1] hover:underline"
               >
-                Terms of Service
+                Business Partner Terms
               </a>{' '}
               and{' '}
               <a
-                href="https://www.bonzah.com/privacy"
+                href={BONZAH_LINKS.privacyPolicy}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[#6366f1] hover:underline"
