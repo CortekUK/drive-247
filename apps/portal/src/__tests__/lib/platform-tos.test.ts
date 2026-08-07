@@ -88,6 +88,30 @@ describe("platform ToS — the draft flag is actually wired to the page", () => 
     expect(doc).toContain("PLATFORM_TOS_CLOSING");
   });
 
+  it("uses the checkbox copy the handoff memo specifies, verbatim", () => {
+    // Memo item 3: 'A single checkbox: "I agree to the Terms of Service and
+    // Privacy Policy," with each word hyperlinked to its own canonical page.'
+    // This drifted once to "I have read and agree to..." — a defensible
+    // improvement, but the memo's closing note reserves legal copy for Ghulam.
+    // Pin it so any future rewording is a deliberate decision, not a drive-by.
+    const consent = readFileSync(
+      resolve(__dirname, "../../components/legal/terms-consent.tsx"),
+      "utf8",
+    );
+    const rendered = consent.slice(consent.indexOf("<label"), consent.indexOf("</label>"));
+    const prose = rendered
+      // Order matters: brace expressions must go BEFORE tags, because an arrow
+      // function like {(e) => e.stopPropagation()} contains a ">" that would
+      // otherwise terminate the tag regex early and leak attribute text.
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")   // JSX block comments
+      .replace(/\/\/[^\n]*/g, "")             // line comments inside the tag
+      .replace(/\{[^{}]*\}/g, "")             // expressions incl. {" "}
+      .replace(/<[^>]*>/g, "")                // tags
+      .replace(/\s+/g, " ")
+      .trim();
+    expect(prose).toBe("I agree to the Terms of Service and Privacy Policy .");
+  });
+
   it("has the consent checkbox point at the page this flag controls", () => {
     const consent = readFileSync(
       resolve(__dirname, "../../components/legal/terms-consent.tsx"),

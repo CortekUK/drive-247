@@ -17,7 +17,7 @@
  * There is exactly ONE platform Terms of Service, served at the canonical URL
  * below by apps/web/src/app/(marketing)/terms/page.tsx. That page switches on
  * PLATFORM_TOS_IS_DRAFT (apps/web/src/lib/legal/platform-tos.ts): true renders
- * components/legal/legacy-marketing-terms.tsx — the document live today, which
+ * components/legal/interim-platform-terms.tsx — the document live today, which
  * the version string below identifies — and false renders the Appendix A
  * rewrite. apps/portal/src/__tests__/lib/platform-tos.test.ts asserts the two
  * files agree AND that the page really consumes the flag, because a mismatch
