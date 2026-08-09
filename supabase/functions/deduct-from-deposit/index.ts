@@ -40,6 +40,51 @@ Deno.serve(async (req) => {
       return errorResponse("Missing required fields: rentalId, amount (positive)");
     }
 
+    // ── Auth ────────────────────────────────────────────────────────────────
+    // This endpoint CAPTURES a renter's authorised money, and it had no caller
+    // check at all. `verify_jwt = true` is not one: the Supabase gateway accepts
+    // the project's anon key as a valid JWT, and booking-app CUSTOMERS
+    // authenticate against the same project — so before this, anyone holding
+    // the public anon key could post an arbitrary rentalId and pull money off
+    // someone else's card. Mirrors verify-deposit-hold's preamble exactly.
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace("Bearer ", "").trim();
+    if (!token) return errorResponse("Missing authorization", 401);
+
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    // Server-to-server callers (other edge functions, cron) present the service
+    // role key; they are already trusted and have no app_users row.
+    const isServiceRole = serviceRoleKey.length > 0 && token === serviceRoleKey;
+
+    let caller: { id: string | null; tenant_id: string | null; is_super_admin: boolean } | null = null;
+    if (!isServiceRole) {
+      const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+      if (userErr || !userData?.user) return errorResponse("Invalid token", 401);
+
+      // app_users has its own primary key; the auth user is linked via
+      // auth_user_id (matching on `id` silently matches nothing).
+      const { data: appUser } = await supabase
+        .from("app_users")
+        .select("id, tenant_id, is_super_admin, is_active")
+        .eq("auth_user_id", userData.user.id)
+        .maybeSingle();
+
+      // No app_users row means the caller is a customer or the raw anon key —
+      // neither may deduct from a deposit.
+      if (!appUser || appUser.is_active === false) {
+        return errorResponse("Not authorised for this rental", 403);
+      }
+      caller = {
+        id: (appUser.id as string | null) ?? null,
+        tenant_id: (appUser.tenant_id as string | null) ?? null,
+        is_super_admin: appUser.is_super_admin === true,
+      };
+    }
+
+    // deposit_hold_links.actor: the app_user id when a human asked, a plain
+    // label when another edge function or a cron did.
+    const actor = caller?.id ?? (isServiceRole ? "service_role" : "deduct-from-deposit");
+
     console.log("[DEDUCT-DEPOSIT] Processing deduction for rental:", rentalId, "amount:", amount);
 
     // Fetch the excess mileage charge
@@ -77,7 +122,23 @@ Deno.serve(async (req) => {
       return errorResponse("Rental not found", 404);
     }
 
-    const effectiveTenantId = tenantId || rental.tenant_id;
+    // Tenant scoping. A head admin of tenant A must not be able to deduct from
+    // tenant B's rental just because they hold a valid session.
+    if (caller && !caller.is_super_admin && caller.tenant_id !== rental.tenant_id) {
+      return errorResponse("Not authorised for this rental", 403);
+    }
+
+    // The rental is the authority on its own tenant. `tenantId` arrives in the
+    // request body, so honouring it would let a caller mis-file the ledger and
+    // deposit_hold_links rows under a tenant they chose — it is now only
+    // accepted when it agrees with the row.
+    if (tenantId && tenantId !== rental.tenant_id) {
+      console.warn(
+        "[DEDUCT-DEPOSIT] Ignoring body tenantId", tenantId,
+        "— rental", rentalId, "belongs to tenant", rental.tenant_id
+      );
+    }
+    const effectiveTenantId = rental.tenant_id;
 
     // Check the Security Deposit ledger — how much was charged and how much was already refunded
     const { data: depositCharges } = await supabase
@@ -211,7 +272,9 @@ Deno.serve(async (req) => {
               platform_account: (rental as any).platform_account ?? null,
               connect_account_id: holdConnectAccountId,
               stripe_mode: holdMode,
-              actor: "deduct-from-deposit",
+              // The app_user who asked, when a human did — resolved in the auth
+              // preamble. Falls back to a plain label for server-to-server.
+              actor,
               completed_at: new Date().toISOString(),
               // Mutable set — replaced wholesale by every call site.
               payment_intent_id: null,

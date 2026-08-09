@@ -5,7 +5,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { formatCurrency } from '../_shared/format-utils.ts';
-import { getStripeClientForAccount, getWebhookSecretCandidates } from '../_shared/stripe-client.ts';
+import { getStripeClientForAccount, getWebhookSecretCandidates, readHoldCaptureFacts } from '../_shared/stripe-client.ts';
 import { notifyOperatorsInApp } from '../_shared/notify-inapp.ts';
 import { sendEmail, getTenantNotificationRecipient, isOperatorEmailEnabled } from '../_shared/resend-service.ts';
 
@@ -98,6 +98,150 @@ function classifyHoldSyncFailure(
   }
 
   return { retryable: false, reason: `terminal ${status}: ${message}` };
+}
+
+// ---------------------------------------------------------------------------
+// Security-deposit authorisations vs booking pre-auths — mirrors stripe-webhook-live
+// ---------------------------------------------------------------------------
+/**
+ * PaymentIntent metadata `type` values that mark a SECURITY-DEPOSIT
+ * authorisation. These are owned end-to-end by the deposit-hold engine, which
+ * keeps their lifetime on rentals.deposit_hold_* — never on payments. Two
+ * handlers below need to tell them apart from a booking pre-auth:
+ * `payment_intent.canceled` (a routine hold release must not cancel a live
+ * rental) and `payment_intent.amount_capturable_updated` (a hold's deadline
+ * does not belong in payments.preauth_expires_at).
+ *
+ * Module-level so the two cannot drift apart.
+ */
+const DEPOSIT_HOLD_PI_TYPES = ["deposit_hold", "deposit_hold_rollover", "security_deposit_hold"];
+
+// ---------------------------------------------------------------------------
+// payments.preauth_expires_at reconciliation — mirrors stripe-webhook-live
+// ---------------------------------------------------------------------------
+// create-preauth-checkout has to write preauth_expires_at at SESSION-CREATION
+// time — before the customer has completed Checkout, so before any
+// authorisation exists and before Stripe can possibly know its deadline. What
+// it writes is a deliberately conservative FLOOR (now + the shared fallback
+// days), and it is measured from the wrong moment: the authorisation clock only
+// starts when the card is actually authorised, which can be minutes or days
+// later. Nothing used to correct it, so the portal's pending-bookings expiry
+// badge and the payment-links panel were presenting that guess to operators as
+// fact — and a booking authorised two days after checkout was created showed a
+// deadline two days earlier than the truth.
+//
+// The real deadline only becomes knowable when the authorisation happens, and
+// that arrives here, as
+// latest_charge.payment_method_details.card.capture_before. So this is where
+// the column is corrected.
+//
+// ONLY EVER PERSISTS A VALUE READ FROM STRIPE. readHoldCaptureFacts returns
+// null when Stripe has published no capture_before, and null means LEAVE THE
+// STORED VALUE ALONE. It deliberately does NOT use resolveHoldExpiry* — those
+// layer a computed `now + fallback` on top, and writing a computed fallback as
+// though Stripe had supplied it is precisely what hid dying authorisations from
+// the refresh window in the original incident.
+//
+// Never throws: a webhook 500 costs Stripe redeliveries against this endpoint's
+// auto-disable budget, and an unreconciled expiry column is not worth that.
+async function reconcilePreauthExpiry(
+  supabase: any,
+  stripe: Stripe,
+  stripeOptions: Stripe.RequestOptions | undefined,
+  args: {
+    paymentIntentId: string;
+    /** Known payments row. When absent the row is matched on the PI id. */
+    paymentId?: string | null;
+    /** Event payload, if the handler already has it. Re-fetched when latest_charge isn't expanded. */
+    paymentIntent?: Stripe.PaymentIntent | null;
+  },
+  logPrefix: string
+): Promise<void> {
+  try {
+    let pi = args.paymentIntent ?? null;
+
+    // Webhook payloads never expand latest_charge, and readHoldCaptureFacts can
+    // only fall back to a charges.retrieve when the id is present at all — on a
+    // freshly authorised PI it may not be. Re-read with the expansion.
+    const chargeExpanded =
+      !!pi && typeof (pi as any).latest_charge === "object" && (pi as any).latest_charge !== null;
+    if (!pi || !chargeExpanded) {
+      pi = await stripe.paymentIntents.retrieve(
+        args.paymentIntentId,
+        { expand: ["latest_charge"] },
+        stripeOptions
+      );
+    }
+
+    // Only manual-capture intents have a capture deadline at all.
+    if (pi.capture_method !== "manual") {
+      console.log(
+        `${logPrefix} ${args.paymentIntentId} is not a manual-capture intent — no preauth expiry to reconcile`
+      );
+      return;
+    }
+
+    // A deposit hold's deadline lives on rentals.deposit_hold_expires_at and is
+    // maintained by the hold engine. Never let one write into payments.
+    const piType = pi.metadata?.type ?? "";
+    if (DEPOSIT_HOLD_PI_TYPES.includes(piType)) {
+      console.log(
+        `${logPrefix} ${args.paymentIntentId} is a deposit hold (type: ${piType}) — preauth_expires_at not applicable`
+      );
+      return;
+    }
+
+    const facts = await readHoldCaptureFacts(stripe, pi, stripeOptions);
+    if (!facts) {
+      // Not an error: Stripe often has not published capture_before at the
+      // instant the checkout event lands. The stored floor stays as-is, and
+      // amount_capturable_updated (or the next reconciliation) can still fix it.
+      console.log(
+        `${logPrefix} Stripe has published no capture_before for ${args.paymentIntentId} yet — preauth_expires_at left untouched`
+      );
+      return;
+    }
+
+    // Scoped to rows still awaiting capture: a late or duplicate delivery must
+    // not rewrite the expiry of a booking that has since been captured, voided
+    // or refunded.
+    let update = supabase
+      .from("payments")
+      .update({
+        preauth_expires_at: facts.captureBefore,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("capture_status", "requires_capture");
+    update = args.paymentId
+      ? update.eq("id", args.paymentId)
+      : update.eq("stripe_payment_intent_id", args.paymentIntentId);
+
+    const { data: reconciled, error: reconcileError } = await update.select("id");
+
+    if (reconcileError) {
+      console.error(
+        `${logPrefix} Failed to write reconciled preauth_expires_at for ${args.paymentIntentId}:`,
+        reconcileError.message
+      );
+      return;
+    }
+
+    // extended_authorization is logged, not stored: `payments` has no column for
+    // it (only rentals.deposit_hold_extended_auth exists, and that belongs to the
+    // deposit-hold chain, not to booking pre-auths). Persisting it would need DDL.
+    console.log(
+      `${logPrefix} preauth_expires_at reconciled from Stripe for ${args.paymentIntentId}: ` +
+        `${facts.captureBefore} (window=${facts.windowSeconds !== null ? Math.round(facts.windowSeconds / 3600) : "?"}h, ` +
+        `extended_auth=${facts.extendedAuthStatus ?? "not_reported"}, rows=${reconciled?.length ?? 0})`
+    );
+  } catch (err) {
+    // Includes Stripe transport/auth failures. A throw is NOT "no deadline" —
+    // it means we did not learn one, so the stored value is left alone.
+    console.error(
+      `${logPrefix} preauth expiry reconciliation failed for ${args.paymentIntentId}; stored value left untouched:`,
+      err
+    );
+  }
 }
 
 serve(async (req) => {
@@ -960,6 +1104,28 @@ serve(async (req) => {
             console.log("No existing payment record found for session:", session.id, paymentLookupError.message);
           }
 
+          // The authorisation now exists, so the REAL capture deadline is
+          // knowable for the first time. Replace the session-creation-time floor
+          // create-preauth-checkout stored with Stripe's own capture_before.
+          const preauthPiId =
+            typeof session.payment_intent === "string"
+              ? session.payment_intent
+              : session.payment_intent?.id ?? null;
+          if (preauthPiId) {
+            await reconcilePreauthExpiry(
+              supabase,
+              stripe,
+              stripeOptions,
+              { paymentIntentId: preauthPiId, paymentId: existingPaymentRecord?.id ?? null },
+              "[TEST MODE]"
+            );
+          } else {
+            console.warn(
+              "[TEST MODE] Pre-auth session exposed no PaymentIntent id; preauth_expires_at left at its floor:",
+              session.id
+            );
+          }
+
           // Get paymentId for notification (from lookup or metadata fallback)
           const paymentId = existingPaymentRecord?.id || session.metadata?.payment_id;
 
@@ -1475,6 +1641,35 @@ serve(async (req) => {
         break;
       }
 
+      case "payment_intent.amount_capturable_updated": {
+        // Fires the moment a manual-capture authorisation becomes capturable —
+        // i.e. the exact moment the real deadline first exists. For a booking
+        // pre-auth that is usually the same instant as
+        // checkout.session.completed (reconciled there too), but the two are
+        // independent deliveries: when the checkout event wins the race against
+        // 3DS/async confirmation, its charge carries no capture_before yet and
+        // this is the delivery that actually knows the answer.
+        //
+        // Purely corrective — it writes nothing but payments.preauth_expires_at,
+        // and only on a row still awaiting capture. Deposit-hold authorisations
+        // emit this event too and are filtered inside the helper.
+        //
+        // NOTE: this only ever runs if `payment_intent.amount_capturable_updated`
+        // is in this endpoint's enabled-events list on the platform account.
+        // When it isn't, the branch is simply never delivered and the
+        // checkout.session.completed path above remains the reconciler.
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+        console.log("PaymentIntent amount_capturable_updated:", paymentIntent.id);
+        await reconcilePreauthExpiry(
+          supabase,
+          stripe,
+          stripeOptions,
+          { paymentIntentId: paymentIntent.id, paymentIntent },
+          "[TEST MODE]"
+        );
+        break;
+      }
+
       case "payment_intent.canceled": {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log("PaymentIntent canceled:", paymentIntent.id);
@@ -1488,7 +1683,8 @@ serve(async (req) => {
         // then mark that money Refunded and take the rental to Cancelled — a
         // live 90-day rental killed by a routine deposit release. Chained hold
         // refreshes turn one cancel per rental into 4-18, so filter first.
-        const DEPOSIT_HOLD_PI_TYPES = ["deposit_hold", "deposit_hold_rollover", "security_deposit_hold"];
+        // (DEPOSIT_HOLD_PI_TYPES is module-level so this guard and the
+        // preauth-expiry guard cannot drift apart.)
         const holdPiType = paymentIntent.metadata?.type;
         let isDepositHoldPi = !!holdPiType && DEPOSIT_HOLD_PI_TYPES.includes(holdPiType);
         let holdDetectionReason = isDepositHoldPi ? `type: ${holdPiType}` : "";

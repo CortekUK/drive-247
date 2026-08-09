@@ -195,24 +195,37 @@ serve(async (req) => {
 
     console.log('Pre-auth checkout session created:', session.id)
 
-    // ---- preauth_expires_at -------------------------------------------------
-    // This used to be a flat now+7d, computed at SESSION-CREATION time and never
-    // reconciled. Two things were wrong with it. First, 7 days is not a card
-    // network guarantee — Stripe publishes the real deadline as
-    // capture_before on the authorising charge, and without extended
-    // authorization a Visa MIT window can be as short as ~4d18h. Second, the
-    // clock does not start until the customer actually completes Checkout, so
-    // an authorisation created two days later inherited a deadline measured
-    // from the wrong moment. The portal's pending-bookings expiry badge reads
-    // this column directly, so both errors were shown to operators as fact.
+    // ---- preauth_expires_at: a CONSERVATIVE FLOOR, reconciled by the webhook --
+    // Whatever is written here is provisional. At this instant the customer has
+    // not completed Checkout, so no authorisation exists, so NOBODY — not even
+    // Stripe — knows the real capture deadline yet. This value therefore cannot
+    // be the truth; it can only be a floor that is safe to act on until the
+    // truth arrives.
+    //
+    // This used to be a flat now+7d and nothing ever corrected it. Two things
+    // were wrong. First, 7 days is not a card-network guarantee — Stripe
+    // publishes the real deadline as capture_before on the authorising charge,
+    // and without extended authorization a Visa card-absent,
+    // merchant-initiated window is ~4d18h, so 7 days was an OVER-estimate, the
+    // dangerous direction. Second, the clock does not start until the customer
+    // actually completes Checkout, so an authorisation created two days later
+    // inherited a deadline measured from the wrong moment. The portal's
+    // pending-bookings expiry badge and the payment-links panel read this
+    // column directly, so both errors reached operators as fact.
+    //
+    // Second half of the fix lives in stripe-webhook-live / stripe-webhook-test
+    // (reconcilePreauthExpiry): once the PaymentIntent is authorised they read
+    // the charge's capture_before and overwrite this column with Stripe's own
+    // answer, measured from the real authorisation moment. They persist nothing
+    // they did not read from Stripe, so a floor is never laundered into a fact.
     //
     // resolveHoldExpiryDetailed is the single place that knows how to read
     // Stripe's answer and, when Stripe has not published one yet, how to fall
     // back to the conservative floor rather than an optimistic guess. At this
-    // point the PaymentIntent is unconfirmed and has no charge, so the floor is
-    // what we normally get — deliberately SHORTER than the old 7 days, because
-    // understating coverage is the safe direction: nobody plans a capture
-    // against a window that has already closed.
+    // point the PaymentIntent is unconfirmed and has no charge, so the floor
+    // (HOLD_EXPIRY_FALLBACK_DAYS, deliberately SHORTER than the old 7 days) is
+    // what we normally get: understating coverage is the safe direction, since
+    // nobody plans a capture against a window that has already closed.
     // Deliberately AFTER the session exists and fully wrapped: the session is
     // already created and returned to the customer, so nothing in here may be
     // allowed to fail the checkout. No `expand` on sessions.create for the same
@@ -234,7 +247,9 @@ serve(async (req) => {
         const expiry = await resolveHoldExpiryDetailed(stripe, createdPi, stripeOptions)
         preauthExpiresAtIso = expiry.expiresAt
         console.log(
-          `Pre-auth expiry for session ${session.id}: ${preauthExpiresAtIso} (source: ${expiry.source})`
+          `Pre-auth expiry floor for session ${session.id}: ${preauthExpiresAtIso} ` +
+            `(source: ${expiry.source}) — the webhook reconciles this against the ` +
+            `charge's capture_before once the card is authorised`
         )
       } else {
         console.warn(

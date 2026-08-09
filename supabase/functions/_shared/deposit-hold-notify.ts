@@ -33,6 +33,12 @@
 //   - NO EMAIL / NO SMS. In-app only, deliberately: the portal bell is
 //     always-on for every tenant and needs no per-tenant toggle, so this cannot
 //     be silently switched off on the one tenant that needed it.
+//   - IT NEVER GUESSES ABOUT THE MONEY. Whether the renter is still secured is
+//     a fact the CALLER asserts (`moneyState`), never something this file infers
+//     from the row — a recorded `deposit_hold_payment_intent_id` is not an
+//     authorization, and treating it as one told operators the deposit was safe
+//     on the two paths where it demonstrably was not. Absent an assertion the
+//     alert says NOTHING about the money. See `DepositHoldMoneyState`.
 //
 // This deliberately does NOT build on `reminders-generate` / `reminders-digest`.
 // Those are dead code — `reminders-digest` is a literal TODO followed by a
@@ -57,6 +63,39 @@ export const ALERTING_HOLD_STATUSES = [
 ] as const;
 
 export type AlertingHoldStatus = (typeof ALERTING_HOLD_STATUSES)[number];
+
+/**
+ * What is TRUE of the renter's money at the moment this alert is raised.
+ *
+ * This is the single most dangerous sentence in the whole alert, so it is a
+ * CALLER-SUPPLIED FACT and never an inference made here.
+ *
+ * The first version of this helper derived it from "does the row carry a
+ * `deposit_hold_payment_intent_id` after the patch". That conflates *an id is
+ * recorded* with *an authorization is live*, and the two come apart on exactly
+ * the paths that matter most: the 3DS `requires_action` exit and the
+ * non-capturable-replacement `needs_review` exit both CANCEL the incumbent and
+ * then record a PaymentIntent that is holding nothing (`requires_action` /
+ * `processing` / `requires_payment_method`). The alert would have told an
+ * operator the renter was secured at the precise moment they were not — the
+ * single worst thing an alert about money can do.
+ *
+ *   'live'      — a CONFIRMED capturable authorization exists right now. Only
+ *                 the engine may assert this, and only when it either left the
+ *                 incumbent untouched on a row that records it as live, or is
+ *                 pointing at a PaymentIntent it has just seen at Stripe in
+ *                 `requires_capture`.
+ *   'unsecured' — there is definitively no live authorization: the incumbent was
+ *                 cancelled and no capturable replacement took its place.
+ *   'unknown'   — we cannot prove either. WE THEN SAY NOTHING ABOUT THE MONEY.
+ *                 Silence is the correct output of doubt here; a guess in either
+ *                 direction sends the operator to do the wrong thing (sit on an
+ *                 unsecured rental, or re-charge an already-authorized renter).
+ *
+ * Callers that do not know — a webhook, a manual tool — simply omit it and get
+ * 'unknown'. A missing sentence is a supported outcome, not a degraded one.
+ */
+export type DepositHoldMoneyState = "live" | "unsecured" | "unknown";
 
 /** Every column this helper reads off a rental row. */
 export const DEPOSIT_HOLD_ALERT_COLUMNS = `
@@ -132,6 +171,25 @@ export interface DepositHoldAlertParams {
   currency?: string | null;
   /** Retry ceiling; pass `MAX_HOLD_ATTEMPTS` from the engine to keep them locked. */
   maxAttempts?: number | null;
+  /**
+   * What is true of the renter's money RIGHT NOW — see `DepositHoldMoneyState`.
+   * Omit when you do not know; the alert then says nothing about the money
+   * rather than guessing. NEVER inferred from the row.
+   */
+  moneyState?: DepositHoldMoneyState | null;
+  /**
+   * Verbatim replacement for the money sentence, for the cases the three-value
+   * vocabulary cannot express honestly — chiefly "a live authorization exists,
+   * but for a DIFFERENT amount than this rental's deposit" (the orphan-mismatch
+   * park). Used as given; when present, `moneyState` only feeds `metadata`.
+   */
+  moneyStatement?: string | null;
+  /**
+   * One extra sentence appended to the body — for facts the generic copy cannot
+   * carry, e.g. "the status write also failed, so the row is stuck at
+   * 'refreshing'". Kept separate from `message` so the shared copy stays stable.
+   */
+  detail?: string | null;
   /** Who ran this pass — 'cron', 'sandbox', 'webhook', 'manual'. */
   source?: string;
   /**
@@ -319,20 +377,25 @@ export async function notifyDepositHoldFailure(
       : null;
 
     // ── Is the renter's money actually unsecured right now? ──────────────────
-    // NOT the same question as "did this attempt fail". `recordFailure` clears
-    // the PaymentIntent after cancelling the incumbent, so those rows genuinely
-    // are unsecured — but two `needs_review` paths deliberately leave a LIVE
-    // authorization in place (the "deposit amount unknown" park, which never
-    // touches Stripe, and the orphan-amount-mismatch park, which repoints the row
-    // at the authorization actually holding the money). Telling an operator their
-    // deposit is gone when it is not would send them to re-charge a renter who is
-    // already authorized, so the sentence is derived from the PaymentIntent the
-    // row carries AFTER the attempt, not from the failure itself.
+    // WE DO NOT WORK THIS OUT HERE. It is `params.moneyState`, asserted by the
+    // caller that watched the attempt happen — see `DepositHoldMoneyState` for
+    // why deriving it from the row is wrong in the two places it matters most.
+    // Anything not explicitly asserted is 'unknown', and 'unknown' prints no
+    // sentence about the money at all.
+    const moneyState: DepositHoldMoneyState =
+      params.moneyState === "live" || params.moneyState === "unsecured"
+        ? params.moneyState
+        : "unknown";
+
+    // The PaymentIntent id the row carries after the patch. RECORDED ONLY — it
+    // is diagnostic metadata for whoever opens the rental, and it deliberately
+    // does NOT feed the "is the deposit secured" sentence: a cancelled, expired
+    // or never-confirmed PaymentIntent still leaves its id on the row.
     const patchTouchedPi = Object.prototype.hasOwnProperty.call(
       patch,
       "deposit_hold_payment_intent_id",
     );
-    const livePaymentIntentId = patchTouchedPi
+    const recordedPaymentIntentId = patchTouchedPi
       ? firstString(patch.deposit_hold_payment_intent_id)
       : firstString(rental.deposit_hold_payment_intent_id);
 
@@ -354,22 +417,38 @@ export async function notifyDepositHoldFailure(
       ? ` (${errorMessage.slice(0, 160)})`
       : "";
 
-    // The one sentence an operator has to read. See the derivation above — it
-    // states what is true of the renter's money right now, not what the engine
-    // tried to do.
+    // The one sentence an operator has to read. It states what is KNOWN to be
+    // true of the renter's money right now — and prints nothing at all when that
+    // is not known. An empty string here is a deliberate, supported outcome.
     const depositLabel = amountText ? `${amountText} deposit` : "deposit";
-    const moneyState = livePaymentIntentId
-      ? `The ${depositLabel} authorization on file is still live, but the chain has stopped, so it will lapse when it expires.`
-      : `The ${depositLabel} is NOT currently held.`;
+    const moneySentence = firstString(params.moneyStatement) ??
+      (moneyState === "live"
+        ? `The ${depositLabel} authorization recorded on this rental was not cancelled by this attempt and is still live, ` +
+          `but the chain has stopped — it will lapse when it expires.`
+        : moneyState === "unsecured"
+        ? `The ${depositLabel} is NOT currently held — the renter is unsecured.`
+        : null);
+    // Trailing space folded in here so an unknown money state leaves no double
+    // space in the body.
+    const money = moneySentence ? `${moneySentence} ` : "";
+
+    // AUTO-RECOVERING vs ACTION-REQUIRED. The engine only writes 'failed'
+    // together with a `deposit_hold_next_retry_at`, and that pairing is the ONLY
+    // thing that makes "no action needed" a true statement. A 'failed' row with
+    // no scheduled retry (the Stripe webhooks write exactly that for a first
+    // placement that never succeeded) is not self-healing, so it must not be
+    // announced as if it were: nothing will pick it up on its own.
+    const autoRecovering = status === "failed" && !!nextRetryAt;
 
     let title: string;
     let body: string;
     let severity: "warning" | "critical";
 
-    if (status === "failed") {
+    if (autoRecovering) {
       // AUTO-RECOVERING. The engine wrote a backoff and will come back on its
       // own; this is an FYI so a chain that is quietly bleeding attempts is
-      // visible BEFORE it exhausts them, not after.
+      // visible BEFORE it exhausts them, not after. Telling staff to act here is
+      // how an alert channel earns its mute.
       severity = "warning";
       const when = formatWhen(nextRetryAt);
       const attemptText = failureCount !== null
@@ -377,16 +456,23 @@ export async function notifyDepositHoldFailure(
         : "";
       title = `Deposit hold retrying — ${ref}`;
       body =
-        `Renewing the deposit hold on ${ref} failed${cause}. ${moneyState} ` +
+        `Renewing the deposit hold on ${ref} failed${cause}. ${money}` +
         `It will be retried automatically ${when ? `at ${when}` : "on the next sweep"}${attemptText}. ` +
         `No action needed unless this keeps repeating.`;
+    } else if (status === "failed") {
+      // 'failed' with NO retry scheduled — nothing is coming back for it.
+      severity = "critical";
+      title = `Deposit hold failed — ${ref}`;
+      body =
+        `Renewing the deposit hold on ${ref} failed${cause}, and NO automatic retry is scheduled. ${money}` +
+        `Review this rental and either re-place the hold or release it.`;
     } else if (status === "requires_action") {
       // The cardholder is required. Nothing server-side can fix this.
       severity = "critical";
       title = `Deposit hold needs the cardholder — ${ref}`;
       body =
         `The deposit hold on ${ref} could not be renewed${cause} and cannot be retried automatically — ` +
-        `it needs the cardholder (a new card, or the bank's authentication step). ${moneyState} ` +
+        `it needs the cardholder (a new card, or the bank's authentication step). ${money}` +
         `Contact the renter for a usable card, then re-place the hold from the rental page.`;
     } else {
       // needs_review — attempts exhausted, or something we refuse to guess at.
@@ -395,12 +481,15 @@ export async function notifyDepositHoldFailure(
       title = `Deposit hold needs review — ${ref}`;
       body = exhausted
         ? `Automatic renewal of the deposit hold on ${ref} stopped after ${failureCount} failed attempts${cause}. ` +
-          `No further retries are scheduled. ${moneyState} ` +
+          `No further retries are scheduled. ${money}` +
           `Review this rental and either re-place the hold on a working card or release it.`
         : `The deposit hold on ${ref} was parked for a human${cause}. ` +
-          `No further retries are scheduled. ${moneyState} ` +
+          `No further retries are scheduled. ${money}` +
           `Review this rental and either re-place the hold or release it.`;
     }
+
+    const detail = firstString(params.detail);
+    if (detail) body = `${body} ${detail}`;
 
     // ── Dedupe: rental + status + attempt. ───────────────────────────────────
     // Attempt is in the key on purpose. Without it, a chain that failed once
@@ -431,8 +520,12 @@ export async function notifyDepositHoldFailure(
         next_retry_at: nextRetryAt,
         amount: amountMajor,
         currency,
-        payment_intent_id: livePaymentIntentId,
-        secured: !!livePaymentIntentId,
+        payment_intent_id: recordedPaymentIntentId,
+        // TRI-STATE, and never derived from `payment_intent_id`: true / false /
+        // null for "we could not prove it either way". A consumer must treat
+        // null as unknown, NOT as false.
+        money_state: moneyState,
+        secured: moneyState === "unknown" ? null : moneyState === "live",
         chain_expires_at: firstString(rental.deposit_hold_chain_expires_at),
         source: params.source ?? "cron",
       },
@@ -446,6 +539,92 @@ export async function notifyDepositHoldFailure(
   } catch (err) {
     // NEVER THROW — this runs on money paths, inside catch blocks.
     console.error("[deposit-hold-notify] unexpected error, swallowing:", err);
+    return;
+  }
+}
+
+/**
+ * Separate slug for the config-blocked bell. It must NOT share
+ * `DEPOSIT_HOLD_ALERT_TYPE`: `notifyOperatorsInApp` scopes its dedupe lookup to
+ * `type` + key, and these two have completely different keying (per rental +
+ * attempt vs per tenant + day).
+ */
+export const DEPOSIT_HOLD_CONFIG_ALERT_TYPE = "deposit_hold_config_blocked";
+
+/**
+ * "We could not even try." — the `config_unavailable` outcome.
+ *
+ * The engine returns `config_unavailable` when the tenant row or the Stripe
+ * context could not be resolved (`getConnectAccountId` throws for a live
+ * `payment_model='own'` tenant with no connected account — the likeliest shape
+ * of the in-flight UK->UAE migration going wrong) or when the claim/flag write
+ * itself failed. The row is left UNTOUCHED, which is the right thing to do with
+ * a renter's money, but it also means the authorization simply stops being
+ * renewed and lapses, with nothing louder than a `skippedConfig` counter on
+ * `cron_runs` to say so. That is the exact "nobody is told" outcome this whole
+ * workstream exists to kill.
+ *
+ * Deliberately AGGREGATED and rate-limited, because the cause is per-TENANT and
+ * the symptom is per-RENTAL: one broken Connect account would otherwise ring
+ * once per affected rental, every night. One bell per tenant per UTC day, with
+ * the count and the first message on it. A config outage that lasts a week is
+ * worth seven bells; it is not worth 25 a night.
+ *
+ * NEVER THROWS.
+ */
+export async function notifyDepositHoldConfigBlocked(params: {
+  tenantId: string;
+  /** Rentals left untouched this pass. Length drives the copy. */
+  rentalIds: string[];
+  /** The engine's message for the first affected rental. */
+  sampleMessage?: string | null;
+  /** 'cron' | 'sandbox' | … */
+  source?: string;
+  now?: Date;
+}): Promise<void> {
+  try {
+    const tenantId = firstString(params.tenantId);
+    const rentalIds = (params.rentalIds ?? []).filter((id) => typeof id === "string" && id);
+    if (!tenantId || rentalIds.length === 0) return;
+
+    const now = params.now ?? new Date();
+    const day = now.toISOString().slice(0, 10);
+    const sample = firstString(params.sampleMessage);
+    const count = rentalIds.length;
+
+    await notifyOperatorsInApp({
+      tenantId,
+      type: DEPOSIT_HOLD_CONFIG_ALERT_TYPE,
+      title: `Deposit holds not being renewed — configuration unavailable`,
+      message:
+        `${count} deposit hold${count === 1 ? "" : "s"} could not be renewed this run because this tenant's ` +
+        `Stripe configuration could not be resolved${sample ? ` (${sample.slice(0, 200)})` : ""}. ` +
+        `The existing authorization${count === 1 ? "" : "s"} ${count === 1 ? "was" : "were"} left untouched — ` +
+        `nothing was charged and nothing was cancelled — but ${count === 1 ? "it" : "they"} will lapse on ` +
+        `the card network's own schedule unless the configuration is fixed.`,
+      link: count === 1 ? `/rentals/${rentalIds[0]}` : `/rentals`,
+      metadata: {
+        rental_ids: rentalIds.slice(0, 50),
+        rental_count: count,
+        severity: "warning",
+        result: "config_unavailable",
+        // No money claim: the rows were not touched, so whatever was true before
+        // this run is still true, and this helper did not verify it.
+        money_state: "unknown",
+        secured: null,
+        sample_message: sample ? sample.slice(0, 500) : null,
+        source: params.source ?? "cron",
+        day,
+      },
+      // Per TENANT per UTC DAY. The cause is one configuration, not N rentals.
+      dedupeKey: `deposit_hold_config:${tenantId}:${day}`,
+    });
+
+    console.log(
+      `[deposit-hold-notify] config-blocked alert for tenant ${tenantId} (${count} rental(s), day ${day})`,
+    );
+  } catch (err) {
+    console.error("[deposit-hold-notify] config alert failed, swallowing:", err);
     return;
   }
 }

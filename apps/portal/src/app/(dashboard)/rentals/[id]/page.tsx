@@ -62,6 +62,7 @@ import { extractFunctionError } from "@/lib/edge-error";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { LocationMap } from "@/components/ui/location-map";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useAuth } from "@/stores/auth-store";
 import { ReviewDisplayCard } from "@/components/reviews/review-display-card";
 import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
 import { useFeedbackAfterReview } from "@/hooks/use-feedback-after-review";
@@ -147,6 +148,35 @@ const classifyVerify = (data: any): VerifyOutcome => {
 
 const describeInProgressHold = (status: unknown): string =>
   `This deposit hold is still being worked on${status ? ` (currently ${status})` : ''} — either the card is still authorising or another update is finishing it off. Nothing was changed. Check again in a moment rather than placing a second hold.`;
+
+// ── Reading refresh-deposit-holds' answer ───────────────────────────────────
+// Mirrors `RefreshResult` in supabase/functions/_shared/deposit-hold-refresh.ts.
+// 'released', 'skipped', 'lost_race' and 'chain_expired' are CORRECT outcomes,
+// not failures — the cron driver deliberately keeps them out of its failure
+// count, and a toast that shouted "failed" at them would train an operator to
+// ignore the ones that matter.
+const REFRESH_PROBLEM_RESULTS = ['failed', 'needs_review', 'requires_action', 'config_unavailable'];
+
+const REFRESH_RESULT_TITLES: Record<string, string> = {
+  refreshed: 'Hold refreshed',
+  released: 'Hold released',
+  skipped: 'Nothing to do',
+  lost_race: 'Another update got there first',
+  chain_expired: 'Chain has reached its end',
+  failed: 'Refresh failed',
+  requires_action: 'Card needs the customer',
+  needs_review: 'Needs a closer look',
+  config_unavailable: 'Left untouched — configuration problem',
+};
+
+// The refresh driver applies the SAME due-filters to a single-rental dispatch
+// as it does to the nightly run: deadline lookahead, retry backoff, chain end,
+// terminal rental statuses. A hold with weeks left, or a failed row still
+// inside its backoff window, is legitimately not due — the run then reports
+// zero, and that must read as "nothing needed doing", never as a silent
+// failure.
+const NOTHING_DUE_MESSAGE =
+  'Nothing needed refreshing on this rental right now. The chain only re-authorises a hold as its deadline approaches, a failed hold waits out its retry backoff first, and a hold that never authorised successfully has nothing to re-drive — use "Add Hold" for that. Use "Check with Stripe" if the status itself looks wrong.';
 
 // Format a Postgres TIME value ("HH:MM" or "HH:MM:SS") into 12-hour clock
 // notation ("10:30 AM"). Returns null when the value is missing so callers
@@ -342,6 +372,11 @@ const RentalDetail = () => {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
+  // `isAdmin()` covers head_admin + admin, and super admins too — the auth
+  // store rewrites a super admin's role to 'head_admin' when loading the
+  // profile. It also returns false for an inactive account. Used to gate the
+  // Force-refresh action, which re-drives a DESTRUCTIVE money path.
+  const { isAdmin } = useAuth();
   const { settings: rentalSettings } = useRentalSettings();
   const { balanceNumber: bonzahCdBalance, isBonzahConnected, portalUrl: bonzahPortalUrl } = useBonzahBalance();
   // Buying a NEW policy also requires that Bonzah can issue real cover — test
@@ -1108,6 +1143,8 @@ const RentalDetail = () => {
   const [showChargeDepositDialog, setShowChargeDepositDialog] = useState(false);
   const [showAddHoldDialog, setShowAddHoldDialog] = useState(false);
   const [verifyingHold, setVerifyingHold] = useState(false);
+  const [showForceRefreshDialog, setShowForceRefreshDialog] = useState(false);
+  const [forceRefreshingHold, setForceRefreshingHold] = useState(false);
 
   // Ask Stripe what the deposit authorisation is ACTUALLY doing and write the
   // answer back to the rental.
@@ -1165,6 +1202,89 @@ const RentalDetail = () => {
       });
     } finally {
       setVerifyingHold(false);
+    }
+  };
+
+  // ── Force refresh: re-drive the hold chain for THIS rental, now ───────────
+  //
+  // The chained-hold engine otherwise only runs on the nightly cron. When a
+  // renter is at the counter and the authorisation is about to lapse, "come
+  // back tomorrow" is not an answer. `refresh-deposit-holds` already accepts
+  // `only_rental_id` and applies it as a filter (it was built for the sandbox
+  // Time Machine), so a single-rental dispatch needs no new server surface and
+  // can never touch another tenant's holds.
+  //
+  // Two things the operator has to understand, so the confirmation and the
+  // toasts say them out loud:
+  //
+  //  * It is DESTRUCTIVE. The engine cancels the live authorisation before
+  //    placing its replacement. If the card then declines, the rental is left
+  //    unsecured — that is the whole reason this sits behind a confirm step and
+  //    behind isAdmin() rather than the usual canEdit('rentals').
+  //  * It is NOT a "make it green" button. The same due-filters as the cron
+  //    apply, so a healthy hold with weeks left is simply not due and the run
+  //    correctly reports zero (see NOTHING_DUE_MESSAGE).
+  const handleForceRefreshHold = async () => {
+    if (!rental?.id || forceRefreshingHold) return;
+    setForceRefreshingHold(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('refresh-deposit-holds', {
+        body: { only_rental_id: rental.id },
+      });
+
+      // invoke() does not throw on non-2xx — it resolves with { data, error }.
+      if (error) {
+        // 401/403 is its own story and must not be swallowed as a generic edge
+        // error. The function accepts either the cron's platform secret or a
+        // SUPER-ADMIN user JWT; the portal can only ever send the signed-in
+        // user's token, so a tenant-level head_admin can legitimately be turned
+        // away here. Say which door was shut and name a route that does work,
+        // rather than leaving an operator retrying an action that can never
+        // succeed for them.
+        const status = (error as { context?: Response })?.context?.status;
+        if (status === 401 || status === 403) {
+          throw new Error(
+            'This sign-in is not permitted to dispatch the deposit-hold refresh — it needs a Drive247 platform (super-admin) account. In the meantime use "Check with Stripe" to correct the status, then "Add Hold" to place a fresh authorisation.',
+          );
+        }
+        throw new Error(await extractFunctionError(error, 'Could not run the deposit hold refresh.'));
+      }
+
+      // Re-read the rental so the badge, the expiry line and the action buttons
+      // all reflect whatever the engine just wrote.
+      await queryClient.invalidateQueries({ queryKey: ['rental', id] });
+
+      // The driver returns one RefreshOutcome per rental it processed. Match on
+      // rentalId rather than trusting position — a future driver change that
+      // widened the batch must not make us report someone else's outcome.
+      const results = Array.isArray((data as any)?.results) ? (data as any).results : [];
+      const outcome = results.find((r: any) => r?.rentalId === rental.id) ?? null;
+
+      if (!outcome) {
+        // Nothing was processed. Either the row is genuinely not due, or the
+        // driver skipped it — either way no money moved.
+        toast({
+          title: 'Nothing was due',
+          description: NOTHING_DUE_MESSAGE,
+        });
+        return;
+      }
+
+      const isProblem = REFRESH_PROBLEM_RESULTS.includes(String(outcome.result));
+      toast({
+        title: REFRESH_RESULT_TITLES[String(outcome.result)] || 'Refresh finished',
+        description: outcome.message || `Result: ${outcome.result}`,
+        variant: isProblem ? 'destructive' : undefined,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Could not refresh the hold',
+        description: err.message || 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setForceRefreshingHold(false);
+      setShowForceRefreshDialog(false);
     }
   };
 
@@ -3795,6 +3915,34 @@ const RentalDetail = () => {
                                 {verifyingHold ? 'Checking…' : 'Check with Stripe'}
                               </button>
                             )}
+
+                            {/* Re-drive the chain for this one rental instead of
+                                waiting for the nightly cron. Gated to 'held' —
+                                NOT to every status with a hold — because
+                                REFRESHABLE_HOLD_STATUSES in the engine is
+                                exactly ['held','failed']. An 'expired' row can
+                                never be selected by the driver, so a Force
+                                refresh there would always report "nothing was
+                                due" and read as a broken button; Refresh &
+                                Charge / Add Hold are the real routes out of
+                                'expired' and are already offered above.
+                                head_admin/admin only: the engine CANCELS the
+                                live authorisation before placing a
+                                replacement. */}
+                            {depositHoldStatus === 'held' && isAdmin() && (
+                              <button
+                                className="text-xs font-medium text-violet-500 hover:text-violet-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                                disabled={forceRefreshingHold}
+                                title="Run the deposit-hold refresh for this rental now instead of waiting for tonight's job"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowForceRefreshDialog(true);
+                                }}
+                              >
+                                <RefreshCw className={`h-3 w-3 ${forceRefreshingHold ? 'animate-spin' : ''}`} />
+                                {forceRefreshingHold ? 'Refreshing…' : 'Force refresh'}
+                              </button>
+                            )}
                           </div>
                         ) : isExcessMileageUnpaid && excessMileageCharge ? (
                           <div className="flex items-center gap-2 justify-end">
@@ -3999,6 +4147,27 @@ const RentalDetail = () => {
                               <RefreshCw className={`h-3 w-3 ${verifyingHold ? 'animate-spin' : ''}`} />
                               {verifyingHold ? 'Checking…' : 'Check with Stripe'}
                             </button>
+                            {/* Force refresh is offered on 'failed' only.
+                                'processing'/'refreshing' mean another worker
+                                holds the CAS claim on this row: dispatching
+                                into that would at best lose the race and at
+                                worst race a live Stripe call, so those two get
+                                Check with Stripe and nothing else — the same
+                                rule that denies them a placement button above. */}
+                            {depositHoldStatus === 'failed' && isAdmin() && (
+                              <button
+                                className="text-xs font-medium text-violet-500 hover:text-violet-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                                disabled={forceRefreshingHold}
+                                title="Retry the deposit-hold chain for this rental now instead of waiting for tonight's job"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowForceRefreshDialog(true);
+                                }}
+                              >
+                                <RefreshCw className={`h-3 w-3 ${forceRefreshingHold ? 'animate-spin' : ''}`} />
+                                {forceRefreshingHold ? 'Refreshing…' : 'Force refresh'}
+                              </button>
+                            )}
                           </>
                         )}
 
@@ -6476,6 +6645,59 @@ const RentalDetail = () => {
           customerEmail={(rental as any).customers?.email || null}
         />
       )}
+
+      {/* Force-refresh confirmation. The refresh engine CANCELS the live
+          authorisation before it places the replacement, so there is a window
+          in which the rental is unsecured and a declined replacement leaves it
+          that way. That is not something to trigger from a single stray click
+          on a table row. */}
+      <AlertDialog open={showForceRefreshDialog} onOpenChange={(open) => { if (!forceRefreshingHold) setShowForceRefreshDialog(open); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-violet-500" />
+              Force a deposit hold refresh?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  This runs the nightly deposit-hold job immediately, for this rental only. It will
+                  cancel the current authorisation and place a replacement on the saved card.
+                </p>
+                <p className="text-amber-600 dark:text-amber-500 font-medium">
+                  If the replacement is declined, this rental is left without a live hold until a new
+                  one is placed.
+                </p>
+                <p className="text-muted-foreground">
+                  Nothing happens if the hold is not yet due — the job applies its normal deadline and
+                  retry-backoff rules.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={forceRefreshingHold}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={forceRefreshingHold}
+              onClick={(e) => {
+                // Keep the dialog mounted while the request is in flight; the
+                // handler closes it in its finally block.
+                e.preventDefault();
+                handleForceRefreshHold();
+              }}
+            >
+              {forceRefreshingHold ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Refreshing…
+                </>
+              ) : (
+                'Refresh now'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Extras Breakdown Dialog */}
       <Dialog open={showExtrasDialog} onOpenChange={setShowExtrasDialog}>

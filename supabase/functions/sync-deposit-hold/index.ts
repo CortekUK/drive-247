@@ -81,6 +81,40 @@ Deno.serve(async (req) => {
       return errorResponse(`Hold not active (PI status: ${pi.status})`, 422)
     }
 
+    // ── Session binding ──────────────────────────────────────────────────────
+    // This function takes a Checkout session id and a rentalId from the caller
+    // and writes hold state onto that rental. It cannot require a staff session:
+    // the booking app's success page reaches it for GUEST renters, so the
+    // Supabase gateway's verify_jwt is satisfied by the public anon key and
+    // proves nothing. What DOES bind the two is Stripe's own record —
+    // create-hold-checkout stamps metadata.rental_id on both the session and
+    // the PaymentIntent — so the caller must not be able to point a session it
+    // owns at a rental it does not.
+    //
+    // Calibrated deliberately: a MISMATCH is positive evidence of the wrong
+    // rental and is refused. An ABSENT rental_id is no evidence either way
+    // (a pre-metadata legacy session), and refusing there would strand a real
+    // authorisation with no way to record it — so that case is logged loudly
+    // and allowed through, which is the same posture the anchoring guard below
+    // takes when it cannot prove a move is safe.
+    const sessionRentalId =
+      (session.metadata?.rental_id as string | undefined) ??
+      (pi.metadata?.rental_id as string | undefined) ??
+      null
+    if (sessionRentalId && sessionRentalId !== rentalId) {
+      console.error(
+        `sync-deposit-hold: SESSION/RENTAL MISMATCH — session ${sessionId} is stamped for rental ` +
+          `${sessionRentalId} but was submitted against rental ${rentalId}. Refusing.`
+      )
+      return errorResponse('This checkout session does not belong to the requested rental', 403)
+    }
+    if (!sessionRentalId) {
+      console.warn(
+        `sync-deposit-hold: session ${sessionId} carries no rental_id metadata; ` +
+          `cannot bind it to rental ${rentalId}. Proceeding (legacy session) — verify manually.`
+      )
+    }
+
     const amount = (pi.amount || 0) / 100
     const pmId =
       typeof pi.payment_method === 'string'

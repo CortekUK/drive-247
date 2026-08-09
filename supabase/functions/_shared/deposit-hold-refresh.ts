@@ -73,6 +73,10 @@ import {
   TENANT_STRIPE_COLUMNS,
   type StripeMode,
 } from "./stripe-client.ts";
+import {
+  notifyDepositHoldFailure,
+  type DepositHoldMoneyState,
+} from "./deposit-hold-notify.ts";
 
 type Stripe = ReturnType<typeof getStripeClientForRecord>;
 type StripeOptions = { stripeAccount?: string } | undefined;
@@ -1082,6 +1086,36 @@ export async function refreshOneHold(
         `could not flag a PaymentIntent-less hold (${dbErr instanceof Error ? dbErr.message : String(dbErr)})`
       );
     }
+    if (flagged) {
+      // ALERT — exit 1 of 3 that does NOT go through finish(). This one is
+      // above the claim (the row was never taken to 'refreshing'), so it cannot
+      // use the shared closure defined further down and calls the helper
+      // directly. A `needs_review` written here is otherwise invisible: the
+      // driver only re-selects 'held' and 'failed'.
+      await notifyDepositHoldFailure({
+        rental,
+        result: "needs_review",
+        status: "needs_review",
+        message: "held with no PaymentIntent — flagged for review rather than authorizing blind",
+        errorCode: "missing_payment_intent",
+        errorMessage:
+          "Hold recorded as 'held' with no PaymentIntent — cannot prove the authorization state",
+        // The whole point of this branch is that we CANNOT prove the
+        // authorization state: there is no PaymentIntent to ask Stripe about.
+        // So the alert says nothing at all about the renter's money.
+        moneyState: "unknown",
+        // The attempt sequence is deliberately NOT advanced here — the row was
+        // never claimed, and nothing was attempted. Keying the dedupe on the seq
+        // the row actually carries means this static condition rings once and
+        // then stays quiet until something genuinely changes, which is right:
+        // re-stating it every night would train staff to ignore the channel.
+        attemptSeq: Number(rental.deposit_hold_attempt_seq ?? 0),
+        maxAttempts: MAX_HOLD_ATTEMPTS,
+        currency: (rental.deposit_hold_currency as string | null) ?? null,
+        source: actor,
+        supabase,
+      });
+    }
     return {
       rentalId,
       result: flagged ? "needs_review" : "lost_race",
@@ -1123,6 +1157,69 @@ export async function refreshOneHold(
   const attemptSeq = Number(rental.deposit_hold_attempt_seq ?? 0) + 1;
   const priorFailures = Number(rental.deposit_hold_failure_count ?? 0);
 
+  // ── OPERATOR ALERTING ─────────────────────────────────────────────────────
+  // A chain that dies on day 45 of a 90-day rental used to say nothing until
+  // the car came back. Every exit that leaves the row in 'failed',
+  // 'requires_action' or 'needs_review' raises exactly one bell; every healthy
+  // or intended outcome ('refreshed', 'released', 'skipped', 'lost_race',
+  // 'chain_expired') raises none. The helper is contractually non-throwing, so
+  // this can sit on money paths and inside catch blocks.
+  //
+  // Called from finish() (which covers every row-writing exit) plus the two
+  // exits that bypass it — the PaymentIntent-less 'held' flag above, and the
+  // stranded-at-'refreshing' return in the outer catch.
+
+  /**
+   * What is true of the renter's money on the paths that have NOT yet cancelled
+   * the incumbent.
+   *
+   * 'live' is asserted ONLY when the row itself records a live authorization —
+   * status 'held', a PaymentIntent present, and a stored deadline that has not
+   * passed — and nothing in this pass has touched it. A 'failed' row's
+   * PaymentIntent is NOT evidence (that is exactly the conflation that made the
+   * first version of the alert lie), and neither is a 'held' row whose
+   * authorization has already run out of time. Anything short of that is
+   * 'unknown', which prints no claim at all.
+   */
+  const incumbentMoneyState: DepositHoldMoneyState =
+    incumbentPi &&
+      startingStatus === "held" &&
+      (!storedExpiresAt || new Date(storedExpiresAt).getTime() > now.getTime())
+      ? "live"
+      : "unknown";
+
+  /** One bell, at most, per call of refreshOneHold. */
+  const alertFailure = async (args: {
+    patch?: Record<string, unknown> | null;
+    result: RefreshResult;
+    message: string;
+    status?: string;
+    moneyState: DepositHoldMoneyState;
+    moneyStatement?: string | null;
+    detail?: string | null;
+    failureClass?: FailureClass | null;
+  }): Promise<void> => {
+    await notifyDepositHoldFailure({
+      rental,
+      patch: args.patch ?? null,
+      status: args.status ?? null,
+      result: args.result,
+      message: args.message,
+      failureClass: args.failureClass ?? null,
+      moneyState: args.moneyState,
+      moneyStatement: args.moneyStatement ?? null,
+      detail: args.detail ?? null,
+      attemptSeq,
+      // `amountCents` is 0 when the amount is UNKNOWN, and a bare 0 would print
+      // "$0.00 deposit" in the deposit-amount-unknown review bell.
+      amountCents: amountKnown ? amountCents : null,
+      currency,
+      maxAttempts: MAX_HOLD_ATTEMPTS,
+      source: actor,
+      supabase,
+    });
+  };
+
   // ── CLAIM. From here on we own the row and every exit path must write a
   //    non-'refreshing' status (or explicitly hand the row back). A DB failure
   //    on the claim itself leaves the row exactly as we found it. ─────────────
@@ -1156,13 +1253,38 @@ export async function refreshOneHold(
     );
   }
 
-  /** Hand the row back to a recoverable state. Always CAS'd from 'refreshing'. */
+  /**
+   * Hand the row back to a recoverable state. Always CAS'd from 'refreshing'.
+   *
+   * This is also the alerting funnel for every row-writing exit. Two properties
+   * matter and both are load-bearing:
+   *
+   *   * the bell is raised AFTER the CAS and only when it APPLIED. A lost race
+   *     means somebody else's state is on the row now, and alerting on a patch
+   *     that was never written would describe a rental that does not exist.
+   *   * `money` is a FACT THE CALLER ASSERTS, never inferred from the patch. The
+   *     3DS and non-capturable-replacement exits both record a PaymentIntent id
+   *     while holding none of the renter's money; an inference from the id told
+   *     operators they were secured on precisely those two paths.
+   */
   const finish = async (
     patch: Record<string, unknown>,
     result: RefreshResult,
     message: string,
-    extra: { paymentIntentId?: string | null; expiresAt?: string | null } = {}
+    extra: {
+      paymentIntentId?: string | null;
+      expiresAt?: string | null;
+      /** REQUIRED thinking, optional syntax: omitted means 'unknown' (no claim). */
+      money?: DepositHoldMoneyState;
+      /** Verbatim money sentence, for facts the three-value state cannot carry. */
+      moneyStatement?: string | null;
+      /** One extra sentence for the bell only. */
+      alertDetail?: string | null;
+      failureClass?: FailureClass | null;
+    } = {}
   ): Promise<RefreshOutcome> => {
+    // Alert-only fields must not leak into RefreshOutcome.
+    const { money, moneyStatement, alertDetail, failureClass, ...outcomeExtra } = extra;
     const applied = await casUpdate(supabase, rentalId, patch, {
       status: "refreshing",
       paymentIntentId: incumbentPi,
@@ -1171,7 +1293,19 @@ export async function refreshOneHold(
       console.warn(`${log} ${rentalId}: row moved while we held it as 'refreshing' — leaving the winner's state alone`);
       return { rentalId, result: "lost_race", message: `${message} (but the row moved under us)`, untouched: false };
     }
-    return { rentalId, result, message, untouched: false, ...extra };
+    // Silent for every healthy/intended result — the helper decides from the
+    // status this patch just wrote, so 'captured', 'released' and 'held' say
+    // nothing while 'failed' / 'requires_action' / 'needs_review' ring once.
+    await alertFailure({
+      patch,
+      result,
+      message,
+      moneyState: money ?? "unknown",
+      moneyStatement,
+      detail: alertDetail,
+      failureClass,
+    });
+    return { rentalId, result, message, untouched: false, ...outcomeExtra };
   };
 
   /**
@@ -1234,7 +1368,13 @@ export async function refreshOneHold(
     result: RefreshResult,
     message: string,
     intentId: string,
-    extra: { expiresAt?: string | null } = {}
+    extra: {
+      expiresAt?: string | null;
+      money?: DepositHoldMoneyState;
+      moneyStatement?: string | null;
+      alertDetail?: string | null;
+      failureClass?: FailureClass | null;
+    } = {}
   ): Promise<RefreshOutcome> => {
     const outcome = await finish(patch, result, message, { paymentIntentId: intentId, ...extra });
     if (outcome.result !== "lost_race") {
@@ -1293,7 +1433,11 @@ export async function refreshOneHold(
           deposit_hold_next_retry_at: null,
         },
         "needs_review",
-        "deposit amount unknown — incumbent left alone and flagged for review"
+        "deposit amount unknown — incumbent left alone and flagged for review",
+        // Nothing here touched Stripe, so whatever the row recorded still
+        // stands: 'live' only if the row actually evidenced a live, unexpired
+        // authorization, 'unknown' otherwise.
+        { money: incumbentMoneyState }
       );
     }
 
@@ -1383,7 +1527,9 @@ export async function refreshOneHold(
           deposit_hold_next_retry_at: null,
         },
         "needs_review",
-        "no usable Stripe customer on the anchored account"
+        "no usable Stripe customer on the anchored account",
+        // Pre-cancel: the incumbent has not been touched.
+        { money: incumbentMoneyState }
       );
     }
 
@@ -1409,7 +1555,9 @@ export async function refreshOneHold(
           deposit_hold_next_retry_at: null,
         },
         "requires_action",
-        "no usable card on file — customer action required"
+        "no usable card on file — customer action required",
+        // Pre-cancel: we never reached the incumbent, so it stands as recorded.
+        { money: incumbentMoneyState }
       );
     }
     // Non-null from here; reassigned only when a dead card forces one
