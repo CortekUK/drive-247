@@ -124,6 +124,20 @@ const MANUAL_VERIFY_MIN_REASON = 15;
 /** Audit action + entity recorded when a staff member personally verifies a customer. */
 const MANUAL_VERIFY_AUDIT_ACTION = "customer_identity_manually_verified";
 
+/**
+ * Waiving verification for ONE rental, when the tenant has switched that on.
+ *
+ * Distinct from manual verification: manual verification asserts "I checked this
+ * person's ID myself" and changes the customer's real status. A waiver asserts
+ * nothing about the customer — it records that this rental was created anyway,
+ * and why. The two must stay separate so the customer record never claims a
+ * check that did not happen.
+ *
+ * Same minimum-length rule: a one-word reason is not a record.
+ */
+const ID_WAIVER_MIN_REASON = 15;
+const ID_WAIVER_AUDIT_ACTION = "rental_created_without_id_verification";
+
 const CreateRental = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -158,6 +172,24 @@ const CreateRental = () => {
    */
   const canManuallyVerify =
     isAdmin() || (isManager && canEdit("customers") && canEdit("rentals"));
+
+  /**
+   * Waiver is only offered when the tenant's head admin has switched it on, and
+   * only to the same people trusted with manual verification. The flag alone is
+   * not authority — `ops`/`viewer` still never see it.
+   */
+  const tenantAllowsIdWaiver =
+    (tenant as { allow_rental_without_id_verification?: boolean } | null)
+      ?.allow_rental_without_id_verification === true;
+  const canWaiveIdVerification = tenantAllowsIdWaiver && canManuallyVerify;
+
+  const [showIdWaiverDialog, setShowIdWaiverDialog] = useState(false);
+  const [idWaiverReason, setIdWaiverReason] = useState("");
+  // Set only once the operator has confirmed the dialog; consumed by submit and
+  // written onto the rental. Cleared whenever the customer changes so a reason
+  // typed for one person can never ride along to another.
+  const [idWaiverAccepted, setIdWaiverAccepted] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const submitInFlightRef = useRef(false); // Synchronous re-entrancy lock against double-click duplicate rental creation
   const [creationProgress, setCreationProgress] = useState(0);
@@ -643,6 +675,12 @@ const CreateRental = () => {
     if (prevCustomerRef.current && prevCustomerRef.current !== selectedCustomerId) {
       setInsuranceDocId(null);
       form.setValue("insurance_status", "pending");
+      // A waiver is a statement about ONE person. If the operator switches
+      // customer after accepting it, the reason must not follow — otherwise a
+      // justification typed for someone they checked ends up recorded against
+      // someone they did not.
+      setIdWaiverAccepted(null);
+      setIdWaiverReason("");
     }
     prevCustomerRef.current = selectedCustomerId;
   }, [selectedCustomerId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1473,9 +1511,18 @@ const CreateRental = () => {
     setCreationProgress(1); // Step 1: Validating
     setSubmitError("");
     try {
-      // Check customer verification (STRICT — always required)
+      // Identity verification. Required by default; the ONLY way past it without
+      // a verified customer is an explicit, reasoned waiver that the tenant's
+      // head admin has enabled and a trusted role has confirmed. The reason is
+      // re-validated here rather than trusted from state.
       if (!isCustomerVerified) {
-        throw new Error("Customer must complete identity verification before rental can be created.");
+        const waiverReason = (idWaiverAccepted ?? "").trim();
+        const waiverUsable =
+          canWaiveIdVerification && waiverReason.length >= ID_WAIVER_MIN_REASON;
+
+        if (!waiverUsable) {
+          throw new Error("Customer must complete identity verification before rental can be created.");
+        }
       }
 
       // Validate form data
@@ -1602,9 +1649,25 @@ const CreateRental = () => {
 
       // For PAYG rentals we clear end_date + return fields and persist accrual metadata.
       // Use supabaseUntyped because some PAYG columns are not yet in generated types.
+      // Record the waiver ON THE RENTAL, not only in the audit log, so this
+      // rental stays identifiable as unverified for its whole life — for
+      // disputes, insurance questions and reporting — without anyone having to
+      // join audit_logs. A DB CHECK rejects a waiver with no reason.
+      const waiverReasonForInsert =
+        !isCustomerVerified && canWaiveIdVerification ? (idWaiverAccepted ?? "").trim() : "";
+      const waiverApplied = waiverReasonForInsert.length >= ID_WAIVER_MIN_REASON;
+
       const rentalInsertPayload: any = {
         customer_id: data.customer_id,
         vehicle_id: data.vehicle_id,
+        ...(waiverApplied
+          ? {
+              id_verification_waived: true,
+              id_verification_waived_reason: waiverReasonForInsert,
+              id_verification_waived_by: appUser?.id ?? null,
+              id_verification_waived_at: new Date().toISOString(),
+            }
+          : {}),
         // format() = the picker's LOCAL calendar date. toISOString() shifted the
         // stored dates one day EARLIER for staff in UTC+ timezones (e.g. Manila).
         start_date: format(data.start_date, 'yyyy-MM-dd'),
@@ -1721,6 +1784,41 @@ const CreateRental = () => {
         .single();
 
       if (rentalError) throw rentalError;
+
+      // Audit the waiver. Direct insert rather than the fire-and-forget helper,
+      // which only logs failures to the console — for a control bypass the
+      // record matters more than convenience. The rental is already committed,
+      // so a logging failure is surfaced, not rolled back.
+      if (waiverApplied && rental?.id && tenant?.id && appUser?.id) {
+        const { error: waiverAuditError } = await supabase.from("audit_logs").insert({
+          action: ID_WAIVER_AUDIT_ACTION,
+          actor_id: appUser.id,
+          entity_type: "rental",
+          entity_id: rental.id,
+          tenant_id: tenant.id,
+          details: {
+            customer_id: data.customer_id,
+            customer_name: customerDetails?.name ?? null,
+            customer_verification_status:
+              customerDetails?.identity_verification_status ?? "unverified",
+            reason: waiverReasonForInsert,
+            waived_by_name: appUser.name ?? null,
+            waived_by_email: appUser.email ?? null,
+            waived_by_role: appUser.role ?? null,
+            recorded_from: "rentals/new",
+          },
+        });
+
+        if (waiverAuditError) {
+          console.error("Failed to log ID-verification waiver:", waiverAuditError);
+          toast({
+            title: "Rental created, but the waiver was not logged",
+            description:
+              "The rental is saved and marked as created without ID verification, but the audit entry failed. Please note this manually.",
+            variant: "destructive",
+          });
+        }
+      }
 
       // Additional drivers: bulk-insert rows + fire-and-forget Veriff invites.
       // Non-fatal — the rental row is already saved. If any of these calls fail
@@ -2957,6 +3055,55 @@ const CreateRental = () => {
                           <p className="mt-1.5 text-[11px] text-muted-foreground">
                             Only if you have checked this customer&apos;s ID documents yourself. Your name and reason are recorded.
                           </p>
+                        </div>
+                      )}
+
+                      {/* Waiver — offered only when the head admin has enabled it.
+                          Presented BELOW manual verification and worded as the
+                          lesser option, because marking the customer verified is
+                          the more honest action when the ID really was checked. */}
+                      {!isCustomerVerified && canWaiveIdVerification && (
+                        <div className="border-t border-[#f1f5f9] pt-3">
+                          {idWaiverAccepted ? (
+                            <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-2.5">
+                              <p className="text-[12px] font-medium text-amber-700 dark:text-amber-400">
+                                Proceeding without ID verification
+                              </p>
+                              <p className="mt-0.5 text-[11px] text-amber-700/80 dark:text-amber-400/80 break-words">
+                                {idWaiverAccepted}
+                              </p>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="mt-1 h-7 px-2 text-[11px] text-amber-700 hover:text-amber-800 dark:text-amber-400"
+                                onClick={() => { setIdWaiverAccepted(null); setIdWaiverReason(""); }}
+                              >
+                                Undo
+                              </Button>
+                            </div>
+                          ) : (
+                            <>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="w-full border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                                disabled={creatingVerification || cancelingVerification || manualVerifying}
+                                onClick={() => {
+                                  setIdWaiverReason("");
+                                  setShowIdWaiverDialog(true);
+                                }}
+                              >
+                                <AlertTriangle className="h-4 w-4 mr-2" />
+                                Create rental without ID verification
+                              </Button>
+                              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                Use only if you cannot verify this customer. The rental is
+                                permanently marked as unverified and your reason is recorded.
+                              </p>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
@@ -5435,7 +5582,14 @@ const CreateRental = () => {
                   className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg px-8"
                 >
                   <Save className="h-4 w-4 mr-2" />
-                  {loading ? "Creating..." : !isCustomerVerified ? "Verification Required" : "Create Rental"}
+                  {loading
+                    ? "Creating..."
+                    : isCustomerVerified
+                      ? "Create Rental"
+                      : idWaiverAccepted
+                        // Waiver confirmed — say plainly what is about to happen.
+                        ? "Create Without Verification"
+                        : "Verification Required"}
                 </Button>
               </div>
             </div>
@@ -6072,6 +6226,71 @@ const CreateRental = () => {
               ) : (
                 "Yes, I verified this customer"
               )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Waive ID verification for THIS rental only.
+          Nothing is written here — the reason is held until the rental is
+          actually created, so an abandoned form leaves no trace and no rental
+          is ever marked waived without existing. */}
+      <AlertDialog open={showIdWaiverDialog} onOpenChange={setShowIdWaiverDialog}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create this rental without ID verification?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  This does <span className="font-medium text-foreground">not</span> verify{" "}
+                  <span className="font-medium text-foreground">
+                    {customerDetails?.name || "this customer"}
+                  </span>
+                  . Their record stays unverified, and this rental is permanently marked as
+                  created without an ID check.
+                </p>
+                <p>
+                  If you have actually seen this customer&apos;s ID, close this and use{" "}
+                  <span className="font-medium text-foreground">Mark as manually verified</span>{" "}
+                  instead — it is the accurate record.
+                </p>
+                <p className="text-amber-700 dark:text-amber-400">
+                  Insurance still needs the customer&apos;s date of birth, and the rental
+                  agreement will show blank ID fields.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="id-waiver-reason" className="text-sm font-medium">
+              Why is this rental going ahead without verification?
+            </Label>
+            <Textarea
+              id="id-waiver-reason"
+              value={idWaiverReason}
+              onChange={(e) => setIdWaiverReason(e.target.value)}
+              rows={3}
+              placeholder="e.g. Long-standing corporate account, ID held on file at head office; Veriff unavailable and customer collecting today."
+            />
+            <p className="text-xs text-muted-foreground">
+              {idWaiverReason.trim().length < ID_WAIVER_MIN_REASON
+                ? `Please explain why verification is being skipped (at least ${ID_WAIVER_MIN_REASON} characters).`
+                : "This reason is saved on the rental and in the audit log."}
+            </p>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={idWaiverReason.trim().length < ID_WAIVER_MIN_REASON}
+              onClick={() => {
+                setIdWaiverAccepted(idWaiverReason.trim());
+                setShowIdWaiverDialog(false);
+              }}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              Continue without verification
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

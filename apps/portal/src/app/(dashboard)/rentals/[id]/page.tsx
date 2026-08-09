@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, Fragment } from "react";
-import { differenceInDays } from "date-fns";
+import { differenceInDays, format } from "date-fns";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -1607,13 +1607,37 @@ const RentalDetail = () => {
             .update({ customer_id: rental.customers.id, tenant_id: tenant?.id })
             .eq("id", emailData.id);
 
-          // Update customer's verification status
-          const status = emailData.review_result === 'GREEN' ? 'verified' :
-                         emailData.review_result === 'RED' ? 'rejected' : 'pending';
-          await supabase
-            .from("customers")
-            .update({ identity_verification_status: status })
-            .eq("id", rental.customers.id);
+          // Update customer's verification status.
+          //
+          // Two guards, both load-bearing:
+          //
+          // 1. tenant_id — this ran with only .eq("id", …), so merely OPENING a
+          //    rental could rewrite a customer row belonging to another tenant.
+          //
+          // 2. manually_verified is never overwritten. A staff member recorded,
+          //    with their name and a reason, that they checked this person's ID.
+          //    A later Veriff row going 'pending' (or an unrelated attempt
+          //    resolving RED) must not silently erase that — it would re-block a
+          //    customer who was legitimately cleared, with no audit entry
+          //    explaining why. Only an explicit action should undo an explicit
+          //    action.
+          // Skip entirely without a tenant rather than passing a placeholder:
+          // tenant_id is uuid, and comparing it to '' fails with
+          // "invalid input syntax for type uuid" — which supabase-js RETURNS
+          // rather than throws, so it would have failed silently.
+          if (tenant?.id) {
+            const status = emailData.review_result === 'GREEN' ? 'verified' :
+                           emailData.review_result === 'RED' ? 'rejected' : 'pending';
+            const { error: syncError } = await supabase
+              .from("customers")
+              .update({ identity_verification_status: status })
+              .eq("id", rental.customers.id)
+              .eq("tenant_id", tenant.id)
+              .neq("identity_verification_status", "manually_verified");
+            if (syncError) {
+              console.error("Failed to sync customer verification status:", syncError);
+            }
+          }
 
           return { ...emailData, customer_id: rental.customers.id };
         }
@@ -2306,6 +2330,28 @@ const RentalDetail = () => {
 
   return (
     <div className="container mx-auto space-y-6 py-[24px] px-[8px]">
+      {/* This rental was created without an ID check. Surfaced permanently and
+          prominently: anyone handling it later — a claim, a dispute, an
+          insurance query — needs to know without digging through audit logs. */}
+      {(rental as any)?.id_verification_waived && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
+          <div className="text-sm min-w-0">
+            <p className="font-medium text-amber-800 dark:text-amber-300">
+              Created without ID verification
+            </p>
+            <p className="text-amber-700/90 dark:text-amber-400/90 mt-0.5 break-words">
+              {(rental as any).id_verification_waived_reason}
+            </p>
+            {(rental as any).id_verification_waived_at && (
+              <p className="text-xs text-amber-700/70 dark:text-amber-400/70 mt-1">
+                Recorded {format(new Date((rental as any).id_verification_waived_at), "d MMM yyyy, HH:mm")}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Key Handover Action Banner */}
       <KeyHandoverActionBanner
         show={needsKeyHandover}
@@ -3322,6 +3368,24 @@ const RentalDetail = () => {
             if (rental.deposit_hold_status === 'processing') return 'Authorisation in progress';
             if (rental.deposit_hold_status === 'refreshing') return 'Replacing the hold';
             if (rental.deposit_hold_status === 'failed') return 'Hold failed';
+            // The four statuses the chained-hold work added (Aug 2026), when the
+            // CHECK constraint went from 7 values to 11. None of them matched a
+            // branch here, so they fell through to "No hold placed" — the SAME
+            // lie the three above were fixed for, reopened from the other end.
+            // It is not latent: _shared/deposit-hold-refresh.ts writes
+            // 'requires_action' on every SCA and dead-card decline and
+            // 'needs_review' on every unclassified failure and at the 8-attempt
+            // ceiling, and reconcile-deposit-holds writes 'needs_review' for a
+            // hold it cannot verify. Every one of those is a renter left
+            // UNSECURED with a human being asked to act.
+            //
+            // The two strings here are lifted verbatim from REFRESH_RESULT_TITLES
+            // at the top of this file, so the toast an operator saw after a
+            // refresh and the row they are now looking at say the same thing.
+            if (rental.deposit_hold_status === 'capturing') return 'Charging the hold';
+            if (rental.deposit_hold_status === 'requires_action') return 'Card needs the customer';
+            if (rental.deposit_hold_status === 'needs_review') return 'Needs a closer look';
+            if (rental.deposit_hold_status === 'disputed') return 'Disputed by the customer';
             const depositRefunded = refundBreakdown?.['Security Deposit'] ?? 0;
             const hasExcessMileage = (rentalCharges || []).some(c => c.category === 'Excess Mileage');
             if (depositRefunded > 0 && hasExcessMileage) return 'Applied to Excess Mileage';
@@ -3616,6 +3680,50 @@ const RentalDetail = () => {
                                   </p>
                                 );
                               }
+                              // The four states the chained-hold work added. A
+                              // stored expiry date says nothing useful in any of
+                              // them — the engine NULLs deposit_hold_expires_at on
+                              // every one of these exits, and on 'disputed' the
+                              // date describes an authorisation that is now
+                              // contested. What the operator needs instead is who
+                              // has to act, so say that, in the same slot the
+                              // expiry warning uses. 'requires_action' and
+                              // 'needs_review' both mean the renter is holding
+                              // NOTHING (see the `money: "unsecured"` exits in
+                              // _shared/deposit-hold-refresh.ts) — that fact goes
+                              // first, because it is the one that costs money.
+                              if (depositHoldStatus === 'capturing') {
+                                return (
+                                  <p className="text-xs mt-0.5 flex items-center gap-1 text-muted-foreground">
+                                    <Clock className="h-3 w-3 shrink-0" />
+                                    Taking the deposit from this authorisation…
+                                  </p>
+                                );
+                              }
+                              if (depositHoldStatus === 'requires_action') {
+                                return (
+                                  <p className="text-xs mt-0.5 flex items-center gap-1 text-orange-500 font-medium">
+                                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                                    Not secured — the customer must authorise the card (3DS, or it needs replacing). This cannot be fixed from here.
+                                  </p>
+                                );
+                              }
+                              if (depositHoldStatus === 'needs_review') {
+                                return (
+                                  <p className="text-xs mt-0.5 flex items-center gap-1 text-rose-500 font-medium">
+                                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                                    Not secured — we could not establish what this authorisation is doing. Check with Stripe before placing another.
+                                  </p>
+                                );
+                              }
+                              if (depositHoldStatus === 'disputed') {
+                                return (
+                                  <p className="text-xs mt-0.5 flex items-center gap-1 text-red-600 font-medium">
+                                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                                    Chargeback opened — charging and deducting are blocked until the dispute resolves.
+                                  </p>
+                                );
+                              }
                               if (depositHoldStatus !== 'held' && depositHoldStatus !== 'expired') return null;
                               const expiry = describeHoldExpiry(rental.deposit_hold_expires_at);
                               if (!expiry) return null;
@@ -3670,6 +3778,18 @@ const RentalDetail = () => {
                             if (depositHoldStatus === 'processing') return <Badge variant="outline" className="text-blue-500 border-blue-500/30 bg-blue-500/10 text-[11px]">Processing</Badge>;
                             if (depositHoldStatus === 'refreshing') return <Badge variant="outline" className="text-indigo-500 border-indigo-500/30 bg-indigo-500/10 text-[11px]">Refreshing</Badge>;
                             if (depositHoldStatus === 'failed') return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Failed</Badge>;
+                            // The four the widened CHECK constraint added. Until
+                            // now they matched nothing here and fell through to
+                            // "No Hold" below — telling the operator there was no
+                            // authorisation at the precise moment the renter was
+                            // unsecured and someone had to act. Distinct colours
+                            // on purpose: 'Capturing' is in-flight and needs
+                            // nobody; the other three each need a DIFFERENT
+                            // human (the customer, us, or the dispute process).
+                            if (depositHoldStatus === 'capturing') return <Badge variant="outline" className="text-purple-500 border-purple-500/30 bg-purple-500/10 text-[11px]">Capturing</Badge>;
+                            if (depositHoldStatus === 'requires_action') return <Badge variant="outline" className="text-orange-500 border-orange-500/40 bg-orange-500/10 text-[11px]">Action Needed</Badge>;
+                            if (depositHoldStatus === 'needs_review') return <Badge variant="outline" className="text-rose-500 border-rose-500/40 bg-rose-500/10 text-[11px]">Needs Review</Badge>;
+                            if (depositHoldStatus === 'disputed') return <Badge variant="outline" className="text-red-600 border-red-600/50 bg-red-600/15 text-[11px]">Disputed</Badge>;
                           }
                           // Security Deposit without a hold (manual/cash payments, or Stripe hold
                           // hasn't fired) — never show "Not Paid"; the deposit isn't a charge.
@@ -3806,7 +3926,16 @@ const RentalDetail = () => {
                           // routinely does) sit over a dead auth, with both Add Hold and
                           // Refresh refusing to run. Reconciling first unblocks them.
                           <div className="flex items-center gap-2 justify-end">
-                            {depositHoldStatus === 'held' && (
+                            {/* Release CANCELS a live authorisation and Charge CAPTURES
+                                it — the two most destructive things this row can do to
+                                a renter's card. They were the only write buttons in
+                                this cell with no permission gate, which left the UI
+                                incoherent once `canEdit` began answering for `viewer`:
+                                the safe reconcile action ("Check with Stripe", below)
+                                would disappear for a read-only user while these two
+                                stayed. Same predicate as every other write control on
+                                this page. */}
+                            {depositHoldStatus === 'held' && canEdit('rentals') && (
                               <>
                                 <button
                                   className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
@@ -3859,15 +3988,22 @@ const RentalDetail = () => {
                               // live hold back on the card" is a legitimate end in itself —
                               // it doesn't have to be followed by taking the money.
                               <>
-                                <button
-                                  className="text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowChargeDepositDialog(true);
-                                  }}
-                                >
-                                  Refresh &amp; Charge
-                                </button>
+                                {/* Gated for the same reason as its Add Hold sibling
+                                    directly below: the dialog it opens places a fresh
+                                    authorisation and then captures it. Left as a
+                                    per-button gate rather than hoisted onto the branch
+                                    so the two stay visibly parallel. */}
+                                {canEdit('rentals') && (
+                                  <button
+                                    className="text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setShowChargeDepositDialog(true);
+                                    }}
+                                  >
+                                    Refresh &amp; Charge
+                                  </button>
+                                )}
                                 {canEdit('rentals') && (
                                   <button
                                     className="text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
@@ -3885,15 +4021,36 @@ const RentalDetail = () => {
                             {!depositHoldStatus && (
                               // No usable hold — open the Add Hold dialog which offers
                               // "Place via Stripe" (new tab) and "Send email link".
-                              <button
-                                className="text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowAddHoldDialog(true);
-                                }}
-                              >
-                                Add Hold
-                              </button>
+                              //
+                              // This was the ONE placement entry point with no gate.
+                              // Its three siblings — Add Hold on 'expired' just above,
+                              // Add Hold on 'failed' in the in-flight block, and "Send
+                              // card link" on 'requires_action' — all sit behind
+                              // canEdit('rentals'), and add-hold-dialog.tsx carries no
+                              // permission check of its own, so this branch was the
+                              // whole click-path: a read-only user could open the
+                              // dialog and put a real authorisation on a renter's card
+                              // (or email them a link to do it). It is also the branch
+                              // a read-only user is MOST likely to meet, since a
+                              // rental that never had a hold renders it unconditionally.
+                              //
+                              // The gate is nested rather than folded into the
+                              // condition above so the branch keeps reading as "no
+                              // hold here", with permission as a separate question.
+                              // Client gating is UX only — the enforceable boundary is
+                              // the server-side authorisation in the deposit-hold edge
+                              // functions.
+                              canEdit('rentals') && (
+                                <button
+                                  className="text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowAddHoldDialog(true);
+                                  }}
+                                >
+                                  Add Hold
+                                </button>
+                              )
                             )}
 
                             {/* Reconcile against Stripe. Gated on canEdit because
@@ -3951,6 +4108,25 @@ const RentalDetail = () => {
                               const depositCharge = (rentalCharges || []).find(c => c.category === 'Security Deposit');
                               const depositAvailable = depositCharge && Number(depositCharge.remaining_amount) > 0;
                               const depositFromInvoice = !depositCharge && invoiceBreakdown && invoiceBreakdown.securityDeposit > 0;
+                              // A chargeback has been raised against the
+                              // authorisation this button would draw on.
+                              // deduct-from-deposit captures against that same
+                              // PaymentIntent, so pressing it during a dispute
+                              // either fails at Stripe or takes money that is
+                              // already being clawed back — and either way it
+                              // weakens the tenant's position on the dispute.
+                              // Say that instead of offering the button.
+                              if (rental.deposit_hold_status === 'disputed') {
+                                return (
+                                  <span
+                                    className="text-xs font-medium text-red-600 inline-flex items-center gap-1"
+                                    title="The deposit authorisation is under a chargeback. Deducting from it is blocked until the dispute resolves — collect this by payment link instead."
+                                  >
+                                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                                    Deposit disputed
+                                  </span>
+                                );
+                              }
                               return (depositAvailable || depositFromInvoice) ? (
                                 <button
                                   className="text-xs text-amber-500 hover:text-amber-400 hover:underline font-medium"
@@ -4166,6 +4342,109 @@ const RentalDetail = () => {
                               >
                                 <RefreshCw className={`h-3 w-3 ${forceRefreshingHold ? 'animate-spin' : ''}`} />
                                 {forceRefreshingHold ? 'Refreshing…' : 'Force refresh'}
+                              </button>
+                            )}
+                          </>
+                        )}
+
+                        {/* The four statuses the chained-hold work added, appended
+                            the same way and for the same reason as the block
+                            above: none of them belongs in the hold-only branch at
+                            the top of this cell, because that branch REPLACES the
+                            generic ladder, and the generic ladder is where a
+                            deposit collected outside the hold gets its Release /
+                            Add Payment button. Taking that away from a rental
+                            whose card went bad would be a second dead end.
+
+                            Who is being asked to act decides what is offered:
+
+                              capturing       nobody — a capture is in flight.
+                                              No button at all, not even Check
+                                              with Stripe: verify-deposit-hold
+                                              only treats 'processing'/'refreshing'
+                                              as worker-owned, so on 'capturing'
+                                              it WOULD write, and a PI still at
+                                              requires_capture maps back to
+                                              'held' — stamping that over a
+                                              capture in flight.
+                              requires_action the CUSTOMER — SCA, or the card is
+                                              unusable. There is no server-side
+                                              fix (the engine says so in as many
+                                              words), so the useful action is a
+                                              fresh authorisation link to them.
+                              needs_review    US — we do not know what is true.
+                                              Check with Stripe is the whole job,
+                                              so it is the only thing offered and
+                                              it is styled to be found.
+                              disputed        the dispute process. Capture and
+                                              deduct are blocked outright; see the
+                                              Deduct Deposit guard on the Excess
+                                              Mileage row. */}
+                        {category === 'Security Deposit'
+                          && ['capturing', 'requires_action', 'needs_review', 'disputed'].includes(depositHoldStatus || '') && (
+                          <>
+                            {depositHoldStatus === 'capturing' && (
+                              <span
+                                className="text-xs text-muted-foreground inline-flex items-center gap-1"
+                                title="A capture is in flight on this authorisation. It will settle to Charged or fall back on its own."
+                              >
+                                <RefreshCw className="h-3 w-3 animate-spin" />
+                                Capturing…
+                              </span>
+                            )}
+
+                            {depositHoldStatus === 'disputed' && (
+                              <span
+                                className="text-xs font-medium text-red-600 inline-flex items-center gap-1"
+                                title="A chargeback has been raised against this authorisation. Charging it or deducting from it is blocked until the dispute is resolved — contest it in Stripe."
+                              >
+                                <AlertTriangle className="h-3 w-3 shrink-0" />
+                                Charge blocked
+                              </span>
+                            )}
+
+                            {/* Reaching the customer IS the fix here, so it leads.
+                                The dialog it opens offers both routes: email them
+                                a link, or run Stripe Checkout at the counter if
+                                they are standing there. create-hold-checkout
+                                guards only on 'held', so it will not refuse this
+                                row — and the authorisation that stalled is holding
+                                nothing, so there is no double-hold to cause. */}
+                            {depositHoldStatus === 'requires_action' && canEdit('rentals') && (
+                              <button
+                                className="text-xs font-medium text-orange-500 hover:text-orange-400 hover:underline"
+                                title="Send the customer a fresh authorisation link, or take one at the counter. The card cannot be re-authorised from here — it needs the cardholder."
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowAddHoldDialog(true);
+                                }}
+                              >
+                                Send card link
+                              </button>
+                            )}
+
+                            {/* Both of these states exist because something is
+                                unverified, so the reconcile is the way out of
+                                both. On 'needs_review' it is the ONLY way out,
+                                which is why it is drawn as a button rather than a
+                                text link. Not offered on 'capturing' or
+                                'disputed' — see the note above. */}
+                            {(depositHoldStatus === 'requires_action' || depositHoldStatus === 'needs_review') && canEdit('rentals') && (
+                              <button
+                                className={`text-xs font-medium text-indigo-500 hover:text-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1 ${
+                                  depositHoldStatus === 'needs_review'
+                                    ? 'rounded-md border border-indigo-500/40 bg-indigo-500/10 px-2 py-1 hover:bg-indigo-500/20'
+                                    : 'hover:underline'
+                                }`}
+                                disabled={verifyingHold}
+                                title="Ask Stripe whether this authorisation is still live and correct the status"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleVerifyDepositHold();
+                                }}
+                              >
+                                <RefreshCw className={`h-3 w-3 ${verifyingHold ? 'animate-spin' : ''}`} />
+                                {verifyingHold ? 'Checking…' : 'Check with Stripe'}
                               </button>
                             )}
                           </>
@@ -4925,7 +5204,13 @@ const RentalDetail = () => {
           <div className="border rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Rental Period</p>
-              {canEdit && (
+              {/* `canEdit` is the FUNCTION off useManagerPermissions, so the bare
+                  `{canEdit && …}` this used to be was always truthy and gated
+                  nothing — this Edit button (and its twin on Pickup & Return
+                  below) rendered for every role, viewer included, and it rewrites
+                  the rental's dates. Calling it restores the gate the author
+                  plainly intended. */}
+              {canEdit('rentals') && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -5040,7 +5325,10 @@ const RentalDetail = () => {
               <div className="border rounded-lg p-5">
                 <div className="flex items-center justify-between mb-4">
                   <p className="text-xs uppercase tracking-wider text-muted-foreground">Pickup & Return</p>
-                  {canEdit && (
+                  {/* Same never-fired gate as Rental Period above — see the note
+                      there. Opens the same dialog, which also moves the rental's
+                      pickup/return locations and their fees. */}
+                  {canEdit('rentals') && (
                     <Button
                       variant="ghost"
                       size="sm"

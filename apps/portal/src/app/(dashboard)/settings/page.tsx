@@ -54,6 +54,7 @@ import { formatCurrency } from '@/lib/format-utils';
 import { cn } from '@/lib/utils';
 import { deriveDark, isAutoDerivedDark } from '@/lib/brand-palette';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
+import { useAuth } from '@/stores/auth-store';
 import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
 import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
 import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
@@ -162,6 +163,7 @@ const Settings = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { isManager, canViewSettings, canEditSettings } = useManagerPermissions();
+  const { appUser } = useAuth();
   const { logAction } = useAuditLog();
 
   // All settings tab values
@@ -239,6 +241,19 @@ const Settings = () => {
   const persistedGigDriver = (tenant as { gig_driver_enabled?: boolean } | null)?.gig_driver_enabled !== false;
   const gigDriverEnabled = pendingGigDriver ?? persistedGigDriver;
   const [savingGigDriver, setSavingGigDriver] = useState(false);
+
+  // ID-verification waiver switch. Defaults FALSE (verification required) — the
+  // safe state must be the one you get by doing nothing.
+  const [pendingIdWaiver, setPendingIdWaiver] = useState<boolean | null>(null);
+  const persistedIdWaiver =
+    (tenant as { allow_rental_without_id_verification?: boolean } | null)
+      ?.allow_rental_without_id_verification === true;
+  const idWaiverEnabled = pendingIdWaiver ?? persistedIdWaiver;
+  const [savingIdWaiver, setSavingIdWaiver] = useState(false);
+  // Only a head admin may relax an identity control. `isAdmin()` is not the same
+  // thing — it includes plain `admin`. Super admins are rewritten to head_admin
+  // by the auth store, so they pass too.
+  const isHeadAdmin = appUser?.role === 'head_admin';
   const handleToggleGigDriver = async (next: boolean) => {
     if (!tenant?.id) return;
     const previous = gigDriverEnabled;
@@ -287,7 +302,7 @@ const Settings = () => {
   const [savingHideBreakdown, setSavingHideBreakdown] = useState(false);
 
   const savePricingFlag = async (
-    column: 'show_effective_daily_rate' | 'hide_checkout_price_breakdown',
+    column: 'show_effective_daily_rate' | 'hide_checkout_price_breakdown' | 'allow_rental_without_id_verification',
     next: boolean,
     prev: boolean,
     prevPersisted: boolean,
@@ -2853,6 +2868,54 @@ const Settings = () => {
                   This determines which document type is accepted during Veriff or AI verification.
                 </p>
               </div>
+
+              {/* Waiver switch — head admin only. Deliberately below the document
+                  setting and visually separated: this relaxes a control rather
+                  than configuring one. */}
+              <div className="border-t border-[#f1f5f9] pt-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium">
+                      Allow staff to create rentals without ID verification
+                    </Label>
+                    <p className="text-xs text-muted-foreground max-w-xl">
+                      Off by default. When on, staff can still only proceed by typing a reason,
+                      which is saved on the rental and in your audit log. Use this when you have
+                      checked a customer&apos;s ID yourself and verification is stuck or unavailable.
+                    </p>
+                    {idWaiverEnabled && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 max-w-xl">
+                        Note: insurance still needs the customer&apos;s date of birth, and rental
+                        agreements will show blank ID fields, so add those details manually where
+                        they matter.
+                      </p>
+                    )}
+                    {!isHeadAdmin && (
+                      <p className="text-xs text-muted-foreground">
+                        Only a head admin can change this.
+                      </p>
+                    )}
+                  </div>
+                  <Switch
+                    checked={idWaiverEnabled}
+                    disabled={savingIdWaiver || !isHeadAdmin}
+                    onCheckedChange={(next) =>
+                      savePricingFlag(
+                        'allow_rental_without_id_verification',
+                        next,
+                        idWaiverEnabled,
+                        persistedIdWaiver,
+                        setPendingIdWaiver,
+                        setSavingIdWaiver,
+                        next
+                          ? 'Staff can now create rentals without ID verification'
+                          : 'ID verification is required again',
+                      )
+                    }
+                  />
+                </div>
+              </div>
+
               {canEditSettings('requirements') && (
                 <Button
                   onClick={async () => {
