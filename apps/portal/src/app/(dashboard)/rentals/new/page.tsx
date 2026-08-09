@@ -6319,9 +6319,18 @@ const CreateRental = () => {
               rows={3}
               placeholder="e.g. Long-standing corporate account, ID held on file at head office; Veriff unavailable and customer collecting today."
             />
+            {/* Count DOWN against the minimum rather than restating the rule.
+                Stating "at least 15 characters" next to a greyed-out button
+                tells you the rule but not where you stand against it, so a
+                too-short reason reads as a broken button rather than an
+                unfinished sentence. */}
             <p className="text-xs text-muted-foreground">
               {idWaiverReason.trim().length < ID_WAIVER_MIN_REASON
-                ? `Please explain why verification is being skipped (at least ${ID_WAIVER_MIN_REASON} characters).`
+                ? `Please explain why verification is being skipped — ${
+                    ID_WAIVER_MIN_REASON - idWaiverReason.trim().length
+                  } more character${
+                    ID_WAIVER_MIN_REASON - idWaiverReason.trim().length === 1 ? "" : "s"
+                  } needed.`
                 : "This reason is saved on the rental and in the audit log."}
             </p>
           </div>
