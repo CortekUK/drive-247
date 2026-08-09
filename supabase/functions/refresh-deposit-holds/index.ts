@@ -28,6 +28,22 @@
 //     silently end a chain.
 //   * Writes a cron_runs heartbeat so "no alerts" can be told apart from "the
 //     job is dead".
+//
+// AUTH: `verify_jwt = false` in config.toml (pg_cron carries no user JWT), so
+// the API gateway lets anonymous requests through and the check in THIS file is
+// the only gate. It accepts either:
+//   * `x-platform-secret` — what pg_cron sends, validated by the
+//     `platform_verify_secret(p_secret)` DB RPC, or
+//   * `Authorization: Bearer <super-admin user JWT>` — manual dispatch from the
+//     portal/admin UI.
+// Anything else is 401. This function accepts a caller-supplied
+// `only_rental_id` and applies it as a filter, and a refresh is DESTRUCTIVE (it
+// cancels the live authorisation before placing its replacement), so an
+// unauthenticated caller who merely knew a rental UUID could previously force a
+// cancel-and-reauthorize on a live hold. Deliberately NOT the service-role
+// bearer: a valid production service_role JWT is committed in plaintext at
+// supabase/migrations/20260520170000_schedule_tesla_sync_cron.sql and is pending
+// rotation, so it is not a credential anything new should trust.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
@@ -50,6 +66,84 @@ const JOB_NAME = "refresh-deposit-holds";
  */
 const LOOP_BUDGET_MS = 240_000;
 
+const LOG = "[DEPOSIT-REFRESH]";
+
+/**
+ * The only gate on this endpoint (see the AUTH note in the file header).
+ *
+ * Accepts EITHER the platform secret (pg_cron) OR a super-admin user JWT
+ * (manual dispatch). Mirrors `onboarding-daily-digest` and
+ * `platform-rental-notify` rather than inventing a scheme, so there is exactly
+ * one internal-caller credential to rotate.
+ *
+ * Fails SAFE: every error path — a missing env var, an RPC error, a GoTrue
+ * outage, a failed app_users lookup — returns false. An outage that made this
+ * return true would expose a destructive money path.
+ *
+ * @param supabase a SERVICE-ROLE client. `platform_verify_secret` is
+ *   service-role-only, and the app_users lookup must not be filtered by RLS.
+ */
+// deno-lint-ignore no-explicit-any
+async function isAuthorizedCaller(req: Request, supabase: any): Promise<boolean> {
+  // 1. Platform secret — the cron path. Validated by a DB RPC so the secret
+  //    itself never has to be present in this function's environment.
+  const secret = req.headers.get("x-platform-secret");
+  if (secret) {
+    try {
+      const { data: ok, error } = await supabase.rpc("platform_verify_secret", { p_secret: secret });
+      if (error) console.error(LOG, "platform_verify_secret rpc failed:", error.message);
+      else if (ok === true) return true;
+    } catch (err) {
+      console.error(LOG, "platform_verify_secret rpc threw:", err);
+    }
+  }
+
+  // 2. Super-admin user JWT — the manual-dispatch path.
+  const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) return false;
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  if (!supabaseUrl || !anonKey) {
+    console.error(LOG, "SUPABASE_URL / SUPABASE_ANON_KEY missing — cannot verify a user JWT; denying.");
+    return false;
+  }
+
+  let userId: string | null = null;
+  try {
+    const authClient = createClient(supabaseUrl, anonKey);
+    // NOTE: the anon key and the service-role key are themselves valid project
+    // JWTs, but neither carries a `sub`, so getUser() yields no user for them.
+    // That is what stops a bare apikey — or the leaked service_role key — from
+    // walking through this branch.
+    const { data, error } = await authClient.auth.getUser(token);
+    if (error) {
+      console.warn(LOG, "JWT rejected:", error.message);
+      return false;
+    }
+    userId = data?.user?.id ?? null;
+  } catch (err) {
+    console.error(LOG, "getUser threw:", err);
+    return false;
+  }
+  if (!userId) return false;
+
+  // Filter on is_super_admin in the query and take the first row rather than
+  // .single(): a principal with more than one app_users row would otherwise
+  // make .single() error and lock a legitimate super admin out.
+  const { data: rows, error: lookupError } = await supabase
+    .from("app_users")
+    .select("id")
+    .eq("auth_user_id", userId)
+    .eq("is_super_admin", true)
+    .limit(1);
+  if (lookupError) {
+    console.error(LOG, "app_users lookup failed:", lookupError.message);
+    return false;
+  }
+  return (rows?.length ?? 0) > 0;
+}
+
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
@@ -58,6 +152,13 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
   );
+
+  // Before the cron_runs heartbeat and before the body is read: an unauthorised
+  // caller must not be able to write heartbeat rows either.
+  if (!(await isAuthorizedCaller(req, supabase))) {
+    console.warn(LOG, "Unauthorized call rejected");
+    return errorResponse("Unauthorized", 401);
+  }
 
   const startedAt = new Date();
   const startedMs = Date.now();

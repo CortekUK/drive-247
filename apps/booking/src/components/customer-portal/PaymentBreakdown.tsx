@@ -100,8 +100,10 @@ const HOLD_DETAIL_COPY: Record<string, string> = {
   processing: 'Being placed',
   refreshing: 'Being renewed',
   capturing: 'Being charged',
-  requires_action: 'Needs your confirmation',
-  failed: "Couldn't be placed",
+  requires_action: 'Needs your attention',
+  // `failed` carries a scheduled retry — it is not a dead end, so don't word it
+  // like one.
+  failed: 'Retrying automatically',
   needs_review: "We're checking this",
   disputed: 'Under dispute',
   captured: 'Charged',

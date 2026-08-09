@@ -42,7 +42,9 @@ Deno.serve(async (req) => {
 
     const { data: rental, error: rentalError } = await supabase
       .from('rentals')
-      .select('id, tenant_id, customer_id, deposit_hold_status, deposit_hold_payment_intent_id, platform_account')
+      // deposit_hold_attempt_seq is read for the deposit_hold_links ledger row
+      // written below — it is the chain link every ledger row is keyed on.
+      .select('id, tenant_id, customer_id, deposit_hold_status, deposit_hold_payment_intent_id, deposit_hold_attempt_seq, platform_account')
       .eq('id', rentalId)
       .single()
     if (rentalError || !rental) return errorResponse('Rental not found', 404)
@@ -157,13 +159,114 @@ Deno.serve(async (req) => {
       }
     }
 
+    // -----------------------------------------------------------------------
+    // deposit_hold_links — the authorization ledger.
+    //
+    // Checkout created a REAL authorisation on the renter's card before this
+    // function ever ran, and nothing here used to write it down. To
+    // reconcile-deposit-holds' orphan sweep — and to any dispute-evidence
+    // packet — that is a live PaymentIntent with nothing in the product
+    // pointing at it, i.e. indistinguishable from an orphan (spec invariant I1).
+    //
+    // Written AFTER the rental write, never before, and never with
+    // outcome:'pending'. The reconciler CANCELS stale pending links, and a
+    // pending row on this path would point at the hold the renter has just
+    // given us — an audit row must not be able to kill live cover.
+    //
+    // GENUINELY best-effort: supabase-js RESOLVES with `{ error }` on a
+    // Postgres error but REJECTS on a transport failure, so both are swallowed.
+    // An audit write must never turn a recorded hold into a 500, which the
+    // browser would answer by re-running the sync.
+    //
+    // UPSERT on (rental_id, attempt_seq, action) because the success URL is a
+    // browser redirect: the renter can reload it, and a second sync of the same
+    // Checkout session must refresh this row rather than error. Every mutable
+    // column is defaulted so one upsert fully replaces the previous
+    // observation. created_at is never written, so it keeps the first sync's
+    // timestamp while completed_at tracks the most recent.
+    const attemptSeq = Number((rental as any).deposit_hold_attempt_seq ?? 0)
+    const recordSyncLink = async (fields: Record<string, unknown>) => {
+      try {
+        const { error } = await supabase.from('deposit_hold_links').upsert(
+          {
+            rental_id: rental.id,
+            tenant_id: rental.tenant_id,
+            attempt_seq: attemptSeq,
+            action: 'sync',
+            payment_intent_id: pi.id,
+            // Where the hold ACTUALLY lives — the platform create-hold-checkout
+            // charged on, NOT rentals.platform_account, which the anchoring
+            // guard above deliberately leaves pointing elsewhere whenever
+            // payments are already anchored to the old value. This is the only
+            // record of the hold's true platform, and reconcile's
+            // resolveLinkContext prefers link.platform_account over the
+            // rental's — so writing it here is what makes a diverged hold
+            // resolvable at all.
+            platform_account: platformAccount,
+            connect_account_id: connectAccountId,
+            stripe_mode: stripeMode,
+            amount_cents: typeof pi.amount === 'number' ? pi.amount : null,
+            currency: holdCurrency,
+            // Only Stripe's own deadline is persisted. resolveHoldExpiryDetailed
+            // layers a moving `now + fallback` floor on top when the network
+            // published nothing; recording that would be inventing a deadline.
+            capture_before: expiry.source === 'stripe_capture_before' ? expiry.expiresAt : null,
+            extended_auth_status: expiry.extendedAuthStatus ?? null,
+            actor: 'checkout_sync',
+            completed_at: new Date().toISOString(),
+            // Mutable set — replaced wholesale by each call site.
+            superseded_pi_id: null,
+            estimate_inputs: null,
+            outcome: null,
+            error_code: null,
+            error_message: null,
+            ...fields,
+          },
+          { onConflict: 'rental_id,attempt_seq,action' }
+        )
+        if (error) {
+          console.error('sync-deposit-hold: failed to write deposit_hold_links row (continuing):', error)
+        }
+      } catch (linkErr) {
+        console.error('sync-deposit-hold: deposit_hold_links upsert threw (continuing):', linkErr)
+      }
+    }
+
     // Persist hold details on the rental. Also backfill customer.stripe_customer_id
     // if the customer didn't have one yet (Checkout creates/links one).
     const { error: updateError } = await supabase
       .from('rentals')
       .update(update)
       .eq('id', rental.id)
-    if (updateError) return errorResponse(`Failed to persist hold: ${updateError.message}`, 500)
+    if (updateError) {
+      // The authorisation is LIVE at Stripe but the rental does not know about
+      // it — the one case where this hold is genuinely unreachable from the
+      // product. Record it as 'orphaned' so it is discoverable by the operator
+      // and by a dispute packet. 'orphaned' is inert to both reconciler sweeps
+      // (they act on outcome='pending'), so this is a breadcrumb, not an
+      // instruction to cancel anything.
+      await recordSyncLink({
+        outcome: 'orphaned',
+        error_code: 'rental_write_failed',
+        error_message:
+          `Hold authorised at Stripe (${pi.id}) but the rental write failed: ${updateError.message}`.slice(0, 500),
+        estimate_inputs: { checkout_session_id: sessionId },
+      })
+      return errorResponse(`Failed to persist hold: ${updateError.message}`, 500)
+    }
+
+    await recordSyncLink({
+      outcome: 'succeeded',
+      estimate_inputs: {
+        checkout_session_id: sessionId,
+        source: 'checkout_success_redirect',
+        prior_hold_status: rental.deposit_hold_status ?? null,
+        // Records whether this sync moved the rental's money anchor. The guard
+        // above decides; without this the decision is only ever visible in logs.
+        anchored_platform_account: update.platform_account ?? rental.platform_account ?? null,
+        platform_account_restamped: update.platform_account !== undefined,
+      },
+    })
 
     if (stripeCustomerId) {
       // Overwrite unconditionally (not just when NULL): a stored id that

@@ -30,6 +30,69 @@ type TrackStatus = "ready" | "warning" | "blocked";
  *  cannot be deferred to the existing period end. */
 const MIN_TRIAL_HOURS = 48;
 
+/**
+ * Every `rentals.deposit_hold_status` that is NOT terminal.
+ *
+ * The column now carries 11 values; only `captured`, `released` and `expired`
+ * mean the authorization is definitively over. This gate used to filter on
+ * `['held','processing']`, which predates the chained-hold engine — so a hold
+ * mid-refresh (`refreshing`), mid-capture (`capturing`), waiting on SCA
+ * (`requires_action`), parked after a soft decline (`failed`), escalated to a
+ * human (`needs_review`) or under dispute (`disputed`) was INVISIBLE here.
+ *
+ * That is a false green light, not a cosmetic miss: a PaymentIntent cannot be
+ * moved between platform accounts, so flipping UK → UAE while any of those
+ * exist strands the renter's authorized money on an account the tenant has
+ * stopped operating, with no way to capture or release it.
+ *
+ * Kept as an explicit list rather than "not in (terminal…)" so a status added
+ * to the enum later is treated as unknown-and-therefore-blocking only if it is
+ * also added here — see the platform filter below for the same fail-safe
+ * reasoning applied to the account anchor.
+ */
+const NON_TERMINAL_HOLD_STATUSES = [
+  "processing",
+  "refreshing",
+  "capturing",
+  "held",
+  "requires_action",
+  "failed",
+  "needs_review",
+  "disputed",
+];
+
+/** Terminal statuses, for the operator-facing explanation only. */
+const TERMINAL_HOLD_STATUSES = ["captured", "released", "expired"];
+
+/**
+ * Run a `head: true, count: 'exact'` query so that it fails CLOSED.
+ *
+ * supabase-js RESOLVES with `{ error }` instead of throwing, so the previous
+ * `const { count } = await supabase…` pattern silently turned every read
+ * failure into `undefined` → `?? 0` → "nothing to block on". On a gate whose
+ * entire job is to withhold permission, a failed read that reads as zero is the
+ * worst possible direction. `count: null` means UNKNOWN and every call site
+ * below treats unknown at least as severely as a non-zero count.
+ */
+async function safeCount(
+  builder: any,
+  label: string
+): Promise<{ count: number | null; error: string | null }> {
+  try {
+    const { count, error } = await builder;
+    if (error) {
+      console.error(`[MIGRATION-READINESS] ${label}: count query failed —`, error.message);
+      return { count: null, error: error.message };
+    }
+    return { count: count ?? 0, error: null };
+  } catch (err) {
+    // ...and it REJECTS on a transport failure, which an `{ error }` check
+    // alone would sail straight past.
+    console.error(`[MIGRATION-READINESS] ${label}: count query threw —`, err);
+    return { count: null, error: (err as Error).message };
+  }
+}
+
 async function verifySuperAdmin(supabase: any, userId: string): Promise<boolean> {
   const { data } = await supabase
     .from("app_users")
@@ -127,11 +190,15 @@ Deno.serve(async (req) => {
     }
 
     // Open invoices: DB records + live Stripe unpaid invoices on the UK account.
-    const { count: openInvoicesDb } = await supabase
-      .from("tenant_subscription_invoices")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId)
-      .eq("status", "open");
+    const openInvoicesDbProbe = await safeCount(
+      supabase
+        .from("tenant_subscription_invoices")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .eq("status", "open"),
+      "open subscription invoices"
+    );
+    const openInvoicesDb = openInvoicesDbProbe.count;
 
     let openInvoicesStripe: number | null = null;
     if (tenant.stripe_subscription_customer_id) {
@@ -165,6 +232,15 @@ Deno.serve(async (req) => {
     const planOnUae = (uaePlanCount ?? 0) > 0;
 
     // Verdict — subscription track
+    if (openInvoicesDbProbe.error) {
+      // Unknown, not zero. The live-Stripe list is a mirror of the same fact,
+      // not an independent one, so a failed DB read leaves the open-invoice
+      // count genuinely unknown and the flip must not go green on it.
+      subBlocked = true;
+      subReasons.push(
+        `Could not read subscription invoices from the database (${openInvoicesDbProbe.error}) — the open-invoice count is UNKNOWN. Blocking: an unreadable count is not a zero count. Re-run this check.`
+      );
+    }
     if (openInvoices > 0) {
       subBlocked = true;
       subReasons.push(
@@ -234,56 +310,102 @@ Deno.serve(async (req) => {
     const oauthTestConnected = !!tenant.own_stripe_test_account_id;
     const alreadyOwn = tenant.payment_model === "own";
 
-    // Active deposit holds living on the UK platform account — these die the
-    // moment the tenant stops charging through UK, so they hard-block.
-    const { data: ukHoldRentals } = await supabase
+    // Deposit holds still LIVE on the UK platform account. These become
+    // unreachable the moment the tenant stops charging through UK — a
+    // PaymentIntent cannot be moved between platform accounts — so they
+    // hard-block the flip.
+    //
+    // TWO fail-safe choices here, both deliberate:
+    //
+    //  1. Status filter is every NON-terminal value, not the historical
+    //     ['held','processing'] pair. See NON_TERMINAL_HOLD_STATUSES.
+    //
+    //  2. Platform filter is applied in JS as "not 'uae'", not in SQL as
+    //     "= 'uk'". rentals.platform_account is NOT NULL DEFAULT 'uk', but
+    //     treating any NULL/unrecognised anchor as legacy is the safe
+    //     direction: an ambiguous anchor must count as possibly-on-UK, never
+    //     as definitely-migrated. (The reverse case — a hold anchored to UAE
+    //     on a rental still stamped 'uk', which sync-deposit-hold logs as
+    //     PLATFORM DIVERGENCE — over-blocks rather than under-blocks, which is
+    //     the direction we want on a money gate.)
+    const { data: ukHoldRentals, error: ukHoldError } = await supabase
       .from("rentals")
-      .select("id, deposit_hold_amount, deposit_hold_status, deposit_hold_expires_at")
+      .select(
+        "id, deposit_hold_amount, deposit_hold_status, deposit_hold_expires_at, deposit_hold_payment_intent_id, platform_account"
+      )
       .eq("tenant_id", tenantId)
-      .in("deposit_hold_status", ["held", "processing"])
-      .eq("platform_account", "uk");
+      .in("deposit_hold_status", NON_TERMINAL_HOLD_STATUSES);
 
-    const activeRentalsWithUkHolds = (ukHoldRentals ?? []).map((r: any) => ({
-      rental_id: r.id,
-      deposit_hold_amount: r.deposit_hold_amount,
-      deposit_hold_status: r.deposit_hold_status,
-      deposit_hold_expires_at: r.deposit_hold_expires_at,
-    }));
+    if (ukHoldError) {
+      console.error(
+        "[MIGRATION-READINESS] Could not read deposit holds for tenant",
+        tenantId,
+        "—",
+        ukHoldError.message
+      );
+    }
+
+    const activeRentalsWithUkHolds = (ukHoldRentals ?? [])
+      .filter((r: any) => r.platform_account !== "uae")
+      .map((r: any) => ({
+        rental_id: r.id,
+        deposit_hold_amount: r.deposit_hold_amount,
+        deposit_hold_status: r.deposit_hold_status,
+        deposit_hold_expires_at: r.deposit_hold_expires_at,
+        deposit_hold_payment_intent_id: r.deposit_hold_payment_intent_id ?? null,
+        platform_account: r.platform_account ?? null,
+      }));
 
     // Uncaptured (requires_capture) payments on the UK account.
-    const { count: uncapturedUkPayments } = await supabase
-      .from("payments")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId)
-      .eq("capture_status", "requires_capture")
-      .eq("platform_account", "uk");
+    const uncapturedUkPaymentsProbe = await safeCount(
+      supabase
+        .from("payments")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .eq("capture_status", "requires_capture")
+        .eq("platform_account", "uk"),
+      "uncaptured UK payments"
+    );
+    const uncapturedUkPayments = uncapturedUkPaymentsProbe.count;
 
     // Scheduled refunds still pending — process-scheduled-refund picks these up
     // from payments.refund_status = 'scheduled' (get_refunds_due_today RPC).
-    const { count: scheduledRefunds } = await supabase
-      .from("payments")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId)
-      .eq("refund_status", "scheduled")
-      .eq("platform_account", "uk");
+    const scheduledRefundsProbe = await safeCount(
+      supabase
+        .from("payments")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .eq("refund_status", "scheduled")
+        .eq("platform_account", "uk"),
+      "scheduled UK refunds"
+    );
+    const scheduledRefunds = scheduledRefundsProbe.count;
 
     // Saved cards are platform-scoped: Stripe customer + payment-method ids
     // created on the UK platform do not exist on the UAE platform. Any flow
     // that charges a saved card off-session must therefore finish on UK before
     // the tenant flips — active installment plans and auto-extend rentals are
     // exactly those flows.
-    const { count: activeInstallmentPlans } = await supabase
-      .from("installment_plans")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId)
-      .in("status", ["active", "pending"]);
+    const activeInstallmentPlansProbe = await safeCount(
+      supabase
+        .from("installment_plans")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .in("status", ["active", "pending"]),
+      "active installment plans"
+    );
+    const activeInstallmentPlans = activeInstallmentPlansProbe.count;
 
-    const { count: activeAutoExtendRentals } = await supabase
-      .from("rentals")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId)
-      .eq("auto_extend_enabled", true)
-      .in("status", ["Active", "Pending"]);
+    const activeAutoExtendRentalsProbe = await safeCount(
+      supabase
+        .from("rentals")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .eq("auto_extend_enabled", true)
+        .in("status", ["Active", "Pending"]),
+      "active auto-extend rentals"
+    );
+    const activeAutoExtendRentals = activeAutoExtendRentalsProbe.count;
 
     // Express account balance on the UK platform (live keys — Express accounts
     // are live-mode objects). Failure is a warning, never a crash.
@@ -334,32 +456,76 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Verdict — own-Stripe track
-    if (activeRentalsWithUkHolds.length > 0) {
+    // Verdict — own-Stripe track.
+    //
+    // Every DB probe below fails CLOSED: an unreadable count blocks at least as
+    // hard as a non-zero one. Before this, each of these was destructured
+    // without an error check, so a transient PostgREST failure read as zero and
+    // handed the operator a green flip gate while live authorisations,
+    // uncaptured payments or running installment plans sat on the UK account.
+    if (ukHoldError) {
       ownBlocked = true;
       ownReasons.push(
-        `${activeRentalsWithUkHolds.length} active rental(s) still have deposit holds on the UK account — capture or release them before switching, or they cannot be operated after migration.`
+        `Could not read deposit holds for this tenant (${ukHoldError.message}) — the number of live authorisations on the UK account is UNKNOWN. Blocking: an unread hold is not a zero hold, and a hold stranded on the old platform can never be captured or released. Re-run this check.`
+      );
+    } else if (activeRentalsWithUkHolds.length > 0) {
+      ownBlocked = true;
+      const byStatus = activeRentalsWithUkHolds.reduce(
+        (acc: Record<string, number>, h: any) => {
+          const key = String(h.deposit_hold_status ?? "unknown");
+          acc[key] = (acc[key] ?? 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      );
+      const breakdown = Object.entries(byStatus)
+        .map(([status, n]) => `${n} ${status}`)
+        .join(", ");
+      ownReasons.push(
+        `${activeRentalsWithUkHolds.length} rental(s) still carry a non-terminal deposit hold on the UK account (${breakdown}) — capture, release or resolve them before switching. Only ${TERMINAL_HOLD_STATUSES.join("/")} are safe to leave behind; anything else may still be holding the renter's money on a platform account this tenant is about to stop using.`
       );
     }
-    if ((uncapturedUkPayments ?? 0) > 0) {
+    if (uncapturedUkPaymentsProbe.error) {
+      ownBlocked = true;
+      ownReasons.push(
+        `Could not count uncaptured UK payments (${uncapturedUkPaymentsProbe.error}) — UNKNOWN, so blocking rather than assuming zero.`
+      );
+    } else if ((uncapturedUkPayments ?? 0) > 0) {
       ownBlocked = true;
       ownReasons.push(
         `${uncapturedUkPayments} uncaptured payment(s) (requires_capture) on the UK account — capture or cancel them before switching.`
       );
     }
-    if ((scheduledRefunds ?? 0) > 0) {
+    if (scheduledRefundsProbe.error) {
+      // Non-blocking when known non-zero, so non-blocking when unknown — but
+      // still said out loud rather than silently reported as "0 scheduled".
+      ownWarning = true;
+      ownReasons.push(
+        `Could not count scheduled UK refunds (${scheduledRefundsProbe.error}) — treat as UNKNOWN and keep the UK account open until you have verified manually.`
+      );
+    } else if ((scheduledRefunds ?? 0) > 0) {
       ownWarning = true;
       ownReasons.push(
         `${scheduledRefunds} scheduled refund(s) pending on UK payments — they will still process on the UK account; keep it open until they complete.`
       );
     }
-    if ((activeInstallmentPlans ?? 0) > 0) {
+    if (activeInstallmentPlansProbe.error) {
+      ownBlocked = true;
+      ownReasons.push(
+        `Could not count active installment plans (${activeInstallmentPlansProbe.error}) — UNKNOWN, so blocking rather than assuming zero.`
+      );
+    } else if ((activeInstallmentPlans ?? 0) > 0) {
       ownBlocked = true;
       ownReasons.push(
         `${activeInstallmentPlans} active/pending installment plan(s) charge a saved card on the UK platform — remaining installments cannot be charged after flipping. Let plans finish (or settle them) before switching.`
       );
     }
-    if ((activeAutoExtendRentals ?? 0) > 0) {
+    if (activeAutoExtendRentalsProbe.error) {
+      ownBlocked = true;
+      ownReasons.push(
+        `Could not count active auto-extend rentals (${activeAutoExtendRentalsProbe.error}) — UNKNOWN, so blocking rather than assuming zero.`
+      );
+    } else if ((activeAutoExtendRentals ?? 0) > 0) {
       ownBlocked = true;
       ownReasons.push(
         `${activeAutoExtendRentals} active auto-extend rental(s) auto-charge a saved card on the UK platform — wait for them to close before switching.`
@@ -423,6 +589,9 @@ Deno.serve(async (req) => {
           ukSubLiveChecked,
           openInvoices,
           openInvoicesDb: openInvoicesDb ?? 0,
+          // null count === the read failed. Surfaced explicitly so the UI can
+          // say "unknown" rather than render a reassuring 0.
+          openInvoicesDbUnknown: openInvoicesDbProbe.error !== null,
           openInvoicesStripe,
           planOnUae,
           alreadyOnUae,
@@ -437,10 +606,20 @@ Deno.serve(async (req) => {
           oauthTestConnected,
           alreadyOwn,
           activeRentalsWithUkHolds,
+          // A failed read is never reported as a clean zero. `*Unknown: true`
+          // means "we could not tell", and every one of these already forced
+          // the track to `blocked` above.
+          ukHoldsUnknown: !!ukHoldError,
+          ukHoldsError: ukHoldError?.message ?? null,
+          nonTerminalHoldStatuses: NON_TERMINAL_HOLD_STATUSES,
           uncapturedUkPayments: uncapturedUkPayments ?? 0,
+          uncapturedUkPaymentsUnknown: uncapturedUkPaymentsProbe.error !== null,
           scheduledRefunds: scheduledRefunds ?? 0,
+          scheduledRefundsUnknown: scheduledRefundsProbe.error !== null,
           activeInstallmentPlans: activeInstallmentPlans ?? 0,
+          activeInstallmentPlansUnknown: activeInstallmentPlansProbe.error !== null,
           activeAutoExtendRentals: activeAutoExtendRentals ?? 0,
+          activeAutoExtendRentalsUnknown: activeAutoExtendRentalsProbe.error !== null,
           expressBalance,
           stripeMode: (tenant.stripe_mode as StripeMode) || "test",
         },

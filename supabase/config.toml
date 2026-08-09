@@ -65,6 +65,22 @@ verify_jwt = false
 [functions.send-lockbox-scheduled]
 verify_jwt = false
 
+# Chained security-deposit authorization refresh (pg_cron). verify_jwt = false
+# because pg_cron carries no user JWT, so the gateway check is off and the
+# function does its OWN auth: it accepts the `x-platform-secret` header
+# (validated by the platform_verify_secret() DB RPC — same scheme as
+# onboarding-daily-digest and platform-rental-notify) OR a super-admin user JWT
+# for manual dispatch, and 401s everything else.
+#
+# It is NOT anonymously callable despite verify_jwt = false. It used to be, and
+# that mattered: it accepts a caller-supplied `only_rental_id` and a refresh
+# CANCELS the live authorisation before placing its replacement, so knowing a
+# rental UUID was enough to force a destructive re-auth on a live hold.
+#
+# The pg_cron command for this job MUST send x-platform-secret. net.http_post is
+# asynchronous, so a 401 lands in net._http_response and never in
+# cron.job_run_details — a schedule sending the wrong credential looks healthy.
+# The cron_runs heartbeat is the backstop: none is written on a 401.
 [functions.refresh-deposit-holds]
 verify_jwt = false
 
@@ -237,9 +253,10 @@ verify_jwt = false
 
 # Reconciles rentals.deposit_hold_* against the real PaymentIntent at Stripe.
 # Listed explicitly (verify_jwt already defaults to true) because it is easy to
-# mistake for a cron target next to refresh-deposit-holds, which IS unauthenticated.
-# This one is only ever called by a signed-in operator from the portal's rental
-# page, it writes deposit state, and it must never become callable anonymously.
+# mistake for a cron target next to refresh-deposit-holds, which has the gateway
+# check OFF (it authenticates itself in code instead). This one is only ever
+# called by a signed-in operator from the portal's rental page, it writes deposit
+# state, and it must never become callable anonymously.
 [functions.verify-deposit-hold]
 verify_jwt = true
 
@@ -247,12 +264,37 @@ verify_jwt = true
 # (the fleet-wide counterpart to verify-deposit-hold's one-rental check).
 #
 # verify_jwt = false because pg_cron carries no user JWT — same reasoning as
-# inshur-reconcile above. The function itself requires the service-role key in
-# the Authorization header (constant-time compared), which is exactly what the
-# repo's cron template sends, so it is NOT anonymously callable despite the
-# gateway check being off. Deliberately not an X-Cron-Secret: the template does
-# not send one, and because net.http_post is asynchronous the resulting 401
-# would land in net._http_response and never in cron.job_run_details — the
-# schedule would look healthy while nothing was ever reconciled.
+# inshur-reconcile above. It is NOT anonymously callable: the function does its
+# own auth, accepting the `x-platform-secret` header (validated by the
+# platform_verify_secret() DB RPC) OR a super-admin user JWT for manual
+# dispatch, and 401ing everything else.
+#
+# It no longer accepts the service-role bearer. A valid production service_role
+# JWT is committed in plaintext at
+# supabase/migrations/20260520170000_schedule_tesla_sync_cron.sql and is pending
+# rotation, so it is not a credential a deposit endpoint should trust.
+#
+# The pg_cron command for this job MUST therefore send x-platform-secret, not a
+# service-role bearer: net.http_post is asynchronous, so the resulting 401 would
+# land in net._http_response and never in cron.job_run_details — the schedule
+# would look healthy while nothing was ever reconciled. The cron_runs heartbeat
+# is the backstop; none is written on a 401.
 [functions.reconcile-deposit-holds]
 verify_jwt = false
+
+# One-shot fleet-wide repair sweep for rentals.deposit_hold_* rows that predate
+# the chaining engine. NOT scheduled — an admin drives it, dry-run by default.
+# Listed explicitly at the default verify_jwt = true so the gateway rejects
+# anonymous calls first; the function then requires a super-admin JWT (or the
+# platform secret alongside a JWT) in code. It can cancel authorisations and
+# rewrite deposit state across every tenant, so "nobody wrote a block" is not an
+# acceptable record of who may call it.
+[functions.backfill-deposit-holds]
+verify_jwt = true
+
+# Off-session charge of the card already on file for a rental (portal "add
+# payment" dialog). Listed explicitly at the default verify_jwt = true: it moves
+# real money on a real card with no customer present, and its own RBAC gate
+# (head_admin/admin) only runs after the gateway has established a valid JWT.
+[functions.charge-saved-card]
+verify_jwt = true

@@ -49,6 +49,14 @@
 //      whose response was lost would therefore be re-attempted under a fresh
 //      key — a second live authorization on the renter's card, with the first
 //      invisible forever. See findLiveDepositIntent.
+//   9. `deposit_hold_chain_expires_at` was treated as a hard stop in BOTH the
+//      driver predicate and the engine, but it is written once at placement from
+//      an `end_date` snapshot. Extending a rental moved end_date and left the
+//      bound frozen, so the chain terminated on the ORIGINAL end date and the
+//      deposit silently stopped being renewed while the car was still out — for
+//      a manually-extended fleet, every rental. The bound is now RECOMPUTED from
+//      the live end_date on every pass and the column is a cache. See
+//      resolveChainBound.
 //
 // FAIL SAFE, NEVER OPEN: whenever Stripe cannot be consulted conclusively we
 // keep treating the incumbent hold as LIVE rather than putting a second
@@ -60,6 +68,8 @@ import {
   getStripeClientForRecord,
   createDepositHoldIntentWithFallback,
   validateStripeCustomerId,
+  chainExpiryFromEndDate,
+  CHAIN_GRACE_DAYS_AFTER_END,
   TENANT_STRIPE_COLUMNS,
   type StripeMode,
 } from "./stripe-client.ts";
@@ -74,6 +84,7 @@ type StripeOptions = { stripeAccount?: string } | undefined;
 /** Every column `refreshOneHold` reads. Both drivers select exactly this. */
 export const HOLD_REFRESH_COLUMNS = `
   id, tenant_id, customer_id, status,
+  end_date,
   auto_extend_enabled,
   platform_account,
   deposit_hold_payment_intent_id,
@@ -183,6 +194,132 @@ export const DEFAULT_LOOKAHEAD_DAYS = 2;
 /** Max rentals one invocation will touch. See the batch note in the drivers. */
 export const DEFAULT_BATCH_LIMIT = 25;
 
+// ---------------------------------------------------------------------------
+// The chain bound — DERIVED here, never trusted from the row.
+//
+// `rentals.deposit_hold_chain_expires_at` is written ONCE, by place-deposit-hold,
+// from the `end_date` as it stood at placement. `rentals.end_date` moves every
+// time a rental is extended and an extension does NOT re-place the hold, so a
+// frozen bound terminates the chain on the ORIGINAL end date and the deposit
+// quietly stops being renewed while the car is still out — the exact silent
+// death this engine exists to prevent, and near-certain for a fleet that is
+// manually extended (GMT).
+//
+// verify-deposit-hold re-stamps the column forward, but only when somebody
+// happens to call verify. So the fix belongs at the AUTHORITATIVE READER: this
+// engine recomputes the bound from the rental's CURRENT end_date on every pass
+// and only stops when the RECOMPUTED bound has genuinely passed. The stored
+// column stays as a cache/diagnostic and is refreshed (forward only) whenever
+// the recomputation moves it.
+//
+// The grace window itself is `CHAIN_GRACE_DAYS_AFTER_END` in
+// `_shared/stripe-client.ts` — ONE named constant, imported by this file and by
+// place-deposit-hold so the two derivations can never drift. Its VALUE (3 days)
+// is a PRODUCT DECISION THAT HAS NOT BEEN FORMALLY MADE: how long after handback
+// an operator may still authorise against a renter's card is a business call.
+// It is a deliberately conservative placeholder, not ratified policy.
+// ---------------------------------------------------------------------------
+
+/** A `rentals` row as the drivers select it (HOLD_REFRESH_COLUMNS). */
+// deno-lint-ignore no-explicit-any
+export type RentalRow = Record<string, any>;
+
+export interface ChainBound {
+  /**
+   * The bound we actually enforce: the LATER of the stored cache and the bound
+   * implied by the rental's live `end_date`. `null` means "no ceiling".
+   */
+  effective: string | null;
+  /** What the row was carrying. */
+  stored: string | null;
+  /**
+   * What the rental's CURRENT `end_date` implies — `null` for an open-ended
+   * rental, and also `null` when the caller did not select `end_date` at all.
+   */
+  live: string | null;
+  /** True when the stored cache is behind `effective` and should be re-stamped. */
+  stale: boolean;
+  /** True when `effective` has genuinely passed. */
+  expired: boolean;
+}
+
+/**
+ * Resolve a rental's deposit-chain bound from the row PLUS its live end date.
+ *
+ * Two rules, both load-bearing:
+ *
+ *  1. LATER OF THE TWO, not "the live one wins". place-deposit-hold deliberately
+ *     floors the bound at now + grace when a hold is placed on a rental that is
+ *     ALREADY past its end date (routine: staff hold a deposit late on an
+ *     overdue or extended rental). Letting a live derivation pull the bound back
+ *     IN would kill that hold at its first link, ~4 days later, in silence.
+ *     Moving the bound OUT is always safe — the rental lifecycle deny list, the
+ *     amount/auto-extend release branches and the operator's own release remain
+ *     the other stops. This matches verify-deposit-hold's forward-only re-stamp.
+ *
+ *  2. NULL ON EITHER SIDE MEANS "NO CEILING". A NULL stored column is how every
+ *     row written before this column existed looks, and how an open-ended rental
+ *     looks; inventing a ceiling for those would newly terminate chains across
+ *     all 28 tenants on the first run after deploy. An unparseable stored value
+ *     is treated the same way — fail SAFE (keep chaining), never fail closed on
+ *     a value we cannot read.
+ *
+ * `end_date === undefined` is NOT the same fact as `end_date === null`: it means
+ * the caller never selected the column. Guessing "open-ended" from an absent
+ * column would silently disable the ceiling for that caller, so we fall back to
+ * the stored cache alone.
+ */
+export function resolveChainBound(rental: RentalRow, now: Date = new Date()): ChainBound {
+  const stored = (rental.deposit_hold_chain_expires_at as string | null) ?? null;
+  const storedMs = stored ? new Date(stored).getTime() : Number.NaN;
+  const storedOk = Number.isFinite(storedMs);
+
+  // Distinguish "not selected" from "open-ended" BEFORE deriving anything.
+  const endDateSelected = rental.end_date !== undefined;
+  const live = endDateSelected ? chainExpiryFromEndDate(rental.end_date as string | null) : null;
+  const liveMs = live ? new Date(live).getTime() : Number.NaN;
+  const liveOk = Number.isFinite(liveMs);
+
+  const noCeiling: ChainBound = { effective: null, stored, live, stale: false, expired: false };
+
+  // The caller never asked for end_date, so the cache is the best (and only)
+  // information there is. Honour it as-is: this is the pre-recomputation
+  // behaviour, and it is the right answer for a caller that has nothing better.
+  if (!endDateSelected) {
+    if (!storedOk) return noCeiling;
+    return { effective: stored, stored, live, stale: false, expired: storedMs <= now.getTime() };
+  }
+
+  // Rule 2: a NULL/unreadable value on EITHER side means "no ceiling".
+  if (!storedOk || !liveOk) return noCeiling;
+
+  // Rule 1: the LATER of the two.
+  const effectiveMs = Math.max(storedMs, liveMs);
+  return {
+    effective: new Date(effectiveMs).toISOString(),
+    stored,
+    live,
+    stale: liveMs > storedMs,
+    expired: effectiveMs <= now.getTime(),
+  };
+}
+
+/**
+ * The earliest `end_date` whose derived bound can still be in the future, as a
+ * date literal for PostgREST.
+ *
+ * Mirrors `chainExpiryFromEndDate`: the bound is the END of the last rental day
+ * plus the grace window, so `bound > now` holds for every `end_date` on or after
+ * `now - grace days`. Coarse by one day at the edges, deliberately — this is a
+ * pre-filter, `resolveChainBound` is the authority, and over-selecting by a day
+ * costs one extra row read while under-selecting would drop a live chain.
+ */
+function chainCutoffDate(now: Date): string {
+  return new Date(now.getTime() - CHAIN_GRACE_DAYS_AFTER_END * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
 /**
  * Apply the "due for a refresh" predicate to a select/count builder.
  *
@@ -219,8 +356,25 @@ export function applyDueHoldFilters<T>(
     .or(`deposit_hold_next_retry_at.is.null,deposit_hold_next_retry_at.lte.${nowIso}`)
     // I9 / EC-25: never re-authorize past the end of the chain. Enforced here so
     // a chain-expired rental cannot sit at the head of the queue (it has the
-    // oldest expiry) and starve the batch, and again inside refreshOneHold.
-    .or(`deposit_hold_chain_expires_at.is.null,deposit_hold_chain_expires_at.gt.${nowIso}`);
+    // oldest expiry) and starve the batch, and again — authoritatively — inside
+    // refreshOneHold.
+    //
+    // FOUR terms in ONE .or(), not two .or() calls: successive .or() calls are
+    // AND-ed, and this has to be a single disjunction. It is the SQL shadow of
+    // resolveChainBound's "later of the two" rule — a row survives if the stored
+    // cache says the chain is alive OR the rental's LIVE end_date does. Filtering
+    // on the stored column alone (what this used to do) meant an extended rental
+    // whose bound was frozen at its ORIGINAL end date was never even SELECTED, so
+    // the authoritative recomputation below could never run and the chain died
+    // silently — the defect this pass exists to close.
+    .or(
+      [
+        "deposit_hold_chain_expires_at.is.null",
+        `deposit_hold_chain_expires_at.gt.${nowIso}`,
+        "end_date.is.null",
+        `end_date.gte.${chainCutoffDate(now)}`,
+      ].join(",")
+    );
   return q as T;
 }
 
@@ -790,9 +944,6 @@ export interface RefreshOptions {
   now?: Date;
 }
 
-// deno-lint-ignore no-explicit-any
-type RentalRow = Record<string, any>;
-
 /**
  * Refresh ONE rental's deposit hold: cancel the incumbent authorization and
  * place its replacement, or decide not to. Never throws for anything the caller
@@ -816,16 +967,32 @@ export async function refreshOneHold(
     return { rentalId, result, message, untouched: true };
   };
 
-  // ── I9 / EC-25: the chain has a hard end. ─────────────────────────────────
+  // ── I9 / EC-25: the chain has a hard end — RECOMPUTED, not read. ──────────
   // A rental left 'Active' past its end date is the most common operational
-  // slip in a 60-120 day fleet; without this the card is re-authorized every
-  // ~5 days forever after the car came back. The driver filters these out too;
-  // this is the belt to that braces, for direct callers.
-  const chainEnd = rental.deposit_hold_chain_expires_at as string | null;
-  if (chainEnd && new Date(chainEnd).getTime() <= now.getTime()) {
+  // slip in a 60-120 day fleet; without a bound the card is re-authorized every
+  // ~5 days forever after the car came back.
+  //
+  // But the stored bound is a placement-time snapshot and goes stale the moment
+  // the rental is extended, so THIS is the authoritative reader: resolveChainBound
+  // recomputes from the rental's CURRENT end_date and we stop only when the
+  // recomputed bound has genuinely passed. See the section header above for why
+  // "later of the two" rather than "the live one wins".
+  const chain = resolveChainBound(rental, now);
+  if (chain.expired) {
     return untouched(
       "chain_expired",
-      `chain bound ${chainEnd} has passed — not re-authorizing (capture or release is an operator decision)`
+      `chain bound ${chain.effective} has passed ` +
+        `(stored ${chain.stored ?? "null"}, from live end_date ${chain.live ?? "null"}) — ` +
+        "not re-authorizing (capture or release is an operator decision)"
+    );
+  }
+  if (chain.stale) {
+    // Diagnostic only — the decision above already used the recomputed value.
+    // The write itself rides along on the claim below so it stays inside the
+    // CAS and cannot stamp a row somebody else owns.
+    console.log(
+      `${log} ${rentalId}: chain bound re-derived forward ` +
+        `${chain.stored} -> ${chain.effective} (rental end date moved)`
     );
   }
 
@@ -964,7 +1131,16 @@ export async function refreshOneHold(
     claimed = await casUpdate(
       supabase,
       rentalId,
-      { deposit_hold_status: "refreshing", deposit_hold_attempt_seq: attemptSeq },
+      {
+        deposit_hold_status: "refreshing",
+        deposit_hold_attempt_seq: attemptSeq,
+        // Refresh the cache from the recomputation we just did. It rides on the
+        // claim so it inherits the CAS (never stamps a row another worker owns)
+        // and costs no extra statement. FORWARD ONLY — `stale` is only ever true
+        // when the live bound is LATER — which keeps this in step with
+        // verify-deposit-hold's re-stamp and can never shorten a live chain.
+        ...(chain.stale ? { deposit_hold_chain_expires_at: chain.effective } : {}),
+      },
       { status: startingStatus, paymentIntentId: incumbentPi, requireRefreshableRental: true }
     );
   } catch (dbErr) {

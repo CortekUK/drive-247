@@ -81,10 +81,24 @@
 //  * It never touches a row it did not read (compare-and-set on BOTH status and
 //    PaymentIntent id), so it is safe to run while the refresh cron is live.
 //
-// AUTH: service-role bearer only, checked in constant time. This function is not
-// scheduled and is not in config.toml's verify_jwt=false list, so the gateway
-// also enforces a valid JWT — the explicit check below is what stops any other
-// signed-in principal from driving it.
+// AUTH: two gates, both required. This function is NOT scheduled and is NOT in
+// config.toml's verify_jwt=false list, so the API gateway enforces a valid
+// project JWT first (which means the platform-secret branch below is reachable
+// only when an Authorization header accompanies it — a browser or curl call
+// with the secret alone is stopped at the gateway, by design). The explicit
+// check below is what stops any *other* signed-in principal from driving it; it
+// accepts either:
+//   * `x-platform-secret`, validated by the `platform_verify_secret(p_secret)`
+//     DB RPC — the same internal-caller credential the cron targets use, so an
+//     operator script can drive this the same way, or
+//   * `Authorization: Bearer <super-admin user JWT>` — the normal path, an
+//     admin driving a backfill from the UI.
+// Anything else is 401.
+//
+// This used to accept the service-role bearer instead. It no longer does: a
+// valid production service_role JWT is committed in plaintext at
+// supabase/migrations/20260520170000_schedule_tesla_sync_cron.sql and is pending
+// rotation, so it is not a credential this endpoint should trust.
 //
 // BODY (all optional):
 //   {
@@ -311,19 +325,79 @@ interface Summary {
 // Auth
 // ---------------------------------------------------------------------------
 
-function constantTimeEquals(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
+/**
+ * See the AUTH note in the file header.
+ *
+ * Accepts EITHER the platform secret OR a super-admin user JWT. Mirrors
+ * `onboarding-daily-digest` and `platform-rental-notify` rather than inventing
+ * a scheme.
+ *
+ * Fails SAFE: every error path — a missing env var, an RPC error, a GoTrue
+ * outage, a failed app_users lookup — returns false. This endpoint can cancel
+ * authorisations and rewrite deposit state across the whole fleet; an outage
+ * must never open it.
+ *
+ * @param supabase a SERVICE-ROLE client. `platform_verify_secret` is
+ *   service-role-only, and the app_users lookup must not be filtered by RLS.
+ */
+async function isAuthorizedCaller(req: Request, supabase: SupabaseClient): Promise<boolean> {
+  // 1. Platform secret. Validated by a DB RPC so the secret itself never has to
+  //    be present in this function's environment.
+  const secret = req.headers.get("x-platform-secret");
+  if (secret) {
+    try {
+      const { data: ok, error } = await supabase.rpc("platform_verify_secret", { p_secret: secret });
+      if (error) console.error("[HOLD-BACKFILL] platform_verify_secret rpc failed:", error.message);
+      else if (ok === true) return true;
+    } catch (err) {
+      console.error("[HOLD-BACKFILL] platform_verify_secret rpc threw:", err);
+    }
+  }
 
-function isServiceRoleCall(req: Request): boolean {
-  const serviceKey = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "").trim();
-  if (!serviceKey) return false;
+  // 2. Super-admin user JWT — the normal path for this function.
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
   if (!token) return false;
-  return constantTimeEquals(token, serviceKey);
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  if (!supabaseUrl || !anonKey) {
+    console.error("[HOLD-BACKFILL] SUPABASE_URL / SUPABASE_ANON_KEY missing — cannot verify a user JWT; denying.");
+    return false;
+  }
+
+  let userId: string | null = null;
+  try {
+    const authClient = createClient(supabaseUrl, anonKey);
+    // NOTE: the anon key and the service-role key are themselves valid project
+    // JWTs, but neither carries a `sub`, so getUser() yields no user for them.
+    // That is what stops a bare apikey — or the leaked service_role key — from
+    // walking through this branch.
+    const { data, error } = await authClient.auth.getUser(token);
+    if (error) {
+      console.warn("[HOLD-BACKFILL] JWT rejected:", error.message);
+      return false;
+    }
+    userId = data?.user?.id ?? null;
+  } catch (err) {
+    console.error("[HOLD-BACKFILL] getUser threw:", err);
+    return false;
+  }
+  if (!userId) return false;
+
+  // Filter on is_super_admin in the query and take the first row rather than
+  // .single(): a principal with more than one app_users row would otherwise
+  // make .single() error and lock a legitimate super admin out.
+  const { data: rows, error: lookupError } = await supabase
+    .from("app_users")
+    .select("id")
+    .eq("auth_user_id", userId)
+    .eq("is_super_admin", true)
+    .limit(1);
+  if (lookupError) {
+    console.error("[HOLD-BACKFILL] app_users lookup failed:", lookupError.message);
+    return false;
+  }
+  return (rows?.length ?? 0) > 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -993,7 +1067,15 @@ Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
-  if (!isServiceRoleCall(req)) {
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+  );
+
+  // Before the body is read and before the cron_runs heartbeat: an unauthorised
+  // caller must not be able to write heartbeat rows either.
+  if (!(await isAuthorizedCaller(req, supabase))) {
+    console.warn("[HOLD-BACKFILL] Unauthorized call rejected");
     return errorResponse("Unauthorized", 401);
   }
 
@@ -1029,11 +1111,6 @@ Deno.serve(async (req) => {
     typeof body?.limit === "number" && Number.isFinite(body.limit) && body.limit > 0
       ? Math.min(Math.floor(body.limit), HARD_MAX_RENTALS)
       : DEFAULT_MAX_RENTALS;
-
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-  );
 
   // Distinct job_name per shape, exactly as reconcile-deposit-holds does: a dry
   // or scoped run recorded under the same name would satisfy a dead-man check

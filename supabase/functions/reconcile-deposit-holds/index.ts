@@ -71,12 +71,26 @@
 //    pending link that no rental points at). Cancelling releases a renter's
 //    funds; it can never take them.
 //
-// AUTH: called by pg_cron with `Authorization: Bearer <service_role_key>`, which
-// is what the repo's cron template already sends. Deliberately not a bespoke
-// X-Cron-Secret header: the template does not send one, so the job would 401 on
-// every tick — and because net.http_post is asynchronous that 401 lands in
-// net._http_response, never in cron.job_run_details, so the schedule would look
-// perfectly healthy while nothing was ever reconciled.
+// AUTH: `verify_jwt = false` in config.toml (pg_cron carries no user JWT), so
+// the gateway lets anonymous requests through and the check in THIS file is the
+// only gate. It accepts either:
+//   * `x-platform-secret` — what pg_cron sends, validated by the
+//     `platform_verify_secret(p_secret)` DB RPC, or
+//   * `Authorization: Bearer <super-admin user JWT>` — manual/admin dispatch.
+// Anything else is 401.
+//
+// This used to accept the service-role bearer instead. It no longer does: a
+// valid production service_role JWT is committed in plaintext at
+// supabase/migrations/20260520170000_schedule_tesla_sync_cron.sql and is pending
+// rotation, so it is not a credential this endpoint should trust. The platform
+// secret is the same scheme onboarding-daily-digest and platform-rental-notify
+// already use, which keeps the number of internal-caller credentials at one.
+//
+// DEPLOY ORDER MATTERS: the pg_cron command for this job must send
+// `x-platform-secret` — because net.http_post is asynchronous, a 401 lands in
+// net._http_response and never in cron.job_run_details, so a schedule sending
+// the wrong credential looks perfectly healthy while nothing is reconciled. The
+// cron_runs dead-man row is the backstop: no heartbeat is written on a 401.
 //
 // Body (all optional, for manual/admin dispatch):
 //   { only_rental_id?: string, tenant_id?: string, dry_run?: boolean }
@@ -314,24 +328,78 @@ interface Summary {
 // Auth
 // ---------------------------------------------------------------------------
 
-function constantTimeEquals(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
 /**
- * verify_jwt = false in config.toml (pg_cron carries no user JWT), so the
- * gateway lets anonymous requests through and THIS is the only gate. The
- * service-role key is the exact credential the cron template already sends.
+ * The only gate on this endpoint (see the AUTH note in the file header).
+ *
+ * Accepts EITHER the platform secret (pg_cron) OR a super-admin user JWT
+ * (manual/admin dispatch). Mirrors `onboarding-daily-digest` and
+ * `platform-rental-notify` rather than inventing a scheme.
+ *
+ * Fails SAFE: every error path — a missing env var, an RPC error, a GoTrue
+ * outage, a failed app_users lookup — returns false. This endpoint cancels
+ * authorisations and rewrites deposit state; an outage must never open it.
+ *
+ * @param supabase a SERVICE-ROLE client. `platform_verify_secret` is
+ *   service-role-only, and the app_users lookup must not be filtered by RLS.
  */
-function isServiceRoleCall(req: Request): boolean {
-  const serviceKey = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "").trim();
-  if (!serviceKey) return false;
+async function isAuthorizedCaller(req: Request, supabase: SupabaseClient): Promise<boolean> {
+  // 1. Platform secret — the cron path. Validated by a DB RPC so the secret
+  //    itself never has to be present in this function's environment.
+  const secret = req.headers.get("x-platform-secret");
+  if (secret) {
+    try {
+      const { data: ok, error } = await supabase.rpc("platform_verify_secret", { p_secret: secret });
+      if (error) console.error("[HOLD-RECONCILE] platform_verify_secret rpc failed:", error.message);
+      else if (ok === true) return true;
+    } catch (err) {
+      console.error("[HOLD-RECONCILE] platform_verify_secret rpc threw:", err);
+    }
+  }
+
+  // 2. Super-admin user JWT — the manual-dispatch path.
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
   if (!token) return false;
-  return constantTimeEquals(token, serviceKey);
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  if (!supabaseUrl || !anonKey) {
+    console.error("[HOLD-RECONCILE] SUPABASE_URL / SUPABASE_ANON_KEY missing — cannot verify a user JWT; denying.");
+    return false;
+  }
+
+  let userId: string | null = null;
+  try {
+    const authClient = createClient(supabaseUrl, anonKey);
+    // NOTE: the anon key and the service-role key are themselves valid project
+    // JWTs, but neither carries a `sub`, so getUser() yields no user for them.
+    // That is what stops a bare apikey — or the leaked service_role key — from
+    // walking through this branch.
+    const { data, error } = await authClient.auth.getUser(token);
+    if (error) {
+      console.warn("[HOLD-RECONCILE] JWT rejected:", error.message);
+      return false;
+    }
+    userId = data?.user?.id ?? null;
+  } catch (err) {
+    console.error("[HOLD-RECONCILE] getUser threw:", err);
+    return false;
+  }
+  if (!userId) return false;
+
+  // Filter on is_super_admin in the query and take the first row rather than
+  // .single(): a principal with more than one app_users row would otherwise
+  // make .single() error and lock a legitimate super admin out.
+  const { data: rows, error: lookupError } = await supabase
+    .from("app_users")
+    .select("id")
+    .eq("auth_user_id", userId)
+    .eq("is_super_admin", true)
+    .limit(1);
+  if (lookupError) {
+    console.error("[HOLD-RECONCILE] app_users lookup failed:", lookupError.message);
+    return false;
+  }
+  return (rows?.length ?? 0) > 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -1510,7 +1578,15 @@ Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
-  if (!isServiceRoleCall(req)) {
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+  );
+
+  // Before the body is read and before the cron_runs heartbeat: an unauthorised
+  // caller must not be able to write heartbeat rows either.
+  if (!(await isAuthorizedCaller(req, supabase))) {
+    console.warn("[HOLD-RECONCILE] Unauthorized call rejected");
     return errorResponse("Unauthorized", 401);
   }
 
@@ -1525,11 +1601,6 @@ Deno.serve(async (req) => {
   } catch {
     // No/invalid body — a normal cron tick.
   }
-
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-  );
 
   // A scoped or dry run is NOT the 6-hourly job. Recording it under the same
   // job_name would satisfy a dead-man alert ("max(finished_at) < now() - 2x

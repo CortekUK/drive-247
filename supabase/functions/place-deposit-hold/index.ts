@@ -658,16 +658,27 @@ Deno.serve(async (req) => {
     // open-ended rental simply gets no terminal date (NULL), which the
     // refresher reads as "no ceiling yet" rather than "already over".
     //
-    // THIS IS A FLOOR, NOT THE AUTHORITY. Placement runs once; end_date moves
-    // every time the rental is extended, and an extension does not re-place the
-    // hold. A frozen bound would therefore terminate the chain on the ORIGINAL
-    // end date and the deposit would stop being renewed mid-rental — the exact
-    // silent death this workstream exists to kill, and near-certain for GMT,
-    // whose whole fleet is manually extended (see the two-tier guard above).
-    // verify-deposit-hold re-stamps this column FORWARD from the live end_date
-    // on every reconciliation; the authoritative fix (the refresher deriving
-    // the ceiling from the live end_date instead of this snapshot) lives in
-    // _shared/deposit-hold-refresh.ts, which this workstream does not own.
+    // THIS IS A CACHE AND A FLOOR, NOT THE AUTHORITY. Placement runs once;
+    // end_date moves every time the rental is extended, and an extension does
+    // not re-place the hold. A frozen bound read literally would terminate the
+    // chain on the ORIGINAL end date and the deposit would stop being renewed
+    // mid-rental — near-certain for GMT, whose whole fleet is manually extended
+    // (see the two-tier guard above).
+    //
+    // Nothing relies on this snapshot staying fresh any more. The authoritative
+    // reader is `resolveChainBound` in _shared/deposit-hold-refresh.ts: the
+    // refresher recomputes the bound from the rental's LIVE end_date on every
+    // pass, enforces the LATER of that and this stored value, and re-stamps this
+    // column forward when they disagree. verify-deposit-hold re-stamps it
+    // forward too. What this write still buys is (a) a correct value for the
+    // common case with no extra read, and (b) the placement floor below, which
+    // the refresher deliberately honours and will never pull back in.
+    //
+    // The grace window is the shared CHAIN_GRACE_DAYS_AFTER_END constant in
+    // _shared/stripe-client.ts — ONE definition, reached by this file and by the
+    // refresher both directly and through chainExpiryFromEndDate, so the two
+    // derivations cannot drift. Its VALUE is a product decision that has not
+    // been formally made; see the constant's own doc comment.
     const chainExpiresAt = ((): string | null => {
       const fromEndDate = chainExpiryFromEndDate((rental as any).end_date as string | null);
       if (!fromEndDate) return null;

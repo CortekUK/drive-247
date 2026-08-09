@@ -15,6 +15,11 @@
 // `refreshOneHold` and the shared due-criteria from
 // `_shared/deposit-hold-refresh.ts`; the ONLY differences that remain here are
 // the three genuine ones: the fail-closed guard, the tenant lock, and preview.
+//
+// It also drives the REAL operator-alert helper (`_shared/deposit-hold-notify.ts`)
+// on failing outcomes, for the same reason: alerting is the half of the W1 work
+// that only ever runs when something has gone wrong, so without a sandbox path
+// its first execution would be in production, at 03:00, on the night it mattered.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -22,7 +27,13 @@ import {
   refreshOneHold,
   applyDueHoldFilters,
   HOLD_REFRESH_COLUMNS,
+  MAX_HOLD_ATTEMPTS,
 } from "../_shared/deposit-hold-refresh.ts";
+import {
+  notifyDepositHoldFailure,
+  shouldAlertDepositHold,
+  DEPOSIT_HOLD_ALERT_COLUMNS,
+} from "../_shared/deposit-hold-notify.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const JOB_NAME = "sandbox-refresh-deposit-holds";
@@ -127,6 +138,47 @@ Deno.serve(async (req) => {
       actor: "sandbox",
       now: new Date(),
     });
+
+    // ── W1 ALERTING ──────────────────────────────────────────────────────────
+    // A chain that dies quietly at 03:00 on day 45 of a 90-day rental is the
+    // failure mode this workstream exists to kill, so the harness drives the
+    // REAL operator-alert helper rather than a stub — staging can then prove the
+    // bell without waiting for a production chain to break.
+    //
+    // The row is re-read first: `batch[0]` is the PRE-attempt snapshot, and the
+    // copy turns on the POST-attempt status, counters and next_retry_at that
+    // refreshOneHold has just committed. `attempt_seq` is passed explicitly as
+    // prior+1 — the same value the engine claims the row with — so the dedupe
+    // key computed here is byte-identical to the one the production engine
+    // would compute for this attempt. That is what makes it safe to wire the
+    // same helper into the engine's own failure path: the second call for one
+    // attempt dedupes away instead of ringing twice.
+    if (shouldAlertDepositHold(outcome.result)) {
+      const { data: after, error: afterErr } = await supabase
+        .from("rentals")
+        .select(DEPOSIT_HOLD_ALERT_COLUMNS)
+        .eq("id", onlyRentalId)
+        .maybeSingle();
+      if (afterErr) {
+        console.error(
+          "[SandboxDepositRefresh] Could not re-read rental for alerting " +
+            "(falling back to the pre-attempt row — the bell will still fire, but its " +
+            "amount/retry detail may lag one attempt):",
+          afterErr.message
+        );
+      }
+      // notifyDepositHoldFailure never throws; no try/catch is needed and adding
+      // one would only hide a bug in it.
+      await notifyDepositHoldFailure({
+        rental: (after as Record<string, unknown> | null) ?? (batch[0] as Record<string, unknown>),
+        result: outcome.result,
+        message: outcome.message,
+        attemptSeq: Number(batch[0].deposit_hold_attempt_seq ?? 0) + 1,
+        maxAttempts: MAX_HOLD_ATTEMPTS,
+        source: "sandbox",
+        supabase,
+      });
+    }
 
     const refreshed = outcome.result === "refreshed" ? 1 : 0;
     // 'config_unavailable' is counted separately from 'failed', exactly as in
