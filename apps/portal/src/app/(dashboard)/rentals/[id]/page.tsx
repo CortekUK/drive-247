@@ -2333,7 +2333,7 @@ const RentalDetail = () => {
       {/* This rental was created without an ID check. Surfaced permanently and
           prominently: anyone handling it later — a claim, a dispute, an
           insurance query — needs to know without digging through audit logs. */}
-      {(rental as any)?.id_verification_waived && (
+      {rental?.id_verification_waived && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
           <div className="text-sm min-w-0">
@@ -2341,11 +2341,11 @@ const RentalDetail = () => {
               Created without ID verification
             </p>
             <p className="text-amber-700/90 dark:text-amber-400/90 mt-0.5 break-words">
-              {(rental as any).id_verification_waived_reason}
+              {rental.id_verification_waived_reason}
             </p>
-            {(rental as any).id_verification_waived_at && (
+            {rental.id_verification_waived_at && (
               <p className="text-xs text-amber-700/70 dark:text-amber-400/70 mt-1">
-                Recorded {format(new Date((rental as any).id_verification_waived_at), "d MMM yyyy, HH:mm")}
+                Recorded {format(new Date(rental.id_verification_waived_at), "d MMM yyyy, HH:mm")}
               </p>
             )}
           </div>

@@ -181,7 +181,12 @@ const CreateRental = () => {
   const tenantAllowsIdWaiver =
     (tenant as { allow_rental_without_id_verification?: boolean } | null)
       ?.allow_rental_without_id_verification === true;
-  const canWaiveIdVerification = tenantAllowsIdWaiver && canManuallyVerify;
+  // `appUser?.id` is also required: it is what stamps id_verification_waived_by
+  // and what the audit insert is gated on. Without it you could land a waived
+  // rental that names nobody AND writes no audit row — an unattributed bypass,
+  // which is the one outcome this feature must never produce.
+  const canWaiveIdVerification =
+    tenantAllowsIdWaiver && canManuallyVerify && !!appUser?.id;
 
   const [showIdWaiverDialog, setShowIdWaiverDialog] = useState(false);
   const [idWaiverReason, setIdWaiverReason] = useState("");
@@ -1652,7 +1657,14 @@ const CreateRental = () => {
       // Record the waiver ON THE RENTAL, not only in the audit log, so this
       // rental stays identifiable as unverified for its whole life — for
       // disputes, insurance questions and reporting — without anyone having to
-      // join audit_logs. A DB CHECK rejects a waiver with no reason.
+      // join audit_logs.
+      //
+      // Two DB CHECKs make this hold even for writes that never touch this form
+      // (direct PostgREST, a script, a future edge function):
+      //   rentals_id_waiver_needs_reason — waived ⇒ reason present, >= 15 chars
+      //   rentals_id_waiver_needs_actor  — waived ⇒ id_verification_waived_by set
+      // So a waiver can never be anonymous or unexplained at rest. What is still
+      // only enforced here in the client is the tenant flag and the role gate.
       const waiverReasonForInsert =
         !isCustomerVerified && canWaiveIdVerification ? (idWaiverAccepted ?? "").trim() : "";
       const waiverApplied = waiverReasonForInsert.length >= ID_WAIVER_MIN_REASON;
@@ -3025,7 +3037,24 @@ const CreateRental = () => {
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          <Alert variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>Customer must complete identity verification before rental can be created.</AlertDescription></Alert>
+                          {/* "cannot be created" is only true where this tenant has no
+                              waiver. With the waiver switched on, the controls directly
+                              below ARE the supported way forward, and a red "cannot be
+                              created" sitting a few pixels above a confirmed waiver and a
+                              "Create Without Verification" submit button reads as though
+                              the setting never took effect. Verification is still the
+                              wanted outcome, so this stays prominent — just not false. */}
+                          {canWaiveIdVerification ? (
+                            <Alert>
+                              <AlertTriangle className="h-4 w-4" />
+                              <AlertDescription>
+                                This customer has not completed identity verification. Start verification
+                                below, or use one of the options underneath it to proceed without.
+                              </AlertDescription>
+                            </Alert>
+                          ) : (
+                            <Alert variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>Customer must complete identity verification before rental can be created.</AlertDescription></Alert>
+                          )}
                           <Button type="button" onClick={handleCreateVerification} disabled={creatingVerification} className="w-full">
                             {creatingVerification ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating Session...</>) : (<><Shield className="h-4 w-4 mr-2" />Start Verification</>)}
                           </Button>
@@ -5589,7 +5618,12 @@ const CreateRental = () => {
                       : idWaiverAccepted
                         // Waiver confirmed — say plainly what is about to happen.
                         ? "Create Without Verification"
-                        : "Verification Required"}
+                        // "Verification Required" states a hard rule. Where the
+                        // waiver is available that rule does not apply, so name
+                        // the two ways out instead of denying they exist.
+                        : canWaiveIdVerification
+                          ? "Verify or Waive to Continue"
+                          : "Verification Required"}
                 </Button>
               </div>
             </div>

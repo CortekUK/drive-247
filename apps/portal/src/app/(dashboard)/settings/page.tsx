@@ -310,7 +310,17 @@ const Settings = () => {
     setSaving: (v: boolean) => void,
     okTitle: string,
   ) => {
-    if (!tenant?.id) return;
+    // A bare `return` here made the click completely dead: the switch did not
+    // move, nothing was written, and no error appeared — indistinguishable from
+    // a broken toggle, and the single hardest state to diagnose from a report.
+    if (!tenant?.id) {
+      toast({
+        title: "Settings are still loading",
+        description: "Your account is not attached to a tenant yet. Reload the page and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
     setPending(next);
     setSaving(true);
     try {
