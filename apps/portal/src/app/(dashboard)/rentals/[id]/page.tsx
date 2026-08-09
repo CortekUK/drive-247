@@ -251,6 +251,15 @@ interface Rental {
   deposit_hold_expires_at?: string | null;
   deposit_hold_payment_intent_id?: string | null;
   deposit_amount_override?: number | null;
+  // Set when staff created this rental for a customer who never passed ID
+  // verification. Declared here so the amber banner below is reading a
+  // documented field rather than an untyped one — the query is a nested
+  // select whose result infers loosely, so these are the only written record
+  // of the shape this page relies on.
+  id_verification_waived?: boolean | null;
+  id_verification_waived_reason?: string | null;
+  id_verification_waived_by?: string | null;
+  id_verification_waived_at?: string | null;
 }
 
 function LocationCard({ type, address, location, fee, time, currencyCode }: {

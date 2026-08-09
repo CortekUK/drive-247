@@ -315,8 +315,11 @@ const Settings = () => {
     // a broken toggle, and the single hardest state to diagnose from a report.
     if (!tenant?.id) {
       toast({
-        title: "Settings are still loading",
-        description: "Your account is not attached to a tenant yet. Reload the page and try again.",
+        // The portal resolves its tenant from the subdomain, not from the signed-in
+        // account, so this is a page-load problem — not a permissions one. Saying
+        // otherwise would send someone off checking the wrong thing entirely.
+        title: "Could not save",
+        description: "This portal's settings have not finished loading. Reload the page and try again.",
         variant: "destructive",
       });
       return;

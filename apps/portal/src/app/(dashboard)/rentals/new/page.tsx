@@ -1526,7 +1526,15 @@ const CreateRental = () => {
           canWaiveIdVerification && waiverReason.length >= ID_WAIVER_MIN_REASON;
 
         if (!waiverUsable) {
-          throw new Error("Customer must complete identity verification before rental can be created.");
+          // Same distinction the card above makes. Telling a waiver-enabled
+          // operator the rental "cannot be created" is the exact falsehood this
+          // screen was reported for — here they simply have not chosen a route
+          // yet, so name the routes instead.
+          throw new Error(
+            canWaiveIdVerification
+              ? "Choose how to proceed: mark this customer as manually verified, or record a reason for creating the rental without ID verification."
+              : "Customer must complete identity verification before rental can be created."
+          );
         }
       }
 
@@ -3045,9 +3053,13 @@ const CreateRental = () => {
                               the setting never took effect. Verification is still the
                               wanted outcome, so this stays prominent — just not false. */}
                           {canWaiveIdVerification ? (
-                            <Alert>
+                            // Amber, not the default grey: this is still a warning, and
+                            // amber is what every other unverified signal in this file
+                            // uses. Downgrading red straight to colourless would trade
+                            // one wrong message for an invisible one.
+                            <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 [&>svg]:text-amber-600 dark:[&>svg]:text-amber-500">
                               <AlertTriangle className="h-4 w-4" />
-                              <AlertDescription>
+                              <AlertDescription className="text-amber-800 dark:text-amber-300">
                                 This customer has not completed identity verification. Start verification
                                 below, or use one of the options underneath it to proceed without.
                               </AlertDescription>
