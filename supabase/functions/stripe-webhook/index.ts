@@ -15,6 +15,85 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, stripe-signature",
 };
 
+// ---------------------------------------------------------------------------
+// sync-deposit-hold failure classification — mirrors stripe-webhook-live
+// ---------------------------------------------------------------------------
+// A `security_deposit_hold` checkout is delegated to the `sync-deposit-hold`
+// edge function (see the branch in checkout.session.completed below). When that
+// call fails we must pick between two bad outcomes:
+//
+//   return 500 -> Stripe redelivers (~15 attempts over ~3 days) and books every
+//                 failure against this endpoint's auto-disable budget. A
+//                 disabled endpoint stops checkout.session.completed,
+//                 invoice.paid and installment settlement for ALL tenants.
+//   return 200 -> the authorisation stays live on the customer's card with
+//                 nothing recorded on the rental until the portal redirect or
+//                 verify-deposit-hold reconciles it.
+//
+// The status code alone cannot decide, because sync-deposit-hold funnels every
+// thrown error through a single outer catch that answers 500 — including
+// permanent ones like `No such checkout.session` (session created on the other
+// platform account) or `Missing Stripe secret key for account=… mode=…`.
+// Retrying those can never succeed, so the retry is BOUNDED: only known-
+// transient failures are retried, only while the event is still young, and a
+// give-up raises an operator-visible alert instead of a lone log line.
+
+/** How long after `event.created` we are still willing to ask for redelivery. */
+const HOLD_SYNC_MAX_RETRY_AGE_MS = 60 * 60 * 1000; // 1 hour
+
+/** Stripe abandons a delivery at ~30s and books it as failed — bail earlier. */
+const HOLD_SYNC_TIMEOUT_MS = 15_000;
+
+/**
+ * PaymentIntent statuses that mean "not settled YET". sync-deposit-hold answers
+ * 422 `Hold not active (PI status: …)` for these when the webhook beats 3DS or
+ * async confirmation — the authorisation is real and a redelivery finds it.
+ * Terminal statuses (canceled, succeeded, requires_payment_method) are
+ * deliberately absent: for those a retry can only ever fail again.
+ */
+const HOLD_SYNC_RETRYABLE_PI_STATUSES = ["processing", "requires_action", "requires_confirmation"];
+
+/** Substrings that mark a sync 5xx as transient rather than permanent. */
+const HOLD_SYNC_TRANSIENT_PATTERNS = [
+  "failed to persist hold",   // sync's own DB write failed
+  "connection to stripe",     // StripeConnectionError
+  "timed out",
+  "timeout",
+  "rate limit",               // StripeRateLimitError
+  "fetch failed",
+  "econnreset",
+  "service unavailable",
+  "internal server error",    // Stripe's own 5xx (StripeAPIError)
+];
+
+function classifyHoldSyncFailure(
+  status: number,
+  message: string
+): { retryable: boolean; reason: string } {
+  const msg = (message || "").toLowerCase();
+
+  // The Functions gateway answered, not sync itself — sync never ran.
+  if ([408, 425, 429, 502, 503, 504, 546].includes(status)) {
+    return { retryable: true, reason: `gateway status ${status}` };
+  }
+
+  if (status === 422) {
+    const pending = HOLD_SYNC_RETRYABLE_PI_STATUSES.find((s) => msg.includes(s));
+    return pending
+      ? { retryable: true, reason: `PaymentIntent still ${pending}` }
+      : { retryable: false, reason: `terminal 422: ${message}` };
+  }
+
+  if (status >= 500) {
+    const transient = HOLD_SYNC_TRANSIENT_PATTERNS.find((p) => msg.includes(p));
+    return transient
+      ? { retryable: true, reason: `transient sync failure (${transient})` }
+      : { retryable: false, reason: `permanent failure reported as ${status}: ${message}` };
+  }
+
+  return { retryable: false, reason: `terminal ${status}: ${message}` };
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -91,6 +170,76 @@ serve(async (req) => {
         const rentalId = session.client_reference_id || session.metadata?.rental_id;
         const isPreAuth = session.metadata?.preauth_mode === "true";
         const isInstallment = session.metadata?.checkout_type === "installment";
+
+        // SECURITY DEPOSIT HOLD (create-hold-checkout) — mirrors
+        // stripe-webhook-live. These sessions authorise money WITHOUT capturing
+        // it and carry no preauth_mode flag, so they used to fall through to the
+        // "Auto mode: Payment was captured" else-branch, which marked the rental
+        // payment_status='fulfilled' and inserted a Completed/captured payments
+        // row for the full UNCAPTURED amount. Record the hold and stop.
+        // Delegating to sync-deposit-hold (the same function the portal's return
+        // URL calls) also closes the closed-tab orphan, where an authorisation
+        // existed on Stripe with nothing recorded on the rental.
+        if (session.metadata?.type === "security_deposit_hold") {
+          const holdRentalId = session.metadata?.rental_id || session.client_reference_id;
+          if (!holdRentalId) {
+            console.error("security_deposit_hold session with no rental_id:", session.id);
+            break;
+          }
+
+          console.log("Deposit hold checkout completed for rental:", holdRentalId);
+          try {
+            const syncResponse = await fetch(
+              `${Deno.env.get("SUPABASE_URL")}/functions/v1/sync-deposit-hold`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                },
+                body: JSON.stringify({ sessionId: session.id, rentalId: holdRentalId }),
+              }
+            );
+            const syncResult = await syncResponse.json().catch(() => ({}));
+
+            if (syncResponse.ok) {
+              if (syncResult.skipped) {
+                console.log("Deposit hold sync skipped:", syncResult.skipped);
+              } else {
+                console.log("Deposit hold recorded:", syncResult.paymentIntentId, "amount:", syncResult.amount);
+              }
+            } else {
+              console.error(
+                "sync-deposit-hold failed for session:",
+                session.id,
+                syncResult?.error || syncResponse.statusText
+              );
+              // 5xx = transient (Stripe API blip, DB write failure). Ask Stripe
+              // to redeliver rather than orphan an authorisation that exists on
+              // the customer's card but nowhere in our DB. 4xx (rental gone, PI
+              // no longer capturable) will never succeed, so don't retry-storm.
+              if (syncResponse.status >= 500) {
+                return new Response(
+                  JSON.stringify({ error: "sync-deposit-hold failed, retry" }),
+                  {
+                    status: 500,
+                    headers: { ...corsHeaders, "Content-Type": "application/json" },
+                  }
+                );
+              }
+            }
+          } catch (syncError) {
+            console.error("Error invoking sync-deposit-hold:", syncError);
+            return new Response(
+              JSON.stringify({ error: "sync-deposit-hold unreachable, retry" }),
+              {
+                status: 500,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              }
+            );
+          }
+          break;
+        }
 
         if (!rentalId) {
           console.log("No rental ID in session, skipping");
@@ -659,6 +808,43 @@ serve(async (req) => {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log("PaymentIntent canceled:", paymentIntent.id);
 
+        // GUARD 1: a cancelled security-deposit authorisation is NOT a cancelled
+        // booking. Holds are cancelled routinely — released at the end of a
+        // rental, rolled over after a partial capture, or voided by the card
+        // network when the authorisation expires. Some of those PI ids DO appear
+        // in payments.stripe_payment_intent_id (capture-deposit-hold stamps the
+        // hold PI onto the revenue row it inserts), and the handler below would
+        // then mark that money Refunded and take the rental to Cancelled — a
+        // live 90-day rental killed by a routine deposit release. Chained hold
+        // refreshes turn one cancel per rental into 4-18, so filter first.
+        const DEPOSIT_HOLD_PI_TYPES = ["deposit_hold", "deposit_hold_rollover", "security_deposit_hold"];
+        const holdPiType = paymentIntent.metadata?.type;
+        let isDepositHoldPi = !!holdPiType && DEPOSIT_HOLD_PI_TYPES.includes(holdPiType);
+
+        // Metadata alone isn't enough: holds placed before the metadata existed
+        // carry none, and after a refresh the rental may already point at the
+        // replacement PI. Anything the rental records as its deposit hold is a
+        // hold, whatever its metadata says.
+        if (!isDepositHoldPi) {
+          let holdRentalQuery = supabase
+            .from("rentals")
+            .select("id")
+            .eq("deposit_hold_payment_intent_id", paymentIntent.id);
+          const holdMetaRentalId = paymentIntent.metadata?.rental_id;
+          if (holdMetaRentalId) holdRentalQuery = holdRentalQuery.eq("id", holdMetaRentalId);
+          const { data: holdRental } = await holdRentalQuery.limit(1).maybeSingle();
+          if (holdRental) isDepositHoldPi = true;
+        }
+
+        if (isDepositHoldPi) {
+          console.log(
+            "Ignoring payment_intent.canceled for deposit hold:",
+            paymentIntent.id,
+            holdPiType ? `(type: ${holdPiType})` : "(matched rentals.deposit_hold_payment_intent_id)"
+          );
+          break;
+        }
+
         // Update payment record
         const { data: payment } = await supabase
           .from("payments")
@@ -677,18 +863,38 @@ serve(async (req) => {
             })
             .eq("id", payment.id);
 
-          // Cancel the rental
+          // GUARD 2: only a booking still awaiting payment may be cancelled by a
+          // webhook. This update used to be unconditional, so ANY cancelled PI
+          // that happened to match a payments row took its rental down with it —
+          // including Active and Closed rentals. Mirrors the check the
+          // checkout.session.expired handler has always had.
           if (payment.rental_id) {
-            await supabase
+            const { data: cancelRental } = await supabase
               .from("rentals")
-              .update({
-                status: "Cancelled",
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", payment.rental_id);
-          }
+              .select("id, status")
+              .eq("id", payment.rental_id)
+              .maybeSingle();
 
-          console.log("Payment and rental cancelled from webhook");
+            if (cancelRental?.status === "Pending") {
+              await supabase
+                .from("rentals")
+                .update({
+                  status: "Cancelled",
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", payment.rental_id);
+              console.log("Payment and rental cancelled from webhook");
+            } else {
+              console.log(
+                "Payment cancelled; rental left untouched (status:",
+                cancelRental?.status ?? "not found",
+                ") for rental:",
+                payment.rental_id
+              );
+            }
+          } else {
+            console.log("Payment cancelled from webhook (no rental attached)");
+          }
         }
         break;
       }

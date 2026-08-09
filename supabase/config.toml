@@ -234,3 +234,11 @@ verify_jwt = false
 
 [functions.inshur-sync-billing]
 verify_jwt = false
+
+# Reconciles rentals.deposit_hold_* against the real PaymentIntent at Stripe.
+# Listed explicitly (verify_jwt already defaults to true) because it is easy to
+# mistake for a cron target next to refresh-deposit-holds, which IS unauthenticated.
+# This one is only ever called by a signed-in operator from the portal's rental
+# page, it writes deposit state, and it must never become callable anonymously.
+[functions.verify-deposit-hold]
+verify_jwt = true

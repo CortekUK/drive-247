@@ -93,6 +93,61 @@ const parseLocalDate = (value: string | null | undefined): Date => {
   return new Date(value);
 };
 
+// A Stripe pre-auth is NOT permanent: the bank releases the money after ~5-7
+// days (up to 30 with extended authorization) and Stripe flips the
+// PaymentIntent to `canceled`. Nothing in our webhook chain watches
+// rentals.deposit_hold_payment_intent_id, so the row can sit on 'held' over a
+// dead authorisation (GMT, Aug 2026 — "I cannot refresh the hold"). Until that
+// gap closes the least we can do is put the death date in front of the
+// operator, loudly once it's close.
+const describeHoldExpiry = (
+  expiresAt: string | null | undefined,
+): { tone: 'ok' | 'soon' | 'past'; label: string } | null => {
+  if (!expiresAt) return null;
+  const ts = new Date(expiresAt);
+  if (Number.isNaN(ts.getTime())) return null;
+
+  const dateLabel = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const msLeft = ts.getTime() - Date.now();
+  if (msLeft <= 0) return { tone: 'past', label: `Authorisation lapsed ${dateLabel}` };
+
+  const hoursLeft = Math.floor(msLeft / 3_600_000);
+  const daysLeft = Math.floor(hoursLeft / 24);
+  const remaining =
+    daysLeft >= 1
+      ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`
+      : hoursLeft >= 1
+        ? `${hoursLeft} hour${hoursLeft === 1 ? '' : 's'} left`
+        : 'under an hour left';
+
+  // 3 days is the practical warning window: it's the last point at which an
+  // operator can still refresh the hold before a weekend swallows it.
+  return { tone: daysLeft < 3 ? 'soon' : 'ok', label: `Authorisation expires ${dateLabel} · ${remaining}` };
+};
+
+// ── Reading verify-deposit-hold's answer ────────────────────────────────────
+// Kept byte-for-byte in step with the copy in add-hold-dialog.tsx (two call
+// sites, no shared module yet). `liveHold:false` is NOT the same as "resolved":
+// the function returns it while a card is still authorising (requires_action)
+// and when another worker owns the row ('processing'/'refreshing'), and in the
+// latter case it still carries DEAD_HOLD_MESSAGES copy telling the operator to
+// place a new hold. Only a conclusively dead status counts as resolved.
+type VerifyOutcome = 'resolved' | 'live' | 'in_progress' | 'needs_review';
+
+// Mirrors PI_STATUS_TO_HOLD_STATUS in supabase/functions/verify-deposit-hold:
+// canceled -> expired, succeeded -> captured, requires_payment_method -> failed.
+const CONCLUSIVELY_DEAD_HOLD_STATUSES = ['expired', 'captured', 'failed'];
+
+const classifyVerify = (data: any): VerifyOutcome => {
+  if (data?.verified !== true || data?.needsReview === true) return 'needs_review';
+  // `!== false` (not `=== true`): a missing/renamed field must read as "live".
+  if (data?.liveHold !== false) return 'live';
+  return CONCLUSIVELY_DEAD_HOLD_STATUSES.includes(String(data?.status)) ? 'resolved' : 'in_progress';
+};
+
+const describeInProgressHold = (status: unknown): string =>
+  `This deposit hold is still being worked on${status ? ` (currently ${status})` : ''} — either the card is still authorising or another update is finishing it off. Nothing was changed. Check again in a moment rather than placing a second hold.`;
+
 // Format a Postgres TIME value ("HH:MM" or "HH:MM:SS") into 12-hour clock
 // notation ("10:30 AM"). Returns null when the value is missing so callers
 // can decide whether to render the line at all.
@@ -158,6 +213,14 @@ interface Rental {
   is_gig_driver?: boolean;
   // Pay As You Go
   is_pay_as_you_go?: boolean;
+  // Security deposit pre-auth hold. These live on the rental, NOT on payments —
+  // which is exactly why an expiring Stripe authorisation goes unnoticed (the
+  // webhooks only look PaymentIntents up in payments.stripe_payment_intent_id).
+  deposit_hold_status?: string | null;
+  deposit_hold_amount?: number | null;
+  deposit_hold_expires_at?: string | null;
+  deposit_hold_payment_intent_id?: string | null;
+  deposit_amount_override?: number | null;
 }
 
 function LocationCard({ type, address, location, fee, time, currencyCode }: {
@@ -1044,6 +1107,66 @@ const RentalDetail = () => {
   const [showExtrasDialog, setShowExtrasDialog] = useState(false);
   const [showChargeDepositDialog, setShowChargeDepositDialog] = useState(false);
   const [showAddHoldDialog, setShowAddHoldDialog] = useState(false);
+  const [verifyingHold, setVerifyingHold] = useState(false);
+
+  // Ask Stripe what the deposit authorisation is ACTUALLY doing and write the
+  // answer back to the rental.
+  //
+  // GMT (Aug 2026): "I cannot refresh the hold. This is affecting our day to
+  // day business." Their 60-120 day rentals outlive a Stripe authorisation by
+  // an order of magnitude; when one lapses, Stripe cancels the PaymentIntent
+  // but nothing tells us, so deposit_hold_status stays 'held' forever. Both
+  // create-hold-checkout and place-deposit-hold then short-circuit on that
+  // stale 'held' and the operator is stuck staring at a green badge over a
+  // dead authorisation with no way forward. This button is the way forward:
+  // verify-deposit-hold reconciles the row against Stripe, after which the
+  // normal Add Hold / Refresh & Charge actions unblock themselves.
+  const handleVerifyDepositHold = async () => {
+    if (!rental?.id || verifyingHold) return;
+    setVerifyingHold(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-deposit-hold', {
+        body: { rentalId: rental.id },
+      });
+      // invoke() does not throw on non-2xx — it resolves with { data, error }.
+      if (error) throw new Error(await extractFunctionError(error, 'Could not check the hold with Stripe.'));
+
+      await queryClient.invalidateQueries({ queryKey: ['rental', id] });
+
+      // Read the answer the same way add-hold-dialog does — see classifyVerify
+      // above. The distinction that matters: verify-deposit-hold returns
+      // liveHold:false for states that are NOT resolved (still authorising, or
+      // a worker owns the row), and for the worker-owned case it still carries
+      // the "Place a new hold to re-authorise the deposit" copy. Titling that
+      // 'Hold checked' and repeating the advice would talk an operator into a
+      // second authorisation on top of one that is still in flight.
+      const outcome = classifyVerify(data);
+      if (outcome === 'in_progress') {
+        toast({
+          title: 'Still in progress',
+          description: describeInProgressHold(data?.status),
+        });
+      } else {
+        toast({
+          title: outcome === 'needs_review'
+            ? 'Needs a closer look'
+            : data?.changed
+              ? 'Hold status corrected'
+              : 'Hold checked',
+          description: data?.message || 'Checked this deposit hold against Stripe.',
+          variant: outcome === 'needs_review' ? 'destructive' : undefined,
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Could not check with Stripe',
+        description: err.message || 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setVerifyingHold(false);
+    }
+  };
 
   // Fetch renewal chain info: any rental that was renewed from this one
   const { data: renewedAsRental } = useQuery({
@@ -3074,6 +3197,11 @@ const RentalDetail = () => {
             if (rental.deposit_hold_status === 'captured') return 'Charged';
             if (rental.deposit_hold_status === 'released') return 'Released back to customer';
             if (rental.deposit_hold_status === 'expired') return 'Hold expired';
+            // These three used to fall through to "No hold placed", which is a
+            // lie — there IS a hold record, it's just mid-flight or broken.
+            if (rental.deposit_hold_status === 'processing') return 'Authorisation in progress';
+            if (rental.deposit_hold_status === 'refreshing') return 'Replacing the hold';
+            if (rental.deposit_hold_status === 'failed') return 'Hold failed';
             const depositRefunded = refundBreakdown?.['Security Deposit'] ?? 0;
             const hasExcessMileage = (rentalCharges || []).some(c => c.category === 'Excess Mileage');
             if (depositRefunded > 0 && hasExcessMileage) return 'Applied to Excess Mileage';
@@ -3346,6 +3474,51 @@ const RentalDetail = () => {
                               )}
                             </div>
                             <p className="text-xs text-muted-foreground">{applied ? detail : 'Not applied'}</p>
+                            {/* Expiry of the Stripe authorisation. This was never
+                                rendered anywhere in the portal, so an operator had
+                                no way to see a hold was about to die under them —
+                                they only found out when a capture failed. */}
+                            {category === 'Security Deposit' && (() => {
+                              // 'processing'/'refreshing' mean a worker is placing a
+                              // NEW authorisation right now, and neither writer clears
+                              // deposit_hold_expires_at when it claims the row — so the
+                              // column still holds the OUTGOING hold's date, which by
+                              // definition is at or past expiry (that is why the cron
+                              // picked the row up). Rendering it would shout
+                              // "Authorisation lapsed" in red over a hold that is being
+                              // placed successfully. Say what is actually happening
+                              // instead.
+                              if (depositHoldStatus === 'processing' || depositHoldStatus === 'refreshing') {
+                                return (
+                                  <p className="text-xs mt-0.5 flex items-center gap-1 text-muted-foreground">
+                                    <Clock className="h-3 w-3 shrink-0" />
+                                    Placing a new authorisation…
+                                  </p>
+                                );
+                              }
+                              if (depositHoldStatus !== 'held' && depositHoldStatus !== 'expired') return null;
+                              const expiry = describeHoldExpiry(rental.deposit_hold_expires_at);
+                              if (!expiry) return null;
+                              // 'expired' with a still-future timestamp means the hold
+                              // died EARLY (cancelled, or the bank pulled it), so the
+                              // stored date describes nothing that happened. Only show
+                              // the date on this status when it corroborates the badge.
+                              if (depositHoldStatus === 'expired' && expiry.tone !== 'past') return null;
+                              return (
+                                <p
+                                  className={`text-xs mt-0.5 flex items-center gap-1 ${
+                                    expiry.tone === 'past'
+                                      ? 'text-red-500 font-medium'
+                                      : expiry.tone === 'soon'
+                                        ? 'text-amber-500 font-medium'
+                                        : 'text-muted-foreground'
+                                  }`}
+                                >
+                                  {expiry.tone === 'ok' ? <Clock className="h-3 w-3 shrink-0" /> : <AlertTriangle className="h-3 w-3 shrink-0" />}
+                                  {expiry.label}
+                                </p>
+                              );
+                            })()}
                           </div>
                         </div>
                       </TableCell>
@@ -3371,6 +3544,12 @@ const RentalDetail = () => {
                             if (depositHoldStatus === 'captured') return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Charged</Badge>;
                             if (depositHoldStatus === 'released') return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Released</Badge>;
                             if (depositHoldStatus === 'expired') return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Expired</Badge>;
+                            // Previously unrendered — these fell through to the
+                            // "No Hold" badge below, which told the operator the
+                            // opposite of the truth.
+                            if (depositHoldStatus === 'processing') return <Badge variant="outline" className="text-blue-500 border-blue-500/30 bg-blue-500/10 text-[11px]">Processing</Badge>;
+                            if (depositHoldStatus === 'refreshing') return <Badge variant="outline" className="text-indigo-500 border-indigo-500/30 bg-indigo-500/10 text-[11px]">Refreshing</Badge>;
+                            if (depositHoldStatus === 'failed') return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Failed</Badge>;
                           }
                           // Security Deposit without a hold (manual/cash payments, or Stripe hold
                           // hasn't fired) — never show "Not Paid"; the deposit isn't a charge.
@@ -3488,75 +3667,135 @@ const RentalDetail = () => {
                       </TableCell>
                       <TableCell className="text-right pr-6">
                         <div className="flex items-center gap-2 justify-end">
-                        {category === 'Security Deposit' && rental.deposit_hold_status === 'held' ? (
+                        {category === 'Security Deposit' && (depositHoldStatus === 'held' || depositHoldStatus === 'expired' || !depositHoldStatus) ? (
+                          // Deliberately the SAME three statuses this branch owned before
+                          // (held / expired / no hold). It must not swallow 'processing',
+                          // 'refreshing', 'failed', 'captured' or 'released': those fall
+                          // through to the generic ladder below, which carries real
+                          // Security-Deposit handling (isDepositUsed, the Release/Release
+                          // More button, Add Payment). A rental whose hold failed and
+                          // whose deposit was then collected manually still has to be
+                          // releasable from this row. The hold-specific affordances for
+                          // those states are appended after the ladder instead — see the
+                          // in-flight block below.
+                          //
+                          // What IS new here is "Check with Stripe" on held/expired. The
+                          // stored status is not trustworthy on its own: a Stripe
+                          // authorisation lapses after ~5-7 days and nothing pushes that
+                          // to us, so 'held' can (and for GMT's 60-120 day rentals
+                          // routinely does) sit over a dead auth, with both Add Hold and
+                          // Refresh refusing to run. Reconciling first unblocks them.
                           <div className="flex items-center gap-2 justify-end">
-                            <button
-                              className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                  // supabase.functions.invoke() does NOT throw on a
-                                  // non-2xx response — it resolves with { data, error }.
-                                  // We must inspect both, otherwise a server-side 500
-                                  // (e.g. the hold could not be cancelled) silently
-                                  // shows a success toast while the status never changes.
-                                  const { data, error } = await supabase.functions.invoke('release-deposit-hold', {
-                                    body: { rentalId: rental.id, tenantId: tenant?.id },
-                                  });
-                                  if (error) {
-                                    let detail = error.message;
+                            {depositHoldStatus === 'held' && (
+                              <>
+                                <button
+                                  className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
                                     try {
-                                      const body = await error.context?.json?.();
-                                      if (body?.error) detail = body.error;
-                                    } catch { /* ignore parse errors */ }
-                                    throw new Error(detail);
-                                  }
-                                  if (data && data.success === false) {
-                                    throw new Error(data.error || 'Failed to release the deposit hold.');
-                                  }
-                                  queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
-                                  toast({ title: 'Deposit Released', description: 'The deposit hold has been released.' });
-                                } catch (err: any) {
-                                  toast({ title: 'Error', description: err.message, variant: 'destructive' });
-                                }
-                              }}
-                            >
-                              Release
-                            </button>
-                            <button
-                              className="text-xs font-medium text-red-500 hover:text-red-400 hover:underline"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowChargeDepositDialog(true);
-                              }}
-                            >
-                              Charge
-                            </button>
+                                      // supabase.functions.invoke() does NOT throw on a
+                                      // non-2xx response — it resolves with { data, error }.
+                                      // We must inspect both, otherwise a server-side 500
+                                      // (e.g. the hold could not be cancelled) silently
+                                      // shows a success toast while the status never changes.
+                                      const { data, error } = await supabase.functions.invoke('release-deposit-hold', {
+                                        body: { rentalId: rental.id, tenantId: tenant?.id },
+                                      });
+                                      if (error) {
+                                        let detail = error.message;
+                                        try {
+                                          const body = await error.context?.json?.();
+                                          if (body?.error) detail = body.error;
+                                        } catch { /* ignore parse errors */ }
+                                        throw new Error(detail);
+                                      }
+                                      if (data && data.success === false) {
+                                        throw new Error(data.error || 'Failed to release the deposit hold.');
+                                      }
+                                      queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+                                      toast({ title: 'Deposit Released', description: 'The deposit hold has been released.' });
+                                    } catch (err: any) {
+                                      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+                                    }
+                                  }}
+                                >
+                                  Release
+                                </button>
+                                <button
+                                  className="text-xs font-medium text-red-500 hover:text-red-400 hover:underline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowChargeDepositDialog(true);
+                                  }}
+                                >
+                                  Charge
+                                </button>
+                              </>
+                            )}
+
+                            {depositHoldStatus === 'expired' && (
+                              // Charge opens the two-step dialog: explain → Refresh hold →
+                              // Charge. Add Hold is offered alongside it because "put a
+                              // live hold back on the card" is a legitimate end in itself —
+                              // it doesn't have to be followed by taking the money.
+                              <>
+                                <button
+                                  className="text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowChargeDepositDialog(true);
+                                  }}
+                                >
+                                  Refresh &amp; Charge
+                                </button>
+                                {canEdit('rentals') && (
+                                  <button
+                                    className="text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setShowAddHoldDialog(true);
+                                    }}
+                                  >
+                                    Add Hold
+                                  </button>
+                                )}
+                              </>
+                            )}
+
+                            {!depositHoldStatus && (
+                              // No usable hold — open the Add Hold dialog which offers
+                              // "Place via Stripe" (new tab) and "Send email link".
+                              <button
+                                className="text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowAddHoldDialog(true);
+                                }}
+                              >
+                                Add Hold
+                              </button>
+                            )}
+
+                            {/* Reconcile against Stripe. Gated on canEdit because
+                                verify-deposit-hold WRITES (it corrects
+                                deposit_hold_status), so it is not a viewer action.
+                                Only offered where there is a PaymentIntent worth
+                                asking about — never on the no-hold row. */}
+                            {depositHoldStatus && canEdit('rentals') && (
+                              <button
+                                className="text-xs font-medium text-indigo-500 hover:text-indigo-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                                disabled={verifyingHold}
+                                title="Ask Stripe whether this authorisation is still live and correct the status"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleVerifyDepositHold();
+                                }}
+                              >
+                                <RefreshCw className={`h-3 w-3 ${verifyingHold ? 'animate-spin' : ''}`} />
+                                {verifyingHold ? 'Checking…' : 'Check with Stripe'}
+                              </button>
+                            )}
                           </div>
-                        ) : category === 'Security Deposit' && rental.deposit_hold_status === 'expired' ? (
-                          // Hold expired (Stripe ~7-day boundary). Charge opens the
-                          // two-step dialog: explain → Refresh hold → Charge.
-                          <button
-                            className="text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowChargeDepositDialog(true);
-                            }}
-                          >
-                            Refresh &amp; Charge
-                          </button>
-                        ) : category === 'Security Deposit' && !rental.deposit_hold_status ? (
-                          // No hold placed yet — open the Add Hold dialog which offers
-                          // "Place via Stripe" (new tab) and "Send email link" options.
-                          <button
-                            className="text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowAddHoldDialog(true);
-                            }}
-                          >
-                            Add Hold
-                          </button>
                         ) : isExcessMileageUnpaid && excessMileageCharge ? (
                           <div className="flex items-center gap-2 justify-end">
                             {(() => {
@@ -3720,6 +3959,49 @@ const RentalDetail = () => {
                         ) : (
                           <span className="text-muted-foreground/30">-</span>
                         )}
+
+                        {/* In-flight / broken hold affordances, rendered ALONGSIDE the
+                            ladder above rather than instead of it.
+                            'processing', 'refreshing' and 'failed' have always fallen
+                            through to that ladder, and that is where a deposit collected
+                            outside the hold gets its Release / Release More / Add Payment
+                            button — swallowing these statuses into a hold-only branch
+                            would take those away from every tenant. So the hold actions
+                            are appended here instead of replacing anything.
+                            'processing'/'refreshing' deliberately get NO placement
+                            button: a second authorisation while one is in flight
+                            double-holds the customer's card. Check with Stripe is how you
+                            find out whether it really finished. */}
+                        {category === 'Security Deposit'
+                          && ['processing', 'refreshing', 'failed'].includes(depositHoldStatus || '')
+                          && canEdit('rentals') && (
+                          <>
+                            {depositHoldStatus === 'failed' && (
+                              <button
+                                className="text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowAddHoldDialog(true);
+                                }}
+                              >
+                                Add Hold
+                              </button>
+                            )}
+                            <button
+                              className="text-xs font-medium text-indigo-500 hover:text-indigo-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                              disabled={verifyingHold}
+                              title="Ask Stripe whether this authorisation is still live and correct the status"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleVerifyDepositHold();
+                              }}
+                            >
+                              <RefreshCw className={`h-3 w-3 ${verifyingHold ? 'animate-spin' : ''}`} />
+                              {verifyingHold ? 'Checking…' : 'Check with Stripe'}
+                            </button>
+                          </>
+                        )}
+
                         {applied && (
                           <button
                             className="text-muted-foreground hover:text-amber-500 transition-colors"
@@ -6181,6 +6463,7 @@ const RentalDetail = () => {
           rentalId={rental.id}
           holdAmount={Number(rental.deposit_hold_amount) || 0}
           holdStatus={rental.deposit_hold_status}
+          holdExpiresAt={rental.deposit_hold_expires_at}
         />
       )}
 

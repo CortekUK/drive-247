@@ -25,8 +25,36 @@ interface ChargeDepositDialogProps {
    * be captured; a fresh hold must be placed first).
    */
   holdStatus?: string | null;
+  /**
+   * rentals.deposit_hold_expires_at. Drives the expiry copy in both phases.
+   * The dialog used to state a flat "about 7 days" — but the real window
+   * depends on the account (extended authorization can reach 30 days) and,
+   * more importantly, the operator needs the actual date, not a rule of thumb.
+   */
+  holdExpiresAt?: string | null;
   onSuccess?: () => void;
 }
+
+// Local to this dialog: the rental page has its own copy for the breakdown row.
+// Not worth a shared module for two call sites with different phrasing needs.
+const formatHoldExpiry = (expiresAt: string | null | undefined) => {
+  if (!expiresAt) return null;
+  const ts = new Date(expiresAt);
+  if (Number.isNaN(ts.getTime())) return null;
+  const dateLabel = ts.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const msLeft = ts.getTime() - Date.now();
+  if (msLeft <= 0) return { lapsed: true, urgent: true, dateLabel, remaining: null as string | null };
+  const hoursLeft = Math.floor(msLeft / 3_600_000);
+  const daysLeft = Math.floor(hoursLeft / 24);
+  const remaining =
+    daysLeft >= 1
+      ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`
+      : hoursLeft >= 1
+        ? `${hoursLeft} hour${hoursLeft === 1 ? "" : "s"} left`
+        : "under an hour left";
+  // 3 days matches the warning window used on the rental page's deposit row.
+  return { lapsed: false, urgent: daysLeft < 3, dateLabel, remaining };
+};
 
 export const ChargeDepositDialog = ({
   open,
@@ -34,6 +62,7 @@ export const ChargeDepositDialog = ({
   rentalId,
   holdAmount,
   holdStatus,
+  holdExpiresAt,
   onSuccess,
 }: ChargeDepositDialogProps) => {
   const { tenant } = useTenant();
@@ -41,6 +70,14 @@ export const ChargeDepositDialog = ({
   const queryClient = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // Set the moment a refresh succeeds. onRefresh does not (and should not)
+  // await the parent's refetch before flipping to the charge phase, so for a
+  // beat `holdExpiresAt` is still the OLD, lapsed timestamp — long enough to
+  // render "this authorisation lapsed … the capture will likely be declined"
+  // in red underneath a green "Hold refreshed" toast, over an authorisation
+  // that was just placed successfully. Suppress the stale line until a fresher
+  // prop arrives.
+  const [justRefreshed, setJustRefreshed] = useState(false);
 
   // Two phases: "refresh" (hold expired — re-place it first) and "charge"
   // (hold is live — capture it). We seed the phase from holdStatus on open, and
@@ -48,6 +85,7 @@ export const ChargeDepositDialog = ({
   const [phase, setPhase] = useState<"refresh" | "charge">("charge");
 
   const currency = tenant?.currency_code || "USD";
+  const expiry = formatHoldExpiry(holdExpiresAt);
 
   // Partial captures are temporarily disabled until Stripe approves
   // multicapture for the platform's Connect accounts. Without multicapture,
@@ -71,6 +109,7 @@ export const ChargeDepositDialog = ({
   useEffect(() => {
     if (open) {
       form.reset({ reason: "" });
+      setJustRefreshed(false);
       setPhase(holdStatus === "expired" ? "refresh" : "charge");
     }
   }, [open, holdStatus, form]);
@@ -108,6 +147,7 @@ export const ChargeDepositDialog = ({
       }
 
       invalidateRentalQueries();
+      setJustRefreshed(true);
       toast({
         title: "Hold refreshed",
         description: `A fresh ${formatCurrency(holdAmount, currency)} hold is on the customer's saved card. You can charge it now.`,
@@ -142,6 +182,9 @@ export const ChargeDepositDialog = ({
       // moments ago). The function self-healed and tells us to refresh first.
       if (result?.code === "hold_expired") {
         invalidateRentalQueries();
+        // Whatever we placed a moment ago is gone too — stop suppressing the
+        // expiry line on the strength of that refresh.
+        setJustRefreshed(false);
         setPhase("refresh");
         toast({
           title: "Hold expired",
@@ -198,7 +241,7 @@ export const ChargeDepositDialog = ({
         </DialogHeader>
 
         {phase === "refresh" ? (
-          // ── Step 1: explain the Stripe 7-day boundary and offer Refresh ──
+          // ── Step 1: explain that the authorisation lapsed, and offer Refresh ──
           <div className="space-y-4 pt-2">
             <Alert className="border-amber-500/60 bg-amber-500/10">
               <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
@@ -207,9 +250,28 @@ export const ChargeDepositDialog = ({
                   This pre-authorization hold has expired.
                 </p>
                 <p className="text-xs leading-relaxed text-amber-900/85 dark:text-amber-100/85">
-                  Stripe card holds only last about <strong>7 days</strong>. After that the bank
-                  automatically releases the money back to the customer, so the old hold can no longer
-                  be charged.
+                  {/* This used to read "Stripe card holds only last about 7 days".
+                      That number is not ours to quote — the window depends on the
+                      card and the account (extended authorization reaches 30 days),
+                      and an operator handling a 90-day rental needs the actual date
+                      this authorisation died, not a rule of thumb. */}
+                  {/* Only quote the date when it has actually passed. A hold can
+                      also die early (the bank pulls it, or it's cancelled), in
+                      which case deposit_hold_expires_at is still in the future
+                      and naming it would just confuse the operator. */}
+                  {expiry?.lapsed ? (
+                    <>
+                      The authorisation on the customer&apos;s card lapsed on{" "}
+                      <strong>{expiry.dateLabel}</strong>. Card authorisations are temporary — once one
+                      expires the bank releases the money back to the customer, so the old hold can no
+                      longer be charged.
+                    </>
+                  ) : (
+                    <>
+                      Card authorisations are temporary. Once one lapses — or the bank releases it early
+                      — the money goes back to the customer, so the old hold can no longer be charged.
+                    </>
+                  )}
                   <br />
                   <br />
                   To take this deposit, <strong>refresh the hold</strong> — we&apos;ll place a fresh{" "}
@@ -259,6 +321,31 @@ export const ChargeDepositDialog = ({
                 <span className="text-sm text-muted-foreground">Amount to charge</span>
                 <span className="text-base font-semibold">{formatCurrency(holdAmount, currency)}</span>
               </div>
+
+              {/* When this authorisation dies. An operator charging a long rental
+                  deserves to know they're working against a clock — and if the
+                  date is already past, that the capture is likely to fail. */}
+              {justRefreshed ? (
+                // We just placed a fresh hold; holdExpiresAt hasn't caught up yet.
+                // Anything derived from it right now describes the authorisation we
+                // REPLACED, so say what we actually know instead.
+                <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  A fresh authorisation was just placed — its expiry date will appear once the rental
+                  refreshes.
+                </p>
+              ) : expiry && (
+                <p
+                  className={`flex items-start gap-1.5 text-xs ${
+                    expiry.lapsed ? "text-red-500 font-medium" : expiry.urgent ? "text-amber-500 font-medium" : "text-muted-foreground"
+                  }`}
+                >
+                  <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  {expiry.lapsed
+                    ? `This authorisation lapsed on ${expiry.dateLabel} — the capture will likely be declined. Check with Stripe from the rental page if you're unsure.`
+                    : `Authorisation expires ${expiry.dateLabel} · ${expiry.remaining}`}
+                </p>
+              )}
 
               <FormField
                 control={form.control}

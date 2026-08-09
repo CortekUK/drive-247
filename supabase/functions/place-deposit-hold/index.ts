@@ -3,7 +3,53 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, resolveHoldExpiry, DEPOSIT_HOLD_CARD_OPTIONS, type StripeMode } from "../_shared/stripe-client.ts";
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, getStripeClientForRecord, resolveHoldExpiry, DEPOSIT_HOLD_CARD_OPTIONS, type StripeMode } from "../_shared/stripe-client.ts";
+
+// Stripe PaymentIntent status -> the deposit_hold_status that is conclusively
+// true when we see it. Only these three mean the authorisation is DEAD and the
+// rental may be re-collected; requires_capture means it is alive, and anything
+// else (requires_action, requires_confirmation, processing) is still in motion
+// and is treated as alive so we never authorise the same card twice.
+//
+// Duplicated in create-hold-checkout — _shared/stripe-client.ts is owned by
+// another workstream and this pair of guards must ship without touching it.
+const DEAD_PI_STATUS_TO_HOLD_STATUS: Record<string, string> = {
+  canceled: "expired",
+  succeeded: "captured",
+  requires_payment_method: "failed",
+};
+
+/**
+ * Is the hold recorded on this rental STILL alive at Stripe?
+ *
+ * rentals.deposit_hold_status is written when a hold is placed and then never
+ * revisited: card authorisations expire on their own (~5-7 days at the network
+ * default) and Stripe cancels the PaymentIntent, but every webhook looks
+ * PaymentIntents up by payments.stripe_payment_intent_id, never by
+ * rentals.deposit_hold_payment_intent_id. So the row keeps saying 'held' on a
+ * dead auth forever and every placement path short-circuits — the operator is
+ * told a hold is already active and has no way forward (GMT: "I cannot refresh
+ * the hold", Aug 2026).
+ *
+ * FAIL SAFE, NOT OPEN: any doubt — Stripe unreachable, an id Stripe has never
+ * heard of, a PI still mid-authorisation — returns `alive: true` so we keep the
+ * conservative skip rather than risk double-authorising a customer's card.
+ */
+async function probeRecordedHold(
+  stripe: ReturnType<typeof getStripeClientForRecord>,
+  paymentIntentId: string,
+  stripeOptions: { stripeAccount?: string } | undefined
+): Promise<{ alive: boolean; deadStatus: string | null }> {
+  try {
+    const intent = await stripe.paymentIntents.retrieve(paymentIntentId, stripeOptions);
+    const deadStatus = DEAD_PI_STATUS_TO_HOLD_STATUS[String(intent.status)] ?? null;
+    if (deadStatus) return { alive: false, deadStatus };
+    return { alive: true, deadStatus: null };
+  } catch (err) {
+    console.warn("[DEPOSIT-HOLD] Could not verify existing hold at Stripe, treating as active:", err);
+    return { alive: true, deadStatus: null };
+  }
+}
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -26,7 +72,7 @@ Deno.serve(async (req) => {
     // Fetch rental details
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
-      .select("customer_id, vehicle_id, tenant_id, deposit_hold_status, deposit_amount_override, auto_extend_enabled")
+      .select("customer_id, vehicle_id, tenant_id, deposit_hold_status, deposit_hold_payment_intent_id, deposit_amount_override, auto_extend_enabled, platform_account")
       .eq("id", rentalId)
       .single();
 
@@ -64,25 +110,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Remember the prior state: a re-collection after an expired/released hold
-    // needs a fresh Stripe idempotency key so it doesn't get handed back the
-    // old (dead) PaymentIntent.
-    const priorHoldStatus = rental.deposit_hold_status as string | null;
-
-    // Don't place a hold if one already exists
-    if (rental.deposit_hold_status === "held") {
-      return jsonResponse({ success: true, alreadyHeld: true, message: "Deposit hold already active" });
-    }
-    // If another worker is mid-flight, bail out — they'll finish their write.
-    // The Stripe idempotency key below also catches the case where this guard
-    // is bypassed (e.g. status reset between read and claim).
-    if (rental.deposit_hold_status === "processing") {
-      return jsonResponse({ success: true, alreadyHeld: true, message: "Deposit hold is being placed by another request" });
-    }
-
     const effectiveTenantId = tenantId || rental.tenant_id;
 
-    // Fetch tenant settings (deposit amount, Stripe config)
+    // Fetch tenant settings (deposit amount, Stripe config).
+    // Hoisted above the 'held' guard below: that guard now has to ask Stripe
+    // whether the recorded hold is real, and resolving the right Stripe client
+    // needs this row.
     const { data: tenant, error: tenantError } = await supabase
       .from("tenants")
       .select("global_deposit_amount, security_deposit_enabled, deposit_mode, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id")
@@ -91,6 +124,113 @@ Deno.serve(async (req) => {
 
     if (tenantError || !tenant) {
       return errorResponse("Tenant not found", 404);
+    }
+
+    // Remember the prior state: a re-collection after a dead hold needs a fresh
+    // Stripe idempotency key so it doesn't get handed back the old (dead)
+    // PaymentIntent. It is `let` because the stale-hold reconciliation below
+    // may correct it — and the atomic claim further down matches on it.
+    let priorHoldStatus = rental.deposit_hold_status as string | null;
+
+    // Don't place a hold if one already exists — but 'held' in the DB is NOT
+    // proof of a live authorisation (see probeRecordedHold above). Ask Stripe
+    // before refusing: an expired auth left this branch returning alreadyHeld
+    // forever, so the rental could never take another deposit and the operator
+    // had no way forward (GMT: "I cannot refresh the hold", Aug 2026).
+    //
+    // The PI we probe is the one the heal below is anchored to. Anchoring on
+    // status alone is unsafe: refresh-deposit-holds CANCELS the old PI and then
+    // re-writes the row as 'held' carrying a BRAND NEW live PI, so a
+    // status-only guard would happily mark that live hold dead and we would
+    // authorise the customer's card a second time.
+    const probedPiId = (rental.deposit_hold_payment_intent_id as string | null) ?? null;
+    if (priorHoldStatus === "held") {
+      let alive = true;
+      let deadStatus: string | null = null;
+      try {
+        if (!probedPiId) {
+          // No PaymentIntent recorded, so nothing can be alive — the status is
+          // a leftover, not an authorisation.
+          alive = false;
+        } else {
+          const holdMode: StripeMode = (tenant.stripe_mode as StripeMode) || "test";
+          // Record-anchored: the EXISTING hold lives on the platform account it
+          // was created on (rentals.platform_account), which may differ from
+          // where the NEW hold goes if the tenant has since flipped model.
+          const holdStripe = getStripeClientForRecord(rental as any, holdMode);
+          const holdConnectId = getConnectAccountId({
+            ...(tenant as any),
+            payment_model: (rental as any).platform_account === "uae" ? "own" : "managed",
+          });
+          const probe = await probeRecordedHold(
+            holdStripe,
+            probedPiId,
+            holdConnectId ? { stripeAccount: holdConnectId } : undefined
+          );
+          alive = probe.alive;
+          deadStatus = probe.deadStatus;
+        }
+      } catch (probeErr) {
+        // getConnectAccountId throws for a live 'own' tenant with no connected
+        // account. Keep the old conservative answer rather than turning a clean
+        // skip into a 500.
+        console.warn("[DEPOSIT-HOLD] Hold liveness probe unavailable, treating as active:", probeErr);
+        alive = true;
+      }
+
+      if (alive) {
+        return jsonResponse({ success: true, alreadyHeld: true, message: "Deposit hold already active" });
+      }
+
+      // Correct the record to the truth BEFORE the atomic claim below, anchored
+      // to the EXACT row we probed — same status AND same PaymentIntent (or the
+      // same absence of one). priorHoldStatus must track the correction: the
+      // claim matches on it, and a claim still looking for 'held' would find
+      // nothing and bail out with "Hold slot already claimed".
+      //
+      // deadStatus === null means the row said 'held' with NO PaymentIntent
+      // behind it, so the honest value is NULL (never placed).
+      let healQuery = supabase
+        .from("rentals")
+        .update({ deposit_hold_status: deadStatus })
+        .eq("id", rentalId)
+        .eq("deposit_hold_status", "held");
+      healQuery = probedPiId
+        ? healQuery.eq("deposit_hold_payment_intent_id", probedPiId)
+        : healQuery.is("deposit_hold_payment_intent_id", null);
+      const { data: healed, error: healError } = await healQuery.select("id");
+
+      if (healError) {
+        return errorResponse(`Failed to correct stale deposit hold status: ${healError.message}`, 500);
+      }
+      if (!healed || healed.length === 0) {
+        // Somebody else moved the row while we were asking Stripe — most likely
+        // refresh-deposit-holds swapping in a NEW PaymentIntent. Our "dead"
+        // conclusion is about a PI that is no longer this rental's hold, so
+        // fail safe and keep the conservative answer rather than authorising
+        // the card again.
+        console.warn(`[DEPOSIT-HOLD] Rental ${rentalId} changed under the hold probe; leaving it alone`);
+        return jsonResponse({ success: true, alreadyHeld: true, message: "Deposit hold already active" });
+      }
+      console.warn(`[DEPOSIT-HOLD] Stale hold on rental ${rentalId} corrected held -> ${deadStatus ?? "null"}; re-collecting`);
+      priorHoldStatus = deadStatus;
+      // ...and fall through to place a fresh hold.
+    }
+
+    // If another worker is mid-flight, bail out — they'll finish their write.
+    // The Stripe idempotency key below also catches the case where this guard
+    // is bypassed (e.g. status reset between read and claim).
+    if (priorHoldStatus === "processing") {
+      return jsonResponse({ success: true, alreadyHeld: true, message: "Deposit hold is being placed by another request" });
+    }
+    // Same for the refresh cron, which owns the row as 'refreshing' between
+    // cancelling the old PaymentIntent and writing the new one
+    // (refresh-deposit-holds). Without this guard the atomic claim below happily
+    // takes the slot from it mid-flight and we create a duplicate authorisation
+    // on the customer's card — the cron then writes its own PI id over ours and
+    // ours is orphaned, never released.
+    if (priorHoldStatus === "refreshing") {
+      return jsonResponse({ success: true, alreadyHeld: true, message: "Deposit hold is being refreshed by another request" });
     }
 
     if (!tenant.security_deposit_enabled) {
@@ -207,9 +347,16 @@ Deno.serve(async (req) => {
     // for R-f07370. Combined with the Stripe idempotency key below, this gives
     // belt-and-braces protection.
     // Claim from a placeable state: never placed (null) OR a dead hold that can
-    // be re-collected (expired/released). 'held'/'processing' are handled above.
-    // We match on the EXACT prior status we read, which keeps the claim atomic
-    // (only wins if nothing changed underneath us). NOTE: a PostgREST `.or()`
+    // be re-collected (expired/released/captured/failed). 'held', 'processing'
+    // and 'refreshing' are all returned above — including a 'held' row we just
+    // reconciled against Stripe, in which case priorHoldStatus already carries
+    // the CORRECTED value, so the claim matches the row as it now stands.
+    // We match on the EXACT prior status we read (or wrote) AND on the exact
+    // PaymentIntent the row carried, which keeps the claim atomic (only wins if
+    // nothing changed underneath us). The PI anchor matters because
+    // refresh-deposit-holds can hand the row a NEW live authorisation while
+    // leaving the status looking claimable — claiming that would put a second
+    // hold on the customer's card. NOTE: a PostgREST `.or()`
     // filter on `.update()` mis-qualifies the column and errors with
     // "column rentals.deposit_hold_status does not exist", so we branch on the
     // proven `.is(null)` / `.eq()` filters instead.
@@ -221,6 +368,11 @@ Deno.serve(async (req) => {
       priorHoldStatus === null || priorHoldStatus === undefined
         ? claimQuery.is("deposit_hold_status", null)
         : claimQuery.eq("deposit_hold_status", priorHoldStatus);
+    // Only when a PI was actually recorded: with none recorded there is no
+    // authorisation to protect, and nothing in this codebase ever writes a PI id
+    // without moving the status in the same statement, so the status filter
+    // already covers that case.
+    if (probedPiId) claimQuery = claimQuery.eq("deposit_hold_payment_intent_id", probedPiId);
     const { data: claimed, error: claimError } = await claimQuery.select("id");
     if (claimError) {
       return errorResponse(`Failed to claim hold slot: ${claimError.message}`, 500);
@@ -271,9 +423,23 @@ Deno.serve(async (req) => {
         type: "deposit_hold",
       },
     };
-    // Re-collections (prior hold expired/released) get a distinct idempotency
-    // key so Stripe creates a NEW hold instead of returning the dead PI.
-    const idemSuffix = priorHoldStatus === "expired" || priorHoldStatus === "released" ? `-recollect-${priorHoldStatus}` : "";
+    // Re-collections get a distinct idempotency key so Stripe creates a NEW
+    // hold instead of replaying the dead one for 24h.
+    //
+    // Keyed on the DEAD PAYMENT INTENT, not on the prior status. Status is the
+    // wrong anchor because every placement-failure path below resets
+    // deposit_hold_status to NULL while LEAVING deposit_hold_payment_intent_id
+    // in place: a declined re-collection therefore came back with a null status
+    // and collapsed to the plain `deposit-hold-<rentalId>` key — the very key
+    // the rental's FIRST-EVER hold used — so within Stripe's 24h window the
+    // operator was handed the old response and told the hold was placed when no
+    // authorisation existed.
+    //
+    // The surviving PI id has none of that trouble: it is untouched by the
+    // failure resets, differs for each successive re-collection (so a second
+    // dead hold gets a second key), collapses to the unsuffixed key only for a
+    // genuine first hold, and keeps true retries of ONE attempt idempotent.
+    const idemSuffix = probedPiId ? `-recollect-${probedPiId}` : "";
     const requestOpts = { ...(stripeOptions ?? {}), idempotencyKey: `deposit-hold-${rentalId}${idemSuffix}` };
 
     let paymentIntent;
