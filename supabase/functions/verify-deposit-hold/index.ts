@@ -198,19 +198,30 @@ Deno.serve(async (req) => {
     // UAE-migrated rental of a tenant mid-OAuth would 500. This endpoint's
     // contract is that a reconcilable state never throws, so an unresolvable
     // Stripe context is reported as needsReview, exactly like a missing PI.
-    let stripe: ReturnType<typeof getStripeClientForRecord>;
-    let stripeOptions: { stripeAccount?: string } | undefined;
-    let connectAccountId: string | null = null;
-    try {
-      const stripeMode: StripeMode = ((tenant as any).stripe_mode as StripeMode) || "test";
-      stripe = getStripeClientForRecord(rental, stripeMode);
-      connectAccountId = getConnectAccountId({
-        ...(tenant as any),
-        payment_model: rental.platform_account === "uae" ? "own" : "managed",
-      });
-      stripeOptions = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
-    } catch (configErr) {
-      console.warn("[HOLD-VERIFY] Stripe context unresolvable for rental", rentalId, configErr);
+    const stripeContext = ((): {
+      stripe: ReturnType<typeof getStripeClientForRecord>;
+      stripeOptions: { stripeAccount?: string } | undefined;
+      connectAccountId: string | null;
+    } | null => {
+      try {
+        const stripeMode: StripeMode = ((tenant as any).stripe_mode as StripeMode) || "test";
+        const client = getStripeClientForRecord(rental, stripeMode);
+        const account = getConnectAccountId({
+          ...(tenant as any),
+          payment_model: rental.platform_account === "uae" ? "own" : "managed",
+        });
+        return {
+          stripe: client,
+          stripeOptions: account ? { stripeAccount: account } : undefined,
+          connectAccountId: account,
+        };
+      } catch (configErr) {
+        console.warn("[HOLD-VERIFY] Stripe context unresolvable for rental", rentalId, configErr);
+        return null;
+      }
+    })();
+
+    if (!stripeContext) {
       return jsonResponse({
         verified: false,
         liveHold: false,
@@ -222,6 +233,8 @@ Deno.serve(async (req) => {
           "Stripe is not reachable for this rental — the tenant's Stripe connection is incomplete, so the deposit hold could not be checked. Nothing was changed.",
       });
     }
+
+    const { stripe, stripeOptions, connectAccountId } = stripeContext;
 
     let intent;
     try {

@@ -119,7 +119,28 @@ describe('ChargeDepositDialog — copy', () => {
   it('renders no expiry line at all when the rental has no recorded expiry', () => {
     // formatHoldExpiry returns null and the JSX is gated on the result, so a
     // rental with a null column shows nothing rather than "Invalid Date".
-    expect(source).toMatch(/\{expiry && \(/);
+    expect(source).toMatch(/: expiry && \(/);
+  });
+
+  it('does not shout "lapsed" over a hold it just refreshed successfully', () => {
+    // onRefresh fires invalidateRentalQueries() WITHOUT awaiting it and flips
+    // straight to the charge phase, so for the length of the parent's refetch
+    // holdExpiresAt is still the OLD, lapsed timestamp. Rendering it would put
+    // "this authorisation lapsed … the capture will likely be declined" in red
+    // directly under a green "Hold refreshed" toast.
+    const refresh = source.slice(source.indexOf('const onRefresh'), source.indexOf('const onSubmit'));
+    expect(refresh).toContain('setJustRefreshed(true)');
+
+    const chargePhase = source.slice(source.indexOf('Amount to charge'));
+    expect(chargePhase).toContain('{justRefreshed ? (');
+    // The suppression must sit BEFORE the expiry-derived line, or it never wins.
+    expect(chargePhase.indexOf('{justRefreshed ? (')).toBeLessThan(chargePhase.indexOf('expiry.lapsed'));
+
+    // …and it must not outlive its evidence: a fresh open, or a capture that
+    // discovers the hold is dead after all, both clear it.
+    expect(source).toMatch(/if \(open\) \{[\s\S]{0,200}setJustRefreshed\(false\)/);
+    const submit = source.slice(source.indexOf('const onSubmit'), source.indexOf('const busy ='));
+    expect(submit.slice(submit.indexOf('hold_expired'))).toContain('setJustRefreshed(false)');
   });
 });
 

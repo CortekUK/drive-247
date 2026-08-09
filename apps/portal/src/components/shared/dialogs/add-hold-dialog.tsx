@@ -333,7 +333,19 @@ export const AddHoldDialog = ({
             ) : (
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
             )}
-            <span>{verifyMessage}</span>
+            <div className="space-y-2">
+              <span>{verifyMessage}</span>
+              {/* Retry lives here only when the conflict panel (which carries its
+                  own button) is gone — i.e. the check itself failed and we
+                  re-enabled the placement options. Without this the operator
+                  would have no way to ask again. */}
+              {verifyUnresolved && !holdConflict && (
+                <Button type="button" size="sm" variant="outline" onClick={handleVerify} disabled={busy}>
+                  <RefreshCw className={`mr-2 h-3.5 w-3.5 ${verifying ? "animate-spin" : ""}`} />
+                  {verifying ? "Checking…" : "Check again"}
+                </Button>
+              )}
+            </div>
           </div>
         )}
 

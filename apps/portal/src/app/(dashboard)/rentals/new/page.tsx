@@ -62,6 +62,7 @@ import { formatCurrency, getCurrencySymbol, formatDistance, getDistanceUnitShort
 import type { DistanceUnit } from "@/lib/format-utils";
 import { getMileageTier, getTierMileage, calculateTotalMileageAllowance, isUnlimitedMileage } from "@/lib/mileage-utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useAuth } from "@/stores/auth-store";
 import { useCustomerReviewSummary } from "@/hooks/use-customer-review-summary";
 import { useCustomerReviews } from "@/hooks/use-customer-reviews";
 import { useCustomerInsurance } from "@/hooks/use-customer-insurance";
@@ -113,6 +114,16 @@ const rentalSchema = z.object({
 
 type RentalFormData = z.infer<typeof rentalSchema>;
 
+/**
+ * Minimum length of the justification a privileged user must type before they can
+ * record a manual identity verification. Deliberately long enough that "ok" or
+ * "fine" won't pass — the reason is the only narrative the audit trail carries.
+ */
+const MANUAL_VERIFY_MIN_REASON = 15;
+
+/** Audit action + entity recorded when a staff member personally verifies a customer. */
+const MANUAL_VERIFY_AUDIT_ACTION = "customer_identity_manually_verified";
+
 const CreateRental = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -127,7 +138,26 @@ const CreateRental = () => {
   const skipInsurance = !isBonzahConnected || !isBonzahSellable(tenant);
   const queryClient = useQueryClient();
   const { isManager, canEdit } = useManagerPermissions();
+  const { appUser, isAdmin } = useAuth();
   const { logAction } = useAuditLog();
+
+  /**
+   * Who may record a manual identity verification.
+   *
+   * `isAdmin()` covers head_admin + admin, and super admins too — the auth store
+   * rewrites a super admin's role to 'head_admin' when loading the profile. It
+   * also returns false for an inactive account.
+   *
+   * A manager is NOT an admin, so they only qualify through the explicit branch:
+   * they must hold *editor* rights on `customers` (the row this action mutates)
+   * as well as on `rentals` (already required to reach this page at all). A
+   * manager with rentals-edit but no customers-edit must not be able to flip a
+   * customer's identity status.
+   *
+   * `ops` and `viewer` fall through both branches and never see the action.
+   */
+  const canManuallyVerify =
+    isAdmin() || (isManager && canEdit("customers") && canEdit("rentals"));
   const [loading, setLoading] = useState(false);
   const submitInFlightRef = useRef(false); // Synchronous re-entrancy lock against double-click duplicate rental creation
   const [creationProgress, setCreationProgress] = useState(0);
@@ -253,6 +283,13 @@ const CreateRental = () => {
   const [cancelingVerification, setCancelingVerification] = useState(false);
   const [showCancelVerificationDialog, setShowCancelVerificationDialog] = useState(false);
   const [pendingVerificationAction, setPendingVerificationAction] = useState<"cancel" | "restart">("cancel");
+
+  // Manual identity verification (privileged) — records a real decision by a named
+  // human rather than bypassing the check. See handleManualVerify.
+  const [showManualVerifyDialog, setShowManualVerifyDialog] = useState(false);
+  const [manualVerifyReason, setManualVerifyReason] = useState("");
+  const [manualVerifying, setManualVerifying] = useState(false);
+  const [manualVerifyError, setManualVerifyError] = useState<string | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [aiSessionData, setAiSessionData] = useState<{ sessionId: string; qrUrl: string; expiresAt: Date } | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -872,6 +909,48 @@ const CreateRental = () => {
   const verificationPending = customerVerification?.status === "pending" || customerVerification?.review_status === "pending";
   const verificationMode = tenant?.integration_veriff !== false ? "veriff" : "ai";
 
+  // 'manually_verified' is a real, already-supported status value (see
+  // pending-bookings/page.tsx). It satisfies isCustomerVerified above honestly —
+  // there is no bypass flag anywhere in this form.
+  const isManuallyVerified = customerDetails?.identity_verification_status === "manually_verified";
+
+  /**
+   * Provenance for a manual verification: who recorded it, when, and why.
+   *
+   * `customers` carries no verified_by / verified_at / notes column, so the audit
+   * log IS the record. We read the most recent manual-verification entry back so
+   * the form can show the approver rather than passing off a staff decision as a
+   * normal Veriff pass.
+   */
+  const { data: manualVerifyRecord } = useQuery({
+    queryKey: ["customer-manual-verification-audit", tenant?.id, selectedCustomerId],
+    queryFn: async () => {
+      if (!selectedCustomerId || !tenant?.id) return null;
+      const { data, error } = await supabase
+        .from("audit_logs")
+        .select(`created_at, details, actor:app_users!audit_logs_actor_id_fkey ( name, email )`)
+        .eq("tenant_id", tenant.id)
+        .eq("entity_type", "customer")
+        .eq("entity_id", selectedCustomerId)
+        .eq("action", MANUAL_VERIFY_AUDIT_ACTION)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      // Provenance is decoration, not a gate — a failed read must not break the
+      // form or imply the verification itself is invalid.
+      if (error) {
+        console.warn("[manual-verify] could not load provenance:", error);
+        return null;
+      }
+      return (data ?? null) as unknown as {
+        created_at: string;
+        details: Record<string, any> | null;
+        actor?: { name: string | null; email: string | null } | null;
+      } | null;
+    },
+    enabled: !!selectedCustomerId && !!tenant?.id && isManuallyVerified,
+  });
+
   const { data: vehicles } = useQuery({
     queryKey: ["vehicles-for-rental", tenant?.id],
     queryFn: async () => {
@@ -1191,6 +1270,118 @@ const CreateRental = () => {
     } finally {
       setCancelingVerification(false);
       setShowCancelVerificationDialog(false);
+    }
+  };
+
+  /**
+   * Record that a privileged staff member has personally verified this customer's
+   * identity.
+   *
+   * This is NOT a bypass. It sets the customer's real status to 'manually_verified'
+   * — an already-supported value — so the existing check in onSubmit passes
+   * truthfully rather than being skipped. A customer who was never verified still
+   * cannot produce a rental; someone has to put their name to it first.
+   *
+   * Order matters: mutate first, then audit. Writing the audit row first would
+   * leave a log entry asserting a verification that may never have landed.
+   */
+  const handleManualVerify = async () => {
+    const reason = manualVerifyReason.trim();
+
+    // Defence in depth — the button is already gated, but never trust the UI alone.
+    if (!canManuallyVerify) return;
+    if (reason.length < MANUAL_VERIFY_MIN_REASON) return;
+    if (!selectedCustomerId || !tenant?.id || !appUser?.id) {
+      setManualVerifyError("Missing customer or session context. Reload and try again.");
+      return;
+    }
+
+    setManualVerifying(true);
+    setManualVerifyError(null);
+
+    const previousStatus = customerDetails?.identity_verification_status ?? null;
+
+    try {
+      // .select() is load-bearing: a bare .update() reports no error when RLS
+      // silently matches zero rows, which would leave us claiming success and
+      // unblocking the form while the customer stayed unverified.
+      const { data: updated, error: updateError } = await supabase
+        .from("customers")
+        .update({ identity_verification_status: "manually_verified" })
+        .eq("id", selectedCustomerId)
+        .eq("tenant_id", tenant.id)
+        .select("id");
+
+      if (updateError) throw updateError;
+      if (!updated || updated.length === 0) {
+        throw new Error(
+          "The customer record was not updated — you may not have permission to change it."
+        );
+      }
+
+      // The durable record. `customers` has no verified_by/verified_at/notes
+      // column, so audit_logs carries the attribution and the reason. Inserted
+      // directly (rather than via the fire-and-forget useAuditLog helper) so a
+      // failure here is surfaced instead of only reaching the console.
+      const { error: auditError } = await supabase.from("audit_logs").insert({
+        action: MANUAL_VERIFY_AUDIT_ACTION,
+        actor_id: appUser.id,
+        entity_type: "customer",
+        entity_id: selectedCustomerId,
+        tenant_id: tenant.id,
+        details: {
+          customer_name: customerDetails?.name ?? null,
+          previous_status: previousStatus,
+          new_status: "manually_verified",
+          reason,
+          approved_by_name: appUser.name ?? null,
+          approved_by_email: appUser.email ?? null,
+          approved_by_role: appUser.role ?? null,
+          recorded_from: "rentals/new",
+        },
+      });
+
+      // The status change already committed, so we do NOT roll back or pretend it
+      // failed — we tell the operator the attribution is missing so they can note
+      // it out of band.
+      if (auditError) {
+        console.error("[manual-verify] audit entry failed:", auditError);
+        toast({
+          variant: "destructive",
+          title: "Verified, but not logged",
+          description:
+            "The customer was marked as manually verified, but the audit entry could not be saved. Please record this decision manually.",
+        });
+      } else {
+        toast({
+          title: "Marked as manually verified",
+          description: `You are recorded as having verified ${customerDetails?.name || "this customer"}'s identity.`,
+        });
+      }
+
+      // Recompute isCustomerVerified from the source of truth so the form
+      // unblocks naturally, and refresh the surfaces that show this status.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["customer-details-for-rental"] }),
+        queryClient.invalidateQueries({ queryKey: ["customer-verification-for-rental"] }),
+        queryClient.invalidateQueries({ queryKey: ["customer-manual-verification-audit"] }),
+        queryClient.invalidateQueries({ queryKey: ["customers"] }),
+        queryClient.invalidateQueries({ queryKey: ["customers-list"] }),
+        queryClient.invalidateQueries({ queryKey: ["audit-logs"] }),
+        queryClient.invalidateQueries({ queryKey: ["audit-log-actions"] }),
+      ]);
+
+      setShowManualVerifyDialog(false);
+      setManualVerifyReason("");
+    } catch (err: any) {
+      // Leave the dialog open and the form blocked — the check must keep failing
+      // until the status genuinely changed.
+      console.error("[manual-verify] failed:", err);
+      setManualVerifyError(
+        err?.message || "Could not mark this customer as manually verified. Please try again."
+      );
+    } finally {
+      setManualVerifying(false);
     }
   };
 
@@ -2624,7 +2815,11 @@ const CreateRental = () => {
                             ({verificationMode === "ai" ? "AI Verification" : "Veriff"})
                           </span>
                         </div>
-                        {isCustomerVerified ? (
+                        {isManuallyVerified ? (
+                          /* Deliberately distinct from the green Veriff pass — a staff
+                             decision must never be mistaken for a completed ID check. */
+                          <Badge variant="default" className="bg-indigo-500 hover:bg-indigo-600"><ShieldCheck className="h-3 w-3 mr-1" />Manually Verified</Badge>
+                        ) : isCustomerVerified ? (
                           <Badge variant="default" className="bg-green-500 hover:bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Verified</Badge>
                         ) : verificationPending ? (
                           <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Pending</Badge>
@@ -2654,7 +2849,33 @@ const CreateRental = () => {
                         <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">Customer date of birth is not set. This may be required for identity verification.</p>
                       )}
 
-                      {isCustomerVerified ? (
+                      {isManuallyVerified ? (
+                        <div className="rounded-md border border-indigo-200 bg-indigo-50/60 px-3 py-2.5 dark:border-indigo-900 dark:bg-indigo-950/30">
+                          <p className="text-sm font-medium text-indigo-900 dark:text-indigo-200">
+                            Verified manually by a member of staff — not by {verificationMode === "ai" ? "AI verification" : "Veriff"}.
+                          </p>
+                          {manualVerifyRecord ? (
+                            <div className="mt-1.5 space-y-0.5 text-xs text-indigo-800/90 dark:text-indigo-300/90">
+                              <p>
+                                Approved by{" "}
+                                <span className="font-medium">
+                                  {manualVerifyRecord.actor?.name || manualVerifyRecord.details?.approved_by_name || manualVerifyRecord.actor?.email || manualVerifyRecord.details?.approved_by_email || "an unknown user"}
+                                </span>
+                                {manualVerifyRecord.created_at && (
+                                  <> on {format(parseISO(manualVerifyRecord.created_at), "d MMM yyyy 'at' HH:mm")}</>
+                                )}
+                              </p>
+                              {manualVerifyRecord.details?.reason && (
+                                <p className="italic">Reason: &ldquo;{manualVerifyRecord.details.reason}&rdquo;</p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="mt-1.5 text-xs text-indigo-800/80 dark:text-indigo-300/80">
+                              Recorded in the audit log. See Audit Logs for who approved it and why.
+                            </p>
+                          )}
+                        </div>
+                      ) : isCustomerVerified ? (
                         <div className="text-sm text-muted-foreground">
                           <p>Customer identity has been verified.</p>
                           {customerVerification?.first_name && customerVerification?.last_name && (<p className="mt-1">Name: {customerVerification.first_name} {customerVerification.last_name}</p>)}
@@ -2710,6 +2931,32 @@ const CreateRental = () => {
                           <Button type="button" onClick={handleCreateVerification} disabled={creatingVerification} className="w-full">
                             {creatingVerification ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating Session...</>) : (<><Shield className="h-4 w-4 mr-2" />Start Verification</>)}
                           </Button>
+                        </div>
+                      )}
+
+                      {/* Privileged manual verification — available whether the session is
+                          stuck pending or was never started. Not a bypass: it sets the
+                          customer's real status so the existing check passes honestly. */}
+                      {!isCustomerVerified && canManuallyVerify && (
+                        <div className="border-t border-[#f1f5f9] pt-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+                            disabled={creatingVerification || cancelingVerification || manualVerifying}
+                            onClick={() => {
+                              setManualVerifyReason("");
+                              setManualVerifyError(null);
+                              setShowManualVerifyDialog(true);
+                            }}
+                          >
+                            <ShieldCheck className="h-4 w-4 mr-2" />
+                            Mark as manually verified
+                          </Button>
+                          <p className="mt-1.5 text-[11px] text-muted-foreground">
+                            Only if you have checked this customer&apos;s ID documents yourself. Your name and reason are recorded.
+                          </p>
                         </div>
                       )}
                     </div>
@@ -5735,6 +5982,95 @@ const CreateRental = () => {
                 "Yes, Restart"
               ) : (
                 "Yes, Cancel"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Manual identity verification confirmation */}
+      <AlertDialog
+        open={showManualVerifyDialog}
+        onOpenChange={(open) => {
+          if (manualVerifying) return; // don't let a click-away abandon an in-flight write
+          setShowManualVerifyDialog(open);
+          if (!open) {
+            setManualVerifyReason("");
+            setManualVerifyError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Record a manual identity verification?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  This records that <span className="font-medium text-foreground">you</span> have
+                  personally verified{" "}
+                  <span className="font-medium text-foreground">
+                    {customerDetails?.name || "this customer"}
+                  </span>
+                  &apos;s identity — that you have seen and checked their ID documents yourself.
+                </p>
+                <p>
+                  It sets their status to <span className="font-medium text-foreground">Manually Verified</span>,
+                  which will be visible on their customer record and on this rental. Your name, the
+                  time, and the reason you type below are written to the audit log and cannot be
+                  edited afterwards.
+                </p>
+                <p>
+                  This does not skip the verification requirement — it satisfies it on your
+                  authority.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="manual-verify-reason" className="text-sm font-medium">
+              Reason for manual verification
+            </Label>
+            <Textarea
+              id="manual-verify-reason"
+              value={manualVerifyReason}
+              onChange={(e) => setManualVerifyReason(e.target.value)}
+              disabled={manualVerifying}
+              rows={3}
+              placeholder="e.g. Passport and driving licence checked in person at the branch on 9 Aug; Veriff repeatedly failed on document scan."
+            />
+            <p className="text-xs text-muted-foreground">
+              {manualVerifyReason.trim().length < MANUAL_VERIFY_MIN_REASON
+                ? `Please describe how you verified this customer (at least ${MANUAL_VERIFY_MIN_REASON} characters).`
+                : "This reason is stored permanently in the audit log."}
+            </p>
+            {manualVerifyError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{manualVerifyError}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={manualVerifying}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={
+                manualVerifying ||
+                manualVerifyReason.trim().length < MANUAL_VERIFY_MIN_REASON
+              }
+              onClick={(e) => {
+                e.preventDefault(); // keep the dialog open until the write resolves
+                handleManualVerify();
+              }}
+              className="bg-indigo-600 hover:bg-indigo-700"
+            >
+              {manualVerifying ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Recording...</>
+              ) : (
+                "Yes, I verified this customer"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

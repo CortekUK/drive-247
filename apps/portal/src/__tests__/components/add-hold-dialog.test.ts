@@ -134,29 +134,105 @@ describe('AddHoldDialog — reconciling with Stripe', () => {
     expect(handler).toContain('invalidateQueries({ queryKey: ["rental", rentalId] })');
   });
 
-  it('treats BOTH a live hold and an unreadable one as unresolved', () => {
-    // needsReview means the PaymentIntent could not be read at all (wrong
-    // platform account, resource_missing). Clearing the block on that would let
-    // an operator authorise a card that may already be holding funds.
-    expect(handler).toMatch(/const unresolved = liveHold \|\| data\?\.needsReview === true/);
-  });
-
-  it('only unblocks placement when the authorisation is conclusively dead', () => {
-    expect(handler).toMatch(/if \(!unresolved\) setHoldConflict\(false\)/);
+  it('only unblocks placement when the classifier says the authorisation is dead', () => {
+    // Note the shape: the ONE positive case, never a negation of "live".
+    expect(handler).toContain('const outcome = classifyVerify(data)');
+    expect(handler).toMatch(/if \(outcome === "resolved"\) setHoldConflict\(false\)/);
   });
 
   it('prefers the function\'s own message but always says something', () => {
-    expect(handler).toContain('setVerifyMessage(data?.message ||');
+    expect(handler).toContain('data?.message ||');
     expect(handler).toContain('Stripe still has a live authorisation');
     expect(handler).toContain('Stripe has no live authorisation');
+  });
+
+  it('does not repeat the server\'s "place a new hold" advice for an in-flight hold', () => {
+    // verify-deposit-hold builds its message from DEAD_HOLD_MESSAGES even when
+    // it wrote nothing because another worker owns the row — so its copy says
+    // "Place a new hold to re-authorise the deposit" while an authorisation is
+    // still running. Echoing that talks the operator into a double hold.
+    expect(handler).toContain('describeInProgress(data?.status)');
+    const copy = source.slice(source.indexOf('const describeInProgress'), source.indexOf('export const AddHoldDialog'));
+    expect(copy).toMatch(/still being worked on/);
+    expect(copy).toMatch(/Nothing was changed/);
   });
 
   it('reports a failed reconcile without pretending it succeeded', () => {
     expect(handler).toContain('title: "Could not check with Stripe"');
     expect(handler).toContain('variant: "destructive"');
-    // The conflict panel is untouched in the catch — the block must stay up.
+  });
+
+  it('re-opens the placement options when the CHECK ITSELF fails', () => {
+    // The check failing (function not deployed, Stripe unreachable, 5xx) is not
+    // evidence of a live hold — and leaving both buttons greyed with no way to
+    // retry rebuilds the dead end this dialog exists to remove. Safe to reopen:
+    // create-hold-checkout runs its own liveness probe and treats an
+    // inconclusive probe as ALIVE, so the worst case is a second refusal.
     const catchBlock = handler.slice(handler.indexOf('} catch'));
-    expect(catchBlock).not.toContain('setHoldConflict(false)');
+    expect(catchBlock).toContain('setHoldConflict(false)');
+    expect(catchBlock).toContain('setVerifyUnresolved(true)');
+    expect(catchBlock).toMatch(/couldn't reach Stripe/);
+    // …and the operator can ask again without closing the dialog.
+    const strip = between('{verifyMessage && (', '<div className="grid gap-3 pt-2">');
+    expect(strip).toContain('verifyUnresolved && !holdConflict');
+    expect(strip).toContain('Check again');
+  });
+});
+
+describe('AddHoldDialog — classifying what verify-deposit-hold answered', () => {
+  // The blocker this suite previously enshrined: `liveHold || needsReview` read
+  // everything else as RESOLVED, cleared the conflict panel and re-enabled both
+  // placement buttons — including for three answers that are anything but.
+  const classifyVerify = evalModuleConsts<(data: any) => string>(
+    [
+      source.match(/const CONCLUSIVELY_DEAD = \[[^\]]*\];/)![0],
+      sliceModuleConst(source, 'classifyVerify'),
+    ],
+    'classifyVerify',
+  );
+
+  it.each(['expired', 'captured', 'failed'])(
+    'resolves on a conclusively dead hold (%s)',
+    (status) => {
+      expect(classifyVerify({ verified: true, liveHold: false, status, changed: true })).toBe('resolved');
+    },
+  );
+
+  it('does NOT resolve while the card is still authorising', () => {
+    // verify-deposit-hold, requires_action branch: liveHold:false, no
+    // needsReview, status left at whatever the row says. No funds are held YET —
+    // but one authorisation is already in flight on that card.
+    expect(
+      classifyVerify({ verified: true, liveHold: false, status: 'held', changed: false }),
+    ).toBe('in_progress');
+  });
+
+  it('does NOT resolve while another worker owns the row', () => {
+    // place-deposit-hold parks the row at 'processing', refresh-deposit-holds at
+    // 'refreshing'. Both cases come back liveHold:false carrying DEAD_HOLD copy.
+    // create-hold-checkout guards only on 'held', so a resolve here would let a
+    // second authorisation through underneath the first.
+    for (const status of ['processing', 'refreshing']) {
+      expect(classifyVerify({ verified: true, liveHold: false, status, changed: false })).toBe('in_progress');
+    }
+  });
+
+  it('does NOT resolve when Stripe could not be read', () => {
+    expect(
+      classifyVerify({ verified: false, liveHold: false, status: 'held', needsReview: true }),
+    ).toBe('needs_review');
+  });
+
+  it('does NOT resolve on a live authorisation', () => {
+    expect(classifyVerify({ verified: true, liveHold: true, status: 'held' })).toBe('live');
+  });
+
+  it('reads a missing or renamed liveHold field as live, not dead', () => {
+    // Fail safe: if the contract drifts, the cost is an operator clicking twice,
+    // not a second hold on a renter's card.
+    expect(classifyVerify({ verified: true, status: 'expired' })).toBe('live');
+    expect(classifyVerify({})).toBe('needs_review');
+    expect(classifyVerify(null)).toBe('needs_review');
   });
 });
 

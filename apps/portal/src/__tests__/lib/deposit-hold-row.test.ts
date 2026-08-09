@@ -114,23 +114,82 @@ describe('Security Deposit row — detail caption', () => {
   });
 });
 
+/** Code only — the branches carry long comments that quote the very statuses
+ *  the assertions below check are absent from the code. */
+const stripComments = (s: string) =>
+  s
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+
 describe('Security Deposit row — actions', () => {
-  it('offers the reconcile action on every non-terminal hold state', () => {
-    // The whole point: the stored status is not trustworthy on its own, so
-    // every state that is not already settled needs a way to ask Stripe.
+  /** The hold-specific branch, which owns exactly the statuses it always owned. */
+  const holdBranch = pageSource.slice(
+    pageSource.indexOf("{category === 'Security Deposit' && (depositHoldStatus === 'held'"),
+    pageSource.indexOf(') : isExcessMileageUnpaid && excessMileageCharge ? ('),
+  );
+
+  /** The extras appended AFTER the generic ladder, for the in-flight/broken states. */
+  const inFlightExtras = pageSource.slice(
+    pageSource.indexOf("{category === 'Security Deposit'\n                          && ['processing', 'refreshing', 'failed']"),
+    pageSource.indexOf('{applied && (\n                          <button\n                            className="text-muted-foreground hover:text-amber-500'),
+  );
+
+  it('claims only the statuses it has always claimed', () => {
+    // The regression that made this a `!['captured','released']` branch: it
+    // swallowed 'processing', 'refreshing' and 'failed', which have always
+    // fallen through to the generic ladder below — and that ladder is where a
+    // deposit collected outside the hold gets its Release / Release More /
+    // Add Payment button (isDepositUsed, wouldShowRefund). A rental whose hold
+    // failed and whose deposit was then taken manually must stay releasable.
     expect(pageSource).toMatch(
-      /category === 'Security Deposit' && !\['captured', 'released'\]\.includes\(depositHoldStatus \|\| ''\)/,
+      /category === 'Security Deposit' && \(depositHoldStatus === 'held' \|\| depositHoldStatus === 'expired' \|\| !depositHoldStatus\)/,
     );
+    expect(pageSource).not.toContain("!['captured', 'released'].includes(depositHoldStatus || '')");
+    const code = stripComments(holdBranch);
+    for (const status of ['processing', 'refreshing', 'failed']) {
+      expect(code, `${status} must not be captured by the hold-only branch`).not.toContain(`'${status}'`);
+    }
+  });
+
+  it('still reaches the generic ladder for the in-flight and broken states', () => {
+    // isDepositUsed / wouldShowRefund / the Release label live there, and the
+    // hold actions are appended alongside rather than replacing them.
+    expect(inFlightExtras).toContain("['processing', 'refreshing', 'failed'].includes(depositHoldStatus || '')");
+    expect(inFlightExtras).toContain('Check with Stripe');
+    expect(pageSource).toContain("const isDepositUsed = category === 'Security Deposit'");
+    expect(pageSource).toMatch(/category === 'Security Deposit' \? \(refunded > 0 \? 'Release More' : 'Release'\)/);
   });
 
   it('gates the Check-with-Stripe button on there being a hold to check', () => {
     // A rental that never had a hold has no PaymentIntent to verify — offering
     // the button there would 404 against verify-deposit-hold.
-    const branchStart = pageSource.indexOf('{depositHoldStatus && (');
+    const branchStart = pageSource.indexOf("{depositHoldStatus && canEdit('rentals') && (");
     expect(branchStart, 'the reconcile branch is not gated on depositHoldStatus').toBeGreaterThan(-1);
     const btn = pageSource.slice(branchStart, branchStart + 900);
     expect(btn).toContain('Check with Stripe');
     expect(btn).toContain('disabled={verifyingHold}');
+  });
+
+  it('keeps the reconcile action out of a viewer\'s hands', () => {
+    // verify-deposit-hold WRITES (it corrects deposit_hold_status), so it is
+    // not a read-only action, and neither is placing a hold.
+    expect(pageSource).toContain("{depositHoldStatus && canEdit('rentals') && (");
+    expect(inFlightExtras).toContain("canEdit('rentals')");
+  });
+
+  it('discriminates an in-progress answer from a resolved one before toasting', () => {
+    // verify-deposit-hold returns liveHold:false — carrying "Place a new hold to
+    // re-authorise the deposit" — while another worker owns the row. Titling
+    // that 'Hold checked' and repeating the advice invites a double hold.
+    const handler = pageSource.slice(
+      pageSource.indexOf('const handleVerifyDepositHold'),
+      pageSource.indexOf('// Fetch renewal chain info'),
+    );
+    expect(handler).toContain('const outcome = classifyVerify(data)');
+    expect(handler).toMatch(/if \(outcome === 'in_progress'\)/);
+    expect(handler).toContain("title: 'Still in progress'");
+    expect(handler).toContain('describeInProgressHold(data?.status)');
   });
 
   it('routes the button at verify-deposit-hold and refreshes the rental afterwards', () => {
@@ -149,15 +208,20 @@ describe('Security Deposit row — actions', () => {
   });
 
   it('offers Add Hold when the hold failed or was never placed', () => {
-    expect(pageSource).toMatch(/\{\(depositHoldStatus === 'failed' \|\| !depositHoldStatus\) && \(/);
+    // Two places now, because the two statuses sit on opposite sides of the
+    // generic ladder: 'no hold' inside the hold branch, 'failed' appended after.
+    expect(holdBranch).toMatch(/\{!depositHoldStatus && \(/);
+    expect(holdBranch.slice(holdBranch.indexOf('{!depositHoldStatus && ('))).toContain('Add Hold');
+    expect(inFlightExtras).toMatch(/\{depositHoldStatus === 'failed' && \(/);
+    expect(inFlightExtras).toContain('Add Hold');
   });
 
   it('offers Add Hold alongside Refresh & Charge once the hold has expired', () => {
     // Putting a live hold back on the card is a legitimate end in itself; it
     // does not have to be followed by taking the money.
-    const expiredBranch = pageSource.slice(
-      pageSource.indexOf("{depositHoldStatus === 'expired' && ("),
-      pageSource.indexOf("{(depositHoldStatus === 'failed'"),
+    const expiredBranch = holdBranch.slice(
+      holdBranch.indexOf("{depositHoldStatus === 'expired' && ("),
+      holdBranch.indexOf('{!depositHoldStatus && ('),
     );
     expect(expiredBranch).toContain('Refresh &amp; Charge');
     expect(expiredBranch).toContain('Add Hold');
@@ -175,31 +239,55 @@ describe('Security Deposit row — actions', () => {
   });
 
   it('leaves captured and released on their original ladder', () => {
-    // These fall outside the new branch entirely — no reconcile button, no
-    // behaviour change for tenants who never hit the stale-hold bug.
-    expect(pageSource).toContain("!['captured', 'released'].includes(depositHoldStatus || '')");
+    // These fall outside every new branch — no reconcile button, no Add Hold,
+    // no behaviour change for tenants who never hit the stale-hold bug.
+    for (const status of ['captured', 'released']) {
+      expect(stripComments(holdBranch)).not.toContain(`'${status}'`);
+      expect(stripComments(inFlightExtras)).not.toContain(`'${status}'`);
+    }
   });
 });
 
 describe('Security Deposit row — expiry line', () => {
-  it('renders the authorisation expiry for the states where one is still running', () => {
-    expect(pageSource).toMatch(
-      /\['held', 'refreshing', 'processing'\]\.includes\(depositHoldStatus \|\| ''\)/,
-    );
-    expect(pageSource).toContain('describeHoldExpiry(rental.deposit_hold_expires_at)');
+  /** The whole expiry-line IIFE, from its gate to the end of its JSX. */
+  const expiryLine = pageSource.slice(
+    pageSource.indexOf("{category === 'Security Deposit' && (() => {"),
+    pageSource.indexOf('</TableCell>', pageSource.indexOf("{category === 'Security Deposit' && (() => {")),
+  );
+
+  it('renders the authorisation expiry for the two states where the date means something', () => {
+    expect(expiryLine).toMatch(/depositHoldStatus !== 'held' && depositHoldStatus !== 'expired'\) return null/);
+    expect(expiryLine).toContain('describeHoldExpiry(rental.deposit_hold_expires_at)');
+  });
+
+  it('does not show the OUTGOING hold\'s date while a new one is being placed', () => {
+    // Neither writer clears deposit_hold_expires_at when it claims the row:
+    // place-deposit-hold sets { deposit_hold_status: 'processing' } and
+    // refresh-deposit-holds { deposit_hold_status: 'refreshing' }, both writing
+    // the new expiry only later. So during a refresh the column still holds the
+    // dead authorisation's date — which is at or past expiry by definition,
+    // since that is why the cron picked the row up. Rendering it would shout
+    // "Authorisation lapsed" in red over a hold being placed successfully.
+    expect(expiryLine).toMatch(/depositHoldStatus === 'processing' \|\| depositHoldStatus === 'refreshing'/);
+    const inFlight = expiryLine.slice(expiryLine.indexOf("depositHoldStatus === 'processing'"));
+    expect(inFlight.slice(0, 400)).toContain('Placing a new authorisation');
+    expect(inFlight.slice(0, 400)).not.toContain('describeHoldExpiry');
+  });
+
+  it('only names a lapse date on an expired hold when the date corroborates it', () => {
+    // 'expired' with a still-future timestamp means the hold died EARLY (bank
+    // pulled it, or it was cancelled); the stored date then describes nothing
+    // that happened.
+    expect(expiryLine).toMatch(/depositHoldStatus === 'expired' && expiry\.tone !== 'past'\) return null/);
   });
 
   it('escalates the expiry line visually instead of leaving it muted', () => {
     // An operator on a 90-day rental will not notice a grey date. The amber/red
     // escalation is the only thing that makes a dying hold visible in time.
-    const line = pageSource.slice(
-      pageSource.indexOf("describeHoldExpiry(rental.deposit_hold_expires_at)"),
-      pageSource.indexOf("describeHoldExpiry(rental.deposit_hold_expires_at)") + 900,
-    );
-    expect(line).toContain("expiry.tone === 'past'");
-    expect(line).toContain('text-red-500');
-    expect(line).toContain("expiry.tone === 'soon'");
-    expect(line).toContain('text-amber-500');
-    expect(line).toContain('AlertTriangle');
+    expect(expiryLine).toContain("expiry.tone === 'past'");
+    expect(expiryLine).toContain('text-red-500');
+    expect(expiryLine).toContain("expiry.tone === 'soon'");
+    expect(expiryLine).toContain('text-amber-500');
+    expect(expiryLine).toContain('AlertTriangle');
   });
 });

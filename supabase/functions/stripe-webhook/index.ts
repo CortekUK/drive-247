@@ -181,13 +181,22 @@ serve(async (req) => {
         // URL calls) also closes the closed-tab orphan, where an authorisation
         // existed on Stripe with nothing recorded on the rental.
         if (session.metadata?.type === "security_deposit_hold") {
-          const holdRentalId = session.metadata?.rental_id || session.client_reference_id;
+          // Reuse the rentalId this case already resolved. Re-deriving it with
+          // the opposite precedence (metadata first) was a divergence trap:
+          // inert today only because create-hold-checkout writes no
+          // client_reference_id.
+          const holdRentalId = rentalId;
+          const holdTenantId = session.metadata?.tenant_id || "";
           if (!holdRentalId) {
             console.error("security_deposit_hold session with no rental_id:", session.id);
             break;
           }
 
           console.log("Deposit hold checkout completed for rental:", holdRentalId);
+
+          const holdEventAgeMs = Date.now() - (event.created || 0) * 1000;
+          let holdSyncFailure: { retryable: boolean; reason: string } | null = null;
+
           try {
             const syncResponse = await fetch(
               `${Deno.env.get("SUPABASE_URL")}/functions/v1/sync-deposit-hold`,
@@ -197,7 +206,20 @@ serve(async (req) => {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
                 },
-                body: JSON.stringify({ sessionId: session.id, rentalId: holdRentalId }),
+                body: JSON.stringify({
+                  sessionId: session.id,
+                  rentalId: holdRentalId,
+                  // This legacy handler holds a single STRIPE_SECRET_KEY client and
+                  // has no platform-account resolution, so it can only pass the
+                  // connected account the event arrived on. sync-deposit-hold still
+                  // re-derives the platform itself; the field is harmlessly ignored
+                  // until it accepts it.
+                  connectedAccountId,
+                }),
+                // Stripe abandons a delivery at ~30s and records the timeout as a
+                // failed delivery, feeding the same auto-disable budget. Bail well
+                // before that; the abort lands in the catch as transport failure.
+                signal: AbortSignal.timeout(HOLD_SYNC_TIMEOUT_MS),
               }
             );
             const syncResult = await syncResponse.json().catch(() => ({}));
@@ -209,34 +231,68 @@ serve(async (req) => {
                 console.log("Deposit hold recorded:", syncResult.paymentIntentId, "amount:", syncResult.amount);
               }
             } else {
+              const syncMessage = String(syncResult?.error || syncResponse.statusText || "");
+              holdSyncFailure = classifyHoldSyncFailure(syncResponse.status, syncMessage);
               console.error(
                 "sync-deposit-hold failed for session:",
                 session.id,
-                syncResult?.error || syncResponse.statusText
+                `status=${syncResponse.status}`,
+                syncMessage,
+                `->`,
+                holdSyncFailure.retryable ? "retryable" : "permanent",
+                holdSyncFailure.reason
               );
-              // 5xx = transient (Stripe API blip, DB write failure). Ask Stripe
-              // to redeliver rather than orphan an authorisation that exists on
-              // the customer's card but nowhere in our DB. 4xx (rental gone, PI
-              // no longer capturable) will never succeed, so don't retry-storm.
-              if (syncResponse.status >= 500) {
-                return new Response(
-                  JSON.stringify({ error: "sync-deposit-hold failed, retry" }),
-                  {
-                    status: 500,
-                    headers: { ...corsHeaders, "Content-Type": "application/json" },
-                  }
-                );
-              }
             }
           } catch (syncError) {
+            // Transport: unreachable, DNS/TLS, or our own 15s abort. Nothing was
+            // observed of sync's outcome, so one redelivery is worth attempting.
+            const detail = syncError instanceof Error ? syncError.message : String(syncError);
+            holdSyncFailure = { retryable: true, reason: `sync-deposit-hold unreachable: ${detail}` };
             console.error("Error invoking sync-deposit-hold:", syncError);
-            return new Response(
-              JSON.stringify({ error: "sync-deposit-hold unreachable, retry" }),
-              {
-                status: 500,
-                headers: { ...corsHeaders, "Content-Type": "application/json" },
-              }
+          }
+
+          if (holdSyncFailure) {
+            if (holdSyncFailure.retryable && holdEventAgeMs < HOLD_SYNC_MAX_RETRY_AGE_MS) {
+              console.warn(
+                "Requesting Stripe redelivery for deposit-hold session:",
+                session.id,
+                holdSyncFailure.reason
+              );
+              return new Response(
+                JSON.stringify({ error: `sync-deposit-hold failed: ${holdSyncFailure.reason}` }),
+                {
+                  status: 500,
+                  headers: { ...corsHeaders, "Content-Type": "application/json" },
+                }
+              );
+            }
+
+            // Out of retries, or never worth one. The authorisation is LIVE on the
+            // customer's card and unrecorded, so this must not die in a log line:
+            // alert the operators, who can reconcile from the rental page.
+            console.error(
+              "GIVING UP on deposit-hold sync — session:",
+              session.id,
+              "rental:",
+              holdRentalId,
+              holdSyncFailure.retryable
+                ? `(retry window exhausted after ${Math.round(holdEventAgeMs / 60000)}m)`
+                : `(permanent: ${holdSyncFailure.reason})`
             );
+            await notifyOperatorsInApp({
+              tenantId: holdTenantId,
+              type: "deposit_hold_sync_failed",
+              title: "Deposit hold not recorded",
+              message:
+                "A security deposit authorisation completed on Stripe but could not be recorded against this rental. Open the rental and verify the hold before placing another one.",
+              link: `/rentals/${holdRentalId}`,
+              metadata: {
+                rental_id: holdRentalId,
+                checkout_session_id: session.id,
+                reason: holdSyncFailure.reason,
+              },
+              dedupeKey: session.id,
+            });
           }
           break;
         }
@@ -820,6 +876,7 @@ serve(async (req) => {
         const DEPOSIT_HOLD_PI_TYPES = ["deposit_hold", "deposit_hold_rollover", "security_deposit_hold"];
         const holdPiType = paymentIntent.metadata?.type;
         let isDepositHoldPi = !!holdPiType && DEPOSIT_HOLD_PI_TYPES.includes(holdPiType);
+        let holdDetectionReason = isDepositHoldPi ? `type: ${holdPiType}` : "";
 
         // Metadata alone isn't enough: holds placed before the metadata existed
         // carry none, and after a refresh the rental may already point at the
@@ -832,15 +889,33 @@ serve(async (req) => {
             .eq("deposit_hold_payment_intent_id", paymentIntent.id);
           const holdMetaRentalId = paymentIntent.metadata?.rental_id;
           if (holdMetaRentalId) holdRentalQuery = holdRentalQuery.eq("id", holdMetaRentalId);
-          const { data: holdRental } = await holdRentalQuery.limit(1).maybeSingle();
-          if (holdRental) isDepositHoldPi = true;
+          const { data: holdRental, error: holdLookupError } = await holdRentalQuery.limit(1).maybeSingle();
+
+          if (holdLookupError) {
+            // FAIL SAFE, not open. This probe is the ONLY protection legacy,
+            // metadata-less holds have; reading a failed query as "not a hold"
+            // would let a routine deposit release cancel the rental. Skipping a
+            // genuine cancellation of a Pending booking is recoverable by hand;
+            // a cancelled live rental is not.
+            console.error(
+              "Deposit-hold lookup failed for",
+              paymentIntent.id,
+              "- treating as a hold:",
+              holdLookupError.message
+            );
+            isDepositHoldPi = true;
+            holdDetectionReason = `lookup failed, assumed hold: ${holdLookupError.message}`;
+          } else if (holdRental) {
+            isDepositHoldPi = true;
+            holdDetectionReason = "matched rentals.deposit_hold_payment_intent_id";
+          }
         }
 
         if (isDepositHoldPi) {
           console.log(
             "Ignoring payment_intent.canceled for deposit hold:",
             paymentIntent.id,
-            holdPiType ? `(type: ${holdPiType})` : "(matched rentals.deposit_hold_payment_intent_id)"
+            `(${holdDetectionReason})`
           );
           break;
         }
@@ -869,11 +944,20 @@ serve(async (req) => {
           // including Active and Closed rentals. Mirrors the check the
           // checkout.session.expired handler has always had.
           if (payment.rental_id) {
-            const { data: cancelRental } = await supabase
+            const { data: cancelRental, error: cancelRentalError } = await supabase
               .from("rentals")
               .select("id, status")
               .eq("id", payment.rental_id)
               .maybeSingle();
+
+            // An errored read leaves cancelRental null, so the check below is
+            // already fail-safe (no cancellation). Log it so it isn't silent.
+            if (cancelRentalError) {
+              console.error(
+                "Rental status lookup failed; leaving rental untouched:",
+                cancelRentalError.message
+              );
+            }
 
             if (cancelRental?.status === "Pending") {
               await supabase
